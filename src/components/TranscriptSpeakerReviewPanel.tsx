@@ -375,6 +375,7 @@ export function TranscriptSpeakerReviewPanel({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledby="speaker-review-title"
+      size="settings"
       className="transcript-speaker-review-modal"
       overlayClassName="transcript-speaker-review-overlay"
       shellRef={modalRef}

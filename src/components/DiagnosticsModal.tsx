@@ -31,6 +31,8 @@ interface DiagnosticsModalProps {
   onClose: () => void;
   onOpenSettingsTab: (tab: SettingsTab) => void;
   onRunFirstRunSetup: () => void;
+  origin?: 'settings' | 'standalone';
+  onBack?: () => void;
 }
 
 function formatScannedAt(scannedAt: string, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -152,6 +154,8 @@ export function DiagnosticsModal({
   onClose,
   onOpenSettingsTab,
   onRunFirstRunSetup,
+  origin = 'standalone',
+  onBack,
 }: DiagnosticsModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(null);
@@ -230,6 +234,10 @@ export function DiagnosticsModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledby="diagnostics-title"
+      size="settings"
+      origin={origin}
+      onBack={onBack}
+      backLabel={t('common.back', { defaultValue: 'Back' })}
       className="diagnostics-modal"
       overlayClassName="diagnostics-overlay"
       badge={(

@@ -2,10 +2,6 @@
   z-index: 2070;
 }
 
-.transcript-version-modal {
-  width: min(1180px, calc(100vw - 48px));
-}
-
 .transcript-version-error {
   margin: 18px 32px 0;
   padding: 12px 14px;

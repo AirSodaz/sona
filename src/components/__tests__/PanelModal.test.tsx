@@ -24,6 +24,10 @@ describe('PanelModal', () => {
         isOpen
         onClose={vi.fn()}
         ariaLabel="Test Panel"
+        size="settings"
+        origin="settings"
+        onBack={vi.fn()}
+        backLabel="Back"
         className="test-modal"
         overlayClassName="test-overlay"
         headerClassName="test-header"
@@ -45,15 +49,23 @@ describe('PanelModal', () => {
     );
 
     const dialog = screen.getByRole('dialog', { name: 'Test Panel' });
+    const overlay = document.querySelector('.panel-modal-overlay.test-overlay') as HTMLElement | null;
     expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
     expect(dialog.classList.contains('test-modal')).toBe(true);
+    expect(dialog.classList.contains('panel-modal-size-settings')).toBe(true);
     expect(dialog.querySelector('.panel-modal-header.test-header')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-header-leading')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-copy.test-header-copy')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-controls.test-header-controls')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-header-leading .panel-modal-back')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-toolbar.test-toolbar')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-badge.test-badge')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-meta-row.test-meta')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-content.test-content')).toBeTruthy();
+    expect(overlay?.classList.contains('panel-modal-origin-settings')).toBe(true);
+    expect(overlay?.classList.contains('settings-overlay')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDefined();
+    expect(screen.queryByText('Back')).toBeNull();
     expect(screen.getByText('Badge')).toBeDefined();
     expect(screen.getByText('Test Title')).toBeDefined();
     expect(screen.getByText('Test description')).toBeDefined();
@@ -79,10 +91,13 @@ describe('PanelModal', () => {
       </PanelModal>,
     );
 
+    const overlay = document.querySelector('.panel-modal-overlay.test-overlay') as HTMLElement;
+    expect(overlay.classList.contains('panel-modal-origin-standalone')).toBe(true);
+    expect(overlay.classList.contains('settings-overlay')).toBe(false);
+
     fireEvent.click(screen.getByRole('dialog', { name: 'Test Panel' }));
     expect(onClose).not.toHaveBeenCalled();
 
-    const overlay = document.querySelector('.panel-modal-overlay.test-overlay') as HTMLElement;
     fireEvent.click(overlay);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -102,5 +117,39 @@ describe('PanelModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls back for settings-origin panels and hides back button for standalone panels', () => {
+    const onBack = vi.fn();
+    const { rerender } = render(
+      <PanelModal
+        isOpen
+        onClose={vi.fn()}
+        ariaLabel="Settings Panel"
+        title="Settings Title"
+        origin="settings"
+        onBack={onBack}
+        backLabel="Go Back"
+      >
+        <div>Body</div>
+      </PanelModal>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <PanelModal
+        isOpen
+        onClose={vi.fn()}
+        ariaLabel="Standalone Panel"
+        title="Standalone Title"
+        origin="standalone"
+      >
+        <div>Body</div>
+      </PanelModal>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Go Back' })).toBeNull();
   });
 });

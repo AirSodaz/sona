@@ -1,13 +1,20 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 
 import './PanelModal.css';
+
+type PanelModalSize = 'default' | 'settings';
+type PanelModalOrigin = 'standalone' | 'settings';
 
 interface PanelModalProps {
   isOpen: boolean;
   onClose: () => void;
   ariaLabel?: string;
   ariaLabelledby?: string;
+  size?: PanelModalSize;
+  origin?: PanelModalOrigin;
+  onBack?: () => void;
+  backLabel?: string;
   className?: string;
   overlayClassName?: string;
   headerClassName?: string;
@@ -17,6 +24,7 @@ interface PanelModalProps {
   badgeClassName?: string;
   metaClassName?: string;
   contentClassName?: string;
+  headerLeading?: React.ReactNode;
   badge?: React.ReactNode;
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -36,6 +44,10 @@ export function PanelModal({
   onClose,
   ariaLabel,
   ariaLabelledby,
+  size = 'default',
+  origin = 'standalone',
+  onBack,
+  backLabel = 'Back',
   className,
   overlayClassName,
   headerClassName,
@@ -45,6 +57,7 @@ export function PanelModal({
   badgeClassName,
   metaClassName,
   contentClassName,
+  headerLeading,
   badge,
   title,
   description,
@@ -60,12 +73,16 @@ export function PanelModal({
 
   return (
     <div
-      className={joinClassNames('settings-overlay', 'panel-modal-overlay', overlayClassName)}
+      className={joinClassNames(
+        'panel-modal-overlay',
+        `panel-modal-origin-${origin}`,
+        overlayClassName,
+      )}
       onClick={onClose}
     >
       <div
         ref={shellRef}
-        className={joinClassNames('panel-modal-shell', className)}
+        className={joinClassNames('panel-modal-shell', `panel-modal-size-${size}`, className)}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -73,6 +90,20 @@ export function PanelModal({
         aria-labelledby={ariaLabelledby}
       >
         <div className={joinClassNames('panel-modal-header', headerClassName)}>
+          <div className="panel-modal-header-leading">
+            {origin === 'settings' && onBack ? (
+              <button
+                type="button"
+                className="btn btn-icon panel-modal-back"
+                onClick={onBack}
+                aria-label={backLabel}
+                title={backLabel}
+              >
+                <ArrowLeft size={16} />
+              </button>
+            ) : null}
+            {headerLeading}
+          </div>
           <div className={joinClassNames('panel-modal-header-copy', headerCopyClassName)}>
             {badge ? (
               <div className={joinClassNames('panel-modal-badge', badgeClassName)}>

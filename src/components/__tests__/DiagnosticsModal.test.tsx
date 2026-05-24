@@ -104,11 +104,29 @@ describe('DiagnosticsModal', () => {
     expect(await screen.findByText('Model & Environment Diagnostics')).toBeDefined();
     expect(container.querySelector('.panel-modal-shell')).toBeTruthy();
     expect(container.querySelector('.panel-modal-header')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-header-leading .panel-modal-back')).toBeNull();
     expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
     expect(screen.getByText('Live Record')).toBeDefined();
     expect(screen.getByText('Input & Capture')).toBeDefined();
     expect(screen.getByText('Automatic')).toBeDefined();
     expect(mocks.collectSnapshot.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('renders the settings-origin back button inside the shared leading slot', async () => {
+    const { container } = render(
+      <DiagnosticsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onOpenSettingsTab={vi.fn()}
+        onRunFirstRunSetup={vi.fn()}
+        origin="settings"
+        onBack={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('Model & Environment Diagnostics');
+
+    expect(container.querySelector('.panel-modal-header-leading .panel-modal-back')).toBeTruthy();
   });
 
   it('forwards open-settings actions to the requested settings tab', async () => {

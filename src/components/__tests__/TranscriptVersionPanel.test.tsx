@@ -58,6 +58,7 @@ describe('TranscriptVersionPanel', () => {
     });
 
     expect(container.querySelector('.panel-modal-shell.transcript-version-modal')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-shell.panel-modal-size-settings.transcript-version-modal')).toBeTruthy();
     expect(container.querySelector('.panel-modal-header.transcript-version-header')).toBeTruthy();
     expect(container.querySelector('.panel-modal-badge.transcript-version-badge')).toBeTruthy();
     expect(container.querySelector('.panel-modal-toolbar.transcript-version-actions')).toBeTruthy();

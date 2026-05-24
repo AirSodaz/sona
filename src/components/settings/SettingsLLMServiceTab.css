@@ -292,14 +292,19 @@
   width: min(100%, 520px);
 }
 
-.provider-details-modal {
-  width: min(860px, calc(100vw - 48px));
-}
-
 .provider-details-subtitle {
   color: var(--color-text-muted);
   font-size: 0.88rem;
   margin: 0;
+}
+
+.provider-details-header-copy {
+  min-width: 0;
+}
+
+.provider-details-header-copy .provider-details-subtitle {
+  display: block;
+  margin-top: 6px;
 }
 
 .provider-details-toolbar {

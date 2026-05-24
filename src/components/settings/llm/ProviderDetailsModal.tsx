@@ -43,6 +43,8 @@ interface ProviderDetailsModalProps {
   config: LlmAssistantConfig;
   isOpen: boolean;
   onClose: () => void;
+  origin?: 'settings' | 'standalone';
+  onBack?: () => void;
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
@@ -56,6 +58,8 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
   config,
   isOpen,
   onClose,
+  origin = 'standalone',
+  onBack,
   applyLlmSettings,
   t,
 }: ProviderDetailsModalProps) {
@@ -181,9 +185,15 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     <PanelModal
       isOpen={isOpen}
       onClose={onClose}
+      size="settings"
+      origin={origin}
+      onBack={onBack}
+      backLabel={t('common.back', { defaultValue: 'Back' })}
       ariaLabel={t('settings.llm.details')}
       className="provider-details-modal"
       overlayClassName="provider-details-overlay"
+      headerCopyClassName="provider-details-header-copy"
+      toolbarClassName="provider-details-toolbar"
       badge={<span>{t('settings.llm.model_library')}</span>}
       title={<h2>{definition.label}</h2>}
       description={<span className="provider-details-subtitle">{t('settings.llm.model_library')}</span>}

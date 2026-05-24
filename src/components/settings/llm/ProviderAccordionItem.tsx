@@ -18,7 +18,7 @@ interface ProviderAccordionItemProps {
   isOpen: boolean;
   onToggle: () => void;
   applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
-  onOpenDetails: () => void;
+  onOpenDetails?: () => void;
   t: (key: string) => string;
 }
 
@@ -157,6 +157,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
                   className="btn btn-secondary btn-loading-wrapper"
                   style={{ width: 'fit-content', minWidth: '120px' }}
                   onClick={onOpenDetails}
+                  disabled={!onOpenDetails}
                 >
                   <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     <span>{t('settings.llm.details')}</span>

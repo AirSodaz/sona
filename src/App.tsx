@@ -27,6 +27,9 @@ import { preloadAllSettingsTabs, preloadSettingsTab } from './components/setting
 import { diagnosticsService } from './services/diagnosticsService';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
+import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
+import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
+import type { LlmProvider } from './types/transcript';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
 
@@ -53,6 +56,16 @@ const RecoveryCenterPanel = lazy(async () => {
   return { default: module.RecoveryCenterModal };
 });
 
+const ProviderDetailsPanel = lazy(async () => {
+  const module = await import('./components/settings/llm/ProviderDetailsModal');
+  return { default: module.ProviderDetailsModal };
+});
+
+type ActivePanelModal =
+  | { kind: 'diagnostics'; origin: 'settings' | 'standalone' }
+  | { kind: 'provider_details'; origin: 'settings'; provider: LlmProvider }
+  | null;
+
 /**
  * Helper to determine the title of the left panel based on the current mode.
  */
@@ -74,6 +87,7 @@ function App(): React.JSX.Element {
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isRecoveryCenterOpen, setIsRecoveryCenterOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
+  const [activePanelModal, setActivePanelModal] = useState<ActivePanelModal>(null);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
@@ -87,6 +101,8 @@ function App(): React.JSX.Element {
   );
 
   const { t } = useTranslation();
+  const llmConfig = useLlmAssistantConfig();
+  const updateConfig = useSetConfig();
 
   // Run application initialization logic
   const { isLoaded } = useAppInitialization();
@@ -142,14 +158,38 @@ function App(): React.JSX.Element {
   const openSettingsTab = useCallback((tab: SettingsTab) => {
     markSettingsPerf('settings.open.tab.click', { tab });
     preloadSettings(tab);
-    setIsDiagnosticsOpen(false);
+    setActivePanelModal((current) => (current?.origin === 'settings' ? null : current));
     setSettingsInitialTab(tab);
     setIsSettingsOpen(true);
   }, [preloadSettings]);
 
   const openDiagnostics = useCallback(() => {
-    setIsSettingsOpen(false);
-    setIsDiagnosticsOpen(true);
+    const origin = isSettingsOpen ? 'settings' : 'standalone';
+    setActivePanelModal({
+      kind: 'diagnostics',
+      origin,
+    });
+    if (origin === 'standalone') {
+      setIsDiagnosticsOpen(true);
+    }
+  }, [isSettingsOpen]);
+
+  const closeDiagnostics = useCallback(() => {
+    setIsDiagnosticsOpen(false);
+    setActivePanelModal((current) => (current?.kind === 'diagnostics' ? null : current));
+  }, []);
+
+  const openProviderDetailsFromSettings = useCallback((provider?: LlmProvider) => {
+    const nextProvider = provider ?? llmConfig.llmSettings?.activeProvider ?? 'open_ai';
+    setActivePanelModal({
+      kind: 'provider_details',
+      origin: 'settings',
+      provider: nextProvider,
+    });
+  }, [llmConfig.llmSettings?.activeProvider]);
+
+  const handlePanelBack = useCallback(() => {
+    setActivePanelModal(null);
   }, []);
 
   const openRecoveryCenter = useCallback(() => {
@@ -280,16 +320,35 @@ function App(): React.JSX.Element {
             onClose={() => setIsSettingsOpen(false)}
             initialTab={isSettingsOpen ? settingsInitialTab : 'general'}
             onOpenDiagnostics={openDiagnostics}
+            onOpenLlmProviderDetails={openProviderDetailsFromSettings}
           />
         </Suspense>
       ) : null}
-      {isDiagnosticsOpen ? (
+      {isDiagnosticsOpen || activePanelModal?.kind === 'diagnostics' ? (
         <Suspense fallback={null}>
           <DiagnosticsPanel
-            isOpen={isDiagnosticsOpen}
-            onClose={() => setIsDiagnosticsOpen(false)}
+            isOpen={isDiagnosticsOpen || activePanelModal?.kind === 'diagnostics'}
+            origin={activePanelModal?.kind === 'diagnostics' ? activePanelModal.origin : 'standalone'}
+            onBack={activePanelModal?.kind === 'diagnostics' && activePanelModal.origin === 'settings' ? handlePanelBack : undefined}
+            onClose={closeDiagnostics}
             onOpenSettingsTab={openSettingsTab}
             onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}
+          />
+        </Suspense>
+      ) : null}
+      {activePanelModal?.kind === 'provider_details' ? (
+        <Suspense fallback={null}>
+          <ProviderDetailsPanel
+            provider={activePanelModal.provider}
+            config={llmConfig}
+            isOpen={true}
+            origin="settings"
+            onBack={handlePanelBack}
+            onClose={() => setActivePanelModal(null)}
+            applyLlmSettings={(nextLlmSettings) => {
+              updateConfig(buildLlmConfigPatch(nextLlmSettings ?? createLlmSettings()));
+            }}
+            t={(key) => t(key)}
           />
         </Suspense>
       ) : null}

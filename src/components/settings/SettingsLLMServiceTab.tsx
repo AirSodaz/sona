@@ -15,16 +15,19 @@ import {
 import { listProviderDefinitions } from '../../services/llm/providers';
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import { FeatureCard } from './llm/FeatureCard';
-import { ProviderDetailsModal } from './llm/ProviderDetailsModal';
 import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import { getCurrentLlmSettings, getCurrentLlmState } from './llm/helpers';
 import './SettingsLLMServiceTab.css';
 
 interface SettingsLLMServiceTabProps {
   isActive?: boolean;
+  onOpenProviderDetails?: (provider: LlmProvider) => void;
 }
 
-export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({ isActive = true }: SettingsLLMServiceTabProps): React.JSX.Element {
+export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
+  isActive = true,
+  onOpenProviderDetails,
+}: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
@@ -32,7 +35,6 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
   const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
   const [customProviderName, setCustomProviderName] = useState('');
   const [customProviderStrategy, setCustomProviderStrategy] = useState<CustomLlmProviderStrategy>('openai_compatible');
-  const [detailProvider, setDetailProvider] = useState<LlmProvider | null>(null);
   const summaryEnabled = config.summaryEnabled ?? true;
 
   const applyLlmSettings = useCallback((nextLlmSettings: LlmAssistantConfig['llmSettings']) => {
@@ -174,7 +176,7 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
                isOpen={effectiveExpandedProvider === def.id}
                onToggle={() => setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)}
                applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
-               onOpenDetails={() => setDetailProvider(def.id)}
+               onOpenDetails={onOpenProviderDetails ? () => onOpenProviderDetails(def.id) : undefined}
                t={t}
              />
            ))
@@ -271,16 +273,6 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
         </div>
       )}
 
-      {detailProvider ? (
-        <ProviderDetailsModal
-          provider={detailProvider}
-          config={config}
-          isOpen={Boolean(detailProvider)}
-          onClose={() => setDetailProvider(null)}
-          applyLlmSettings={applyLlmSettings}
-          t={t}
-        />
-      ) : null}
     </SettingsTabContainer>
   );
 });

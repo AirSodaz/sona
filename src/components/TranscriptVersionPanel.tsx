@@ -339,6 +339,7 @@ export function TranscriptVersionPanel({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledby="transcript-version-title"
+      size="settings"
       className="transcript-version-modal"
       overlayClassName="transcript-version-overlay"
       headerClassName="transcript-version-header"

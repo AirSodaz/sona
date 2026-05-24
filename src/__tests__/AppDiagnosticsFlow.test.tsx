@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
+import { PanelModal } from '../components/PanelModal';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -32,9 +33,11 @@ vi.mock('../components/Icons', () => ({
 vi.mock('../components/Settings', () => ({
   Settings: ({ isOpen, initialTab, onOpenDiagnostics }: any) => (
     isOpen ? (
-      <div>
-        <div>Settings Tab: {initialTab}</div>
-        <button type="button" onClick={onOpenDiagnostics}>Open Diagnostics</button>
+      <div className="settings-overlay" data-testid="settings-overlay">
+        <div data-testid="settings-modal">
+          <div>Settings Tab: {initialTab}</div>
+          <button type="button" onClick={onOpenDiagnostics}>Open Diagnostics</button>
+        </div>
       </div>
     ) : null
   ),
@@ -46,12 +49,24 @@ vi.mock('../components/settings/settingsLoaders', () => ({
 }));
 
 vi.mock('../components/DiagnosticsModal', () => ({
-  DiagnosticsModal: ({ isOpen, onOpenSettingsTab }: any) => (
+  DiagnosticsModal: ({ isOpen, onOpenSettingsTab, origin, onBack }: any) => (
     isOpen ? (
-      <div>
-        <div>Diagnostics Modal</div>
-        <button type="button" onClick={() => onOpenSettingsTab('models')}>Open Model Settings</button>
-      </div>
+      <PanelModal
+        isOpen={isOpen}
+        onClose={vi.fn()}
+        ariaLabel="Diagnostics Modal"
+        origin={origin}
+        onBack={onBack}
+        backLabel="Back to Settings"
+        size="settings"
+        title="Diagnostics Modal"
+      >
+        <div data-testid="diagnostics-modal">
+          <div>Diagnostics Modal</div>
+          <div>Diagnostics Origin: {origin}</div>
+          <button type="button" onClick={() => onOpenSettingsTab('models')}>Open Model Settings</button>
+        </div>
+      </PanelModal>
     ) : null
   ),
 }));
@@ -90,7 +105,7 @@ vi.mock('../stores/onboardingStore', () => ({
 }));
 
 describe('App diagnostics flow', () => {
-  it('closes settings when opening diagnostics and reopens settings on the requested tab', async () => {
+  it('keeps settings open under diagnostics and reopens the requested tab flow from settings origin', async () => {
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       setMode: vi.fn(),
@@ -110,14 +125,49 @@ describe('App diagnostics flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Diagnostics' }));
     await waitFor(() => {
-      expect(screen.queryByText('Settings Tab: general')).toBeNull();
+      expect(screen.getByTestId('settings-modal')).toBeDefined();
     });
-    expect(await screen.findByText('Diagnostics Modal')).toBeDefined();
+    expect(await screen.findByRole('dialog', { name: 'Diagnostics Modal' })).toBeDefined();
+    expect(screen.getByText('Diagnostics Origin: settings')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Back to Settings' })).toBeDefined();
+    expect(document.querySelectorAll('.settings-overlay')).toHaveLength(1);
+    expect(document.querySelectorAll('.panel-modal-overlay.panel-modal-origin-settings')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Model Settings' }));
     await waitFor(() => {
       expect(screen.queryByText('Diagnostics Modal')).toBeNull();
     });
     expect(await screen.findByText('Settings Tab: models')).toBeDefined();
+  });
+
+  it('returns to the existing settings modal when back is pressed', async () => {
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
+      mode: 'live',
+      setMode: vi.fn(),
+    }));
+    mockUseProjectStore.mockImplementation((selector: any) => selector({
+      activeProjectId: null,
+      projects: [],
+    }));
+    mockUseOnboardingStore.mockImplementation((selector: any) => selector({
+      reopen: vi.fn(),
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'header.settings' }));
+    expect(await screen.findByText('Settings Tab: general')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Diagnostics' }));
+    expect(await screen.findByRole('dialog', { name: 'Diagnostics Modal' })).toBeDefined();
+    expect(document.querySelectorAll('.settings-overlay')).toHaveLength(1);
+    expect(document.querySelectorAll('.panel-modal-overlay.panel-modal-origin-settings')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Settings' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Diagnostics Modal')).toBeNull();
+    });
+    expect(screen.getByText('Settings Tab: general')).toBeDefined();
   });
 });

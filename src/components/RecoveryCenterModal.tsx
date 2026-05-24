@@ -148,6 +148,7 @@ export function RecoveryCenterModal({
             isOpen={isOpen}
             onClose={onClose}
             ariaLabelledby="recovery-center-title"
+            size="settings"
             className="recovery-modal"
             overlayClassName="recovery-overlay"
             badge={(

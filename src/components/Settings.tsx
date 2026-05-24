@@ -36,6 +36,7 @@ import {
     XIcon,
     BookIcon
 } from './Icons';
+import type { LlmProvider } from '../types/transcript';
 
 /** Props for the Settings modal. */
 interface SettingsProps {
@@ -44,6 +45,7 @@ interface SettingsProps {
     onClose: () => void;
     initialTab?: SettingsTabInput;
     onOpenDiagnostics?: () => void;
+    onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
 }
 
 const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
@@ -64,6 +66,7 @@ function renderSettingsPane(
     isActive: boolean,
     isPrewarming = false,
     onOpenDiagnostics?: () => void,
+    onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
 ): React.JSX.Element | null {
     switch (activeTab) {
         case 'general':
@@ -94,7 +97,7 @@ function renderSettingsPane(
         case 'automation':
             return <SettingsAutomationTab />;
         case 'llm_service':
-            return <SettingsLLMServiceTab isActive={isActive} />;
+            return <SettingsLLMServiceTab isActive={isActive} onOpenProviderDetails={onOpenLlmProviderDetails} />;
         case 'shortcuts':
             return <SettingsShortcutsTab />;
         case 'about':
@@ -169,16 +172,18 @@ const SettingsPaneContent = React.memo(function SettingsPaneContent({
     isActive,
     isPrewarming,
     onOpenDiagnostics,
+    onOpenLlmProviderDetails,
 }: {
     tab: SettingsTab;
     isOpen: boolean;
     isActive: boolean;
     isPrewarming: boolean;
     onOpenDiagnostics?: () => void;
+    onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
 }): React.JSX.Element {
     return (
         <Suspense fallback={null}>
-            {renderSettingsPane(tab, isOpen, isActive, isPrewarming, onOpenDiagnostics)}
+            {renderSettingsPane(tab, isOpen, isActive, isPrewarming, onOpenDiagnostics, onOpenLlmProviderDetails)}
         </Suspense>
     );
 });
@@ -191,7 +196,14 @@ const SettingsPaneContent = React.memo(function SettingsPaneContent({
  * @param props Component props.
  * @return The settings modal or null if not closed.
  */
-export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenDiagnostics }: SettingsProps): React.JSX.Element | null {
+export function Settings({
+    isOpen,
+    prewarm = false,
+    onClose,
+    initialTab,
+    onOpenDiagnostics,
+    onOpenLlmProviderDetails,
+}: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
     const isPrewarming = prewarm && !isOpen;
@@ -506,6 +518,7 @@ export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenD
                                                 isActive={isPaneVisible}
                                                 isPrewarming={isPanePrewarming}
                                                 onOpenDiagnostics={paneDiagnosticsHandler}
+                                                onOpenLlmProviderDetails={onOpenLlmProviderDetails}
                                             />
                                         </SettingsPaneFrame>
                                     );
