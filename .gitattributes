@@ -1,0 +1,2 @@
+# Keep TOML files stable across Windows/macOS/Linux checkouts.
+*.toml text eol=lf
