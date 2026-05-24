@@ -5,6 +5,7 @@ import {
   LlmDiscoveredModelSummary,
   LlmFeature,
   LlmModelEntry,
+  LlmModelMetadata,
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
@@ -28,6 +29,16 @@ const FEATURE_TEMPERATURE_SELECTION_KEYS = {
   translation: 'translationTemperature',
   summary: 'summaryTemperature',
 } as const;
+
+const EDITABLE_MODEL_METADATA_KEYS = [
+  'inputPrice',
+  'outputPrice',
+  'contextWindow',
+  'maxOutputTokens',
+  'supportsMultimodal',
+  'supportsTools',
+  'supportsReasoning',
+] as const satisfies (keyof LlmModelMetadata)[];
 
 export function sanitizeProviderSetting(
   provider: LlmProvider,
@@ -167,7 +178,7 @@ export function addCustomProvider(
 
 export function addLlmModel(
   llmSettings: LlmSettings | undefined,
-  entry: Pick<LlmModelEntry, 'provider' | 'model'> & Partial<Pick<LlmModelEntry, 'source' | 'metadata'>>,
+  entry: Pick<LlmModelEntry, 'provider' | 'model'> & Partial<Pick<LlmModelEntry, 'source' | 'metadata' | 'metadataOverrides'>>,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(entry.provider);
   const model = entry.model.trim();
@@ -181,14 +192,18 @@ export function addLlmModel(
   });
   if (existingId) {
     const existing = current.models[existingId];
+    const metadataOverrides = entry.metadataOverrides ?? existing.metadataOverrides;
+    const metadata = mergeModelMetadata(existing.metadata, entry.metadata, metadataOverrides);
     const nextEntry: LlmModelEntry = {
       ...existing,
       source: entry.source ?? existing.source ?? 'manual',
-      metadata: entry.metadata ?? existing.metadata,
+      metadata,
+      metadataOverrides,
     };
     if (
       nextEntry.source === existing.source
       && nextEntry.metadata === existing.metadata
+      && nextEntry.metadataOverrides === existing.metadataOverrides
     ) {
       return current;
     }
@@ -215,9 +230,73 @@ export function addLlmModel(
         model,
         source: entry.source ?? 'manual',
         metadata: entry.metadata,
+        metadataOverrides: entry.metadataOverrides,
       },
     },
     modelOrder: [...current.modelOrder, nextId],
+  };
+}
+
+function mergeModelMetadata(
+  existing: LlmModelMetadata | undefined,
+  incoming: LlmModelMetadata | undefined,
+  overrides: LlmModelEntry['metadataOverrides'] | undefined,
+): LlmModelMetadata | undefined {
+  if (!incoming) {
+    return existing;
+  }
+
+  const next: LlmModelMetadata = {
+    ...existing,
+  };
+
+  for (const key of EDITABLE_MODEL_METADATA_KEYS) {
+    if (overrides?.[key]) {
+      continue;
+    }
+    next[key] = incoming[key] as never;
+  }
+
+  return next;
+}
+
+export function updateLlmModelMetadata(
+  llmSettings: LlmSettings | undefined,
+  modelId: string,
+  metadata: Partial<LlmModelMetadata>,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const existing = current.models[modelId];
+  if (!existing) {
+    return current;
+  }
+
+  const nextMetadata: LlmModelMetadata = {
+    ...(existing.metadata ?? {}),
+  };
+  const nextOverrides: LlmModelEntry['metadataOverrides'] = {
+    ...(existing.metadataOverrides ?? {}),
+  };
+
+  for (const key of EDITABLE_MODEL_METADATA_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(metadata, key)) {
+      continue;
+    }
+    nextMetadata[key] = metadata[key] as never;
+    nextOverrides[key] = true;
+  }
+
+  return {
+    ...current,
+    customProviders: current.customProviders ?? {},
+    models: {
+      ...current.models,
+      [modelId]: {
+        ...existing,
+        metadata: nextMetadata,
+        metadataOverrides: nextOverrides,
+      },
+    },
   };
 }
 

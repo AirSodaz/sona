@@ -2,6 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PanelModal } from '../PanelModal';
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: Record<string, unknown>) =>
+      (options?.defaultValue as string | undefined) ?? key,
+  }),
+}));
+
 describe('PanelModal', () => {
   it('does not render when closed', () => {
     const { container } = render(
@@ -27,7 +34,6 @@ describe('PanelModal', () => {
         size="settings"
         origin="settings"
         onBack={vi.fn()}
-        backLabel="Back"
         className="test-modal"
         overlayClassName="test-overlay"
         headerClassName="test-header"
@@ -60,7 +66,8 @@ describe('PanelModal', () => {
     expect(dialog.querySelector('.panel-modal-header-leading')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-copy.test-header-copy')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-controls.test-header-controls')).toBeTruthy();
-    expect(topRow?.contains(screen.getByRole('button', { name: 'Back' }))).toBe(true);
+    const backButton = screen.getByRole('button', { name: 'Back' });
+    expect(topRow?.contains(backButton)).toBe(true);
     const toolbar = dialog.querySelector('.panel-modal-toolbar.test-toolbar');
     const closeButton = screen.getByRole('button', { name: 'Close' });
     expect(toolbar).toBeTruthy();
@@ -75,7 +82,9 @@ describe('PanelModal', () => {
     expect(dialog.querySelector('.panel-modal-content.test-content')).toBeTruthy();
     expect(overlay?.classList.contains('panel-modal-origin-settings')).toBe(true);
     expect(overlay?.classList.contains('settings-overlay')).toBe(false);
-    expect(screen.getByRole('button', { name: 'Back' })).toBeDefined();
+    expect(backButton.hasAttribute('title')).toBe(false);
+    expect(backButton.getAttribute('data-tooltip')).toBe('Back');
+    expect(backButton.getAttribute('data-tooltip-pos')).toBe('bottom');
     expect(screen.queryByText('Back')).toBeNull();
     expect(screen.getByText('Badge')).toBeDefined();
     expect(screen.getByText('Test Title')).toBeDefined();
@@ -85,7 +94,10 @@ describe('PanelModal', () => {
     expect(screen.getByText('Meta Value')).toBeDefined();
     expect(screen.getByRole('alert').textContent).toContain('Banner error');
     expect(screen.getByText('Body')).toBeDefined();
-    expect(closeButton).toBeDefined();
+    expect(closeButton.getAttribute('aria-label')).toBe('Close');
+    expect(closeButton.hasAttribute('title')).toBe(false);
+    expect(closeButton.getAttribute('data-tooltip')).toBe('Close');
+    expect(closeButton.getAttribute('data-tooltip-pos')).toBe('bottom-left');
   });
 
   it('closes on overlay click but not on shell click', () => {
@@ -146,7 +158,12 @@ describe('PanelModal', () => {
       </PanelModal>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+    const backButton = screen.getByRole('button', { name: 'Go Back' });
+    expect(backButton.hasAttribute('title')).toBe(false);
+    expect(backButton.getAttribute('data-tooltip')).toBe('Go Back');
+    expect(backButton.getAttribute('data-tooltip-pos')).toBe('bottom');
+
+    fireEvent.click(backButton);
     expect(onBack).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -162,5 +179,25 @@ describe('PanelModal', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Go Back' })).toBeNull();
+  });
+
+  it('uses a custom close label for accessible name and tooltip', () => {
+    render(
+      <PanelModal
+        isOpen
+        onClose={vi.fn()}
+        ariaLabel="Test Panel"
+        title="Test Title"
+        closeLabel="Dismiss panel"
+      >
+        <div>Body</div>
+      </PanelModal>,
+    );
+
+    const closeButton = screen.getByRole('button', { name: 'Dismiss panel' });
+    expect(closeButton.hasAttribute('title')).toBe(false);
+    expect(closeButton.getAttribute('data-tooltip')).toBe('Dismiss panel');
+    expect(closeButton.getAttribute('data-tooltip-pos')).toBe('bottom-left');
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   });
 });

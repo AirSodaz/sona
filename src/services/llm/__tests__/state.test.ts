@@ -12,6 +12,7 @@ import {
   setFeatureModelSelection,
   setFeatureTemperature,
   syncProviderDiscoveredModels,
+  updateLlmModelMetadata,
   updateProviderSetting,
 } from '../state';
 import { DEFAULT_LLM_PROVIDER } from '../providers';
@@ -197,5 +198,121 @@ describe('llm state', () => {
       expect.objectContaining({ model: 'gpt-4.1-mini', source: 'discovered' }),
       expect.objectContaining({ model: 'manual-model', source: 'manual' }),
     ]);
+  });
+
+  it('updates model metadata while preserving model order and feature selections', () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'gpt-4.1',
+      metadata: {
+        contextWindow: 128000,
+        supportsTools: true,
+      },
+    });
+    const modelId = llmSettings.modelOrder[0];
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', modelId);
+
+    const nextSettings = updateLlmModelMetadata(llmSettings, modelId, {
+      contextWindow: 200000,
+      inputPrice: 2.5,
+      supportsTools: false,
+      supportsReasoning: true,
+    });
+
+    expect(nextSettings.modelOrder).toEqual([modelId]);
+    expect(nextSettings.selections.summaryModelId).toBe(modelId);
+    expect(nextSettings.models[modelId]).toEqual(expect.objectContaining({
+      model: 'gpt-4.1',
+      metadata: expect.objectContaining({
+        contextWindow: 200000,
+        inputPrice: 2.5,
+        supportsTools: false,
+        supportsReasoning: true,
+      }),
+      metadataOverrides: {
+        contextWindow: true,
+        inputPrice: true,
+        supportsTools: true,
+        supportsReasoning: true,
+      },
+    }));
+  });
+
+  it('keeps edited discovered metadata fields while refreshing provider values for untouched fields', () => {
+    let llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 128000,
+        inputPrice: 2,
+        outputPrice: 8,
+        supportsTools: true,
+      },
+    ]);
+    const modelId = findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1');
+    expect(modelId).toBeDefined();
+    llmSettings = updateLlmModelMetadata(llmSettings, modelId!, {
+      contextWindow: 200000,
+      supportsTools: false,
+    });
+
+    const nextSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 64000,
+        inputPrice: 1.5,
+        outputPrice: 6,
+        supportsTools: true,
+        supportsReasoning: true,
+      },
+    ]);
+
+    expect(nextSettings.models[modelId!].metadata).toEqual(expect.objectContaining({
+      contextWindow: 200000,
+      inputPrice: 1.5,
+      outputPrice: 6,
+      supportsTools: false,
+      supportsReasoning: true,
+    }));
+    expect(nextSettings.models[modelId!].metadataOverrides).toEqual({
+      contextWindow: true,
+      supportsTools: true,
+    });
+  });
+
+  it('keeps edited manual model metadata outside discovered refreshes', () => {
+    let llmSettings = addLlmModel(createLlmSettings('open_ai'), {
+      provider: 'open_ai',
+      model: 'manual-model',
+      metadata: {
+        contextWindow: 32000,
+      },
+    });
+    const manualModelId = llmSettings.modelOrder[0];
+    llmSettings = updateLlmModelMetadata(llmSettings, manualModelId, {
+      contextWindow: 64000,
+      outputPrice: 3,
+    });
+
+    const nextSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 128000,
+      },
+    ]);
+
+    expect(nextSettings.models[manualModelId]).toEqual(expect.objectContaining({
+      model: 'manual-model',
+      source: 'manual',
+      metadata: expect.objectContaining({
+        contextWindow: 64000,
+        outputPrice: 3,
+      }),
+      metadataOverrides: {
+        contextWindow: true,
+        outputPrice: true,
+      },
+    }));
+    expect(findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1')).toBeDefined();
   });
 });

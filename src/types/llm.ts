@@ -103,6 +103,8 @@ export interface LlmModelEntry {
   source?: LlmModelSource;
   /** Optional metadata reported by the provider for this model. */
   metadata?: LlmModelMetadata;
+  /** Metadata fields manually edited by the user and protected from provider refreshes. */
+  metadataOverrides?: Partial<Record<keyof LlmModelMetadata, true>>;
 }
 
 export interface LlmFeatureSelections {

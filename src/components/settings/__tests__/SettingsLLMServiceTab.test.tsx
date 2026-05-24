@@ -9,6 +9,7 @@ import {
   addLlmModel,
   buildLlmConfigPatch,
   createLlmSettings,
+  findLlmModelId,
   syncProviderDiscoveredModels,
   setFeatureModelSelection,
   updateProviderSetting,
@@ -507,7 +508,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(dialog.querySelector('.provider-details-actions')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-add-group')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-refresh')).toBeTruthy();
-    expect(dialog.querySelector('.provider-details-toolbar')?.contains(screen.getByRole('button', { name: 'Close' }))).toBe(false);
+    expect(dialog.querySelector('.provider-details-toolbar')?.contains(screen.getByRole('button', { name: 'common.close' }))).toBe(false);
     expect(container.querySelector('.panel-modal-header-leading.provider-details-header')).toBeNull();
   });
 
@@ -571,6 +572,219 @@ describe('SettingsLLMServiceTab', () => {
     });
     expect(applyLlmSettings).toHaveBeenCalledTimes(1);
     expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('edits discovered provider model metadata from the model card', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 128000,
+        inputPrice: 2,
+        outputPrice: 8,
+        supportsTools: true,
+      },
+    ]);
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('settings.llm.model_context_window'), {
+        target: { value: '200000' },
+      });
+      fireEvent.change(screen.getByLabelText('settings.llm.model_input_price'), {
+        target: { value: '1.25' },
+      });
+      fireEvent.change(screen.getByLabelText('settings.llm.model_output_price'), {
+        target: { value: '' },
+      });
+      fireEvent.click(screen.getByLabelText('settings.llm.model_supports_tools'));
+      fireEvent.click(screen.getByLabelText('settings.llm.model_supports_reasoning'));
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.save_model_metadata' }));
+    });
+
+    expect(applyLlmSettings).toHaveBeenCalledTimes(1);
+    const nextSettings = applyLlmSettings.mock.calls[0][0];
+    const modelId = findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1');
+    expect(modelId).toBeDefined();
+    expect(nextSettings.models[modelId!]).toEqual(expect.objectContaining({
+      metadata: expect.objectContaining({
+        contextWindow: 200000,
+        inputPrice: 1.25,
+        outputPrice: undefined,
+        supportsTools: false,
+        supportsReasoning: true,
+      }),
+      metadataOverrides: expect.objectContaining({
+        contextWindow: true,
+        inputPrice: true,
+        outputPrice: true,
+        supportsTools: true,
+        supportsReasoning: true,
+      }),
+    }));
+  });
+
+  it('edits manual provider model metadata while keeping manual-only delete available', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'manual-model',
+    });
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    expect(screen.getByRole('button', { name: 'common.delete manual-model' })).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata manual-model' }));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('settings.llm.model_max_output_tokens'), {
+        target: { value: '8192' },
+      });
+      fireEvent.click(screen.getByLabelText('settings.llm.model_supports_multimodal'));
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.save_model_metadata' }));
+    });
+
+    expect(applyLlmSettings).toHaveBeenCalledTimes(1);
+    const nextSettings = applyLlmSettings.mock.calls[0][0];
+    const modelId = findLlmModelId(nextSettings, 'open_ai', 'manual-model');
+    expect(modelId).toBeDefined();
+    expect(nextSettings.models[modelId!]).toEqual(expect.objectContaining({
+      source: 'manual',
+      metadata: expect.objectContaining({
+        maxOutputTokens: 8192,
+        supportsMultimodal: true,
+      }),
+      metadataOverrides: expect.objectContaining({
+        maxOutputTokens: true,
+        supportsMultimodal: true,
+      }),
+    }));
+  });
+
+  it('cancels provider model metadata edits without applying settings', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1', contextWindow: 128000 },
+    ]);
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('settings.llm.model_context_window'), {
+        target: { value: '200000' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+    });
+
+    expect(applyLlmSettings).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('settings.llm.model_context_window')).toBeNull();
+  });
+
+  it('blocks saving provider model metadata when a numeric field is invalid', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1', contextWindow: 128000 },
+    ]);
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('settings.llm.model_context_window'), {
+        target: { value: '-1' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.save_model_metadata' }));
+    });
+
+    expect(applyLlmSettings).not.toHaveBeenCalled();
+    expect(screen.getByText('settings.llm.model_metadata_invalid_number')).toBeDefined();
   });
 
   it('adds a custom provider and expands its credentials panel', async () => {

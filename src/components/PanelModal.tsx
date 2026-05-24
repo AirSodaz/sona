@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import './PanelModal.css';
 
@@ -15,6 +16,7 @@ interface PanelModalProps {
   origin?: PanelModalOrigin;
   onBack?: () => void;
   backLabel?: string;
+  closeLabel?: string;
   className?: string;
   overlayClassName?: string;
   headerClassName?: string;
@@ -47,7 +49,8 @@ export function PanelModal({
   size = 'default',
   origin = 'standalone',
   onBack,
-  backLabel = 'Back',
+  backLabel,
+  closeLabel,
   className,
   overlayClassName,
   headerClassName,
@@ -67,6 +70,10 @@ export function PanelModal({
   children,
   shellRef,
 }: PanelModalProps): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const resolvedBackLabel = backLabel ?? t('common.back', { defaultValue: 'Back' });
+  const resolvedCloseLabel = closeLabel ?? t('common.close', { defaultValue: 'Close' });
+
   if (!isOpen) {
     return null;
   }
@@ -98,8 +105,9 @@ export function PanelModal({
                     type="button"
                     className="btn btn-icon panel-modal-back"
                     onClick={onBack}
-                    aria-label={backLabel}
-                    title={backLabel}
+                    aria-label={resolvedBackLabel}
+                    data-tooltip={resolvedBackLabel}
+                    data-tooltip-pos="bottom"
                   >
                     <ArrowLeft size={16} />
                   </button>
@@ -124,7 +132,9 @@ export function PanelModal({
                 type="button"
                 className="btn btn-icon panel-modal-close"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label={resolvedCloseLabel}
+                data-tooltip={resolvedCloseLabel}
+                data-tooltip-pos="bottom-left"
               >
                 <X size={18} />
               </button>

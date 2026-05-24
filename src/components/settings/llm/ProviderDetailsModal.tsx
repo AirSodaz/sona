@@ -5,6 +5,7 @@ import {
   ImageIcon,
   LibraryBig,
   Loader2,
+  Pencil,
   RefreshCw,
   Trash2,
   Wrench,
@@ -16,6 +17,7 @@ import type {
 } from '../../../types/config';
 import type {
   LlmModelEntry,
+  LlmModelMetadata,
   LlmProvider,
 } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
@@ -24,6 +26,7 @@ import {
   getProviderLlmModels,
   removeLlmModel,
   syncProviderDiscoveredModels,
+  updateLlmModelMetadata,
 } from '../../../services/llm/state';
 import {
   buildLlmConfig,
@@ -39,6 +42,16 @@ type ModelTestState = {
   message: string;
 };
 
+type ModelMetadataDraft = {
+  contextWindow: string;
+  maxOutputTokens: string;
+  inputPrice: string;
+  outputPrice: string;
+  supportsMultimodal: boolean;
+  supportsTools: boolean;
+  supportsReasoning: boolean;
+};
+
 interface ProviderDetailsModalProps {
   provider: LlmProvider;
   config: LlmAssistantConfig;
@@ -52,6 +65,32 @@ interface ProviderDetailsModalProps {
 
 function formatOptionalNumber(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : '—';
+}
+
+function createModelMetadataDraft(entry: LlmModelEntry): ModelMetadataDraft {
+  return {
+    contextWindow: formatDraftNumber(entry.metadata?.contextWindow),
+    maxOutputTokens: formatDraftNumber(entry.metadata?.maxOutputTokens),
+    inputPrice: formatDraftNumber(entry.metadata?.inputPrice),
+    outputPrice: formatDraftNumber(entry.metadata?.outputPrice),
+    supportsMultimodal: Boolean(entry.metadata?.supportsMultimodal),
+    supportsTools: Boolean(entry.metadata?.supportsTools),
+    supportsReasoning: Boolean(entry.metadata?.supportsReasoning),
+  };
+}
+
+function formatDraftNumber(value: number | undefined): string {
+  return typeof value === 'number' ? String(value) : '';
+}
+
+function parseOptionalNonNegativeNumber(value: string): number | undefined | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
@@ -75,6 +114,13 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
   const [refreshMessage, setRefreshMessage] = useState('');
   const [draftModelName, setDraftModelName] = useState('');
   const [modelTests, setModelTests] = useState<Record<string, ModelTestState>>({});
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [metadataDraft, setMetadataDraft] = useState<ModelMetadataDraft>(() => createModelMetadataDraft({
+    id: '',
+    provider,
+    model: '',
+  }));
+  const [metadataDraftError, setMetadataDraftError] = useState('');
   const savedModelCount = providerModels.length;
 
   const refreshProviderModels = useCallback(async () => {
@@ -131,6 +177,65 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
 
   const handleDeleteModel = (entry: LlmModelEntry) => {
     applyLlmSettings(removeLlmModel(currentLlmState, entry.id));
+  };
+
+  const handleEditMetadata = (entry: LlmModelEntry) => {
+    setEditingModelId(entry.id);
+    setMetadataDraft(createModelMetadataDraft(entry));
+    setMetadataDraftError('');
+  };
+
+  const handleCancelMetadataEdit = () => {
+    setEditingModelId(null);
+    setMetadataDraftError('');
+  };
+
+  const handleMetadataNumberChange = (field: keyof Pick<ModelMetadataDraft, 'contextWindow' | 'maxOutputTokens' | 'inputPrice' | 'outputPrice'>, value: string) => {
+    setMetadataDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setMetadataDraftError('');
+  };
+
+  const handleMetadataCapabilityChange = (field: keyof Pick<ModelMetadataDraft, 'supportsMultimodal' | 'supportsTools' | 'supportsReasoning'>, checked: boolean) => {
+    setMetadataDraft((current) => ({
+      ...current,
+      [field]: checked,
+    }));
+  };
+
+  const handleSaveMetadata = () => {
+    if (!editingModelId) {
+      return;
+    }
+
+    const contextWindow = parseOptionalNonNegativeNumber(metadataDraft.contextWindow);
+    const maxOutputTokens = parseOptionalNonNegativeNumber(metadataDraft.maxOutputTokens);
+    const inputPrice = parseOptionalNonNegativeNumber(metadataDraft.inputPrice);
+    const outputPrice = parseOptionalNonNegativeNumber(metadataDraft.outputPrice);
+    if (
+      contextWindow === null
+      || maxOutputTokens === null
+      || inputPrice === null
+      || outputPrice === null
+    ) {
+      setMetadataDraftError(t('settings.llm.model_metadata_invalid_number'));
+      return;
+    }
+
+    const metadata: Partial<LlmModelMetadata> = {
+      contextWindow,
+      maxOutputTokens,
+      inputPrice,
+      outputPrice,
+      supportsMultimodal: metadataDraft.supportsMultimodal,
+      supportsTools: metadataDraft.supportsTools,
+      supportsReasoning: metadataDraft.supportsReasoning,
+    };
+    applyLlmSettings(updateLlmModelMetadata(currentLlmState, editingModelId, metadata));
+    setEditingModelId(null);
+    setMetadataDraftError('');
   };
 
   const handleTestModel = async (entry: LlmModelEntry) => {
@@ -283,6 +388,15 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    aria-label={`${t('settings.llm.edit_model_metadata')} ${entry.model}`}
+                    onClick={() => handleEditMetadata(entry)}
+                  >
+                    <Pencil size={16} />
+                    <span>{t('settings.llm.edit_model_metadata')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
                     aria-label={`${t('settings.llm.test_connection')} ${entry.model}`}
                     onClick={() => void handleTestModel(entry)}
                     disabled={testState.status === 'loading'}
@@ -304,7 +418,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                     <button
                       type="button"
                       className="btn btn-icon btn-secondary-soft"
-                      aria-label={t('common.delete')}
+                      aria-label={`${t('common.delete')} ${entry.model}`}
                       onClick={() => handleDeleteModel(entry)}
                     >
                       <Trash2 size={16} />
@@ -314,9 +428,106 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
               </div>
               <div className="provider-model-metadata">
                 <span>{`Context: ${formatOptionalNumber(entry.metadata?.contextWindow)}`}</span>
+                <span>{`Max Output: ${formatOptionalNumber(entry.metadata?.maxOutputTokens)}`}</span>
                 <span>{`Input: ${formatOptionalNumber(entry.metadata?.inputPrice)}`}</span>
                 <span>{`Output: ${formatOptionalNumber(entry.metadata?.outputPrice)}`}</span>
               </div>
+              {editingModelId === entry.id ? (
+                <div className="provider-model-metadata-editor">
+                  {metadataDraftError ? (
+                    <div className="connection-error-detail">
+                      <X size={12} />
+                      <span>{metadataDraftError}</span>
+                    </div>
+                  ) : null}
+                  <div className="provider-model-metadata-editor-grid">
+                    <label className="provider-model-metadata-field">
+                      <span className="settings-label">{t('settings.llm.model_context_window')}</span>
+                      <input
+                        className="settings-input"
+                        type="number"
+                        min={0}
+                        value={metadataDraft.contextWindow}
+                        onChange={(event) => handleMetadataNumberChange('contextWindow', event.target.value)}
+                      />
+                    </label>
+                    <label className="provider-model-metadata-field">
+                      <span className="settings-label">{t('settings.llm.model_max_output_tokens')}</span>
+                      <input
+                        className="settings-input"
+                        type="number"
+                        min={0}
+                        value={metadataDraft.maxOutputTokens}
+                        onChange={(event) => handleMetadataNumberChange('maxOutputTokens', event.target.value)}
+                      />
+                    </label>
+                    <label className="provider-model-metadata-field">
+                      <span className="settings-label">{t('settings.llm.model_input_price')}</span>
+                      <input
+                        className="settings-input"
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={metadataDraft.inputPrice}
+                        onChange={(event) => handleMetadataNumberChange('inputPrice', event.target.value)}
+                      />
+                    </label>
+                    <label className="provider-model-metadata-field">
+                      <span className="settings-label">{t('settings.llm.model_output_price')}</span>
+                      <input
+                        className="settings-input"
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={metadataDraft.outputPrice}
+                        onChange={(event) => handleMetadataNumberChange('outputPrice', event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="provider-model-capability-editor">
+                    <label className="provider-model-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={metadataDraft.supportsMultimodal}
+                        onChange={(event) => handleMetadataCapabilityChange('supportsMultimodal', event.target.checked)}
+                      />
+                      <span>{t('settings.llm.model_supports_multimodal')}</span>
+                    </label>
+                    <label className="provider-model-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={metadataDraft.supportsTools}
+                        onChange={(event) => handleMetadataCapabilityChange('supportsTools', event.target.checked)}
+                      />
+                      <span>{t('settings.llm.model_supports_tools')}</span>
+                    </label>
+                    <label className="provider-model-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={metadataDraft.supportsReasoning}
+                        onChange={(event) => handleMetadataCapabilityChange('supportsReasoning', event.target.checked)}
+                      />
+                      <span>{t('settings.llm.model_supports_reasoning')}</span>
+                    </label>
+                  </div>
+                  <div className="provider-model-editor-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleSaveMetadata}
+                    >
+                      {t('settings.llm.save_model_metadata')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleCancelMetadataEdit}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {testState.status === 'error' && testState.message ? (
                 <div className="connection-error-detail">
                   <X size={12} />

@@ -4,6 +4,7 @@ import type {
   CustomLlmProviderId,
   CustomLlmProviderStrategy,
   LlmModelEntry,
+  LlmModelMetadata,
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
@@ -15,6 +16,16 @@ import {
   sanitizeProviderSetting,
   setFeatureModelSelection,
 } from './state';
+
+const EDITABLE_MODEL_METADATA_KEYS = [
+  'inputPrice',
+  'outputPrice',
+  'contextWindow',
+  'maxOutputTokens',
+  'supportsMultimodal',
+  'supportsTools',
+  'supportsReasoning',
+] as const satisfies (keyof LlmModelMetadata)[];
 
 function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): LlmModelEntry | null {
   if (!entry) {
@@ -44,7 +55,25 @@ function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): L
       supportsReasoning:
         typeof entry.metadata.supportsReasoning === 'boolean' ? entry.metadata.supportsReasoning : undefined,
     } : undefined,
+    metadataOverrides: sanitizeMetadataOverrides(entry.metadataOverrides),
   };
+}
+
+function sanitizeMetadataOverrides(
+  overrides: LlmModelEntry['metadataOverrides'] | null | undefined,
+): LlmModelEntry['metadataOverrides'] | undefined {
+  if (!overrides || typeof overrides !== 'object') {
+    return undefined;
+  }
+
+  const nextOverrides: LlmModelEntry['metadataOverrides'] = {};
+  for (const key of EDITABLE_MODEL_METADATA_KEYS) {
+    if (overrides[key] === true) {
+      nextOverrides[key] = true;
+    }
+  }
+
+  return Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined;
 }
 
 // Stored model records are untrusted compatibility input. Drop incomplete rows here so
