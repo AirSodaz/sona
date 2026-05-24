@@ -426,7 +426,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                 <div className="provider-model-actions">
                   <button
                     type="button"
-                    className="btn btn-icon btn-secondary-soft"
+                    className="btn btn-icon provider-model-edit"
                     aria-label={`${t('settings.llm.edit_model_metadata')} ${entry.model}`}
                     data-tooltip={t('settings.llm.edit_model_metadata')}
                     data-tooltip-pos="top"
@@ -436,7 +436,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                   </button>
                   <button
                     type="button"
-                    className="btn btn-icon btn-secondary-soft"
+                    className="btn btn-icon provider-model-test"
                     aria-label={`${t('settings.llm.test_connection')} ${entry.model}`}
                     data-tooltip={t('settings.llm.test_connection')}
                     data-tooltip-pos="top"
@@ -452,8 +452,10 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                   {entry.source === 'manual' ? (
                     <button
                       type="button"
-                      className="btn btn-icon btn-secondary-soft"
+                      className="btn btn-icon provider-model-delete"
                       aria-label={`${t('common.delete')} ${entry.model}`}
+                      data-tooltip={t('common.delete')}
+                      data-tooltip-pos="top"
                       onClick={() => handleDeleteModel(entry)}
                     >
                       <Trash2 size={16} />

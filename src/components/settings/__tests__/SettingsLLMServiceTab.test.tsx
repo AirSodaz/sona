@@ -578,13 +578,15 @@ describe('SettingsLLMServiceTab', () => {
     const testButton = screen.getByRole('button', { name: 'settings.llm.test_connection gpt-4.1' });
 
     expect(editButton.classList.contains('btn-icon')).toBe(true);
-    expect(editButton.classList.contains('btn-secondary-soft')).toBe(true);
+    expect(editButton.classList.contains('provider-model-edit')).toBe(true);
+    expect(editButton.classList.contains('btn-secondary-soft')).toBe(false);
     expect(editButton.getAttribute('data-tooltip')).toBe('settings.llm.edit_model_metadata');
     expect(editButton.getAttribute('data-tooltip-pos')).toBe('top');
     expect(editButton.textContent).toBe('');
 
     expect(testButton.classList.contains('btn-icon')).toBe(true);
-    expect(testButton.classList.contains('btn-secondary-soft')).toBe(true);
+    expect(testButton.classList.contains('provider-model-test')).toBe(true);
+    expect(testButton.classList.contains('btn-secondary-soft')).toBe(false);
     expect(testButton.getAttribute('data-tooltip')).toBe('settings.llm.test_connection');
     expect(testButton.getAttribute('data-tooltip-pos')).toBe('top');
     expect(testButton.textContent).toBe('');
@@ -833,7 +835,13 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    expect(screen.getByRole('button', { name: 'common.delete manual-model' })).toBeDefined();
+    const deleteButton = screen.getByRole('button', { name: 'common.delete manual-model' });
+    expect(deleteButton).toBeDefined();
+    expect(deleteButton.classList.contains('btn-icon')).toBe(true);
+    expect(deleteButton.classList.contains('provider-model-delete')).toBe(true);
+    expect(deleteButton.classList.contains('btn-secondary-soft')).toBe(false);
+    expect(deleteButton.getAttribute('data-tooltip')).toBe('common.delete');
+    expect(deleteButton.getAttribute('data-tooltip-pos')).toBe('top');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata manual-model' }));
