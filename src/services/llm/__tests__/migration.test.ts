@@ -250,4 +250,51 @@ describe('llm migration', () => {
     }));
     expect(llmSettings.selections.polishModelId).toBe('open-ai-test');
   });
+
+  it('normalizes stored provider model discovery cache metadata', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'open_ai',
+        providers: {
+          open_ai: {
+            apiHost: 'https://api.openai.com',
+            apiKey: 'openai-key',
+          },
+        },
+        models: {
+          'open-ai-test': {
+            id: 'open-ai-test',
+            provider: 'open_ai',
+            model: 'gpt-4.1',
+            source: 'discovered',
+          },
+        },
+        modelOrder: ['open-ai-test'],
+        modelDiscovery: {
+          open_ai: {
+            fetchedAt: '2026-05-24T10:00:00.000Z',
+            expiresAt: '2026-05-25T10:00:00.000Z',
+          },
+          gemini: {
+            fetchedAt: 'not-a-date',
+            expiresAt: '2026-05-25T10:00:00.000Z',
+          },
+          anthropic: {
+            fetchedAt: '2026-05-24T10:00:00.000Z',
+            expiresAt: 'also-not-a-date',
+          },
+        },
+        selections: {
+          polishModelId: 'open-ai-test',
+        },
+      },
+    } as any);
+
+    expect(llmSettings.modelDiscovery).toEqual({
+      open_ai: {
+        fetchedAt: '2026-05-24T10:00:00.000Z',
+        expiresAt: '2026-05-25T10:00:00.000Z',
+      },
+    });
+  });
 });

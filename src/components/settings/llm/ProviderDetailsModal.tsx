@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrainCircuit,
   Check,
@@ -6,6 +6,7 @@ import {
   LibraryBig,
   Loader2,
   Pencil,
+  PlugZap,
   RefreshCw,
   Trash2,
   Wrench,
@@ -24,6 +25,7 @@ import { normalizeError } from '../../../utils/errorUtils';
 import {
   addLlmModel,
   getProviderLlmModels,
+  isProviderModelDiscoveryExpired,
   removeLlmModel,
   syncProviderDiscoveredModels,
   updateLlmModelMetadata,
@@ -121,6 +123,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     model: '',
   }));
   const [metadataDraftError, setMetadataDraftError] = useState('');
+  const autoRefreshKeyRef = useRef<string | null>(null);
   const savedModelCount = providerModels.length;
 
   const refreshProviderModels = useCallback(async () => {
@@ -131,13 +134,14 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     setRefreshState('loading');
     setRefreshMessage('');
     try {
+      const fetchedAt = new Date().toISOString();
       const result = await listLlmModels({
         provider,
         strategy: definition.strategy,
         baseUrl: setting.apiHost,
         apiKey: setting.apiKey,
       });
-      applyLlmSettings(syncProviderDiscoveredModels(currentLlmState, provider, result));
+      applyLlmSettings(syncProviderDiscoveredModels(currentLlmState, provider, result, fetchedAt));
       setRefreshState('idle');
     } catch (error) {
       setRefreshState('error');
@@ -149,6 +153,41 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     definition.strategy,
     definition.supportsModelListing,
     provider,
+    setting.apiHost,
+    setting.apiKey,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || !definition.supportsModelListing || refreshState === 'loading') {
+      return;
+    }
+
+    if (!isProviderModelDiscoveryExpired(currentLlmState, provider)) {
+      autoRefreshKeyRef.current = null;
+      return;
+    }
+
+    const discoveryStatus = currentLlmState.modelDiscovery?.[provider];
+    const autoRefreshKey = [
+      provider,
+      setting.apiHost,
+      setting.apiKey,
+      discoveryStatus?.fetchedAt ?? 'missing',
+      discoveryStatus?.expiresAt ?? 'missing',
+    ].join('|');
+    if (autoRefreshKeyRef.current === autoRefreshKey) {
+      return;
+    }
+
+    autoRefreshKeyRef.current = autoRefreshKey;
+    void refreshProviderModels();
+  }, [
+    currentLlmState,
+    definition.supportsModelListing,
+    isOpen,
+    provider,
+    refreshProviderModels,
+    refreshState,
     setting.apiHost,
     setting.apiKey,
   ]);
@@ -387,17 +426,20 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                 <div className="provider-model-actions">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-icon btn-secondary-soft"
                     aria-label={`${t('settings.llm.edit_model_metadata')} ${entry.model}`}
+                    data-tooltip={t('settings.llm.edit_model_metadata')}
+                    data-tooltip-pos="top"
                     onClick={() => handleEditMetadata(entry)}
                   >
                     <Pencil size={16} />
-                    <span>{t('settings.llm.edit_model_metadata')}</span>
                   </button>
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-icon btn-secondary-soft"
                     aria-label={`${t('settings.llm.test_connection')} ${entry.model}`}
+                    data-tooltip={t('settings.llm.test_connection')}
+                    data-tooltip-pos="top"
                     onClick={() => void handleTestModel(entry)}
                     disabled={testState.status === 'loading'}
                   >
@@ -405,14 +447,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                       ? <Loader2 size={16} className="animate-spin" />
                       : testState.status === 'success'
                         ? <Check size={16} />
-                        : null}
-                    <span>
-                      {testState.status === 'success'
-                        ? t('settings.llm.connection_success')
-                        : testState.status === 'error'
-                          ? t('settings.llm.connection_failed')
-                          : t('settings.llm.test_connection')}
-                    </span>
+                        : <PlugZap size={16} />}
                   </button>
                   {entry.source === 'manual' ? (
                     <button

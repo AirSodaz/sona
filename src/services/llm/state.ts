@@ -4,6 +4,7 @@ import {
   CustomLlmProviderStrategy,
   LlmDiscoveredModelSummary,
   LlmFeature,
+  LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
   LlmProvider,
@@ -40,6 +41,25 @@ const EDITABLE_MODEL_METADATA_KEYS = [
   'supportsReasoning',
 ] as const satisfies (keyof LlmModelMetadata)[];
 
+const MODEL_DISCOVERY_TTL_MS = 24 * 60 * 60 * 1000;
+
+function parseTimestampMs(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createDiscoveryStatus(fetchedAt: string = new Date().toISOString()): LlmModelDiscoveryStatus {
+  const fetchedAtMs = parseTimestampMs(fetchedAt) ?? Date.now();
+  return {
+    fetchedAt,
+    expiresAt: new Date(fetchedAtMs + MODEL_DISCOVERY_TTL_MS).toISOString(),
+  };
+}
+
 export function sanitizeProviderSetting(
   provider: LlmProvider,
   setting?: Partial<LlmProviderSetting> | null,
@@ -60,6 +80,7 @@ function createEmptyModelState() {
   return {
     models: {} as Record<string, LlmModelEntry>,
     modelOrder: [] as string[],
+    modelDiscovery: {} as LlmSettings['modelDiscovery'],
     selections: {} as LlmSettings['selections'],
   };
 }
@@ -125,16 +146,30 @@ export function updateProviderSetting(
   updates: Partial<LlmProviderSetting>,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(provider);
+  const existingSetting = ensureProviderSetting(current, provider);
+  const nextSetting = sanitizeProviderSetting(provider, {
+    ...existingSetting,
+    ...updates,
+  }, current.customProviders);
+  const settingChanged =
+    existingSetting.apiHost !== nextSetting.apiHost ||
+    existingSetting.apiKey !== nextSetting.apiKey ||
+    existingSetting.apiPath !== nextSetting.apiPath ||
+    existingSetting.apiVersion !== nextSetting.apiVersion;
+  const currentDiscovery = current.modelDiscovery ?? {};
   return {
     ...current,
     customProviders: current.customProviders ?? {},
     activeProvider: current.activeProvider,
+    modelDiscovery: settingChanged
+      ? {
+        ...currentDiscovery,
+        [provider]: undefined,
+      }
+      : current.modelDiscovery,
     providers: {
       ...current.providers,
-      [provider]: sanitizeProviderSetting(provider, {
-        ...ensureProviderSetting(current, provider),
-        ...updates,
-      }, current.customProviders),
+      [provider]: nextSetting,
     },
   };
 }
@@ -394,10 +429,33 @@ export function findLlmModelId(
   });
 }
 
+export function getModelDiscoveryStatus(
+  llmSettings: LlmSettings | undefined,
+  provider: LlmProvider,
+): LlmModelDiscoveryStatus | undefined {
+  return llmSettings?.modelDiscovery?.[provider];
+}
+
+export function isProviderModelDiscoveryExpired(
+  llmSettings: LlmSettings | undefined,
+  provider: LlmProvider,
+  now: string = new Date().toISOString(),
+): boolean {
+  const status = getModelDiscoveryStatus(llmSettings, provider);
+  const expiresAtMs = parseTimestampMs(status?.expiresAt);
+  const nowMs = parseTimestampMs(now);
+  if (expiresAtMs === null || nowMs === null) {
+    return true;
+  }
+
+  return nowMs >= expiresAtMs;
+}
+
 export function syncProviderDiscoveredModels(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
   discoveredModels: LlmDiscoveredModelSummary[],
+  fetchedAt?: string,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(provider);
   const nextDiscoveredModelNames = new Set(
@@ -435,7 +493,13 @@ export function syncProviderDiscoveredModels(
     nextSettings = removeLlmModel(nextSettings, entry.id);
   }
 
-  return nextSettings;
+  return {
+    ...nextSettings,
+    modelDiscovery: {
+      ...(nextSettings.modelDiscovery ?? {}),
+      [provider]: createDiscoveryStatus(fetchedAt),
+    },
+  };
 }
 
 export function getFeatureModelId(

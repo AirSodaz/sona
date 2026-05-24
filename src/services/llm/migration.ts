@@ -3,6 +3,7 @@ import type {
   CustomLlmProvider,
   CustomLlmProviderId,
   CustomLlmProviderStrategy,
+  LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
   LlmProvider,
@@ -74,6 +75,38 @@ function sanitizeMetadataOverrides(
   }
 
   return Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined;
+}
+
+function isValidIsoTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+function normalizeStoredModelDiscovery(
+  rawDiscovery: unknown,
+): LlmSettings['modelDiscovery'] {
+  if (!rawDiscovery || typeof rawDiscovery !== 'object') {
+    return {};
+  }
+
+  const modelDiscovery: LlmSettings['modelDiscovery'] = {};
+  for (const [rawProvider, rawStatus] of Object.entries(rawDiscovery as Record<string, unknown>)) {
+    if (!rawStatus || typeof rawStatus !== 'object') {
+      continue;
+    }
+
+    const status = rawStatus as Partial<LlmModelDiscoveryStatus>;
+    if (!isValidIsoTimestamp(status.fetchedAt) || !isValidIsoTimestamp(status.expiresAt)) {
+      continue;
+    }
+
+    const provider = normalizeProvider(rawProvider);
+    modelDiscovery[provider] = {
+      fetchedAt: status.fetchedAt,
+      expiresAt: status.expiresAt,
+    };
+  }
+
+  return modelDiscovery;
 }
 
 // Stored model records are untrusted compatibility input. Drop incomplete rows here so
@@ -422,6 +455,7 @@ export function ensureLlmState(
 
   const storedModels = normalizeStoredModels(candidate.llmSettings?.models);
   const storedModelOrder = normalizeStoredModelOrder(candidate.llmSettings?.modelOrder, storedModels);
+  const storedModelDiscovery = normalizeStoredModelDiscovery(candidate.llmSettings?.modelDiscovery);
   const storedSelections = normalizeStoredSelections(candidate.llmSettings?.selections, storedModels);
 
   // Migration order matters here:
@@ -438,6 +472,7 @@ export function ensureLlmState(
     },
     models: storedModels,
     modelOrder: storedModelOrder,
+    modelDiscovery: storedModelDiscovery,
     selections: storedSelections,
   };
 

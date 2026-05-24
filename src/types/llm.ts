@@ -122,6 +122,13 @@ export interface LlmFeatureSelections {
   summaryTemperature?: number;
 }
 
+export interface LlmModelDiscoveryStatus {
+  /** ISO timestamp when provider models were last fetched successfully. */
+  fetchedAt: string;
+  /** ISO timestamp when the fetched provider model list should be refreshed. */
+  expiresAt: string;
+}
+
 export interface LlmSettings {
   /** Currently active provider. */
   activeProvider: LlmProvider;
@@ -133,6 +140,8 @@ export interface LlmSettings {
   models: Record<string, LlmModelEntry>;
   /** Ordered list of added model IDs. */
   modelOrder: string[];
+  /** Per-provider freshness metadata for discovered model lists. */
+  modelDiscovery?: Partial<Record<LlmProvider, LlmModelDiscoveryStatus>>;
   /** Feature-specific model selections. */
   selections: LlmFeatureSelections;
 }

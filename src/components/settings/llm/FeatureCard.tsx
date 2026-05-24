@@ -7,8 +7,10 @@ import {
   addLlmModel,
   getProviderLlmModels,
   getFeatureModelEntry,
+  isProviderModelDiscoveryExpired,
   setFeatureModelSelection,
   setFeatureTemperature,
+  syncProviderDiscoveredModels,
 } from '../../../services/llm/state';
 import { isFeatureLlmConfigComplete } from '../../../services/llm/runtime';
 import {
@@ -95,7 +97,8 @@ export const FeatureCard = React.memo(function FeatureCard({
 
   const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
     const persistedModels = getProviderLlmModels(currentLlmState, provider);
-    if (persistedModels.length > 0) {
+    const isCacheExpired = isProviderModelDiscoveryExpired(currentLlmState, provider);
+    if (persistedModels.length > 0 && !isCacheExpired) {
       setModelCandidates(persistedModels.map((entry) => entry.model));
       setIsLoadingCandidates(false);
       return;
@@ -110,6 +113,7 @@ export const FeatureCard = React.memo(function FeatureCard({
     setIsLoadingCandidates(true);
     try {
       const strategy = getProviderDefinition(provider, currentLlmState.customProviders).strategy;
+      const fetchedAt = new Date().toISOString();
       const result = await listLlmModels({ provider, strategy, baseUrl: setting.apiHost, apiKey: setting.apiKey });
       const models = Array.isArray(result)
         ? result
@@ -117,19 +121,20 @@ export const FeatureCard = React.memo(function FeatureCard({
           .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
         : [];
       setModelCandidates(models);
+      applyLlmSettings(syncProviderDiscoveredModels(currentLlmState, provider, result, fetchedAt));
     } catch {
-      setModelCandidates([]);
+      setModelCandidates(persistedModels.map((entry) => entry.model));
     } finally {
       setIsLoadingCandidates(false);
     }
-  }, [currentLlmState]);
+  }, [applyLlmSettings, currentLlmState]);
 
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
-    if (persistedProviderModels.length > 0) {
+    if (persistedProviderModels.length > 0 && !isProviderModelDiscoveryExpired(currentLlmState, localProvider)) {
       setModelCandidates(persistedProviderModels.map((entry) => entry.model));
       return;
     }
@@ -137,7 +142,15 @@ export const FeatureCard = React.memo(function FeatureCard({
     queueMicrotask(() => {
       void fetchModelCandidates(localProvider);
     });
-  }, [fetchModelCandidates, isActive, localProvider, persistedProviderModels, providerApiHost, providerApiKey]);
+  }, [
+    currentLlmState,
+    fetchModelCandidates,
+    isActive,
+    localProvider,
+    persistedProviderModels,
+    providerApiHost,
+    providerApiKey,
+  ]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();

@@ -5,9 +5,11 @@ import {
   createLlmSettings,
   addCustomProvider,
   findLlmModelId,
+  getModelDiscoveryStatus,
   getFeatureModelEntry,
   getOrderedLlmModels,
   getProviderLlmModels,
+  isProviderModelDiscoveryExpired,
   removeLlmModel,
   setFeatureModelSelection,
   setFeatureTemperature,
@@ -173,6 +175,36 @@ describe('llm state', () => {
         }),
       }),
     ]);
+  });
+
+  it('stores provider model discovery expiration when syncing discovered models', () => {
+    const fetchedAt = '2026-05-24T10:00:00.000Z';
+    const llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], fetchedAt);
+
+    expect(getModelDiscoveryStatus(llmSettings, 'open_ai')).toEqual({
+      fetchedAt,
+      expiresAt: '2026-05-25T10:00:00.000Z',
+    });
+    expect(isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-24T12:00:00.000Z')).toBe(false);
+    expect(isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-25T10:00:00.000Z')).toBe(true);
+    expect(isProviderModelDiscoveryExpired(createLlmSettings('open_ai'), 'open_ai', fetchedAt)).toBe(true);
+  });
+
+  it('marks a provider model discovery cache expired when provider settings change', () => {
+    const synced = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], '2026-05-24T10:00:00.000Z');
+
+    const updated = updateProviderSetting(synced, 'open_ai', {
+      apiHost: 'https://gateway.example.com',
+    });
+
+    expect(getProviderLlmModels(updated, 'open_ai')).toEqual([
+      expect.objectContaining({ model: 'gpt-4.1', source: 'discovered' }),
+    ]);
+    expect(isProviderModelDiscoveryExpired(updated, 'open_ai', '2026-05-24T10:05:00.000Z')).toBe(true);
   });
 
   it('removes stale discovered models while preserving manual models and clearing stale selections', () => {

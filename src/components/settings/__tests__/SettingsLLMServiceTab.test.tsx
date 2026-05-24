@@ -243,7 +243,7 @@ describe('SettingsLLMServiceTab', () => {
     llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
       { model: 'gpt-4.1', contextWindow: 128000 },
       { model: 'gpt-4.1-mini', supportsReasoning: true },
-    ]);
+    ], '2026-05-24T10:00:00.000Z');
     currentConfig = {
       ...buildConfig('open_ai'),
       llmSettings,
@@ -267,6 +267,40 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(vi.mocked(tauriApi.invoke)).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+  });
+
+  it('refreshes expired persisted provider models for feature candidates and writes them back', async () => {
+    let llmSettings = buildConfig('open_ai').llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], '2026-05-22T10:00:00.000Z');
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(tauriApi.invoke)).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
+        request: expect.objectContaining({
+          provider: 'open_ai',
+          apiKey: 'test-key',
+        }),
+      }));
+    });
+
+    const nextSettings = mockUpdateConfig.mock.calls.at(-1)?.[0].llmSettings;
+    expect(nextSettings.modelDiscovery.open_ai).toEqual(expect.objectContaining({
+      fetchedAt: expect.any(String),
+      expiresAt: expect.any(String),
+    }));
+    expect(findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1-mini')).toBeDefined();
   });
 
   it('adds a model through the searchable model input flow', async () => {
@@ -512,8 +546,61 @@ describe('SettingsLLMServiceTab', () => {
     expect(container.querySelector('.panel-modal-header-leading.provider-details-header')).toBeNull();
   });
 
+  it('renders provider model card edit and test actions as tooltip-only icon buttons', async () => {
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 128000,
+      },
+    ]);
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={vi.fn()}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    const editButton = screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' });
+    const testButton = screen.getByRole('button', { name: 'settings.llm.test_connection gpt-4.1' });
+
+    expect(editButton.classList.contains('btn-icon')).toBe(true);
+    expect(editButton.classList.contains('btn-secondary-soft')).toBe(true);
+    expect(editButton.getAttribute('data-tooltip')).toBe('settings.llm.edit_model_metadata');
+    expect(editButton.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(editButton.textContent).toBe('');
+
+    expect(testButton.classList.contains('btn-icon')).toBe(true);
+    expect(testButton.classList.contains('btn-secondary-soft')).toBe(true);
+    expect(testButton.getAttribute('data-tooltip')).toBe('settings.llm.test_connection');
+    expect(testButton.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(testButton.textContent).toBe('');
+    expect(testButton.querySelector('svg')).not.toBeNull();
+  });
+
   it('only refreshes provider models from details after an explicit refresh click', async () => {
     const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], new Date().toISOString());
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
     let resolveModels!: (models: unknown[]) => void;
     const modelListRequest = new Promise<unknown[]>((resolve) => {
       resolveModels = resolve;
@@ -572,6 +659,75 @@ describe('SettingsLLMServiceTab', () => {
     });
     expect(applyLlmSettings).toHaveBeenCalledTimes(1);
     expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('auto-refreshes an expired provider model library when details open', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], '2026-05-22T10:00:00.000Z');
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
+        request: expect.objectContaining({
+          provider: 'open_ai',
+          apiKey: 'test-key',
+        }),
+      }));
+    });
+    expect(applyLlmSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps fresh provider model library cache local when details open', async () => {
+    const applyLlmSettings = vi.fn();
+    let llmSettings = currentConfig.llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], new Date().toISOString());
+    currentConfig = {
+      ...currentConfig,
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+    expect(applyLlmSettings).not.toHaveBeenCalled();
   });
 
   it('edits discovered provider model metadata from the model card', async () => {
@@ -654,6 +810,9 @@ describe('SettingsLLMServiceTab', () => {
       provider: 'open_ai',
       model: 'manual-model',
     });
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+    ], new Date().toISOString());
     currentConfig = {
       ...currentConfig,
       llmSettings,
