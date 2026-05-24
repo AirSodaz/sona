@@ -27,6 +27,15 @@ function stripHtmlTags(text: string): string {
   return text.replace(/<\/?[^>]+(>|$)/g, '');
 }
 
+function normalizeComparableText(text: string): string {
+  return stripHtmlTags(text).toLowerCase().replace(NORMALIZE_REGEX, '');
+}
+
+function doTimingUnitsMatchSegmentText(units: TranscriptTimingUnit[], text: string): boolean {
+  const unitsText = units.map((unit) => unit.text).join('');
+  return normalizeComparableText(unitsText) === normalizeComparableText(text);
+}
+
 function normalizeUnitBoundaries(
   units: TranscriptTimingUnit[],
   start: number,
@@ -271,6 +280,10 @@ function coerceTiming(segment: TranscriptSegment): TranscriptTiming {
       segment.end,
     );
     if (normalizedUnits.length > 0) {
+      if (!doTimingUnitsMatchSegmentText(normalizedUnits, segment.text)) {
+        return buildTokenLevelTiming(segment, 'model') ?? buildSegmentLevelTiming(segment, 'derived');
+      }
+
       return {
         level: timing.level,
         source: timing.source,

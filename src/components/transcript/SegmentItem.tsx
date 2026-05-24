@@ -37,7 +37,7 @@ export interface SegmentItemProps {
 const ContentEditable = React.forwardRef<HTMLDivElement, {
     html: string;
     onChange: (e: React.FormEvent<HTMLDivElement>) => void;
-    onBlur: () => void;
+    onBlur: (e: React.FocusEvent<HTMLDivElement>) => void;
     onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
     className?: string;
 }>(function ContentEditable({ html, onChange, onBlur, onKeyDown, className }, ref) {
@@ -226,10 +226,8 @@ function SegmentItemComponent({
         }
     }
 
-    function handleBlur(): void {
-        // Use current state or ref? State updates onInput, so editText is up to date (mostly).
-        // But safer to use htmlToText(editText)
-        onSave(segment.id, editorHtmlToTranscriptText(editText));
+    function handleBlur(e: React.FocusEvent<HTMLDivElement>): void {
+        onSave(segment.id, editorHtmlToTranscriptText(e.currentTarget.innerHTML));
     }
 
     function handleChange(e: React.FormEvent<HTMLDivElement>) {

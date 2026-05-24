@@ -44,6 +44,23 @@ describe('SegmentTokens', () => {
     expect(screen.getByText('world')).not.toBeNull();
   });
 
+  it('renders edited segment text when timing text is stale', () => {
+    render(
+      <SegmentTokens
+        segment={{
+          ...mockSegment,
+          text: 'Edited text',
+        }}
+        isActive={false}
+        onSeek={mockOnSeek}
+      />
+    );
+
+    expect(screen.getByText('Edited text')).not.toBeNull();
+    expect(screen.queryByText('Hello')).toBeNull();
+    expect(screen.queryByText('world')).toBeNull();
+  });
+
   it('applies "partial" class when segment is not final', () => {
     const partialSegment = { ...mockSegment, isFinal: false };
     const { container } = render(

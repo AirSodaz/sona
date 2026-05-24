@@ -5,6 +5,8 @@ import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
 import { renderSafeTranscriptRichText } from './richText';
 
+const COMPARABLE_TEXT_REGEX = /[^\p{L}\p{N}]/gu;
+
 /** Props for SegmentTokens component. */
 export interface SegmentTokensProps {
     segment: TranscriptSegment;
@@ -74,6 +76,22 @@ function checkTokenMatch(
     }
 
     return { isMatch, isActiveMatch, matchIndex };
+}
+
+function normalizeComparableText(text: string): string {
+    return text.replace(/<\/?[^>]+(>|$)/g, '').toLowerCase().replace(COMPARABLE_TEXT_REGEX, '');
+}
+
+function doTimingUnitsMatchSegmentText(
+    alignedUnits: TranscriptTimingUnit[] | null,
+    segmentText: string,
+): boolean {
+    if (!alignedUnits) {
+        return true;
+    }
+
+    const timingText = alignedUnits.map((unit) => unit.text).join('');
+    return normalizeComparableText(timingText) === normalizeComparableText(segmentText);
 }
 
 /**
@@ -214,13 +232,16 @@ function SegmentTokensComponent({
     const alignedUnits = useMemo(() => (
         segment.timing?.level === 'token' ? segment.timing.units : null
     ), [segment.timing]);
+    const renderAlignedUnits = doTimingUnitsMatchSegmentText(alignedUnits, segment.text)
+        ? alignedUnits
+        : null;
 
     // Stable render prop
     const renderTokenList = (timestamp: number) => (
         <TokenList
             segmentText={segment.text}
             isFinal={segment.isFinal ?? true}
-            alignedUnits={alignedUnits}
+            alignedUnits={renderAlignedUnits}
             activeUnitStart={timestamp}
             onSeek={onSeek}
             onMatchClick={onMatchClick}
@@ -230,7 +251,7 @@ function SegmentTokensComponent({
     );
 
     if (isActive) {
-        return <ActiveSegmentWrapper alignedUnits={alignedUnits} renderTokenList={renderTokenList} />;
+        return <ActiveSegmentWrapper alignedUnits={renderAlignedUnits} renderTokenList={renderTokenList} />;
     }
 
     return renderTokenList(-1);
