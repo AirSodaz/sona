@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { splitTranscriptSegment } from '../stores/transcriptCoordinator';
+import { getCaretCharacterOffset } from './transcript/richText';
 import {
     UndoIcon,
     RedoIcon,
@@ -25,6 +27,15 @@ export function EditorToolbar(): React.JSX.Element | null {
     const [isSavedVisible, setIsSavedVisible] = useState(false);
 
     const handleAction = (command: string, value?: string) => {
+        if (command === 'insertLineBreak' && editingSegmentId) {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('segment-input')) {
+                const caretOffset = getCaretCharacterOffset(activeElement as HTMLElement);
+                const currentHtml = activeElement.innerHTML;
+                splitTranscriptSegment(editingSegmentId, caretOffset, currentHtml);
+                return;
+            }
+        }
         document.execCommand(command, false, value);
     };
 
@@ -146,9 +157,9 @@ export function EditorToolbar(): React.JSX.Element | null {
                         className="btn-icon toolbar-btn"
                         onMouseDown={handleMouseDown}
                         onClick={() => handleAction('insertLineBreak')}
-                        data-tooltip={t('editor.line_break', 'Line break')}
+                        data-tooltip={t('editor.split_segment', 'Split segment')}
                         data-tooltip-pos="top"
-                        aria-label={t('editor.line_break', 'Line break')}
+                        aria-label={t('editor.split_segment', 'Split segment')}
                     >
                         <ReturnIcon />
                     </button>

@@ -285,7 +285,13 @@
         "char_count": "{{count}} 个字符",
         "autosave_saving": "正在保存...",
         "autosave_saved": "已保存",
-        "autosave_error": "保存失败"
+        "autosave_error": "保存失败",
+        "undo": "撤销",
+        "redo": "重做",
+        "bold": "加粗",
+        "italic": "斜体",
+        "underline": "下划线",
+        "split_segment": "拆分段落"
     },
     "export": {
         "button": "导出",
@@ -1086,7 +1092,7 @@
         "editor_bold": "加粗",
         "editor_italic": "斜体",
         "editor_underline": "下划线",
-        "editor_line_break": "换行",
+        "editor_split_segment": "拆分段落",
         "section_live": "实时录音",
         "record_start_stop": "开始 / 停止录音",
         "record_pause_resume": "暂停 / 恢复录音",

@@ -79,6 +79,7 @@ export type {
   LlmFeature,
   LlmFeatureSelections,
   LlmDiscoveredModelSummary,
+  LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
   LlmModelSource,

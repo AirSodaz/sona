@@ -7,6 +7,7 @@ import {
     deleteTranscriptSegment,
     mergeTranscriptSegments,
     updateTranscriptSegment,
+    splitTranscriptSegment,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -39,6 +40,7 @@ interface TranscriptContext {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
+    onSplit: (id: string, caretOffset: number, currentHtml: string) => void;
     onAnimationEnd: (id: string) => void;
 }
 
@@ -112,6 +114,10 @@ export function TranscriptEditor(): React.JSX.Element {
         }
     }, [confirm, t]);
 
+    const handleSplit = useCallback((id: string, caretOffset: number, currentHtml: string) => {
+        splitTranscriptSegment(id, caretOffset, currentHtml);
+    }, []);
+
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({
         onSeek: handleSeek,
@@ -119,8 +125,9 @@ export function TranscriptEditor(): React.JSX.Element {
         onSave: handleSave,
         onDelete: handleDelete,
         onMergeWithNext: handleMergeWithNext,
+        onSplit: handleSplit,
         onAnimationEnd: handleAnimationEnd,
-    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleAnimationEnd]);
+    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleSplit, handleAnimationEnd]);
 
     const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => {
         const previousSegment = index > 0 ? segmentsRef.current[index - 1] : null;
@@ -137,6 +144,7 @@ export function TranscriptEditor(): React.JSX.Element {
                 onSave={context.onSave}
                 onDelete={context.onDelete}
                 onMergeWithNext={context.onMergeWithNext}
+                onSplit={context.onSplit}
                 onAnimationEnd={context.onAnimationEnd}
             />
         );

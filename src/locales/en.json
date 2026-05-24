@@ -285,7 +285,13 @@
         "char_count": "{{count}} characters",
         "autosave_saving": "Saving...",
         "autosave_saved": "Saved",
-        "autosave_error": "Save failed"
+        "autosave_error": "Save failed",
+        "undo": "Undo",
+        "redo": "Redo",
+        "bold": "Bold",
+        "italic": "Italic",
+        "underline": "Underline",
+        "split_segment": "Split segment"
     },
     "export": {
         "button": "Export",
@@ -1088,7 +1094,7 @@
         "editor_bold": "Bold",
         "editor_italic": "Italic",
         "editor_underline": "Underline",
-        "editor_line_break": "Line Break",
+        "editor_split_segment": "Split Segment",
         "section_live": "Live Recording",
         "record_start_stop": "Start / Stop Recording",
         "record_pause_resume": "Pause / Resume Recording",

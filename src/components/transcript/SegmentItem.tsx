@@ -18,7 +18,7 @@ import {
     buildSpeakerCorrectionProfileSections,
     speakerCorrectionService,
 } from '../../services/speakerCorrectionService';
-import { editorHtmlToTranscriptText, transcriptTextToEditorHtml } from './richText';
+import { editorHtmlToTranscriptText, transcriptTextToEditorHtml, getCaretCharacterOffset } from './richText';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -31,6 +31,7 @@ export interface SegmentItemProps {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
+    onSplit?: (id: string, caretOffset: number, currentHtml: string) => void;
     onAnimationEnd: (id: string) => void;
 }
 
@@ -99,6 +100,7 @@ function SegmentItemComponent({
     onSave,
     onDelete,
     onMergeWithNext,
+    onSplit,
     onAnimationEnd,
 }: SegmentItemProps): React.JSX.Element {
     const { t } = useTranslation();
@@ -196,6 +198,16 @@ function SegmentItemComponent({
     }
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
+        if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            if (onSplit) {
+                const caretOffset = getCaretCharacterOffset(e.currentTarget);
+                const currentHtml = e.currentTarget.innerHTML;
+                onSplit(segment.id, caretOffset, currentHtml);
+            }
+            return;
+        }
+
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             // Save current HTML converted to text

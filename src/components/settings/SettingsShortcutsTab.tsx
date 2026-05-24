@@ -60,16 +60,16 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 { key: 'Ctrl + B', description: t('shortcuts.editor_bold') },
                 { key: 'Ctrl + I', description: t('shortcuts.editor_italic') },
                 { key: 'Ctrl + U', description: t('shortcuts.editor_underline') },
-                { key: 'Shift + Enter', description: t('shortcuts.editor_line_break') },
+                { key: 'Shift + Enter', description: t('shortcuts.editor_split_segment') },
             ]
         }
     ];
     return (
         <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
-            <SettingsPageHeader 
+            <SettingsPageHeader
                 icon={<KeyboardIcon width={28} height={28} />}
-                title={t('shortcuts.title')} 
-                description={t('settings.shortcuts_description')} 
+                title={t('shortcuts.title')}
+                description={t('settings.shortcuts_description')}
             />
 
             {sections.map((section, index) => (

@@ -153,7 +153,7 @@ describe('EditorToolbar', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
         expect(execCommandMock).toHaveBeenCalledWith('italic', false, undefined);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Line break' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Split segment' }));
         expect(execCommandMock).toHaveBeenCalledWith('insertLineBreak', false, undefined);
     });
 

@@ -161,3 +161,88 @@ function serializeTranscriptNode(node: Node): string {
 
     return `<${tagName}>${children}</${tagName}>`;
 }
+
+export function getCaretCharacterOffset(element: HTMLElement): number {
+    let caretOffset = 0;
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(element);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        caretOffset = preCaretRange.toString().length;
+    }
+    return caretOffset;
+}
+
+export function getRichTextNodesLength(nodes: RichTextNode[]): number {
+    let length = 0;
+    for (const node of nodes) {
+        if (typeof node === 'string') {
+            length += node.length;
+        } else {
+            length += getRichTextNodesLength(node.children);
+        }
+    }
+    return length;
+}
+
+export function splitRichTextNodes(nodes: RichTextNode[], offset: number): [RichTextNode[], RichTextNode[]] {
+    const left: RichTextNode[] = [];
+    const right: RichTextNode[] = [];
+    let currentOffset = offset;
+
+    for (const node of nodes) {
+        if (typeof node === 'string') {
+            const len = node.length;
+            if (currentOffset <= 0) {
+                right.push(node);
+            } else if (currentOffset >= len) {
+                left.push(node);
+                currentOffset -= len;
+            } else {
+                left.push(node.slice(0, currentOffset));
+                right.push(node.slice(currentOffset));
+                currentOffset = 0;
+            }
+        } else {
+            const childTextLen = getRichTextNodesLength(node.children);
+            if (currentOffset <= 0) {
+                right.push(node);
+            } else if (currentOffset >= childTextLen) {
+                left.push(node);
+                currentOffset -= childTextLen;
+            } else {
+                const [leftChildren, rightChildren] = splitRichTextNodes(node.children, currentOffset);
+                if (leftChildren.length > 0) {
+                    left.push({ tag: node.tag, children: leftChildren });
+                }
+                if (rightChildren.length > 0) {
+                    right.push({ tag: node.tag, children: rightChildren });
+                }
+                currentOffset = 0;
+            }
+        }
+    }
+
+    return [left, right];
+}
+
+export function serializeNodesToTranscriptText(nodes: RichTextNode[]): string {
+    return nodes.map((node) => {
+        if (typeof node === 'string') {
+            return node;
+        }
+        const children = serializeNodesToTranscriptText(node.children);
+        return `<${node.tag}>${children}</${node.tag}>`;
+    }).join('');
+}
+
+export function splitTranscriptText(text: string, caretOffset: number): [string, string] {
+    const nodes = parseSafeTranscriptRichText(text);
+    const [leftNodes, rightNodes] = splitRichTextNodes(nodes, caretOffset);
+    return [
+        serializeNodesToTranscriptText(leftNodes),
+        serializeNodesToTranscriptText(rightNodes)
+    ];
+}
