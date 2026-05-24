@@ -1286,15 +1286,24 @@ fn sanitize_provider_setting(
     setting: Option<Value>,
     custom_providers: Option<&Map<String, Value>>,
 ) -> Value {
-    let mut defaults = provider_defaults(provider, custom_providers);
+    let defaults = provider_defaults(provider, custom_providers);
+
+    // Google Translate Free is a fixed built-in endpoint. Persisted values are
+    // ignored so a stale custom gateway URL (e.g. https://api2.apiaqi.com)
+    // cannot break the free translation path.
+    if provider == "google_translate_free" {
+        return Value::Object(defaults);
+    }
+
+    let mut merged = defaults;
     if let Some(setting_object) = setting.and_then(|value| value.as_object().cloned()) {
         for key in ["apiHost", "apiKey", "apiPath", "apiVersion"] {
             if let Some(value) = setting_object.get(key) {
-                defaults.insert(key.to_string(), value.clone());
+                merged.insert(key.to_string(), value.clone());
             }
         }
     }
-    Value::Object(defaults)
+    Value::Object(merged)
 }
 
 fn create_llm_settings(active_provider: &str) -> Value {

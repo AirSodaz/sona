@@ -227,47 +227,16 @@ impl LlmAdapter for GoogleTranslateAdapter {
                 input,
                 "en".to_string(),
                 move |text, target| {
-                    let url = base_url
-                        .with_query(&format!(
-                            "client=gtx&sl=auto&tl={}&dt=t&q={}",
-                            target,
-                            urlencoding::encode(&text)
-                        ))
-                        .map_err(GoogleTranslateFreeAttemptError::Message);
                     let client = fetch_client.clone();
+                    let base_url = base_url.clone();
                     async move {
-                        let url = url?;
-                        let response =
-                            client.get(url.reqwest_url()).send().await.map_err(|e| {
-                                GoogleTranslateFreeAttemptError::Message(e.to_string())
-                            })?;
-                        let status = response.status();
-                        if !status.is_success() {
-                            return Err(GoogleTranslateFreeAttemptError::HttpStatus {
-                                status,
-                                retry_after: None,
-                            });
-                        }
-                        let body: Value = response
-                            .json()
-                            .await
-                            .map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
-                        let mut result = String::new();
-                        if let Some(outer_arr) = body.as_array() {
-                            if let Some(inner_arr) = outer_arr.first().and_then(|v| v.as_array()) {
-                                for part in inner_arr {
-                                    if let Some(text) = part.get(0).and_then(|v| v.as_str()) {
-                                        result.push_str(text);
-                                    }
-                                }
-                            }
-                        }
-                        if result.is_empty() {
-                            return Err(GoogleTranslateFreeAttemptError::Message(
-                                "No translation returned".to_string(),
-                            ));
-                        }
-                        Ok(result)
+                        fetch_google_translate_free_translation(
+                            &client,
+                            &base_url,
+                            &target,
+                            &text,
+                        )
+                        .await
                     }
                 },
                 tokio::time::sleep,

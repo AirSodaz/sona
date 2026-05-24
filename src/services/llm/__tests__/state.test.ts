@@ -4,6 +4,7 @@ import {
   buildLlmConfigPatch,
   createLlmSettings,
   addCustomProvider,
+  ensureProviderSetting,
   findLlmModelId,
   getModelDiscoveryStatus,
   getFeatureModelEntry,
@@ -11,6 +12,7 @@ import {
   getProviderLlmModels,
   isProviderModelDiscoveryExpired,
   removeLlmModel,
+  sanitizeProviderSetting,
   setFeatureModelSelection,
   setFeatureTemperature,
   syncProviderDiscoveredModels,
@@ -346,5 +348,44 @@ describe('llm state', () => {
       },
     }));
     expect(findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1')).toBeDefined();
+  });
+
+  it('sanitizes google_translate_free to the official endpoint ignoring persisted gateway', () => {
+    const setting = sanitizeProviderSetting('google_translate_free', {
+      apiHost: 'https://api2.apiaqi.com',
+      apiKey: 'leaked-key',
+      apiPath: '/custom/path',
+      apiVersion: '2',
+    });
+
+    expect(setting).toEqual({
+      apiHost: 'https://translate.googleapis.com/translate_a/single',
+      apiKey: '',
+      apiPath: undefined,
+      apiVersion: undefined,
+    });
+  });
+
+  it('preserves user-configured apiHost and apiKey for non-free providers', () => {
+    const setting = sanitizeProviderSetting('open_ai', {
+      apiHost: 'https://custom-gateway.example.com',
+      apiKey: 'sk-test',
+    });
+
+    expect(setting.apiHost).toBe('https://custom-gateway.example.com');
+    expect(setting.apiKey).toBe('sk-test');
+  });
+
+  it('ensures google_translate_free provider setting returns official defaults from stored settings', () => {
+    let llmSettings = createLlmSettings('google_translate_free');
+    llmSettings = updateProviderSetting(llmSettings, 'google_translate_free', {
+      apiHost: 'https://api2.apiaqi.com',
+      apiKey: 'bad-key',
+    });
+
+    const setting = ensureProviderSetting(llmSettings, 'google_translate_free');
+
+    expect(setting.apiHost).toBe('https://translate.googleapis.com/translate_a/single');
+    expect(setting.apiKey).toBe('');
   });
 });

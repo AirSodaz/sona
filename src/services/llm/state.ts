@@ -66,6 +66,14 @@ export function sanitizeProviderSetting(
   customProviders?: LlmSettings['customProviders'],
 ): LlmProviderSetting {
   const defaults = createProviderSetting(provider, customProviders);
+
+  // Google Translate Free is a fixed built-in endpoint. Persisted values are
+  // ignored so a stale custom gateway URL (e.g. https://api2.apiaqi.com)
+  // cannot break the free translation path.
+  if (provider === 'google_translate_free') {
+    return defaults;
+  }
+
   return {
     ...defaults,
     ...(setting ?? {}),

@@ -152,4 +152,36 @@ describe('llm providers', () => {
       },
     })).toBe('custom-openai-compatible-2');
   });
+
+  it('forces buildLlmConfig to use the official endpoint for google_translate_free regardless of setting', () => {
+    const config = buildLlmConfig('google_translate_free', {
+      apiHost: 'https://api2.apiaqi.com',
+      apiKey: 'leaked-key',
+      apiPath: '/custom/path',
+      apiVersion: '2',
+    });
+
+    expect(config).toEqual({
+      provider: 'google_translate_free',
+      strategy: 'google_translate_free',
+      baseUrl: 'https://translate.googleapis.com/translate_a/single',
+      apiKey: '',
+      model: '',
+      apiPath: undefined,
+      apiVersion: undefined,
+      temperature: DEFAULT_LLM_TEMPERATURE,
+    });
+  });
+
+  it('allows custom apiHost for non-free providers in buildLlmConfig', () => {
+    const config = buildLlmConfig('open_ai', {
+      apiHost: 'https://custom-gateway.example.com',
+      apiKey: 'sk-test',
+      apiPath: undefined,
+      apiVersion: undefined,
+    });
+
+    expect(config.baseUrl).toBe('https://custom-gateway.example.com');
+    expect(config.apiKey).toBe('sk-test');
+  });
 });

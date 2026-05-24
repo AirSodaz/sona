@@ -390,6 +390,23 @@ export function buildLlmConfig(
   customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
 ): LlmConfig {
   const definition = getProviderDefinition(provider, customProviders);
+
+  // Google Translate Free must always hit the official endpoint. This is a
+  // second safety net: even if a corrupted provider setting somehow reaches
+  // here, the runtime config will still use the correct URL.
+  if (provider === 'google_translate_free') {
+    return {
+      provider,
+      strategy: definition.strategy,
+      baseUrl: definition.defaultApiHost,
+      apiKey: '',
+      model: '',
+      apiPath: undefined,
+      apiVersion: undefined,
+      temperature: DEFAULT_LLM_TEMPERATURE,
+    };
+  }
+
   // This returns a provider-level runtime snapshot without picking a concrete model yet.
   // Feature helpers layer the selected model and temperature on top of this base shape.
   return {
