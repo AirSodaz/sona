@@ -67,6 +67,15 @@ export const DEFAULT_CONFIG: AppConfig = {
         modelPath: '',
       },
     },
+    providers: {
+      volcengineDoubao: {
+        apiKey: '',
+        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+        streamingResourceId: 'volc.seedasr.sauc.duration',
+        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+        batchResourceId: 'volc.bigasr.auc_turbo',
+      },
+    },
   },
   streamingModelPath: '',
   offlineModelPath: '',

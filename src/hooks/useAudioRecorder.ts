@@ -19,7 +19,7 @@ import { historyService } from '../services/historyService';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
 import { transcriptionService } from '../services/transcriptionService';
-import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
@@ -297,7 +297,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
     const startRecording = useCallback(async () => {
         const effectiveConfig = getEffectiveConfigSnapshot();
-        if (!resolveAsrTranscriptionRequest(effectiveConfig, 'live').modelPath) {
+        if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(effectiveConfig, 'live'))) {
             const onboardingStore = useOnboardingStore.getState();
             useTranscriptRuntimeStore.getState().setMode('live');
             onboardingStore.reopen(

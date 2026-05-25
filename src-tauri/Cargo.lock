@@ -5679,6 +5679,7 @@ name = "tauri-appsona"
 version = "0.6.7"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "bytes",
  "bzip2",
  "chrono",
@@ -5717,6 +5718,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
  "toml 0.8.23",
  "unicode-normalization",
  "urlencoding",

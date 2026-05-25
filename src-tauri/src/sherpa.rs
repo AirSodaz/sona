@@ -10,6 +10,7 @@ mod runtime;
 mod state;
 mod transcript;
 mod types;
+mod volcengine;
 
 const BATCH_PROGRESS_EVENT: &str = "batch-progress";
 
@@ -30,6 +31,7 @@ pub use types::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
     TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, TranscriptTiming,
     TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
+    VolcengineDoubaoAsrConfig,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -68,32 +70,44 @@ pub async fn init_recognizer(
             postprocess_options.unwrap_or_default(),
         )
     });
-    LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)?;
-    runtime::init_recognizer_impl(
-        state,
-        instance_id,
-        request.model_path,
-        request.num_threads,
-        request.enable_itn,
-        request.language,
-        request.punctuation_model,
-        request.vad_model,
-        request.vad_buffer,
-        request.model_type,
-        request.file_config,
-        request.hotwords,
-        Some(request.normalization_options),
-        Some(request.postprocess_options),
-    )
-    .await
+    match request.engine {
+        AsrEngine::LocalSherpa => {
+            LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)?;
+            runtime::init_recognizer_impl(
+                state,
+                instance_id,
+                request.model_path,
+                request.num_threads,
+                request.enable_itn,
+                request.language,
+                request.punctuation_model,
+                request.vad_model,
+                request.vad_buffer,
+                request.model_type,
+                request.file_config,
+                request.hotwords,
+                Some(request.normalization_options),
+                Some(request.postprocess_options),
+            )
+            .await
+        }
+        AsrEngine::VolcengineDoubao => {
+            volcengine::init_streaming_recognizer_impl(state, instance_id, request).await
+        }
+    }
 }
 
 #[tauri::command]
-pub async fn start_recognizer(
+pub async fn start_recognizer<R: tauri::Runtime>(
+    app: AppHandle<R>,
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    runtime::start_recognizer_impl(state, instance_id).await
+    if state.has_volcengine_session(&instance_id).await {
+        volcengine::start_streaming_recognizer_impl(app, state, instance_id).await
+    } else {
+        runtime::start_recognizer_impl(state, instance_id).await
+    }
 }
 
 #[tauri::command]
@@ -101,7 +115,11 @@ pub async fn stop_recognizer(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    runtime::stop_recognizer_impl(state, instance_id).await
+    if state.has_volcengine_session(&instance_id).await {
+        volcengine::stop_streaming_recognizer_impl(state, instance_id).await
+    } else {
+        runtime::stop_recognizer_impl(state, instance_id).await
+    }
 }
 
 #[tauri::command]
@@ -110,7 +128,11 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    runtime::flush_recognizer_impl(app, state, instance_id).await
+    if state.has_volcengine_session(&instance_id).await {
+        volcengine::flush_streaming_recognizer_impl(app, state, instance_id).await
+    } else {
+        runtime::flush_recognizer_impl(app, state, instance_id).await
+    }
 }
 
 #[tauri::command]
@@ -125,7 +147,11 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         instance_id,
         samples.len()
     );
-    runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
+    if state.has_volcengine_session(&instance_id).await {
+        volcengine::feed_audio_chunk_impl(app, state, instance_id, samples).await
+    } else {
+        runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -167,10 +193,17 @@ pub async fn process_batch_file<R: tauri::Runtime>(
             postprocess_options.unwrap_or_default(),
         )
     });
-    let adapter = LocalSherpaAdapter;
-    let batch_request =
-        adapter.batch_request(file_path, save_to_path, request, speaker_processing)?;
-    batch::process_batch_request_impl(app, state.inner(), batch_request).await
+    match request.engine {
+        AsrEngine::LocalSherpa => {
+            let adapter = LocalSherpaAdapter;
+            let batch_request =
+                adapter.batch_request(file_path, save_to_path, request, speaker_processing)?;
+            batch::process_batch_request_impl(app, state.inner(), batch_request).await
+        }
+        AsrEngine::VolcengineDoubao => {
+            volcengine::process_batch_file_impl(app, state.inner(), file_path, request).await
+        }
+    }
 }
 
 #[tauri::command]

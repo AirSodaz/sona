@@ -7,6 +7,7 @@ import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import {
+    isAsrRequestConfigured,
     resolveAsrTranscriptionRequest,
     type AsrTranscriptionRequest,
     type TranscriptPostprocessOptions,
@@ -50,6 +51,13 @@ type ServiceConfig = AsrTranscriptionRequest;
 function arePostprocessOptionsEqual(
     left: TranscriptPostprocessOptions,
     right: TranscriptPostprocessOptions,
+): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function areServiceConfigsEqual(
+    left: ServiceConfig,
+    right: ServiceConfig,
 ): boolean {
     return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -159,15 +167,16 @@ export class TranscriptionService {
 
     async prepare(): Promise<void> {
         if (this._isConfigMatch()) return;
-        if (!this.modelPath) return;
+        if (!isAsrRequestConfigured(this._buildStreamingServiceConfig())) return;
         return this._initBackend();
     }
 
     async start(onUpdate: TranscriptionUpdateCallback, onError: ErrorCallback, options?: StartOptions): Promise<void> {
         this.onError = onError;
 
-        if (!this.modelPath) {
-            onError('Model path not configured');
+        const initialConfig = this._buildStreamingServiceConfig();
+        if (!isAsrRequestConfigured(initialConfig)) {
+            onError('ASR is not configured');
             return;
         }
 
@@ -253,27 +262,46 @@ export class TranscriptionService {
         await this._startStream();
     }
 
+    private _resolveStreamingSlot(): 'live' | 'caption' | 'voiceTyping' {
+        return this.instanceId === 'voice-typing'
+            ? 'voiceTyping'
+            : this.instanceId === 'caption'
+                ? 'caption'
+                : 'live';
+    }
+
+    private _buildStreamingServiceConfig(): ServiceConfig {
+        const appConfig = getEffectiveConfigSnapshot();
+        const request = resolveAsrTranscriptionRequest(
+            appConfig,
+            this._resolveStreamingSlot(),
+            { language: this.language },
+        );
+        const modelPath = request.engine === 'local-sherpa' && this.modelPath
+            ? this.modelPath
+            : request.modelPath;
+
+        return {
+            ...request,
+            modelPath,
+            enableItn: this.enableITN,
+            normalizationOptions: {
+                enableTimeline: this.instanceId === 'record'
+                    ? (appConfig.enableTimeline ?? false)
+                    : false,
+            },
+        };
+    }
+
     private async _initBackend(): Promise<void> {
         if (this.startingPromise) return this.startingPromise;
 
         this.startingPromise = (async () => {
             try {
-                const appConfig = getEffectiveConfigSnapshot();
-                const slot = this.instanceId === 'voice-typing'
-                    ? 'voiceTyping'
-                    : this.instanceId === 'caption'
-                        ? 'caption'
-                        : 'live';
-                const configToUse: ServiceConfig = {
-                    ...resolveAsrTranscriptionRequest(appConfig, slot, { language: this.language }),
-                    modelPath: this.modelPath,
-                    enableItn: this.enableITN,
-                    normalizationOptions: {
-                        enableTimeline: this.instanceId === 'record'
-                            ? (appConfig.enableTimeline ?? false)
-                            : false,
-                    },
-                };
+                const configToUse = this._buildStreamingServiceConfig();
+                if (!isAsrRequestConfigured(configToUse)) {
+                    throw new Error('ASR is not configured');
+                }
 
                 await initRecognizer({
                     instanceId: this.instanceId,
@@ -326,33 +354,26 @@ export class TranscriptionService {
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
 
-        const appConfig = getEffectiveConfigSnapshot();
-        const slot = this.instanceId === 'voice-typing'
-            ? 'voiceTyping'
-            : this.instanceId === 'caption'
-                ? 'caption'
-                : 'live';
-        const nextRequest = {
-            ...resolveAsrTranscriptionRequest(appConfig, slot, { language: this.language }),
-            modelPath: this.modelPath,
-            enableItn: this.enableITN,
-            normalizationOptions: {
-                enableTimeline: this.instanceId === 'record'
-                    ? (appConfig.enableTimeline ?? false)
-                    : false,
-            },
-        };
+        const nextRequest = this._buildStreamingServiceConfig();
 
         const mismatches: string[] = [];
-        if (this.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${this.modelPath} vs ${this.runningConfig.modelPath}`);
+        if (nextRequest.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${nextRequest.modelPath} vs ${this.runningConfig.modelPath}`);
+        if (nextRequest.engine !== this.runningConfig.engine) mismatches.push(`engine: ${nextRequest.engine} vs ${this.runningConfig.engine}`);
         if (this.enableITN !== this.runningConfig.enableItn) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableItn}`);
         if (this.language !== this.runningConfig.language) mismatches.push(`language: ${this.language} vs ${this.runningConfig.language}`);
         if (nextRequest.vadModel !== this.runningConfig.vadModel) mismatches.push(`vadModel: ${nextRequest.vadModel} vs ${this.runningConfig.vadModel}`);
         if (nextRequest.punctuationModel !== this.runningConfig.punctuationModel) mismatches.push(`punctuationModel: ${nextRequest.punctuationModel} vs ${this.runningConfig.punctuationModel}`);
         if (nextRequest.hotwords !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${nextRequest.hotwords} vs ${this.runningConfig.hotwords}`);
         if (nextRequest.modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${nextRequest.modelType} vs ${this.runningConfig.modelType}`);
+        if (nextRequest.providerId !== this.runningConfig.providerId) mismatches.push(`providerId: ${nextRequest.providerId} vs ${this.runningConfig.providerId}`);
+        if (nextRequest.profileId !== this.runningConfig.profileId) mismatches.push(`profileId: ${nextRequest.profileId} vs ${this.runningConfig.profileId}`);
         if (nextRequest.normalizationOptions.enableTimeline !== this.runningConfig.normalizationOptions.enableTimeline) mismatches.push(`enableTimeline: ${nextRequest.normalizationOptions.enableTimeline} vs ${this.runningConfig.normalizationOptions.enableTimeline}`);
         if (!arePostprocessOptionsEqual(nextRequest.postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
+        if (!areServiceConfigsEqual(nextRequest, { ...this.runningConfig, postprocessOptions: nextRequest.postprocessOptions })) {
+            if (JSON.stringify(nextRequest.volcengine) !== JSON.stringify(this.runningConfig.volcengine)) {
+                mismatches.push('volcengine provider config changed');
+            }
+        }
 
         if (mismatches.length > 0) {
             logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
@@ -391,8 +412,9 @@ export class TranscriptionService {
             return;
         }
 
-        if (!this.modelPath) {
-            const errorMessage = 'Model path not configured';
+        const nextConfig = this._buildStreamingServiceConfig();
+        if (!isAsrRequestConfigured(nextConfig)) {
+            const errorMessage = 'ASR is not configured';
             if (this.onError) this.onError(errorMessage);
             throw new Error(errorMessage);
         }
@@ -468,16 +490,20 @@ export class TranscriptionService {
         _saveToPath?: string,
         configOverride?: AppConfig,
     ): Promise<TranscriptSegment[]> {
-        if (!this.modelPath) throw new Error('Model path not configured');
-
         const appConfig = configOverride || getEffectiveConfigSnapshot();
-        const asrRequest = {
-            ...resolveAsrTranscriptionRequest(appConfig, 'batch', {
+        const resolvedBatchRequest = resolveAsrTranscriptionRequest(appConfig, 'batch', {
                 language: language || this.language || 'auto',
-            }),
-            modelPath: this.modelPath,
+            });
+        const asrRequest = {
+            ...resolvedBatchRequest,
+            modelPath: resolvedBatchRequest.engine === 'local-sherpa' && this.modelPath
+                ? this.modelPath
+                : resolvedBatchRequest.modelPath,
             enableItn: this.enableITN,
         };
+        if (!isAsrRequestConfigured(asrRequest)) {
+            throw new Error('ASR is not configured');
+        }
 
         const segments = await processBatchFile({
             filePath,

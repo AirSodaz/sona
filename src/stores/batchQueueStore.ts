@@ -11,7 +11,7 @@ import {
 import { TranscriptSegment } from '../types/transcript';
 import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
-import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import { processBatchQueueItem } from '../services/batch/batchItemProcessor';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
 import {
@@ -325,8 +325,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             return;
         }
 
-        if (!resolveAsrTranscriptionRequest(config, 'batch').modelPath) {
-            const message = 'No offline model path configured.';
+        if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'))) {
+            const message = 'Batch ASR is not configured.';
             get().setItemError(itemId, message);
             await notifyAutomationResult(item, 'error', message);
             return;

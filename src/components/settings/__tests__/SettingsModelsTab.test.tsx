@@ -229,4 +229,55 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
         });
     });
+
+    it('allows selecting Volcengine Doubao cloud ASR even when no local ASR model is installed', async () => {
+        renderTab(new Set());
+
+        fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
+        fireEvent.click(screen.getByRole('option', { name: '豆包语音 (云端)' }));
+
+        await waitFor(() => {
+            const config = useConfigStore.getState().config;
+            expect(config.streamingModelPath).toBe('');
+            expect(config.asr?.selections.live).toMatchObject({
+                engine: 'volcengine-doubao',
+                mode: 'streaming',
+                modelPath: '',
+                providerId: 'volcengine-doubao',
+                profileId: 'volcengine-doubao-default',
+            });
+            expect(config.asr?.selections.caption.engine).toBe('volcengine-doubao');
+            expect(config.asr?.selections.voiceTyping.engine).toBe('volcengine-doubao');
+        });
+
+        expect(screen.queryByText('音频会发送到火山引擎进行识别。')).not.toBeNull();
+    });
+
+    it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
+        setTestConfig({
+            asr: {
+                selections: {
+                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    batch: {
+                        engine: 'volcengine-doubao',
+                        mode: 'offline',
+                        modelId: null,
+                        modelPath: '',
+                        providerId: 'volcengine-doubao',
+                        profileId: 'volcengine-doubao-default',
+                    },
+                },
+            },
+            offlineModelPath: '',
+        } as any);
+
+        renderTab(new Set());
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: '豆包语音 (云端)' })).not.toBeNull();
+            expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('volcengine-doubao');
+        });
+    });
 });

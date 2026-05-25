@@ -8,6 +8,12 @@ const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
 const LEGACY_OPENAI_COMPATIBLE_PROVIDER: &str = "custom-openai-compatible";
 const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z";
+const VOLCENGINE_STREAMING_ENDPOINT_DEFAULT: &str =
+    "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
+const VOLCENGINE_STREAMING_RESOURCE_DEFAULT: &str = "volc.seedasr.sauc.duration";
+const VOLCENGINE_BATCH_ENDPOINT_DEFAULT: &str =
+    "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash";
+const VOLCENGINE_BATCH_RESOURCE_DEFAULT: &str = "volc.bigasr.auc_turbo";
 
 const BUILTIN_POLISH_PRESET_IDS: [&str; 6] = [
     "general",
@@ -196,7 +202,7 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         }
     }
 
-    if !has_valid_asr_config(config) {
+    if !has_valid_or_legacy_current_asr_config(config) {
         return true;
     }
 
@@ -315,10 +321,35 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     {
         return true;
     }
-    if existing.get("asr") != normalized.get("asr") {
+    if asr_config_needs_persist(existing.get("asr"), normalized.get("asr")) {
         return true;
     }
     existing.get("logLevel") != normalized.get("logLevel")
+}
+
+fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>) -> bool {
+    if existing == normalized {
+        return false;
+    }
+    let Some(existing) = existing else {
+        return normalized.is_some();
+    };
+    let Some(normalized) = normalized else {
+        return true;
+    };
+    if existing.get("selections") != normalized.get("selections") {
+        return true;
+    }
+    let existing_provider = existing
+        .get("providers")
+        .and_then(|value| value.get("volcengineDoubao"));
+    let normalized_provider = normalized
+        .get("providers")
+        .and_then(|value| value.get("volcengineDoubao"));
+    match (existing_provider, normalized_provider) {
+        (None, Some(provider)) if *provider == default_volcengine_doubao_provider() => false,
+        _ => existing.get("providers") != normalized.get("providers"),
+    }
 }
 
 fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
@@ -550,7 +581,11 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     ] {
         set(&mut config, key, value);
     }
-    let asr_config = normalize_asr_config(&config);
+    let mut asr_source = config.clone();
+    if let Some(asr) = parsed.get("asr") {
+        set(&mut asr_source, "asr", asr.clone());
+    }
+    let asr_config = normalize_asr_config(&asr_source);
     set(&mut config, "asr", asr_config);
 
     if config
@@ -684,6 +719,16 @@ fn default_asr_selection(mode: &str, model_path: String) -> Value {
     })
 }
 
+fn default_volcengine_doubao_provider() -> Value {
+    json!({
+        "apiKey": "",
+        "streamingEndpoint": VOLCENGINE_STREAMING_ENDPOINT_DEFAULT,
+        "streamingResourceId": VOLCENGINE_STREAMING_RESOURCE_DEFAULT,
+        "batchEndpoint": VOLCENGINE_BATCH_ENDPOINT_DEFAULT,
+        "batchResourceId": VOLCENGINE_BATCH_RESOURCE_DEFAULT,
+    })
+}
+
 fn default_asr_config() -> Value {
     json!({
         "selections": {
@@ -691,6 +736,9 @@ fn default_asr_config() -> Value {
             "caption": default_asr_selection("streaming", String::new()),
             "voiceTyping": default_asr_selection("streaming", String::new()),
             "batch": default_asr_selection("offline", String::new()),
+        },
+        "providers": {
+            "volcengineDoubao": default_volcengine_doubao_provider(),
         }
     })
 }
@@ -713,6 +761,55 @@ fn has_valid_asr_config(config: &Value) -> bool {
         let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
             return false;
         };
+        let engine = selection.get("engine").and_then(Value::as_str);
+        if !matches!(engine, Some("local-sherpa") | Some("volcengine-doubao")) {
+            return false;
+        }
+        if selection.get("mode").and_then(Value::as_str) != Some(expected_mode) {
+            return false;
+        }
+        if !selection.get("modelPath").is_some_and(Value::is_string) {
+            return false;
+        }
+        if engine == Some("volcengine-doubao")
+            && (!selection.get("providerId").is_some_and(Value::is_string)
+                || !selection.get("profileId").is_some_and(Value::is_string))
+        {
+            return false;
+        }
+    }
+
+    if !config
+        .get("asr")
+        .and_then(|value| value.get("providers"))
+        .and_then(|value| value.get("volcengineDoubao"))
+        .is_some_and(Value::is_object)
+    {
+        return false;
+    }
+
+    true
+}
+
+fn has_valid_or_legacy_current_asr_config(config: &Value) -> bool {
+    if has_valid_asr_config(config) {
+        return true;
+    }
+    let Some(asr) = config.get("asr") else {
+        return false;
+    };
+    let Some(selections) = asr.get("selections") else {
+        return false;
+    };
+    for (slot, expected_mode) in [
+        ("live", "streaming"),
+        ("caption", "streaming"),
+        ("voiceTyping", "streaming"),
+        ("batch", "offline"),
+    ] {
+        let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
+            return false;
+        };
         if selection.get("engine").and_then(Value::as_str) != Some("local-sherpa") {
             return false;
         }
@@ -723,8 +820,7 @@ fn has_valid_asr_config(config: &Value) -> bool {
             return false;
         }
     }
-
-    true
+    asr.get("providers").is_none()
 }
 
 fn normalize_asr_selection(
@@ -732,6 +828,27 @@ fn normalize_asr_selection(
     expected_mode: &str,
     fallback_model_path: String,
 ) -> Value {
+    if existing
+        .and_then(|value| value.get("engine"))
+        .and_then(Value::as_str)
+        == Some("volcengine-doubao")
+    {
+        return json!({
+            "engine": "volcengine-doubao",
+            "mode": expected_mode,
+            "modelId": Value::Null,
+            "modelPath": "",
+            "providerId": existing
+                .and_then(|value| value.get("providerId"))
+                .and_then(non_empty_str)
+                .unwrap_or("volcengine-doubao"),
+            "profileId": existing
+                .and_then(|value| value.get("profileId"))
+                .and_then(non_empty_str)
+                .unwrap_or("volcengine-doubao-default"),
+        });
+    }
+
     let model_id = existing
         .and_then(|value| value.get("modelId"))
         .filter(|value| value.is_string() || value.is_null())
@@ -752,10 +869,37 @@ fn normalize_asr_selection(
     })
 }
 
+fn normalize_volcengine_doubao_provider(existing: Option<&Value>) -> Value {
+    json!({
+        "apiKey": existing
+            .and_then(|value| value.get("apiKey"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default(),
+        "streamingEndpoint": existing
+            .and_then(|value| value.get("streamingEndpoint"))
+            .and_then(non_empty_str)
+            .unwrap_or(VOLCENGINE_STREAMING_ENDPOINT_DEFAULT),
+        "streamingResourceId": existing
+            .and_then(|value| value.get("streamingResourceId"))
+            .and_then(non_empty_str)
+            .unwrap_or(VOLCENGINE_STREAMING_RESOURCE_DEFAULT),
+        "batchEndpoint": existing
+            .and_then(|value| value.get("batchEndpoint"))
+            .and_then(non_empty_str)
+            .unwrap_or(VOLCENGINE_BATCH_ENDPOINT_DEFAULT),
+        "batchResourceId": existing
+            .and_then(|value| value.get("batchResourceId"))
+            .and_then(non_empty_str)
+            .unwrap_or(VOLCENGINE_BATCH_RESOURCE_DEFAULT),
+    })
+}
+
 fn normalize_asr_config(config: &Value) -> Value {
     let streaming_model_path = string_at(config, "streamingModelPath").unwrap_or_default();
     let offline_model_path = string_at(config, "offlineModelPath").unwrap_or_default();
     let selections = config.get("asr").and_then(|value| value.get("selections"));
+    let providers = config.get("asr").and_then(|value| value.get("providers"));
 
     let existing_selection = |slot: &str| selections.and_then(|value| value.get(slot));
 
@@ -780,6 +924,11 @@ fn normalize_asr_config(config: &Value) -> Value {
                 existing_selection("batch"),
                 "offline",
                 offline_model_path,
+            ),
+        },
+        "providers": {
+            "volcengineDoubao": normalize_volcengine_doubao_provider(
+                providers.and_then(|value| value.get("volcengineDoubao"))
             ),
         }
     })
@@ -2130,6 +2279,109 @@ mod tests {
         assert_eq!(
             result.config["asr"]["selections"]["batch"]["modelPath"],
             "C:/models/offline"
+        );
+        assert_eq!(result.config["streamingModelPath"], "C:/models/live");
+        assert_eq!(result.config["offlineModelPath"], "C:/models/offline");
+    }
+
+    #[test]
+    fn config_core_preserves_volcengine_asr_selection_and_normalizes_provider_defaults() {
+        let saved = json!({
+            "configVersion": 7,
+            "asr": {
+                "selections": {
+                    "live": {
+                        "engine": "volcengine-doubao",
+                        "mode": "streaming",
+                        "modelId": null,
+                        "modelPath": "",
+                        "providerId": "volcengine-doubao",
+                        "profileId": "volcengine-doubao-default"
+                    },
+                    "caption": {
+                        "engine": "volcengine-doubao",
+                        "mode": "streaming",
+                        "modelId": null,
+                        "modelPath": "",
+                        "providerId": "volcengine-doubao",
+                        "profileId": "volcengine-doubao-default"
+                    },
+                    "voiceTyping": {
+                        "engine": "volcengine-doubao",
+                        "mode": "streaming",
+                        "modelId": null,
+                        "modelPath": "",
+                        "providerId": "volcengine-doubao",
+                        "profileId": "volcengine-doubao-default"
+                    },
+                    "batch": {
+                        "engine": "volcengine-doubao",
+                        "mode": "offline",
+                        "modelId": null,
+                        "modelPath": "",
+                        "providerId": "volcengine-doubao",
+                        "profileId": "volcengine-doubao-default"
+                    }
+                },
+                "providers": {
+                    "volcengineDoubao": {
+                        "apiKey": " volc-test-key ",
+                        "streamingEndpoint": "",
+                        "streamingResourceId": "",
+                        "batchEndpoint": "",
+                        "batchResourceId": ""
+                    }
+                }
+            },
+            "streamingModelPath": "C:/models/live",
+            "offlineModelPath": "C:/models/offline",
+            "summaryEnabled": true,
+            "summaryTemplateId": "meeting",
+            "summaryCustomTemplates": [],
+            "polishPresetId": "meeting",
+            "polishCustomPresets": [],
+            "polishKeywordSets": [],
+            "speakerProfiles": [],
+            "speakerSegmentationModelPath": "",
+            "speakerEmbeddingModelPath": "",
+            "logLevel": "info",
+            "llmSettings": {
+                "activeProvider": "google_translate_free",
+                "providers": {
+                    "google_translate_free": {
+                        "apiHost": "https://translate.googleapis.com/translate_a/single",
+                        "apiKey": ""
+                    }
+                },
+                "models": {},
+                "modelOrder": [],
+                "selections": {}
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        assert_eq!(
+            result.config["asr"]["selections"]["batch"],
+            json!({
+                "engine": "volcengine-doubao",
+                "mode": "offline",
+                "modelId": null,
+                "modelPath": "",
+                "providerId": "volcengine-doubao",
+                "profileId": "volcengine-doubao-default"
+            })
+        );
+        assert_eq!(
+            result.config["asr"]["providers"]["volcengineDoubao"],
+            json!({
+                "apiKey": "volc-test-key",
+                "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                "streamingResourceId": "volc.seedasr.sauc.duration",
+                "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+                "batchResourceId": "volc.bigasr.auc_turbo"
+            })
         );
         assert_eq!(result.config["streamingModelPath"], "C:/models/live");
         assert_eq!(result.config["offlineModelPath"], "C:/models/offline");

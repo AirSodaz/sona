@@ -67,6 +67,7 @@ vi.mock('../../stores/configStore', () => ({
 
 vi.mock('../modelService', () => ({
     PRESET_MODELS: [],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         getModelRules: mocks.getModelRules,
     },
@@ -366,6 +367,156 @@ describe('TranscriptionService voice typing diagnostics', () => {
         expect(segments.map((segment) => ({ id: segment.id, text: segment.text }))).toEqual([
             { id: 'seg-apple', text: 'apple' },
             { id: 'seg-dot', text: '.' },
+        ]);
+    });
+
+    it('starts a Volcengine streaming recognizer without a local model path', async () => {
+        mocks.config = {
+            ...mocks.config,
+            language: 'zh',
+            enableITN: true,
+            asr: {
+                selections: {
+                    live: {
+                        engine: 'volcengine-doubao',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                        providerId: 'volcengine-doubao',
+                        profileId: 'volcengine-doubao-default',
+                    },
+                    caption: {
+                        engine: 'local-sherpa',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                    voiceTyping: {
+                        engine: 'local-sherpa',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                    batch: {
+                        engine: 'local-sherpa',
+                        mode: 'offline',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                },
+                providers: {
+                    volcengineDoubao: {
+                        apiKey: 'volc-test-key',
+                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    },
+                },
+            },
+        };
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+
+        await service.start(vi.fn(), vi.fn());
+
+        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+            modelPath: '',
+            asrRequest: expect.objectContaining({
+                engine: 'volcengine-doubao',
+                mode: 'streaming',
+                modelPath: '',
+                volcengine: expect.objectContaining({
+                    apiKey: 'volc-test-key',
+                    streamingResourceId: 'volc.seedasr.sauc.duration',
+                }),
+            }),
+        }));
+        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
+    });
+
+    it('transcribes a Volcengine batch request without setting a local model path', async () => {
+        mocks.config = {
+            ...mocks.config,
+            asr: {
+                selections: {
+                    live: {
+                        engine: 'local-sherpa',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                    caption: {
+                        engine: 'local-sherpa',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                    voiceTyping: {
+                        engine: 'local-sherpa',
+                        mode: 'streaming',
+                        modelId: null,
+                        modelPath: '',
+                    },
+                    batch: {
+                        engine: 'volcengine-doubao',
+                        mode: 'offline',
+                        modelId: null,
+                        modelPath: '',
+                        providerId: 'volcengine-doubao',
+                        profileId: 'volcengine-doubao-default',
+                    },
+                },
+                providers: {
+                    volcengineDoubao: {
+                        apiKey: 'volc-test-key',
+                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    },
+                },
+            },
+        };
+        mocks.invoke.mockImplementation((async (...args: any[]) => {
+            const [command] = args;
+            if (command === 'process_batch_file') {
+                return [{
+                    id: 'volc-1',
+                    text: '关闭透传。',
+                    start: 0.45,
+                    end: 1.53,
+                    isFinal: true,
+                }];
+            }
+            return undefined;
+        }) as any);
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+
+        const segments = await service.transcribeFile('C:/audio/demo.wav');
+
+        expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+            modelPath: '',
+            asrRequest: expect.objectContaining({
+                engine: 'volcengine-doubao',
+                mode: 'offline',
+                modelPath: '',
+                volcengine: expect.objectContaining({
+                    apiKey: 'volc-test-key',
+                    batchResourceId: 'volc.bigasr.auc_turbo',
+                }),
+            }),
+        }));
+        expect(segments).toEqual([
+            expect.objectContaining({
+                id: 'volc-1',
+                text: '关闭透传。',
+            }),
         ]);
     });
 

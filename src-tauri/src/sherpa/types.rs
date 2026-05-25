@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "kebab-case")]
 pub enum AsrEngine {
     LocalSherpa,
+    VolcengineDoubao,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,6 +24,10 @@ pub struct AsrTranscriptionRequest {
     #[serde(default)]
     pub model_id: Option<String>,
     pub model_path: String,
+    #[serde(default)]
+    pub provider_id: Option<String>,
+    #[serde(default)]
+    pub profile_id: Option<String>,
     pub num_threads: i32,
     pub enable_itn: bool,
     pub language: String,
@@ -38,6 +43,8 @@ pub struct AsrTranscriptionRequest {
     pub hotwords: Option<String>,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
+    #[serde(default)]
+    pub volcengine: Option<VolcengineDoubaoAsrConfig>,
 }
 
 impl AsrTranscriptionRequest {
@@ -62,6 +69,8 @@ impl AsrTranscriptionRequest {
             mode,
             model_id: None,
             model_path,
+            provider_id: None,
+            profile_id: None,
             num_threads,
             enable_itn,
             language,
@@ -73,8 +82,24 @@ impl AsrTranscriptionRequest {
             hotwords,
             normalization_options,
             postprocess_options,
+            volcengine: None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolcengineDoubaoAsrConfig {
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub streaming_endpoint: String,
+    #[serde(default)]
+    pub streaming_resource_id: String,
+    #[serde(default)]
+    pub batch_endpoint: String,
+    #[serde(default)]
+    pub batch_resource_id: String,
 }
 
 #[derive(Debug, Clone)]

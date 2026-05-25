@@ -10,14 +10,20 @@ import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
+    DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+    syncStreamingVolcengineDoubaoSelectionFields,
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
+    syncVolcengineDoubaoProviderConfig,
+    syncVolcengineDoubaoSelectionFields,
 } from '../../services/asrConfigService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Mic, Type, Activity, Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
+
+const VOLCENGINE_DOUBAO_OPTION_ID = 'volcengine-doubao';
 
 interface ModelSectionProps {
     title: string;
@@ -111,12 +117,16 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     );
 
     const selectedStreamingModelId = useMemo(
-        () => selectedModelIds.streaming ?? '',
-        [selectedModelIds.streaming],
+        () => modelConfig.asr?.selections.live.engine === 'volcengine-doubao'
+            ? VOLCENGINE_DOUBAO_OPTION_ID
+            : selectedModelIds.streaming ?? '',
+        [modelConfig.asr?.selections.live.engine, selectedModelIds.streaming],
     );
     const selectedOfflineModelId = useMemo(
-        () => selectedModelIds.offline ?? '',
-        [selectedModelIds.offline],
+        () => modelConfig.asr?.selections.batch.engine === 'volcengine-doubao'
+            ? VOLCENGINE_DOUBAO_OPTION_ID
+            : selectedModelIds.offline ?? '',
+        [modelConfig.asr?.selections.batch.engine, selectedModelIds.offline],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
         () => selectedModelIds.speakerSegmentation ?? '',
@@ -183,6 +193,15 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             return;
         }
 
+        if (modelId === VOLCENGINE_DOUBAO_OPTION_ID) {
+            if (type === 'streaming') {
+                updateConfig(syncStreamingVolcengineDoubaoSelectionFields(modelConfig));
+            } else if (type === 'offline') {
+                updateConfig(syncVolcengineDoubaoSelectionFields(modelConfig, 'batch'));
+            }
+            return;
+        }
+
         const path = modelCatalog.modelPathById[modelId]
             || modelCatalog.models.find((model) => model.id === modelId)?.installPath
             || '';
@@ -220,12 +239,34 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     }), [t]);
 
     const streamingOptions = useMemo(() => {
-        return toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId);
-    }, [selectedStreamingModelId, selectionOptions.streaming]);
+        return [
+            ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId),
+            {
+                value: VOLCENGINE_DOUBAO_OPTION_ID,
+                label: t('settings.asr.volcengine_doubao_option', { defaultValue: '豆包语音 (云端)' }),
+            },
+        ];
+    }, [selectedStreamingModelId, selectionOptions.streaming, t]);
 
     const offlineOptions = useMemo(() => {
-        return toDropdownOptions(selectionOptions.offline, selectedOfflineModelId);
-    }, [selectedOfflineModelId, selectionOptions.offline]);
+        return [
+            ...toDropdownOptions(selectionOptions.offline, selectedOfflineModelId),
+            {
+                value: VOLCENGINE_DOUBAO_OPTION_ID,
+                label: t('settings.asr.volcengine_doubao_option', { defaultValue: '豆包语音 (云端)' }),
+            },
+        ];
+    }, [selectedOfflineModelId, selectionOptions.offline, t]);
+
+    const volcengineConfig = modelConfig.asr?.providers?.volcengineDoubao
+        ?? DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG;
+    const isVolcengineSelected = modelConfig.asr?.selections.live.engine === 'volcengine-doubao'
+        || modelConfig.asr?.selections.caption.engine === 'volcengine-doubao'
+        || modelConfig.asr?.selections.voiceTyping.engine === 'volcengine-doubao'
+        || modelConfig.asr?.selections.batch.engine === 'volcengine-doubao';
+    const updateVolcengineConfig = (updates: Partial<typeof volcengineConfig>) => {
+        updateConfig(syncVolcengineDoubaoProviderConfig(modelConfig, updates));
+    };
 
     const speakerSegmentationOptions = useMemo(() => {
         const installedOptions = toDropdownOptions(
@@ -317,6 +358,96 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             options={speakerEmbeddingOptions}
                             style={{ flex: 1 }}
                             aria-label={t('settings.speaker_embedding_model_label', { defaultValue: 'Speaker Embedding Model' })}
+                        />
+                    </div>
+                </SettingsItem>
+
+                {isVolcengineSelected && (
+                    <div className="settings-hint">
+                        {t('settings.asr.cloud_upload_hint', { defaultValue: '音频会发送到火山引擎进行识别。' })}
+                    </div>
+                )}
+            </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.asr.volcengine_credentials_title', { defaultValue: '火山 ASR 凭据' })}
+                description={t('settings.asr.volcengine_credentials_hint', {
+                    defaultValue: '仅在对应 ASR 槽位选择豆包语音时使用，API Key 保存在本机配置中。',
+                })}
+                icon={<Settings2 size={20} />}
+            >
+                <SettingsItem
+                    title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
+                    hint={t('settings.asr.api_key_hint', { defaultValue: '新版控制台的 X-Api-Key；不会写入日志。' })}
+                >
+                    <div style={{ width: '320px' }}>
+                        <input
+                            id="settings-volcengine-api-key"
+                            type="password"
+                            className="settings-input"
+                            value={volcengineConfig.apiKey}
+                            onChange={(event) => updateVolcengineConfig({ apiKey: event.target.value })}
+                            placeholder="X-Api-Key"
+                        />
+                    </div>
+                </SettingsItem>
+                <SettingsItem
+                    title={t('settings.asr.streaming_resource_id', { defaultValue: '实时 Resource ID' })}
+                    hint={t('settings.asr.streaming_resource_id_hint', { defaultValue: '默认使用豆包流式语音识别模型 2.0 小时版。' })}
+                >
+                    <div style={{ width: '320px' }}>
+                        <input
+                            id="settings-volcengine-streaming-resource"
+                            type="text"
+                            className="settings-input"
+                            value={volcengineConfig.streamingResourceId}
+                            onChange={(event) => updateVolcengineConfig({ streamingResourceId: event.target.value })}
+                            placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingResourceId}
+                        />
+                    </div>
+                </SettingsItem>
+                <SettingsItem
+                    title={t('settings.asr.batch_resource_id', { defaultValue: '批量 Resource ID' })}
+                    hint={t('settings.asr.batch_resource_id_hint', { defaultValue: '极速版固定默认值为 volc.bigasr.auc_turbo。' })}
+                >
+                    <div style={{ width: '320px' }}>
+                        <input
+                            id="settings-volcengine-batch-resource"
+                            type="text"
+                            className="settings-input"
+                            value={volcengineConfig.batchResourceId}
+                            onChange={(event) => updateVolcengineConfig({ batchResourceId: event.target.value })}
+                            placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchResourceId}
+                        />
+                    </div>
+                </SettingsItem>
+                <SettingsItem
+                    title={t('settings.asr.streaming_endpoint', { defaultValue: '实时 Endpoint' })}
+                    hint={t('settings.asr.streaming_endpoint_hint', { defaultValue: '高级设置：默认使用双向流式优化版。' })}
+                >
+                    <div style={{ width: '420px' }}>
+                        <input
+                            id="settings-volcengine-streaming-endpoint"
+                            type="text"
+                            className="settings-input"
+                            value={volcengineConfig.streamingEndpoint}
+                            onChange={(event) => updateVolcengineConfig({ streamingEndpoint: event.target.value })}
+                            placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingEndpoint}
+                        />
+                    </div>
+                </SettingsItem>
+                <SettingsItem
+                    title={t('settings.asr.batch_endpoint', { defaultValue: '批量 Endpoint' })}
+                    hint={t('settings.asr.batch_endpoint_hint', { defaultValue: '高级设置：极速版同步识别接口。' })}
+                >
+                    <div style={{ width: '420px' }}>
+                        <input
+                            id="settings-volcengine-batch-endpoint"
+                            type="text"
+                            className="settings-input"
+                            value={volcengineConfig.batchEndpoint}
+                            onChange={(event) => updateVolcengineConfig({ batchEndpoint: event.target.value })}
+                            placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchEndpoint}
                         />
                     </div>
                 </SettingsItem>

@@ -211,6 +211,87 @@ describe('batchQueueStore', () => {
         }));
     });
 
+    it('processes queue items when the batch ASR slot is Volcengine Doubao with no local model path', async () => {
+        const { transcriptionService } = await import('../../services/transcriptionService');
+        const { processBatchQueueItem } = await import('../../services/batch/batchItemProcessor');
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue([
+            {
+                id: 'volc-1',
+                text: '云端结果',
+                start: 0,
+                end: 1,
+                isFinal: true,
+            } as any,
+        ]);
+        const item = {
+            id: '1',
+            filename: 'cloud.wav',
+            filePath: '/cloud.wav',
+            status: 'pending',
+            progress: 0,
+            segments: [],
+            audioUrl: 'asset:///cloud.wav',
+            projectId: null,
+        } as any;
+        const config = {
+            language: 'auto',
+            enableITN: true,
+            asr: {
+                selections: {
+                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    batch: {
+                        engine: 'volcengine-doubao',
+                        mode: 'offline',
+                        modelId: null,
+                        modelPath: '',
+                        providerId: 'volcengine-doubao',
+                        profileId: 'volcengine-doubao-default',
+                    },
+                },
+                providers: {
+                    volcengineDoubao: {
+                        apiKey: 'volc-test-key',
+                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    },
+                },
+            },
+        } as any;
+        const updateStatus = vi.fn();
+        const updateSegments = vi.fn();
+
+        await processBatchQueueItem({
+            item,
+            config,
+            callbacks: {
+                updateStatus,
+                updateSegments,
+                onHistorySaved: vi.fn(),
+                onExportComplete: vi.fn(),
+                isActiveItem: () => false,
+                isCancelRequested: () => false,
+            },
+        });
+
+        expect(transcriptionService.setModelPath).not.toHaveBeenCalledWith('');
+        expect(transcriptionService.transcribeFile).toHaveBeenCalledWith(
+            '/cloud.wav',
+            expect.any(Function),
+            expect.any(Function),
+            undefined,
+            expect.any(String),
+            config,
+        );
+        expect(updateSegments).toHaveBeenCalledWith([
+            expect.objectContaining({ text: '云端结果' }),
+        ]);
+        expect(updateStatus).toHaveBeenCalledWith('processing', 0, 'transcribing');
+    });
+
     it('should sync to transcript store when removing the active item', () => {
         // Setup
         useBatchQueueStore.setState({

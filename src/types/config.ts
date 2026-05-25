@@ -64,7 +64,7 @@ export interface AudioConfig {
 // Local model paths and management
 // ---------------------------------------------------------------------------
 
-export type AsrEngine = 'local-sherpa';
+export type AsrEngine = 'local-sherpa' | 'volcengine-doubao';
 export type AsrMode = 'streaming' | 'offline';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
 
@@ -73,10 +73,25 @@ export interface AsrModelSelection {
   mode: AsrMode;
   modelId?: string | null;
   modelPath: string;
+  providerId?: string | null;
+  profileId?: string | null;
+}
+
+export interface VolcengineDoubaoAsrProviderConfig {
+  apiKey: string;
+  streamingEndpoint: string;
+  streamingResourceId: string;
+  batchEndpoint: string;
+  batchResourceId: string;
+}
+
+export interface AsrProviderConfig {
+  volcengineDoubao: VolcengineDoubaoAsrProviderConfig;
 }
 
 export interface AsrConfig {
   selections: Record<AsrSelectionSlot, AsrModelSelection>;
+  providers?: AsrProviderConfig;
 }
 
 /** Model paths and related management settings. */

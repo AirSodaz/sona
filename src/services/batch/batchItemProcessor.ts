@@ -8,7 +8,7 @@ import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
 import { transcriptionService } from '../transcriptionService';
-import { resolveAsrTranscriptionRequest } from '../asrConfigService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../asrConfigService';
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
@@ -79,11 +79,11 @@ export async function processBatchQueueItem({
     callbacks,
 }: ProcessBatchItemOptions): Promise<void> {
     const language = config.language;
-    const offlineModelPath = resolveAsrTranscriptionRequest(config, 'batch').modelPath;
+    const batchAsr = resolveAsrTranscriptionRequest(config, 'batch');
     const stageConfig = getAutomationStageConfig(item, config);
 
-    if (!offlineModelPath) {
-        throw new Error('No offline model path configured.');
+    if (!isAsrRequestConfigured(batchAsr)) {
+        throw new Error('Batch ASR is not configured.');
     }
 
     callbacks.updateStatus('processing', 0, 'transcribing');
@@ -130,7 +130,9 @@ export async function processBatchQueueItem({
     };
 
     try {
-        transcriptionService.setModelPath(offlineModelPath);
+        if (batchAsr.engine === 'local-sherpa') {
+            transcriptionService.setModelPath(batchAsr.modelPath);
+        }
         transcriptionService.setEnableITN(config.enableITN ?? false);
 
         const tempDirectory = await tempDir();

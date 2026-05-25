@@ -4,7 +4,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { resolveAsrTranscriptionRequest } from './asrConfigService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from './asrConfigService';
 import { TranscriptionService } from './transcriptionService';
 import {
     startMicrophoneCapture,
@@ -27,6 +27,17 @@ function resolveVoiceTypingAsr() {
     return resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'voiceTyping');
 }
 
+function buildAsrSignature(asr: ReturnType<typeof resolveVoiceTypingAsr>): string {
+    return JSON.stringify({
+        engine: asr.engine,
+        mode: asr.mode,
+        modelPath: asr.modelPath,
+        providerId: asr.providerId,
+        profileId: asr.profileId,
+        volcengine: asr.volcengine,
+    });
+}
+
 class VoiceTypingService {
     private initialized = false;
     private isShortcutRegistered = false;
@@ -35,7 +46,7 @@ class VoiceTypingService {
 
     private lastEnabled = false;
     private lastShortcut = '';
-    private lastModelPath = '';
+    private lastAsrSignature = '';
     private lastVadModelPath = '';
     private lastMicrophoneId = 'default';
     private lastLanguage = '';
@@ -71,7 +82,7 @@ class VoiceTypingService {
         const initialAsr = resolveVoiceTypingAsr();
         this.lastEnabled = initialConfig.voiceTypingEnabled || false;
         this.lastShortcut = initialConfig.voiceTypingShortcut ?? 'Alt+V';
-        this.lastModelPath = initialAsr.modelPath;
+        this.lastAsrSignature = buildAsrSignature(initialAsr);
         this.lastVadModelPath = initialConfig.vadModelPath || '';
         this.lastMicrophoneId = initialConfig.microphoneId || 'default';
         this.lastLanguage = initialConfig.language || 'auto';
@@ -80,7 +91,7 @@ class VoiceTypingService {
         logger.info('[VoiceTypingService] Initial config', {
             enabled: this.lastEnabled,
             shortcut: this.lastShortcut,
-            modelPath: this.lastModelPath,
+            asr: this.lastAsrSignature,
             vadModelPath: this.lastVadModelPath,
             microphoneId: this.lastMicrophoneId,
             language: this.lastLanguage,
@@ -92,7 +103,7 @@ class VoiceTypingService {
             const newAsr = resolveVoiceTypingAsr();
             const newEnabled = newConfig.voiceTypingEnabled || false;
             const newShortcut = newConfig.voiceTypingShortcut ?? 'Alt+V';
-            const newModelPath = newAsr.modelPath;
+            const newAsrSignature = buildAsrSignature(newAsr);
             const newVadModelPath = newConfig.vadModelPath || '';
             const newMicrophoneId = newConfig.microphoneId || 'default';
             const newLanguage = newConfig.language || 'auto';
@@ -103,14 +114,14 @@ class VoiceTypingService {
             const vadModelChanged = newVadModelPath !== this.lastVadModelPath;
             const microphoneChanged = newMicrophoneId !== this.lastMicrophoneId;
             const configChanged =
-                newModelPath !== this.lastModelPath ||
+                newAsrSignature !== this.lastAsrSignature ||
                 vadModelChanged ||
                 microphoneChanged ||
                 newLanguage !== this.lastLanguage ||
                 newEnableITN !== this.lastEnableITN;
             const runtimeDependencyChanged =
                 shortcutChanged ||
-                newModelPath !== this.lastModelPath ||
+                newAsrSignature !== this.lastAsrSignature ||
                 vadModelChanged ||
                 microphoneChanged;
 
@@ -125,7 +136,7 @@ class VoiceTypingService {
                 useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
                     resetShortcutRegistration: shortcutChanged,
                     resetWarmup:
-                        newModelPath !== this.lastModelPath ||
+                        newAsrSignature !== this.lastAsrSignature ||
                         vadModelChanged ||
                         microphoneChanged,
                 });
@@ -145,7 +156,7 @@ class VoiceTypingService {
 
             this.lastEnabled = newEnabled;
             this.lastShortcut = newShortcut;
-            this.lastModelPath = newModelPath;
+            this.lastAsrSignature = newAsrSignature;
             this.lastVadModelPath = newVadModelPath;
             this.lastMicrophoneId = newMicrophoneId;
             this.lastLanguage = newLanguage;
@@ -165,7 +176,7 @@ class VoiceTypingService {
     private async syncAndPrepare() {
         const config = useConfigStore.getState().config;
         const asr = resolveVoiceTypingAsr();
-        if (!config.voiceTypingEnabled || !asr.modelPath) {
+        if (!config.voiceTypingEnabled || !isAsrRequestConfigured(asr)) {
             useVoiceTypingRuntimeStore.getState().setWarmupStatus('idle');
             return;
         }
@@ -198,7 +209,9 @@ class VoiceTypingService {
 
     private configureTranscriptionService() {
         const asr = resolveVoiceTypingAsr();
-        this.transcriptionService.setModelPath(asr.modelPath);
+        if (asr.engine === 'local-sherpa') {
+            this.transcriptionService.setModelPath(asr.modelPath);
+        }
         this.transcriptionService.setLanguage(asr.language);
         this.transcriptionService.setEnableITN(asr.enableItn);
     }
@@ -480,7 +493,7 @@ class VoiceTypingService {
         this.captureStarted = false;
         this.lastEnabled = false;
         this.lastShortcut = '';
-        this.lastModelPath = '';
+        this.lastAsrSignature = '';
         this.lastVadModelPath = '';
         this.lastMicrophoneId = 'default';
         this.lastLanguage = '';

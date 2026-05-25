@@ -107,10 +107,12 @@ type TranscriptPostprocessOptions = {
 };
 
 type AsrTranscriptionRequest = {
-  engine: 'local-sherpa';
+  engine: 'local-sherpa' | 'volcengine-doubao';
   mode: 'streaming' | 'offline';
   modelId?: string | null;
   modelPath: string;
+  providerId?: string | null;
+  profileId?: string | null;
   numThreads: number;
   enableItn: boolean;
   language: string;
@@ -124,6 +126,13 @@ type AsrTranscriptionRequest = {
     enableTimeline: boolean;
   };
   postprocessOptions: TranscriptPostprocessOptions;
+  volcengine?: {
+    apiKey: string;
+    streamingEndpoint: string;
+    streamingResourceId: string;
+    batchEndpoint: string;
+    batchResourceId: string;
+  };
 };
 
 type WorkspaceQueryScope =

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useConfigStore } from '../stores/configStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { transcriptionService, captionTranscriptionService } from '../services/transcriptionService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import { logger } from '../utils/logger';
 
 export function useTranscriptionServiceSync() {
@@ -16,16 +17,22 @@ export function useTranscriptionServiceSync() {
         }
 
         const syncAndPrepare = async () => {
-            if (!config.streamingModelPath) {
+            const liveAsr = resolveAsrTranscriptionRequest(config, 'live');
+            const captionAsr = resolveAsrTranscriptionRequest(config, 'caption');
+            if (!isAsrRequestConfigured(liveAsr) && !isAsrRequestConfigured(captionAsr)) {
                 return;
             }
 
             try {
-                transcriptionService.setModelPath(config.streamingModelPath);
+                if (liveAsr.engine === 'local-sherpa') {
+                    transcriptionService.setModelPath(liveAsr.modelPath);
+                }
                 transcriptionService.setLanguage(config.language);
                 transcriptionService.setEnableITN(config.enableITN ?? false);
 
-                captionTranscriptionService.setModelPath(config.streamingModelPath);
+                if (captionAsr.engine === 'local-sherpa') {
+                    captionTranscriptionService.setModelPath(captionAsr.modelPath);
+                }
                 captionTranscriptionService.setLanguage(config.language);
                 captionTranscriptionService.setEnableITN(config.enableITN ?? false);
 
@@ -38,12 +45,7 @@ export function useTranscriptionServiceSync() {
 
         syncAndPrepare();
     }, [
-        config.streamingModelPath,
-        config.language,
-        config.enableITN,
-        config.punctuationModelPath,
-        config.vadModelPath,
-        config.vadBufferSize,
+        config,
         isRecording
     ]);
 }

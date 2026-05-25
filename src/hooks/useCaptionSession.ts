@@ -7,7 +7,7 @@ import {
   captionTranscriptionService,
   type TranscriptionService,
 } from '../services/transcriptionService';
-import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import {
   startSystemAudioCapture,
   stopSystemAudioCapture,
@@ -319,8 +319,8 @@ export function useCaptionSession(
   }, []);
 
   const startCaptionSession = useCallback(async function startCaptionSession(): Promise<void> {
-    if (!resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'caption').modelPath) {
-      logger.warn('Cannot start caption: streaming model path is not set.');
+    if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'caption'))) {
+      logger.warn('Cannot start caption: ASR is not configured.');
       return;
     }
 

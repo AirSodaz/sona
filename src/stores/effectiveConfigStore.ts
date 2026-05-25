@@ -24,7 +24,8 @@ function shouldUseGlobalSnapshot(snapshot: AppConfig | undefined, globalConfig: 
   return !snapshot
     || (snapshot === DEFAULT_CONFIG && globalConfig !== DEFAULT_CONFIG)
     || snapshot.streamingModelPath !== globalConfig.streamingModelPath
-    || snapshot.offlineModelPath !== globalConfig.offlineModelPath;
+    || snapshot.offlineModelPath !== globalConfig.offlineModelPath
+    || snapshot.asr !== globalConfig.asr;
 }
 
 async function computeEffectiveConfig(): Promise<AppConfig> {

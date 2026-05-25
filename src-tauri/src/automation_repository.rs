@@ -325,11 +325,10 @@ pub fn validate_rule_activation_inner(
         );
     }
 
-    let offline_model_path = string_field(global_config, "offlineModelPath").unwrap_or_default();
-    if offline_model_path.trim().is_empty() || !Path::new(offline_model_path.trim()).exists() {
+    if !is_batch_asr_configured(global_config) {
         return invalid_validation(
             "automation.offline_model_missing",
-            "An offline model is required before automation can run.",
+            "A batch ASR model or cloud ASR credential is required before automation can run.",
         );
     }
 
@@ -426,6 +425,43 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
     let has_api_key = !provider_definition.requires_api_key || !api_key.is_empty();
 
     has_api_host && has_api_key
+}
+
+fn is_batch_asr_configured(global_config: &Value) -> bool {
+    let batch_selection = global_config
+        .get("asr")
+        .and_then(|asr| asr.get("selections"))
+        .and_then(|selections| selections.get("batch"));
+    if batch_selection
+        .and_then(|selection| string_field(selection, "engine"))
+        .map(str::trim)
+        == Some("volcengine-doubao")
+    {
+        let provider = global_config
+            .get("asr")
+            .and_then(|asr| asr.get("providers"))
+            .and_then(|providers| providers.get("volcengineDoubao"));
+        let api_key = provider
+            .and_then(|value| string_field(value, "apiKey"))
+            .map(str::trim)
+            .unwrap_or_default();
+        let endpoint = provider
+            .and_then(|value| string_field(value, "batchEndpoint"))
+            .map(str::trim)
+            .unwrap_or_default();
+        let resource_id = provider
+            .and_then(|value| string_field(value, "batchResourceId"))
+            .map(str::trim)
+            .unwrap_or_default();
+        return !api_key.is_empty() && !endpoint.is_empty() && !resource_id.is_empty();
+    }
+
+    let offline_model_path = batch_selection
+        .and_then(|selection| string_field(selection, "modelPath"))
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| string_field(global_config, "offlineModelPath"))
+        .unwrap_or_default();
+    !offline_model_path.trim().is_empty() && Path::new(offline_model_path.trim()).exists()
 }
 
 fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

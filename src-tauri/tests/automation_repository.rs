@@ -161,6 +161,46 @@ fn validation_creates_the_output_directory_for_valid_rules() {
 }
 
 #[test]
+fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = dir.path().join("exports");
+    fs::create_dir_all(&watch_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        export_dir.to_string_lossy().into_owned(),
+        |_| {},
+    );
+    let mut global_config = valid_global_config("");
+    global_config["asr"] = json!({
+        "selections": {
+            "batch": {
+                "engine": "volcengine-doubao",
+                "mode": "offline",
+                "modelId": null,
+                "modelPath": "",
+                "providerId": "volcengine-doubao",
+                "profileId": "volcengine-doubao-default"
+            }
+        },
+        "providers": {
+            "volcengineDoubao": {
+                "apiKey": "volc-test-key",
+                "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+                "batchResourceId": "volc.bigasr.auc_turbo",
+                "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                "streamingResourceId": "volc.seedasr.sauc.duration"
+            }
+        }
+    });
+
+    let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));
+
+    assert!(result.valid);
+    assert!(export_dir.is_dir());
+}
+
+#[test]
 fn validation_accepts_inbox_without_project_record() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");

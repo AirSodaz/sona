@@ -13,6 +13,7 @@ import { TranscriptionOptions } from './TranscriptionOptions';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { logger } from '../utils/logger';
 import { SUPPORTED_MEDIA_EXTENSIONS } from '../constants/mediaExtensions';
+import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -120,10 +121,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     // Transcript store
     const config = useConfigStore((state) => state.config);
-    const offlineModelPath = config.offlineModelPath;
+    const batchAsrConfigured = isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'));
 
     const queueFiles = useCallback((files: string[]) => {
-        if (!offlineModelPath) {
+        if (!batchAsrConfigured) {
             const onboardingStore = useOnboardingStore.getState();
             onboardingStore.reopen(
                 getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
@@ -133,7 +134,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         }
 
         addFiles(files);
-    }, [addFiles, config, offlineModelPath]);
+    }, [addFiles, batchAsrConfigured, config]);
 
     const handleTauriDrop = useCallback((payload: unknown): void => {
         let files: string[] = [];
