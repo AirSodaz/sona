@@ -45,7 +45,7 @@ export interface TaskLedgerSnapshot {
   tasks: TaskLedgerRecord[];
 }
 
-export type TaskLedgerPatch = Partial<Omit<TaskLedgerRecord, 'id'>> & {
+export type TaskLedgerPatch = Partial<Omit<TaskLedgerRecord, 'id' | 'errorMessage'>> & {
   errorMessage?: string | null;
 };
 

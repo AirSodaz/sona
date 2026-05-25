@@ -4,7 +4,6 @@ import type {
   TaskLedgerPatch,
   TaskLedgerRecord,
   TaskLedgerSnapshot,
-  TaskLedgerStatus,
 } from '../types/taskLedger';
 import {
   taskLedgerClearResolved,
@@ -16,6 +15,15 @@ import {
 import { TauriEvent } from '../services/tauri/events';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import {
+  getCancelRequestedIds,
+  isCancelRequestedTask,
+  mergeSnapshotWithLocalTasks,
+  mergeTask,
+  patchTaskRecord,
+  shouldRetainTaskStatus,
+  snapshotToTaskLedgerState,
+} from './taskLedgerState';
 
 interface UpsertTaskOptions {
   transient?: boolean;
@@ -41,61 +49,6 @@ interface TaskLedgerState {
 let taskLedgerUnlisten: UnlistenFn | null = null;
 const durableWriteChains = new Map<string, Promise<void>>();
 
-function applyTaskPatch(record: TaskLedgerRecord, patch: TaskLedgerPatch): TaskLedgerRecord {
-  return {
-    ...record,
-    ...patch,
-    errorMessage: patch.errorMessage === null ? undefined : patch.errorMessage ?? record.errorMessage,
-  };
-}
-
-function mergeTask(tasks: TaskLedgerRecord[], record: TaskLedgerRecord): TaskLedgerRecord[] {
-  return [
-    record,
-    ...tasks.filter((task) => task.id !== record.id),
-  ].sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
-function shouldRetainTaskStatus(status: TaskLedgerStatus): boolean {
-  return status !== 'succeeded' && status !== 'cancelled';
-}
-
-function isResolvedTaskStatus(status: TaskLedgerStatus): boolean {
-  return !shouldRetainTaskStatus(status);
-}
-
-function isCancelRequestedTask(task: TaskLedgerRecord): boolean {
-  return task.status === 'cancelRequested';
-}
-
-function getCancelRequestedIds(
-  tasks: TaskLedgerRecord[],
-  existingIds: Set<string> = new Set(),
-): Set<string> {
-  const taskIds = new Set(tasks.map((task) => task.id));
-  const resolvedTaskIds = new Set(
-    tasks
-      .filter((task) => isResolvedTaskStatus(task.status))
-      .map((task) => task.id),
-  );
-  const cancelRequestedIds = new Set(
-    Array.from(existingIds).filter((id) => taskIds.has(id) && !resolvedTaskIds.has(id)),
-  );
-  tasks.filter(isCancelRequestedTask).forEach((task) => {
-    cancelRequestedIds.add(task.id);
-  });
-  return cancelRequestedIds;
-}
-
-function applySnapshotState(snapshot: TaskLedgerSnapshot): Pick<TaskLedgerState, 'tasks' | 'updatedAt' | 'error' | 'cancelRequestedIds'> {
-  return {
-    tasks: snapshot.tasks,
-    updatedAt: snapshot.updatedAt,
-    error: null,
-    cancelRequestedIds: getCancelRequestedIds(snapshot.tasks),
-  };
-}
-
 async function ensureTaskLedgerListener() {
   if (taskLedgerUnlisten) {
     return;
@@ -107,29 +60,6 @@ async function ensureTaskLedgerListener() {
       useTaskLedgerStore.getState().applySnapshot(payload);
     },
   );
-}
-
-function shouldKeepLocalTask(existing: TaskLedgerRecord, incoming: TaskLedgerRecord): boolean {
-  return existing.updatedAt > incoming.updatedAt
-    || (isResolvedTaskStatus(existing.status) && existing.updatedAt >= incoming.updatedAt);
-}
-
-function mergeSnapshotWithLocalTasks(
-  snapshotTasks: TaskLedgerRecord[],
-  localTasks: TaskLedgerRecord[],
-): TaskLedgerRecord[] {
-  const localTasksById = new Map(localTasks.map((task) => [task.id, task]));
-  const snapshotTaskIds = new Set(snapshotTasks.map((task) => task.id));
-  const mergedSnapshotTasks = snapshotTasks.map((task) => {
-    const existing = localTasksById.get(task.id);
-    return existing && shouldKeepLocalTask(existing, task) ? existing : task;
-  });
-  const transientResolvedTasks = localTasks.filter((task) => (
-    !snapshotTaskIds.has(task.id) && isResolvedTaskStatus(task.status)
-  ));
-
-  return [...mergedSnapshotTasks, ...transientResolvedTasks]
-    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 async function enqueueDurableWrite<T>(
@@ -171,7 +101,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
       await ensureTaskLedgerListener();
       const snapshot = await taskLedgerLoadSnapshot();
       set({
-        ...applySnapshotState(snapshot),
+        ...snapshotToTaskLedgerState(snapshot),
         isLoaded: true,
         isBusy: false,
       });
@@ -210,7 +140,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
         if (task.id !== id) {
           return task;
         }
-        patchedTask = applyTaskPatch(task, patch);
+        patchedTask = patchTaskRecord(task, patch);
         return patchedTask;
       }),
     }));

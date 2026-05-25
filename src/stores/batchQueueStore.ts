@@ -33,6 +33,10 @@ import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
 import type { TaskLedgerStatus } from '../types/taskLedger';
 import { historyService } from '../services/historyService';
+import {
+    applySavedBatchHistoryToQueue,
+    resolveSavedBatchHistoryMeta,
+} from './batchQueueHistorySync';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -345,23 +349,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         get().updateItemSegments(itemId, segments);
                     },
                     onHistorySaved: async (historyItem) => {
-                        const historyAudioUrl = historyItem.audioPath
-                            ? await historyService.getAudioUrl(historyItem.audioPath)
-                            : null;
-                        const nextAudioUrl = historyAudioUrl || item.audioUrl;
+                        const savedMeta = await resolveSavedBatchHistoryMeta({
+                            historyItem,
+                            fallbackAudioUrl: item.audioUrl,
+                            fallbackProjectId: item.projectId,
+                            getAudioUrl: (audioPath) => historyService.getAudioUrl(audioPath),
+                        });
                         let nextQueueItems: BatchQueueItem[] = [];
                         set((currentState) => {
-                            nextQueueItems = currentState.queueItems.map((queueItem) => (
-                                queueItem.id === itemId
-                                    ? {
-                                        ...queueItem,
-                                        historyId: historyItem.id,
-                                        historyTitle: historyItem.title,
-                                        audioUrl: nextAudioUrl,
-                                        projectId: historyItem.projectId ?? queueItem.projectId,
-                                    }
-                                    : queueItem
-                            ));
+                            nextQueueItems = applySavedBatchHistoryToQueue(currentState.queueItems, itemId, savedMeta);
                             return {
                                 queueItems: nextQueueItems,
                             };
@@ -374,8 +370,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         });
 
                         if (get().activeItemId === itemId) {
-                            syncSavedRecordingMeta(historyItem.title, historyItem.id, historyItem.icon || null, nextAudioUrl ?? null);
-                            void useProjectStore.getState().setActiveProjectId(historyItem.projectId);
+                            syncSavedRecordingMeta(savedMeta.title, savedMeta.historyId, savedMeta.icon, savedMeta.audioUrl ?? null);
+                            void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
                         }
                     },
                     onExportComplete: (exportPath) => {
