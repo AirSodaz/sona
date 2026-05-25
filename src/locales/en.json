@@ -820,7 +820,12 @@
             "volcengine_title": "Volcengine Speech Service (Volcano ASR)",
             "active": "Active",
             "configured": "Ready",
-            "not_configured": "Not Configured"
+            "not_configured": "Not Configured",
+            "volcengine_batch_mode_label": "Recording File Mode",
+            "volcengine_batch_mode_hint": "Standard and Off-peak are async tasks; Flash is sync, suitable for fast transcription.",
+            "volcengine_batch_mode_standard": "Standard (Async Polling)",
+            "volcengine_batch_mode_flash": "Flash (Sync Direct)",
+            "volcengine_batch_mode_offpeak": "Off-peak (Discount Async)"
         },
         "model_settings_description": "Manage local transcription models and processing behavior.",
         "local_path": "Local Setup",

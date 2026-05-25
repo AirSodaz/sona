@@ -477,62 +477,42 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         </div>
                     </SettingsItem>
                     <SettingsItem
-                        title={t('settings.asr.streaming_resource_id', { defaultValue: '实时 Resource ID' })}
-                        hint={t('settings.asr.streaming_resource_id_hint', { defaultValue: '默认使用豆包流式语音识别模型 2.0 小时版。' })}
+                        title={t('settings.asr.volcengine_batch_mode_label', { defaultValue: 'Recording File Mode' })}
+                        hint={t('settings.asr.volcengine_batch_mode_hint', { defaultValue: '普通和闲时为异步任务；极速为同步直回，适合快速转录。' })}
                     >
-                        <div style={{ width: '320px' }}>
-                            <input
-                                id="settings-volcengine-streaming-resource"
-                                type="text"
-                                className="settings-input"
-                                value={volcengineConfig.streamingResourceId}
-                                onChange={(event) => updateVolcengineConfig({ streamingResourceId: event.target.value })}
-                                placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingResourceId}
-                            />
-                        </div>
-                    </SettingsItem>
-                    <SettingsItem
-                        title={t('settings.asr.batch_resource_id', { defaultValue: '批量 Resource ID' })}
-                        hint={t('settings.asr.batch_resource_id_hint', { defaultValue: '极速版固定默认值为 volc.bigasr.auc_turbo。' })}
-                    >
-                        <div style={{ width: '320px' }}>
-                            <input
-                                id="settings-volcengine-batch-resource"
-                                type="text"
-                                className="settings-input"
-                                value={volcengineConfig.batchResourceId}
-                                onChange={(event) => updateVolcengineConfig({ batchResourceId: event.target.value })}
-                                placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchResourceId}
-                            />
-                        </div>
-                    </SettingsItem>
-                    <SettingsItem
-                        title={t('settings.asr.streaming_endpoint', { defaultValue: '实时 Endpoint' })}
-                        hint={t('settings.asr.streaming_endpoint_hint', { defaultValue: '高级设置：默认使用双向流式优化版。' })}
-                    >
-                        <div style={{ width: '420px' }}>
-                            <input
-                                id="settings-volcengine-streaming-endpoint"
-                                type="text"
-                                className="settings-input"
-                                value={volcengineConfig.streamingEndpoint}
-                                onChange={(event) => updateVolcengineConfig({ streamingEndpoint: event.target.value })}
-                                placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingEndpoint}
-                            />
-                        </div>
-                    </SettingsItem>
-                    <SettingsItem
-                        title={t('settings.asr.batch_endpoint', { defaultValue: '批量 Endpoint' })}
-                        hint={t('settings.asr.batch_endpoint_hint', { defaultValue: '高级设置：极速版同步识别接口。' })}
-                    >
-                        <div style={{ width: '420px' }}>
-                            <input
-                                id="settings-volcengine-batch-endpoint"
-                                type="text"
-                                className="settings-input"
-                                value={volcengineConfig.batchEndpoint}
-                                onChange={(event) => updateVolcengineConfig({ batchEndpoint: event.target.value })}
-                                placeholder={DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchEndpoint}
+                        <div style={{ width: '220px' }}>
+                            <Dropdown
+                                id="settings-volcengine-batch-mode"
+                                value={
+                                    volcengineConfig.batchEndpoint.includes('recognize/flash')
+                                        ? 'flash'
+                                        : volcengineConfig.batchEndpoint.includes('idle')
+                                            ? 'offpeak'
+                                            : 'standard'
+                                }
+                                onChange={(value) => {
+                                    if (value === 'standard') {
+                                        updateVolcengineConfig({
+                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
+                                            batchResourceId: 'volc.seedasr.auc',
+                                        });
+                                    } else if (value === 'flash') {
+                                        updateVolcengineConfig({
+                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                                            batchResourceId: 'volc.bigasr.auc_turbo',
+                                        });
+                                    } else if (value === 'offpeak') {
+                                        updateVolcengineConfig({
+                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit',
+                                            batchResourceId: 'volc.bigasr.auc_idle',
+                                        });
+                                    }
+                                }}
+                                options={[
+                                    { value: 'standard', label: t('settings.asr.volcengine_batch_mode_standard', { defaultValue: '普通 (异步轮询)' }) },
+                                    { value: 'flash', label: t('settings.asr.volcengine_batch_mode_flash', { defaultValue: '急速 (同步直回)' }) },
+                                    { value: 'offpeak', label: t('settings.asr.volcengine_batch_mode_offpeak', { defaultValue: '闲时 (特惠异步)' }) },
+                                ]}
                             />
                         </div>
                     </SettingsItem>

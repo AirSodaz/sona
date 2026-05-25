@@ -23,7 +23,6 @@ pub use batch::transcribe_batch_with_progress;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
 pub use postprocess::TranscriptPostprocessor;
-pub use runtime::feed_audio_samples;
 pub use state::SherpaState;
 pub(crate) use transcript::ensure_transcript_segment_timing;
 pub use types::{
@@ -33,6 +32,22 @@ pub use types::{
     TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
     VolcengineDoubaoAsrConfig,
 };
+
+/// Feed f32 audio samples from the hardware capture worker to the correct
+/// ASR backend. Routes to Volcengine if the instance has an active streaming
+/// session, otherwise falls through to the local Sherpa runtime.
+pub async fn feed_audio_samples<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &SherpaState,
+    instance_id: &str,
+    samples: &[f32],
+) -> Result<(), String> {
+    if state.has_volcengine_session(instance_id).await {
+        volcengine::feed_audio_samples_impl(state, instance_id, samples).await
+    } else {
+        runtime::feed_audio_samples(app, state, instance_id, samples).await
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]

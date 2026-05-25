@@ -818,7 +818,12 @@
             "volcengine_title": "火山引擎语音服务 (火山 ASR)",
             "active": "已启用",
             "configured": "已就绪",
-            "not_configured": "未配置"
+            "not_configured": "未配置",
+            "volcengine_batch_mode_label": "录音文件识别模式",
+            "volcengine_batch_mode_hint": "普通和闲时为异步任务；极速为同步直回，适合快速转录。",
+            "volcengine_batch_mode_standard": "普通 (异步轮询)",
+            "volcengine_batch_mode_flash": "急速 (同步直回)",
+            "volcengine_batch_mode_offpeak": "闲时 (特惠异步)"
         },
         "model_settings_description": "管理本地转录模型与处理参数。",
         "local_path": "本地设置",

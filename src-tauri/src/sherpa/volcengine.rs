@@ -64,6 +64,31 @@ fn non_empty_or_default(value: &str, default: &str) -> String {
     }
 }
 
+fn detect_audio_format(file_path: &str) -> &'static str {
+    let path = std::path::Path::new(file_path);
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("mp3") => "mp3",
+        Some("wav") => "wav",
+        Some("pcm") => "pcm",
+        Some("ogg") | Some("oga") => "ogg",
+        Some("m4a") => "m4a",
+        Some("aac") => "aac",
+        Some("flac") => "flac",
+        Some("wma") => "wma",
+        Some("amr") => "amr",
+        Some("opus") => "opus",
+        Some("webm") => "webm",
+        // Default to wav for unknown extensions; the API will attempt
+        // auto-detection from the file header bytes.
+        _ => "wav",
+    }
+}
+
 pub fn validate_config(
     config: &VolcengineDoubaoAsrConfig,
     mode: VolcengineMode,
@@ -489,6 +514,44 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Feed f32 audio samples from the hardware capture worker to a Volcengine
+/// streaming session. Converts f32 → i16 PCM bytes and sends via WebSocket.
+pub async fn feed_audio_samples_impl(
+    state: &SherpaState,
+    instance_id: &str,
+    samples: &[f32],
+) -> Result<(), String> {
+    let session = {
+        let sessions = state.volcengine_sessions.lock().await;
+        sessions
+            .get(instance_id)
+            .cloned()
+            .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
+    };
+    let mut writer_guard = session.writer.lock().await;
+    let Some(writer) = writer_guard.as_mut() else {
+        // WebSocket not yet connected — silently skip. The session may still
+        // be in the "preparing" phase before start_recognizer connects.
+        return Ok(());
+    };
+    let pcm_bytes = f32_samples_to_i16_pcm_bytes(samples);
+    writer
+        .send(Message::Binary(build_audio_frame(&pcm_bytes, false)))
+        .await
+        .map_err(|error| format!("火山 ASR 音频发送失败：{error}"))?;
+    Ok(())
+}
+
+fn f32_samples_to_i16_pcm_bytes(samples: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(samples.len() * 2);
+    for &sample in samples {
+        let clamped = sample.clamp(-1.0, 1.0);
+        let value = (clamped * i16::MAX as f32) as i16;
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes
+}
+
 pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
     _app: AppHandle<R>,
     state: State<'_, SherpaState>,
@@ -543,10 +606,11 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .await
         .map_err(|error| format!("读取音频文件失败：{error}"))?;
     let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let audio_format = detect_audio_format(&file_path);
     let request_id = uuid::Uuid::new_v4().to_string();
     let body = json!({
         "user": { "uid": "sona" },
-        "audio": { "data": audio_data },
+        "audio": { "format": audio_format, "data": audio_data },
         "request": {
             "model_name": "bigmodel",
             "enable_itn": request.enable_itn,
@@ -555,39 +619,141 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         }
     });
 
+    let is_async = config.batch_endpoint.contains("submit");
     let client = reqwest::Client::new();
-    let response = client
-        .post(&config.batch_endpoint)
-        .header("X-Api-Key", &config.api_key)
-        .header("X-Api-Resource-Id", &config.batch_resource_id)
-        .header("X-Api-Request-Id", request_id)
-        .header("X-Api-Sequence", "-1")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| format!("火山批量 ASR 网络请求失败：{error}"))?;
-    let status = response.status();
-    let headers = response.headers().clone();
-    let api_code = headers
-        .get("X-Api-Status-Code")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    let api_message = headers
-        .get("X-Api-Message")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
-        return Err(map_status_error(
-            status.as_u16(),
-            api_code.as_deref(),
-            api_message.as_deref(),
-        ));
-    }
+    let response_value: Value = if is_async {
+        // 1. Submit the task
+        let response = client
+            .post(&config.batch_endpoint)
+            .header("X-Api-Key", &config.api_key)
+            .header("X-Api-Resource-Id", &config.batch_resource_id)
+            .header("X-Api-Request-Id", request_id.clone())
+            .header("X-Api-Sequence", "-1")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| format!("火山批量 ASR 任务提交请求失败：{error}"))?;
 
-    let response_value = response
-        .json::<Value>()
-        .await
-        .map_err(|error| format!("火山批量 ASR 响应解析失败：{error}"))?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let api_code = headers
+            .get("X-Api-Status-Code")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let api_message = headers
+            .get("X-Api-Message")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
+            return Err(map_status_error(
+                status.as_u16(),
+                api_code.as_deref(),
+                api_message.as_deref(),
+            ));
+        }
+
+        // 2. Start the polling loop
+        let query_endpoint = config.batch_endpoint.replace("submit", "query");
+        let max_attempts = 600;
+        let mut final_result = None;
+
+        for attempts in 1..=max_attempts {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            let poll_response = client
+                .post(&query_endpoint)
+                .header("X-Api-Key", &config.api_key)
+                .header("X-Api-Resource-Id", &config.batch_resource_id)
+                .header("X-Api-Request-Id", request_id.clone())
+                .header("X-Api-Sequence", "-1")
+                .json(&json!({ "user": { "uid": "sona" } }))
+                .send()
+                .await
+                .map_err(|error| format!("火山批量 ASR 轮询请求失败：{error}"))?;
+
+            let poll_status = poll_response.status();
+            let poll_headers = poll_response.headers().clone();
+            let poll_api_code = poll_headers
+                .get("X-Api-Status-Code")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            let poll_api_message = poll_headers
+                .get("X-Api-Message")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+
+            if !poll_status.is_success() || poll_api_code.as_deref().is_some_and(|code| code != "20000000") {
+                let code_str = poll_api_code.as_deref().unwrap_or("");
+                if poll_status.as_u16() == 429 || code_str == "55000031" {
+                    warn!("[Volcengine ASR] 轮询请求限流或网关繁忙，重试中... (HTTP {}, code: {})", poll_status.as_u16(), code_str);
+                    continue;
+                } else {
+                    return Err(map_status_error(
+                        poll_status.as_u16(),
+                        poll_api_code.as_deref(),
+                        poll_api_message.as_deref(),
+                    ));
+                }
+            }
+
+            let poll_val = poll_response
+                .json::<Value>()
+                .await
+                .map_err(|error| format!("火山批量 ASR 轮询响应解析失败：{error}"))?;
+
+            let code = poll_val.get("code").and_then(Value::as_i64);
+            match code {
+                Some(0) => {
+                    final_result = Some(poll_val);
+                    break;
+                }
+                Some(1000) => {
+                    let progress = attempts as f32 / max_attempts as f32 * 100.0;
+                    let _ = app.emit(super::BATCH_PROGRESS_EVENT, &(file_path.as_str(), progress.min(99.0)));
+                    continue;
+                }
+                other => {
+                    let msg = poll_val.get("message").and_then(Value::as_str).unwrap_or("未知错误");
+                    return Err(format!("火山批量 ASR 任务处理失败: code {:?}, message: {}", other, msg));
+                }
+            }
+        }
+
+        final_result.ok_or_else(|| "火山批量 ASR 轮询超时。".to_string())?
+    } else {
+        let response = client
+            .post(&config.batch_endpoint)
+            .header("X-Api-Key", &config.api_key)
+            .header("X-Api-Resource-Id", &config.batch_resource_id)
+            .header("X-Api-Request-Id", request_id)
+            .header("X-Api-Sequence", "-1")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| format!("火山批量 ASR 网络请求失败：{error}"))?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let api_code = headers
+            .get("X-Api-Status-Code")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let api_message = headers
+            .get("X-Api-Message")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
+            return Err(map_status_error(
+                status.as_u16(),
+                api_code.as_deref(),
+                api_message.as_deref(),
+            ));
+        }
+
+        response
+            .json::<Value>()
+            .await
+            .map_err(|error| format!("火山批量 ASR 响应解析失败：{error}"))?
+    };
     let mut segments = segments_from_response_value(&response_value, true, "volc-batch")?;
     segments = apply_timeline_normalization(segments, request.normalization_options);
     segments = TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
@@ -625,7 +791,7 @@ mod tests {
     fn config(api_key: &str) -> VolcengineDoubaoAsrConfig {
         VolcengineDoubaoAsrConfig {
             api_key: api_key.to_string(),
-            streaming_endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+            streaming_endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
                 .to_string(),
             streaming_resource_id: "volc.seedasr.sauc.duration".to_string(),
             batch_endpoint:
@@ -706,5 +872,58 @@ mod tests {
 
         assert!(auth.contains("鉴权"));
         assert!(quota.contains("限流"));
+    }
+
+    #[test]
+    fn detect_audio_format_maps_known_extensions() {
+        assert_eq!(detect_audio_format("recording.mp3"), "mp3");
+        assert_eq!(detect_audio_format("recording.MP3"), "mp3");
+        assert_eq!(detect_audio_format("recording.wav"), "wav");
+        assert_eq!(detect_audio_format("recording.flac"), "flac");
+        assert_eq!(detect_audio_format("recording.m4a"), "m4a");
+        assert_eq!(detect_audio_format("recording.ogg"), "ogg");
+        assert_eq!(detect_audio_format("recording.oga"), "ogg");
+        assert_eq!(detect_audio_format("recording.aac"), "aac");
+        assert_eq!(detect_audio_format("recording.opus"), "opus");
+        assert_eq!(detect_audio_format("recording.webm"), "webm");
+        assert_eq!(detect_audio_format("recording.pcm"), "pcm");
+        assert_eq!(detect_audio_format("recording.amr"), "amr");
+        assert_eq!(detect_audio_format("recording.wma"), "wma");
+    }
+
+    #[test]
+    fn detect_audio_format_defaults_to_wav_for_unknown() {
+        assert_eq!(detect_audio_format("recording.xyz"), "wav");
+        assert_eq!(detect_audio_format("recording"), "wav");
+        assert_eq!(detect_audio_format(""), "wav");
+    }
+
+    #[test]
+    fn f32_samples_to_i16_pcm_bytes_converts_correctly() {
+        let samples = [0.0_f32, 1.0, -1.0, 0.5];
+        let bytes = f32_samples_to_i16_pcm_bytes(&samples);
+
+        assert_eq!(bytes.len(), 8); // 4 samples × 2 bytes each
+        let value_0 = i16::from_le_bytes([bytes[0], bytes[1]]);
+        let value_1 = i16::from_le_bytes([bytes[2], bytes[3]]);
+        let value_2 = i16::from_le_bytes([bytes[4], bytes[5]]);
+        let value_3 = i16::from_le_bytes([bytes[6], bytes[7]]);
+
+        assert_eq!(value_0, 0);
+        assert_eq!(value_1, i16::MAX);
+        assert_eq!(value_2, -i16::MAX);
+        assert_eq!(value_3, (0.5 * i16::MAX as f32) as i16);
+    }
+
+    #[test]
+    fn f32_samples_to_i16_pcm_bytes_clamps_out_of_range() {
+        let samples = [2.0_f32, -3.0];
+        let bytes = f32_samples_to_i16_pcm_bytes(&samples);
+
+        let value_0 = i16::from_le_bytes([bytes[0], bytes[1]]);
+        let value_1 = i16::from_le_bytes([bytes[2], bytes[3]]);
+
+        assert_eq!(value_0, i16::MAX);
+        assert_eq!(value_1, -i16::MAX);
     }
 }
