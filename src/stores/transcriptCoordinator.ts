@@ -68,11 +68,15 @@ export function syncSavedRecordingMeta(
   title: string,
   historyId: string,
   icon: string | undefined | null,
+  audioUrl?: string | null,
 ): void {
   useTranscriptSessionStore.getState().setSourceHistoryId(historyId);
   useTranscriptSidecarStore.getState().rekeyCurrentSummaryState(historyId);
   useTranscriptSessionStore.getState().setTitle(title);
   useTranscriptSessionStore.getState().setIcon(icon || null);
+  if (audioUrl !== undefined) {
+    useTranscriptPlaybackStore.getState().setAudioUrl(audioUrl);
+  }
 }
 
 export function setTranscriptSegments(segments: TranscriptSegment[]): void {

@@ -56,7 +56,10 @@ function resetTaskLedgerStore() {
 
 describe('taskLedgerStore', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    loadSnapshotMock.mockReset();
+    patchTaskMock.mockReset();
+    upsertTaskMock.mockReset();
+    listenMock.mockReset();
     resetTaskLedgerStore();
     listenMock.mockResolvedValue(vi.fn());
   });
@@ -130,6 +133,81 @@ describe('taskLedgerStore', () => {
     });
     expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
       id: 'task-succeeded',
+      status: 'succeeded',
+      progress: 100,
+    }));
+  });
+
+  it('keeps a locally completed task when an older durable snapshot arrives late', () => {
+    const pendingTask = makeTask({
+      id: 'task-race',
+      status: 'pending',
+      progress: 0,
+      updatedAt: 100,
+      cancelable: true,
+    });
+    const succeededTask = makeTask({
+      id: 'task-race',
+      status: 'succeeded',
+      progress: 100,
+      updatedAt: 200,
+      cancelable: false,
+    });
+
+    useTaskLedgerStore.setState({
+      tasks: [succeededTask],
+      cancelRequestedIds: new Set(['task-race']),
+    });
+
+    useTaskLedgerStore.getState().applySnapshot(makeSnapshot([pendingTask]));
+
+    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
+      id: 'task-race',
+      status: 'succeeded',
+      progress: 100,
+      cancelable: false,
+    }));
+    expect(useTaskLedgerStore.getState().isCancelRequested('task-race')).toBe(false);
+  });
+
+  it('serializes durable writes for the same task id', async () => {
+    const pendingTask = makeTask({
+      id: 'task-serial',
+      status: 'pending',
+      progress: 0,
+      updatedAt: 100,
+    });
+    let resolveUpsert!: (snapshot: TaskLedgerSnapshot) => void;
+    upsertTaskMock.mockImplementationOnce(() => new Promise<TaskLedgerSnapshot>((resolve) => {
+      resolveUpsert = resolve;
+    }));
+    patchTaskMock.mockResolvedValueOnce(makeSnapshot([]));
+
+    const upsertPromise = useTaskLedgerStore.getState().upsertTask(pendingTask);
+    const patchPromise = useTaskLedgerStore.getState().patchTask('task-serial', {
+      status: 'succeeded',
+      progress: 100,
+      cancelable: false,
+      updatedAt: 200,
+    });
+
+    await Promise.resolve();
+
+    expect(upsertTaskMock).toHaveBeenCalledTimes(1);
+    expect(patchTaskMock).not.toHaveBeenCalled();
+
+    resolveUpsert(makeSnapshot([pendingTask]));
+    await upsertPromise;
+    await patchPromise;
+
+    expect(patchTaskMock).toHaveBeenCalledWith('task-serial', {
+      status: 'succeeded',
+      progress: 100,
+      cancelable: false,
+      updatedAt: 200,
+    });
+    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
+      id: 'task-serial',
       status: 'succeeded',
       progress: 100,
     }));

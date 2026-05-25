@@ -39,6 +39,7 @@ interface TaskLedgerState {
 }
 
 let taskLedgerUnlisten: UnlistenFn | null = null;
+const durableWriteChains = new Map<string, Promise<void>>();
 
 function applyTaskPatch(record: TaskLedgerRecord, patch: TaskLedgerPatch): TaskLedgerRecord {
   return {
@@ -59,6 +60,10 @@ function shouldRetainTaskStatus(status: TaskLedgerStatus): boolean {
   return status !== 'succeeded' && status !== 'cancelled';
 }
 
+function isResolvedTaskStatus(status: TaskLedgerStatus): boolean {
+  return !shouldRetainTaskStatus(status);
+}
+
 function isCancelRequestedTask(task: TaskLedgerRecord): boolean {
   return task.status === 'cancelRequested';
 }
@@ -67,7 +72,15 @@ function getCancelRequestedIds(
   tasks: TaskLedgerRecord[],
   existingIds: Set<string> = new Set(),
 ): Set<string> {
-  const cancelRequestedIds = new Set(existingIds);
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const resolvedTaskIds = new Set(
+    tasks
+      .filter((task) => isResolvedTaskStatus(task.status))
+      .map((task) => task.id),
+  );
+  const cancelRequestedIds = new Set(
+    Array.from(existingIds).filter((id) => taskIds.has(id) && !resolvedTaskIds.has(id)),
+  );
   tasks.filter(isCancelRequestedTask).forEach((task) => {
     cancelRequestedIds.add(task.id);
   });
@@ -94,6 +107,54 @@ async function ensureTaskLedgerListener() {
       useTaskLedgerStore.getState().applySnapshot(payload);
     },
   );
+}
+
+function shouldKeepLocalTask(existing: TaskLedgerRecord, incoming: TaskLedgerRecord): boolean {
+  return existing.updatedAt > incoming.updatedAt
+    || (isResolvedTaskStatus(existing.status) && existing.updatedAt >= incoming.updatedAt);
+}
+
+function mergeSnapshotWithLocalTasks(
+  snapshotTasks: TaskLedgerRecord[],
+  localTasks: TaskLedgerRecord[],
+): TaskLedgerRecord[] {
+  const localTasksById = new Map(localTasks.map((task) => [task.id, task]));
+  const snapshotTaskIds = new Set(snapshotTasks.map((task) => task.id));
+  const mergedSnapshotTasks = snapshotTasks.map((task) => {
+    const existing = localTasksById.get(task.id);
+    return existing && shouldKeepLocalTask(existing, task) ? existing : task;
+  });
+  const transientResolvedTasks = localTasks.filter((task) => (
+    !snapshotTaskIds.has(task.id) && isResolvedTaskStatus(task.status)
+  ));
+
+  return [...mergedSnapshotTasks, ...transientResolvedTasks]
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function enqueueDurableWrite<T>(
+  taskId: string,
+  write: () => Promise<T>,
+): Promise<T> {
+  const previousWrite = durableWriteChains.get(taskId);
+  const nextWrite = previousWrite
+    ? previousWrite
+      .catch(() => undefined)
+      .then(write)
+    : write();
+  const trackedWrite = nextWrite.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  durableWriteChains.set(taskId, trackedWrite);
+  trackedWrite.finally(() => {
+    if (durableWriteChains.get(taskId) === trackedWrite) {
+      durableWriteChains.delete(taskId);
+    }
+  });
+
+  return nextWrite;
 }
 
 export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
@@ -138,7 +199,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
       return;
     }
 
-    const snapshot = await taskLedgerUpsertTask(record);
+    const snapshot = await enqueueDurableWrite(record.id, () => taskLedgerUpsertTask(record));
     get().applySnapshot(snapshot);
   },
 
@@ -158,7 +219,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
       return;
     }
 
-    const snapshot = await taskLedgerPatchTask(id, patch);
+    const snapshot = await enqueueDurableWrite(id, () => taskLedgerPatchTask(id, patch));
     get().applySnapshot(snapshot);
   },
 
@@ -166,7 +227,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
     set((state) => ({
       tasks: state.tasks.filter((task) => task.id !== id),
     }));
-    const snapshot = await taskLedgerRemoveTask(id);
+    const snapshot = await enqueueDurableWrite(id, () => taskLedgerRemoveTask(id));
     get().applySnapshot(snapshot);
   },
 
@@ -206,13 +267,10 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
 
   applySnapshot: (snapshot) => {
     set((state) => {
-      const durableIds = new Set(snapshot.tasks.map((task) => task.id));
-      const cancelRequestedIds = getCancelRequestedIds(snapshot.tasks, state.cancelRequestedIds);
-      const transientTasks = state.tasks.filter((task) => (
-        !durableIds.has(task.id) && !shouldRetainTaskStatus(task.status)
-      ));
+      const tasks = mergeSnapshotWithLocalTasks(snapshot.tasks, state.tasks);
+      const cancelRequestedIds = getCancelRequestedIds(tasks, state.cancelRequestedIds);
       return {
-        tasks: [...snapshot.tasks, ...transientTasks].sort((a, b) => b.updatedAt - a.updatedAt),
+        tasks,
         updatedAt: snapshot.updatedAt,
         error: null,
         cancelRequestedIds,
@@ -224,4 +282,5 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
 export function resetTaskLedgerRuntimeForTests(): void {
   taskLedgerUnlisten?.();
   taskLedgerUnlisten = null;
+  durableWriteChains.clear();
 }

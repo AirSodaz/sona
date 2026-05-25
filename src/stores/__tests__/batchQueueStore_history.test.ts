@@ -17,6 +17,10 @@ vi.mock('@tauri-apps/api/core', () => ({
     invoke: vi.fn()
 }));
 
+vi.mock('@tauri-apps/api/event', () => ({
+    listen: vi.fn(() => Promise.resolve(vi.fn())),
+}));
+
 vi.mock('@tauri-apps/api/path', () => ({
     tempDir: vi.fn(() => Promise.resolve('/tmp')),
     join: vi.fn((...args) => Promise.resolve(args.join('/'))),
@@ -43,9 +47,23 @@ vi.mock('../../services/transcriptionService', () => ({
 }));
 
 vi.mock('../../services/modelService', () => ({
+    PRESET_MODELS: [],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
-        getEnabledITNModelPaths: vi.fn()
+        getEnabledITNModelPaths: vi.fn(),
+        getModelRules: vi.fn(() => ({
+            requiresPunctuation: false,
+            requiresVad: false,
+        })),
     }
+}));
+
+vi.mock('../../services/tauri/taskLedger', () => ({
+    taskLedgerLoadSnapshot: vi.fn(() => Promise.resolve({ version: 1, updatedAt: null, tasks: [] })),
+    taskLedgerPatchTask: vi.fn(() => Promise.resolve({ version: 1, updatedAt: null, tasks: [] })),
+    taskLedgerUpsertTask: vi.fn(() => Promise.resolve({ version: 1, updatedAt: null, tasks: [] })),
+    taskLedgerRemoveTask: vi.fn(() => Promise.resolve({ version: 1, updatedAt: null, tasks: [] })),
+    taskLedgerClearResolved: vi.fn(() => Promise.resolve({ version: 1, updatedAt: null, tasks: [] })),
 }));
 
 vi.mock('../../services/historyService', () => ({
@@ -63,6 +81,7 @@ vi.mock('../../services/historyService', () => ({
             projectId: null,
         }),
         updateTranscript: vi.fn().mockResolvedValue(undefined),
+        getAudioUrl: vi.fn().mockResolvedValue('asset:///history/history-1.wav'),
     }
 }));
 
@@ -198,6 +217,83 @@ describe('batchQueueStore History Integration', () => {
 
         useBatchQueueStore.getState().setActiveItem(queueItemId);
         expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
+    });
+
+    it('syncs the active editor audio URL from the saved history item after batch import completes', async () => {
+        const file = '/path/to/player.wav';
+        const mockSegments = [
+            { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },
+        ];
+
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+            }
+        });
+        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        vi.mocked(historyService.saveImportedFile).mockResolvedValueOnce({
+            id: 'history-player',
+            timestamp: 1,
+            duration: 1,
+            audioPath: 'history-player.wav',
+            transcriptPath: 'history-player.json',
+            title: 'Batch player.wav',
+            previewText: 'Hello...',
+            searchContent: 'Hello',
+            type: 'batch',
+            projectId: null,
+        });
+        vi.mocked(historyService.getAudioUrl).mockResolvedValueOnce('asset:///history/history-player.wav');
+
+        useBatchQueueStore.getState().addFiles([file]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        expect(historyService.getAudioUrl).toHaveBeenCalledWith('history-player.wav');
+        expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
+            sourceHistoryId: 'history-player',
+            title: 'Batch player.wav',
+            audioUrl: 'asset:///history/history-player.wav',
+        }));
+    });
+
+    it('keeps the queue item audio URL when saved history audio cannot be resolved', async () => {
+        const file = '/path/to/fallback.wav';
+        const mockSegments = [
+            { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },
+        ];
+
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+            }
+        });
+        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        vi.mocked(historyService.saveImportedFile).mockResolvedValueOnce({
+            id: 'history-fallback',
+            timestamp: 1,
+            duration: 1,
+            audioPath: 'history-fallback.wav',
+            transcriptPath: 'history-fallback.json',
+            title: 'Batch fallback.wav',
+            previewText: 'Hello...',
+            searchContent: 'Hello',
+            type: 'batch',
+            projectId: null,
+        });
+        vi.mocked(historyService.getAudioUrl).mockResolvedValueOnce(null);
+
+        useBatchQueueStore.getState().addFiles([file]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
+            sourceHistoryId: 'history-fallback',
+            title: 'Batch fallback.wav',
+            audioUrl: 'asset:///path/to/fallback.wav',
+        }));
     });
 
     it('updates in-memory history metadata immediately when a saved batch item is rewritten later', async () => {

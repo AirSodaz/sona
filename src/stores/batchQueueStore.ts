@@ -32,6 +32,7 @@ import {
 import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
 import type { TaskLedgerStatus } from '../types/taskLedger';
+import { historyService } from '../services/historyService';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -343,7 +344,11 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     updateSegments: (segments) => {
                         get().updateItemSegments(itemId, segments);
                     },
-                    onHistorySaved: (historyItem) => {
+                    onHistorySaved: async (historyItem) => {
+                        const historyAudioUrl = historyItem.audioPath
+                            ? await historyService.getAudioUrl(historyItem.audioPath)
+                            : null;
+                        const nextAudioUrl = historyAudioUrl || item.audioUrl;
                         let nextQueueItems: BatchQueueItem[] = [];
                         set((currentState) => {
                             nextQueueItems = currentState.queueItems.map((queueItem) => (
@@ -352,6 +357,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                                         ...queueItem,
                                         historyId: historyItem.id,
                                         historyTitle: historyItem.title,
+                                        audioUrl: nextAudioUrl,
                                         projectId: historyItem.projectId ?? queueItem.projectId,
                                     }
                                     : queueItem
@@ -368,7 +374,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         });
 
                         if (get().activeItemId === itemId) {
-                            syncSavedRecordingMeta(historyItem.title, historyItem.id, historyItem.icon || null);
+                            syncSavedRecordingMeta(historyItem.title, historyItem.id, historyItem.icon || null, nextAudioUrl ?? null);
                             void useProjectStore.getState().setActiveProjectId(historyItem.projectId);
                         }
                     },
