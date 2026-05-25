@@ -607,6 +607,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
   it('confirms the active group with Enter and advances to the next pending group', async () => {
     await renderReviewPanel();
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Enter' });
@@ -653,6 +656,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
   it('restores the active group with R and advances to the next pending group', async () => {
     await renderReviewPanel();
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'r' });
@@ -702,6 +708,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
       }));
 
     await renderReviewPanel();
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Enter' });

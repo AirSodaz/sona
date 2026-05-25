@@ -57,6 +57,8 @@ vi.mock('../../services/transcriptionService', () => ({
 }));
 
 vi.mock('../../services/modelService', () => ({
+    PRESET_MODELS: [],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/itn/path']),
     }

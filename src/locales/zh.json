@@ -809,6 +809,17 @@
         "theme_light": "浅色",
         "theme_dark": "深色",
         "model_hub": "模型设置",
+        "offline_model_management": "离线模型管理",
+        "online_model_management": "在线模型管理",
+        "installed_count": "已安装 {{count}} 个",
+        "not_installed": "未安装",
+        "downloading_progress": "正在下载 ({{progress}}%)",
+        "asr": {
+            "volcengine_title": "火山引擎语音服务 (火山 ASR)",
+            "active": "已启用",
+            "configured": "已就绪",
+            "not_configured": "未配置"
+        },
         "model_settings_description": "管理本地转录模型与处理参数。",
         "local_path": "本地设置",
         "local_path_description": "配置本地转录及 ITN 参数。",

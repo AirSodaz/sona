@@ -811,6 +811,17 @@
         "theme_light": "Light",
         "theme_dark": "Dark",
         "model_hub": "Model Settings",
+        "offline_model_management": "Offline Model Management",
+        "online_model_management": "Online Model Management",
+        "installed_count": "{{count}} installed",
+        "not_installed": "Not installed",
+        "downloading_progress": "Downloading ({{progress}}%)",
+        "asr": {
+            "volcengine_title": "Volcengine Speech Service (Volcano ASR)",
+            "active": "Active",
+            "configured": "Ready",
+            "not_configured": "Not Configured"
+        },
         "model_settings_description": "Manage local transcription models and processing behavior.",
         "local_path": "Local Setup",
         "local_path_description": "Configure local transcription and ITN parameters.",

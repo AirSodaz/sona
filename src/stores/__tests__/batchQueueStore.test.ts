@@ -32,7 +32,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
-vi.mock('../services/transcriptionService', () => ({
+vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
@@ -42,7 +42,9 @@ vi.mock('../services/transcriptionService', () => ({
     }
 }));
 
-vi.mock('../services/modelService', () => ({
+vi.mock('../../services/modelService', () => ({
+    PRESET_MODELS: [],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         getEnabledITNModelPaths: vi.fn()
     }

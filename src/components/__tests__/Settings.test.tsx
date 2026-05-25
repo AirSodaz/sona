@@ -96,6 +96,7 @@ vi.mock('../../services/modelService', () => ({
         { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'sherpa-onnx', filename: 'test-punct' },
         { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst', type: 'itn', engine: 'sherpa-onnx' }
     ],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false), // Default: Not installed
         checkHardware: vi.fn().mockResolvedValue({ compatible: true }),

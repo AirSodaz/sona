@@ -193,6 +193,14 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Off');
             expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
         });
+
+        // Expand accordions to mount ModelCards
+        const segAccordion = screen.getByRole('button', { name: /Speaker Segmentation Models/ });
+        fireEvent.click(segAccordion);
+
+        const embedAccordion = screen.getByRole('button', { name: /Speaker Embedding Models/ });
+        fireEvent.click(embedAccordion);
+
         expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
         expect(screen.getByTestId('model-card-3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx').textContent).toContain('3DSpeaker CAMPPlus');
 

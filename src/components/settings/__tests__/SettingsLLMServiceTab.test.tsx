@@ -154,7 +154,7 @@ describe('SettingsLLMServiceTab', () => {
     const conf = buildConfig();
     conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
     currentConfig = conf;
-    
+
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
@@ -245,7 +245,7 @@ describe('SettingsLLMServiceTab', () => {
     llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
       { model: 'gpt-4.1', contextWindow: 128000 },
       { model: 'gpt-4.1-mini', supportsReasoning: true },
-    ], '2026-05-24T10:00:00.000Z');
+    ], new Date().toISOString());
     currentConfig = {
       ...buildConfig('open_ai'),
       llmSettings,
@@ -314,7 +314,7 @@ describe('SettingsLLMServiceTab', () => {
 
     const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini');
     const modelInput = modelInputs[0];
-    
+
     await act(async () => {
       fireEvent.focus(modelInput);
       fireEvent.change(modelInput, { target: { value: 'gpt-4.2-new' } });

@@ -29,6 +29,7 @@ vi.mock('../../../services/modelService', () => ({
             modes: ['streaming'],
         },
     ],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         getModelRules: vi.fn(() => ({
             requiresVad: true,
