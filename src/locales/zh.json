@@ -436,6 +436,9 @@
         "discard_changes_action": "放弃修改",
         "keep_editing_action": "继续编辑"
     },
+    "voice_typing": {
+        "open_settings": "打开语音输入"
+    },
     "automation": {
         "open_settings": "打开自动化",
         "automated": "自动化",

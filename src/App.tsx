@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Type } from 'lucide-react';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptWorkbench } from './components/TranscriptWorkbench';
 import { BatchImport } from './components/BatchImport';
@@ -200,6 +201,10 @@ function App(): React.JSX.Element {
     openSettingsTab('automation');
   }, [openSettingsTab]);
 
+  const openVoiceTypingSettings = useCallback(() => {
+    openSettingsTab('voice_typing');
+  }, [openSettingsTab]);
+
   const runFirstRunSetupFromDiagnostics = useCallback(() => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
@@ -285,6 +290,18 @@ function App(): React.JSX.Element {
                     data-tooltip-pos="bottom"
                   >
                     <AutomationIcon width={18} height={18} />
+                  </button>
+                )}
+                {mode === 'live' && (
+                  <button
+                    type="button"
+                    className="btn btn-icon projects-rail-create"
+                    onClick={openVoiceTypingSettings}
+                    aria-label={t('voice_typing.open_settings', { defaultValue: 'Open Voice Typing' })}
+                    data-tooltip={t('voice_typing.open_settings', { defaultValue: 'Open Voice Typing' })}
+                    data-tooltip-pos="bottom"
+                  >
+                    <Type size={18} aria-hidden="true" />
                   </button>
                 )}
               </div>

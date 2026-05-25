@@ -436,6 +436,9 @@
         "discard_changes_action": "Discard",
         "keep_editing_action": "Keep editing"
     },
+    "voice_typing": {
+        "open_settings": "Open Voice Typing"
+    },
     "automation": {
         "open_settings": "Open Automation",
         "automated": "Automated",
