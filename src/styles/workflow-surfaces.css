@@ -153,6 +153,11 @@
   cursor: pointer;
 }
 
+.audio-slider:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
