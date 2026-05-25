@@ -257,16 +257,7 @@ fn build_openai_stream_url(config: &LlmConfig) -> String {
     }
 }
 
-async fn stream_openai_chat_completion<EmitFn>(
-    config: &LlmConfig,
-    input: &str,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, String>
-where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
-{
-    let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
-    let client = url.client()?;
+pub(crate) fn build_openai_chat_payload(config: &LlmConfig, input: &str, stream: bool) -> Value {
     let mut payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
         json!({
             "messages": [
@@ -275,7 +266,6 @@ where
                     "content": input,
                 }
             ],
-            "stream": true,
         })
     } else {
         json!({
@@ -286,17 +276,35 @@ where
                     "content": input,
                 }
             ],
-            "stream": true,
         })
     };
+
+    if stream {
+        payload["stream"] = json!(true);
+    }
+
+    payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
 
     if config.reasoning_enabled.unwrap_or(false) {
         if let Some(ref level) = config.reasoning_level {
             payload["reasoning_effort"] = json!(level);
         }
-    } else {
-        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
     }
+
+    payload
+}
+
+async fn stream_openai_chat_completion<EmitFn>(
+    config: &LlmConfig,
+    input: &str,
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
+) -> Result<StandardLlmResponse, String>
+where
+    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+{
+    let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
+    let client = url.client()?;
+    let payload = build_openai_chat_payload(config, input, true);
 
     let mut request = client
         .post(url.reqwest_url())
@@ -509,6 +517,7 @@ where
             "parts": [{"text": input}]
         }],
         "generationConfig": {
+            "temperature": config.temperature.unwrap_or(0.7),
             "thinkingConfig": thinking_config
         }
     });
@@ -775,23 +784,7 @@ pub(crate) async fn generate_with_openai_chat_api(
     }
     headers.extend(extra_headers);
 
-    let mut payload = json!({
-        "model": config.model,
-        "messages": [
-            {
-                "role": "user",
-                "content": input,
-            }
-        ],
-    });
-
-    if config.reasoning_enabled.unwrap_or(false) {
-        if let Some(ref level) = config.reasoning_level {
-            payload["reasoning_effort"] = json!(level);
-        }
-    } else {
-        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
-    }
+    let payload = build_openai_chat_payload(config, input, false);
 
     let response = post_json_request(url, headers, payload).await?;
     Ok(StandardLlmResponse {
@@ -843,22 +836,7 @@ pub(crate) async fn generate_with_azure_openai(
         ))?
         .with_query(&format!("api-version={}", version))?;
 
-    let mut payload = json!({
-        "messages": [
-            {
-                "role": "user",
-                "content": input,
-            }
-        ],
-    });
-
-    if config.reasoning_enabled.unwrap_or(false) {
-        if let Some(ref level) = config.reasoning_level {
-            payload["reasoning_effort"] = json!(level);
-        }
-    } else {
-        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
-    }
+    let payload = build_openai_chat_payload(config, input, false);
 
     let response =
         post_json_request(&endpoint, vec![("api-key", config.api_key.to_string())], payload).await?;

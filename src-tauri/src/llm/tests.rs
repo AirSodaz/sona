@@ -350,6 +350,24 @@ fn llm_config_accepts_custom_provider_with_strategy() {
 }
 
 #[test]
+fn openai_chat_payload_keeps_temperature_when_reasoning_is_enabled() {
+    let mut config = sample_llm_config("https://api.openai.com/v1");
+    config.temperature = Some(0.35);
+    config.reasoning_enabled = Some(true);
+    config.reasoning_level = Some("high".to_string());
+
+    let payload = build_openai_chat_payload(&config, "hello", true);
+
+    assert_eq!(payload["model"], "test-model");
+    assert_eq!(payload["stream"], true);
+    assert_eq!(payload["reasoning_effort"], "high");
+    let temperature = payload["temperature"]
+        .as_f64()
+        .expect("temperature should be numeric");
+    assert!((temperature - 0.35).abs() < 0.000_001);
+}
+
+#[test]
 fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
     let config: LlmConfig = serde_json::from_value(json!({
         "provider": "gemini",

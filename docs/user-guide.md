@@ -156,7 +156,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 2. Click a timestamp to seek playback to that time.
 3. Double-click segment text, or use the edit action, to start editing.
 4. Press `Enter` to save the current segment.
-5. Press `Shift + Enter` to insert a line break while editing.
+5. Press `Shift + Enter` to split the current segment at the cursor.
 6. Use the merge action to combine a segment with the next one.
 7. Use the delete action to remove a segment after confirmation.
 8. Press `Ctrl + F` to search inside the transcript.
@@ -175,7 +175,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 ### Notes
 
 - The editor toolbar only appears while a segment is actively being edited.
-- The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and line breaks.
+- The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and segment splitting.
 - Search can jump between matching segments without leaving the editor.
 - `Speaker Review` appears with the transcript tools when there are transcript segments. If the transcript has no speaker metadata yet, the review list can be empty.
 - `Speaker Profiles` are created in `Settings > Vocabulary`; project settings can choose which profiles are active for that project. Profiles help with candidates and automatic matching, but you can still confirm, reassign, or reset labels manually.
@@ -195,8 +195,9 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 1. Open `Settings > LLM Service`.
 2. In `Feature Models`, choose the model for `Polish Model`, `Translation Model`, and `Summary Model`.
 3. In `Provider Credentials`, open the provider you want to use and fill in its connection details such as `Base URL`, `API Key`, `Endpoint`, `Deployment Name`, or provider-specific fields.
-4. Click `Test Connection` after entering credentials.
-5. Return to the main workspace after the required feature model is assigned.
+4. If the selected model supports it, enable `Reasoning Mode` and choose a `Reasoning Level`.
+5. Click `Test Connection` after entering credentials.
+6. Return to the main workspace after the required feature model is assigned.
 
 ### Steps For `LLM Polish`
 
@@ -350,9 +351,9 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Automation`
   watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
 - `Settings > LLM Service`
-  feature model bindings and provider credentials
+  feature model bindings, reasoning options, and provider credentials
 - `Settings > Shortcuts`
-  live recording shortcuts
+  live recording, playback, search, workspace navigation, and editor shortcuts
 - `Settings > About`
   source code, logs, and update-related actions
 

@@ -49,6 +49,7 @@ cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --conf
 Current CLI scope is intentionally narrow:
 
 - Single-file offline transcription
+- Preset model listing and model downloads
 - Export to `json`, `txt`, `srt`, or `vtt`
 - Exposed through the main desktop executable, but not registered on `PATH`
 

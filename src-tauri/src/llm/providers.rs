@@ -45,6 +45,29 @@ pub trait LlmAdapter: Send + Sync {
 
 pub struct OpenAiAdapter;
 
+fn strategy_uses_openai_chat_payload(strategy: LlmProviderStrategy) -> bool {
+    matches!(
+        strategy,
+        LlmProviderStrategy::OpenAi
+            | LlmProviderStrategy::OpenAiCompatible
+            | LlmProviderStrategy::OpenAiCompatibleCustomPath
+            | LlmProviderStrategy::DeepSeek
+            | LlmProviderStrategy::Kimi
+            | LlmProviderStrategy::SiliconFlow
+            | LlmProviderStrategy::Qwen
+            | LlmProviderStrategy::QwenPortal
+            | LlmProviderStrategy::MinimaxGlobal
+            | LlmProviderStrategy::MinimaxCn
+            | LlmProviderStrategy::OpenRouter
+            | LlmProviderStrategy::LmStudio
+            | LlmProviderStrategy::Groq
+            | LlmProviderStrategy::XAi
+            | LlmProviderStrategy::MistralAi
+            | LlmProviderStrategy::Chatglm
+            | LlmProviderStrategy::Volcengine
+    )
+}
+
 #[async_trait]
 impl LlmAdapter for OpenAiAdapter {
     async fn generate(
@@ -68,6 +91,14 @@ impl LlmAdapter for OpenAiAdapter {
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
+
+        if config.reasoning_enabled.unwrap_or(false)
+            && strategy_uses_openai_chat_payload(config.strategy)
+        {
+            let base_url = LlmApiUrl::parse(&config.base_url)?;
+            let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
+            return generate_with_openai_chat_api(&url, config, &input, vec![]).await;
+        }
 
         let response = client
             .completion_model(&config.model)
@@ -262,6 +293,7 @@ impl LlmAdapter for GeminiAdapter {
                     "parts": [{"text": input}]
                 }],
                 "generationConfig": {
+                    "temperature": req.temperature,
                     "thinkingConfig": thinking_config
                 }
             });

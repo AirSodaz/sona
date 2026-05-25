@@ -388,14 +388,9 @@ export const FeatureCard = React.memo(function FeatureCard({
         {localProvider !== 'google_translate' && (
           <div className="feature-card-row feature-card-row-secondary">
             <div className="feature-field">
-              <div className={`feature-temperature-row ${reasoningEnabled ? 'temperature-disabled' : ''}`}>
+              <div className="feature-temperature-row">
                 <span className="feature-temperature-label" id={temperatureLabelId}>
                   {t('settings.llm.temperature')}
-                  {reasoningEnabled && (
-                    <span className="temperature-locked-badge" title={t('settings.llm.temperature_locked_desc')}>
-                      🔒 {t('settings.llm.temperature_locked')}
-                    </span>
-                  )}
                 </span>
                 <div className="feature-temperature-controls">
                   <input
@@ -405,11 +400,10 @@ export const FeatureCard = React.memo(function FeatureCard({
                     min={0}
                     max={2}
                     step={0.05}
-                    value={reasoningEnabled ? 1.0 : temperature}
-                    disabled={reasoningEnabled}
+                    value={temperature}
                     onChange={(e) => handleTempChange(parseFloat(e.target.value))}
                     aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
-                    style={{ '--temperature-progress': `${((reasoningEnabled ? 1.0 : temperature) / 2) * 100}%` } as React.CSSProperties}
+                    style={{ '--temperature-progress': `${(temperature / 2) * 100}%` } as React.CSSProperties}
                   />
                   <input
                     id={`feature-temp-${featureId}`}
@@ -418,8 +412,7 @@ export const FeatureCard = React.memo(function FeatureCard({
                     min={0}
                     max={2}
                     step={0.05}
-                    value={reasoningEnabled ? 1.0 : temperature}
-                    disabled={reasoningEnabled}
+                    value={temperature}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value);
                       if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);

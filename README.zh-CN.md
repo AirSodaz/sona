@@ -50,6 +50,7 @@ cargo run --manifest-path src-tauri/Cargo.toml -- \
 当前 CLI 范围刻意保持精简：
 
 - 单文件离线转写
+- 预置模型列表查看与模型下载
 - 导出到 `json`、`txt`、`srt`、`vtt`
 - 通过桌面主程序提供，但不会注册到 `PATH`
 

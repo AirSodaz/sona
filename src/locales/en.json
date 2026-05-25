@@ -1088,9 +1088,7 @@
             "reasoning_level": "Reasoning Level",
             "reasoning_level_low": "Low",
             "reasoning_level_medium": "Medium",
-            "reasoning_level_high": "High",
-            "temperature_locked": "Locked",
-            "temperature_locked_desc": "Temperature settings are locked at 1.0 or default when Reasoning Mode is enabled."
+            "reasoning_level_high": "High"
         }
     },
     "shortcuts": {

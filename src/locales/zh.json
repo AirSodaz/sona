@@ -1086,9 +1086,7 @@
             "reasoning_level": "思考程度",
             "reasoning_level_low": "低",
             "reasoning_level_medium": "中",
-            "reasoning_level_high": "高",
-            "temperature_locked": "已锁定",
-            "temperature_locked_desc": "开启深度思考模式时，温度参数锁定为 1.0 或默认值。"
+            "reasoning_level_high": "高"
         }
     },
     "shortcuts": {

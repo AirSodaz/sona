@@ -12,6 +12,8 @@ import {
   findLlmModelId,
   syncProviderDiscoveredModels,
   setFeatureModelSelection,
+  setFeatureReasoningEnabled,
+  setFeatureTemperature,
   updateProviderSetting,
 } from '../../../services/llm/state';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
@@ -392,6 +394,46 @@ describe('SettingsLLMServiceTab', () => {
       llmSettings: expect.objectContaining({
         selections: expect.objectContaining({
           summaryTemperature: 0.6,
+        }),
+      }),
+    }));
+  });
+
+  it('keeps temperature controls editable when reasoning mode is enabled', async () => {
+    let llmSettings = buildConfig('open_ai').llmSettings!;
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'gpt-4.1-mini',
+      metadata: { supportsReasoning: true },
+    });
+    const reasoningModelId = llmSettings.modelOrder.find((id) => llmSettings.models[id]?.model === 'gpt-4.1-mini')!;
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', reasoningModelId);
+    llmSettings = setFeatureReasoningEnabled(llmSettings, 'polish', true);
+    llmSettings = setFeatureTemperature(llmSettings, 'polish', 0.35);
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      ...buildLlmConfigPatch(llmSettings),
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    const temperatureInputs = screen.getAllByRole('spinbutton') as HTMLInputElement[];
+    expect(temperatureInputs[0].disabled).toBe(false);
+    expect(temperatureInputs[0].value).toBe('0.35');
+
+    await act(async () => {
+      fireEvent.change(temperatureInputs[0], { target: { value: '0.55' } });
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        selections: expect.objectContaining({
+          polishReasoningEnabled: true,
+          polishTemperature: 0.55,
         }),
       }),
     }));
