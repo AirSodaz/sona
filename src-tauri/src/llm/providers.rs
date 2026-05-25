@@ -94,12 +94,6 @@ impl LlmAdapter for AnthropicAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
-        let client = anthropic::Client::builder()
-            .api_key(&config.api_key)
-            .base_url(&config.base_url)
-            .build()
-            .map_err(|error| error.to_string())?;
-
         let input = req
             .messages
             .iter()
@@ -107,6 +101,55 @@ impl LlmAdapter for AnthropicAdapter {
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
+
+        if config.reasoning_enabled.unwrap_or(false) {
+            let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
+            let budget_tokens = match config.reasoning_level.as_deref() {
+                Some("low") => 1024,
+                Some("high") => 4096,
+                _ => 2048, // medium
+            };
+
+            let payload = json!({
+                "model": config.model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": input,
+                    }
+                ],
+                "max_tokens": 8192,
+                "thinking": {
+                    "type": "enabled",
+                    "budget_tokens": budget_tokens,
+                },
+                "temperature": 1.0,
+            });
+
+            let response = post_json_request(
+                &url,
+                vec![
+                    ("x-api-key", config.api_key.clone()),
+                    ("anthropic-version", "2023-06-01".to_string()),
+                ],
+                payload,
+            )
+            .await?;
+
+            let text = response
+                .pointer("/content/0/text")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Anthropic response did not contain text output".to_string())?
+                .to_string();
+
+            return Ok(StandardLlmResponse { text, usage: None });
+        }
+
+        let client = anthropic::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(&config.base_url)
+            .build()
+            .map_err(|error| error.to_string())?;
 
         let response = client
             .completion_model(&config.model)
@@ -172,12 +215,6 @@ impl LlmAdapter for GeminiAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
-        let client = gemini::Client::builder()
-            .api_key(&config.api_key)
-            .base_url(clean_gemini_base_url(&config.base_url))
-            .build()
-            .map_err(|error| error.to_string())?;
-
         let input = req
             .messages
             .iter()
@@ -185,6 +222,72 @@ impl LlmAdapter for GeminiAdapter {
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
+
+        if config.reasoning_enabled.unwrap_or(false) {
+            let cleaned_base = clean_gemini_base_url(&config.base_url);
+            let is_gemini_2_5 = config.model.contains("gemini-2.5");
+
+            let url_str = format!(
+                "{}/v1beta/models/{}:generateContent?key={}",
+                cleaned_base, config.model, config.api_key
+            );
+            let url = LlmApiUrl::parse(&url_str)?;
+
+            let budget_tokens = match config.reasoning_level.as_deref() {
+                Some("low") => 1024,
+                Some("high") => 4096,
+                _ => 2048, // medium
+            };
+
+            let thinking_level = match config.reasoning_level.as_deref() {
+                Some("low") => "LOW",
+                Some("high") => "HIGH",
+                _ => "MEDIUM",
+            };
+
+            let thinking_config = if is_gemini_2_5 {
+                json!({
+                    "thinkingBudget": budget_tokens,
+                    "includeThoughts": true
+                })
+            } else {
+                json!({
+                    "thinkingLevel": thinking_level,
+                    "includeThoughts": true
+                })
+            };
+
+            let payload = json!({
+                "contents": [{
+                    "parts": [{"text": input}]
+                }],
+                "generationConfig": {
+                    "thinkingConfig": thinking_config
+                }
+            });
+
+            let response = post_json_request(&url, vec![], payload).await?;
+
+            let text = response
+                .pointer("/candidates/0/content/parts/0/text")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Gemini response did not contain text output".to_string())?
+                .to_string();
+
+            let usage = response.get("usageMetadata").map(|u| TokenUsage {
+                prompt_tokens: u.get("promptTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
+                completion_tokens: u.get("candidatesTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
+                total_tokens: u.get("totalTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
+            });
+
+            return Ok(StandardLlmResponse { text, usage });
+        }
+
+        let client = gemini::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(clean_gemini_base_url(&config.base_url))
+            .build()
+            .map_err(|error| error.to_string())?;
 
         let response = client
             .completion_model(&config.model)
@@ -296,32 +399,22 @@ impl LlmAdapter for GenericHttpAdapter {
             }
             LlmProviderStrategy::AzureOpenAi => {
                 generate_with_azure_openai(
-                    &config.base_url,
-                    &config.api_key,
-                    &config.model,
+                    config,
                     &input,
-                    Some(req.temperature),
-                    config.api_version.as_deref(),
                 )
                 .await?
             }
             LlmProviderStrategy::Perplexity => {
                 generate_with_perplexity(
-                    &config.api_key,
-                    &config.model,
+                    config,
                     &input,
-                    Some(req.temperature),
                 )
                 .await?
             }
             _ => {
                 generate_with_openai_custom_path(
-                    &config.base_url,
-                    &config.api_key,
-                    &config.model,
+                    config,
                     &input,
-                    Some(req.temperature),
-                    config.api_path.as_deref(),
                 )
                 .await?
             }

@@ -267,7 +267,7 @@ where
 {
     let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
     let client = url.client()?;
-    let payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
+    let mut payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
         json!({
             "messages": [
                 {
@@ -275,7 +275,6 @@ where
                     "content": input,
                 }
             ],
-            "temperature": config.temperature.unwrap_or(0.7),
             "stream": true,
         })
     } else {
@@ -287,10 +286,17 @@ where
                     "content": input,
                 }
             ],
-            "temperature": config.temperature.unwrap_or(0.7),
             "stream": true,
         })
     };
+
+    if config.reasoning_enabled.unwrap_or(false) {
+        if let Some(ref level) = config.reasoning_level {
+            payload["reasoning_effort"] = json!(level);
+        }
+    } else {
+        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
+    }
 
     let mut request = client
         .post(url.reqwest_url())
@@ -375,6 +381,182 @@ where
         usage: None,
     })
 }
+
+async fn stream_anthropic_custom_completion<EmitFn>(
+    config: &LlmConfig,
+    input: &str,
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
+) -> Result<StandardLlmResponse, String>
+where
+    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+{
+    let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
+    let client = url.client()?;
+
+    let budget_tokens = match config.reasoning_level.as_deref() {
+        Some("low") => 1024,
+        Some("high") => 4096,
+        _ => 2048, // medium
+    };
+
+    let payload = json!({
+        "model": config.model,
+        "messages": [
+            {
+                "role": "user",
+                "content": input,
+            }
+        ],
+        "max_tokens": 8192,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": budget_tokens,
+        },
+        "temperature": 1.0,
+        "stream": true,
+    });
+
+    let response = client
+        .post(url.reqwest_url())
+        .header("Content-Type", "application/json")
+        .header("Accept", "text/event-stream")
+        .header("x-api-key", config.api_key.clone())
+        .header("anthropic-version", "2023-06-01")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Anthropic API Error: {} {}", status, text));
+    }
+
+    let mut sse = SseEventBuffer::default();
+    let mut byte_stream = response.bytes_stream();
+
+    while let Some(item) = byte_stream.next().await {
+        let bytes = item.map_err(|error| error.to_string())?;
+        let chunk = String::from_utf8_lossy(&bytes);
+        for data in sse.process(&chunk) {
+            if let Ok(event) = serde_json::from_str::<Value>(&data) {
+                if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
+                    accumulator.push(delta)?;
+                }
+            }
+        }
+    }
+
+    for data in sse.flush() {
+        if let Ok(event) = serde_json::from_str::<Value>(&data) {
+            if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
+                accumulator.push(delta)?;
+            }
+        }
+    }
+
+    Ok(StandardLlmResponse {
+        text: accumulator.text(),
+        usage: None,
+    })
+}
+
+async fn stream_gemini_custom_completion<EmitFn>(
+    config: &LlmConfig,
+    input: &str,
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
+) -> Result<StandardLlmResponse, String>
+where
+    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+{
+    let cleaned_base = clean_gemini_base_url(&config.base_url);
+    let is_gemini_2_5 = config.model.contains("gemini-2.5");
+
+    let url_str = format!(
+        "{}/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
+        cleaned_base, config.model, config.api_key
+    );
+    let url = LlmApiUrl::parse(&url_str)?;
+    let client = url.client()?;
+
+    let budget_tokens = match config.reasoning_level.as_deref() {
+        Some("low") => 1024,
+        Some("high") => 4096,
+        _ => 2048, // medium
+    };
+
+    let thinking_level = match config.reasoning_level.as_deref() {
+        Some("low") => "LOW",
+        Some("high") => "HIGH",
+        _ => "MEDIUM",
+    };
+
+    let thinking_config = if is_gemini_2_5 {
+        json!({
+            "thinkingBudget": budget_tokens,
+            "includeThoughts": true
+        })
+    } else {
+        json!({
+            "thinkingLevel": thinking_level,
+            "includeThoughts": true
+        })
+    };
+
+    let payload = json!({
+        "contents": [{
+            "parts": [{"text": input}]
+        }],
+        "generationConfig": {
+            "thinkingConfig": thinking_config
+        }
+    });
+
+    let response = client
+        .post(url.reqwest_url())
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("Gemini API Error: {} {}", status, text));
+    }
+
+    let mut sse = SseEventBuffer::default();
+    let mut byte_stream = response.bytes_stream();
+
+    while let Some(item) = byte_stream.next().await {
+        let bytes = item.map_err(|error| error.to_string())?;
+        let chunk = String::from_utf8_lossy(&bytes);
+        for data in sse.process(&chunk) {
+            if let Ok(event) = serde_json::from_str::<Value>(&data) {
+                if let Some(text) = event.pointer("/candidates/0/content/parts/0/text").and_then(Value::as_str) {
+                    accumulator.push(text)?;
+                }
+            }
+        }
+    }
+
+    for data in sse.flush() {
+        if let Ok(event) = serde_json::from_str::<Value>(&data) {
+            if let Some(text) = event.pointer("/candidates/0/content/parts/0/text").and_then(Value::as_str) {
+                accumulator.push(text)?;
+            }
+        }
+    }
+
+    Ok(StandardLlmResponse {
+        text: accumulator.text(),
+        usage: None,
+    })
+}
+
+
 
 async fn stream_openai_responses_completion<EmitFn>(
     config: &LlmConfig,
@@ -490,36 +672,44 @@ where
 
     let response = match request.config.strategy {
         LlmProviderStrategy::Anthropic => {
-            let client = anthropic::Client::builder()
-                .api_key(&request.config.api_key)
-                .base_url(&request.config.base_url)
-                .build()
-                .map_err(|error| error.to_string())?;
-            Some(
-                stream_rig_completion_model(
-                    client.completion_model(&request.config.model),
-                    &input,
-                    request.config.temperature.unwrap_or(0.7),
-                    accumulator,
+            if request.config.reasoning_enabled.unwrap_or(false) {
+                Some(stream_anthropic_custom_completion(&request.config, &input, accumulator).await?)
+            } else {
+                let client = anthropic::Client::builder()
+                    .api_key(&request.config.api_key)
+                    .base_url(&request.config.base_url)
+                    .build()
+                    .map_err(|error| error.to_string())?;
+                Some(
+                    stream_rig_completion_model(
+                        client.completion_model(&request.config.model),
+                        &input,
+                        request.config.temperature.unwrap_or(0.7),
+                        accumulator,
+                    )
+                    .await?,
                 )
-                .await?,
-            )
+            }
         }
         LlmProviderStrategy::Gemini => {
-            let client = gemini::Client::builder()
-                .api_key(&request.config.api_key)
-                .base_url(clean_gemini_base_url(&request.config.base_url))
-                .build()
-                .map_err(|error| error.to_string())?;
-            Some(
-                stream_rig_completion_model(
-                    client.completion_model(&request.config.model),
-                    &input,
-                    request.config.temperature.unwrap_or(0.7),
-                    accumulator,
+            if request.config.reasoning_enabled.unwrap_or(false) {
+                Some(stream_gemini_custom_completion(&request.config, &input, accumulator).await?)
+            } else {
+                let client = gemini::Client::builder()
+                    .api_key(&request.config.api_key)
+                    .base_url(clean_gemini_base_url(&request.config.base_url))
+                    .build()
+                    .map_err(|error| error.to_string())?;
+                Some(
+                    stream_rig_completion_model(
+                        client.completion_model(&request.config.model),
+                        &input,
+                        request.config.temperature.unwrap_or(0.7),
+                        accumulator,
+                    )
+                    .await?,
                 )
-                .await?,
-            )
+            }
         }
         LlmProviderStrategy::Ollama => {
             let client = ollama::Client::builder()
@@ -575,28 +765,33 @@ where
 
 pub(crate) async fn generate_with_openai_chat_api(
     url: &LlmApiUrl,
-    api_key: &str,
-    model: &str,
+    config: &LlmConfig,
     input: &str,
-    temperature: Option<f32>,
     extra_headers: Vec<(&str, String)>,
 ) -> Result<StandardLlmResponse, String> {
     let mut headers = vec![];
-    if !api_key.is_empty() {
-        headers.push(("Authorization", format!("Bearer {}", api_key)));
+    if !config.api_key.is_empty() {
+        headers.push(("Authorization", format!("Bearer {}", config.api_key)));
     }
     headers.extend(extra_headers);
 
-    let payload = json!({
-        "model": model,
+    let mut payload = json!({
+        "model": config.model,
         "messages": [
             {
                 "role": "user",
                 "content": input,
             }
         ],
-        "temperature": temperature.unwrap_or(0.7),
     });
+
+    if config.reasoning_enabled.unwrap_or(false) {
+        if let Some(ref level) = config.reasoning_level {
+            payload["reasoning_effort"] = json!(level);
+        }
+    } else {
+        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
+    }
 
     let response = post_json_request(url, headers, payload).await?;
     Ok(StandardLlmResponse {
@@ -635,16 +830,12 @@ pub(crate) async fn generate_with_openai_responses_api(
 }
 
 pub(crate) async fn generate_with_azure_openai(
-    base_url: &str,
-    api_key: &str,
-    deployment: &str,
+    config: &LlmConfig,
     input: &str,
-    temperature: Option<f32>,
-    api_version: Option<&str>,
 ) -> Result<StandardLlmResponse, String> {
-    let version = api_version.unwrap_or("2024-10-21");
-    let deployment = deployment.trim();
-    let base_url = LlmApiUrl::parse(base_url)?;
+    let version = config.api_version.as_deref().unwrap_or("2024-10-21");
+    let deployment = config.model.trim();
+    let base_url = LlmApiUrl::parse(&config.base_url)?;
     let endpoint = base_url
         .join(&format!(
             "/openai/deployments/{}/chat/completions",
@@ -652,18 +843,25 @@ pub(crate) async fn generate_with_azure_openai(
         ))?
         .with_query(&format!("api-version={}", version))?;
 
-    let payload = json!({
+    let mut payload = json!({
         "messages": [
             {
                 "role": "user",
                 "content": input,
             }
         ],
-        "temperature": temperature.unwrap_or(0.7),
     });
 
+    if config.reasoning_enabled.unwrap_or(false) {
+        if let Some(ref level) = config.reasoning_level {
+            payload["reasoning_effort"] = json!(level);
+        }
+    } else {
+        payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
+    }
+
     let response =
-        post_json_request(&endpoint, vec![("api-key", api_key.to_string())], payload).await?;
+        post_json_request(&endpoint, vec![("api-key", config.api_key.to_string())], payload).await?;
 
     Ok(StandardLlmResponse {
         text: extract_text_from_json_response(&response)?,
@@ -672,26 +870,20 @@ pub(crate) async fn generate_with_azure_openai(
 }
 
 pub(crate) async fn generate_with_openai_custom_path(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
+    config: &LlmConfig,
     input: &str,
-    temperature: Option<f32>,
-    api_path: Option<&str>,
 ) -> Result<StandardLlmResponse, String> {
-    let base_url = LlmApiUrl::parse(base_url)?;
-    let url = base_url.join(api_path.unwrap_or("/v1/chat/completions"))?;
-    generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
+    let base_url = LlmApiUrl::parse(&config.base_url)?;
+    let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
+    generate_with_openai_chat_api(&url, config, input, vec![]).await
 }
 
 pub(crate) async fn generate_with_perplexity(
-    api_key: &str,
-    model: &str,
+    config: &LlmConfig,
     input: &str,
-    temperature: Option<f32>,
 ) -> Result<StandardLlmResponse, String> {
     let url = LlmApiUrl::parse("https://api.perplexity.ai/chat/completions")?;
-    generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
+    generate_with_openai_chat_api(&url, config, input, vec![]).await
 }
 
 pub(crate) async fn generate_with_rig(

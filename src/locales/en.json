@@ -1080,7 +1080,14 @@
             "status_ready": "Ready",
             "status_missing_api_key": "Missing API Key",
             "status_missing_model": "Missing model",
-            "status_off": "Off"
+            "status_off": "Off",
+            "reasoning_mode": "Reasoning Mode",
+            "reasoning_level": "Reasoning Level",
+            "reasoning_level_low": "Low",
+            "reasoning_level_medium": "Medium",
+            "reasoning_level_high": "High",
+            "temperature_locked": "Locked",
+            "temperature_locked_desc": "Temperature settings are locked at 1.0 or default when Reasoning Mode is enabled."
         }
     },
     "shortcuts": {

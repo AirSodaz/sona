@@ -94,6 +94,8 @@ fn sample_llm_config(base_url: &str) -> LlmConfig {
         api_path: None,
         api_version: None,
         temperature: None,
+        reasoning_enabled: None,
+        reasoning_level: None,
     }
 }
 
@@ -700,6 +702,8 @@ async fn try_stream_text_skips_google_translate_providers() {
                 api_path: None,
                 api_version: None,
                 temperature: Some(0.2),
+                reasoning_enabled: None,
+                reasoning_level: None,
             },
             input: "hello".to_string(),
             source: None,

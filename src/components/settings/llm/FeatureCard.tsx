@@ -10,6 +10,8 @@ import {
   isProviderModelDiscoveryExpired,
   setFeatureModelSelection,
   setFeatureTemperature,
+  setFeatureReasoningEnabled,
+  setFeatureReasoningLevel,
   syncProviderDiscoveredModels,
 } from '../../../services/llm/state';
 import { isFeatureLlmConfigComplete } from '../../../services/llm/runtime';
@@ -55,6 +57,41 @@ export const FeatureCard = React.memo(function FeatureCard({
     : featureId === 'translation'
       ? (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE)
       : (currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE);
+
+  const reasoningEnabled = featureId === 'polish'
+    ? !!currentLlmState.selections.polishReasoningEnabled
+    : featureId === 'translation'
+      ? !!currentLlmState.selections.translationReasoningEnabled
+      : !!currentLlmState.selections.summaryReasoningEnabled;
+
+  const reasoningLevel = featureId === 'polish'
+    ? (currentLlmState.selections.polishReasoningLevel ?? 'medium')
+    : featureId === 'translation'
+      ? (currentLlmState.selections.translationReasoningLevel ?? 'medium')
+      : (currentLlmState.selections.summaryReasoningLevel ?? 'medium');
+
+  const supportsReasoning = useMemo(() => {
+    return !!(
+      modelEntry?.metadata?.supportsReasoning ||
+      (modelEntry?.model && (
+        modelEntry.model.toLowerCase().includes('o1-') ||
+        modelEntry.model.toLowerCase() === 'o1' ||
+        modelEntry.model.toLowerCase().includes('o3-') ||
+        modelEntry.model.toLowerCase().includes('deepseek-reasoner') ||
+        modelEntry.model.toLowerCase().includes('deepseek-r1') ||
+        modelEntry.model.toLowerCase().includes('claude-3-7') ||
+        modelEntry.model.toLowerCase().includes('gemini-2.5')
+      ))
+    );
+  }, [modelEntry]);
+
+  const handleReasoningEnabledChange = (enabled: boolean) => {
+    applyLlmSettings(setFeatureReasoningEnabled(currentLlmState, featureId, enabled));
+  };
+
+  const handleReasoningLevelChange = (level: string) => {
+    applyLlmSettings(setFeatureReasoningLevel(currentLlmState, featureId, level as 'low' | 'medium' | 'high'));
+  };
 
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
@@ -313,12 +350,52 @@ export const FeatureCard = React.memo(function FeatureCard({
           )}
         </div>
 
+        {localProvider !== 'google_translate' && supportsReasoning && (
+          <div className="feature-card-row feature-card-row-reasoning">
+            <div className="feature-field-toggle">
+              <label className="settings-toggle-label">
+                <input
+                  id={`feature-reasoning-toggle-${featureId}`}
+                  type="checkbox"
+                  checked={reasoningEnabled}
+                  onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
+                />
+                <span className="toggle-text">{t('settings.llm.reasoning_mode')}</span>
+              </label>
+            </div>
+
+            {reasoningEnabled && (
+              <div className="feature-field reasoning-level-wrapper">
+                <label className="settings-label" htmlFor={`feature-reasoning-level-${featureId}`}>
+                  {t('settings.llm.reasoning_level')}
+                </label>
+                <Dropdown
+                  id={`feature-reasoning-level-${featureId}`}
+                  value={reasoningLevel}
+                  onChange={(val) => handleReasoningLevelChange(val)}
+                  options={[
+                    { value: 'low', label: t('settings.llm.reasoning_level_low') },
+                    { value: 'medium', label: t('settings.llm.reasoning_level_medium') },
+                    { value: 'high', label: t('settings.llm.reasoning_level_high') },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {localProvider !== 'google_translate' && (
           <div className="feature-card-row feature-card-row-secondary">
             <div className="feature-field">
-              <div className="feature-temperature-row">
+              <div className={`feature-temperature-row ${reasoningEnabled ? 'temperature-disabled' : ''}`}>
                 <span className="feature-temperature-label" id={temperatureLabelId}>
                   {t('settings.llm.temperature')}
+                  {reasoningEnabled && (
+                    <span className="temperature-locked-badge" title={t('settings.llm.temperature_locked_desc')}>
+                      🔒 {t('settings.llm.temperature_locked')}
+                    </span>
+                  )}
                 </span>
                 <div className="feature-temperature-controls">
                   <input
@@ -328,10 +405,11 @@ export const FeatureCard = React.memo(function FeatureCard({
                     min={0}
                     max={2}
                     step={0.05}
-                    value={temperature}
+                    value={reasoningEnabled ? 1.0 : temperature}
+                    disabled={reasoningEnabled}
                     onChange={(e) => handleTempChange(parseFloat(e.target.value))}
                     aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
-                    style={{ '--temperature-progress': `${(temperature / 2) * 100}%` } as React.CSSProperties}
+                    style={{ '--temperature-progress': `${((reasoningEnabled ? 1.0 : temperature) / 2) * 100}%` } as React.CSSProperties}
                   />
                   <input
                     id={`feature-temp-${featureId}`}
@@ -340,7 +418,8 @@ export const FeatureCard = React.memo(function FeatureCard({
                     min={0}
                     max={2}
                     step={0.05}
-                    value={temperature}
+                    value={reasoningEnabled ? 1.0 : temperature}
+                    disabled={reasoningEnabled}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value);
                       if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);

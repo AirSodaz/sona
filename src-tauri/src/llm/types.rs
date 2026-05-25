@@ -151,6 +151,8 @@ pub struct LlmConfig {
     pub api_path: Option<String>,
     pub api_version: Option<String>,
     pub temperature: Option<f32>,
+    pub reasoning_enabled: Option<bool>,
+    pub reasoning_level: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -164,6 +166,8 @@ struct RawLlmConfig {
     api_path: Option<String>,
     api_version: Option<String>,
     temperature: Option<f32>,
+    reasoning_enabled: Option<bool>,
+    reasoning_level: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for LlmConfig {
@@ -183,6 +187,8 @@ impl<'de> Deserialize<'de> for LlmConfig {
             api_path: raw.api_path,
             api_version: raw.api_version,
             temperature: raw.temperature,
+            reasoning_enabled: raw.reasoning_enabled,
+            reasoning_level: raw.reasoning_level,
         })
     }
 }

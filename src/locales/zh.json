@@ -1078,7 +1078,14 @@
             "status_ready": "就绪",
             "status_missing_api_key": "缺少 API 密钥",
             "status_missing_model": "未指定模型",
-            "status_off": "未开启"
+            "status_off": "未开启",
+            "reasoning_mode": "深度思考模式",
+            "reasoning_level": "思考程度",
+            "reasoning_level_low": "低",
+            "reasoning_level_medium": "中",
+            "reasoning_level_high": "高",
+            "temperature_locked": "已锁定",
+            "temperature_locked_desc": "开启深度思考模式时，温度参数锁定为 1.0 或默认值。"
         }
     },
     "shortcuts": {
