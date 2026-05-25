@@ -5,6 +5,8 @@ import {
   createLlmSettings,
   setFeatureModelSelection,
   setFeatureTemperature,
+  setFeatureReasoningEnabled,
+  setFeatureReasoningLevel,
   updateProviderSetting,
 } from '../state';
 import {
@@ -168,5 +170,30 @@ describe('llm runtime', () => {
       model: 'claude-sonnet-4-20250514',
     }));
     expect(isFeatureLlmConfigComplete({ llmSettings }, 'summary')).toBe(true);
+  });
+
+  it('resolves feature-specific reasoning options independently', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
+      apiHost: 'https://api.openai.com',
+      apiKey: 'openai-key',
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureReasoningEnabled(llmSettings, 'polish', true);
+    llmSettings = setFeatureReasoningLevel(llmSettings, 'polish', 'high');
+    llmSettings = setFeatureReasoningEnabled(llmSettings, 'translation', false);
+
+    const config = buildLlmConfigPatch(llmSettings);
+
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
+      reasoningEnabled: true,
+      reasoningLevel: 'high',
+    }));
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
+      reasoningEnabled: false,
+      reasoningLevel: undefined,
+    }));
   });
 });

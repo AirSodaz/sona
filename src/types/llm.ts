@@ -120,6 +120,12 @@ export interface LlmFeatureSelections {
   translationTemperature?: number;
   /** Temperature override for summary. */
   summaryTemperature?: number;
+  polishReasoningEnabled?: boolean;
+  polishReasoningLevel?: 'low' | 'medium' | 'high';
+  translationReasoningEnabled?: boolean;
+  translationReasoningLevel?: 'low' | 'medium' | 'high';
+  summaryReasoningEnabled?: boolean;
+  summaryReasoningLevel?: 'low' | 'medium' | 'high';
 }
 
 export interface LlmModelDiscoveryStatus {
@@ -163,6 +169,8 @@ export interface LlmConfig {
   apiVersion?: string;
   /** LLM temperature (0.0 to 2.0). */
   temperature?: number;
+  reasoningEnabled?: boolean;
+  reasoningLevel?: 'low' | 'medium' | 'high';
 }
 
 export type SummaryTemplateId = string;

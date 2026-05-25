@@ -15,6 +15,8 @@ import {
   sanitizeProviderSetting,
   setFeatureModelSelection,
   setFeatureTemperature,
+  setFeatureReasoningEnabled,
+  setFeatureReasoningLevel,
   syncProviderDiscoveredModels,
   updateLlmModelMetadata,
   updateProviderSetting,
@@ -387,5 +389,13 @@ describe('llm state', () => {
 
     expect(setting.apiHost).toBe('https://translate.googleapis.com/translate_a/single');
     expect(setting.apiKey).toBe('');
+  });
+
+  it('should successfully toggle and set reasoning options per feature', () => {
+    let settings = createLlmSettings();
+    settings = setFeatureReasoningEnabled(settings, 'polish', true);
+    settings = setFeatureReasoningLevel(settings, 'polish', 'high');
+    expect(settings.selections.polishReasoningEnabled).toBe(true);
+    expect(settings.selections.polishReasoningLevel).toBe('high');
   });
 });

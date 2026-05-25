@@ -31,6 +31,18 @@ const FEATURE_TEMPERATURE_SELECTION_KEYS = {
   summary: 'summaryTemperature',
 } as const;
 
+const FEATURE_REASONING_ENABLED_KEYS = {
+  polish: 'polishReasoningEnabled',
+  translation: 'translationReasoningEnabled',
+  summary: 'summaryReasoningEnabled',
+} as const;
+
+const FEATURE_REASONING_LEVEL_KEYS = {
+  polish: 'polishReasoningLevel',
+  translation: 'translationReasoningLevel',
+  summary: 'summaryReasoningLevel',
+} as const;
+
 const EDITABLE_MODEL_METADATA_KEYS = [
   'inputPrice',
   'outputPrice',
@@ -361,13 +373,11 @@ export function removeLlmModel(
     models: nextModels,
     modelOrder: current.modelOrder.filter((id) => id !== modelId),
     selections: {
+      ...current.selections,
       polishModelId: current.selections.polishModelId === modelId ? undefined : current.selections.polishModelId,
       translationModelId:
         current.selections.translationModelId === modelId ? undefined : current.selections.translationModelId,
       summaryModelId: current.selections.summaryModelId === modelId ? undefined : current.selections.summaryModelId,
-      polishTemperature: current.selections.polishTemperature,
-      translationTemperature: current.selections.translationTemperature,
-      summaryTemperature: current.selections.summaryTemperature,
     },
   };
 }
@@ -402,6 +412,41 @@ export function setFeatureTemperature(
     selections: {
       ...current.selections,
       [key]: normalizeTemperature(temperature),
+    },
+  };
+}
+
+export function setFeatureReasoningEnabled(
+  llmSettings: LlmSettings | undefined,
+  feature: LlmFeature,
+  enabled: boolean | undefined,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const key = FEATURE_REASONING_ENABLED_KEYS[feature];
+  return {
+    ...current,
+    customProviders: current.customProviders ?? {},
+    selections: {
+      ...current.selections,
+      [key]: typeof enabled === 'boolean' ? enabled : undefined,
+    },
+  };
+}
+
+export function setFeatureReasoningLevel(
+  llmSettings: LlmSettings | undefined,
+  feature: LlmFeature,
+  level: 'low' | 'medium' | 'high' | undefined,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const key = FEATURE_REASONING_LEVEL_KEYS[feature];
+  const isValidLevel = level === 'low' || level === 'medium' || level === 'high';
+  return {
+    ...current,
+    customProviders: current.customProviders ?? {},
+    selections: {
+      ...current.selections,
+      [key]: isValidLevel ? level : undefined,
     },
   };
 }

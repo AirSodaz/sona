@@ -68,6 +68,18 @@ function getFeatureTemperature(
   return selectionTemperature ?? DEFAULT_LLM_TEMPERATURE;
 }
 
+const FEATURE_REASONING_ENABLED_KEYS = {
+  polish: 'polishReasoningEnabled',
+  translation: 'translationReasoningEnabled',
+  summary: 'summaryReasoningEnabled',
+} as const;
+
+const FEATURE_REASONING_LEVEL_KEYS = {
+  polish: 'polishReasoningLevel',
+  translation: 'translationReasoningLevel',
+  summary: 'summaryReasoningLevel',
+} as const;
+
 export function getFeatureLlmConfig(
   config: Pick<AppConfig, 'llmSettings'>,
   feature: LlmFeature,
@@ -81,10 +93,16 @@ export function getFeatureLlmConfig(
   // Runtime calls always derive from the selected feature model instead of the active
   // provider UI. That keeps one persisted provider registry while allowing each feature
   // to talk to a different backend with its own model and temperature.
+  const selections = config.llmSettings?.selections;
+  const reasoningEnabled = selections?.[FEATURE_REASONING_ENABLED_KEYS[feature]] ?? false;
+  const reasoningLevel = selections?.[FEATURE_REASONING_LEVEL_KEYS[feature]] ?? 'medium';
+
   return {
     ...buildLlmConfig(modelEntry.provider, setting, config.llmSettings?.customProviders),
     model: modelEntry.model,
     temperature: getFeatureTemperature(config, feature),
+    reasoningEnabled,
+    reasoningLevel: reasoningEnabled ? reasoningLevel : undefined,
   };
 }
 
