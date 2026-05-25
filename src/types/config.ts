@@ -64,8 +64,25 @@ export interface AudioConfig {
 // Local model paths and management
 // ---------------------------------------------------------------------------
 
+export type AsrEngine = 'local-sherpa';
+export type AsrMode = 'streaming' | 'offline';
+export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
+
+export interface AsrModelSelection {
+  engine: AsrEngine;
+  mode: AsrMode;
+  modelId?: string | null;
+  modelPath: string;
+}
+
+export interface AsrConfig {
+  selections: Record<AsrSelectionSlot, AsrModelSelection>;
+}
+
 /** Model paths and related management settings. */
 export interface ModelConfig {
+  /** ASR engine/profile selections. */
+  asr?: AsrConfig;
   /** Path to streaming model (e.g. sherpa-onnx streaming sensevoice). */
   streamingModelPath: string;
   /** Path to offline model (e.g. sherpa-onnx offline sensevoice). */

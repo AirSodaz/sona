@@ -8,6 +8,7 @@ import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
 import { transcriptionService } from '../transcriptionService';
+import { resolveAsrTranscriptionRequest } from '../asrConfigService';
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
@@ -78,7 +79,7 @@ export async function processBatchQueueItem({
     callbacks,
 }: ProcessBatchItemOptions): Promise<void> {
     const language = config.language;
-    const offlineModelPath = config.offlineModelPath;
+    const offlineModelPath = resolveAsrTranscriptionRequest(config, 'batch').modelPath;
     const stageConfig = getAutomationStageConfig(item, config);
 
     if (!offlineModelPath) {

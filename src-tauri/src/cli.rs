@@ -1,8 +1,9 @@
 use crate::export::{export_segments, ExportFormat};
 use crate::preset_models::{find_preset_model, preset_models, PresetModel};
 use crate::sherpa::{
-    transcribe_batch_with_progress, BatchTranscriptionRequest, TranscriptNormalizationOptions,
-    TranscriptPostprocessOptions, TranscriptPostprocessor,
+    transcribe_batch_with_progress, AsrEngineAdapter, AsrMode, AsrTranscriptionRequest,
+    BatchTranscriptionRequest, LocalSherpaAdapter, TranscriptNormalizationOptions,
+    TranscriptPostprocessOptions,
 };
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
@@ -400,25 +401,26 @@ pub fn resolve_transcribe_options(
         export_format,
         output_target,
         quiet: cli.quiet,
-        request: BatchTranscriptionRequest {
-            file_path: cli.input.to_string_lossy().to_string(),
-            save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
-            model_path,
-            num_threads: threads,
-            enable_itn,
-            language,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
-            model_type: model.model_type.clone(),
-            file_config: model.file_config.clone(),
-            hotwords: cli.hotwords,
-            speaker_processing: None,
-            normalization_options: TranscriptNormalizationOptions::default(),
-            postprocessor: TranscriptPostprocessor::compile(
+        request: LocalSherpaAdapter.batch_request(
+            cli.input.to_string_lossy().to_string(),
+            cli.save_wav.map(|path| path.to_string_lossy().to_string()),
+            AsrTranscriptionRequest::local_sherpa(
+                AsrMode::Offline,
+                model_path,
+                threads,
+                enable_itn,
+                language,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                model.model_type.clone(),
+                model.file_config.clone(),
+                cli.hotwords,
+                TranscriptNormalizationOptions::default(),
                 TranscriptPostprocessOptions::default(),
-            )?,
-        },
+            ),
+            None,
+        )?,
     })
 }
 

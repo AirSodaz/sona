@@ -11,6 +11,7 @@ import {
 import { TranscriptSegment } from '../types/transcript';
 import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
+import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import { processBatchQueueItem } from '../services/batch/batchItemProcessor';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
 import {
@@ -324,7 +325,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             return;
         }
 
-        if (!config.offlineModelPath) {
+        if (!resolveAsrTranscriptionRequest(config, 'batch').modelPath) {
             const message = 'No offline model path configured.';
             get().setItemError(itemId, message);
             await notifyAutomationResult(item, 'error', message);

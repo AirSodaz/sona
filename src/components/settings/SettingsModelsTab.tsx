@@ -9,6 +9,10 @@ import type {
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
+import {
+    syncLegacyAsrSelectionFields,
+    syncStreamingAsrSelectionFields,
+} from '../../services/asrConfigService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Mic, Type, Activity, Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
@@ -160,6 +164,21 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                     : 'speakerEmbeddingModelPath';
 
         if (!modelId) {
+            if (type === 'streaming') {
+                const patch = syncStreamingAsrSelectionFields(modelConfig, {
+                    modelId: null,
+                    modelPath: '',
+                });
+                updateConfig(patch);
+                return;
+            }
+            if (type === 'offline') {
+                updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
+                    modelId: null,
+                    modelPath: '',
+                }));
+                return;
+            }
             updateConfig({ [configKey]: '' });
             return;
         }
@@ -170,7 +189,20 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         if (!path) {
             return;
         }
-        updateConfig({ [configKey]: path });
+        if (type === 'streaming') {
+            const patch = syncStreamingAsrSelectionFields(modelConfig, {
+                modelId,
+                modelPath: path,
+            });
+            updateConfig(patch);
+        } else if (type === 'offline') {
+            updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
+                modelId,
+                modelPath: path,
+            }));
+        } else {
+            updateConfig({ [configKey]: path });
+        }
         applyDependencyRequests(modelId);
     };
 

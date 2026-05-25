@@ -2,6 +2,81 @@ use super::model_config::ModelFileConfig;
 use super::postprocess::TranscriptPostprocessor;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AsrEngine {
+    LocalSherpa,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AsrMode {
+    Streaming,
+    Offline,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AsrTranscriptionRequest {
+    pub engine: AsrEngine,
+    pub mode: AsrMode,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    #[serde(default)]
+    pub punctuation_model: Option<String>,
+    #[serde(default)]
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub model_type: String,
+    #[serde(default)]
+    pub file_config: Option<ModelFileConfig>,
+    #[serde(default)]
+    pub hotwords: Option<String>,
+    pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocess_options: TranscriptPostprocessOptions,
+}
+
+impl AsrTranscriptionRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn local_sherpa(
+        mode: AsrMode,
+        model_path: String,
+        num_threads: i32,
+        enable_itn: bool,
+        language: String,
+        punctuation_model: Option<String>,
+        vad_model: Option<String>,
+        vad_buffer: f32,
+        model_type: String,
+        file_config: Option<ModelFileConfig>,
+        hotwords: Option<String>,
+        normalization_options: TranscriptNormalizationOptions,
+        postprocess_options: TranscriptPostprocessOptions,
+    ) -> Self {
+        Self {
+            engine: AsrEngine::LocalSherpa,
+            mode,
+            model_id: None,
+            model_path,
+            num_threads,
+            enable_itn,
+            language,
+            punctuation_model,
+            vad_model,
+            vad_buffer,
+            model_type,
+            file_config,
+            hotwords,
+            normalization_options,
+            postprocess_options,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BatchTranscriptionRequest {
     pub file_path: String,

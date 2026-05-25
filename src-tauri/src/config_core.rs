@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
-const CURRENT_CONFIG_VERSION: i64 = 6;
+const CURRENT_CONFIG_VERSION: i64 = 7;
 const DEFAULT_POLISH_PRESET_ID: &str = "general";
 const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
@@ -196,6 +196,10 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         }
     }
 
+    if !has_valid_asr_config(config) {
+        return true;
+    }
+
     false
 }
 
@@ -233,6 +237,7 @@ fn normalize_current_config(existing: Value) -> Value {
     let speaker_embedding_model_path =
         string_at(&config, "speakerEmbeddingModelPath").unwrap_or_default();
     let speaker_profiles = normalize_speaker_profiles(config.get("speakerProfiles"));
+    let asr_config = normalize_asr_config(&config);
 
     set(&mut config, "llmSettings", llm_settings);
     set(&mut config, "summaryEnabled", summary_enabled);
@@ -258,6 +263,7 @@ fn normalize_current_config(existing: Value) -> Value {
         json!(speaker_embedding_model_path),
     );
     set(&mut config, "speakerProfiles", speaker_profiles);
+    set(&mut config, "asr", asr_config);
     set(&mut config, "__original", original);
     config
 }
@@ -309,11 +315,29 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     {
         return true;
     }
+    if existing.get("asr") != normalized.get("asr") {
+        return true;
+    }
     existing.get("logLevel") != normalized.get("logLevel")
 }
 
 fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     let mut config = merge_default(parsed.clone());
+    let streaming_model_path = first_string(
+        &parsed,
+        &[
+            "streamingModelPath",
+            "recognitionModelPath",
+            "offlineModelPath",
+            "modelPath",
+        ],
+    )
+    .unwrap_or_default();
+    let offline_model_path = first_string(
+        &parsed,
+        &["offlineModelPath", "recognitionModelPath", "modelPath"],
+    )
+    .unwrap_or_default();
     let normalized_polish_custom_presets =
         normalize_polish_custom_presets(parsed.get("polishCustomPresets"));
     let normalized_summary_custom_templates =
@@ -330,27 +354,8 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
 
     for (key, value) in [
         ("configVersion", json!(CURRENT_CONFIG_VERSION)),
-        (
-            "streamingModelPath",
-            json!(first_string(
-                &parsed,
-                &[
-                    "streamingModelPath",
-                    "recognitionModelPath",
-                    "offlineModelPath",
-                    "modelPath"
-                ]
-            )
-            .unwrap_or_default()),
-        ),
-        (
-            "offlineModelPath",
-            json!(first_string(
-                &parsed,
-                &["offlineModelPath", "recognitionModelPath", "modelPath"]
-            )
-            .unwrap_or_default()),
-        ),
+        ("streamingModelPath", json!(streaming_model_path.clone())),
+        ("offlineModelPath", json!(offline_model_path.clone())),
         (
             "punctuationModelPath",
             json!(string_at(&parsed, "punctuationModelPath").unwrap_or_default()),
@@ -545,6 +550,8 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     ] {
         set(&mut config, key, value);
     }
+    let asr_config = normalize_asr_config(&config);
+    set(&mut config, "asr", asr_config);
 
     if config
         .get("textReplacementSets")
@@ -615,6 +622,7 @@ fn default_config() -> Value {
         ("microphoneId", json!("default")),
         ("systemAudioDeviceId", json!("default")),
         ("muteDuringRecording", json!(false)),
+        ("asr", default_asr_config()),
         ("streamingModelPath", json!("")),
         ("offlineModelPath", json!("")),
         ("punctuationModelPath", json!("")),
@@ -665,6 +673,116 @@ fn merge_default(source: Value) -> Value {
         }
     }
     Value::Object(base)
+}
+
+fn default_asr_selection(mode: &str, model_path: String) -> Value {
+    json!({
+        "engine": "local-sherpa",
+        "mode": mode,
+        "modelId": Value::Null,
+        "modelPath": model_path,
+    })
+}
+
+fn default_asr_config() -> Value {
+    json!({
+        "selections": {
+            "live": default_asr_selection("streaming", String::new()),
+            "caption": default_asr_selection("streaming", String::new()),
+            "voiceTyping": default_asr_selection("streaming", String::new()),
+            "batch": default_asr_selection("offline", String::new()),
+        }
+    })
+}
+
+fn has_valid_asr_config(config: &Value) -> bool {
+    let Some(selections) = config
+        .get("asr")
+        .and_then(|value| value.get("selections"))
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+
+    for (slot, expected_mode) in [
+        ("live", "streaming"),
+        ("caption", "streaming"),
+        ("voiceTyping", "streaming"),
+        ("batch", "offline"),
+    ] {
+        let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
+            return false;
+        };
+        if selection.get("engine").and_then(Value::as_str) != Some("local-sherpa") {
+            return false;
+        }
+        if selection.get("mode").and_then(Value::as_str) != Some(expected_mode) {
+            return false;
+        }
+        if !selection.get("modelPath").is_some_and(Value::is_string) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn normalize_asr_selection(
+    existing: Option<&Value>,
+    expected_mode: &str,
+    fallback_model_path: String,
+) -> Value {
+    let model_id = existing
+        .and_then(|value| value.get("modelId"))
+        .filter(|value| value.is_string() || value.is_null())
+        .cloned()
+        .unwrap_or(Value::Null);
+    let model_path = existing
+        .and_then(|value| value.get("modelPath"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or(fallback_model_path);
+
+    json!({
+        "engine": "local-sherpa",
+        "mode": expected_mode,
+        "modelId": model_id,
+        "modelPath": model_path,
+    })
+}
+
+fn normalize_asr_config(config: &Value) -> Value {
+    let streaming_model_path = string_at(config, "streamingModelPath").unwrap_or_default();
+    let offline_model_path = string_at(config, "offlineModelPath").unwrap_or_default();
+    let selections = config.get("asr").and_then(|value| value.get("selections"));
+
+    let existing_selection = |slot: &str| selections.and_then(|value| value.get(slot));
+
+    json!({
+        "selections": {
+            "live": normalize_asr_selection(
+                existing_selection("live"),
+                "streaming",
+                streaming_model_path.clone(),
+            ),
+            "caption": normalize_asr_selection(
+                existing_selection("caption"),
+                "streaming",
+                streaming_model_path.clone(),
+            ),
+            "voiceTyping": normalize_asr_selection(
+                existing_selection("voiceTyping"),
+                "streaming",
+                streaming_model_path,
+            ),
+            "batch": normalize_asr_selection(
+                existing_selection("batch"),
+                "offline",
+                offline_model_path,
+            ),
+        }
+    })
 }
 
 fn normalize_log_level(value: Option<&Value>) -> &'static str {
@@ -1171,9 +1289,7 @@ fn normalize_provider_str(provider: &str) -> String {
         "deepseek" => "deep_seek".to_string(),
         "moonshot" => "kimi".to_string(),
         "openai" => "open_ai".to_string(),
-        "openai_compatible" | "open_ai_compatible" => {
-            LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string()
-        }
+        "openai_compatible" | "open_ai_compatible" => LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string(),
         "siliconflow" => "silicon_flow".to_string(),
         _ => DEFAULT_LLM_PROVIDER.to_string(),
     }
@@ -1839,9 +1955,27 @@ mod tests {
         let result = migrate_app_config(None, Some(legacy), "Default Rules".to_string());
 
         assert!(result.migrated);
-        assert_eq!(result.config["configVersion"], 6);
+        assert_eq!(result.config["configVersion"], 7);
         assert_eq!(result.config["streamingModelPath"], "models/recognition");
         assert_eq!(result.config["offlineModelPath"], "models/recognition");
+        assert_eq!(
+            result.config["asr"]["selections"]["live"],
+            json!({
+                "engine": "local-sherpa",
+                "mode": "streaming",
+                "modelId": null,
+                "modelPath": "models/recognition"
+            })
+        );
+        assert_eq!(
+            result.config["asr"]["selections"]["batch"],
+            json!({
+                "engine": "local-sherpa",
+                "mode": "offline",
+                "modelId": null,
+                "modelPath": "models/recognition"
+            })
+        );
         assert_eq!(result.config["logLevel"], "info");
         assert_eq!(result.config["microphoneBoost"], 0.0);
         assert_eq!(result.config["captionBackgroundOpacity"], 0.0);
@@ -1903,7 +2037,17 @@ mod tests {
     #[test]
     fn config_core_normalizes_saved_current_config_without_false_migration() {
         let saved = json!({
-            "configVersion": 6,
+            "configVersion": 7,
+            "asr": {
+                "selections": {
+                    "live": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
+                    "caption": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
+                    "voiceTyping": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
+                    "batch": { "engine": "local-sherpa", "mode": "offline", "modelId": null, "modelPath": "C:/models/offline" }
+                }
+            },
+            "streamingModelPath": "C:/models/live",
+            "offlineModelPath": "C:/models/offline",
             "summaryEnabled": true,
             "summaryTemplateId": "meeting",
             "summaryCustomTemplates": [],
@@ -1935,10 +2079,60 @@ mod tests {
         let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
 
         assert!(!result.migrated);
-        assert_eq!(result.config["configVersion"], 6);
+        assert_eq!(result.config["configVersion"], 7);
+        assert_eq!(
+            result.config["asr"]["selections"]["voiceTyping"]["modelPath"],
+            "C:/models/live"
+        );
         assert_eq!(result.config["summaryTemplateId"], "meeting");
         assert_eq!(result.config["polishPresetId"], "meeting");
         assert_eq!(result.config["logLevel"], "debug");
+    }
+
+    #[test]
+    fn config_core_upgrades_current_config_without_asr_to_new_asr_shape() {
+        let saved = json!({
+            "configVersion": 6,
+            "streamingModelPath": "C:/models/live",
+            "offlineModelPath": "C:/models/offline",
+            "summaryEnabled": true,
+            "summaryTemplateId": "meeting",
+            "summaryCustomTemplates": [],
+            "polishPresetId": "meeting",
+            "polishCustomPresets": [],
+            "polishKeywordSets": [],
+            "speakerProfiles": [],
+            "speakerSegmentationModelPath": "",
+            "speakerEmbeddingModelPath": "",
+            "logLevel": "info",
+            "llmSettings": {
+                "activeProvider": "google_translate_free",
+                "providers": {
+                    "google_translate_free": {
+                        "apiHost": "https://translate.googleapis.com/translate_a/single",
+                        "apiKey": ""
+                    }
+                },
+                "models": {},
+                "modelOrder": [],
+                "selections": {}
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        assert_eq!(result.config["configVersion"], 7);
+        assert_eq!(
+            result.config["asr"]["selections"]["caption"]["modelPath"],
+            "C:/models/live"
+        );
+        assert_eq!(
+            result.config["asr"]["selections"]["batch"]["modelPath"],
+            "C:/models/offline"
+        );
+        assert_eq!(result.config["streamingModelPath"], "C:/models/live");
+        assert_eq!(result.config["offlineModelPath"], "C:/models/offline");
     }
 
     #[test]
@@ -2020,7 +2214,10 @@ mod tests {
         let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
 
         assert!(result.migrated);
-        assert_eq!(result.config["llmSettings"]["activeProvider"], "custom-acme");
+        assert_eq!(
+            result.config["llmSettings"]["activeProvider"],
+            "custom-acme"
+        );
         assert_eq!(
             result.config["llmSettings"]["customProviders"]["custom-acme"]["strategy"],
             "openai_responses"

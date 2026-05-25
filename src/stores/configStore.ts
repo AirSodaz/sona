@@ -20,7 +20,7 @@ import type {
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
-  configVersion: 6,
+  configVersion: 7,
 
   // UI
   appLanguage: 'auto',
@@ -40,6 +40,34 @@ export const DEFAULT_CONFIG: AppConfig = {
   muteDuringRecording: false,
 
   // Model
+  asr: {
+    selections: {
+      live: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelId: null,
+        modelPath: '',
+      },
+      caption: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelId: null,
+        modelPath: '',
+      },
+      voiceTyping: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelId: null,
+        modelPath: '',
+      },
+      batch: {
+        engine: 'local-sherpa',
+        mode: 'offline',
+        modelId: null,
+        modelPath: '',
+      },
+    },
+  },
   streamingModelPath: '',
   offlineModelPath: '',
   punctuationModelPath: '',
@@ -125,6 +153,7 @@ const AUDIO_KEYS: (keyof AudioConfig)[] = [
 ];
 
 const MODEL_KEYS: (keyof ModelConfig)[] = [
+  'asr',
   'streamingModelPath',
   'offlineModelPath',
   'punctuationModelPath',

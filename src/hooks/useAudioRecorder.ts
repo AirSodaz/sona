@@ -19,6 +19,7 @@ import { historyService } from '../services/historyService';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
 import { transcriptionService } from '../services/transcriptionService';
+import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
@@ -295,18 +296,19 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, [isPaused, isRecording, timing]);
 
     const startRecording = useCallback(async () => {
-        if (!config.streamingModelPath) {
+        const effectiveConfig = getEffectiveConfigSnapshot();
+        if (!resolveAsrTranscriptionRequest(effectiveConfig, 'live').modelPath) {
             const onboardingStore = useOnboardingStore.getState();
             useTranscriptRuntimeStore.getState().setMode('live');
             onboardingStore.reopen(
-                getResumeOnboardingStep(config, 'live_record', onboardingStore.persistedState),
+                getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
                 'live_record'
             );
             return false;
         }
         peakLevelRef.current = 0;
         return recordController.startRecording();
-    }, [config, recordController]);
+    }, [recordController]);
 
     const stopRecording = useCallback(async () => {
         return recordController.stopRecording();

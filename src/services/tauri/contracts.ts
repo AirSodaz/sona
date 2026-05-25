@@ -106,6 +106,26 @@ type TranscriptPostprocessOptions = {
   dropFinalDotSegments?: boolean;
 };
 
+type AsrTranscriptionRequest = {
+  engine: 'local-sherpa';
+  mode: 'streaming' | 'offline';
+  modelId?: string | null;
+  modelPath: string;
+  numThreads: number;
+  enableItn: boolean;
+  language: string;
+  punctuationModel: string | null;
+  vadModel: string | null;
+  vadBuffer: number;
+  modelType: string;
+  fileConfig?: ModelFileConfig;
+  hotwords: string | null;
+  normalizationOptions: {
+    enableTimeline: boolean;
+  };
+  postprocessOptions: TranscriptPostprocessOptions;
+};
+
 type WorkspaceQueryScope =
   | { kind: 'all' }
   | { kind: 'inbox' }
@@ -607,6 +627,7 @@ export type TauriCommandContractMap = {
         enableTimeline: boolean;
       };
       postprocessOptions: TranscriptPostprocessOptions;
+      asrRequest?: AsrTranscriptionRequest;
     };
     result: void;
   };
@@ -648,6 +669,7 @@ export type TauriCommandContractMap = {
         enableTimeline: boolean;
       };
       postprocessOptions: TranscriptPostprocessOptions;
+      asrRequest?: AsrTranscriptionRequest;
     };
     result: TranscriptSegment[];
   };

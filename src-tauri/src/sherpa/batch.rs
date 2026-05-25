@@ -4,60 +4,24 @@ use super::metrics::{
     set_batch_inference_metric, set_model_load_metric, AsrInferenceMetric, AsrMetricsStore,
     AsrModelLoadMetric,
 };
-use super::model_config::ModelFileConfig;
 use super::model_config::{
     build_model_config, load_punctuation, Punctuation, Recognizer, RecognizerInner,
     SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
 };
 use super::state::SherpaState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
-use super::types::{
-    BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
-    TranscriptSegment,
-};
-use super::TranscriptPostprocessor;
+use super::types::{BatchTranscriptionRequest, TranscriptSegment};
 use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
-pub async fn process_batch_file_impl<R: tauri::Runtime>(
+pub async fn process_batch_request_impl<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: &SherpaState,
-    file_path: String,
-    save_to_path: Option<String>,
-    model_path: String,
-    num_threads: i32,
-    enable_itn: bool,
-    language: String,
-    punctuation_model: Option<String>,
-    vad_model: Option<String>,
-    vad_buffer: f32,
-    model_type: String,
-    file_config: Option<ModelFileConfig>,
-    hotwords: Option<String>,
-    speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
-    normalization_options: Option<TranscriptNormalizationOptions>,
-    postprocess_options: Option<TranscriptPostprocessOptions>,
+    request: BatchTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let request = BatchTranscriptionRequest {
-        file_path,
-        save_to_path,
-        model_path,
-        num_threads,
-        enable_itn,
-        language,
-        punctuation_model,
-        vad_model,
-        vad_buffer,
-        model_type,
-        file_config,
-        hotwords,
-        speaker_processing,
-        normalization_options: normalization_options.unwrap_or_default(),
-        postprocessor: TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?,
-    };
     let progress_file_path = request.file_path.clone();
 
     transcribe_batch_with_progress_and_metrics(

@@ -99,6 +99,10 @@ vi.mock('../../stores/configStore', () => ({
     },
 }));
 
+vi.mock('../../stores/effectiveConfigStore', () => ({
+    getEffectiveConfigSnapshot: vi.fn(() => mocks.config),
+}));
+
 vi.mock('../../utils/logger', () => ({
     logger: {
         info: mocks.loggerInfo,

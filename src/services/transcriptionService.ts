@@ -2,13 +2,15 @@ import { logger } from "../utils/logger";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import type { ModelFileConfig } from '../types/model';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { modelService } from './modelService';
 import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
-import { findSelectedModelByMode } from '../utils/modelSelection';
 import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import {
+    resolveAsrTranscriptionRequest,
+    type AsrTranscriptionRequest,
+    type TranscriptPostprocessOptions,
+} from './asrConfigService';
 import { buildRecognizerOutputEvent } from './tauri/events';
 import {
     feedAudioChunk,
@@ -43,31 +45,7 @@ interface StartOptions {
     callbackSessionId?: string | null;
 }
 
-interface ServiceConfig {
-    modelPath: string;
-    punctuationModelPath: string;
-    vadModelPath: string;
-    vadBufferSize: number;
-    enableITN: boolean;
-    language: string;
-    modelType: string;
-    fileConfig?: ModelFileConfig;
-    hotwords?: string;
-    enableTimeline: boolean;
-    postprocessOptions: TranscriptPostprocessOptions;
-}
-
-type TranscriptPostprocessOptions = {
-    textReplacementSets: NonNullable<AppConfig['textReplacementSets']>;
-    dropFinalDotSegments: boolean;
-};
-
-function buildPostprocessOptions(appConfig: AppConfig): TranscriptPostprocessOptions {
-    return {
-        textReplacementSets: appConfig.textReplacementSets || [],
-        dropFinalDotSegments: true,
-    };
-}
+type ServiceConfig = AsrTranscriptionRequest;
 
 function arePostprocessOptionsEqual(
     left: TranscriptPostprocessOptions,
@@ -281,66 +259,37 @@ export class TranscriptionService {
         this.startingPromise = (async () => {
             try {
                 const appConfig = getEffectiveConfigSnapshot();
-                let punctuationPathToUse = '';
-                let vadPathToUse = '';
-                let vadBufferToUse = 5.0;
-
-                const streamingModel = findSelectedModelByMode(this.modelPath, 'streaming');
-
-                if (streamingModel) {
-                    const rules = modelService.getModelRules(streamingModel.id);
-                    if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
-                        punctuationPathToUse = appConfig.punctuationModelPath;
-                    }
-                    if (rules.requiresVad) {
-                        if (appConfig.vadModelPath) {
-                            vadPathToUse = appConfig.vadModelPath;
-                            vadBufferToUse = appConfig.vadBufferSize || 5.0;
-                        } else {
-                            const errorMsg = 'VAD model not configured. Please download the Silero VAD model in Settings → Model Center.';
-                            if (this.onError) this.onError(errorMsg);
-                            throw new Error(errorMsg);
-                        }
-                    }
-                }
-
-                const enabledHotwords = appConfig.hotwordSets
-                    ?.filter(set => set.enabled)
-                    .flatMap(set => set.rules.map(r => r.text))
-                    .filter(text => text.trim() !== '') || [];
-                const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
-                const postprocessOptions = buildPostprocessOptions(appConfig);
-
+                const slot = this.instanceId === 'voice-typing'
+                    ? 'voiceTyping'
+                    : this.instanceId === 'caption'
+                        ? 'caption'
+                        : 'live';
                 const configToUse: ServiceConfig = {
+                    ...resolveAsrTranscriptionRequest(appConfig, slot, { language: this.language }),
                     modelPath: this.modelPath,
-                    punctuationModelPath: punctuationPathToUse,
-                    vadModelPath: vadPathToUse,
-                    vadBufferSize: vadBufferToUse,
-                    enableITN: this.enableITN,
-                    language: this.language,
-                    modelType: streamingModel?.type || 'sensevoice',
-                    fileConfig: streamingModel?.fileConfig,
-                    hotwords: hotwordsStr,
-                    enableTimeline: this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
-                    postprocessOptions,
+                    enableItn: this.enableITN,
+                    normalizationOptions: {
+                        enableTimeline: this.instanceId === 'record'
+                            ? (appConfig.enableTimeline ?? false)
+                            : false,
+                    },
                 };
 
                 await initRecognizer({
                     instanceId: this.instanceId,
                     modelPath: configToUse.modelPath,
-                    numThreads: 4,
-                    enableItn: configToUse.enableITN,
+                    numThreads: configToUse.numThreads,
+                    enableItn: configToUse.enableItn,
                     language: configToUse.language,
-                    punctuationModel: configToUse.punctuationModelPath || null,
-                    vadModel: configToUse.vadModelPath || null,
-                    vadBuffer: configToUse.vadBufferSize,
+                    punctuationModel: configToUse.punctuationModel,
+                    vadModel: configToUse.vadModel,
+                    vadBuffer: configToUse.vadBuffer,
                     modelType: configToUse.modelType,
                     fileConfig: configToUse.fileConfig,
-                    hotwords: configToUse.hotwords || null,
-                    normalizationOptions: {
-                        enableTimeline: configToUse.enableTimeline,
-                    },
+                    hotwords: configToUse.hotwords,
+                    normalizationOptions: configToUse.normalizationOptions,
                     postprocessOptions: configToUse.postprocessOptions,
+                    asrRequest: configToUse,
                 });
 
                 this.runningConfig = configToUse;
@@ -378,40 +327,32 @@ export class TranscriptionService {
         if (!this.runningConfig) return false;
 
         const appConfig = getEffectiveConfigSnapshot();
-        let vadPathToUse = '';
-        let punctuationPathToUse = '';
-        const streamingModel = findSelectedModelByMode(this.modelPath, 'streaming');
-        
-        if (streamingModel) {
-            const rules = modelService.getModelRules(streamingModel.id);
-            if (rules.requiresVad && appConfig.vadModelPath) {
-                vadPathToUse = appConfig.vadModelPath;
-            }
-            if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
-                punctuationPathToUse = appConfig.punctuationModelPath;
-            }
-        }
-
-        const enabledHotwords = appConfig.hotwordSets
-            ?.filter(set => set.enabled)
-            .flatMap(set => set.rules.map(r => r.text))
-            .filter(text => text.trim() !== '') || [];
-        const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
-
-        const modelType = streamingModel?.type || 'sensevoice';
-        const enableTimeline = this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false;
-        const postprocessOptions = buildPostprocessOptions(appConfig);
+        const slot = this.instanceId === 'voice-typing'
+            ? 'voiceTyping'
+            : this.instanceId === 'caption'
+                ? 'caption'
+                : 'live';
+        const nextRequest = {
+            ...resolveAsrTranscriptionRequest(appConfig, slot, { language: this.language }),
+            modelPath: this.modelPath,
+            enableItn: this.enableITN,
+            normalizationOptions: {
+                enableTimeline: this.instanceId === 'record'
+                    ? (appConfig.enableTimeline ?? false)
+                    : false,
+            },
+        };
 
         const mismatches: string[] = [];
         if (this.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${this.modelPath} vs ${this.runningConfig.modelPath}`);
-        if (this.enableITN !== this.runningConfig.enableITN) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableITN}`);
+        if (this.enableITN !== this.runningConfig.enableItn) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableItn}`);
         if (this.language !== this.runningConfig.language) mismatches.push(`language: ${this.language} vs ${this.runningConfig.language}`);
-        if (vadPathToUse !== this.runningConfig.vadModelPath) mismatches.push(`vadModelPath: ${vadPathToUse} vs ${this.runningConfig.vadModelPath}`);
-        if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) mismatches.push(`punctuationModelPath: ${punctuationPathToUse} vs ${this.runningConfig.punctuationModelPath}`);
-        if (hotwordsStr !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${hotwordsStr} vs ${this.runningConfig.hotwords}`);
-        if (modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${modelType} vs ${this.runningConfig.modelType}`);
-        if (enableTimeline !== this.runningConfig.enableTimeline) mismatches.push(`enableTimeline: ${enableTimeline} vs ${this.runningConfig.enableTimeline}`);
-        if (!arePostprocessOptionsEqual(postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
+        if (nextRequest.vadModel !== this.runningConfig.vadModel) mismatches.push(`vadModel: ${nextRequest.vadModel} vs ${this.runningConfig.vadModel}`);
+        if (nextRequest.punctuationModel !== this.runningConfig.punctuationModel) mismatches.push(`punctuationModel: ${nextRequest.punctuationModel} vs ${this.runningConfig.punctuationModel}`);
+        if (nextRequest.hotwords !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${nextRequest.hotwords} vs ${this.runningConfig.hotwords}`);
+        if (nextRequest.modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${nextRequest.modelType} vs ${this.runningConfig.modelType}`);
+        if (nextRequest.normalizationOptions.enableTimeline !== this.runningConfig.normalizationOptions.enableTimeline) mismatches.push(`enableTimeline: ${nextRequest.normalizationOptions.enableTimeline} vs ${this.runningConfig.normalizationOptions.enableTimeline}`);
+        if (!arePostprocessOptionsEqual(nextRequest.postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
 
         if (mismatches.length > 0) {
             logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
@@ -530,38 +471,31 @@ export class TranscriptionService {
         if (!this.modelPath) throw new Error('Model path not configured');
 
         const appConfig = configOverride || getEffectiveConfigSnapshot();
-        let punctuationPathToUse = '';
-        let vadPathToUse = '';
-        let vadBufferToUse = 5.0;
-
-        const offlineModel = findSelectedModelByMode(this.modelPath, 'offline');
-        if (offlineModel) {
-            const rules = modelService.getModelRules(offlineModel.id);
-            if (rules.requiresPunctuation && appConfig.punctuationModelPath) punctuationPathToUse = appConfig.punctuationModelPath;
-            if (rules.requiresVad && appConfig.vadModelPath) {
-                vadPathToUse = appConfig.vadModelPath;
-                vadBufferToUse = appConfig.vadBufferSize || 5.0;
-            }
-        }
-
-        const enabledHotwords = appConfig.hotwordSets
-            ?.filter(set => set.enabled)
-            .flatMap(set => set.rules.map(r => r.text))
-            .filter(text => text.trim() !== '') || [];
-        const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : null;
-        const postprocessOptions = buildPostprocessOptions(appConfig);
+        const asrRequest = {
+            ...resolveAsrTranscriptionRequest(appConfig, 'batch', {
+                language: language || this.language || 'auto',
+            }),
+            modelPath: this.modelPath,
+            enableItn: this.enableITN,
+        };
 
         const segments = await processBatchFile({
-            filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
-            language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
-            vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',
-            fileConfig: offlineModel?.fileConfig,
-            hotwords: hotwordsStr,
+            filePath,
+            saveToPath: _saveToPath || null,
+            modelPath: asrRequest.modelPath,
+            numThreads: asrRequest.numThreads,
+            enableItn: asrRequest.enableItn,
+            language: asrRequest.language,
+            punctuationModel: asrRequest.punctuationModel,
+            vadModel: asrRequest.vadModel,
+            vadBuffer: asrRequest.vadBuffer,
+            modelType: asrRequest.modelType,
+            fileConfig: asrRequest.fileConfig,
+            hotwords: asrRequest.hotwords,
             speakerProcessing: speakerService.buildProcessingConfig(appConfig),
-            normalizationOptions: {
-                enableTimeline: appConfig.enableTimeline ?? false,
-            },
-            postprocessOptions,
+            normalizationOptions: asrRequest.normalizationOptions,
+            postprocessOptions: asrRequest.postprocessOptions,
+            asrRequest,
         });
 
         const processedSegments = normalizeTranscriptSegments(segments);

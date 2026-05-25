@@ -1,8 +1,10 @@
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useConfigStore } from '../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { resolveAsrTranscriptionRequest } from './asrConfigService';
 import { TranscriptionService } from './transcriptionService';
 import {
     startMicrophoneCapture,
@@ -20,6 +22,10 @@ const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
+
+function resolveVoiceTypingAsr() {
+    return resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'voiceTyping');
+}
 
 class VoiceTypingService {
     private initialized = false;
@@ -62,9 +68,10 @@ class VoiceTypingService {
         logger.info('[VoiceTypingService] Initializing...');
 
         const initialConfig = useConfigStore.getState().config;
+        const initialAsr = resolveVoiceTypingAsr();
         this.lastEnabled = initialConfig.voiceTypingEnabled || false;
         this.lastShortcut = initialConfig.voiceTypingShortcut ?? 'Alt+V';
-        this.lastModelPath = initialConfig.streamingModelPath || '';
+        this.lastModelPath = initialAsr.modelPath;
         this.lastVadModelPath = initialConfig.vadModelPath || '';
         this.lastMicrophoneId = initialConfig.microphoneId || 'default';
         this.lastLanguage = initialConfig.language || 'auto';
@@ -82,9 +89,10 @@ class VoiceTypingService {
 
         useConfigStore.subscribe((state) => {
             const newConfig = state.config;
+            const newAsr = resolveVoiceTypingAsr();
             const newEnabled = newConfig.voiceTypingEnabled || false;
             const newShortcut = newConfig.voiceTypingShortcut ?? 'Alt+V';
-            const newModelPath = newConfig.streamingModelPath || '';
+            const newModelPath = newAsr.modelPath;
             const newVadModelPath = newConfig.vadModelPath || '';
             const newMicrophoneId = newConfig.microphoneId || 'default';
             const newLanguage = newConfig.language || 'auto';
@@ -156,7 +164,8 @@ class VoiceTypingService {
 
     private async syncAndPrepare() {
         const config = useConfigStore.getState().config;
-        if (!config.voiceTypingEnabled || !config.streamingModelPath) {
+        const asr = resolveVoiceTypingAsr();
+        if (!config.voiceTypingEnabled || !asr.modelPath) {
             useVoiceTypingRuntimeStore.getState().setWarmupStatus('idle');
             return;
         }
@@ -188,10 +197,10 @@ class VoiceTypingService {
     }
 
     private configureTranscriptionService() {
-        const config = useConfigStore.getState().config;
-        this.transcriptionService.setModelPath(config.streamingModelPath);
-        this.transcriptionService.setLanguage(config.language);
-        this.transcriptionService.setEnableITN(config.enableITN ?? true);
+        const asr = resolveVoiceTypingAsr();
+        this.transcriptionService.setModelPath(asr.modelPath);
+        this.transcriptionService.setLanguage(asr.language);
+        this.transcriptionService.setEnableITN(asr.enableItn);
     }
 
     private async ensureMicrophoneStarted() {

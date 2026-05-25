@@ -5,6 +5,11 @@ import { useDialogStore } from '../stores/dialogStore';
 import {
     modelService,
 } from '../services/modelService';
+import {
+    createDefaultAsrConfig,
+    syncLegacyAsrSelectionFields,
+    syncStreamingAsrSelectionFields,
+} from '../services/asrConfigService';
 import type {
     ModelCatalogSelectedIds,
     ModelCatalogModel,
@@ -172,10 +177,20 @@ export function useModelManager(isOpen: boolean) {
 
         if (model.modes && model.modes.length > 0) {
             if (model.modes.includes('streaming')) {
-                updates.streamingModelPath = path;
+                Object.assign(updates, syncStreamingAsrSelectionFields(config, {
+                    modelId: model.id,
+                    modelPath: path,
+                }));
             }
             if (model.modes.includes('offline')) {
-                updates.offlineModelPath = path;
+                Object.assign(updates, syncLegacyAsrSelectionFields(
+                    { ...config, ...updates },
+                    'batch',
+                    {
+                        modelId: model.id,
+                        modelPath: path,
+                    },
+                ));
             }
         } else {
             switch (model.type) {
@@ -199,7 +214,7 @@ export function useModelManager(isOpen: boolean) {
         if (Object.keys(updates).length > 0) {
             updateConfig(updates);
         }
-    }, [updateConfig]);
+    }, [config, updateConfig]);
 
     // Listen for background download requests from components
     useEffect(() => {
@@ -355,11 +370,19 @@ export function useModelManager(isOpen: boolean) {
             const deletedPath = await getModelInstallPath(model);
             await modelService.deleteModel(model.id);
             await refreshModelCatalogSnapshot();
+            const asr = createDefaultAsrConfig(config.streamingModelPath, config.offlineModelPath);
+            if (config.asr?.selections) {
+                asr.selections = { ...config.asr.selections };
+            }
             if (config.streamingModelPath === deletedPath) {
                 updateConfig({ streamingModelPath: '' });
+                asr.selections.live = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
+                asr.selections.caption = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
+                asr.selections.voiceTyping = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
             }
             if (config.offlineModelPath === deletedPath) {
                 updateConfig({ offlineModelPath: '' });
+                asr.selections.batch = { engine: 'local-sherpa', mode: 'offline', modelId: null, modelPath: '' };
             }
             if (config.punctuationModelPath === deletedPath) {
                 updateConfig({ punctuationModelPath: '' });
@@ -373,6 +396,7 @@ export function useModelManager(isOpen: boolean) {
             if (config.speakerEmbeddingModelPath === deletedPath) {
                 updateConfig({ speakerEmbeddingModelPath: '' });
             }
+            updateConfig({ asr });
         } catch (error) {
             await showError({
                 code: 'model.delete_failed',
@@ -406,10 +430,23 @@ export function useModelManager(isOpen: boolean) {
             };
 
             if (defaults.streamingModelPath !== undefined) {
-                updates.streamingModelPath = defaults.streamingModelPath;
+                Object.assign(updates, syncStreamingAsrSelectionFields(
+                    { ...config, ...updates },
+                    {
+                        modelId: null,
+                        modelPath: defaults.streamingModelPath,
+                    },
+                ));
             }
             if (defaults.offlineModelPath !== undefined) {
-                updates.offlineModelPath = defaults.offlineModelPath;
+                Object.assign(updates, syncLegacyAsrSelectionFields(
+                    { ...config, ...updates },
+                    'batch',
+                    {
+                        modelId: null,
+                        modelPath: defaults.offlineModelPath,
+                    },
+                ));
             }
             if (defaults.vadModelPath !== undefined) {
                 updates.vadModelPath = defaults.vadModelPath;

@@ -16,6 +16,10 @@ const tauriFsMocks = vi.hoisted(() => ({
     remove: vi.fn(),
 }));
 
+const effectiveConfigMocks = vi.hoisted(() => ({
+    config: null as ReturnType<typeof buildTestConfig> | null,
+}));
+
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: tauriCoreMocks.invoke,
 }));
@@ -38,9 +42,19 @@ vi.mock('../../services/captionWindowService', () => ({
 }));
 
 vi.mock('../../services/modelService', () => ({
+    PRESET_MODELS: [],
+    PRESET_MODELS_MAP: new Map(),
     modelService: {
         getEnabledITNModelPaths: vi.fn().mockResolvedValue([]),
+        getModelRules: vi.fn(() => ({
+            requiresPunctuation: false,
+            requiresVad: false,
+        })),
     }
+}));
+
+vi.mock('../../stores/effectiveConfigStore', () => ({
+    getEffectiveConfigSnapshot: vi.fn(() => effectiveConfigMocks.config),
 }));
 
 const transcriptionServiceMocks = vi.hoisted(() => ({
@@ -115,6 +129,7 @@ describe('useCaptionSession', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        effectiveConfigMocks.config = defaultConfig;
 
         mockStream = {
             getAudioTracks: () => [{ onended: null, stop: vi.fn() }],

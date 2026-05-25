@@ -2,10 +2,12 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { captionWindowService } from '../services/captionWindowService';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import {
   captionTranscriptionService,
   type TranscriptionService,
 } from '../services/transcriptionService';
+import { resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import {
   startSystemAudioCapture,
   stopSystemAudioCapture,
@@ -317,7 +319,7 @@ export function useCaptionSession(
   }, []);
 
   const startCaptionSession = useCallback(async function startCaptionSession(): Promise<void> {
-    if (!config.streamingModelPath) {
+    if (!resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'caption').modelPath) {
       logger.warn('Cannot start caption: streaming model path is not set.');
       return;
     }
@@ -438,6 +440,7 @@ export function useCaptionSession(
     void restartCaptionRecognizer();
   }, [
     config.streamingModelPath,
+    config.asr,
     config.language,
     config.enableITN,
     config.punctuationModelPath,

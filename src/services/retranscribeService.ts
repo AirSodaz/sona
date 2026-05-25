@@ -6,6 +6,7 @@ import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
 import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { transcriptionService } from './transcriptionService';
+import { resolveAsrTranscriptionRequest } from './asrConfigService';
 import { logger } from '../utils/logger';
 
 class RetranscribeService {
@@ -32,12 +33,13 @@ class RetranscribeService {
         }
 
         const config = getEffectiveConfigSnapshot();
-        if (!config.offlineModelPath) {
+        const batchAsr = resolveAsrTranscriptionRequest(config, 'batch');
+        if (!batchAsr.modelPath) {
             throw new Error('Batch import model not configured.');
         }
 
         // Configure transcription service for batch mode
-        transcriptionService.setModelPath(config.offlineModelPath);
+        transcriptionService.setModelPath(batchAsr.modelPath);
         transcriptionService.setEnableITN(config.enableITN ?? false);
         const language = config.language;
         const currentSegments = useTranscriptSessionStore.getState().segments;
