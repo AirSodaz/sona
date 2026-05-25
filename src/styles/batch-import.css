@@ -193,6 +193,7 @@
 
 .queue-icon-spin {
   animation: spin 1s linear infinite;
+  transform-origin: center;
 }
 
 .queue-item-content {

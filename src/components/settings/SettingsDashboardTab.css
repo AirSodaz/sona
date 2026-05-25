@@ -522,6 +522,7 @@
 
 .spin {
   animation: settings-dashboard-spin 1s linear infinite;
+  transform-origin: center;
 }
 
 @keyframes settings-dashboard-spin {

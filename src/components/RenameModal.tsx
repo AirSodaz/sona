@@ -130,13 +130,19 @@ export function RenameModal({
                                 className="btn btn-icon btn-sm"
                                 onClick={handleAiRename}
                                 disabled={isAiLoading}
-                                title={t('common.ai_rename')}
-                                aria-label={t('common.ai_rename')}
+                                data-tooltip={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                                data-tooltip-pos="top"
+                                aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
                                 style={{
                                     position: 'absolute',
                                     right: '4px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
+                                    top: 0,
+                                    bottom: 0,
+                                    marginTop: 'auto',
+                                    marginBottom: 'auto',
+                                    width: '28px',
+                                    height: '28px',
+                                    padding: 0,
                                     color: 'var(--color-info)',
                                     background: 'transparent',
                                     border: 'none',
@@ -146,7 +152,7 @@ export function RenameModal({
                                 }}
                             >
                                 {isAiLoading ? (
-                                    <Loader2 className="spin" width={16} height={16} />
+                                    <Loader2 className="animate-spin" width={16} height={16} />
                                 ) : (
                                     <SparklesIcon width={16} height={16} />
                                 )}

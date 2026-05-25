@@ -84,7 +84,9 @@ export function ProjectCreateModal({
             type="button"
             className="btn btn-icon"
             onClick={onClose}
-            aria-label={t('common.close')}
+            aria-label={t('common.close', { defaultValue: 'Close' })}
+            data-tooltip={t('common.close', { defaultValue: 'Close' })}
+            data-tooltip-pos="bottom-left"
           >
             <XIcon />
           </button>

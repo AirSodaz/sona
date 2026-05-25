@@ -75,6 +75,7 @@
 
 .animate-spin {
   animation: spin 1s linear infinite;
+  transform-origin: center;
 }
 
 .connection-status {
