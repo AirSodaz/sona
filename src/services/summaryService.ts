@@ -1,6 +1,4 @@
 import {
-  DEFAULT_SUMMARY_TEMPLATE_ID,
-  HistorySummaryPayload,
   ResolvedSummaryTemplate,
   SummaryTemplateId,
   TranscriptSegment,
@@ -11,7 +9,6 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
-import { historyService } from './historyService';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
 import type { SummaryTranscriptLlmJobRequest } from './llmTaskService';
 import { runTranscriptLlmTaskJob } from './llm/segmentTask';
@@ -21,43 +18,12 @@ import {
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
 } from './taskLedgerRuntime';
+import { summarySidecarService } from './summarySidecarService';
 
 interface RetrySummaryTranscriptJobOptions {
   segments: TranscriptSegment[];
   historyId: string | null;
   templateId?: SummaryTemplateId;
-}
-
-// Once we have local state, prefer it over re-hydrating from disk. This prevents a late
-// sidecar read from clobbering in-memory edits, streaming text, or template switches.
-function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined): boolean {
-  if (!summaryState) {
-    return false;
-  }
-
-  return (
-    summaryState.isGenerating ||
-    summaryState.generationProgress > 0 ||
-    !!summaryState.streamingContent ||
-    !!summaryState.record ||
-    summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
-  );
-}
-
-function buildSummaryPayload(summaryState: TranscriptSummaryState): HistorySummaryPayload {
-  return {
-    activeTemplateId: summaryState.activeTemplateId,
-    record: summaryState.record,
-  };
-}
-
-// We intentionally persist only durable summary state. Empty/default state should delete
-// the sidecar so opening a transcript without summary data stays equivalent to "no file".
-function hasPersistableSummaryData(summaryState: TranscriptSummaryState): boolean {
-  return (
-    !!summaryState.record ||
-    summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
-  );
 }
 
 export function isSummaryRecordStale(
@@ -73,45 +39,11 @@ export function isSummaryRecordStale(
 
 class SummaryService {
   async loadSummary(historyId: string): Promise<void> {
-    if (!historyId) {
-      return;
-    }
-
-    const existingState = useTranscriptSidecarStore.getState().summaryStates[historyId];
-    if (hasStoredSummaryState(existingState)) {
-      return;
-    }
-
-    const payload = await historyService.loadSummary(historyId);
-    const latestState = useTranscriptSidecarStore.getState().summaryStates[historyId];
-    // Another async path may have populated or modified the state while the sidecar was
-    // loading, so re-check before hydrating to avoid overwriting fresher in-memory data.
-    if (hasStoredSummaryState(latestState)) {
-      return;
-    }
-
-    if (payload) {
-      useTranscriptSidecarStore.getState().hydrateSummaryState(payload, historyId);
-    }
+    await summarySidecarService.loadSummary(historyId);
   }
 
   async persistSummary(historyId: string): Promise<void> {
-    if (!historyId || historyId === 'current') {
-      return;
-    }
-
-    const storedSummaryState = useTranscriptSidecarStore.getState().summaryStates[historyId];
-    if (!storedSummaryState) {
-      return;
-    }
-
-    const summaryState = useTranscriptSidecarStore.getState().getSummaryState(historyId);
-    if (!hasPersistableSummaryData(summaryState)) {
-      await historyService.deleteSummary(historyId);
-      return;
-    }
-
-    await historyService.saveSummary(historyId, buildSummaryPayload(summaryState));
+    await summarySidecarService.persistSummary(historyId);
   }
 
   async setActiveTemplate(templateId: SummaryTemplateId, historyId?: string): Promise<void> {
