@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Settings } from '../Settings';
 import type { SettingsTab } from '../../hooks/useSettingsLogic';
 
@@ -259,5 +259,27 @@ describe('Settings Focus Trap & Navigation', () => {
 
         const inactivePropsAfterOpen = modelPanePropsMock.mock.calls.map(([props]) => props);
         expect(inactivePropsAfterOpen.every((props) => props.isOpen === false && props.isActive === false)).toBe(true);
+    });
+
+    it('resets scroll position to 0 when active tab changes', async () => {
+        const onClose = vi.fn();
+        mockActiveTab = 'general';
+        const { rerender, container } = render(<Settings isOpen={true} onClose={onClose} />);
+
+        const scrollContainer = container.querySelector('.settings-content-scroll') as HTMLElement;
+        expect(scrollContainer).not.toBeNull();
+
+        // Mock scrollTop and set it to a non-zero value
+        scrollContainer.scrollTop = 100;
+        expect(scrollContainer.scrollTop).toBe(100);
+
+        // Change active tab and rerender within act
+        await act(async () => {
+            mockActiveTab = 'dashboard';
+            rerender(<Settings isOpen={true} onClose={onClose} />);
+        });
+
+        // Scroll position should be reset to 0
+        expect(scrollContainer.scrollTop).toBe(0);
     });
 });

@@ -206,6 +206,7 @@ export function Settings({
 }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const isPrewarming = prewarm && !isOpen;
     const shouldRender = isOpen || isPrewarming;
     const effectiveInitialTab = isPrewarming ? 'general' : initialTab;
@@ -236,6 +237,14 @@ export function Settings({
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
+
+    // Reset scroll position on active tab change
+    useEffect(() => {
+        if (!isOpen) return;
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+        }
+    }, [activeTab, isOpen]);
 
     useEffect(() => {
         if (!shouldRender) return;
@@ -496,7 +505,7 @@ export function Settings({
                     </div>
 
                     {/* Scrollable Content Area */}
-                    <div className="settings-content-scroll full-height">
+                    <div ref={scrollContainerRef} className="settings-content-scroll full-height">
                         <SettingsNavigationProvider value={navigationContextValue}>
                             <div className="settings-pane-host">
                                 {renderedMountedTabs.map((tab) => {

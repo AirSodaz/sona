@@ -249,6 +249,44 @@
   border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
 }
 
+/* --- Premium Model Cards inside accordion panels --- */
+.settings-section-content .accordion-content-panel .model-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-lg, 24px);
+  margin-bottom: var(--spacing-sm, 8px);
+  transition: border-color var(--transition-fast, 150ms) ease;
+}
+
+.settings-section-content .accordion-content-panel .model-card:hover {
+  border-color: var(--color-border-hover);
+}
+
+.settings-section-content .accordion-content-panel .model-card:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Premium Settings Items inside accordion panels --- */
+.settings-section-content .accordion-content-panel .settings-item-container {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-lg, 24px);
+  margin-bottom: var(--spacing-sm, 8px);
+  transition: border-color var(--transition-fast, 150ms) ease;
+}
+
+.settings-section-content .accordion-content-panel .settings-item-container:hover {
+  border-color: var(--color-border-hover);
+}
+
+.settings-section-content .accordion-content-panel .settings-item-container:last-child {
+  margin-bottom: 0;
+}
+
 /* --- Page Header (Top level tab header) --- */
 .settings-page-header {
   padding-bottom: var(--spacing-lg, 24px);
