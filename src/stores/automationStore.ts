@@ -22,7 +22,7 @@ import {
   persistAutomationRepositoryState,
   persistAutomationRules,
   validateAutomationRuleActivation,
-} from './automationRepository';
+} from '../services/automation/automationRepository';
 import {
   applyRuntimeFailureState,
   applyRuntimeReplaceResults,
@@ -30,11 +30,11 @@ import {
   deriveRuntimeState,
   rebuildRuntimeStates,
   removeRuleNotifications,
-} from './automationSessionState';
+} from '../services/automation/automationSessionState';
 import {
   createAutomationRuntimeCoordinator,
   type AutomationRuntimeCoordinatorState,
-} from './automationRuntimeCoordinator';
+} from '../services/automation/automationRuntimeCoordinator';
 
 interface SaveRuleInput {
   id?: string;
