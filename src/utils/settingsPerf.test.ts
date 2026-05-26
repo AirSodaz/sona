@@ -100,5 +100,11 @@ describe('settingsPerf', () => {
     expect(getSettingsPerfErrorDetail('plain failure')).toEqual({
       message: 'plain failure',
     });
+    expect(getSettingsPerfErrorDetail({ message: 'object failure' })).toEqual({
+      message: 'object failure',
+    });
+    expect(getSettingsPerfErrorDetail(null)).toEqual({
+      message: 'Unknown error',
+    });
   });
 });

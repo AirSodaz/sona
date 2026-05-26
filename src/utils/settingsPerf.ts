@@ -1,3 +1,4 @@
+import { extractErrorMessage } from './errorUtils';
 import { logger } from './logger';
 
 export const SETTINGS_PERF_STORAGE_KEY = 'sona-settings-perf-enabled';
@@ -97,12 +98,12 @@ export function getSettingsPerfErrorDetail(error: unknown): Record<string, unkno
   if (error instanceof Error) {
     return {
       name: error.name,
-      message: error.message,
+      message: extractErrorMessage(error),
     };
   }
 
   return {
-    message: String(error),
+    message: extractErrorMessage(error),
   };
 }
 
