@@ -1,41 +1,24 @@
 import { logger } from "../utils/logger";
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { extractErrorMessage } from '../utils/errorUtils';
-import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import {
     type AsrTranscriptionRequest,
     type TranscriptPostprocessOptions,
 } from './asrConfigService';
-import { buildRecognizerOutputEvent } from './tauri/events';
 import {
-    feedAudioChunk,
-    flushRecognizer,
     initRecognizer,
     processBatchFile,
-    startRecognizer,
-    stopRecognizer,
 } from './tauri/recognizer';
+import { RecognizerLifecycle } from './transcription/recognizerLifecycle';
 import {
     buildBatchTranscriptionRequest,
     buildRecognizerInitRequest,
     buildStreamingAsrRequest,
     isTranscriptionRequestConfigured,
 } from './transcription/transcriptionRequest';
-
-const LOG_PREVIEW_MAX_CHARS = 24;
-
-function previewTextForLog(text: string) {
-    const flattened = text.replace(/\r?\n/g, ' ');
-    const preview = flattened.slice(0, LOG_PREVIEW_MAX_CHARS);
-    return flattened.length > LOG_PREVIEW_MAX_CHARS ? `${preview}...` : preview;
-}
-
-function shouldLogVoiceTypingDiagnostics(instanceId: string) {
-    return instanceId === 'voice-typing';
-}
 
 /** Callback for receiving a normalized streaming transcript update. */
 export type TranscriptionUpdateCallback = (update: TranscriptUpdate) => void;
@@ -70,80 +53,6 @@ function areServiceConfigsEqual(
  * Uses a Global Bus pattern for event reliability.
  */
 export class TranscriptionService {
-    private static globalListeners: Map<string, UnlistenFn> = new Map();
-    private static callbackRegistrationCounter = 0;
-    private static instanceCallbacks: Map<string, {
-        onUpdate: TranscriptionUpdateCallback,
-        onError: ErrorCallback,
-        owner: string,
-        sessionId: string | null,
-        registrationId: number,
-    }> = new Map();
-
-    private static isDiagnosticsInstance(instanceId: string): boolean {
-        return (
-            instanceId === 'record' ||
-            instanceId === 'voice-typing' ||
-            instanceId === 'caption'
-        );
-    }
-
-    private static formatSession(sessionId: string | null | undefined): string {
-        return sessionId ?? 'none';
-    }
-
-    /** Ensures the global listener is active for a specific instance. */
-    private static async ensureGlobalBusFor(instanceId: string) {
-        if (this.globalListeners.has(instanceId)) return;
-
-        const eventName = buildRecognizerOutputEvent(instanceId);
-        const unlisten = await listen<TranscriptUpdate>(eventName, (event) => {
-            const update = normalizeTranscriptUpdate(event.payload);
-            const instance = this.instanceCallbacks.get(instanceId);
-            if (!instance) {
-                if (this.isDiagnosticsInstance(instanceId)) {
-                    logger.info(
-                        `[TranscriptionService:${instanceId}] Received recognizer event without an active callback. removes=${update.removeIds.length} upserts=${update.upsertSegments.length}`
-                    );
-                }
-                return;
-            }
-
-            if (this.isDiagnosticsInstance(instanceId)) {
-                logger.info(
-                    `[TranscriptionService:${instanceId}] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} removes=${update.removeIds.length} upserts=${update.upsertSegments.length}`
-                );
-            }
-
-            try {
-                for (const segment of update.upsertSegments) {
-                    if (shouldLogVoiceTypingDiagnostics(instanceId)) {
-                        logger.info(
-                            '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
-                            {
-                                instanceId,
-                                registrationId: instance.registrationId,
-                                segmentId: segment.id,
-                                isFinal: segment.isFinal,
-                                rawTextLength: segment.text.length,
-                                processedTextLength: segment.text.length,
-                                preview: previewTextForLog(segment.text),
-                                callbackInvoked: false,
-                            }
-                        );
-                    }
-                }
-
-                instance.onUpdate(update);
-            } catch (e) {
-                logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
-            }
-        });
-
-        this.globalListeners.set(instanceId, unlisten);
-    }
-
-    private isRunning: boolean = false;
     private modelPath: string = '';
     private enableITN: boolean = true;
     private onError: ErrorCallback | null = null;
@@ -151,9 +60,11 @@ export class TranscriptionService {
     private runningConfig: ServiceConfig | null = null;
     private language: string = 'auto';
     private instanceId: string;
+    private readonly lifecycle: RecognizerLifecycle;
 
     constructor(instanceId: string = 'default') {
         this.instanceId = instanceId;
+        this.lifecycle = new RecognizerLifecycle(instanceId);
     }
 
     setModelPath(path: string): void {
@@ -184,86 +95,17 @@ export class TranscriptionService {
             throw new Error(errorMessage);
         }
 
-        const existingRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
-        if (
-            TranscriptionService.isDiagnosticsInstance(this.instanceId) &&
-            existingRegistration
-        ) {
-            logger.info(
-                `[TranscriptionService:${this.instanceId}] Replacing callback registration. previous_registration=${existingRegistration.registrationId} previous_owner=${existingRegistration.owner} previous_session=${TranscriptionService.formatSession(existingRegistration.sessionId)}`
-            );
-        }
-
-        const owner = options?.callbackOwner ?? this.instanceId;
-        const sessionId = options?.callbackSessionId ?? null;
-        const registrationId = ++TranscriptionService.callbackRegistrationCounter;
-        const wrappedOnUpdate: TranscriptionUpdateCallback = (update) => {
-            const currentRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
-            if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
-                if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
-                    logger.info(
-                        '[TranscriptionService:voice-typing] Skipped callback invocation',
-                        {
-                            instanceId: this.instanceId,
-                            registrationId,
-                            currentRegistrationId: currentRegistration?.registrationId ?? null,
-                            segmentIds: update.upsertSegments.map((segment) => segment.id),
-                            removeIds: update.removeIds,
-                            rawTextLength: null,
-                            processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
-                            preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
-                            callbackInvoked: false,
-                            dropReason: 'stale_registration',
-                        }
-                    );
-                }
-                if (TranscriptionService.isDiagnosticsInstance(this.instanceId)) {
-                    logger.info(
-                        `[TranscriptionService:${this.instanceId}] Ignored stale callback invocation. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)} current_registration=${currentRegistration?.registrationId ?? 'none'}`
-                    );
-                }
-                return;
-            }
-
-            if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
-                logger.info(
-                    '[TranscriptionService:voice-typing] Invoking callback',
-                    {
-                        instanceId: this.instanceId,
-                        registrationId,
-                        segmentIds: update.upsertSegments.map((segment) => segment.id),
-                        removeIds: update.removeIds,
-                        rawTextLength: null,
-                        processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
-                        preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
-                        callbackInvoked: true,
-                    }
-                );
-            }
-            onUpdate(update);
-        };
-
-        TranscriptionService.instanceCallbacks.set(this.instanceId, {
-            onUpdate: wrappedOnUpdate,
-            onError,
-            owner,
-            sessionId,
-            registrationId
+        this.lifecycle.registerCallback(onUpdate, onError, {
+            owner: options?.callbackOwner,
+            sessionId: options?.callbackSessionId,
         });
-
-        if (TranscriptionService.isDiagnosticsInstance(this.instanceId)) {
-            logger.info(
-                `[TranscriptionService:${this.instanceId}] Registered callback. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)}`
-            );
-        }
-
-        await TranscriptionService.ensureGlobalBusFor(this.instanceId);
+        await this.lifecycle.ensureGlobalBus();
 
         if (!this._isConfigMatch()) {
             await this._initBackend();
         }
 
-        await this._startStream();
+        await this.lifecycle.start(onError);
     }
 
     private _buildStreamingServiceConfig(): ServiceConfig {
@@ -311,21 +153,6 @@ export class TranscriptionService {
         }
     }
 
-    private async _startStream(): Promise<void> {
-        if (this.isRunning) {
-            return;
-        }
-        try {
-            await startRecognizer(this.instanceId);
-            this.isRunning = true;
-        } catch (error) {
-            logger.error(`[TranscriptionService:${this.instanceId}] Failed to start stream:`, error);
-            if (this.onError) this.onError(`Failed to start stream: ${error}`);
-            this.isRunning = false;
-            throw error;
-        }
-    }
-
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
 
@@ -359,23 +186,11 @@ export class TranscriptionService {
     }
 
     async stop(): Promise<void> {
-        if (!this.isRunning) return;
-        try {
-            await stopRecognizer(this.instanceId);
-        } finally {
-            this.isRunning = false;
-        }
+        await this.lifecycle.stop();
     }
 
     async softStop(): Promise<void> {
-        if (this.isRunning) {
-            try {
-                await flushRecognizer(this.instanceId);
-            } catch (error) {
-                logger.error('Flush failed:', error);
-            }
-        }
-        await this.stop();
+        await this.lifecycle.flushAndStop();
     }
 
     async pauseStream(): Promise<void> {
@@ -383,7 +198,7 @@ export class TranscriptionService {
     }
 
     async resumeStream(): Promise<void> {
-        if (this.isRunning) {
+        if (this.lifecycle.running) {
             return;
         }
 
@@ -394,18 +209,17 @@ export class TranscriptionService {
             throw new Error(errorMessage);
         }
 
-        const registration = TranscriptionService.instanceCallbacks.get(this.instanceId);
-        if (!registration) {
+        if (!this.lifecycle.hasCallbackRegistration()) {
             throw new Error(`No active callback registration for ${this.instanceId}`);
         }
 
-        await TranscriptionService.ensureGlobalBusFor(this.instanceId);
+        await this.lifecycle.ensureGlobalBus();
 
         if (!this._isConfigMatch()) {
             await this._initBackend();
         }
 
-        await this._startStream();
+        await this.lifecycle.start((error) => this.onError?.(error));
     }
 
     async terminate(): Promise<void> {
@@ -413,13 +227,7 @@ export class TranscriptionService {
     }
 
     async sendAudioInt16(samples: Int16Array): Promise<void> {
-        if (!this.isRunning) return;
-        try {
-            const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
-            await feedAudioChunk(this.instanceId, bytes);
-        } catch (error) {
-            logger.error('Feed audio failed:', error);
-        }
+        await this.lifecycle.feedAudioInt16(samples);
     }
 
     async transcribeFile(
