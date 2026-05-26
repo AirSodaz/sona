@@ -1,4 +1,3 @@
-import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useConfigStore } from '../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
@@ -7,16 +6,14 @@ import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
 import { TranscriptionService } from './transcriptionService';
 import {
-    startMicrophoneCapture,
-    stopMicrophoneCapture,
-} from './tauri/audio';
-import {
     getMousePosition,
     getTextCursorPosition,
     injectText,
 } from './tauri/system';
+import { VoiceTypingMicrophoneRuntime } from './voiceTyping/voiceTypingMicrophoneRuntime';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
+import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
 import {
     getVoiceTypingShortcutModifiers,
     resolveVoiceTypingAsr,
@@ -32,14 +29,12 @@ const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 
 class VoiceTypingService {
     private initialized = false;
-    private isShortcutRegistered = false;
-    private currentShortcut: string | null = null;
-    private captureStarted = false;
 
     private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
 
     private readonly transcriptionService = new TranscriptionService('voice-typing');
     private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
+    private readonly microphoneRuntime = new VoiceTypingMicrophoneRuntime();
     private readonly sessionMachine = new VoiceTypingSessionMachine({
         transcriptionService: this.transcriptionService,
         overlayPresenter: this.overlayPresenter,
@@ -53,6 +48,12 @@ class VoiceTypingService {
         onRuntimeError: (error) => {
             useVoiceTypingRuntimeStore.getState().reportRuntimeError('session', error);
         },
+    });
+    private readonly shortcutController = new VoiceTypingShortcutController({
+        getMode: () => this.getVoiceTypingMode(),
+        isListening: () => this.sessionMachine.isActive(),
+        startListening: () => this.startListening(),
+        stopListening: () => this.stopListening(),
     });
 
     public init() {
@@ -169,110 +170,16 @@ class VoiceTypingService {
     }
 
     private async ensureMicrophoneStarted() {
-        if (this.captureStarted) {
-            return;
-        }
-
-        try {
-            const config = useConfigStore.getState().config;
-            logger.info('[VoiceTypingService] Starting microphone capture for pre-warming...');
-            const deviceName = config.microphoneId && config.microphoneId !== 'default'
-                ? config.microphoneId
-                : null;
-            await startMicrophoneCapture({
-                deviceName,
-                instanceId: 'voice-typing',
-            });
-            this.captureStarted = true;
-        } catch (error) {
-            logger.error('[VoiceTypingService] Failed to start microphone capture:', error);
-            useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
-                errorSource: 'microphone',
-                errorMessage: extractErrorMessage(error),
-            });
-        }
+        const config = useConfigStore.getState().config;
+        await this.microphoneRuntime.ensureStarted(config.microphoneId);
     }
 
     private async stopMicrophoneCapture() {
-        if (!this.captureStarted) {
-            return;
-        }
-
-        try {
-            logger.info('[VoiceTypingService] Stopping persistent microphone capture...');
-            await stopMicrophoneCapture('voice-typing');
-            this.captureStarted = false;
-        } catch (error) {
-            logger.error('[VoiceTypingService] Failed to stop microphone capture:', error);
-        }
+        await this.microphoneRuntime.stop();
     }
 
     private async updateShortcutRegistration(enabled: boolean, shortcut: string) {
-        const normalizedShortcut = shortcut.replace(/\s+/g, '');
-        logger.info('[VoiceTypingService] updateShortcutRegistration called', {
-            enabled,
-            shortcut,
-            normalizedShortcut,
-        });
-
-        try {
-            if (this.isShortcutRegistered && this.currentShortcut) {
-                const registered = await isRegistered(this.currentShortcut);
-                if (registered) {
-                    await unregister(this.currentShortcut);
-                }
-                this.isShortcutRegistered = false;
-            }
-
-            if (!enabled || !normalizedShortcut) {
-                this.currentShortcut = null;
-                useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('idle');
-                return;
-            }
-
-            this.currentShortcut = null;
-            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('idle');
-
-            await register(normalizedShortcut, (event) => {
-                logger.info('[VoiceTypingService] Shortcut event triggered', {
-                    shortcut: event.shortcut,
-                    state: event.state,
-                    mode: this.getVoiceTypingMode(),
-                    isListening: this.sessionMachine.isActive(),
-                });
-
-                const mode = this.getVoiceTypingMode();
-                if (mode === 'hold') {
-                    if (event.state === 'Pressed' && !this.sessionMachine.isActive()) {
-                        void this.startListening();
-                    } else if (event.state === 'Released' && this.sessionMachine.isActive()) {
-                        void this.stopListening();
-                    }
-                    return;
-                }
-
-                if (event.state === 'Pressed') {
-                    if (this.sessionMachine.isActive()) {
-                        void this.stopListening();
-                    } else {
-                        void this.startListening();
-                    }
-                }
-            });
-
-            this.isShortcutRegistered = true;
-            this.currentShortcut = normalizedShortcut;
-            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
-            logger.info('[VoiceTypingService] Successfully registered voice typing shortcut', {
-                shortcut: normalizedShortcut,
-            });
-        } catch (error) {
-            logger.error('[VoiceTypingService] Failed to update voice typing shortcut:', error);
-            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus(
-                'error',
-                extractErrorMessage(error)
-            );
-        }
+        await this.shortcutController.update(enabled, shortcut);
     }
 
     private async startListening() {
@@ -407,10 +314,9 @@ class VoiceTypingService {
 
     resetForTest() {
         this.initialized = false;
-        this.isShortcutRegistered = false;
-        this.currentShortcut = null;
-        this.captureStarted = false;
         this.lastConfigSnapshot = null;
+        this.microphoneRuntime.resetForTest();
+        this.shortcutController.resetForTest();
         this.overlayPresenter.resetForTest();
         this.sessionMachine.resetForTest();
         useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
