@@ -6,9 +6,12 @@ import {
     modelService,
 } from '../services/modelService';
 import {
+    VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+    VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
     createDefaultAsrConfig,
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
+    syncVolcengineDoubaoProviderConfig,
 } from '../services/asrConfigService';
 import type {
     ModelCatalogSelectedIds,
@@ -451,6 +454,13 @@ export function useModelManager(isOpen: boolean) {
             if (defaults.vadModelPath !== undefined) {
                 updates.vadModelPath = defaults.vadModelPath;
             }
+            Object.assign(updates, syncVolcengineDoubaoProviderConfig(
+                { ...config, ...updates },
+                {
+                    batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+                    batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+                },
+            ));
 
             updateConfig(updates);
         } catch (e) {

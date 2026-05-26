@@ -265,6 +265,32 @@
   background: var(--color-bg-hover);
 }
 
+.dropdown-item:disabled,
+.dropdown-item[aria-disabled='true'] {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+  opacity: 0.68;
+}
+
+.dropdown-item:disabled:hover,
+.dropdown-item[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+.dropdown-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dropdown-item-description {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  white-space: normal;
+}
+
 .dropdown-trigger {
 
   cursor: pointer;

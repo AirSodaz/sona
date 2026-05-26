@@ -288,4 +288,53 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('volcengine-doubao');
         });
     });
+
+    it('keeps Volcengine local batch import on flash mode and disables async URL-only modes', async () => {
+        setTestConfig({
+            asr: {
+                selections: {
+                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    batch: {
+                        engine: 'volcengine-doubao',
+                        mode: 'offline',
+                        modelId: null,
+                        modelPath: '',
+                        providerId: 'volcengine-doubao',
+                        profileId: 'volcengine-doubao-default',
+                    },
+                },
+                providers: {
+                    volcengineDoubao: {
+                        apiKey: 'volc-test-key',
+                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    },
+                },
+            },
+        } as any);
+
+        renderTab(new Set());
+
+        fireEvent.click(screen.getByRole('button', { name: '急速 (同步直回)' }));
+
+        const standardOption = screen.getByRole('option', { name: /普通 \(异步轮询\)/ });
+        const offpeakOption = screen.getByRole('option', { name: /闲时 \(特惠异步\)/ });
+
+        expect((standardOption as HTMLButtonElement).disabled).toBe(true);
+        expect((offpeakOption as HTMLButtonElement).disabled).toBe(true);
+        expect(screen.getAllByText('需要公网音频 URL，当前本地批量导入暂不支持。').length).toBeGreaterThan(0);
+
+        fireEvent.click(standardOption);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.asr?.providers?.volcengineDoubao).toMatchObject({
+                batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                batchResourceId: 'volc.bigasr.auc_turbo',
+            });
+        });
+    });
 });

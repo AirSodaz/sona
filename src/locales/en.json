@@ -822,10 +822,11 @@
             "configured": "Ready",
             "not_configured": "Not Configured",
             "volcengine_batch_mode_label": "Recording File Mode",
-            "volcengine_batch_mode_hint": "Standard and Off-peak are async tasks; Flash is sync, suitable for fast transcription.",
+            "volcengine_batch_mode_hint": "Local batch import currently supports Flash only. Standard and Off-peak require a public audio URL and will be handled separately later.",
             "volcengine_batch_mode_standard": "Standard (Async Polling)",
             "volcengine_batch_mode_flash": "Flash (Sync Direct)",
-            "volcengine_batch_mode_offpeak": "Off-peak (Discount Async)"
+            "volcengine_batch_mode_offpeak": "Off-peak (Discount Async)",
+            "volcengine_batch_mode_url_only_unavailable": "Requires a public audio URL; local batch import does not support it yet."
         },
         "model_settings_description": "Manage local transcription models and processing behavior.",
         "local_path": "Local Setup",

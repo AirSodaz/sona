@@ -820,10 +820,11 @@
             "configured": "已就绪",
             "not_configured": "未配置",
             "volcengine_batch_mode_label": "录音文件识别模式",
-            "volcengine_batch_mode_hint": "普通和闲时为异步任务；极速为同步直回，适合快速转录。",
+            "volcengine_batch_mode_hint": "当前本地批量导入仅支持极速版；普通和闲时需要公网音频 URL，后续单独支持。",
             "volcengine_batch_mode_standard": "普通 (异步轮询)",
             "volcengine_batch_mode_flash": "急速 (同步直回)",
-            "volcengine_batch_mode_offpeak": "闲时 (特惠异步)"
+            "volcengine_batch_mode_offpeak": "闲时 (特惠异步)",
+            "volcengine_batch_mode_url_only_unavailable": "需要公网音频 URL，当前本地批量导入暂不支持。"
         },
         "model_settings_description": "管理本地转录模型与处理参数。",
         "local_path": "本地设置",

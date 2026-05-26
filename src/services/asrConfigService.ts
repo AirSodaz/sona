@@ -50,12 +50,15 @@ const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
 };
 
 export const VOLCENGINE_DOUBAO_PROFILE_ID = 'volcengine-doubao-default';
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT =
+  'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = 'volc.bigasr.auc_turbo';
 export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG: VolcengineDoubaoAsrProviderConfig = {
   apiKey: '',
   streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
   streamingResourceId: 'volc.seedasr.sauc.duration',
-  batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-  batchResourceId: 'volc.bigasr.auc_turbo',
+  batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+  batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
 };
 
 export function createDefaultAsrConfig(
@@ -99,19 +102,32 @@ function createDefaultAsrProviders(): AsrProviderConfig {
   };
 }
 
+export function isVolcengineFlashBatchMode(
+  provider: Pick<VolcengineDoubaoAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
+): boolean {
+  return provider?.batchEndpoint.trim().replace(/\/+$/, '') === VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT
+    && provider.batchResourceId.trim() === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+}
+
 function normalizeVolcengineConfig(
   provider: Partial<VolcengineDoubaoAsrProviderConfig> | undefined,
 ): VolcengineDoubaoAsrProviderConfig {
+  const batchEndpoint = provider?.batchEndpoint?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT;
+  const batchResourceId = provider?.batchResourceId?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+  const flashBatch = isVolcengineFlashBatchMode({ batchEndpoint, batchResourceId })
+    ? { batchEndpoint, batchResourceId }
+    : {
+        batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+        batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+      };
+
   return {
     apiKey: provider?.apiKey?.trim() ?? '',
     streamingEndpoint: provider?.streamingEndpoint?.trim()
       || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingEndpoint,
     streamingResourceId: provider?.streamingResourceId?.trim()
       || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingResourceId,
-    batchEndpoint: provider?.batchEndpoint?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchEndpoint,
-    batchResourceId: provider?.batchResourceId?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.batchResourceId,
+    ...flashBatch,
   };
 }
 
@@ -267,8 +283,7 @@ export function isAsrRequestConfigured(request: AsrTranscriptionRequest): boolea
       );
     }
     return Boolean(
-      volcengine.batchEndpoint.trim()
-      && volcengine.batchResourceId.trim(),
+      isVolcengineFlashBatchMode(volcengine),
     );
   }
 

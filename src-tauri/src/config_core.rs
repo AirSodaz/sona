@@ -870,6 +870,17 @@ fn normalize_asr_selection(
 }
 
 fn normalize_volcengine_doubao_provider(existing: Option<&Value>) -> Value {
+    let batch_endpoint = existing
+        .and_then(|value| value.get("batchEndpoint"))
+        .and_then(non_empty_str)
+        .unwrap_or(VOLCENGINE_BATCH_ENDPOINT_DEFAULT);
+    let batch_resource_id = existing
+        .and_then(|value| value.get("batchResourceId"))
+        .and_then(non_empty_str)
+        .unwrap_or(VOLCENGINE_BATCH_RESOURCE_DEFAULT);
+    let is_flash_batch = batch_endpoint.trim_end_matches('/') == VOLCENGINE_BATCH_ENDPOINT_DEFAULT
+        && batch_resource_id == VOLCENGINE_BATCH_RESOURCE_DEFAULT;
+
     json!({
         "apiKey": existing
             .and_then(|value| value.get("apiKey"))
@@ -884,14 +895,16 @@ fn normalize_volcengine_doubao_provider(existing: Option<&Value>) -> Value {
             .and_then(|value| value.get("streamingResourceId"))
             .and_then(non_empty_str)
             .unwrap_or(VOLCENGINE_STREAMING_RESOURCE_DEFAULT),
-        "batchEndpoint": existing
-            .and_then(|value| value.get("batchEndpoint"))
-            .and_then(non_empty_str)
-            .unwrap_or(VOLCENGINE_BATCH_ENDPOINT_DEFAULT),
-        "batchResourceId": existing
-            .and_then(|value| value.get("batchResourceId"))
-            .and_then(non_empty_str)
-            .unwrap_or(VOLCENGINE_BATCH_RESOURCE_DEFAULT),
+        "batchEndpoint": if is_flash_batch {
+            batch_endpoint
+        } else {
+            VOLCENGINE_BATCH_ENDPOINT_DEFAULT
+        },
+        "batchResourceId": if is_flash_batch {
+            batch_resource_id
+        } else {
+            VOLCENGINE_BATCH_RESOURCE_DEFAULT
+        },
     })
 }
 
@@ -2385,6 +2398,46 @@ mod tests {
         );
         assert_eq!(result.config["streamingModelPath"], "C:/models/live");
         assert_eq!(result.config["offlineModelPath"], "C:/models/offline");
+    }
+
+    #[test]
+    fn config_core_normalizes_saved_volcengine_async_batch_provider_to_flash() {
+        let saved = json!({
+            "configVersion": 7,
+            "asr": {
+                "selections": {
+                    "batch": {
+                        "engine": "volcengine-doubao",
+                        "mode": "offline",
+                        "modelId": null,
+                        "modelPath": "",
+                        "providerId": "volcengine-doubao",
+                        "profileId": "volcengine-doubao-default"
+                    }
+                },
+                "providers": {
+                    "volcengineDoubao": {
+                        "apiKey": "volc-test-key",
+                        "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                        "streamingResourceId": "volc.seedasr.sauc.duration",
+                        "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit",
+                        "batchResourceId": "volc.bigasr.auc_idle"
+                    }
+                }
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        assert_eq!(
+            result.config["asr"]["providers"]["volcengineDoubao"]["batchEndpoint"],
+            VOLCENGINE_BATCH_ENDPOINT_DEFAULT
+        );
+        assert_eq!(
+            result.config["asr"]["providers"]["volcengineDoubao"]["batchResourceId"],
+            VOLCENGINE_BATCH_RESOURCE_DEFAULT
+        );
     }
 
     #[test]

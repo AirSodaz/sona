@@ -189,6 +189,17 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             enableITN: false,
             vadBufferSize: 9,
             maxConcurrent: 4,
+            asr: {
+                providers: {
+                    volcengineDoubao: {
+                        apiKey: 'volc-test-key',
+                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
+                        batchResourceId: 'volc.seedasr.auc',
+                    },
+                },
+            },
         });
 
         useDialogStore.setState({
@@ -288,6 +299,14 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             enableITN: true,
             vadBufferSize: 5,
             maxConcurrent: 2,
+            asr: {
+                providers: {
+                    volcengineDoubao: {
+                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    },
+                },
+            },
         });
     });
 

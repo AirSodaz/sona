@@ -4,6 +4,9 @@ import { ChevronDownIcon } from './Icons';
 export interface DropdownOption {
     value: string;
     label: string;
+    description?: string;
+    disabled?: boolean;
+    ariaLabel?: string;
     style?: React.CSSProperties;
 }
 
@@ -26,7 +29,7 @@ export function Dropdown({
     className = '',
     style,
     id,
-    'aria-label': ariaLabel
+    'aria-label': ariaLabel,
 }: DropdownProps): React.JSX.Element {
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
@@ -34,7 +37,7 @@ export function Dropdown({
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
-    const selectedOption = options.find(opt => opt.value === value);
+    const selectedOption = options.find((opt) => opt.value === value);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -51,11 +54,11 @@ export function Dropdown({
     useEffect(() => {
         if (isOpen && menuRef.current) {
             // Try to find selected option first
-            const selectedBtn = menuRef.current.querySelector('.selected') as HTMLElement;
+            const selectedBtn = menuRef.current.querySelector<HTMLButtonElement>('.selected:not(:disabled)');
             if (selectedBtn) {
                 requestAnimationFrame(() => selectedBtn.focus());
             } else {
-                const firstButton = menuRef.current.querySelector('button');
+                const firstButton = menuRef.current.querySelector<HTMLButtonElement>('button:not(:disabled)');
                 if (firstButton) {
                     requestAnimationFrame(() => firstButton.focus());
                 }
@@ -72,7 +75,7 @@ export function Dropdown({
             // buffer for visuals (e.g. shadow, margin)
             const buffer = 10;
 
-            if (spaceBelow < (menuHeight + buffer) && rect.top > (menuHeight + buffer)) {
+            if (spaceBelow < menuHeight + buffer && rect.top > menuHeight + buffer) {
                 setPosition('top');
             } else {
                 setPosition('bottom');
@@ -80,8 +83,11 @@ export function Dropdown({
         }
     }, [isOpen]);
 
-    const handleSelect = (optionValue: string) => {
-        onChange(optionValue);
+    const handleSelect = (option: DropdownOption) => {
+        if (option.disabled) {
+            return;
+        }
+        onChange(option.value);
         setIsOpen(false);
         triggerRef.current?.focus();
     };
@@ -110,7 +116,10 @@ export function Dropdown({
         }
 
         if (menuRef.current) {
-            const buttons = Array.from(menuRef.current.querySelectorAll('button'));
+            const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+            if (buttons.length === 0) {
+                return;
+            }
             const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
 
             switch (e.key) {
@@ -169,30 +178,33 @@ export function Dropdown({
                 aria-expanded={isOpen}
                 aria-label={ariaLabel}
             >
-                <span className="dropdown-value">
-                    {selectedOption ? selectedOption.label : placeholder}
-                </span>
+                <span className="dropdown-value">{selectedOption ? selectedOption.label : placeholder}</span>
                 <ChevronDownIcon className="dropdown-icon" />
             </button>
 
             {isOpen && (
-                <div
-                    ref={menuRef}
-                    className={`dropdown-menu position-${position}`}
-                    role="listbox"
-                >
+                <div ref={menuRef} className={`dropdown-menu position-${position}`} role="listbox">
                     {options.map((option) => (
                         <button
                             key={option.value}
                             type="button"
                             className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
-                            onClick={() => handleSelect(option.value)}
+                            onClick={() => handleSelect(option)}
                             role="option"
                             aria-selected={option.value === value}
+                            aria-label={option.ariaLabel}
+                            aria-disabled={option.disabled || undefined}
+                            disabled={option.disabled}
                             tabIndex={-1}
                             style={option.style}
+                            title={option.description}
                         >
-                            {option.label}
+                            <span className="dropdown-item-content">
+                                <span>{option.label}</span>
+                                {option.description && (
+                                    <span className="dropdown-item-description">{option.description}</span>
+                                )}
+                            </span>
                         </button>
                     ))}
                 </div>

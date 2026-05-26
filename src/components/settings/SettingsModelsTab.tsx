@@ -9,6 +9,8 @@ import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
     DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+    VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+    VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
     syncStreamingVolcengineDoubaoSelectionFields,
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
@@ -223,6 +225,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const updateVolcengineConfig = (updates: Partial<typeof volcengineConfig>) => {
         updateConfig(syncVolcengineDoubaoProviderConfig(modelConfig, updates));
     };
+    const volcengineBatchUrlOnlyUnavailable = t('settings.asr.volcengine_batch_mode_url_only_unavailable', {
+        defaultValue: '需要公网音频 URL，当前本地批量导入暂不支持。',
+    });
 
     const getSectionStatus = (type: ModelCatalogSectionType) => {
         const groups = getSectionGroups(type);
@@ -483,35 +488,29 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         <div style={{ width: '220px' }}>
                             <Dropdown
                                 id="settings-volcengine-batch-mode"
-                                value={
-                                    volcengineConfig.batchEndpoint.includes('recognize/flash')
-                                        ? 'flash'
-                                        : volcengineConfig.batchEndpoint.includes('idle')
-                                            ? 'offpeak'
-                                            : 'standard'
-                                }
+                                value="flash"
                                 onChange={(value) => {
-                                    if (value === 'standard') {
+                                    if (value === 'flash') {
                                         updateVolcengineConfig({
-                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
-                                            batchResourceId: 'volc.seedasr.auc',
-                                        });
-                                    } else if (value === 'flash') {
-                                        updateVolcengineConfig({
-                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                                            batchResourceId: 'volc.bigasr.auc_turbo',
-                                        });
-                                    } else if (value === 'offpeak') {
-                                        updateVolcengineConfig({
-                                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit',
-                                            batchResourceId: 'volc.bigasr.auc_idle',
+                                            batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+                                            batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
                                         });
                                     }
                                 }}
                                 options={[
-                                    { value: 'standard', label: t('settings.asr.volcengine_batch_mode_standard', { defaultValue: '普通 (异步轮询)' }) },
+                                    {
+                                        value: 'standard',
+                                        label: t('settings.asr.volcengine_batch_mode_standard', { defaultValue: '普通 (异步轮询)' }),
+                                        description: volcengineBatchUrlOnlyUnavailable,
+                                        disabled: true,
+                                    },
                                     { value: 'flash', label: t('settings.asr.volcengine_batch_mode_flash', { defaultValue: '急速 (同步直回)' }) },
-                                    { value: 'offpeak', label: t('settings.asr.volcengine_batch_mode_offpeak', { defaultValue: '闲时 (特惠异步)' }) },
+                                    {
+                                        value: 'offpeak',
+                                        label: t('settings.asr.volcengine_batch_mode_offpeak', { defaultValue: '闲时 (特惠异步)' }),
+                                        description: volcengineBatchUrlOnlyUnavailable,
+                                        disabled: true,
+                                    },
                                 ]}
                             />
                         </div>
