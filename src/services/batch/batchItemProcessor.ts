@@ -111,7 +111,7 @@ export async function processBatchQueueItem({
             item.filePath,
             currentSegments,
             calculateDuration(currentSegments),
-            tempWavPath,
+            batchAsr.engine === 'local-sherpa' ? tempWavPath : undefined,
             item.projectId,
         );
 

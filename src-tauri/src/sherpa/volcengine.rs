@@ -13,10 +13,13 @@ use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use serde_json::{json, Value};
-use std::sync::Arc;
-use std::time::Instant;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -38,6 +41,8 @@ pub enum VolcengineMode {
 pub struct VolcengineStreamingSession {
     request: AsrTranscriptionRequest,
     writer: Arc<Mutex<Option<VolcengineWriter>>>,
+    flushing: Arc<AtomicBool>,
+    final_response_received: Arc<Notify>,
 }
 
 type VolcengineWriter = futures_util::stream::SplitSink<
@@ -304,6 +309,13 @@ pub fn segments_from_response_value(
     }])
 }
 
+fn segments_from_streaming_response_value(
+    response: &Value,
+    flush_final: bool,
+) -> Result<Vec<TranscriptSegment>, String> {
+    segments_from_response_value(response, flush_final, "volc-live")
+}
+
 fn segment_from_utterance(
     utterance: &Value,
     index: usize,
@@ -405,6 +417,8 @@ pub async fn init_streaming_recognizer_impl(
         VolcengineStreamingSession {
             request,
             writer: Arc::new(Mutex::new(None)),
+            flushing: Arc::new(AtomicBool::new(false)),
+            final_response_received: Arc::new(Notify::new()),
         },
     );
     Ok(())
@@ -468,14 +482,17 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     let instance_id_for_task = instance_id.clone();
     let normalization_options = session.request.normalization_options;
     let postprocessor = TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
+    let flushing = session.flushing.clone();
+    let final_response_received = session.final_response_received.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
                 Ok(Message::Binary(frame)) => {
+                    let flush_final = flushing.load(Ordering::SeqCst);
                     match parse_server_response_frame(&frame)
                         .and_then(|value| {
                             value
-                                .map(|value| segments_from_response_value(&value, false, "volc-live"))
+                                .map(|value| segments_from_streaming_response_value(&value, flush_final))
                                 .transpose()
                                 .map(|value| value.unwrap_or_default())
                         }) {
@@ -495,6 +512,10 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
                         }
                         Ok(_) => {}
                         Err(error) => warn!("[Volcengine ASR] response parse failed: {error}"),
+                    }
+                    if flush_final {
+                        final_response_received.notify_waiters();
+                        break;
                     }
                 }
                 Ok(Message::Close(_)) => break,
@@ -600,10 +621,16 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
     };
     let mut writer = session.writer.lock().await;
     if let Some(writer) = writer.as_mut() {
+        session.flushing.store(true, Ordering::SeqCst);
         writer
             .send(Message::Binary(build_audio_frame(&[], true)))
             .await
             .map_err(|error| format!("火山 ASR 结束帧发送失败：{error}"))?;
+        let _ = tokio::time::timeout(
+            Duration::from_millis(1500),
+            session.final_response_received.notified(),
+        )
+        .await;
     }
     Ok(())
 }
@@ -848,6 +875,29 @@ mod tests {
         assert_eq!(timing.level, TranscriptTimingLevel::Token);
         assert_eq!(timing.source, TranscriptTimingSource::Model);
         assert_eq!(timing.units[0].text, "关");
+    }
+
+    #[test]
+    fn volcengine_streaming_final_frame_defaults_missing_definite_to_final() {
+        let response = serde_json::json!({
+            "result": {
+                "text": "尾句保存。",
+                "utterances": [
+                    {
+                        "end_time": 2400,
+                        "start_time": 1200,
+                        "text": "尾句保存。"
+                    }
+                ]
+            }
+        });
+
+        let segments = segments_from_streaming_response_value(&response, true)
+            .expect("final streaming frame should map");
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].text, "尾句保存。");
+        assert!(segments[0].is_final);
     }
 
     #[test]

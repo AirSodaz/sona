@@ -181,6 +181,61 @@ describe('batchQueueStore History Integration', () => {
         expect(queueState.queueItems[0].status).toBe('complete');
     });
 
+    it('saves Volcengine batch imports from the original file path without a temp WAV copy', async () => {
+        const file = '/path/to/volcengine.wav';
+        const mockSegments = [
+            { id: 'volc-seg-1', start: 0, end: 2, text: 'Online batch saved', isFinal: true },
+        ];
+
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+                asr: {
+                    selections: {
+                        live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                        caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                        voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                        batch: {
+                            engine: 'volcengine-doubao',
+                            mode: 'offline',
+                            modelId: null,
+                            modelPath: '',
+                            providerId: 'volcengine-doubao',
+                            profileId: 'volcengine-doubao-default',
+                        },
+                    },
+                    providers: {
+                        volcengineDoubao: {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
+                    },
+                },
+            },
+        });
+        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+
+        useBatchQueueStore.getState().addFiles([file]);
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        expect(historyService.saveImportedFile).toHaveBeenCalledWith(
+            file,
+            mockSegments,
+            2,
+            undefined,
+            null,
+        );
+        expect(useBatchQueueStore.getState().queueItems[0]).toEqual(expect.objectContaining({
+            historyId: 'history-1',
+            status: 'complete',
+        }));
+    });
+
     it('keeps the active editor title aligned with the saved history title for batch imports', async () => {
         const file = '/path/to/meeting.wav';
         const mockSegments = [

@@ -590,6 +590,46 @@ describe('LiveRecord Native Capture', () => {
         expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });
 
+    it('persists final online streaming segments delivered during stop flush', async () => {
+        mockCreateLiveRecordingDraft.mockResolvedValueOnce(createDraftHandle('online-history-id', 'wav'));
+        mockSoftStop.mockImplementationOnce(async () => {
+            recordSegmentCallback?.({
+                removeIds: [],
+                upsertSegments: [{
+                    id: 'online-final-seg',
+                    text: 'Online final during stop',
+                    start: 0,
+                    end: 2,
+                    isFinal: true,
+                }],
+            });
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(100);
+            await Promise.resolve();
+        });
+
+        expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
+            'online-history-id',
+            [expect.objectContaining({
+                id: 'online-final-seg',
+                text: 'Online final during stop',
+                isFinal: true,
+            })],
+            expect.any(Number),
+        );
+        expect(mockLiveRecordHistory.mockDeleteRecording).not.toHaveBeenCalledWith('online-history-id');
+    });
+
     it('keeps accepting native microphone segments after capture attaches', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
