@@ -626,21 +626,7 @@ export type TauriCommandContractMap = {
   [TauriCommand.recognizer.init]: {
     args: {
       instanceId: string;
-      modelPath: string;
-      numThreads: number;
-      enableItn: boolean;
-      language: string;
-      punctuationModel: string | null;
-      vadModel: string | null;
-      vadBuffer: number;
-      modelType: string;
-      fileConfig?: ModelFileConfig;
-      hotwords: string | null;
-      normalizationOptions: {
-        enableTimeline: boolean;
-      };
-      postprocessOptions: TranscriptPostprocessOptions;
-      asrRequest?: AsrTranscriptionRequest;
+      asrRequest: AsrTranscriptionRequest;
     };
     result: void;
   };
@@ -667,22 +653,8 @@ export type TauriCommandContractMap = {
     args: {
       filePath: string;
       saveToPath: string | null;
-      modelPath: string;
-      numThreads: number;
-      enableItn: boolean;
-      language: string;
-      punctuationModel: string | null;
-      vadModel: string | null;
-      vadBuffer: number;
-      modelType: string;
-      fileConfig?: ModelFileConfig;
-      hotwords: string | null;
       speakerProcessing: SpeakerProcessingConfig | null;
-      normalizationOptions: {
-        enableTimeline: boolean;
-      };
-      postprocessOptions: TranscriptPostprocessOptions;
-      asrRequest?: AsrTranscriptionRequest;
+      asrRequest: AsrTranscriptionRequest;
     };
     result: TranscriptSegment[];
   };

@@ -535,41 +535,49 @@ describe('tauri boundary wrappers', () => {
   it('recognizer wrappers use the centralized recognizer commands', async () => {
     await initRecognizer({
       instanceId: 'record',
-      modelPath: 'C:/models/live',
-      numThreads: 4,
-      enableItn: true,
-      language: 'auto',
-      punctuationModel: null,
-      vadModel: null,
-      vadBuffer: 5,
-      modelType: 'sensevoice',
-      hotwords: null,
-      normalizationOptions: {
-        enableTimeline: false,
-      },
-      postprocessOptions: {
-        textReplacementSets: [],
-        dropFinalDotSegments: true,
+      asrRequest: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelPath: 'C:/models/live',
+        numThreads: 4,
+        enableItn: true,
+        language: 'auto',
+        punctuationModel: null,
+        vadModel: null,
+        vadBuffer: 5,
+        modelType: 'sensevoice',
+        hotwords: null,
+        normalizationOptions: {
+          enableTimeline: false,
+        },
+        postprocessOptions: {
+          textReplacementSets: [],
+          dropFinalDotSegments: true,
+        },
       },
     });
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.recognizer.init, {
       instanceId: 'record',
-      modelPath: 'C:/models/live',
-      numThreads: 4,
-      enableItn: true,
-      language: 'auto',
-      punctuationModel: null,
-      vadModel: null,
-      vadBuffer: 5,
-      modelType: 'sensevoice',
-      hotwords: null,
-      normalizationOptions: {
-        enableTimeline: false,
-      },
-      postprocessOptions: {
-        textReplacementSets: [],
-        dropFinalDotSegments: true,
+      asrRequest: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelPath: 'C:/models/live',
+        numThreads: 4,
+        enableItn: true,
+        language: 'auto',
+        punctuationModel: null,
+        vadModel: null,
+        vadBuffer: 5,
+        modelType: 'sensevoice',
+        hotwords: null,
+        normalizationOptions: {
+          enableTimeline: false,
+        },
+        postprocessOptions: {
+          textReplacementSets: [],
+          dropFinalDotSegments: true,
+        },
       },
     });
   });

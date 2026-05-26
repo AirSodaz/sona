@@ -41,6 +41,85 @@ async fn route_engine(state: &SherpaState, instance_id: &str) -> AsrEngine {
         .unwrap_or(AsrEngine::LocalSherpa)
 }
 
+#[derive(Default)]
+struct LegacyLocalSherpaTransportRequest {
+    model_path: Option<String>,
+    num_threads: Option<i32>,
+    enable_itn: Option<bool>,
+    language: Option<String>,
+    punctuation_model: Option<String>,
+    vad_model: Option<String>,
+    vad_buffer: Option<f32>,
+    model_type: Option<String>,
+    file_config: Option<ModelFileConfig>,
+    hotwords: Option<String>,
+    normalization_options: Option<TranscriptNormalizationOptions>,
+    postprocess_options: Option<TranscriptPostprocessOptions>,
+}
+
+impl LegacyLocalSherpaTransportRequest {
+    fn into_asr_request(
+        self,
+        mode: AsrMode,
+        command_name: &str,
+    ) -> Result<AsrTranscriptionRequest, String> {
+        let mut missing = Vec::new();
+        if self.model_path.is_none() {
+            missing.push("modelPath");
+        }
+        if self.num_threads.is_none() {
+            missing.push("numThreads");
+        }
+        if self.enable_itn.is_none() {
+            missing.push("enableItn");
+        }
+        if self.language.is_none() {
+            missing.push("language");
+        }
+        if self.vad_buffer.is_none() {
+            missing.push("vadBuffer");
+        }
+        if self.model_type.is_none() {
+            missing.push("modelType");
+        }
+
+        if !missing.is_empty() {
+            return Err(format!(
+                "Missing asrRequest for {command_name}; legacy flat ASR fields are incomplete: {}",
+                missing.join(", ")
+            ));
+        }
+
+        Ok(AsrTranscriptionRequest::local_sherpa(
+            mode,
+            self.model_path.expect("checked modelPath"),
+            self.num_threads.expect("checked numThreads"),
+            self.enable_itn.expect("checked enableItn"),
+            self.language.expect("checked language"),
+            self.punctuation_model,
+            self.vad_model,
+            self.vad_buffer.expect("checked vadBuffer"),
+            self.model_type.expect("checked modelType"),
+            self.file_config,
+            self.hotwords,
+            self.normalization_options.unwrap_or_default(),
+            self.postprocess_options.unwrap_or_default(),
+        ))
+    }
+}
+
+fn resolve_transport_asr_request(
+    asr_request: Option<AsrTranscriptionRequest>,
+    legacy_request: LegacyLocalSherpaTransportRequest,
+    mode: AsrMode,
+    command_name: &str,
+) -> Result<AsrTranscriptionRequest, String> {
+    match asr_request {
+        Some(request) => Ok(request),
+        None => legacy_request.into_asr_request(mode, command_name),
+    }
+}
+
 /// Feed f32 audio samples from the hardware capture worker to the correct
 /// ASR backend. Routes by the engine selected during `init_recognizer` so an
 /// expected cloud recognizer cannot silently fall through to local Sherpa when
@@ -64,23 +143,23 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 pub async fn init_recognizer(
     state: State<'_, SherpaState>,
     instance_id: String,
-    model_path: String,
-    num_threads: i32,
-    enable_itn: bool,
-    language: String,
+    model_path: Option<String>,
+    num_threads: Option<i32>,
+    enable_itn: Option<bool>,
+    language: Option<String>,
     punctuation_model: Option<String>,
     vad_model: Option<String>,
-    vad_buffer: f32,
-    model_type: String,
+    vad_buffer: Option<f32>,
+    model_type: Option<String>,
     file_config: Option<ModelFileConfig>,
     hotwords: Option<String>,
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
     asr_request: Option<AsrTranscriptionRequest>,
 ) -> Result<(), String> {
-    let request = asr_request.unwrap_or_else(|| {
-        AsrTranscriptionRequest::local_sherpa(
-            AsrMode::Streaming,
+    let request = resolve_transport_asr_request(
+        asr_request,
+        LegacyLocalSherpaTransportRequest {
             model_path,
             num_threads,
             enable_itn,
@@ -91,10 +170,12 @@ pub async fn init_recognizer(
             model_type,
             file_config,
             hotwords,
-            normalization_options.unwrap_or_default(),
-            postprocess_options.unwrap_or_default(),
-        )
-    });
+            normalization_options,
+            postprocess_options,
+        },
+        AsrMode::Streaming,
+        "init_recognizer",
+    )?;
     match request.engine {
         AsrEngine::LocalSherpa => {
             LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)?;
@@ -198,14 +279,14 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     file_path: String,
     save_to_path: Option<String>,
-    model_path: String,
-    num_threads: i32,
-    enable_itn: bool,
-    language: String,
+    model_path: Option<String>,
+    num_threads: Option<i32>,
+    enable_itn: Option<bool>,
+    language: Option<String>,
     punctuation_model: Option<String>,
     vad_model: Option<String>,
-    vad_buffer: f32,
-    model_type: String,
+    vad_buffer: Option<f32>,
+    model_type: Option<String>,
     file_config: Option<ModelFileConfig>,
     hotwords: Option<String>,
     speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
@@ -213,9 +294,9 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     postprocess_options: Option<TranscriptPostprocessOptions>,
     asr_request: Option<AsrTranscriptionRequest>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let request = asr_request.unwrap_or_else(|| {
-        AsrTranscriptionRequest::local_sherpa(
-            AsrMode::Offline,
+    let request = resolve_transport_asr_request(
+        asr_request,
+        LegacyLocalSherpaTransportRequest {
             model_path,
             num_threads,
             enable_itn,
@@ -226,10 +307,12 @@ pub async fn process_batch_file<R: tauri::Runtime>(
             model_type,
             file_config,
             hotwords,
-            normalization_options.unwrap_or_default(),
-            postprocess_options.unwrap_or_default(),
-        )
-    });
+            normalization_options,
+            postprocess_options,
+        },
+        AsrMode::Offline,
+        "process_batch_file",
+    )?;
     match request.engine {
         AsrEngine::LocalSherpa => {
             let adapter = LocalSherpaAdapter;
@@ -253,6 +336,7 @@ pub async fn get_asr_runtime_metrics(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sherpa::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
 
     #[tokio::test]
     async fn route_engine_uses_selected_online_engine_even_without_active_session() {
@@ -268,5 +352,94 @@ mod tests {
         let state = SherpaState::new();
 
         assert_eq!(route_engine(&state, "record").await, AsrEngine::LocalSherpa);
+    }
+
+    fn local_request(mode: AsrMode, model_path: &str) -> AsrTranscriptionRequest {
+        AsrTranscriptionRequest::local_sherpa(
+            mode,
+            model_path.to_string(),
+            4,
+            true,
+            "auto".to_string(),
+            None,
+            None,
+            5.0,
+            "sensevoice".to_string(),
+            None,
+            None,
+            TranscriptNormalizationOptions::default(),
+            TranscriptPostprocessOptions::default(),
+        )
+    }
+
+    #[test]
+    fn transport_asr_request_prefers_canonical_asr_request() {
+        let request = resolve_transport_asr_request(
+            Some(local_request(AsrMode::Streaming, "C:/models/canonical")),
+            LegacyLocalSherpaTransportRequest::default(),
+            AsrMode::Streaming,
+            "init_recognizer",
+        )
+        .expect("canonical asrRequest should be sufficient");
+
+        assert_eq!(request.model_path, "C:/models/canonical");
+        assert_eq!(request.mode, AsrMode::Streaming);
+    }
+
+    #[test]
+    fn transport_asr_request_adapts_complete_legacy_flat_fields() {
+        let request = resolve_transport_asr_request(
+            None,
+            LegacyLocalSherpaTransportRequest {
+                model_path: Some("C:/models/legacy".to_string()),
+                num_threads: Some(2),
+                enable_itn: Some(false),
+                language: Some("zh".to_string()),
+                punctuation_model: Some("C:/models/punct".to_string()),
+                vad_model: None,
+                vad_buffer: Some(3.0),
+                model_type: Some("sensevoice".to_string()),
+                file_config: None,
+                hotwords: Some("Sona".to_string()),
+                normalization_options: Some(TranscriptNormalizationOptions {
+                    enable_timeline: true,
+                }),
+                postprocess_options: None,
+            },
+            AsrMode::Offline,
+            "process_batch_file",
+        )
+        .expect("complete legacy fields should be adapted");
+
+        assert_eq!(request.engine, AsrEngine::LocalSherpa);
+        assert_eq!(request.mode, AsrMode::Offline);
+        assert_eq!(request.model_path, "C:/models/legacy");
+        assert_eq!(request.num_threads, 2);
+        assert!(!request.enable_itn);
+        assert_eq!(request.language, "zh");
+        assert_eq!(
+            request.punctuation_model.as_deref(),
+            Some("C:/models/punct")
+        );
+        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
+        assert!(request.normalization_options.enable_timeline);
+    }
+
+    #[test]
+    fn transport_asr_request_rejects_incomplete_legacy_flat_fields() {
+        let error = resolve_transport_asr_request(
+            None,
+            LegacyLocalSherpaTransportRequest {
+                model_path: Some("C:/models/legacy".to_string()),
+                ..LegacyLocalSherpaTransportRequest::default()
+            },
+            AsrMode::Streaming,
+            "init_recognizer",
+        )
+        .expect_err("missing canonical and incomplete legacy request should fail");
+
+        assert!(error.contains("Missing asrRequest for init_recognizer"));
+        assert!(error.contains("numThreads"));
+        assert!(error.contains("modelType"));
     }
 }

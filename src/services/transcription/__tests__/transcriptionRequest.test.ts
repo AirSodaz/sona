@@ -62,15 +62,10 @@ describe('transcriptionRequest helpers', () => {
         dropFinalDotSegments: true,
       },
     }));
-    expect(request).toEqual(expect.objectContaining({
+    expect(request).toEqual({
       instanceId: 'record',
-      modelPath: '/models/runtime-streaming',
-      enableItn: true,
-      language: 'ja',
-      normalizationOptions: { enableTimeline: true },
-      postprocessOptions: asrRequest.postprocessOptions,
       asrRequest,
-    }));
+    });
   });
 
   it('disables timeline for non-record streaming instances', () => {
@@ -86,8 +81,7 @@ describe('transcriptionRequest helpers', () => {
       enableItn: true,
     });
 
-    expect(request.normalizationOptions).toEqual({ enableTimeline: false });
-    expect(request.asrRequest?.normalizationOptions).toEqual({ enableTimeline: false });
+    expect(request.asrRequest.normalizationOptions).toEqual({ enableTimeline: false });
   });
 
   it('builds batch process requests with speaker processing and save target', () => {
@@ -128,10 +122,9 @@ describe('transcriptionRequest helpers', () => {
         dropFinalDotSegments: true,
       },
     }));
-    expect(request).toEqual(expect.objectContaining({
+    expect(request).toEqual({
       filePath: 'C:/audio/demo.wav',
       saveToPath: 'C:/audio/demo.json',
-      modelPath: '/models/runtime-offline',
       speakerProcessing: {
         speakerSegmentationModelPath: '/models/speaker-segmentation',
         speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
@@ -139,8 +132,7 @@ describe('transcriptionRequest helpers', () => {
           { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
         ],
       },
-      postprocessOptions: asrRequest.postprocessOptions,
       asrRequest,
-    }));
+    });
   });
 });

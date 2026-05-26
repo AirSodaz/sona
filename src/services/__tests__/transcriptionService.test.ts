@@ -97,6 +97,12 @@ async function syncTranscriptConfig() {
     }));
 }
 
+function getInvokePayload(commandName: string): Record<string, unknown> | undefined {
+    const calls = mocks.invoke.mock.calls as unknown as Array<[string, unknown]>;
+    const call = calls.find(([command]) => command === commandName);
+    return call?.[1] as Record<string, unknown> | undefined;
+}
+
 describe('TranscriptionService voice typing diagnostics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -185,11 +191,16 @@ describe('TranscriptionService voice typing diagnostics', () => {
             })
         );
         expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
-            postprocessOptions: {
-                textReplacementSets: [],
-                dropFinalDotSegments: true,
-            },
+            asrRequest: expect.objectContaining({
+                postprocessOptions: {
+                    textReplacementSets: [],
+                    dropFinalDotSegments: true,
+                },
+            }),
         }));
+        const initPayload = getInvokePayload('init_recognizer');
+        expect(initPayload).not.toHaveProperty('postprocessOptions');
+        expect(initPayload).not.toHaveProperty('language');
     });
 
     it('does not apply frontend text replacements to recognizer events', async () => {
@@ -251,10 +262,12 @@ describe('TranscriptionService voice typing diagnostics', () => {
             })
         );
         expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
-            postprocessOptions: {
-                textReplacementSets: mocks.config.textReplacementSets,
-                dropFinalDotSegments: true,
-            },
+            asrRequest: expect.objectContaining({
+                postprocessOptions: {
+                    textReplacementSets: mocks.config.textReplacementSets,
+                    dropFinalDotSegments: true,
+                },
+            }),
         }));
     });
 
@@ -372,11 +385,16 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const segments = await service.transcribeFile('C:/audio/demo.wav');
 
         expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
-            postprocessOptions: {
-                textReplacementSets: mocks.config.textReplacementSets,
-                dropFinalDotSegments: true,
-            },
+            asrRequest: expect.objectContaining({
+                postprocessOptions: {
+                    textReplacementSets: mocks.config.textReplacementSets,
+                    dropFinalDotSegments: true,
+                },
+            }),
         }));
+        const batchPayload = getInvokePayload('process_batch_file');
+        expect(batchPayload).not.toHaveProperty('postprocessOptions');
+        expect(batchPayload).not.toHaveProperty('language');
         expect(segments.map((segment) => ({ id: segment.id, text: segment.text }))).toEqual([
             { id: 'seg-apple', text: 'apple' },
             { id: 'seg-dot', text: '.' },
@@ -438,7 +456,6 @@ describe('TranscriptionService voice typing diagnostics', () => {
         await service.start(vi.fn(), vi.fn());
 
         expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
-            modelPath: '',
             asrRequest: expect.objectContaining({
                 engine: 'online',
                 mode: 'streaming',
@@ -453,6 +470,9 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 }),
             }),
         }));
+        const initPayload = getInvokePayload('init_recognizer');
+        expect(initPayload).not.toHaveProperty('modelPath');
+        expect(initPayload).not.toHaveProperty('language');
         expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });
 
@@ -522,7 +542,6 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const segments = await service.transcribeFile('C:/audio/demo.wav');
 
         expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
-            modelPath: '',
             asrRequest: expect.objectContaining({
                 engine: 'online',
                 mode: 'offline',
@@ -536,6 +555,9 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 }),
             }),
         }));
+        const batchPayload = getInvokePayload('process_batch_file');
+        expect(batchPayload).not.toHaveProperty('modelPath');
+        expect(batchPayload).not.toHaveProperty('language');
         expect(segments).toEqual([
             expect.objectContaining({
                 id: 'volc-1',
