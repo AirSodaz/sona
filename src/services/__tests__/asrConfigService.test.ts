@@ -224,7 +224,7 @@ describe('asrConfigService', () => {
     expect(patch.asr?.selections.live.modelPath).toBe('C:/models/local-live');
   });
 
-  it('resolves Volcengine Doubao requests for streaming and batch slots without local model paths', () => {
+  it('normalizes legacy Volcengine Doubao selections into online provider requests without local model paths', () => {
     const config = buildAsrConfig({
       asr: {
         selections: {
@@ -234,12 +234,14 @@ describe('asrConfigService', () => {
           batch: createVolcengineDoubaoSelection('offline'),
         },
         providers: {
-          volcengineDoubao: {
-            apiKey: 'volc-test-key',
-            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-            streamingResourceId: 'volc.seedasr.sauc.duration',
-            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-            batchResourceId: 'volc.bigasr.auc_turbo',
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'volc-test-key',
+              streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+              streamingResourceId: 'volc.seedasr.sauc.duration',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
+            },
           },
         },
       },
@@ -249,27 +251,35 @@ describe('asrConfigService', () => {
     const batch = resolveAsrTranscriptionRequest(config, 'batch');
 
     expect(live).toMatchObject({
-      engine: 'volcengine-doubao',
+      engine: 'online',
       mode: 'streaming',
       modelId: null,
       modelPath: '',
       providerId: 'volcengine-doubao',
       profileId: 'volcengine-doubao-default',
-      volcengine: {
-        apiKey: 'volc-test-key',
-        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-        streamingResourceId: 'volc.seedasr.sauc.duration',
+      onlineProvider: {
+        providerId: 'volcengine-doubao',
+        profileId: 'volcengine-doubao-default',
+        config: {
+          apiKey: 'volc-test-key',
+          streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+          streamingResourceId: 'volc.seedasr.sauc.duration',
+        },
       },
     });
     expect(batch).toMatchObject({
-      engine: 'volcengine-doubao',
+      engine: 'online',
       mode: 'offline',
       modelPath: '',
-      volcengine: {
-        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-        batchResourceId: 'volc.bigasr.auc_turbo',
+      onlineProvider: {
+        providerId: 'volcengine-doubao',
+        config: {
+          batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+          batchResourceId: 'volc.bigasr.auc_turbo',
+        },
       },
     });
+    expect('volcengine' in live).toBe(false);
     expect(isAsrRequestConfigured(live)).toBe(true);
     expect(isAsrRequestConfigured(batch)).toBe(true);
   });
@@ -305,9 +315,12 @@ describe('asrConfigService', () => {
 
     const request = resolveAsrTranscriptionRequest(config, 'batch');
 
-    expect(request.volcengine).toMatchObject({
-      batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-      batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+    expect(request.onlineProvider).toMatchObject({
+      providerId: 'volcengine-doubao',
+      config: {
+        batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+        batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+      },
     });
     expect(isAsrRequestConfigured(request)).toBe(true);
   });
@@ -360,14 +373,14 @@ describe('asrConfigService', () => {
       modelPath: 'D:/models/local-batch',
     });
 
-    expect(patch.asr?.providers?.volcengineDoubao).toMatchObject({
+    expect(patch.asr?.providers?.online?.['volcengine-doubao']).toMatchObject({
       apiKey: 'volc-test-key',
       streamingEndpoint: 'wss://custom.example.com/stream',
       streamingResourceId: 'volc.seedasr.sauc.concurrent',
       batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
       batchResourceId: 'volc.bigasr.auc_turbo',
     });
-    expect(patch.asr?.selections.live.engine).toBe('volcengine-doubao');
+    expect(patch.asr?.selections.live.engine).toBe('online');
     expect(patch.offlineModelPath).toBe('D:/models/local-batch');
   });
 });

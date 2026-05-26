@@ -175,7 +175,7 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
     global_config["asr"] = json!({
         "selections": {
             "batch": {
-                "engine": "volcengine-doubao",
+                "engine": "online",
                 "mode": "offline",
                 "modelId": null,
                 "modelPath": "",
@@ -184,12 +184,14 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
             }
         },
         "providers": {
-            "volcengineDoubao": {
-                "apiKey": "volc-test-key",
-                "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
-                "batchResourceId": "volc.bigasr.auc_turbo",
-                "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
-                "streamingResourceId": "volc.seedasr.sauc.duration"
+            "online": {
+                "volcengine-doubao": {
+                    "apiKey": "volc-test-key",
+                    "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+                    "batchResourceId": "volc.bigasr.auc_turbo",
+                    "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                    "streamingResourceId": "volc.seedasr.sauc.duration"
+                }
             }
         }
     });

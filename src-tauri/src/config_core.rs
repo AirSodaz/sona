@@ -14,6 +14,8 @@ const VOLCENGINE_STREAMING_RESOURCE_DEFAULT: &str = "volc.seedasr.sauc.duration"
 const VOLCENGINE_BATCH_ENDPOINT_DEFAULT: &str =
     "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash";
 const VOLCENGINE_BATCH_RESOURCE_DEFAULT: &str = "volc.bigasr.auc_turbo";
+const VOLCENGINE_DOUBAO_PROVIDER_ID: &str = "volcengine-doubao";
+const VOLCENGINE_DOUBAO_PROFILE_ID: &str = "volcengine-doubao-default";
 
 const BUILTIN_POLISH_PRESET_IDS: [&str; 6] = [
     "general",
@@ -340,12 +342,8 @@ fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>
     if existing.get("selections") != normalized.get("selections") {
         return true;
     }
-    let existing_provider = existing
-        .get("providers")
-        .and_then(|value| value.get("volcengineDoubao"));
-    let normalized_provider = normalized
-        .get("providers")
-        .and_then(|value| value.get("volcengineDoubao"));
+    let existing_provider = volcengine_provider_from_providers(existing.get("providers"));
+    let normalized_provider = volcengine_provider_from_providers(normalized.get("providers"));
     match (existing_provider, normalized_provider) {
         (None, Some(provider)) if *provider == default_volcengine_doubao_provider() => false,
         _ => existing.get("providers") != normalized.get("providers"),
@@ -738,8 +736,39 @@ fn default_asr_config() -> Value {
             "batch": default_asr_selection("offline", String::new()),
         },
         "providers": {
-            "volcengineDoubao": default_volcengine_doubao_provider(),
+            "online": {
+                "volcengine-doubao": default_volcengine_doubao_provider(),
+            },
         }
+    })
+}
+
+fn is_online_asr_engine(engine: Option<&str>) -> bool {
+    matches!(engine, Some("online") | Some("volcengine-doubao"))
+}
+
+fn volcengine_provider_from_providers(providers: Option<&Value>) -> Option<&Value> {
+    let modern = providers
+        .and_then(|value| value.get("online"))
+        .and_then(|value| value.get(VOLCENGINE_DOUBAO_PROVIDER_ID));
+    let legacy = providers.and_then(|value| value.get("volcengineDoubao"));
+    if let (Some(modern), Some(legacy)) = (modern, legacy) {
+        if normalize_volcengine_doubao_provider(Some(modern))
+            == default_volcengine_doubao_provider()
+        {
+            return Some(legacy);
+        }
+    }
+    modern.or(legacy)
+}
+
+fn normalize_asr_providers(providers: Option<&Value>) -> Value {
+    json!({
+        "online": {
+            "volcengine-doubao": normalize_volcengine_doubao_provider(
+                volcengine_provider_from_providers(providers)
+            ),
+        },
     })
 }
 
@@ -762,7 +791,7 @@ fn has_valid_asr_config(config: &Value) -> bool {
             return false;
         };
         let engine = selection.get("engine").and_then(Value::as_str);
-        if !matches!(engine, Some("local-sherpa") | Some("volcengine-doubao")) {
+        if !matches!(engine, Some("local-sherpa") | Some("online")) {
             return false;
         }
         if selection.get("mode").and_then(Value::as_str) != Some(expected_mode) {
@@ -771,19 +800,19 @@ fn has_valid_asr_config(config: &Value) -> bool {
         if !selection.get("modelPath").is_some_and(Value::is_string) {
             return false;
         }
-        if engine == Some("volcengine-doubao")
-            && (!selection.get("providerId").is_some_and(Value::is_string)
+        if engine == Some("online")
+            && (selection.get("providerId").and_then(Value::as_str)
+                != Some(VOLCENGINE_DOUBAO_PROVIDER_ID)
                 || !selection.get("profileId").is_some_and(Value::is_string))
         {
             return false;
         }
     }
 
-    if !config
-        .get("asr")
-        .and_then(|value| value.get("providers"))
-        .and_then(|value| value.get("volcengineDoubao"))
-        .is_some_and(Value::is_object)
+    if !volcengine_provider_from_providers(
+        config.get("asr").and_then(|value| value.get("providers")),
+    )
+    .is_some_and(Value::is_object)
     {
         return false;
     }
@@ -828,24 +857,26 @@ fn normalize_asr_selection(
     expected_mode: &str,
     fallback_model_path: String,
 ) -> Value {
-    if existing
-        .and_then(|value| value.get("engine"))
-        .and_then(Value::as_str)
-        == Some("volcengine-doubao")
-    {
+    if is_online_asr_engine(
+        existing
+            .and_then(|value| value.get("engine"))
+            .and_then(Value::as_str),
+    ) {
+        let provider_id = existing
+            .and_then(|value| value.get("providerId"))
+            .and_then(non_empty_str)
+            .filter(|value| *value == VOLCENGINE_DOUBAO_PROVIDER_ID)
+            .unwrap_or(VOLCENGINE_DOUBAO_PROVIDER_ID);
         return json!({
-            "engine": "volcengine-doubao",
+            "engine": "online",
             "mode": expected_mode,
             "modelId": Value::Null,
             "modelPath": "",
-            "providerId": existing
-                .and_then(|value| value.get("providerId"))
-                .and_then(non_empty_str)
-                .unwrap_or("volcengine-doubao"),
+            "providerId": provider_id,
             "profileId": existing
                 .and_then(|value| value.get("profileId"))
                 .and_then(non_empty_str)
-                .unwrap_or("volcengine-doubao-default"),
+                .unwrap_or(VOLCENGINE_DOUBAO_PROFILE_ID),
         });
     }
 
@@ -939,11 +970,7 @@ fn normalize_asr_config(config: &Value) -> Value {
                 offline_model_path,
             ),
         },
-        "providers": {
-            "volcengineDoubao": normalize_volcengine_doubao_provider(
-                providers.and_then(|value| value.get("volcengineDoubao"))
-            ),
-        }
+        "providers": normalize_asr_providers(providers),
     })
 }
 
@@ -2298,7 +2325,7 @@ mod tests {
     }
 
     #[test]
-    fn config_core_preserves_volcengine_asr_selection_and_normalizes_provider_defaults() {
+    fn config_core_migrates_volcengine_asr_selection_to_online_provider_shape() {
         let saved = json!({
             "configVersion": 7,
             "asr": {
@@ -2378,7 +2405,7 @@ mod tests {
         assert_eq!(
             result.config["asr"]["selections"]["batch"],
             json!({
-                "engine": "volcengine-doubao",
+                "engine": "online",
                 "mode": "offline",
                 "modelId": null,
                 "modelPath": "",
@@ -2387,7 +2414,7 @@ mod tests {
             })
         );
         assert_eq!(
-            result.config["asr"]["providers"]["volcengineDoubao"],
+            result.config["asr"]["providers"]["online"]["volcengine-doubao"],
             json!({
                 "apiKey": "volc-test-key",
                 "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
@@ -2431,11 +2458,11 @@ mod tests {
 
         assert!(result.migrated);
         assert_eq!(
-            result.config["asr"]["providers"]["volcengineDoubao"]["batchEndpoint"],
+            result.config["asr"]["providers"]["online"]["volcengine-doubao"]["batchEndpoint"],
             VOLCENGINE_BATCH_ENDPOINT_DEFAULT
         );
         assert_eq!(
-            result.config["asr"]["providers"]["volcengineDoubao"]["batchResourceId"],
+            result.config["asr"]["providers"]["online"]["volcengine-doubao"]["batchResourceId"],
             VOLCENGINE_BATCH_RESOURCE_DEFAULT
         );
     }

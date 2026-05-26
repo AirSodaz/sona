@@ -4,8 +4,8 @@ use super::metrics::{
     AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
+use super::online::OnlineStreamingSession;
 use super::types::{AsrEngine, TranscriptNormalizationOptions, TranscriptSegment};
-use super::volcengine::VolcengineStreamingSession;
 use super::TranscriptPostprocessor;
 use log::info;
 use std::collections::HashMap;
@@ -176,7 +176,7 @@ pub struct SherpaState {
     // Each logical instance keeps its own runtime buffers and stream state,
     // while recognizers are pooled separately by configuration.
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
-    pub volcengine_sessions: Mutex<HashMap<String, VolcengineStreamingSession>>,
+    pub online_sessions: Mutex<HashMap<String, OnlineStreamingSession>>,
     pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
     pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
     pub(crate) metrics: AsrMetricsStore,
@@ -192,15 +192,15 @@ impl SherpaState {
     pub fn new() -> Self {
         Self {
             instances: Mutex::new(HashMap::new()),
-            volcengine_sessions: Mutex::new(HashMap::new()),
+            online_sessions: Mutex::new(HashMap::new()),
             instance_engines: Mutex::new(HashMap::new()),
             recognizer_pool: Mutex::new(HashMap::new()),
             metrics: new_metrics_store(),
         }
     }
 
-    pub async fn has_volcengine_session(&self, instance_id: &str) -> bool {
-        self.volcengine_sessions.lock().await.contains_key(instance_id)
+    pub async fn has_online_session(&self, instance_id: &str) -> bool {
+        self.online_sessions.lock().await.contains_key(instance_id)
     }
 
     pub async fn set_instance_engine(&self, instance_id: &str, engine: AsrEngine) {

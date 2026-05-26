@@ -7,12 +7,38 @@ import type {
   AsrProviderConfig,
   AsrSelectionSlot,
   ModelConfig,
+  OnlineAsrProviderId,
   TextReplacementRuleSet,
   VolcengineDoubaoAsrProviderConfig,
 } from '../types/config';
 import type { ModelFileConfig } from '../types/model';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import { modelService, PRESET_MODELS_MAP, type ModelInfo } from './modelService';
+import {
+  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+  ONLINE_ASR_PROVIDER_DEFINITIONS,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+  VOLCENGINE_DOUBAO_PROFILE_ID,
+  VOLCENGINE_DOUBAO_PROVIDER_ID,
+  createOnlineAsrSelection,
+  getOnlineAsrProviderDefinition,
+  getOnlineProviderConfig,
+  isOnlineAsrProviderId,
+  isVolcengineFlashBatchMode,
+  normalizeVolcengineDoubaoConfig,
+  type OnlineAsrProviderRequest,
+} from './onlineAsrProviders';
+
+export {
+  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+  ONLINE_ASR_PROVIDER_DEFINITIONS,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+  VOLCENGINE_DOUBAO_PROFILE_ID,
+  VOLCENGINE_DOUBAO_PROVIDER_ID,
+  isVolcengineFlashBatchMode,
+};
 
 export type AsrTranscriptionRequest = {
   engine: AsrEngine;
@@ -34,7 +60,7 @@ export type AsrTranscriptionRequest = {
     enableTimeline: boolean;
   };
   postprocessOptions: TranscriptPostprocessOptions;
-  volcengine?: VolcengineDoubaoAsrProviderConfig;
+  onlineProvider?: OnlineAsrProviderRequest;
 };
 
 export type TranscriptPostprocessOptions = {
@@ -49,17 +75,9 @@ const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
   batch: 'offline',
 };
 
-export const VOLCENGINE_DOUBAO_PROFILE_ID = 'volcengine-doubao-default';
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT =
-  'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = 'volc.bigasr.auc_turbo';
-export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG: VolcengineDoubaoAsrProviderConfig = {
-  apiKey: '',
-  streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-  streamingResourceId: 'volc.seedasr.sauc.duration',
-  batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-  batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-};
+function isLegacyOnlineEngine(engine: unknown): boolean {
+  return engine === 'volcengine-doubao';
+}
 
 export function createDefaultAsrConfig(
   streamingModelPath = '',
@@ -86,48 +104,14 @@ function createLocalSherpaSelection(mode: AsrMode, modelPath: string): AsrModelS
 }
 
 export function createVolcengineDoubaoSelection(mode: AsrMode): AsrModelSelection {
-  return {
-    engine: 'volcengine-doubao',
-    mode,
-    modelId: null,
-    modelPath: '',
-    providerId: 'volcengine-doubao',
-    profileId: VOLCENGINE_DOUBAO_PROFILE_ID,
-  };
+  return createOnlineAsrSelection(VOLCENGINE_DOUBAO_PROVIDER_ID, mode);
 }
 
 function createDefaultAsrProviders(): AsrProviderConfig {
   return {
-    volcengineDoubao: { ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG },
-  };
-}
-
-export function isVolcengineFlashBatchMode(
-  provider: Pick<VolcengineDoubaoAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
-): boolean {
-  return provider?.batchEndpoint.trim().replace(/\/+$/, '') === VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT
-    && provider.batchResourceId.trim() === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
-}
-
-function normalizeVolcengineConfig(
-  provider: Partial<VolcengineDoubaoAsrProviderConfig> | undefined,
-): VolcengineDoubaoAsrProviderConfig {
-  const batchEndpoint = provider?.batchEndpoint?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT;
-  const batchResourceId = provider?.batchResourceId?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
-  const flashBatch = isVolcengineFlashBatchMode({ batchEndpoint, batchResourceId })
-    ? { batchEndpoint, batchResourceId }
-    : {
-        batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-        batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-      };
-
-  return {
-    apiKey: provider?.apiKey?.trim() ?? '',
-    streamingEndpoint: provider?.streamingEndpoint?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingEndpoint,
-    streamingResourceId: provider?.streamingResourceId?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingResourceId,
-    ...flashBatch,
+    online: {
+      [VOLCENGINE_DOUBAO_PROVIDER_ID]: { ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG },
+    },
   };
 }
 
@@ -135,7 +119,9 @@ function normalizeAsrProviders(
   providers: Partial<AsrProviderConfig> | undefined,
 ): AsrProviderConfig {
   return {
-    volcengineDoubao: normalizeVolcengineConfig(providers?.volcengineDoubao),
+    online: {
+      [VOLCENGINE_DOUBAO_PROVIDER_ID]: getOnlineProviderConfig(providers, VOLCENGINE_DOUBAO_PROVIDER_ID),
+    },
   };
 }
 
@@ -165,14 +151,19 @@ function normalizeSelection(
   mode: AsrMode,
   fallbackPath: string,
 ): AsrModelSelection {
-  if (selection?.engine === 'volcengine-doubao') {
+  const rawSelection = selection as ({ engine?: string } & Partial<AsrModelSelection>) | undefined;
+  if (rawSelection && (rawSelection.engine === 'online' || isLegacyOnlineEngine(rawSelection.engine))) {
+    const providerId = isOnlineAsrProviderId(rawSelection.providerId)
+      ? rawSelection.providerId
+      : VOLCENGINE_DOUBAO_PROVIDER_ID;
+    const definition = getOnlineAsrProviderDefinition(providerId);
     return {
-      engine: 'volcengine-doubao',
+      engine: 'online',
       mode,
       modelId: null,
       modelPath: '',
-      providerId: selection.providerId || 'volcengine-doubao',
-      profileId: selection.profileId || VOLCENGINE_DOUBAO_PROFILE_ID,
+      providerId,
+      profileId: rawSelection.profileId || definition?.profileId || providerId,
     };
   }
 
@@ -187,7 +178,7 @@ function normalizeSelection(
 function getSelection(config: AppConfig, slot: AsrSelectionSlot): AsrModelSelection {
   const mode = SLOT_MODE[slot];
   const selection = normalizeAsrConfig(config).selections[slot];
-  if (selection.engine === 'volcengine-doubao') {
+  if (selection.engine === 'online') {
     return selection;
   }
   if (selection.modelPath.trim()) {
@@ -221,13 +212,31 @@ export function buildPostprocessOptions(config: AppConfig): TranscriptPostproces
   };
 }
 
+function buildOnlineProviderRequest(
+  providers: AsrProviderConfig,
+  selection: AsrModelSelection,
+): OnlineAsrProviderRequest | undefined {
+  if (!isOnlineAsrProviderId(selection.providerId)) {
+    return undefined;
+  }
+  const definition = getOnlineAsrProviderDefinition(selection.providerId);
+  if (!definition) {
+    return undefined;
+  }
+  return {
+    providerId: selection.providerId,
+    profileId: selection.profileId || definition.profileId,
+    config: getOnlineProviderConfig(providers, selection.providerId),
+  };
+}
+
 export function resolveAsrTranscriptionRequest(
   config: AppConfig,
   slot: AsrSelectionSlot,
   overrides: Partial<Pick<AsrTranscriptionRequest, 'language'>> = {},
 ): AsrTranscriptionRequest {
-  const selection = getSelection(config, slot);
-  const providers = normalizeAsrProviders(config.asr?.providers);
+  const normalizedAsr = normalizeAsrConfig(config);
+  const selection = getSelection({ ...config, asr: normalizedAsr }, slot);
   const modelInfo = resolveModelInfo(selection);
   const rules = modelInfo
     ? modelService.getModelRules(modelInfo.id)
@@ -260,8 +269,8 @@ export function resolveAsrTranscriptionRequest(
       enableTimeline: config.enableTimeline ?? false,
     },
     postprocessOptions: buildPostprocessOptions(config),
-    ...(selection.engine === 'volcengine-doubao'
-      ? { volcengine: providers.volcengineDoubao }
+    ...(selection.engine === 'online'
+      ? { onlineProvider: buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
       : {}),
   };
 }
@@ -271,57 +280,83 @@ export function isAsrRequestConfigured(request: AsrTranscriptionRequest): boolea
     return Boolean(request.modelPath.trim());
   }
 
-  if (request.engine === 'volcengine-doubao') {
-    const volcengine = request.volcengine;
-    if (!volcengine?.apiKey.trim()) {
-      return false;
-    }
-    if (request.mode === 'streaming') {
-      return Boolean(
-        volcengine.streamingEndpoint.trim()
-        && volcengine.streamingResourceId.trim(),
-      );
-    }
+  if (request.engine === 'online') {
+    const onlineProvider = request.onlineProvider;
+    const definition = getOnlineAsrProviderDefinition(onlineProvider?.providerId);
     return Boolean(
-      isVolcengineFlashBatchMode(volcengine),
+      definition
+      && onlineProvider
+      && definition.isConfigured(onlineProvider.config as never, request.mode),
     );
   }
 
   return false;
 }
 
+export function syncOnlineAsrSelectionFields(
+  config: AsrModelConfig,
+  slot: AsrSelectionSlot,
+  providerId: OnlineAsrProviderId,
+): Partial<AppConfig> {
+  const asr = normalizeAsrConfig(config);
+  asr.selections[slot] = createOnlineAsrSelection(providerId, SLOT_MODE[slot]);
+  return { asr };
+}
+
+export function syncStreamingOnlineAsrSelectionFields(
+  config: AsrModelConfig,
+  providerId: OnlineAsrProviderId,
+): Partial<AppConfig> {
+  const asr = normalizeAsrConfig(config);
+  asr.selections.live = createOnlineAsrSelection(providerId, 'streaming');
+  asr.selections.caption = createOnlineAsrSelection(providerId, 'streaming');
+  asr.selections.voiceTyping = createOnlineAsrSelection(providerId, 'streaming');
+  return { asr };
+}
+
+export function syncOnlineAsrProviderConfig<TProvider extends OnlineAsrProviderId>(
+  config: AsrModelConfig,
+  providerId: TProvider,
+  updates: Partial<VolcengineDoubaoAsrProviderConfig>,
+): Partial<AppConfig> {
+  const asr = normalizeAsrConfig(config);
+  const existing = getOnlineProviderConfig(asr.providers, providerId);
+  asr.providers = {
+    ...asr.providers,
+    online: {
+      ...(asr.providers?.online ?? {}),
+      [providerId]: providerId === VOLCENGINE_DOUBAO_PROVIDER_ID
+        ? normalizeVolcengineDoubaoConfig({
+            ...(existing as VolcengineDoubaoAsrProviderConfig),
+            ...updates,
+          })
+        : {
+            ...(existing as unknown as Record<string, unknown>),
+            ...updates,
+          },
+    },
+  };
+  return { asr };
+}
+
 export function syncVolcengineDoubaoSelectionFields(
   config: AsrModelConfig,
   slot: AsrSelectionSlot,
 ): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  asr.selections[slot] = createVolcengineDoubaoSelection(SLOT_MODE[slot]);
-  return { asr };
+  return syncOnlineAsrSelectionFields(config, slot, VOLCENGINE_DOUBAO_PROVIDER_ID);
 }
 
 export function syncStreamingVolcengineDoubaoSelectionFields(
   config: AsrModelConfig,
 ): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  asr.selections.live = createVolcengineDoubaoSelection('streaming');
-  asr.selections.caption = createVolcengineDoubaoSelection('streaming');
-  asr.selections.voiceTyping = createVolcengineDoubaoSelection('streaming');
-  return { asr };
+  return syncStreamingOnlineAsrSelectionFields(config, VOLCENGINE_DOUBAO_PROVIDER_ID);
 }
 
 export function syncVolcengineDoubaoProviderConfig(
   config: AsrModelConfig,
   updates: Partial<VolcengineDoubaoAsrProviderConfig>,
 ): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  asr.providers = {
-    ...normalizeAsrProviders(asr.providers),
-    volcengineDoubao: normalizeVolcengineConfig({
-      ...asr.providers?.volcengineDoubao,
-      ...updates,
-    }),
-  };
-  return { asr };
+  return syncOnlineAsrProviderConfig(config, VOLCENGINE_DOUBAO_PROVIDER_ID, updates);
 }
 
 export function syncLegacyAsrSelectionFields(

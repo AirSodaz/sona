@@ -371,8 +371,8 @@ export class TranscriptionService {
         if (nextRequest.normalizationOptions.enableTimeline !== this.runningConfig.normalizationOptions.enableTimeline) mismatches.push(`enableTimeline: ${nextRequest.normalizationOptions.enableTimeline} vs ${this.runningConfig.normalizationOptions.enableTimeline}`);
         if (!arePostprocessOptionsEqual(nextRequest.postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
         if (!areServiceConfigsEqual(nextRequest, { ...this.runningConfig, postprocessOptions: nextRequest.postprocessOptions })) {
-            if (JSON.stringify(nextRequest.volcengine) !== JSON.stringify(this.runningConfig.volcengine)) {
-                mismatches.push('volcengine provider config changed');
+            if (JSON.stringify(nextRequest.onlineProvider) !== JSON.stringify(this.runningConfig.onlineProvider)) {
+                mismatches.push('online ASR provider config changed');
             }
         }
 

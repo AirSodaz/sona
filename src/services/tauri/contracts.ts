@@ -107,7 +107,7 @@ type TranscriptPostprocessOptions = {
 };
 
 type AsrTranscriptionRequest = {
-  engine: 'local-sherpa' | 'volcengine-doubao';
+  engine: 'local-sherpa' | 'online';
   mode: 'streaming' | 'offline';
   modelId?: string | null;
   modelPath: string;
@@ -126,12 +126,16 @@ type AsrTranscriptionRequest = {
     enableTimeline: boolean;
   };
   postprocessOptions: TranscriptPostprocessOptions;
-  volcengine?: {
-    apiKey: string;
-    streamingEndpoint: string;
-    streamingResourceId: string;
-    batchEndpoint: string;
-    batchResourceId: string;
+  onlineProvider?: {
+    providerId: 'volcengine-doubao';
+    profileId: string;
+    config: {
+      apiKey: string;
+      streamingEndpoint: string;
+      streamingResourceId: string;
+      batchEndpoint: string;
+      batchResourceId: string;
+    };
   };
 };
 

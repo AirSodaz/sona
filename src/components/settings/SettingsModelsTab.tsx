@@ -9,21 +9,26 @@ import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
     DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+    ONLINE_ASR_PROVIDER_DEFINITIONS,
+    VOLCENGINE_DOUBAO_PROVIDER_ID,
     VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
     VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-    syncStreamingVolcengineDoubaoSelectionFields,
+    isVolcengineFlashBatchMode,
+    syncOnlineAsrProviderConfig,
+    syncOnlineAsrSelectionFields,
+    syncStreamingOnlineAsrSelectionFields,
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
-    syncVolcengineDoubaoProviderConfig,
-    syncVolcengineDoubaoSelectionFields,
 } from '../../services/asrConfigService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
 import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
+import type { VolcengineDoubaoAsrProviderConfig } from '../../types/config';
 
-const VOLCENGINE_DOUBAO_OPTION_ID = 'volcengine-doubao';
+const onlineAsrProvider = ONLINE_ASR_PROVIDER_DEFINITIONS[0];
+const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
 
 interface SettingsModelsTabProps {
     isActive?: boolean;
@@ -75,16 +80,16 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     );
 
     const selectedStreamingModelId = useMemo(
-        () => modelConfig.asr?.selections.live.engine === 'volcengine-doubao'
-            ? VOLCENGINE_DOUBAO_OPTION_ID
+        () => modelConfig.asr?.selections.live.engine === 'online'
+            ? (modelConfig.asr.selections.live.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
             : selectedModelIds.streaming ?? '',
-        [modelConfig.asr?.selections.live.engine, selectedModelIds.streaming],
+        [modelConfig.asr?.selections.live, selectedModelIds.streaming],
     );
     const selectedOfflineModelId = useMemo(
-        () => modelConfig.asr?.selections.batch.engine === 'volcengine-doubao'
-            ? VOLCENGINE_DOUBAO_OPTION_ID
+        () => modelConfig.asr?.selections.batch.engine === 'online'
+            ? (modelConfig.asr.selections.batch.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
             : selectedModelIds.offline ?? '',
-        [modelConfig.asr?.selections.batch.engine, selectedModelIds.offline],
+        [modelConfig.asr?.selections.batch, selectedModelIds.offline],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
         () => selectedModelIds.speakerSegmentation ?? '',
@@ -153,9 +158,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
         if (modelId === VOLCENGINE_DOUBAO_OPTION_ID) {
             if (type === 'streaming') {
-                updateConfig(syncStreamingVolcengineDoubaoSelectionFields(modelConfig));
+                updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, VOLCENGINE_DOUBAO_PROVIDER_ID));
             } else if (type === 'offline') {
-                updateConfig(syncVolcengineDoubaoSelectionFields(modelConfig, 'batch'));
+                updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', VOLCENGINE_DOUBAO_PROVIDER_ID));
             }
             return;
         }
@@ -199,31 +204,33 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const streamingOptions = useMemo(() => {
         return [
             ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId),
-            {
-                value: VOLCENGINE_DOUBAO_OPTION_ID,
-                label: t('settings.asr.volcengine_doubao_option', { defaultValue: '豆包语音 (云端)' }),
-            },
+            ...ONLINE_ASR_PROVIDER_DEFINITIONS.map((provider) => ({
+                value: provider.id,
+                label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
+            })),
         ];
     }, [selectedStreamingModelId, selectionOptions.streaming, t]);
 
     const offlineOptions = useMemo(() => {
         return [
             ...toDropdownOptions(selectionOptions.offline, selectedOfflineModelId),
-            {
-                value: VOLCENGINE_DOUBAO_OPTION_ID,
-                label: t('settings.asr.volcengine_doubao_option', { defaultValue: '豆包语音 (云端)' }),
-            },
+            ...ONLINE_ASR_PROVIDER_DEFINITIONS.map((provider) => ({
+                value: provider.id,
+                label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
+            })),
         ];
     }, [selectedOfflineModelId, selectionOptions.offline, t]);
 
-    const volcengineConfig = modelConfig.asr?.providers?.volcengineDoubao
-        ?? DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG;
-    const isVolcengineSelected = modelConfig.asr?.selections.live.engine === 'volcengine-doubao'
-        || modelConfig.asr?.selections.caption.engine === 'volcengine-doubao'
-        || modelConfig.asr?.selections.voiceTyping.engine === 'volcengine-doubao'
-        || modelConfig.asr?.selections.batch.engine === 'volcengine-doubao';
+    const volcengineConfig = (
+        modelConfig.asr?.providers?.online?.[VOLCENGINE_DOUBAO_PROVIDER_ID]
+        ?? modelConfig.asr?.providers?.volcengineDoubao
+        ?? DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG
+    ) as VolcengineDoubaoAsrProviderConfig;
+    const isVolcengineSelected = Object.values(modelConfig.asr?.selections ?? {}).some(
+        (selection) => selection.engine === 'online' && selection.providerId === VOLCENGINE_DOUBAO_PROVIDER_ID,
+    );
     const updateVolcengineConfig = (updates: Partial<typeof volcengineConfig>) => {
-        updateConfig(syncVolcengineDoubaoProviderConfig(modelConfig, updates));
+        updateConfig(syncOnlineAsrProviderConfig(modelConfig, VOLCENGINE_DOUBAO_PROVIDER_ID, updates));
     };
     const volcengineBatchUrlOnlyUnavailable = t('settings.asr.volcengine_batch_mode_url_only_unavailable', {
         defaultValue: '需要公网音频 URL，当前本地批量导入暂不支持。',
@@ -258,31 +265,29 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         };
     };
 
-    const getOnlineServiceStatus = (service: 'volcengine') => {
-        if (service === 'volcengine') {
-            const isEnabled = modelConfig.asr?.selections.live.engine === 'volcengine-doubao'
-                || modelConfig.asr?.selections.batch.engine === 'volcengine-doubao';
+    const getOnlineServiceStatus = () => {
+        const isEnabled = Object.values(modelConfig.asr?.selections ?? {}).some(
+            (selection) => selection.engine === 'online' && selection.providerId === VOLCENGINE_DOUBAO_PROVIDER_ID,
+        );
 
-            if (isEnabled) {
-                return {
-                    type: 'ready',
-                    text: t('settings.asr.active', { defaultValue: '已启用' })
-                };
-            }
-
-            if (volcengineConfig.apiKey) {
-                return {
-                    type: 'off',
-                    text: t('settings.asr.configured', { defaultValue: '已就绪' })
-                };
-            }
-
+        if (isEnabled) {
             return {
-                type: 'off',
-                text: t('settings.asr.not_configured', { defaultValue: '未配置' })
+                type: 'ready',
+                text: t('settings.asr.active', { defaultValue: '已启用' })
             };
         }
-        return { type: 'off', text: '' };
+
+        if (volcengineConfig.apiKey) {
+            return {
+                type: 'off',
+                text: t('settings.asr.configured', { defaultValue: '已就绪' })
+            };
+        }
+
+        return {
+            type: 'off',
+            text: t('settings.asr.not_configured', { defaultValue: '未配置' })
+        };
     };
 
     const speakerSegmentationOptions = useMemo(() => {
@@ -381,7 +386,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
                 {isVolcengineSelected && (
                     <div className="settings-hint">
-                        {t('settings.asr.cloud_upload_hint', { defaultValue: '音频会发送到火山引擎进行识别。' })}
+                        {t(onlineAsrProvider.cloudUploadHintKey, { defaultValue: onlineAsrProvider.cloudUploadHintDefault })}
                     </div>
                 )}
             </SettingsSection>
@@ -462,8 +467,8 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 icon={<Settings2 size={20} />}
             >
                 <SettingsAccordion
-                    title={t('settings.asr.volcengine_title', { defaultValue: '火山引擎语音服务 (火山 ASR)' })}
-                    status={<span className={`status-badge ${getOnlineServiceStatus('volcengine').type}`}>{getOnlineServiceStatus('volcengine').text}</span>}
+                    title={t(onlineAsrProvider.titleKey, { defaultValue: onlineAsrProvider.titleDefault })}
+                    status={<span className={`status-badge ${getOnlineServiceStatus().type}`}>{getOnlineServiceStatus().text}</span>}
                     defaultOpen={true}
                 >
                     <SettingsItem
@@ -488,7 +493,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         <div style={{ width: '220px' }}>
                             <Dropdown
                                 id="settings-volcengine-batch-mode"
-                                value="flash"
+                                value={isVolcengineFlashBatchMode(volcengineConfig) ? 'flash' : 'flash'}
                                 onChange={(value) => {
                                     if (value === 'flash') {
                                         updateVolcengineConfig({

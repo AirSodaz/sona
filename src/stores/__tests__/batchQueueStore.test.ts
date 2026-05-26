@@ -244,7 +244,7 @@ describe('batchQueueStore', () => {
                     caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
-                        engine: 'volcengine-doubao',
+                        engine: 'online',
                         mode: 'offline',
                         modelId: null,
                         modelPath: '',
@@ -253,12 +253,14 @@ describe('batchQueueStore', () => {
                     },
                 },
                 providers: {
-                    volcengineDoubao: {
-                        apiKey: 'volc-test-key',
-                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                        streamingResourceId: 'volc.seedasr.sauc.duration',
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
                     },
                 },
             },

@@ -1,12 +1,13 @@
 use super::model_config::ModelFileConfig;
 use super::postprocess::TranscriptPostprocessor;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AsrEngine {
     LocalSherpa,
-    VolcengineDoubao,
+    Online,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,10 +25,6 @@ pub struct AsrTranscriptionRequest {
     #[serde(default)]
     pub model_id: Option<String>,
     pub model_path: String,
-    #[serde(default)]
-    pub provider_id: Option<String>,
-    #[serde(default)]
-    pub profile_id: Option<String>,
     pub num_threads: i32,
     pub enable_itn: bool,
     pub language: String,
@@ -44,7 +41,7 @@ pub struct AsrTranscriptionRequest {
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
     #[serde(default)]
-    pub volcengine: Option<VolcengineDoubaoAsrConfig>,
+    pub online_provider: Option<OnlineAsrProviderRequest>,
 }
 
 impl AsrTranscriptionRequest {
@@ -69,8 +66,6 @@ impl AsrTranscriptionRequest {
             mode,
             model_id: None,
             model_path,
-            provider_id: None,
-            profile_id: None,
             num_threads,
             enable_itn,
             language,
@@ -82,9 +77,18 @@ impl AsrTranscriptionRequest {
             hotwords,
             normalization_options,
             postprocess_options,
-            volcengine: None,
+            online_provider: None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAsrProviderRequest {
+    pub provider_id: String,
+    pub profile_id: String,
+    #[serde(default)]
+    pub config: Value,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]

@@ -2,8 +2,11 @@ use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
+use super::online::{OnlineStreamingSession, VOLCENGINE_DOUBAO_PROVIDER_ID};
 use super::state::SherpaState;
-use super::transcript::{apply_timeline_normalization, build_transcript_update, emit_transcript_update};
+use super::transcript::{
+    apply_timeline_normalization, build_transcript_update, emit_transcript_update,
+};
 use super::types::{
     AsrMode, AsrTranscriptionRequest, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
     TranscriptTimingSource, TranscriptTimingUnit, VolcengineDoubaoAsrConfig,
@@ -53,8 +56,14 @@ type VolcengineWriter = futures_util::stream::SplitSink<
 fn normalized_config(config: &VolcengineDoubaoAsrConfig) -> VolcengineDoubaoAsrConfig {
     VolcengineDoubaoAsrConfig {
         api_key: config.api_key.trim().to_string(),
-        streaming_endpoint: non_empty_or_default(&config.streaming_endpoint, STREAMING_ENDPOINT_DEFAULT),
-        streaming_resource_id: non_empty_or_default(&config.streaming_resource_id, STREAMING_RESOURCE_DEFAULT),
+        streaming_endpoint: non_empty_or_default(
+            &config.streaming_endpoint,
+            STREAMING_ENDPOINT_DEFAULT,
+        ),
+        streaming_resource_id: non_empty_or_default(
+            &config.streaming_resource_id,
+            STREAMING_RESOURCE_DEFAULT,
+        ),
         batch_endpoint: non_empty_or_default(&config.batch_endpoint, BATCH_ENDPOINT_DEFAULT),
         batch_resource_id: non_empty_or_default(&config.batch_resource_id, BATCH_RESOURCE_DEFAULT),
     }
@@ -137,10 +146,18 @@ fn config_from_request(
     request: &AsrTranscriptionRequest,
     mode: VolcengineMode,
 ) -> Result<VolcengineDoubaoAsrConfig, String> {
-    let Some(config) = request.volcengine.as_ref() else {
+    let Some(provider) = request.online_provider.as_ref() else {
         return Err("火山 ASR provider 配置缺失。".to_string());
     };
-    validate_config(config, mode)
+    if provider.provider_id != VOLCENGINE_DOUBAO_PROVIDER_ID {
+        return Err(format!(
+            "不支持的火山 ASR provider：{}",
+            provider.provider_id
+        ));
+    }
+    let config = serde_json::from_value::<VolcengineDoubaoAsrConfig>(provider.config.clone())
+        .map_err(|error| format!("火山 ASR provider 配置无效：{error}"))?;
+    validate_config(&config, mode)
 }
 
 pub fn build_full_client_request_frame(
@@ -194,9 +211,18 @@ pub fn build_audio_frame(samples: &[u8], is_final: bool) -> Vec<u8> {
     build_frame(flags, 0x00, samples)
 }
 
-fn build_frame(message_type_and_flags: u8, serialization_and_compression: u8, payload: &[u8]) -> Vec<u8> {
+fn build_frame(
+    message_type_and_flags: u8,
+    serialization_and_compression: u8,
+    payload: &[u8],
+) -> Vec<u8> {
     let mut frame = Vec::with_capacity(8 + payload.len());
-    frame.extend_from_slice(&[0x11, message_type_and_flags, serialization_and_compression, 0x00]);
+    frame.extend_from_slice(&[
+        0x11,
+        message_type_and_flags,
+        serialization_and_compression,
+        0x00,
+    ]);
     frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
     frame.extend_from_slice(payload);
     frame
@@ -230,7 +256,11 @@ fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, String> {
             return Err("火山 ASR 返回错误帧。".to_string());
         }
         let code = u32::from_be_bytes(frame[4..8].try_into().map_err(|_| "火山错误码解析失败。")?);
-        let size = u32::from_be_bytes(frame[8..12].try_into().map_err(|_| "火山错误长度解析失败。")?) as usize;
+        let size = u32::from_be_bytes(
+            frame[8..12]
+                .try_into()
+                .map_err(|_| "火山错误长度解析失败。")?,
+        ) as usize;
         let message = frame
             .get(12..12 + size)
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -270,7 +300,9 @@ pub fn segments_from_response_value(
     if let Some(utterances) = utterances {
         let mut segments = Vec::new();
         for (index, utterance) in utterances.iter().enumerate() {
-            if let Some(segment) = segment_from_utterance(utterance, index, default_final, id_prefix) {
+            if let Some(segment) =
+                segment_from_utterance(utterance, index, default_final, id_prefix)
+            {
                 segments.push(segment);
             }
         }
@@ -345,7 +377,9 @@ fn segment_from_utterance(
                 continue;
             }
             let word_start = ms_value(word.get("start_time")).unwrap_or(start);
-            let word_end = ms_value(word.get("end_time")).unwrap_or(word_start).max(word_start);
+            let word_end = ms_value(word.get("end_time"))
+                .unwrap_or(word_start)
+                .max(word_start);
             tokens.push(word_text.to_string());
             timestamps.push(word_start as f32);
             durations.push((word_end - word_start) as f32);
@@ -381,11 +415,7 @@ fn ms_value(value: Option<&Value>) -> Option<f64> {
     value.and_then(Value::as_f64).map(|value| value / 1000.0)
 }
 
-pub fn map_status_error(
-    status: u16,
-    api_code: Option<&str>,
-    api_message: Option<&str>,
-) -> String {
+pub fn map_status_error(status: u16, api_code: Option<&str>, api_message: Option<&str>) -> String {
     let code = api_code.unwrap_or_default();
     let message = api_message.unwrap_or_default();
     let category = match (status, code) {
@@ -411,15 +441,15 @@ pub async fn init_streaming_recognizer_impl(
         return Err("火山实时 ASR 只能用于 streaming 槽位。".to_string());
     }
     config_from_request(&request, VolcengineMode::Streaming)?;
-    let mut sessions = state.volcengine_sessions.lock().await;
+    let mut sessions = state.online_sessions.lock().await;
     sessions.insert(
         instance_id,
-        VolcengineStreamingSession {
+        OnlineStreamingSession::Volcengine(VolcengineStreamingSession {
             request,
             writer: Arc::new(Mutex::new(None)),
             flushing: Arc::new(AtomicBool::new(false)),
             final_response_received: Arc::new(Notify::new()),
-        },
+        }),
     );
     Ok(())
 }
@@ -430,9 +460,10 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     instance_id: String,
 ) -> Result<(), String> {
     let session = {
-        let sessions = state.volcengine_sessions.lock().await;
+        let sessions = state.online_sessions.lock().await;
         sessions
             .get(&instance_id)
+            .and_then(OnlineStreamingSession::as_volcengine)
             .cloned()
             .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
     };
@@ -458,7 +489,11 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     let (ws, response) = tokio_tungstenite::connect_async(client_request)
         .await
         .map_err(|error| format!("火山 ASR WebSocket 连接失败：{error}"))?;
-    if let Some(logid) = response.headers().get("X-Tt-Logid").and_then(|value| value.to_str().ok()) {
+    if let Some(logid) = response
+        .headers()
+        .get("X-Tt-Logid")
+        .and_then(|value| value.to_str().ok())
+    {
         info!("[Volcengine ASR] websocket connected logid={logid}");
     }
 
@@ -481,7 +516,8 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
 
     let instance_id_for_task = instance_id.clone();
     let normalization_options = session.request.normalization_options;
-    let postprocessor = TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
+    let postprocessor =
+        TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
     let flushing = session.flushing.clone();
     let final_response_received = session.final_response_received.clone();
     tauri::async_runtime::spawn(async move {
@@ -489,18 +525,21 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
             match message {
                 Ok(Message::Binary(frame)) => {
                     let flush_final = flushing.load(Ordering::SeqCst);
-                    match parse_server_response_frame(&frame)
-                        .and_then(|value| {
-                            value
-                                .map(|value| segments_from_streaming_response_value(&value, flush_final))
-                                .transpose()
-                                .map(|value| value.unwrap_or_default())
-                        }) {
+                    match parse_server_response_frame(&frame).and_then(|value| {
+                        value
+                            .map(|value| {
+                                segments_from_streaming_response_value(&value, flush_final)
+                            })
+                            .transpose()
+                            .map(|value| value.unwrap_or_default())
+                    }) {
                         Ok(segments) if !segments.is_empty() => {
-                            let normalized = apply_timeline_normalization(segments, normalization_options);
+                            let normalized =
+                                apply_timeline_normalization(segments, normalization_options);
                             let processed = postprocessor.process_segments(normalized);
                             for segment in processed {
-                                let update = build_transcript_update(segment, normalization_options);
+                                let update =
+                                    build_transcript_update(segment, normalization_options);
                                 emit_transcript_update(
                                     &app,
                                     &instance_id_for_task,
@@ -551,9 +590,10 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
     samples: Vec<u8>,
 ) -> Result<(), String> {
     let session = {
-        let sessions = state.volcengine_sessions.lock().await;
+        let sessions = state.online_sessions.lock().await;
         sessions
             .get(&instance_id)
+            .and_then(OnlineStreamingSession::as_volcengine)
             .cloned()
             .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
     };
@@ -577,9 +617,10 @@ pub async fn feed_audio_samples_impl(
     samples: &[f32],
 ) -> Result<(), String> {
     let session = {
-        let sessions = state.volcengine_sessions.lock().await;
+        let sessions = state.online_sessions.lock().await;
         sessions
             .get(instance_id)
+            .and_then(OnlineStreamingSession::as_volcengine)
             .cloned()
             .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
     };
@@ -613,9 +654,10 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
     instance_id: String,
 ) -> Result<(), String> {
     let session = {
-        let sessions = state.volcengine_sessions.lock().await;
+        let sessions = state.online_sessions.lock().await;
         sessions
             .get(&instance_id)
+            .and_then(OnlineStreamingSession::as_volcengine)
             .cloned()
             .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
     };
@@ -640,8 +682,11 @@ pub async fn stop_streaming_recognizer_impl(
     instance_id: String,
 ) -> Result<(), String> {
     let session = {
-        let sessions = state.volcengine_sessions.lock().await;
-        sessions.get(&instance_id).cloned()
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(&instance_id)
+            .and_then(OnlineStreamingSession::as_volcengine)
+            .cloned()
     };
     if let Some(session) = session {
         let mut writer = session.writer.lock().await;
@@ -705,7 +750,8 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .map_err(|error| format!("火山批量 ASR 响应解析失败：{error}"))?;
     let mut segments = segments_from_response_value(&response_value, true, "volc-batch")?;
     segments = apply_timeline_normalization(segments, request.normalization_options);
-    segments = TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
+    segments =
+        TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
 
     let metric = AsrInferenceMetric {
         occurred_at_ms: current_time_millis(),
@@ -729,25 +775,28 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     };
     set_batch_inference_metric(&state.metrics, metric.clone());
     log_inference_metric(&metric);
-    let _ = app.emit(super::BATCH_PROGRESS_EVENT, &(file_path.as_str(), 100.0_f32));
+    let _ = app.emit(
+        super::BATCH_PROGRESS_EVENT,
+        &(file_path.as_str(), 100.0_f32),
+    );
     Ok(segments)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::{
-        AsrEngine, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+        AsrEngine, OnlineAsrProviderRequest, TranscriptNormalizationOptions,
+        TranscriptPostprocessOptions,
     };
+    use super::*;
 
     fn config(api_key: &str) -> VolcengineDoubaoAsrConfig {
         VolcengineDoubaoAsrConfig {
             api_key: api_key.to_string(),
-            streaming_endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
-                .to_string(),
+            streaming_endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
             streaming_resource_id: "volc.seedasr.sauc.duration".to_string(),
-            batch_endpoint:
-                "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash".to_string(),
+            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
+                .to_string(),
             batch_resource_id: "volc.bigasr.auc_turbo".to_string(),
         }
     }
@@ -763,12 +812,14 @@ mod tests {
     #[test]
     fn volcengine_local_batch_rejects_async_recording_file_endpoints() {
         let standard = VolcengineDoubaoAsrConfig {
-            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit".to_string(),
+            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit"
+                .to_string(),
             batch_resource_id: "volc.seedasr.auc".to_string(),
             ..config("volc-test-key")
         };
         let offpeak = VolcengineDoubaoAsrConfig {
-            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit".to_string(),
+            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit"
+                .to_string(),
             batch_resource_id: "volc.bigasr.auc_idle".to_string(),
             ..config("volc-test-key")
         };
@@ -786,12 +837,10 @@ mod tests {
     #[test]
     fn volcengine_flash_batch_request_body_uses_local_audio_data_and_existing_options() {
         let request = AsrTranscriptionRequest {
-            engine: AsrEngine::VolcengineDoubao,
+            engine: AsrEngine::Online,
             mode: AsrMode::Offline,
             model_id: None,
             model_path: String::new(),
-            provider_id: Some("volcengine-doubao".to_string()),
-            profile_id: Some("volcengine-doubao-default".to_string()),
             num_threads: 4,
             enable_itn: true,
             language: "auto".to_string(),
@@ -803,7 +852,11 @@ mod tests {
             hotwords: None,
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
-            volcengine: Some(config("volc-test-key")),
+            online_provider: Some(OnlineAsrProviderRequest {
+                provider_id: VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
+                profile_id: "volcengine-doubao-default".to_string(),
+                config: serde_json::to_value(config("volc-test-key")).expect("config json"),
+            }),
         };
 
         let body = build_flash_batch_request_body(
@@ -822,14 +875,19 @@ mod tests {
 
     #[test]
     fn volcengine_streaming_frame_builders_use_expected_binary_header() {
-        let request_frame = build_full_client_request_frame(true, true, "auto", None)
-            .expect("request frame");
+        let request_frame =
+            build_full_client_request_frame(true, true, "auto", None).expect("request frame");
         let audio_frame = build_audio_frame(&[1, 2, 3, 4], false);
         let final_audio_frame = build_audio_frame(&[], true);
 
         assert_eq!(&request_frame[0..4], &[0x11, 0x10, 0x10, 0x00]);
-        assert_eq!(u32::from_be_bytes(request_frame[4..8].try_into().unwrap()) as usize, request_frame.len() - 8);
-        assert!(String::from_utf8_lossy(&request_frame[8..]).contains("\"model_name\":\"bigmodel\""));
+        assert_eq!(
+            u32::from_be_bytes(request_frame[4..8].try_into().unwrap()) as usize,
+            request_frame.len() - 8
+        );
+        assert!(
+            String::from_utf8_lossy(&request_frame[8..]).contains("\"model_name\":\"bigmodel\"")
+        );
         assert_eq!(&audio_frame[0..4], &[0x11, 0x20, 0x00, 0x00]);
         assert_eq!(u32::from_be_bytes(audio_frame[4..8].try_into().unwrap()), 4);
         assert_eq!(&audio_frame[8..], &[1, 2, 3, 4]);
@@ -859,8 +917,8 @@ mod tests {
             }
         });
 
-        let segments = segments_from_response_value(&response, true, "volc")
-            .expect("segments should map");
+        let segments =
+            segments_from_response_value(&response, true, "volc").expect("segments should map");
 
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].id, "volc-0");
@@ -868,9 +926,18 @@ mod tests {
         assert_eq!(segments[0].start, 0.45);
         assert_eq!(segments[0].end, 1.53);
         assert!(segments[0].is_final);
-        assert_eq!(segments[0].tokens.as_ref().unwrap(), &vec!["关", "闭", "透", "传"]);
-        assert_eq!(segments[0].timestamps.as_ref().unwrap(), &vec![0.45, 0.77, 1.13, 1.49]);
-        assert_eq!(segments[0].durations.as_ref().unwrap(), &vec![0.32, 0.2, 0.08, 0.04]);
+        assert_eq!(
+            segments[0].tokens.as_ref().unwrap(),
+            &vec!["关", "闭", "透", "传"]
+        );
+        assert_eq!(
+            segments[0].timestamps.as_ref().unwrap(),
+            &vec![0.45, 0.77, 1.13, 1.49]
+        );
+        assert_eq!(
+            segments[0].durations.as_ref().unwrap(),
+            &vec![0.32, 0.2, 0.08, 0.04]
+        );
         let timing = segments[0].timing.as_ref().unwrap();
         assert_eq!(timing.level, TranscriptTimingLevel::Token);
         assert_eq!(timing.source, TranscriptTimingSource::Model);

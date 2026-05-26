@@ -5,6 +5,7 @@ mod adapter;
 mod batch;
 mod metrics;
 mod model_config;
+mod online;
 mod postprocess;
 mod runtime;
 mod state;
@@ -27,10 +28,10 @@ pub use state::SherpaState;
 pub(crate) use transcript::ensure_transcript_segment_timing;
 pub use types::{
     AsrEngine, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest,
-    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
-    TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, TranscriptTiming,
-    TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
-    VolcengineDoubaoAsrConfig,
+    OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    TranscriptSegment, TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet,
+    TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
+    TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
 async fn route_engine(state: &SherpaState, instance_id: &str) -> AsrEngine {
@@ -51,10 +52,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     samples: &[f32],
 ) -> Result<(), String> {
     match route_engine(state, instance_id).await {
-        AsrEngine::VolcengineDoubao => {
-            volcengine::feed_audio_samples_impl(state, instance_id, samples).await
+        AsrEngine::Online => online::feed_audio_samples_impl(state, instance_id, samples).await,
+        AsrEngine::LocalSherpa => {
+            runtime::feed_audio_samples(app, state, instance_id, samples).await
         }
-        AsrEngine::LocalSherpa => runtime::feed_audio_samples(app, state, instance_id, samples).await,
     }
 }
 
@@ -121,13 +122,13 @@ pub async fn init_recognizer(
             }
             init_result
         }
-        AsrEngine::VolcengineDoubao => {
+        AsrEngine::Online => {
             let init_result =
-                volcengine::init_streaming_recognizer_impl(state.clone(), instance_id.clone(), request)
+                online::init_streaming_recognizer_impl(state.clone(), instance_id.clone(), request)
                     .await;
             if init_result.is_ok() {
                 state
-                    .set_instance_engine(&instance_id, AsrEngine::VolcengineDoubao)
+                    .set_instance_engine(&instance_id, AsrEngine::Online)
                     .await;
             }
             init_result
@@ -142,9 +143,7 @@ pub async fn start_recognizer<R: tauri::Runtime>(
     instance_id: String,
 ) -> Result<(), String> {
     match route_engine(&state, &instance_id).await {
-        AsrEngine::VolcengineDoubao => {
-            volcengine::start_streaming_recognizer_impl(app, state, instance_id).await
-        }
+        AsrEngine::Online => online::start_streaming_recognizer_impl(app, state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id).await,
     }
 }
@@ -155,9 +154,7 @@ pub async fn stop_recognizer(
     instance_id: String,
 ) -> Result<(), String> {
     match route_engine(&state, &instance_id).await {
-        AsrEngine::VolcengineDoubao => {
-            volcengine::stop_streaming_recognizer_impl(state, instance_id).await
-        }
+        AsrEngine::Online => online::stop_streaming_recognizer_impl(state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id).await,
     }
 }
@@ -169,9 +166,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     instance_id: String,
 ) -> Result<(), String> {
     match route_engine(&state, &instance_id).await {
-        AsrEngine::VolcengineDoubao => {
-            volcengine::flush_streaming_recognizer_impl(app, state, instance_id).await
-        }
+        AsrEngine::Online => online::flush_streaming_recognizer_impl(app, state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id).await,
     }
 }
@@ -189,10 +184,10 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         samples.len()
     );
     match route_engine(&state, &instance_id).await {
-        AsrEngine::VolcengineDoubao => {
-            volcengine::feed_audio_chunk_impl(app, state, instance_id, samples).await
+        AsrEngine::Online => online::feed_audio_chunk_impl(app, state, instance_id, samples).await,
+        AsrEngine::LocalSherpa => {
+            runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
         }
-        AsrEngine::LocalSherpa => runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await,
     }
 }
 
@@ -242,8 +237,8 @@ pub async fn process_batch_file<R: tauri::Runtime>(
                 adapter.batch_request(file_path, save_to_path, request, speaker_processing)?;
             batch::process_batch_request_impl(app, state.inner(), batch_request).await
         }
-        AsrEngine::VolcengineDoubao => {
-            volcengine::process_batch_file_impl(app, state.inner(), file_path, request).await
+        AsrEngine::Online => {
+            online::process_batch_file_impl(app, state.inner(), file_path, request).await
         }
     }
 }
@@ -260,14 +255,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn route_engine_uses_selected_volcengine_even_without_active_session() {
+    async fn route_engine_uses_selected_online_engine_even_without_active_session() {
         let state = SherpaState::new();
-        state
-            .set_instance_engine("record", AsrEngine::VolcengineDoubao)
-            .await;
+        state.set_instance_engine("record", AsrEngine::Online).await;
 
-        assert_eq!(route_engine(&state, "record").await, AsrEngine::VolcengineDoubao);
-        assert!(!state.has_volcengine_session("record").await);
+        assert_eq!(route_engine(&state, "record").await, AsrEngine::Online);
+        assert!(!state.has_online_session("record").await);
     }
 
     #[tokio::test]

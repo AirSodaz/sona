@@ -34,7 +34,7 @@ function buildAsrSignature(asr: ReturnType<typeof resolveVoiceTypingAsr>): strin
         modelPath: asr.modelPath,
         providerId: asr.providerId,
         profileId: asr.profileId,
-        volcengine: asr.volcengine,
+        onlineProvider: asr.onlineProvider,
     });
 }
 

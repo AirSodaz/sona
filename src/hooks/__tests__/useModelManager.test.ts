@@ -191,12 +191,14 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             maxConcurrent: 4,
             asr: {
                 providers: {
-                    volcengineDoubao: {
-                        apiKey: 'volc-test-key',
-                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                        streamingResourceId: 'volc.seedasr.sauc.duration',
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
-                        batchResourceId: 'volc.seedasr.auc',
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
+                            batchResourceId: 'volc.seedasr.auc',
+                        },
                     },
                 },
             },
@@ -301,9 +303,11 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             maxConcurrent: 2,
             asr: {
                 providers: {
-                    volcengineDoubao: {
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    online: {
+                        'volcengine-doubao': {
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
                     },
                 },
             },

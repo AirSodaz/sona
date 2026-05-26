@@ -383,7 +383,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         ]);
     });
 
-    it('starts a Volcengine streaming recognizer without a local model path', async () => {
+    it('starts an online Volcengine streaming recognizer without a local model path', async () => {
         mocks.config = {
             ...mocks.config,
             language: 'zh',
@@ -391,7 +391,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
             asr: {
                 selections: {
                     live: {
-                        engine: 'volcengine-doubao',
+                        engine: 'online',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',
@@ -418,12 +418,14 @@ describe('TranscriptionService voice typing diagnostics', () => {
                     },
                 },
                 providers: {
-                    volcengineDoubao: {
-                        apiKey: 'volc-test-key',
-                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                        streamingResourceId: 'volc.seedasr.sauc.duration',
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
                     },
                 },
             },
@@ -438,19 +440,23 @@ describe('TranscriptionService voice typing diagnostics', () => {
         expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
             modelPath: '',
             asrRequest: expect.objectContaining({
-                engine: 'volcengine-doubao',
+                engine: 'online',
                 mode: 'streaming',
                 modelPath: '',
-                volcengine: expect.objectContaining({
-                    apiKey: 'volc-test-key',
-                    streamingResourceId: 'volc.seedasr.sauc.duration',
+                onlineProvider: expect.objectContaining({
+                    providerId: 'volcengine-doubao',
+                    profileId: 'volcengine-doubao-default',
+                    config: expect.objectContaining({
+                        apiKey: 'volc-test-key',
+                        streamingResourceId: 'volc.seedasr.sauc.duration',
+                    }),
                 }),
             }),
         }));
         expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });
 
-    it('transcribes a Volcengine batch request without setting a local model path', async () => {
+    it('transcribes an online Volcengine batch request without setting a local model path', async () => {
         mocks.config = {
             ...mocks.config,
             asr: {
@@ -474,7 +480,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                         modelPath: '',
                     },
                     batch: {
-                        engine: 'volcengine-doubao',
+                        engine: 'online',
                         mode: 'offline',
                         modelId: null,
                         modelPath: '',
@@ -483,12 +489,14 @@ describe('TranscriptionService voice typing diagnostics', () => {
                     },
                 },
                 providers: {
-                    volcengineDoubao: {
-                        apiKey: 'volc-test-key',
-                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                        streamingResourceId: 'volc.seedasr.sauc.duration',
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
                     },
                 },
             },
@@ -516,12 +524,15 @@ describe('TranscriptionService voice typing diagnostics', () => {
         expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
             modelPath: '',
             asrRequest: expect.objectContaining({
-                engine: 'volcengine-doubao',
+                engine: 'online',
                 mode: 'offline',
                 modelPath: '',
-                volcengine: expect.objectContaining({
-                    apiKey: 'volc-test-key',
-                    batchResourceId: 'volc.bigasr.auc_turbo',
+                onlineProvider: expect.objectContaining({
+                    providerId: 'volcengine-doubao',
+                    config: expect.objectContaining({
+                        apiKey: 'volc-test-key',
+                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    }),
                 }),
             }),
         }));

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
 import { createLlmSettings } from '../services/llm/state';
+import {
+  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+  VOLCENGINE_DOUBAO_PROVIDER_ID,
+} from '../services/onlineAsrProviders';
 import type {
   AppConfig,
   UIConfig,
@@ -68,12 +72,10 @@ export const DEFAULT_CONFIG: AppConfig = {
       },
     },
     providers: {
-      volcengineDoubao: {
-        apiKey: '',
-        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-        streamingResourceId: 'volc.seedasr.sauc.duration',
-        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-        batchResourceId: 'volc.bigasr.auc_turbo',
+      online: {
+        [VOLCENGINE_DOUBAO_PROVIDER_ID]: {
+          ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+        },
       },
     },
   },

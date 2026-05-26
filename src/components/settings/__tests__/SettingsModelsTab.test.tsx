@@ -248,14 +248,14 @@ describe('SettingsModelsTab speaker model selections', () => {
             const config = useConfigStore.getState().config;
             expect(config.streamingModelPath).toBe('');
             expect(config.asr?.selections.live).toMatchObject({
-                engine: 'volcengine-doubao',
+                engine: 'online',
                 mode: 'streaming',
                 modelPath: '',
                 providerId: 'volcengine-doubao',
                 profileId: 'volcengine-doubao-default',
             });
-            expect(config.asr?.selections.caption.engine).toBe('volcengine-doubao');
-            expect(config.asr?.selections.voiceTyping.engine).toBe('volcengine-doubao');
+            expect(config.asr?.selections.caption.engine).toBe('online');
+            expect(config.asr?.selections.voiceTyping.engine).toBe('online');
         });
 
         expect(screen.queryByText('音频会发送到火山引擎进行识别。')).not.toBeNull();
@@ -269,7 +269,7 @@ describe('SettingsModelsTab speaker model selections', () => {
                     caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
-                        engine: 'volcengine-doubao',
+                        engine: 'online',
                         mode: 'offline',
                         modelId: null,
                         modelPath: '',
@@ -285,7 +285,7 @@ describe('SettingsModelsTab speaker model selections', () => {
 
         await waitFor(() => {
             expect(screen.getByRole('button', { name: '豆包语音 (云端)' })).not.toBeNull();
-            expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('volcengine-doubao');
+            expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
         });
     });
 
@@ -297,7 +297,7 @@ describe('SettingsModelsTab speaker model selections', () => {
                     caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
-                        engine: 'volcengine-doubao',
+                        engine: 'online',
                         mode: 'offline',
                         modelId: null,
                         modelPath: '',
@@ -306,12 +306,14 @@ describe('SettingsModelsTab speaker model selections', () => {
                     },
                 },
                 providers: {
-                    volcengineDoubao: {
-                        apiKey: 'volc-test-key',
-                        streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                        streamingResourceId: 'volc.seedasr.sauc.duration',
-                        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                        batchResourceId: 'volc.bigasr.auc_turbo',
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'volc-test-key',
+                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+                            streamingResourceId: 'volc.seedasr.sauc.duration',
+                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                            batchResourceId: 'volc.bigasr.auc_turbo',
+                        },
                     },
                 },
             },
@@ -331,7 +333,7 @@ describe('SettingsModelsTab speaker model selections', () => {
         fireEvent.click(standardOption);
 
         await waitFor(() => {
-            expect(useConfigStore.getState().config.asr?.providers?.volcengineDoubao).toMatchObject({
+            expect(useConfigStore.getState().config.asr?.providers?.online?.['volcengine-doubao']).toMatchObject({
                 batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
                 batchResourceId: 'volc.bigasr.auc_turbo',
             });
