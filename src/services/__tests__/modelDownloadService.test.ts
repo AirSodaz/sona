@@ -164,6 +164,31 @@ describe('modelDownloadService', () => {
     }));
   });
 
+  it('stops mirror fallback once a retry succeeds', async () => {
+    const service = createModelDownloadService({
+      downloadFile,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+    downloadFile
+      .mockRejectedValueOnce(new Error('direct failed'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(service.downloadModel({
+      modelId: 'model-a',
+      model: makeModel(),
+    })).resolves.toBe('/models/model-a');
+
+    expect(downloadFile).toHaveBeenCalledTimes(2);
+    expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
+    }));
+  });
+
   it('cancels the active backend download when the abort signal fires', async () => {
     const service = createModelDownloadService({
       downloadFile,

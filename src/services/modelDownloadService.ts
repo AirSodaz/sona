@@ -1,6 +1,7 @@
 import i18n from '../i18n';
 import { logger } from '../utils/logger';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { retryWithBackoff } from '../utils/retryWithBackoff';
 import { TauriEvent } from './tauri/events';
 import type { ModelCatalogModel, ModelInfo, ProgressCallback } from './modelService';
 
@@ -156,7 +157,6 @@ class ModelDownloadService {
       'https://ghproxy.net/',
     ];
 
-    let downloadSuccess = false;
     let lastError: unknown = null;
     let unlisten: (() => void) | undefined;
     let lastDownloaded = 0;
@@ -208,47 +208,58 @@ class ModelDownloadService {
     }
 
     try {
-      for (const mirror of mirrors) {
-        if (signal?.aborted) throw new Error('Download cancelled');
+      try {
+        await retryWithBackoff({
+          attempts: mirrors.length,
+          abortError: () => new Error('Download cancelled'),
+          run: async ({ attempt }) => {
+            const mirror = mirrors[attempt - 1];
+            const downloadUrl = mirror ? `${mirror}${url}` : url;
 
-        try {
-          const downloadUrl = mirror ? `${mirror}${url}` : url;
+            if (onProgress) {
+              onProgress(0, i18n.t(
+                mirror
+                  ? 'settings.model_download_status.downloading_from_mirror'
+                  : 'settings.model_download_status.downloading_only',
+                { label },
+              ));
+            }
 
-          if (onProgress) {
-            onProgress(0, i18n.t(
-              mirror
-                ? 'settings.model_download_status.downloading_from_mirror'
-                : 'settings.model_download_status.downloading_only',
-              { label },
-            ));
-          }
-
-          logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
-          await this.ports.downloadFile({
-            url: downloadUrl,
-            outputPath,
-            id: downloadId,
-          });
-
-          downloadSuccess = true;
-          break;
-        } catch (error) {
-          if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
-            throw Object.assign(new Error('Download cancelled'), { cause: error });
-          }
-          logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
-          lastError = error;
+            logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
+            await this.ports.downloadFile({
+              url: downloadUrl,
+              outputPath,
+              id: downloadId,
+            });
+          },
+          onFailedAttempt: (error, { attempt }) => {
+            const mirror = mirrors[attempt - 1];
+            logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
+            lastError = error;
+          },
+          shouldRetry: (error) => {
+            if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
+              throw Object.assign(new Error('Download cancelled'), { cause: error });
+            }
+            return true;
+          },
+          signal,
+        });
+      } catch (error) {
+        if (extractErrorMessage(error) === 'Download cancelled') {
+          throw error;
         }
+        const cause = lastError ?? error;
+        const lastErrorMessage = extractErrorMessage(cause);
+        throw Object.assign(
+          new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`),
+          { cause },
+        );
       }
     } finally {
       if (unlisten) {
         unlisten();
       }
-    }
-
-    if (!downloadSuccess) {
-      const lastErrorMessage = lastError ? extractErrorMessage(lastError) : 'Unknown error';
-      throw new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`);
     }
   }
 
