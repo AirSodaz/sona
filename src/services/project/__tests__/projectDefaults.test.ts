@@ -5,15 +5,15 @@ import {
   normalizeProjectRecord,
   normalizeProjectRecordWithKeywordSetBackfill,
   resolveProjectAwareTextReplacementSets,
-} from './project';
-import { DEFAULT_CONFIG } from '../stores/configStore';
+} from '../projectDefaults';
+import { DEFAULT_CONFIG } from '../../../stores/configStore';
 
-describe('normalizeProjectRecord', () => {
+describe('projectDefaults', () => {
   it('preserves an incoming icon value', () => {
     const project = normalizeProjectRecord({
       id: 'project-1',
       name: 'Alpha',
-      icon: '🧪',
+      icon: 'icon-alpha',
       createdAt: 1,
       updatedAt: 2,
       defaults: {
@@ -28,7 +28,7 @@ describe('normalizeProjectRecord', () => {
       },
     });
 
-    expect(project.icon).toBe('🧪');
+    expect(project.icon).toBe('icon-alpha');
   });
 
   it('migrates legacy project polish context into a shared custom preset reference', () => {
@@ -94,15 +94,7 @@ describe('normalizeProjectRecord', () => {
     expect(project.defaults.summaryTemplateId).toBe('meeting');
   });
 
-  it('keeps runtime helpers re-exported from the type facade', () => {
-    expect(typeof buildProjectDefaultsFromConfig).toBe('function');
-    expect(typeof normalizeProjectRecord).toBe('function');
-    expect(typeof normalizeProjectRecordWithKeywordSetBackfill).toBe('function');
-    expect(typeof migrateProjectPolishDefaults).toBe('function');
-    expect(typeof resolveProjectAwareTextReplacementSets).toBe('function');
-  });
-
-  it('builds project defaults from only enabled global config sets through the facade', () => {
+  it('builds project defaults from only enabled global config sets', () => {
     const defaults = buildProjectDefaultsFromConfig({
       ...DEFAULT_CONFIG,
       translationLanguage: 'ja',
@@ -125,9 +117,33 @@ describe('normalizeProjectRecord', () => {
       ],
     });
 
-    expect(defaults.enabledTextReplacementSetIds).toEqual(['replace-on']);
-    expect(defaults.enabledHotwordSetIds).toEqual(['hot-on']);
-    expect(defaults.enabledPolishKeywordSetIds).toEqual(['kw-on']);
-    expect(defaults.enabledSpeakerProfileIds).toEqual(['speaker-on']);
+    expect(defaults).toEqual(expect.objectContaining({
+      translationLanguage: 'ja',
+      polishPresetId: 'technical',
+      enabledTextReplacementSetIds: ['replace-on'],
+      enabledHotwordSetIds: ['hot-on'],
+      enabledPolishKeywordSetIds: ['kw-on'],
+      enabledSpeakerProfileIds: ['speaker-on'],
+    }));
+  });
+
+  it('keeps global set references without a project and applies project enabled ids when present', () => {
+    const sets = [
+      { id: 'set-1', name: 'One', enabled: true, ignoreCase: true, rules: [] },
+      { id: 'set-2', name: 'Two', enabled: true, ignoreCase: true, rules: [] },
+    ];
+    const project = normalizeProjectRecord({
+      id: 'project-1',
+      name: 'Alpha',
+      defaults: {
+        enabledTextReplacementSetIds: ['set-2'],
+      },
+    });
+
+    expect(resolveProjectAwareTextReplacementSets(sets, null)).toBe(sets);
+    expect(resolveProjectAwareTextReplacementSets(sets, project)).toEqual([
+      { id: 'set-1', name: 'One', enabled: false, ignoreCase: true, rules: [] },
+      { id: 'set-2', name: 'Two', enabled: true, ignoreCase: true, rules: [] },
+    ]);
   });
 });
