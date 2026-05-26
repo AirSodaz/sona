@@ -63,4 +63,4 @@ export {
   normalizeSpeakerProfiles,
   normalizeSpeakerProfileSample,
   normalizeSpeakerTag,
-} from '../services/speaker/speakerProfileRuntime';
+} from '../services/speaker/speakerProfileNormalization';

@@ -13,7 +13,7 @@ import {
   getFeatureLlmConfig,
   isFeatureLlmConfigComplete,
   isSummaryLlmConfigComplete,
-} from '../runtime';
+} from '../configUtils';
 import { DEFAULT_LLM_TEMPERATURE } from '../providers';
 
 describe('llm runtime', () => {

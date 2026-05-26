@@ -9,7 +9,7 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
-import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
 import type { SummaryTranscriptLlmJobRequest } from './llmTaskService';
 import { runTranscriptLlmTaskJob } from './llm/segmentTask';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
@@ -17,7 +17,7 @@ import { runTranscriptLlmJob } from './tauri/llm';
 import {
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
-} from './taskLedgerRuntime';
+} from './taskLedgerBuilders';
 import { summarySidecarService } from './summarySidecarService';
 
 interface RetrySummaryTranscriptJobOptions {

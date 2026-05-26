@@ -14,7 +14,7 @@ import {
   type TranslatedSegment,
   type TranslateSegmentsRequest,
 } from '../llmTaskService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './configUtils';
 import {
   polishTranscriptSegments,
   translateTranscriptSegments,
@@ -25,7 +25,7 @@ import {
   isTaskLedgerCancelRequested,
   patchTaskLedgerRecord,
   upsertTaskLedgerRecord,
-} from '../taskLedgerRuntime';
+} from '../taskLedgerBuilders';
 
 type SegmentTaskFeature = 'translation' | 'polish';
 type SegmentTaskType = Extract<LlmTaskType, 'translate' | 'polish'>;

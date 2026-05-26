@@ -5,7 +5,7 @@ import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { isSummaryLlmConfigComplete } from '../services/llm/runtime';
+import { isSummaryLlmConfigComplete } from '../services/llm/configUtils';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import {
   getSummaryTemplateOptions,

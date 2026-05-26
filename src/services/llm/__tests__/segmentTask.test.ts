@@ -51,12 +51,12 @@ vi.mock('../../llmTaskService', () => ({
   listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
 }));
 
-vi.mock('../runtime', () => ({
+vi.mock('../configUtils', () => ({
   getFeatureLlmConfig: (...args: unknown[]) => mockGetFeatureLlmConfig(...args),
   isLlmConfigComplete: (...args: unknown[]) => mockIsLlmConfigComplete(...args),
 }));
 
-vi.mock('../../taskLedgerRuntime', () => ({
+vi.mock('../../taskLedgerBuilders', () => ({
   buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
   upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
   patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),

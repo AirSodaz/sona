@@ -1,7 +1,7 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
@@ -18,7 +18,7 @@ import { runTranscriptLlmJob } from './tauri/llm';
 import {
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
-} from './taskLedgerRuntime';
+} from './taskLedgerBuilders';
 
 interface RetryTranslateTranscriptJobOptions {
   segments: TranscriptSegment[];

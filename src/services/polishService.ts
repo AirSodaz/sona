@@ -3,7 +3,7 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
 import type {
@@ -20,7 +20,7 @@ import { runTranscriptLlmJob } from './tauri/llm';
 import {
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
-} from './taskLedgerRuntime';
+} from './taskLedgerBuilders';
 
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];

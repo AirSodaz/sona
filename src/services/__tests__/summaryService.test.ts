@@ -51,7 +51,7 @@ vi.mock('../historyService', () => ({
   },
 }));
 
-vi.mock('../taskLedgerRuntime', () => ({
+vi.mock('../taskLedgerBuilders', () => ({
   buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
   createLlmTaskLedgerId: (...args: unknown[]) => Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
   isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),

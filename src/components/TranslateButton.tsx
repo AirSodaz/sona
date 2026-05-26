@@ -8,7 +8,7 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
 
 const LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 

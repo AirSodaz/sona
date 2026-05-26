@@ -61,7 +61,7 @@ vi.mock('../projectStore', () => ({
     },
 }));
 
-vi.mock('../../services/taskLedgerRuntime', () => ({
+vi.mock('../../services/taskLedgerBuilders', () => ({
     buildBatchTaskLedgerRecord: (item: any, status = 'pending') => ({
         id: `batch-${item.id}`,
         kind: item.origin === 'automation' ? 'automation' : 'batchImport',

@@ -4,7 +4,7 @@ import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerAttribution,
   normalizeSpeakerProfiles,
-} from '../speakerProfileRuntime';
+} from '../speakerProfileNormalization';
 import type { SpeakerProfile } from '../../../types/speaker';
 
 function createProfile(samples: number[]): SpeakerProfile {
@@ -21,7 +21,7 @@ function createProfile(samples: number[]): SpeakerProfile {
   };
 }
 
-describe('speakerProfileRuntime', () => {
+describe('speakerProfileNormalization', () => {
   it('marks profiles with insufficient usable duration as not ready', () => {
     expect(deriveSpeakerProfileReadiness(createProfile([3.9, 2.5]))).toEqual({
       state: 'not_ready',

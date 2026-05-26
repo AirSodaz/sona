@@ -1,6 +1,6 @@
 import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
-import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
 import { normalizeError } from '../utils/errorUtils';
 import i18n from '../i18n';
 import { TranscriptSegment } from '../types/transcript';

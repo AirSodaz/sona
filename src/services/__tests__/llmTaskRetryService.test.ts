@@ -5,7 +5,7 @@ import { polishService } from '../polishService';
 import { summaryService } from '../summaryService';
 import { translationService } from '../translationService';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { patchTaskLedgerRecord } from '../taskLedgerRuntime';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
@@ -36,7 +36,7 @@ vi.mock('../translationService', () => ({
   },
 }));
 
-vi.mock('../taskLedgerRuntime', () => ({
+vi.mock('../taskLedgerBuilders', () => ({
   patchTaskLedgerRecord: vi.fn(),
 }));
 

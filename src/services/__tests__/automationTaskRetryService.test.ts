@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { retryAutomationTaskFromLedger } from '../automationTaskRetryService';
 import { useAutomationStore } from '../../stores/automationStore';
-import { patchTaskLedgerRecord } from '../taskLedgerRuntime';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 
 vi.mock('../../stores/automationStore', () => ({
@@ -10,7 +10,7 @@ vi.mock('../../stores/automationStore', () => ({
   },
 }));
 
-vi.mock('../taskLedgerRuntime', () => ({
+vi.mock('../taskLedgerBuilders', () => ({
   patchTaskLedgerRecord: vi.fn(),
 }));
 

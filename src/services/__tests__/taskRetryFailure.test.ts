@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { handleTaskRetryPreflightFailure } from '../taskRetryFailure';
-import { patchTaskLedgerRecord } from '../taskLedgerRuntime';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 
-vi.mock('../taskLedgerRuntime', () => ({
+vi.mock('../taskLedgerBuilders', () => ({
   patchTaskLedgerRecord: vi.fn(),
 }));
 

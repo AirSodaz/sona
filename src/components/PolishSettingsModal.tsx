@@ -7,7 +7,7 @@ import { XIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { Checkbox } from './Checkbox';
-import { isFeatureLlmConfigComplete } from '../services/llm/runtime';
+import { isFeatureLlmConfigComplete } from '../services/llm/configUtils';
 import { getPolishPresetOptions } from '../utils/polishPresets';
 import { normalizePolishKeywordSets } from '../utils/polishKeywords';
 import { ModalPortal } from './ModalPortal';

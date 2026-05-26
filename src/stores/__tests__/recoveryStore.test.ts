@@ -50,7 +50,7 @@ vi.mock('../automationStore', () => ({
     },
 }));
 
-vi.mock('../../services/taskLedgerRuntime', () => ({
+vi.mock('../../services/taskLedgerBuilders', () => ({
     createBatchTaskLedgerId: (id: string) => `batch-${id}`,
     buildRecoveryTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.buildRecoveryTaskLedgerRecordMock, undefined, args),
     upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.upsertTaskLedgerRecordMock, undefined, args),

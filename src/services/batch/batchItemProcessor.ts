@@ -10,7 +10,7 @@ import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../asrCo
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../llm/configUtils';
 import { summaryService } from '../summaryService';
 import { exportTranscriptToDirectory } from '../exportService';
 import { useHistoryStore } from '../../stores/historyStore';

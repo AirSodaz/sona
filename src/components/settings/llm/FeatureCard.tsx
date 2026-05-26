@@ -14,7 +14,7 @@ import {
   setFeatureReasoningLevel,
   syncProviderDiscoveredModels,
 } from '../../../services/llm/state';
-import { isFeatureLlmConfigComplete } from '../../../services/llm/runtime';
+import { isFeatureLlmConfigComplete } from '../../../services/llm/configUtils';
 import {
   DEFAULT_LLM_TEMPERATURE,
   getProviderDefinition,

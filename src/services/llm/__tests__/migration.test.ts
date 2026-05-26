@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ensureLlmState } from '../migration';
-import { getFeatureLlmConfig } from '../runtime';
+import { getFeatureLlmConfig } from '../configUtils';
 
 describe('llm migration', () => {
   it('migrates legacy llm config into llmSettings without losing values', () => {

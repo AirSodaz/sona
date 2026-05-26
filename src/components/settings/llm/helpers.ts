@@ -2,7 +2,7 @@ import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import { ensureLlmState } from '../../../services/llm/migration';
 import { getProviderDefinition } from '../../../services/llm/providers';
-import { isProviderConfigComplete } from '../../../services/llm/runtime';
+import { isProviderConfigComplete } from '../../../services/llm/configUtils';
 
 export function getCurrentLlmSettings(config: LlmAssistantConfig) {
   return config.llmSettings ?? ensureLlmState(config).llmSettings;

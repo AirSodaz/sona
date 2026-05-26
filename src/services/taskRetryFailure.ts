@@ -1,6 +1,6 @@
 import type { TaskLedgerRecord } from '../types/taskLedger';
 import { normalizeError } from '../utils/errorUtils';
-import { patchTaskLedgerRecord } from './taskLedgerRuntime';
+import { patchTaskLedgerRecord } from './taskLedgerBuilders';
 
 /** Records retry preflight failures on the original ledger task, then rethrows a normalized error. */
 export function handleTaskRetryPreflightFailure(task: TaskLedgerRecord, error: unknown): never {

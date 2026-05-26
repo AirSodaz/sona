@@ -4,7 +4,7 @@ import type { TranscriptSegment } from '../types/transcript';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { logger } from '../utils/logger';
-import { getFeatureLlmConfig, isLlmConfigComplete, isSummaryLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete, isSummaryLlmConfigComplete } from './llm/configUtils';
 import { historyService } from './historyService';
 import { polishService } from './polishService';
 import { summaryService } from './summaryService';
