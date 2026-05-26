@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { AutomationIcon } from '../Icons';
 import { useAutomationStore } from '../../stores/automationStore';
@@ -26,6 +25,7 @@ import {
     type AutomationDraftUpdate,
     type AutomationRuleDraft,
 } from './automation/automationRuleDraft';
+import { openDialog } from '../../services/tauri/platform/dialog';
 
 type BrowseField = 'watchDirectory' | 'directory';
 type SelectOption = {
@@ -244,7 +244,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return;
         }
 
-        const selected = await open({
+        const selected = await openDialog({
             directory: true,
             multiple: false,
             defaultPath: field === 'watchDirectory'

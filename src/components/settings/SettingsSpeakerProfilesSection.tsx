@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
-import { remove } from '@tauri-apps/plugin-fs';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, Mic, Plus, Trash2, Upload } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,6 +15,8 @@ import {
 import { speakerService } from '../../services/speakerService';
 import { SettingsSection } from './SettingsLayout';
 import { Switch } from '../Switch';
+import { openDialog } from '../../services/tauri/platform/dialog';
+import { remove } from '../../services/tauri/platform/fs';
 
 function formatSampleDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) {
@@ -137,7 +137,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
 
   const handleImportSamples = async (profile: SpeakerProfile) => {
     try {
-      const selected = await open({
+      const selected = await openDialog({
         multiple: true,
         directory: false,
         filters: [{

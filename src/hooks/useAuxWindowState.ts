@@ -1,8 +1,8 @@
-import { listen } from '@tauri-apps/api/event';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect, useRef, useState } from 'react';
 import { auxWindowStateService } from '../services/auxWindowStateService';
 import { logger } from '../utils/logger';
+import { listen } from '../services/tauri/platform/events';
+import { getCurrentWebviewWindow } from '../services/tauri/platform/windows';
 
 const SNAPSHOT_POLL_INTERVAL_MS = 120;
 

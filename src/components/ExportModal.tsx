@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -11,6 +10,7 @@ import { Dropdown } from './Dropdown';
 import { XIcon, FolderIcon } from './Icons';
 import { logger } from '../utils/logger';
 import { ModalPortal } from './ModalPortal';
+import { openDialog } from '../services/tauri/platform/dialog';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -86,7 +86,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
 
     const handleBrowse = async () => {
         try {
-            const selected = await open({
+            const selected = await openDialog({
                 directory: true,
                 multiple: false,
                 defaultPath: directory || undefined,

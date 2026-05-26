@@ -1,5 +1,3 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { remove } from '@tauri-apps/plugin-fs';
 import { captionWindowService } from './captionWindowService';
 import {
   captionTranscriptionService,
@@ -14,6 +12,8 @@ import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import { listen, type UnlistenFn } from './tauri/platform/events';
+import { remove } from './tauri/platform/fs';
 
 type CaptionWindowOpenOptions = Parameters<typeof captionWindowService.open>[0];
 type CaptionWindowStyleOptions = Parameters<typeof captionWindowService.updateStyle>[0];

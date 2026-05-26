@@ -4,10 +4,8 @@ import { Volume2, SlidersHorizontal } from 'lucide-react';
 import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useAudioConfig, useSetConfig } from '../../stores/configStore';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
-import { remove } from '@tauri-apps/plugin-fs';
 import {
     listMicrophoneDeviceOptions,
     listSystemAudioDeviceOptions,
@@ -23,6 +21,8 @@ import { TauriEvent } from '../../services/tauri/events';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { logger } from '../../utils/logger';
+import { listen, type UnlistenFn } from '../../services/tauri/platform/events';
+import { remove } from '../../services/tauri/platform/fs';
 
 interface SettingsMicrophoneTabProps {
     isActiveTab?: boolean;

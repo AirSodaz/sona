@@ -1,9 +1,9 @@
-import { save } from '@tauri-apps/plugin-dialog';
 import type { TranscriptSegment } from '../types/transcript';
 import { getFileExtension } from './exportFormats';
 import type { ExportFormat, ExportMode } from './exportFormats';
 import { logger } from './logger';
 import { exportTranscriptFile } from '../services/tauri/export';
+import { saveDialog } from '../services/tauri/platform/dialog';
 
 interface ExportOptions {
     /** The transcript segments to export. */
@@ -30,7 +30,7 @@ export async function saveTranscript(options: ExportOptions): Promise<boolean> {
         const extension = getFileExtension(format);
 
         // Open save dialog
-        const filePath = await save({
+        const filePath = await saveDialog({
             defaultPath: `${defaultFileName}${extension}`,
             filters: [
                 {

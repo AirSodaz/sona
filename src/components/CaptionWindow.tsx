@@ -1,6 +1,4 @@
-import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import {
@@ -9,6 +7,7 @@ import {
     DEFAULT_CAPTION_WINDOW_STATE,
 } from '../services/captionWindowService';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
+import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 
 /**
  * Root component for the always-on-top caption window.

@@ -1,5 +1,3 @@
-import { join, tempDir } from '@tauri-apps/api/path';
-import { mkdir, remove } from '@tauri-apps/plugin-fs';
 import {
   buildDefaultBackupFileName,
   exportBackup,
@@ -20,6 +18,8 @@ import {
   webdavTestConnection,
   webdavUploadBackup,
 } from './tauri/backup';
+import { mkdir, remove } from './tauri/platform/fs';
+import { join, tempDir } from './tauri/platform/path';
 
 function normalizeWebDavConfig(config: Partial<BackupWebDavConfig> | null | undefined): BackupWebDavConfig {
   return {

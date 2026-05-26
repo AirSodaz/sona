@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import type { AppConfig } from '../types/config';
 import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
 import {
@@ -36,6 +35,7 @@ import {
     applySavedBatchHistoryToQueue,
     resolveSavedBatchHistoryMeta,
 } from './batchQueueHistorySync';
+import { convertFileSrc } from '../services/tauri/platform/assets';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;

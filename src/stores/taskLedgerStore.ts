@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   TaskLedgerPatch,
   TaskLedgerRecord,
@@ -16,6 +15,7 @@ import {
 import { TauriEvent } from '../services/tauri/events';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import {
   getCancelRequestedIds,
   isCancelRequestedTask,

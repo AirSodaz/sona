@@ -1,4 +1,3 @@
-import { remove } from '@tauri-apps/plugin-fs';
 import { finalizeLastTranscriptSegment } from '../../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { transcriptionService } from '../../services/transcriptionService';
@@ -13,6 +12,7 @@ import type {
     MutableRefLike,
     RecordSessionPhase,
 } from './types';
+import { remove } from '../../services/tauri/platform/fs';
 
 interface RecordControllerCapture {
     tryStartNativeDesktopCapture: (

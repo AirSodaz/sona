@@ -1,4 +1,3 @@
-import { open, save } from '@tauri-apps/plugin-dialog';
 import packageJson from '../../package.json';
 import { loadAutomationProcessedEntries, loadAutomationRules, saveAutomationProcessedEntries, saveAutomationRules } from './automationService';
 import { migrateConfig } from './configMigrationService';
@@ -33,6 +32,7 @@ import {
   prepareBackupImport,
 } from './tauri/backup';
 import { llmUsageReadRaw, llmUsageReplaceRaw } from './tauri/llmUsage';
+import { openDialog, saveDialog } from './tauri/platform/dialog';
 
 const ANALYTICS_FALLBACK_CONTENT = '{}';
 
@@ -147,7 +147,7 @@ function validateManifest(raw: unknown): BackupManifestV1 {
 }
 
 async function pickExportArchivePath(): Promise<string | null> {
-  const selected = await save({
+  const selected = await saveDialog({
     defaultPath: buildDefaultBackupFileName(),
   });
 
@@ -155,7 +155,7 @@ async function pickExportArchivePath(): Promise<string | null> {
 }
 
 async function pickImportArchivePath(): Promise<string | null> {
-  const selected = await open({
+  const selected = await openDialog({
     multiple: false,
   });
 

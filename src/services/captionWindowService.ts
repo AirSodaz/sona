@@ -1,8 +1,8 @@
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { TranscriptSegment } from '../types/transcript';
 import { AuxWindowController } from './auxWindowController';
 import { TauriEvent } from './tauri/events';
 import { logger } from '../utils/logger';
+import { WebviewWindow } from './tauri/platform/windows';
 
 export const CAPTION_WINDOW_LABEL = 'caption';
 export const CAPTION_EVENT_STATE = TauriEvent.auxWindow.captionState;

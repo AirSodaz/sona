@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
 import { forceExitWithGuard } from '../services/quitGuard';
 import { SettingsTab } from './useSettingsLogic';
@@ -8,6 +7,7 @@ import { useAppUpdaterStore } from '../stores/appUpdaterStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { updateTrayMenu } from '../services/tauri/app';
 import { TauriEvent } from '../services/tauri/events';
+import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 
 /**
  * Hook to handle system tray events.

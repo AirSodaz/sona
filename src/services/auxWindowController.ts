@@ -1,8 +1,7 @@
-import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
-import { emitTo, type EventTarget } from '@tauri-apps/api/event';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { auxWindowStateService } from './auxWindowStateService';
 import { logger } from '../utils/logger';
+import { emitTo, type EventTarget } from './tauri/platform/events';
+import { PhysicalPosition, PhysicalSize, WebviewWindow } from './tauri/platform/windows';
 
 export interface AuxWindowDisplayState {
     position?: [number, number] | null;

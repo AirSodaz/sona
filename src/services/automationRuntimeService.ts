@@ -1,4 +1,3 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AutomationRule } from '../types/automation';
 import {
   collectAutomationRuntimeRulePaths as collectAutomationRuntimeRulePathsTauri,
@@ -6,6 +5,7 @@ import {
   scanAutomationRuntimeRule as scanAutomationRuntimeRuleTauri,
 } from './tauri/automation';
 import { TauriEvent } from './tauri/events';
+import { listen, type UnlistenFn } from './tauri/platform/events';
 
 export const AUTOMATION_RUNTIME_CANDIDATE_EVENT = TauriEvent.automation.runtimeCandidate;
 export const DEFAULT_AUTOMATION_CANDIDATE_DEBOUNCE_MS = 250;

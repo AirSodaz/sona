@@ -1,4 +1,3 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
 import type { BatchQueueItem } from '../types/batchQueue';
 import type { RecoverySnapshot, RecoveredQueueItem } from '../types/recovery';
 import { logger } from '../utils/logger';
@@ -7,6 +6,7 @@ import {
     recoveryPersistQueueSnapshot,
     recoverySaveSnapshot,
 } from './tauri/recovery';
+import { convertFileSrc } from './tauri/platform/assets';
 
 const RECOVERY_VERSION = 1;
 const RECOVERY_WRITE_DEBOUNCE_MS = 120;

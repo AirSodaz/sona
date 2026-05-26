@@ -1,8 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Event } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useConfigStore } from '../stores/configStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -14,6 +11,9 @@ import { getResumeOnboardingStep } from '../utils/onboarding';
 import { logger } from '../utils/logger';
 import { SUPPORTED_MEDIA_EXTENSIONS } from '../constants/mediaExtensions';
 import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
+import { openDialog } from '../services/tauri/platform/dialog';
+import type { Event } from '../services/tauri/platform/events';
+import { getCurrentWindow } from '../services/tauri/platform/windows';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -181,7 +181,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     const handleClick = useCallback(async (): Promise<void> => {
         try {
-            const selected = await open({
+            const selected = await openDialog({
                 multiple: true,
                 filters: [{
                     name: 'Audio',

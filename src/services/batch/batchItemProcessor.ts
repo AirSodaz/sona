@@ -1,6 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { tempDir, join } from '@tauri-apps/api/path';
-import { remove } from '@tauri-apps/plugin-fs';
 import type { AppConfig } from '../../types/config';
 import type { AutomationStageConfig } from '../../types/automation';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
@@ -17,6 +15,8 @@ import { summaryService } from '../summaryService';
 import { exportTranscriptToDirectory } from '../exportService';
 import { useHistoryStore } from '../../stores/historyStore';
 import { logger } from '../../utils/logger';
+import { remove } from '../tauri/platform/fs';
+import { join, tempDir } from '../tauri/platform/path';
 
 interface BatchItemProcessorCallbacks {
     updateStatus: (

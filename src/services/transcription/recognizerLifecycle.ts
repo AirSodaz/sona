@@ -1,4 +1,3 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { TranscriptUpdate } from '../../types/transcript';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
@@ -9,6 +8,7 @@ import {
   startRecognizer,
   stopRecognizer,
 } from '../tauri/recognizer';
+import { listen, type UnlistenFn } from '../tauri/platform/events';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 

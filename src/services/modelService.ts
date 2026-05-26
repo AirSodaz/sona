@@ -1,6 +1,3 @@
-import { join, appLocalDataDir } from '@tauri-apps/api/path';
-import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
-import { listen } from '@tauri-apps/api/event';
 import presetModelsData from '../shared/preset-models.json';
 import {
     downloadFile,
@@ -12,6 +9,9 @@ import type { ModelFileConfig } from '../types/model';
 import { createModelDownloadService } from './modelDownloadService';
 import { createModelFileService } from './modelFileService';
 import { createModelRegistryService } from './modelRegistryService';
+import { listen } from './tauri/platform/events';
+import { exists, mkdir, remove } from './tauri/platform/fs';
+import { appLocalDataDir, join } from './tauri/platform/path';
 
 export type { ModelFileConfig } from '../types/model';
 

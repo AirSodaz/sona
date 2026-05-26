@@ -1,4 +1,3 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { HistoryItem } from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import {
@@ -32,6 +31,7 @@ import {
     historyUpdateProjectAssignments,
     historyUpdateTranscript,
 } from './tauri/history';
+import { convertFileSrc } from './tauri/platform/assets';
 
 export interface LiveRecordingDraftHandle {
     item: HistoryItem;

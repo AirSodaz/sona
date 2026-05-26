@@ -1,4 +1,3 @@
-import { BaseDirectory, exists } from '@tauri-apps/plugin-fs';
 import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
@@ -7,6 +6,7 @@ import { getPathStatusMap } from './pathStatusService';
 import type { AppConfig } from '../types/config';
 import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
+import { BaseDirectory, exists } from './tauri/platform/fs';
 
 const HISTORY_DIR = 'history';
 type ModelConfigKey = 'offlineModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';

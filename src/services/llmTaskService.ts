@@ -1,4 +1,3 @@
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { v4 as uuidv4 } from 'uuid';
 import {
   HistorySummaryPayload,
@@ -9,6 +8,7 @@ import {
 } from '../types/transcript';
 import type { HistoryItem } from '../types/history';
 import { TauriEvent } from './tauri/events';
+import { listen, type UnlistenFn } from './tauri/platform/events';
 
 export const LLM_TASK_PROGRESS_EVENT = TauriEvent.llm.taskProgress;
 export const LLM_TASK_CHUNK_EVENT = TauriEvent.llm.taskChunk;

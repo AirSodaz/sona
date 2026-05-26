@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { remove, writeFile } from '@tauri-apps/plugin-fs';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
@@ -36,6 +34,8 @@ import type {
     RecordSessionPhase,
 } from './audioRecorder/types';
 import type { LiveRecordingDraftHandle } from '../services/historyService';
+import { convertFileSrc } from '../services/tauri/platform/assets';
+import { remove, writeFile } from '../services/tauri/platform/fs';
 
 export type {
     RecordSegmentDeliveryMeta,

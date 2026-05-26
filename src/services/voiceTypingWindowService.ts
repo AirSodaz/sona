@@ -1,6 +1,6 @@
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { AuxWindowController } from './auxWindowController';
 import { TauriEvent } from './tauri/events';
+import { WebviewWindow } from './tauri/platform/windows';
 
 export const VOICE_TYPING_WINDOW_LABEL = 'voice-typing';
 export const VOICE_TYPING_EVENT_TEXT = TauriEvent.auxWindow.voiceTypingText;

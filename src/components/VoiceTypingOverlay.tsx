@@ -1,5 +1,3 @@
-import { PhysicalSize } from '@tauri-apps/api/dpi';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mic } from 'lucide-react';
@@ -12,6 +10,7 @@ import {
     VOICE_TYPING_WINDOW_LABEL,
     VOICE_TYPING_WINDOW_WIDTH,
 } from '../services/voiceTypingWindowService';
+import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 
 const OVERLAY_ROOT_PADDING = {
     top: 4,

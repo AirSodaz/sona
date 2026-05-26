@@ -1,8 +1,8 @@
-import { join } from '@tauri-apps/api/path';
 import type { TranscriptSegment } from '../types/transcript';
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
 import { getFileExtension } from '../utils/exportFormats';
 import { exportTranscriptFile } from './tauri/export';
+import { join } from './tauri/platform/path';
 
 export interface ExportTranscriptToDirectoryOptions {
   segments: TranscriptSegment[];

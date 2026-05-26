@@ -1,4 +1,3 @@
-import { listen } from '@tauri-apps/api/event';
 import { transcriptionService } from '../../services/transcriptionService';
 import {
     setMicrophoneBoost as setMicrophoneBoostTauri,
@@ -18,6 +17,7 @@ import type {
     AudioRecorderLogger,
     InputSource,
 } from './types';
+import { listen } from '../../services/tauri/platform/events';
 
 interface CaptureErrorDialogInput {
     code: string;
