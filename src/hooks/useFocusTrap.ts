@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
+import { useEscapeKey } from './useEscapeKey';
 
 /**
  * Hook to trap focus inside a modal and handle Escape key.
@@ -13,11 +14,21 @@ export function useFocusTrap(
     onClose: () => void,
     containerRef: React.RefObject<HTMLElement | null>
 ) {
+
     const onCloseRef = useRef(onClose);
 
     useEffect(() => {
         onCloseRef.current = onClose;
     }, [onClose]);
+
+    useEscapeKey((e) => {
+        e.preventDefault();
+        onCloseRef.current();
+    }, {
+        enabled: isOpen,
+        checkTopMost: true,
+        containerRef
+    });
 
     useEffect(() => {
         if (isOpen) {
@@ -29,14 +40,6 @@ export function useFocusTrap(
 
             function handleKeyDown(e: KeyboardEvent) {
                 const isTopMost = isTopMostModal(containerRef.current);
-
-                if (e.key === 'Escape') {
-                    if (isTopMost) {
-                        e.preventDefault();
-                        onCloseRef.current();
-                    }
-                    return;
-                }
 
                 if (e.key === 'Tab' && !e.ctrlKey) {
                     if (!isTopMost || !containerRef.current) return;

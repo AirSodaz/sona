@@ -92,11 +92,11 @@ describe('ExportButton', () => {
         });
 
         const bodyOverlay = Array.from(document.body.children).find((element) =>
-            element.classList.contains('settings-overlay')
+            element.classList.contains('shared-modal-overlay')
         );
 
         expect(bodyOverlay).toBeDefined();
-        expect(bodyOverlay?.querySelector('#export-modal-title')?.textContent).toBe('export.modal_title');
+        expect(screen.getByText('export.modal_title')).toBeDefined();
     });
 
     it('hides button when no segments', () => {

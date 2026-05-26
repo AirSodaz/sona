@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle } from 'lucide-react';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 /**
  * Dedicated modal dialog for user-visible errors.
@@ -33,12 +34,6 @@ export function ErrorDialog(): React.JSX.Element | null {
         return;
       }
 
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        close('dismiss');
-        return;
-      }
-
       if (event.key !== 'Tab' || !modalRef.current) {
         return;
       }
@@ -66,6 +61,15 @@ export function ErrorDialog(): React.JSX.Element | null {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, close]);
+
+  useEscapeKey((e) => {
+    e.preventDefault();
+    close('dismiss');
+  }, {
+    enabled: isOpen,
+    checkTopMost: true,
+    containerRef: modalRef,
+  });
 
   if (!isOpen || !options) {
     return null;

@@ -11,6 +11,7 @@ import {
   getSummaryTemplateOptions,
   resolveSummaryTemplate,
 } from '../utils/summaryTemplates';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { Dropdown } from './Dropdown';
 import { ProcessingIcon, SummaryIcon, XIcon } from './Icons';
 
@@ -126,15 +127,21 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }
   }, [isOpen]);
 
+  useEscapeKey((e) => {
+    e.preventDefault();
+    void handleCloseRequest();
+  }, {
+    enabled: isOpen,
+    checkTopMost: true,
+    containerRef: modalRef,
+  });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) {
         return;
       }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        void handleCloseRequest();
-      } else if (e.key === 'Tab') {
+      if (e.key === 'Tab') {
         if (!modalRef.current) return;
 
         const focusable = modalRef.current.querySelectorAll(

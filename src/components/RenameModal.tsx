@@ -80,6 +80,8 @@ export function RenameModal({
       title={t('common.rename', { defaultValue: 'Rename' })}
       size="sm"
       autoFocus={false}
+      shellStyle={{ overflow: 'visible' }}
+      bodyStyle={{ overflow: 'visible' }}
       footer={
         <>
           <button type="button" className="btn btn-secondary" onClick={onClose}>

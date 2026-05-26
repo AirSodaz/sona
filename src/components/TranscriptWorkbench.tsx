@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { History as VersionHistoryIcon, Users as SpeakerReviewIcon } from 'lucide-react';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
@@ -19,6 +19,7 @@ import { TranscriptVersionPanel } from './TranscriptVersionPanel';
 import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
 import { generateAiTitle } from '../services/aiRenameService';
 import { isHistoryItemDraft } from '../types/history';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */
@@ -79,31 +80,13 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
     sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
   ));
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-
-      // Check if there are any active modal overlays in the DOM
-      const openOverlays = document.querySelectorAll(
-        '.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, .dialog-modal'
-      );
-      if (openOverlays.length > 0) {
-        return;
-      }
-
-      if (isRecording) {
-        return;
-      }
-
-      event.preventDefault();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isRecording]);
+  useEscapeKey((event) => {
+    event.preventDefault();
+    onClose();
+  }, {
+    enabled: !isRecording,
+    checkTopMost: true,
+  });
 
   const hasSegments = segments.length > 0;
   

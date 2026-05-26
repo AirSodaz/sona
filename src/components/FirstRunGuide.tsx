@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
-import { useFocusTrap } from '../hooks/useFocusTrap';
+import { PanelModal } from './PanelModal';
 import {
   type DeviceOption,
   listMicrophoneDeviceOptions,
@@ -227,9 +227,8 @@ export function FirstRunGuide(): React.JSX.Element | null {
 
   const hasModelsConfigured = hasRequiredOnboardingModels(config);
 
-  // Stable reference for onClose to prevent infinite focus-trap teardown loops
+  // Stable reference for onClose
   const noopClose = useCallback(() => {}, []);
-  useFocusTrap(isOpen, noopClose, modalRef);
 
   useEffect(() => {
     if (isOpen) {
@@ -368,15 +367,18 @@ export function FirstRunGuide(): React.JSX.Element | null {
   );
 
   return (
-    <div className="settings-overlay" style={{ zIndex: 2100 }}>
-      <div
-        ref={modalRef}
-        className="onboarding-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="onboarding-title"
-        tabIndex={-1}
-      >
+    <PanelModal
+      isOpen={isOpen}
+      onClose={noopClose}
+      ariaLabelledby="onboarding-title"
+      size="default"
+      origin="standalone"
+      overlayClassName="settings-overlay"
+      className="onboarding-modal"
+      hideHeader
+      title=""
+      shellRef={modalRef}
+    >
         <div className="onboarding-hero">
           <div className="onboarding-badge">
             <WaveformIcon />
@@ -596,7 +598,6 @@ export function FirstRunGuide(): React.JSX.Element | null {
             </section>
           )}
         </div>
-      </div>
-    </div>
+    </PanelModal>
   );
 }

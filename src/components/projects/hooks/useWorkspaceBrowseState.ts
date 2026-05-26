@@ -9,6 +9,7 @@ import { buildWorkspaceViewModel } from './workspaceViewModel';
 import { useWorkspaceBrowseControls } from './useWorkspaceBrowseControls';
 import { useWorkspaceQuery } from './workspaceQuery';
 import { useWorkspaceSearchNavigation } from './useWorkspaceSearchNavigation';
+import { useEscapeKey } from '../../../hooks/useEscapeKey';
 
 interface UseWorkspaceBrowseStateParams {
   activeProjectId: string | null;
@@ -63,22 +64,20 @@ export function useWorkspaceBrowseState({
       setIsFilterMenuOpen(false);
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-
-      setIsFilterMenuOpen(false);
-    };
-
     document.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [filterMenuRef, isFilterMenuOpen, setIsFilterMenuOpen]);
+
+  useEscapeKey(() => {
+    setIsFilterMenuOpen(false);
+  }, {
+    enabled: isFilterMenuOpen,
+    checkTopMost: true,
+    containerRef: filterMenuRef,
+  });
 
   const workspaceQueryScope = useMemo<WorkspaceQueryRequest['scope']>(() => {
     if (controls.isAllItemsScope) {

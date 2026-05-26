@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { ChevronUpIcon, ChevronDownIcon, CloseIcon } from './Icons';
 
 function getMatchCountText(matchCount: number, currentIndex: number, query: string): string {
@@ -30,6 +31,7 @@ export function SearchUI(): React.JSX.Element | null {
 
     const segments = useTranscriptSessionStore((state) => state.segments);
     const inputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // Autofocus input when opened
     useEffect(() => {
@@ -44,6 +46,15 @@ export function SearchUI(): React.JSX.Element | null {
         }
     }, [isOpen, performSearch, query, segments]);
 
+    useEscapeKey((e) => {
+        e.preventDefault();
+        close();
+    }, {
+        enabled: isOpen,
+        checkTopMost: true,
+        containerRef,
+    });
+
     if (!isOpen) return null;
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -53,15 +64,13 @@ export function SearchUI(): React.JSX.Element | null {
             } else {
                 nextMatch();
             }
-        } else if (e.key === 'Escape') {
-            close();
         }
     };
 
     const matchCountText = getMatchCountText(matches.length, currentMatchIndex, query);
 
     return (
-        <div className="search-ui-container" role="search" aria-label={t('search.label', 'Search transcript')}>
+        <div ref={containerRef} className="search-ui-container" role="search" aria-label={t('search.label', 'Search transcript')}>
             <div className="search-bar">
                 <input
                     ref={inputRef}

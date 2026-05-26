@@ -16,6 +16,7 @@ import {
 } from './Icons';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { useAppUpdater } from '../hooks/useAppUpdater';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { useTaskLedgerActions, type TaskCenterAction } from '../hooks/useTaskLedgerActions';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
 import type { RecoveryItemStage } from '../types/recovery';
@@ -428,20 +429,20 @@ export function NotificationCenter({
             }
         };
 
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                setIsOpen(false);
-            }
-        };
-
         document.addEventListener('mousedown', handleMouseDown);
-        document.addEventListener('keydown', handleKeyDown);
 
         return () => {
             document.removeEventListener('mousedown', handleMouseDown);
-            document.removeEventListener('keydown', handleKeyDown);
         };
     }, [isOpen]);
+
+    useEscapeKey(() => {
+        setIsOpen(false);
+    }, {
+        enabled: isOpen,
+        checkTopMost: true,
+        containerRef,
+    });
 
     const getActionButtonClassName = (action: TaskCenterAction) => {
         const variantClassName = action.variant === 'primary'

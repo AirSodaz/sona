@@ -205,11 +205,11 @@ describe('PolishButton', () => {
         fireEvent.click(screen.getByText('polish.advanced_settings'));
 
         const bodyOverlay = Array.from(document.body.children).find((element) =>
-            element.classList.contains('settings-overlay')
+            element.classList.contains('shared-modal-overlay')
         );
 
         expect(bodyOverlay).toBeDefined();
-        expect(bodyOverlay?.querySelector('#polish-settings-modal-title')?.textContent).toBe('polish.advanced_settings');
+        expect(screen.getByText('polish.advanced_settings')).toBeDefined();
         expect(screen.getByText('polish.keywords')).toBeDefined();
     });
 });

@@ -2,7 +2,12 @@ import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { ModalPortal } from './ModalPortal';
+
+function joinClassNames(...parts: Array<string | undefined | false | null>): string {
+  return parts.filter(Boolean).join(' ');
+}
 
 export interface ModalProps {
   isOpen: boolean;
@@ -15,6 +20,11 @@ export interface ModalProps {
   closeOnEsc?: boolean;
   initialFocusRef?: React.RefObject<HTMLElement | null>;
   autoFocus?: boolean;
+  overlayClassName?: string;
+  overlayStyle?: React.CSSProperties;
+  shellStyle?: React.CSSProperties;
+  bodyStyle?: React.CSSProperties;
+  role?: 'dialog' | 'alertdialog';
 }
 
 export function Modal({
@@ -28,6 +38,11 @@ export function Modal({
   closeOnEsc = true,
   initialFocusRef,
   autoFocus = true,
+  overlayClassName,
+  overlayStyle,
+  shellStyle,
+  bodyStyle,
+  role = 'dialog',
 }: ModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -69,6 +84,16 @@ export function Modal({
   }, [isOpen, autoFocus, initialFocusRef]);
 
   // Keyboard events (Esc key and Focus Trap Tab key)
+  useEscapeKey((event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    onClose();
+  }, {
+    enabled: isOpen && closeOnEsc,
+    checkTopMost: true,
+    containerRef: modalRef
+  });
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -76,16 +101,6 @@ export function Modal({
       if (event.defaultPrevented) return;
 
       const isTopMost = isTopMostModal(modalRef.current);
-
-      // 1. Esc Key
-      if (event.key === 'Escape' && closeOnEsc) {
-        if (isTopMost) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          onClose();
-        }
-        return;
-      }
 
       // 2. Tab Key Focus Trap
       if (event.key === 'Tab') {
@@ -114,7 +129,7 @@ export function Modal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, closeOnEsc]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -127,15 +142,17 @@ export function Modal({
   return (
     <ModalPortal>
       <div
-        className="shared-modal-overlay"
+        className={joinClassNames('shared-modal-overlay', overlayClassName)}
+        style={overlayStyle}
         data-modal-layer="shared-modal"
         onClick={handleOverlayClick}
       >
         <div
           ref={modalRef}
           className={`shared-modal-shell shared-modal-${size}`}
+          style={shellStyle}
           onClick={(e) => e.stopPropagation()}
-          role="dialog"
+          role={role}
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
@@ -162,7 +179,7 @@ export function Modal({
           </div>
 
           {/* Body */}
-          <div className="shared-modal-body">
+          <div className="shared-modal-body" style={bodyStyle}>
             {children}
           </div>
 
