@@ -4,7 +4,7 @@ use super::metrics::{
     AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
-use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
+use super::types::{AsrEngine, TranscriptNormalizationOptions, TranscriptSegment};
 use super::volcengine::VolcengineStreamingSession;
 use super::TranscriptPostprocessor;
 use log::info;
@@ -177,6 +177,7 @@ pub struct SherpaState {
     // while recognizers are pooled separately by configuration.
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
     pub volcengine_sessions: Mutex<HashMap<String, VolcengineStreamingSession>>,
+    pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
     pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
     pub(crate) metrics: AsrMetricsStore,
 }
@@ -192,6 +193,7 @@ impl SherpaState {
         Self {
             instances: Mutex::new(HashMap::new()),
             volcengine_sessions: Mutex::new(HashMap::new()),
+            instance_engines: Mutex::new(HashMap::new()),
             recognizer_pool: Mutex::new(HashMap::new()),
             metrics: new_metrics_store(),
         }
@@ -199,6 +201,17 @@ impl SherpaState {
 
     pub async fn has_volcengine_session(&self, instance_id: &str) -> bool {
         self.volcengine_sessions.lock().await.contains_key(instance_id)
+    }
+
+    pub async fn set_instance_engine(&self, instance_id: &str, engine: AsrEngine) {
+        self.instance_engines
+            .lock()
+            .await
+            .insert(instance_id.to_string(), engine);
+    }
+
+    pub async fn instance_engine(&self, instance_id: &str) -> Option<AsrEngine> {
+        self.instance_engines.lock().await.get(instance_id).copied()
     }
 
     pub async fn record_model_load_metric(&self, metric: AsrModelLoadMetric) {

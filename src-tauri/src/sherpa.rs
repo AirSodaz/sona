@@ -33,19 +33,28 @@ pub use types::{
     VolcengineDoubaoAsrConfig,
 };
 
+async fn route_engine(state: &SherpaState, instance_id: &str) -> AsrEngine {
+    state
+        .instance_engine(instance_id)
+        .await
+        .unwrap_or(AsrEngine::LocalSherpa)
+}
+
 /// Feed f32 audio samples from the hardware capture worker to the correct
-/// ASR backend. Routes to Volcengine if the instance has an active streaming
-/// session, otherwise falls through to the local Sherpa runtime.
+/// ASR backend. Routes by the engine selected during `init_recognizer` so an
+/// expected cloud recognizer cannot silently fall through to local Sherpa when
+/// the cloud session is missing or failed.
 pub async fn feed_audio_samples<R: tauri::Runtime>(
     app: &AppHandle<R>,
     state: &SherpaState,
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), String> {
-    if state.has_volcengine_session(instance_id).await {
-        volcengine::feed_audio_samples_impl(state, instance_id, samples).await
-    } else {
-        runtime::feed_audio_samples(app, state, instance_id, samples).await
+    match route_engine(state, instance_id).await {
+        AsrEngine::VolcengineDoubao => {
+            volcengine::feed_audio_samples_impl(state, instance_id, samples).await
+        }
+        AsrEngine::LocalSherpa => runtime::feed_audio_samples(app, state, instance_id, samples).await,
     }
 }
 
@@ -88,9 +97,9 @@ pub async fn init_recognizer(
     match request.engine {
         AsrEngine::LocalSherpa => {
             LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)?;
-            runtime::init_recognizer_impl(
-                state,
-                instance_id,
+            let init_result = runtime::init_recognizer_impl(
+                state.clone(),
+                instance_id.clone(),
                 request.model_path,
                 request.num_threads,
                 request.enable_itn,
@@ -104,10 +113,24 @@ pub async fn init_recognizer(
                 Some(request.normalization_options),
                 Some(request.postprocess_options),
             )
-            .await
+            .await;
+            if init_result.is_ok() {
+                state
+                    .set_instance_engine(&instance_id, AsrEngine::LocalSherpa)
+                    .await;
+            }
+            init_result
         }
         AsrEngine::VolcengineDoubao => {
-            volcengine::init_streaming_recognizer_impl(state, instance_id, request).await
+            let init_result =
+                volcengine::init_streaming_recognizer_impl(state.clone(), instance_id.clone(), request)
+                    .await;
+            if init_result.is_ok() {
+                state
+                    .set_instance_engine(&instance_id, AsrEngine::VolcengineDoubao)
+                    .await;
+            }
+            init_result
         }
     }
 }
@@ -118,10 +141,11 @@ pub async fn start_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    if state.has_volcengine_session(&instance_id).await {
-        volcengine::start_streaming_recognizer_impl(app, state, instance_id).await
-    } else {
-        runtime::start_recognizer_impl(state, instance_id).await
+    match route_engine(&state, &instance_id).await {
+        AsrEngine::VolcengineDoubao => {
+            volcengine::start_streaming_recognizer_impl(app, state, instance_id).await
+        }
+        AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id).await,
     }
 }
 
@@ -130,10 +154,11 @@ pub async fn stop_recognizer(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    if state.has_volcengine_session(&instance_id).await {
-        volcengine::stop_streaming_recognizer_impl(state, instance_id).await
-    } else {
-        runtime::stop_recognizer_impl(state, instance_id).await
+    match route_engine(&state, &instance_id).await {
+        AsrEngine::VolcengineDoubao => {
+            volcengine::stop_streaming_recognizer_impl(state, instance_id).await
+        }
+        AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id).await,
     }
 }
 
@@ -143,10 +168,11 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    if state.has_volcengine_session(&instance_id).await {
-        volcengine::flush_streaming_recognizer_impl(app, state, instance_id).await
-    } else {
-        runtime::flush_recognizer_impl(app, state, instance_id).await
+    match route_engine(&state, &instance_id).await {
+        AsrEngine::VolcengineDoubao => {
+            volcengine::flush_streaming_recognizer_impl(app, state, instance_id).await
+        }
+        AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id).await,
     }
 }
 
@@ -162,10 +188,11 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         instance_id,
         samples.len()
     );
-    if state.has_volcengine_session(&instance_id).await {
-        volcengine::feed_audio_chunk_impl(app, state, instance_id, samples).await
-    } else {
-        runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
+    match route_engine(&state, &instance_id).await {
+        AsrEngine::VolcengineDoubao => {
+            volcengine::feed_audio_chunk_impl(app, state, instance_id, samples).await
+        }
+        AsrEngine::LocalSherpa => runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await,
     }
 }
 
@@ -226,4 +253,27 @@ pub async fn get_asr_runtime_metrics(
     state: State<'_, SherpaState>,
 ) -> Result<AsrRuntimeMetricsSnapshot, String> {
     Ok(state.metrics_snapshot().await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn route_engine_uses_selected_volcengine_even_without_active_session() {
+        let state = SherpaState::new();
+        state
+            .set_instance_engine("record", AsrEngine::VolcengineDoubao)
+            .await;
+
+        assert_eq!(route_engine(&state, "record").await, AsrEngine::VolcengineDoubao);
+        assert!(!state.has_volcengine_session("record").await);
+    }
+
+    #[tokio::test]
+    async fn route_engine_defaults_to_local_for_legacy_instances() {
+        let state = SherpaState::new();
+
+        assert_eq!(route_engine(&state, "record").await, AsrEngine::LocalSherpa);
+    }
 }

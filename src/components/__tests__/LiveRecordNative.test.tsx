@@ -705,6 +705,31 @@ describe('LiveRecord Native Capture', () => {
         expect(screen.getByRole('button', { name: /live.start_recording/i })).not.toBeNull();
     });
 
+    it('reports transcription startup errors without falling back to browser capture', async () => {
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
+        const { useDialogStore } = await import('../../stores/dialogStore');
+        const showError = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+            useDialogStore.setState({ showError } as any);
+        });
+        mockStart.mockRejectedValueOnce(new Error('volcengine websocket failed'));
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+        expect(mockInvoke).not.toHaveBeenCalledWith('start_microphone_capture', expect.anything());
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
+        expect(showError).toHaveBeenCalledWith(expect.objectContaining({
+            code: 'transcription.service_error',
+            cause: expect.any(Error),
+        }));
+    });
+
     it('does not let a stale microphone startup rollback stop a newer record session', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 

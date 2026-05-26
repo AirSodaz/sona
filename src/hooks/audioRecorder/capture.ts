@@ -25,6 +25,20 @@ interface CaptureErrorDialogInput {
     cause: unknown;
 }
 
+export class TranscriptionStartupError extends Error {
+    cause: unknown;
+
+    constructor(cause: unknown) {
+        super(cause instanceof Error ? cause.message : String(cause));
+        this.name = 'TranscriptionStartupError';
+        this.cause = cause;
+    }
+}
+
+export function isTranscriptionStartupError(error: unknown): error is TranscriptionStartupError {
+    return error instanceof TranscriptionStartupError;
+}
+
 export function getSupportedMimeType(): string {
     const types = [
         'audio/webm;codecs=opus',
@@ -199,7 +213,7 @@ export function createAudioRecorderCapture({
             logger.info(`[useAudioRecorder] Record session recognizer ready. session=${sessionId} transport=native`);
         } catch (error) {
             logger.error(`[useAudioRecorder] Failed to start transcription service. session=${sessionId}:`, error);
-            throw error;
+            throw new TranscriptionStartupError(error);
         }
     }
 
@@ -275,6 +289,11 @@ export function createAudioRecorderCapture({
             );
             return true;
         } catch (error) {
+            if (isTranscriptionStartupError(error)) {
+                logger.error(`[useAudioRecorder] Native desktop transcription startup failed. session=${sessionId}:`, error.cause);
+                await cleanupPartialStart(sessionId);
+                throw error;
+            }
             logger.warn(`[useAudioRecorder] Native capture failed, fallback to Web API. session=${sessionId}`, error);
             await cleanupPartialStart(sessionId);
             await rollbackRecognizer(sessionId, 'desktop_native_fallback');
@@ -320,6 +339,11 @@ export function createAudioRecorderCapture({
 
             return true;
         } catch (error) {
+            if (isTranscriptionStartupError(error)) {
+                logger.error(`[useAudioRecorder] Native microphone transcription startup failed. session=${sessionId}:`, error.cause);
+                await cleanupPartialStart(sessionId);
+                throw error;
+            }
             logger.warn(`[useAudioRecorder] Native microphone capture failed, fallback to Web API. session=${sessionId}`, error);
             await cleanupPartialStart(sessionId);
             await rollbackRecognizer(sessionId, 'microphone_native_fallback');

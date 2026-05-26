@@ -5,7 +5,7 @@ import { transcriptionService } from '../../services/transcriptionService';
 import type { AppConfig } from '../../types/config';
 import type { LiveRecordingDraftHandle } from '../../services/historyService';
 import { flushPendingAutoSave } from '../useAutoSaveTranscript';
-import { getSupportedMimeType } from './capture';
+import { getSupportedMimeType, isTranscriptionStartupError } from './capture';
 import { getRecordedAudioExtension } from './persistence';
 import type {
     AudioRecorderLogger,
@@ -207,10 +207,19 @@ export function createRecordController({
             session.resetRecordSession(sessionId, 'start_failed', true);
 
             if (session.canMutateActiveRecordResources(sessionId)) {
+                const isTranscriptionError = isTranscriptionStartupError(error);
                 await showError({
-                    code: inputSource === 'microphone' ? 'audio.microphone_failed' : 'audio.capture_failed',
-                    messageKey: inputSource === 'microphone' ? 'errors.audio.microphone_failed' : 'errors.audio.capture_failed',
-                    cause: error,
+                    code: isTranscriptionError
+                        ? 'transcription.service_error'
+                        : inputSource === 'microphone'
+                            ? 'audio.microphone_failed'
+                            : 'audio.capture_failed',
+                    messageKey: isTranscriptionError
+                        ? 'errors.transcription.service_error'
+                        : inputSource === 'microphone'
+                            ? 'errors.audio.microphone_failed'
+                            : 'errors.audio.capture_failed',
+                    cause: isTranscriptionError ? error.cause : error,
                 });
             } else {
                 logger.info(

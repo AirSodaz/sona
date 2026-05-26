@@ -119,6 +119,19 @@ describe('TranscriptionService voice typing diagnostics', () => {
         mocks.invoke.mockImplementation(async () => undefined);
     });
 
+    it('rejects when streaming ASR is not configured', async () => {
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        const onUpdate = vi.fn();
+        const onError = vi.fn();
+
+        await expect(service.start(onUpdate, onError)).rejects.toThrow('ASR is not configured');
+
+        expect(onError).toHaveBeenCalledWith('ASR is not configured');
+        expect(mocks.invoke).not.toHaveBeenCalledWith('start_recognizer', expect.anything());
+    });
+
     it('logs raw and processed voice-typing text before invoking the callback', async () => {
         const TranscriptionService = await loadTranscriptionService();
         await syncTranscriptConfig();

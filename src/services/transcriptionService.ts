@@ -176,8 +176,9 @@ export class TranscriptionService {
 
         const initialConfig = this._buildStreamingServiceConfig();
         if (!isAsrRequestConfigured(initialConfig)) {
-            onError('ASR is not configured');
-            return;
+            const errorMessage = 'ASR is not configured';
+            onError(errorMessage);
+            throw new Error(errorMessage);
         }
 
         const existingRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
