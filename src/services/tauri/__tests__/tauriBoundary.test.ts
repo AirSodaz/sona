@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
@@ -81,6 +83,52 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('tauri boundary wrappers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('keeps production Tauri command calls behind the tauri boundary wrapper', () => {
+    const srcRoot = resolve(process.cwd(), 'src');
+    const allowedImportFiles = new Set([
+      resolve(srcRoot, 'services/tauri/invoke.ts'),
+    ]);
+    const allowedCoreMembers = new Set(['convertFileSrc']);
+    const violations: string[] = [];
+
+    function visit(path: string) {
+      const stat = statSync(path);
+      if (stat.isDirectory()) {
+        for (const entry of readdirSync(path)) {
+          if (entry === '__tests__') continue;
+          visit(resolve(path, entry));
+        }
+        return;
+      }
+
+      if (!/\.(ts|tsx)$/.test(path) || path.endsWith('.test.ts') || path.endsWith('.test.tsx')) {
+        return;
+      }
+
+      const source = readFileSync(path, 'utf8');
+      const importPattern = /import\s+\{([^}]+)\}\s+from\s+['"]@tauri-apps\/api\/core['"]/g;
+      for (const match of source.matchAll(importPattern)) {
+        const importedMembers = match[1]
+          .split(',')
+          .map((member) => member.trim().split(/\s+as\s+/)[0]?.trim())
+          .filter(Boolean);
+        const disallowedMembers = importedMembers.filter((member) => !allowedCoreMembers.has(member));
+        if (disallowedMembers.length > 0 && !allowedImportFiles.has(path)) {
+          violations.push(`${relative(srcRoot, path)} imports ${disallowedMembers.join(', ')}`);
+        }
+      }
+
+      if (!allowedImportFiles.has(path) && /\binvoke\s*(?:<[^>]+>)?\s*\(/.test(source)) {
+        violations.push(`${relative(srcRoot, path)} calls invoke() directly`);
+      }
+    }
+
+    expect(existsSync(srcRoot)).toBe(true);
+    visit(srcRoot);
+
+    expect(violations).toEqual([]);
   });
 
   it('invokeTauri omits the payload argument when none is provided', async () => {
