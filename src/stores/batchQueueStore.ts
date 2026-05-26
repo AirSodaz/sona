@@ -10,14 +10,15 @@ import {
 } from '../types/batchQueue';
 import { TranscriptSegment } from '../types/transcript';
 import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
-import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
-import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
-import { processBatchQueueItem } from '../services/batch/batchItemProcessor';
+import {
+  processBatchQueueItemLifecycle,
+  processNextBatchQueueItems,
+  toTaskLedgerStatus,
+} from '../services/batch/batchQueueCoordinator';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
 import {
   buildBatchTaskLedgerRecord,
   createBatchTaskLedgerId,
-  isTaskLedgerCancelRequested,
   patchTaskLedgerRecord,
   upsertTaskLedgerRecord,
 } from '../services/taskLedgerRuntime';
@@ -29,15 +30,12 @@ import {
   setTranscriptSegments,
   syncSavedRecordingMeta,
 } from './transcriptCoordinator';
-import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
-import type { TaskLedgerStatus } from '../types/taskLedger';
 import { historyService } from '../services/historyService';
 import {
     applySavedBatchHistoryToQueue,
     resolveSavedBatchHistoryMeta,
 } from './batchQueueHistorySync';
-import { extractErrorMessage } from '../utils/errorUtils';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -142,59 +140,6 @@ function patchQueueItemTask(item: BatchQueueItem, patch: Parameters<typeof patch
     patchTaskLedgerRecord(createBatchTaskLedgerId(item.id), patch);
 }
 
-function toTaskLedgerStatus(status: BatchQueueItemStatus): TaskLedgerStatus {
-    switch (status) {
-        case 'pending':
-            return 'pending';
-        case 'processing':
-            return 'running';
-        case 'complete':
-            return 'succeeded';
-        case 'cancelled':
-            return 'cancelled';
-        case 'error':
-            return 'failed';
-    }
-}
-
-function resolveQueueItemConfig(item: BatchQueueItem): AppConfig {
-    if (item.resolvedConfigSnapshot) {
-        return item.resolvedConfigSnapshot;
-    }
-
-    return getEffectiveConfigSnapshot();
-}
-
-async function notifyAutomationResult(
-    item: BatchQueueItem,
-    status: 'complete' | 'error' | 'discarded',
-    errorMessage?: string,
-): Promise<void> {
-    if (
-        item.origin !== 'automation'
-        || !item.automationRuleId
-        || !item.sourceFingerprint
-        || !item.fileStat
-    ) {
-        return;
-    }
-
-    const latestItem = useBatchQueueStore.getState().queueItems.find((queueItem) => queueItem.id === item.id) || item;
-    await emitAutomationTaskSettled({
-        ruleId: item.automationRuleId,
-        filePath: item.filePath,
-        sourceFingerprint: item.sourceFingerprint,
-        size: item.fileStat.size,
-        mtimeMs: item.fileStat.mtimeMs,
-        status,
-        processedAt: Date.now(),
-        historyId: latestItem.historyId,
-        exportPath: latestItem.exportPath,
-        errorMessage,
-        stage: latestItem.lastKnownStage,
-    });
-}
-
 /**
  * Zustand store for managing batch transcription queue.
  */
@@ -286,149 +231,66 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     processQueue: async () => {
-        const state = get();
-        const maxConcurrent = useConfigStore.getState().config.maxConcurrent || 2;
-        const processingCount = state.queueItems.filter((item) => item.status === 'processing').length;
-
-        if (processingCount >= maxConcurrent) {
-            return;
-        }
-
-        const pendingItems = state.queueItems.filter((item) => item.status === 'pending');
-        const slotsAvailable = maxConcurrent - processingCount;
-        const itemsToStart = pendingItems.slice(0, slotsAvailable);
-
-        if (itemsToStart.length === 0 && processingCount === 0) {
-            set({ isQueueProcessing: false });
-            return;
-        }
-
-        set({ isQueueProcessing: true });
-        itemsToStart.forEach((item) => {
-            void get()._processItem(item.id);
+        processNextBatchQueueItems({
+            getQueueItems: () => get().queueItems,
+            getMaxConcurrent: () => useConfigStore.getState().config.maxConcurrent || 2,
+            setQueueProcessing: (isQueueProcessing) => set({ isQueueProcessing }),
+            processItem: (itemId) => get()._processItem(itemId),
         });
     },
 
     _processItem: async (itemId: string) => {
-        const state = get();
-        const item = state.queueItems.find((queueItem) => queueItem.id === itemId);
-        if (!item || item.status !== 'pending') {
-            return;
-        }
-
-        const config = resolveQueueItemConfig(item);
-
-        if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
-            get().updateItemStatus(itemId, 'cancelled', 0);
-            patchQueueItemTask(item, {
-                status: 'cancelled',
-                progress: 0,
-                cancelable: false,
-                retryable: false,
-                errorMessage: undefined,
-            });
-            await notifyAutomationResult(item, 'discarded');
-            return;
-        }
-
-        if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'))) {
-            const message = 'Batch ASR is not configured.';
-            get().setItemError(itemId, message);
-            await notifyAutomationResult(item, 'error', message);
-            return;
-        }
-
-        try {
-            await processBatchQueueItem({
-                item,
-                config,
-                callbacks: {
-                    updateStatus: (status, progress, lastKnownStage) => {
-                        get().updateItemStatus(itemId, status, progress, lastKnownStage);
-                    },
-                    updateSegments: (segments) => {
-                        get().updateItemSegments(itemId, segments);
-                    },
-                    onHistorySaved: async (historyItem) => {
-                        const savedMeta = await resolveSavedBatchHistoryMeta({
-                            historyItem,
-                            fallbackAudioUrl: item.audioUrl,
-                            fallbackProjectId: item.projectId,
-                            getAudioUrl: (audioPath) => historyService.getAudioUrl(audioPath),
-                        });
-                        let nextQueueItems: BatchQueueItem[] = [];
-                        set((currentState) => {
-                            nextQueueItems = applySavedBatchHistoryToQueue(currentState.queueItems, itemId, savedMeta);
-                            return {
-                                queueItems: nextQueueItems,
-                            };
-                        });
-                        scheduleRecoverySnapshotSync(nextQueueItems, true);
-                        patchQueueItemTask(item, {
-                            historyId: historyItem.id,
-                            projectId: historyItem.projectId ?? item.projectId,
-                            title: historyItem.title,
-                        });
-
-                        if (get().activeItemId === itemId) {
-                            syncSavedRecordingMeta(savedMeta.title, savedMeta.historyId, savedMeta.icon, savedMeta.audioUrl ?? null);
-                            void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
-                        }
-                    },
-                    onExportComplete: (exportPath) => {
-                        set((currentState) => ({
-                            queueItems: currentState.queueItems.map((queueItem) => (
-                                queueItem.id === itemId ? { ...queueItem, exportPath } : queueItem
-                            )),
-                        }));
-                    },
-                    isActiveItem: () => get().activeItemId === itemId,
-                    isCancelRequested: () => isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId)),
-                },
-            });
-
-            if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
-                get().updateItemStatus(itemId, 'cancelled', 0);
-                patchQueueItemTask(item, {
-                    status: 'cancelled',
-                    progress: 0,
-                    cancelable: false,
-                    retryable: false,
-                    errorMessage: undefined,
+        await processBatchQueueItemLifecycle(itemId, {
+            getQueueItems: () => get().queueItems,
+            getQueueItem: (id) => get().queueItems.find((queueItem) => queueItem.id === id),
+            getFallbackConfigSnapshot: () => getEffectiveConfigSnapshot(),
+            updateItemStatus: (id, status, progress, lastKnownStage) => {
+                get().updateItemStatus(id, status, progress, lastKnownStage);
+            },
+            updateItemSegments: (id, segments) => {
+                get().updateItemSegments(id, segments);
+            },
+            setItemError: (id, message) => {
+                get().setItemError(id, message);
+            },
+            applySavedHistory: async (id, item, historyItem) => {
+                const savedMeta = await resolveSavedBatchHistoryMeta({
+                    historyItem,
+                    fallbackAudioUrl: item.audioUrl,
+                    fallbackProjectId: item.projectId,
+                    getAudioUrl: (audioPath) => historyService.getAudioUrl(audioPath),
                 });
-                await notifyAutomationResult(item, 'discarded');
-            } else {
-                get().updateItemStatus(itemId, 'complete', 100);
-                patchQueueItemTask(item, {
-                    status: 'succeeded',
-                    progress: 100,
-                    cancelable: false,
-                    retryable: false,
-                    errorMessage: undefined,
+                let nextQueueItems: BatchQueueItem[] = [];
+                set((currentState) => {
+                    nextQueueItems = applySavedBatchHistoryToQueue(currentState.queueItems, id, savedMeta);
+                    return {
+                        queueItems: nextQueueItems,
+                    };
                 });
-                await notifyAutomationResult(item, 'complete');
-            }
-        } catch (error) {
-            const message = extractErrorMessage(error);
-            logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
+                scheduleRecoverySnapshotSync(nextQueueItems, true);
+                patchQueueItemTask(item, {
+                    historyId: historyItem.id,
+                    projectId: historyItem.projectId ?? item.projectId,
+                    title: historyItem.title,
+                });
 
-            if (message === 'Task cancelled.') {
-                get().updateItemStatus(itemId, 'cancelled', 0);
-                patchQueueItemTask(item, {
-                    status: 'cancelled',
-                    progress: 0,
-                    cancelable: false,
-                    retryable: false,
-                    errorMessage: undefined,
-                });
-                await notifyAutomationResult(item, 'discarded');
-            } else {
-                get().setItemError(itemId, message);
-                await notifyAutomationResult(item, 'error', message);
-            }
-        } finally {
-            void get().processQueue();
-        }
+                if (get().activeItemId === id) {
+                    syncSavedRecordingMeta(savedMeta.title, savedMeta.historyId, savedMeta.icon, savedMeta.audioUrl ?? null);
+                    void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
+                }
+            },
+            setItemExportPath: (id, exportPath) => {
+                set((currentState) => ({
+                    queueItems: currentState.queueItems.map((queueItem) => (
+                        queueItem.id === id ? { ...queueItem, exportPath } : queueItem
+                    )),
+                }));
+            },
+            isActiveItem: (id) => get().activeItemId === id,
+            scheduleNext: () => {
+                void get().processQueue();
+            },
+        });
     },
 
     setActiveItem: (id) => {
