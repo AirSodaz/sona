@@ -16,6 +16,7 @@ import {
   isAutomationRecoveryBlocked,
 } from '../services/recoveryService';
 import { historyService } from '../services/historyService';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
@@ -422,7 +423,7 @@ export function createAutomationRuntimeCoordinator({
         };
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = extractErrorMessage(error);
       setState((current) => ({
         ...applyRuntimeFailureState(current, {
           ruleId,
@@ -544,7 +545,7 @@ export function createAutomationRuntimeCoordinator({
         };
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = extractErrorMessage(error);
       setState((current) => ({
         ...applyRuntimeFailureState(current, {
           ruleId,

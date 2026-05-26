@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { extractErrorMessage } from '../utils/errorUtils';
 import {
   getMicrophoneDevices,
   getSystemAudioDevices,
@@ -41,10 +42,6 @@ function createFallbackProbeResult(
     source: 'fallback',
     errorMessage,
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function dedupeOptions(options: DeviceOption[]): DeviceOption[] {
@@ -165,7 +162,7 @@ export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promis
     };
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
-    return createFallbackProbeResult(defaultLabel, getErrorMessage(error));
+    return createFallbackProbeResult(defaultLabel, extractErrorMessage(error));
   }
 }
 
@@ -221,6 +218,6 @@ export async function probeSystemAudioDeviceOptions(defaultLabel: string): Promi
     };
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to get system audio devices:', error);
-    return createFallbackProbeResult(defaultLabel, getErrorMessage(error));
+    return createFallbackProbeResult(defaultLabel, extractErrorMessage(error));
   }
 }

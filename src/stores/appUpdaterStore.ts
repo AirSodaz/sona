@@ -4,7 +4,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import i18n from '../i18n';
 import { runGuardedQuit } from '../services/quitGuard';
-import { buildErrorDialogViewModel } from '../utils/errorUtils';
+import { buildErrorDialogViewModel, extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useErrorDialogStore } from './errorDialogStore';
 
@@ -30,14 +30,6 @@ interface AppUpdaterState {
   installUpdate: () => Promise<void>;
   dismissNotification: () => void;
   relaunchToUpdate: () => Promise<void>;
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
 }
 
 async function openLatestReleasePage() {
@@ -117,7 +109,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       });
     } catch (error) {
       logger.error('Update check failed:', error);
-      const errorMessage = getErrorMessage(error);
+      const errorMessage = extractErrorMessage(error);
 
       if (manual) {
         set({
@@ -188,7 +180,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       logger.error('Update installation failed:', error);
       set((state) => ({
         status: state.updateInfo ? 'available' : 'idle',
-        error: getErrorMessage(error),
+        error: extractErrorMessage(error),
         progress: 0,
       }));
       await showUpdateError(error);
@@ -211,7 +203,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
     } catch (error) {
       logger.error('Update relaunch failed:', error);
       set({
-        error: getErrorMessage(error),
+        error: extractErrorMessage(error),
       });
       await showUpdateError(error);
     }

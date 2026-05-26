@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
+import { alignTextToTimedTokens, stripHtmlTags } from './transcriptTextUtils';
 
 // Constants
 const MAX_SEGMENT_LENGTH_CJK = 36;
@@ -20,20 +21,7 @@ const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 // Regex for detection
 const CJK_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]/u;
 
-// Regex for alignTokensToText
-const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
-const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
-const WHITESPACE_ONLY_REGEX = /^\s+$/;
-
-// Tag-aware lexer regex
-const LEXER_REGEX = /(<\/?(?:b|i|u)>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
-
-/**
- * Strips HTML tags from a string.
- */
-export function stripHtmlTags(text: string): string {
-    return text.replace(/<\/?[^>]+(>|$)/g, "");
-}
+export { stripHtmlTags };
 
 /**
  * Calculates the length of the text excluding punctuation and whitespace.
@@ -509,127 +497,19 @@ export function alignTokensToText(
     rawTokens: string[],
     rawTimestamps: number[]
 ): { text: string; timestamp: number }[] {
-    const result: { text: string; timestamp: number }[] = [];
-
     const safeText = typeof text === 'string' ? text : String(text || '');
     if (!safeText || !Array.isArray(rawTokens) || !Array.isArray(rawTimestamps) || rawTokens.length !== rawTimestamps.length) {
         return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
     }
 
-    const normalizedTokens = rawTokens.map(t => {
-        if (typeof t !== 'string') return '';
-        return t.toLowerCase().replace(NORMALIZE_REGEX, '');
-    });
-
-    const words: string[] = [];
-    const normalizedWords: string[] = [];
-    const activeTags = new Set<string>();
-
-    let match;
-    LEXER_REGEX.lastIndex = 0;
-
-    while ((match = LEXER_REGEX.exec(safeText)) !== null) {
-        const [full, tag] = match;
-
-        if (tag) {
-            const tagName = tag.replace(/[</>]/g, '').toLowerCase();
-            if (tag.startsWith('</')) {
-                activeTags.delete(tagName);
-            } else {
-                activeTags.add(tagName);
-            }
-            continue;
-        }
-
-        const tokenText = full;
-        let wrapped = tokenText;
-        const sortedTags = Array.from(activeTags).sort().reverse();
-        for (const t of sortedTags) {
-            wrapped = `<${t}>${wrapped}</${t}>`;
-        }
-
-        const isPunctuation = PUNCTUATION_ONLY_REGEX.test(tokenText) && !WHITESPACE_ONLY_REGEX.test(tokenText);
-
-        if (words.length > 0 && isPunctuation && !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(words[words.length - 1]))) {
-            words[words.length - 1] += wrapped;
-            normalizedWords[normalizedWords.length - 1] = stripHtmlTags(words[words.length - 1]).toLowerCase().replace(NORMALIZE_REGEX, '');
-        } else {
-            words.push(wrapped);
-            normalizedWords.push(stripHtmlTags(wrapped).toLowerCase().replace(NORMALIZE_REGEX, ''));
-        }
-    }
-
-    let joinedTokens = "";
-    const charToTokenIndex: number[] = [];
-    for (let i = 0; i < normalizedTokens.length; i++) {
-        const tok = normalizedTokens[i];
-        joinedTokens += tok;
-        for (let j = 0; j < tok.length; j++) {
-            charToTokenIndex.push(i);
-        }
-    }
-
-    let charPos = 0;
-    const maxChars = joinedTokens.length;
-
-    const getFallbackTimestamp = (cPos: number) => {
-        if (rawTimestamps.length === 0) return 0;
-        if (cPos >= charToTokenIndex.length) {
-             return rawTimestamps[charToTokenIndex[charToTokenIndex.length - 1]] || rawTimestamps[rawTimestamps.length - 1];
-        }
-        const tokenIdx = charToTokenIndex[cPos];
-        return rawTimestamps[tokenIdx] || 0;
-    };
-
-    for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        const cleanWord = stripHtmlTags(word);
-
-        if (!cleanWord.trim()) {
-            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
-            continue;
-        }
-
-        const normWord = normalizedWords[i];
-        if (!normWord) {
-            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
-            continue;
-        }
-
-        const searchLimit = Math.max(20, normWord.length * 2);
-        const subStr = joinedTokens.substring(charPos, charPos + searchLimit);
-        const localIdx = subStr.indexOf(normWord);
-
-        if (localIdx !== -1) {
-            const matchPos = charPos + localIdx;
-            result.push({ text: word, timestamp: getFallbackTimestamp(matchPos) });
-            charPos = matchPos + normWord.length;
-        } else {
-            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
-
-            let nextNorm = "";
-            for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
-                nextNorm = normalizedWords[nextIdx];
-                if (nextNorm) break;
-            }
-
-            if (nextNorm) {
-                const nextSubStr = joinedTokens.substring(charPos, charPos + searchLimit + nextNorm.length);
-                const nextLocalIdx = nextSubStr.indexOf(nextNorm);
-                if (nextLocalIdx !== -1) {
-                    charPos = charPos + nextLocalIdx;
-                } else {
-                    charPos += 1;
-                }
-            } else {
-                charPos = maxChars;
-            }
-        }
-
-        if (charPos > maxChars) {
-            charPos = maxChars;
-        }
-    }
-
-    return result;
+    return alignTextToTimedTokens(
+        safeText,
+        rawTokens.map((token, index) => ({
+            text: token,
+            timing: rawTimestamps[index] || 0,
+        })),
+    ).map((unit) => ({
+        text: unit.text,
+        timestamp: unit.timing,
+    }));
 }

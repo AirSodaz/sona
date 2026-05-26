@@ -1,4 +1,5 @@
 import type { RuntimePathStatus } from '../types/runtime';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getPathStatuses } from './tauri/app';
 
@@ -8,10 +9,6 @@ function createUnknownStatus(path: string, error?: string | null): RuntimePathSt
     kind: 'unknown',
     error: error ?? null,
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export async function getPathStatusMap(paths: string[]): Promise<Record<string, RuntimePathStatus>> {
@@ -46,7 +43,7 @@ export async function getPathStatusMap(paths: string[]): Promise<Record<string, 
 
     return pathStatusMap;
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
+    const errorMessage = extractErrorMessage(error);
     logger.error('[PathStatus] Failed to query runtime path statuses:', error);
 
     return Object.fromEntries(

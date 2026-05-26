@@ -3,14 +3,13 @@ import type { TaskLedgerKind, TaskLedgerRecord } from '../types/taskLedger';
 import type { TranscriptSegment } from '../types/transcript';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { normalizeError } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getFeatureLlmConfig, isLlmConfigComplete, isSummaryLlmConfigComplete } from './llm/runtime';
 import { historyService } from './historyService';
 import { polishService } from './polishService';
 import { summaryService } from './summaryService';
 import { translationService } from './translationService';
-import { patchTaskLedgerRecord } from './taskLedgerRuntime';
+import { handleTaskRetryPreflightFailure } from './taskRetryFailure';
 
 interface RetryLlmTaskOptions {
   config?: AppConfig;
@@ -89,16 +88,6 @@ async function resolveRetryTranscript(task: TaskLedgerRecord): Promise<RetryTran
   };
 }
 
-function patchRetryPreflightFailure(task: TaskLedgerRecord, error: unknown): void {
-  patchTaskLedgerRecord(task.id, {
-    status: 'failed',
-    progress: 0,
-    cancelable: false,
-    retryable: true,
-    errorMessage: normalizeError(error).message,
-  });
-}
-
 function runRetryTask(task: TaskLedgerRecord, context: RetryTranscriptContext): Promise<void> {
   if (task.kind === 'llmPolish') {
     return polishService.retryPolishTranscriptJob({
@@ -142,7 +131,6 @@ export async function retryLlmTaskFromLedger(
       logger.error('[TaskLedger] Retried LLM task failed:', error);
     });
   } catch (error) {
-    patchRetryPreflightFailure(task, error);
-    throw Object.assign(new Error(normalizeError(error).message), { cause: error });
+    handleTaskRetryPreflightFailure(task, error);
   }
 }

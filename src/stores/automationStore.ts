@@ -15,6 +15,7 @@ import type {
   AutomationRuntimeState,
 } from '../types/automation';
 import type { RecoveredQueueItem } from '../types/recovery';
+import { extractErrorMessage } from '../utils/errorUtils';
 import {
   loadAutomationRepositoryState,
   persistAutomationProcessedEntries,
@@ -81,7 +82,7 @@ async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string })
   try {
     results = await replaceAutomationRuntimeRules(enabledRules.map((rule) => toAutomationRuntimeRuleConfig(rule)));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = extractErrorMessage(error);
     useAutomationStore.setState((current) => {
       let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
       let notifications = current.notifications;
@@ -170,7 +171,7 @@ async function scanRule(ruleId: string) {
       },
     }));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = extractErrorMessage(error);
     useAutomationStore.setState((current) => ({
       ...applyRuntimeFailureState(current, {
         ruleId,

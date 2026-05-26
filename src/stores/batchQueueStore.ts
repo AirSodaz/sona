@@ -37,6 +37,7 @@ import {
     applySavedBatchHistoryToQueue,
     resolveSavedBatchHistoryMeta,
 } from './batchQueueHistorySync';
+import { extractErrorMessage } from '../utils/errorUtils';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -408,7 +409,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 await notifyAutomationResult(item, 'complete');
             }
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = extractErrorMessage(error);
             logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
 
             if (message === 'Task cancelled.') {

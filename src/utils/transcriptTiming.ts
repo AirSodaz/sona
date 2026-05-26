@@ -6,11 +6,7 @@ import type {
   TranscriptUpdate,
 } from '../types/transcript';
 import { normalizeSpeakerAttribution } from '../types/speaker';
-
-const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
-const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
-const WHITESPACE_ONLY_REGEX = /^\s+$/;
-const LEXER_REGEX = /(<\/?(?:b|i|u)>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
+import { alignTextToTimedTokens } from './transcriptTextUtils';
 
 function toSafeNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -21,10 +17,6 @@ function clampTime(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(Math.max(value, min), max);
-}
-
-function stripHtmlTags(text: string): string {
-  return text.replace(/<\/?[^>]+(>|$)/g, '');
 }
 
 function doTimingUnitsMatchSegmentText(units: TranscriptTimingUnit[], text: string): boolean {
@@ -108,126 +100,20 @@ function buildAlignedTimingUnits(
     return [];
   }
 
-  const normalizedTokens = rawUnits.map((unit) => (
-    typeof unit.text === 'string'
-      ? unit.text.toLowerCase().replace(NORMALIZE_REGEX, '')
-      : ''
-  ));
-
-  const words: string[] = [];
-  const normalizedWords: string[] = [];
-  const activeTags = new Set<string>();
-
-  let match: RegExpExecArray | null;
-  LEXER_REGEX.lastIndex = 0;
-  while ((match = LEXER_REGEX.exec(safeText)) !== null) {
-    const [full, tag] = match;
-
-    if (tag) {
-      const tagName = tag.replace(/[</>]/g, '').toLowerCase();
-      if (tag.startsWith('</')) {
-        activeTags.delete(tagName);
-      } else {
-        activeTags.add(tagName);
-      }
-      continue;
-    }
-
-    const tokenText = full;
-    let wrapped = tokenText;
-    const sortedTags = Array.from(activeTags).sort().reverse();
-    for (const activeTag of sortedTags) {
-      wrapped = `<${activeTag}>${wrapped}</${activeTag}>`;
-    }
-
-    const isPunctuation = PUNCTUATION_ONLY_REGEX.test(tokenText) && !WHITESPACE_ONLY_REGEX.test(tokenText);
-    if (words.length > 0 && isPunctuation && !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(words[words.length - 1]))) {
-      words[words.length - 1] += wrapped;
-      normalizedWords[normalizedWords.length - 1] = stripHtmlTags(words[words.length - 1]).toLowerCase().replace(NORMALIZE_REGEX, '');
-      continue;
-    }
-
-    words.push(wrapped);
-    normalizedWords.push(stripHtmlTags(wrapped).toLowerCase().replace(NORMALIZE_REGEX, ''));
-  }
-
-  let joinedTokens = '';
-  const charToTokenIndex: number[] = [];
-  for (let index = 0; index < normalizedTokens.length; index += 1) {
-    const token = normalizedTokens[index];
-    joinedTokens += token;
-    for (let charIndex = 0; charIndex < token.length; charIndex += 1) {
-      charToTokenIndex.push(index);
-    }
-  }
-
-  const getFallbackUnit = (charPos: number) => {
-    if (rawUnits.length === 0) {
-      return null;
-    }
-    if (charToTokenIndex.length === 0) {
-      return rawUnits[rawUnits.length - 1];
-    }
-    if (charPos >= charToTokenIndex.length) {
-      return rawUnits[charToTokenIndex[charToTokenIndex.length - 1]];
-    }
-    return rawUnits[charToTokenIndex[charPos]];
-  };
-
-  const result: TranscriptTimingUnit[] = [];
-  let charPos = 0;
-  const maxChars = joinedTokens.length;
-
-  for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
-    const cleanWord = stripHtmlTags(word);
-    const normalizedWord = normalizedWords[index];
-
-    if (!cleanWord.trim() || !normalizedWord) {
-      const fallback = getFallbackUnit(charPos);
-      if (fallback) {
-        result.push({ text: word, start: fallback.start, end: fallback.end });
-      }
-      continue;
-    }
-
-    const searchLimit = Math.max(20, normalizedWord.length * 2);
-    const searchWindow = joinedTokens.substring(charPos, charPos + searchLimit);
-    const localIndex = searchWindow.indexOf(normalizedWord);
-
-    let fallback = getFallbackUnit(charPos);
-    if (localIndex !== -1) {
-      const matchPos = charPos + localIndex;
-      fallback = getFallbackUnit(matchPos);
-      charPos = matchPos + normalizedWord.length;
-    } else {
-      let nextNormalizedWord = '';
-      for (let nextIndex = index + 1; nextIndex < words.length; nextIndex += 1) {
-        nextNormalizedWord = normalizedWords[nextIndex];
-        if (nextNormalizedWord) {
-          break;
-        }
-      }
-
-      if (nextNormalizedWord) {
-        const nextSearchWindow = joinedTokens.substring(charPos, charPos + searchLimit + nextNormalizedWord.length);
-        const nextLocalIndex = nextSearchWindow.indexOf(nextNormalizedWord);
-        charPos = nextLocalIndex !== -1 ? charPos + nextLocalIndex : charPos + 1;
-      } else {
-        charPos = maxChars;
-      }
-    }
-
-    if (fallback) {
-      result.push({ text: word, start: fallback.start, end: fallback.end });
-    }
-
-    if (charPos > maxChars) {
-      charPos = maxChars;
-    }
-  }
-
-  return result;
+  return alignTextToTimedTokens(
+    safeText,
+    rawUnits.map((unit) => ({
+      text: unit.text,
+      timing: {
+        start: unit.start,
+        end: unit.end,
+      },
+    })),
+  ).map((unit) => ({
+    text: unit.text,
+    start: unit.timing.start,
+    end: unit.timing.end,
+  }));
 }
 
 function buildTokenLevelTiming(segment: TranscriptSegment, source: TranscriptTimingSource): TranscriptTiming | undefined {
