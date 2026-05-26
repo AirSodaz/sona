@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-
+import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 
 /**
  * Hook to trap focus inside a modal and handle Escape key.
@@ -28,12 +28,7 @@ export function useFocusTrap(
             });
 
             function handleKeyDown(e: KeyboardEvent) {
-                // If GlobalDialog is open, let it handle Escape
-                if (document.querySelector('.dialog-modal')) return;
-
-                const overlays = document.querySelectorAll('.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, [data-focus-trap-overlay]');
-                const topOverlay = overlays[overlays.length - 1];
-                const isTopMost = !topOverlay || (containerRef.current && topOverlay.contains(containerRef.current));
+                const isTopMost = isTopMostModal(containerRef.current);
 
                 if (e.key === 'Escape') {
                     if (isTopMost) {
@@ -47,13 +42,12 @@ export function useFocusTrap(
                     if (!isTopMost || !containerRef.current) return;
 
                     // Trap focus inside modal
-                    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
-                    const focusableElements = containerRef.current.querySelectorAll(focusableSelector);
+                    const focusableElements = getFocusableElements(containerRef.current);
 
                     if (focusableElements.length === 0) return;
 
-                    const firstElement = focusableElements[0] as HTMLElement;
-                    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+                    const firstElement = focusableElements[0];
+                    const lastElement = focusableElements[focusableElements.length - 1];
 
                     const isFocusInside = containerRef.current.contains(document.activeElement);
 

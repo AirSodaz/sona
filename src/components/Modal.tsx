@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { ModalPortal } from './ModalPortal';
 
 export interface ModalProps {
@@ -31,6 +32,8 @@ export function Modal({
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const generatedTitleId = useId();
+  const titleId = title ? `${generatedTitleId}-title` : undefined;
 
   // Focus trap and focus restoration
   useEffect(() => {
@@ -48,11 +51,9 @@ export function Modal({
           }
 
           if (!modalRef.current) return;
-          const focusable = modalRef.current.querySelectorAll(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-          );
+          const focusable = getFocusableElements(modalRef.current);
           if (focusable.length > 0) {
-            (focusable[0] as HTMLElement).focus();
+            focusable[0].focus();
           }
         }, 50);
       }
@@ -74,9 +75,7 @@ export function Modal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
 
-      const overlays = document.querySelectorAll('.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, [data-focus-trap-overlay]');
-      const topOverlay = overlays[overlays.length - 1];
-      const isTopMost = topOverlay && topOverlay.contains(modalRef.current);
+      const isTopMost = isTopMostModal(modalRef.current);
 
       // 1. Esc Key
       if (event.key === 'Escape' && closeOnEsc) {
@@ -92,13 +91,11 @@ export function Modal({
       if (event.key === 'Tab') {
         if (!isTopMost || !modalRef.current) return;
 
-        const focusable = modalRef.current.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
+        const focusable = getFocusableElements(modalRef.current);
         if (focusable.length === 0) return;
 
-        const first = focusable[0] as HTMLElement;
-        const last = focusable[focusable.length - 1] as HTMLElement;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
 
         const isFocusInside = modalRef.current.contains(document.activeElement);
 
@@ -129,8 +126,9 @@ export function Modal({
 
   return (
     <ModalPortal>
-      <div 
-        className="shared-modal-overlay" 
+      <div
+        className="shared-modal-overlay"
+        data-modal-layer="shared-modal"
         onClick={handleOverlayClick}
       >
         <div
@@ -139,16 +137,16 @@ export function Modal({
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={title ? 'shared-modal-title-id' : undefined}
+          aria-labelledby={titleId}
           tabIndex={-1}
         >
           {/* Header */}
           <div className="shared-modal-header">
             {title && (
               typeof title === 'string' ? (
-                <h3 className="shared-modal-title" id="shared-modal-title-id">{title}</h3>
+                <h3 className="shared-modal-title" id={titleId}>{title}</h3>
               ) : (
-                <div className="shared-modal-title" id="shared-modal-title-id">{title}</div>
+                <div className="shared-modal-title" id={titleId}>{title}</div>
               )
             )}
             <button

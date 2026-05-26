@@ -22,6 +22,22 @@ export function FormField({
   className = '',
 }: FormFieldProps): React.JSX.Element {
   const isHorizontal = layout === 'horizontal';
+  const labelId = id && label ? `${id}-label` : undefined;
+  const shouldLabelChild = (
+    labelId
+    && React.isValidElement(children)
+    && children.type !== React.Fragment
+    && !(children.props as Record<string, unknown>)['aria-label']
+    && !(children.props as Record<string, unknown>)['aria-labelledby']
+  );
+  const control = shouldLabelChild
+    ? React.cloneElement(
+      children as React.ReactElement<Record<string, unknown>>,
+      {
+        'aria-labelledby': labelId,
+      },
+    )
+    : children;
 
   return (
     <div className={`shared-form-field layout-${layout} ${className}`}>
@@ -29,7 +45,7 @@ export function FormField({
       {(label || description) && (
         <div className="shared-form-field-info">
           {label && (
-            <label htmlFor={id} className="shared-form-field-label">
+            <label id={labelId} htmlFor={id} className="shared-form-field-label">
               {label}
               {required && <span className="shared-form-field-required">*</span>}
             </label>
@@ -44,7 +60,7 @@ export function FormField({
 
       {/* Form Input / Component slot */}
       <div className="shared-form-field-control" style={isHorizontal ? { flexShrink: 0 } : undefined}>
-        {children}
+        {control}
       </div>
 
       {/* Validation Error Message */}

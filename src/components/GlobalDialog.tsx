@@ -170,7 +170,7 @@ export function GlobalDialog(): React.JSX.Element | null {
     };
 
     return (
-        <div className="settings-overlay" style={{ zIndex: 2000 }}>
+        <div className="settings-overlay" data-modal-layer="global-dialog" style={{ zIndex: 2200 }}>
             <div
                 ref={modalRef}
                 className="dialog-modal"
