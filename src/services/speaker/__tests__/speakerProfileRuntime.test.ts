@@ -4,8 +4,8 @@ import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerAttribution,
   normalizeSpeakerProfiles,
-  type SpeakerProfile,
-} from './speaker';
+} from '../speakerProfileRuntime';
+import type { SpeakerProfile } from '../../../types/speaker';
 
 function createProfile(samples: number[]): SpeakerProfile {
   return {
@@ -21,7 +21,7 @@ function createProfile(samples: number[]): SpeakerProfile {
   };
 }
 
-describe('speaker profile readiness', () => {
+describe('speakerProfileRuntime', () => {
   it('marks profiles with insufficient usable duration as not ready', () => {
     expect(deriveSpeakerProfileReadiness(createProfile([3.9, 2.5]))).toEqual({
       state: 'not_ready',
@@ -48,9 +48,7 @@ describe('speaker profile readiness', () => {
       reasonKey: 'settings.speaker_profile_readiness_ready',
     });
   });
-});
 
-describe('normalizeSpeakerAttribution', () => {
   it('keeps group identity, anonymous label, and the top three candidates', () => {
     expect(normalizeSpeakerAttribution({
       groupId: 'anonymous-1',
@@ -77,29 +75,22 @@ describe('normalizeSpeakerAttribution', () => {
       ],
     });
   });
-});
 
-describe('speaker runtime facade', () => {
-  it('keeps runtime helpers re-exported from the type facade', () => {
-    expect(typeof deriveSpeakerProfileReadiness).toBe('function');
-    expect(typeof normalizeSpeakerAttribution).toBe('function');
-    expect(typeof normalizeSpeakerProfiles).toBe('function');
-    expect(typeof areSpeakerTagsEqual).toBe('function');
-  });
-
-  it('normalizes speaker profiles through the facade', () => {
+  it('normalizes speaker profiles and filters invalid samples', () => {
     expect(normalizeSpeakerProfiles([
       {
         id: ' speaker-a ',
+        name: ' Alice ',
         samples: [
-          { id: ' sample-a ', filePath: ' C:/sample.wav ', durationSeconds: 12 },
+          { id: ' sample-a ', filePath: ' C:/sample.wav ', sourceName: '', durationSeconds: 12 },
           { id: '', filePath: 'C:/missing-id.wav', durationSeconds: 8 },
         ],
       },
+      { id: '', name: 'Invalid', samples: [] },
     ])).toEqual([
       {
         id: 'speaker-a',
-        name: 'Speaker Profile',
+        name: 'Alice',
         enabled: true,
         samples: [
           {
@@ -113,10 +104,15 @@ describe('speaker runtime facade', () => {
     ]);
   });
 
-  it('compares speaker tags by stable identity fields through the facade', () => {
+  it('compares speaker tags by stable identity fields and ignores score', () => {
     expect(areSpeakerTagsEqual(
       { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.9 },
       { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.1 },
     )).toBe(true);
+
+    expect(areSpeakerTagsEqual(
+      { id: 'speaker-a', label: 'Alice', kind: 'identified' },
+      { id: 'speaker-a', label: 'Speaker 1', kind: 'identified' },
+    )).toBe(false);
   });
 });
