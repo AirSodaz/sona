@@ -75,6 +75,20 @@ describe('taskLedgerStore', () => {
     expect(loadSnapshotMock).toHaveBeenCalledTimes(1);
   });
 
+  it('marks the ledger loaded and stores the error when loading fails', async () => {
+    loadSnapshotMock.mockRejectedValueOnce(new Error('Ledger unavailable.'));
+
+    await useTaskLedgerStore.getState().loadTasks();
+
+    expect(useTaskLedgerStore.getState()).toEqual(expect.objectContaining({
+      tasks: [],
+      updatedAt: null,
+      isLoaded: true,
+      isBusy: false,
+      error: 'Ledger unavailable.',
+    }));
+  });
+
   it('treats cancelRequested tasks from the backend snapshot as soft-cancelled', async () => {
     const task = makeTask({ id: 'task-cancelled-late', status: 'cancelRequested' });
     loadSnapshotMock.mockResolvedValueOnce(makeSnapshot([task]));

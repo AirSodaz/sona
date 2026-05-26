@@ -5,6 +5,7 @@ import type {
   TaskLedgerRecord,
   TaskLedgerSnapshot,
 } from '../types/taskLedger';
+import type { LoadableState } from '../types/asyncState';
 import {
   taskLedgerClearResolved,
   taskLedgerLoadSnapshot,
@@ -29,12 +30,9 @@ interface UpsertTaskOptions {
   transient?: boolean;
 }
 
-interface TaskLedgerState {
+interface TaskLedgerState extends LoadableState {
   tasks: TaskLedgerRecord[];
   updatedAt: number | null;
-  isLoaded: boolean;
-  isBusy: boolean;
-  error: string | null;
   cancelRequestedIds: Set<string>;
   loadTasks: () => Promise<void>;
   upsertTask: (record: TaskLedgerRecord, options?: UpsertTaskOptions) => Promise<void>;
