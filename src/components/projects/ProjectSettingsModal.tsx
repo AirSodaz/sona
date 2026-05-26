@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppConfig } from '../../types/config';
 import type { ProjectDefaults, ProjectRecord } from '../../types/project';
@@ -44,6 +44,7 @@ export function ProjectSettingsModal({
   onDefaultsChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -51,12 +52,33 @@ export function ProjectSettingsModal({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void onClose();
+      } else if (event.key === 'Tab') {
+        if (!modalRef.current) return;
 
-      event.preventDefault();
-      void onClose();
+        const focusable = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+
+        const isFocusInside = modalRef.current.contains(document.activeElement);
+
+        if (!isFocusInside) {
+          event.preventDefault();
+          first.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -98,6 +120,7 @@ export function ProjectSettingsModal({
   return (
     <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
       <div
+        ref={modalRef}
         className="dialog-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
@@ -171,6 +194,7 @@ export function ProjectSettingsModal({
                 value={draftName}
                 onChange={(event) => onNameChange(event.target.value)}
                 placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+                autoFocus
               />
             </div>
           </div>

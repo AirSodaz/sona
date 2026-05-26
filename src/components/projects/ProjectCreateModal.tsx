@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { XIcon } from '../Icons';
 
@@ -22,6 +22,7 @@ export function ProjectCreateModal({
   onCreate,
 }: ProjectCreateModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -35,6 +36,29 @@ export function ProjectCreateModal({
       } else if (event.key === 'Enter' && name.trim()) {
         event.preventDefault();
         void onCreate();
+      } else if (event.key === 'Tab') {
+        if (!modalRef.current) return;
+
+        const focusable = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+
+        const isFocusInside = modalRef.current.contains(document.activeElement);
+
+        if (!isFocusInside) {
+          event.preventDefault();
+          first.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
 
@@ -49,6 +73,7 @@ export function ProjectCreateModal({
   return (
     <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
       <div
+        ref={modalRef}
         className="dialog-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"

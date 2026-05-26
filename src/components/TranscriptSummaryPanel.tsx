@@ -27,6 +27,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const bodyId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const segments = useTranscriptSessionStore((state) => state.segments);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
@@ -133,6 +134,29 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
       if (e.key === 'Escape') {
         e.preventDefault();
         void handleCloseRequest();
+      } else if (e.key === 'Tab') {
+        if (!modalRef.current) return;
+
+        const focusable = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+
+        const isFocusInside = modalRef.current.contains(document.activeElement);
+
+        if (!isFocusInside) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -220,6 +244,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   return (
     <div className="settings-overlay" onClick={() => { void handleCloseRequest(); }} style={{ zIndex: 2000 }}>
       <div
+        ref={modalRef}
         className="dialog-modal transcript-summary-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

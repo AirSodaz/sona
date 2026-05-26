@@ -253,6 +253,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     browseState.setIsFilterMenuOpen(false);
     browseState.setBrowseScope(nextScope);
 
+    // Auto-close active editor/session on switching browse scope
+    clearOpenedItem();
+
     if (nextScope === 'all') {
       return;
     }
