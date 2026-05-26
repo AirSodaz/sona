@@ -370,13 +370,25 @@ input[type="radio"]:focus {
 }
 
 .switch-track {
+  box-sizing: border-box;
   position: relative;
   width: 36px;
   height: 20px;
   background-color: var(--color-bg-tertiary);
   border-radius: 10px;
-  transition: background-color var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+}
+
+/* Restrained Hover Effects */
+.switch-container:hover:not(.disabled) .switch-track {
+  border-color: var(--color-border-hover);
+  background-color: color-mix(in srgb, var(--color-bg-tertiary) 92%, var(--color-text-secondary));
 }
 
 .switch-container.checked .switch-track {
@@ -384,20 +396,40 @@ input[type="radio"]:focus {
   border-color: var(--color-text-primary);
 }
 
+.switch-container.checked:hover:not(.disabled) .switch-track {
+  background-color: color-mix(in srgb, var(--color-text-primary) 92%, var(--color-bg-primary));
+  border-color: color-mix(in srgb, var(--color-text-primary) 92%, var(--color-bg-primary));
+}
+
 .switch-thumb {
-  position: absolute;
-  top: 1px;
-  left: 1px;
+  box-sizing: border-box;
   width: 16px;
   height: 16px;
   background-color: #fff;
   border-radius: 50%;
-  transition: left var(--transition-fast);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transform: translateX(1px) scale(1);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .switch-container.checked .switch-thumb {
-  left: 17px;
+  transform: translateX(17px) scale(1);
+}
+
+/* Subtle elevation shadow lift on hover */
+.switch-container:hover:not(.disabled) .switch-thumb {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Premium micro-scale active squish on tap/press */
+.switch-container:active:not(.disabled) .switch-thumb {
+  transform: translateX(1px) scale(0.93);
+}
+
+.switch-container.checked:active:not(.disabled) .switch-thumb {
+  transform: translateX(17px) scale(0.93);
 }
 
 .switch-label {
@@ -410,8 +442,9 @@ input[type="radio"]:focus {
 }
 
 .switch-container:focus-visible .switch-track {
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+  box-shadow: var(--apple-control-focus-ring);
 }
+
 
 /* ===========================
    Record Button (Special)
