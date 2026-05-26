@@ -3,8 +3,8 @@ import {
   applySavedBatchHistoryToQueue,
   resolveSavedBatchHistoryMeta,
 } from '../batchQueueHistorySync';
-import type { BatchQueueItem } from '../../types/batchQueue';
-import type { HistoryItem } from '../../types/history';
+import type { BatchQueueItem } from '../../../types/batchQueue';
+import type { HistoryItem } from '../../../types/history';
 
 function makeHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
   return {

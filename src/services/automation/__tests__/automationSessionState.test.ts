@@ -3,8 +3,8 @@ import type {
   AutomationProcessedEntry,
   AutomationRule,
   AutomationRuntimeState,
-} from '../../types/automation';
-import type { AutomationTaskSettledPayload } from '../../services/automationRuntimeBridge';
+} from '../../../types/automation';
+import type { AutomationTaskSettledPayload } from '../../../services/automationRuntimeBridge';
 import {
   applyRetryBlockedResults,
   applyRetryFailureResults,

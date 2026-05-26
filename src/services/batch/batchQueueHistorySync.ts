@@ -1,5 +1,5 @@
-import type { BatchQueueItem } from '../types/batchQueue';
-import type { HistoryItem } from '../types/history';
+import type { BatchQueueItem } from '../../types/batchQueue';
+import type { HistoryItem } from '../../types/history';
 
 export interface SavedBatchHistoryMeta {
   historyId: string;

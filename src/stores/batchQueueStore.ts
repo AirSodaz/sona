@@ -34,7 +34,7 @@ import { historyService } from '../services/historyService';
 import {
     applySavedBatchHistoryToQueue,
     resolveSavedBatchHistoryMeta,
-} from './batchQueueHistorySync';
+} from '../services/batch/batchQueueHistorySync';
 import { convertFileSrc } from '../services/tauri/platform/assets';
 
 interface AddFilesOptions {
