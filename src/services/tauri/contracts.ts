@@ -43,7 +43,7 @@ import type { ModelFileConfig } from '../../types/model';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {
   DiagnosticsCoreInput,
-  DiagnosticsCoreSnapshotSpec,
+  DiagnosticsCoreFactsSnapshot,
 } from '../diagnosticsSnapshotBuilders';
 import type {
   ApplySpeakerProfileToGroupRequest,
@@ -296,7 +296,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
     args: { input: DiagnosticsCoreInput };
-    result: DiagnosticsCoreSnapshotSpec;
+    result: DiagnosticsCoreFactsSnapshot;
   };
   [TauriCommand.app.migrateAppConfig]: {
     args: {

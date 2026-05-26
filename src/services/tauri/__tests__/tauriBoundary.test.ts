@@ -242,13 +242,52 @@ describe('tauri boundary wrappers', () => {
   it('app wrappers expose the diagnostics core snapshot', async () => {
     const coreSnapshot = {
       scannedAt: '2026-05-03T00:00:00.000Z',
-      overview: [],
-      sections: [],
+      config: {
+        streamingModelPath: 'C:/models/live',
+        offlineModelPath: 'C:/models/offline',
+        vadModelPath: '',
+        punctuationModelPath: '',
+        microphoneId: 'default',
+      },
+      selectedModels: {
+        live: { id: 'live', name: 'Live Model' },
+        offline: { id: 'offline', name: 'Offline Model' },
+      },
+      modelRules: {
+        live: { requiresVad: false, requiresPunctuation: false },
+        offline: { requiresVad: false, requiresPunctuation: false },
+      },
+      pathStatuses: {
+        liveModel: { path: 'C:/models/live', kind: 'directory', error: null },
+        offlineModel: { path: 'C:/models/offline', kind: 'directory', error: null },
+        vad: null,
+        punctuation: null,
+      },
+      permissionState: 'prompt',
+      microphoneProbe: {
+        options: [],
+        available: false,
+      },
+      systemAudioProbe: {
+        options: [],
+        available: false,
+      },
+      voiceTypingReadiness: {
+        state: 'off',
+        lastErrorMessage: null,
+      },
       runtimeEnvironment: {
         ffmpegPath: 'C:/app/ffmpeg.exe',
         ffmpegExists: true,
         logDirPath: 'C:/app/logs',
       },
+      asrRuntimeMetrics: {
+        modelLoad: null,
+        liveInference: null,
+        batchInference: null,
+      },
+      onboardingReady: true,
+      punctuationRequired: false,
     };
     const input = {
       config: {
@@ -288,6 +327,8 @@ describe('tauri boundary wrappers', () => {
     const result = await getDiagnosticsCoreSnapshot(input);
 
     expect(result).toEqual(coreSnapshot);
+    expect(result).not.toHaveProperty('overview');
+    expect(result).not.toHaveProperty('sections');
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getDiagnosticsCoreSnapshot, {
       input,
     });

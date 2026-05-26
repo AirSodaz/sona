@@ -13,7 +13,7 @@ import type {
 } from '../types/diagnostics';
 import { getDiagnosticsCoreSnapshot } from './tauri/app';
 import {
-  hydrateDiagnosticsCoreSnapshot,
+  buildDiagnosticsSnapshot,
   type Translate,
 } from './diagnosticsSnapshotBuilders';
 
@@ -52,7 +52,7 @@ export const diagnosticsService = {
       voiceTypingReadiness,
     });
 
-    return hydrateDiagnosticsCoreSnapshot(t, coreSnapshot);
+    return buildDiagnosticsSnapshot(t, coreSnapshot);
   },
 
   getResumeOnboardingStep() {

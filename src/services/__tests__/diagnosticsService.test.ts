@@ -21,7 +21,6 @@ import { diagnosticsService } from '../diagnosticsService';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
-import type { DiagnosticsCoreSnapshotSpec } from '../diagnosticsSnapshotBuilders';
 
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const OFFLINE_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
@@ -32,7 +31,7 @@ const runtimeEnvironment = {
   ffmpegExists: true,
   logDirPath: 'C:\\app\\logs',
 };
-let coreSnapshot: DiagnosticsCoreSnapshotSpec;
+let coreSnapshot: unknown;
 
 function t(key: string, options?: Record<string, unknown>) {
   const translated: Record<string, string> = {
@@ -44,86 +43,70 @@ function t(key: string, options?: Record<string, unknown>) {
   return translated[key] ?? (options?.defaultValue as string | undefined) ?? key;
 }
 
-function text(key: string, defaultValue: string, params?: Record<string, unknown>) {
-  return { key, defaultValue, params };
-}
-
-function makeCoreSnapshot(): DiagnosticsCoreSnapshotSpec {
+function makeCoreSnapshot() {
   return {
     scannedAt: '2026-05-03T00:00:00.000Z',
     runtimeEnvironment,
-    overview: [
-      {
-        id: 'live-record',
-        title: text('settings.diagnostics.live_record_card', 'Live Record'),
-        description: text(
-          'settings.diagnostics.live_record_card_description',
-          'Model, VAD, permission, and microphone selection for real-time capture.',
-        ),
-        status: 'missing',
-        action: {
-          kind: 'open_settings',
-          label: text('settings.diagnostics.open_model_settings', 'Open Model Settings'),
-          settingsTab: 'models',
-        },
-      },
-    ],
-    sections: [
-      {
-        id: 'input-capture',
-        title: text('settings.diagnostics.input_section', 'Input & Capture'),
-        description: text(
-          'settings.diagnostics.input_section_description',
-          'Check permissions and the availability of input or capture devices.',
-        ),
-        checks: [
-          {
-            id: 'microphone-device',
-            title: text('settings.diagnostics.microphone_title', 'Input Device'),
-            description: text(
-              'settings.diagnostics.microphone_ready',
-              'The current input-device selection is still available.',
-            ),
-            status: 'ready',
-            meta: text('settings.mic_auto', 'Auto'),
-          },
-          {
-            id: 'microphone-permission',
-            title: text('settings.diagnostics.permission_title', 'Microphone Permission'),
-            description: text(
-              'settings.diagnostics.permission_prompt',
-              'Microphone access has not been granted yet.',
-            ),
-            status: 'warning',
-            action: {
-              kind: 'request_microphone_permission',
-              label: text('settings.diagnostics.request_permission', 'Request Permission'),
-            },
-          },
-        ],
-      },
-      {
-        id: 'runtime-environment',
-        title: text('settings.diagnostics.runtime_section', 'Runtime Environment'),
-        description: text(
-          'settings.diagnostics.runtime_section_description',
-          'Check bundled runtime dependencies and troubleshooting paths.',
-        ),
-        checks: [
-          {
-            id: 'log-dir',
-            title: text('settings.diagnostics.log_dir_title', 'Log Directory'),
-            description: text(
-              'settings.diagnostics.log_dir_ready',
-              'Runtime logs can be resolved for troubleshooting.',
-            ),
-            status: 'ready',
-            meta: text('diagnostics.literal_meta', 'C:\\app\\logs'),
-          },
-        ],
-      },
-    ],
+    config: {
+      streamingModelPath: STREAMING_SENSEVOICE_PATH,
+      offlineModelPath: OFFLINE_QWEN_PATH,
+      vadModelPath: VAD_PATH,
+      punctuationModelPath: '',
+      microphoneId: 'default',
+    },
+    selectedModels: {
+      live: { id: 'sensevoice-live', name: 'SenseVoice Live' },
+      offline: { id: 'qwen-offline', name: 'Qwen Offline' },
+    },
+    modelRules: {
+      live: { requiresVad: true, requiresPunctuation: false },
+      offline: { requiresVad: false, requiresPunctuation: false },
+    },
+    pathStatuses: {
+      liveModel: { path: STREAMING_SENSEVOICE_PATH, kind: 'directory', error: null },
+      offlineModel: { path: OFFLINE_QWEN_PATH, kind: 'directory', error: null },
+      vad: { path: VAD_PATH, kind: 'file', error: null },
+      punctuation: null,
+    },
+    permissionState: 'prompt',
+    microphoneProbe: {
+      options: [{ label: 'Auto', value: 'default' }],
+      available: true,
+      source: 'native',
+    },
+    systemAudioProbe: {
+      options: [{ label: 'Auto', value: 'default' }],
+      available: true,
+      source: 'native',
+    },
+    voiceTypingReadiness: {
+      state: 'off',
+      shortcutConfigured: false,
+      liveModelConfigured: true,
+      requiresVad: true,
+      vadConfigured: true,
+      shortcutRegistration: 'idle',
+      warmup: 'idle',
+      inputDeviceState: 'off',
+      runtimeState: 'off',
+      lastErrorSource: null,
+      lastErrorMessage: null,
+    },
+    asrRuntimeMetrics: {
+      modelLoad: null,
+      liveInference: null,
+      batchInference: null,
+    },
+    onboardingReady: true,
+    punctuationRequired: false,
   };
+}
+
+function assertCoreSnapshotHasNoUiSpec(value: unknown) {
+  expect(value).not.toHaveProperty('overview');
+  expect(value).not.toHaveProperty('sections');
+  expect(JSON.stringify(value)).not.toContain('settings.diagnostics.open_model_settings');
+  expect(JSON.stringify(value)).not.toContain('settingsTab');
 }
 
 function setInvokeMock() {
@@ -203,7 +186,9 @@ describe('diagnosticsService', () => {
     );
   });
 
-  it('hydrates Rust text specs and actions into the existing diagnostics snapshot shape', async () => {
+  it('builds diagnostics UI spec in TS from Rust-owned fact fields', async () => {
+    assertCoreSnapshotHasNoUiSpec(coreSnapshot);
+
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const liveOverview = snapshot.overview.find((card) => card.id === 'live-record');
     const inputSection = snapshot.sections.find((section) => section.id === 'input-capture');
@@ -217,9 +202,8 @@ describe('diagnosticsService', () => {
       expect.objectContaining({
         title: 'Live Record',
         action: expect.objectContaining({
-          kind: 'open_settings',
-          label: '打开模型设置',
-          settingsTab: 'models',
+          kind: 'request_microphone_permission',
+          label: '请求权限',
         }),
       }),
     );

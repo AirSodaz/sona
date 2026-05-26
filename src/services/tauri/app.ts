@@ -8,7 +8,7 @@ import type { ProjectRecord } from '../../types/project';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {
   DiagnosticsCoreInput,
-  DiagnosticsCoreSnapshotSpec,
+  DiagnosticsCoreFactsSnapshot,
 } from '../diagnosticsSnapshotBuilders';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
@@ -60,7 +60,7 @@ export async function resolveModelCatalogSelectedIds(
 
 export async function getDiagnosticsCoreSnapshot(
   input: DiagnosticsCoreInput,
-): Promise<DiagnosticsCoreSnapshotSpec> {
+): Promise<DiagnosticsCoreFactsSnapshot> {
   return invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, { input });
 }
 
