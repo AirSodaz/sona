@@ -1,19 +1,16 @@
-import i18n from '../i18n';
 import { logger } from "../utils/logger";
 import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { listen } from '@tauri-apps/api/event';
 import presetModelsData from '../shared/preset-models.json';
-import { extractErrorMessage } from '../utils/errorUtils';
 import {
-    cancelDownload,
     downloadFile,
     extractTarBz2,
     getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
     resolveModelCatalogSelectedIds as resolveModelCatalogSelectedIdsFromRust,
 } from './tauri/app';
-import { TauriEvent } from './tauri/events';
 import type { ModelFileConfig } from '../types/model';
+import { createModelDownloadService } from './modelDownloadService';
 
 export type { ModelFileConfig } from '../types/model';
 
@@ -187,49 +184,6 @@ export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
     PRESET_MODELS.map(model => [model.id, model])
 );
 
-interface DownloadProgressPayloadObject {
-    0?: number;
-    1?: number;
-    2?: string;
-    downloaded?: number;
-    total?: number;
-    id?: string;
-}
-
-function parseDownloadProgressPayload(payload: unknown): { downloaded: number; total: number; id: string } {
-    if (Array.isArray(payload)) {
-        const [downloaded, total, id] = payload;
-        return {
-            downloaded: typeof downloaded === 'number' ? downloaded : 0,
-            total: typeof total === 'number' ? total : 0,
-            id: typeof id === 'string' ? id : '',
-        };
-    }
-
-    if (typeof payload === 'object' && payload !== null) {
-        const value = payload as DownloadProgressPayloadObject;
-        const downloaded = typeof value[0] === 'number'
-            ? value[0]
-            : typeof value.downloaded === 'number'
-                ? value.downloaded
-                : 0;
-        const total = typeof value[1] === 'number'
-            ? value[1]
-            : typeof value.total === 'number'
-                ? value.total
-                : 0;
-        const id = typeof value[2] === 'string'
-            ? value[2]
-            : typeof value.id === 'string'
-                ? value.id
-                : '';
-
-        return { downloaded, total, id };
-    }
-
-    return { downloaded: 0, total: 0, id: '' };
-}
-
 /**
  * Callback function for reporting download or extraction progress.
  *
@@ -244,6 +198,20 @@ export type ProgressCallback = (percentage: number, status: string, isFinished?:
  */
 class ModelService {
     private latestCatalogSnapshot: ModelCatalogSnapshot | null = null;
+    private readonly downloadService = createModelDownloadService({
+        downloadFile,
+        extractTarBz2,
+        cancelDownload: async (id: string) => {
+            const { cancelDownload } = await import('./tauri/app');
+            await cancelDownload(id);
+        },
+        remove: async (path: string) => {
+            await remove(path);
+        },
+        listen,
+        join,
+        getModelsDir: () => this.getModelsDir(),
+    });
 
     private async getCatalogModelFromLatestSnapshot(modelId: string): Promise<ModelCatalogModel | undefined> {
         const cachedModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
@@ -306,130 +274,6 @@ class ModelService {
     }
 
     /**
-     * Generic file downloader with mirror support, progress reporting, and cancellation.
-     *
-     * @param url The primary URL to download from.
-     * @param outputPath The local path to save the file to.
-     * @param onProgress Optional callback for progress updates.
-     * @param signal Optional AbortSignal for cancellation.
-     * @param label Optional label for the download (used in progress messages).
-     */
-    private async downloadFile(
-        url: string,
-        outputPath: string,
-        onProgress?: ProgressCallback,
-        signal?: AbortSignal,
-        label: string = i18n.t('settings.model_download_status.download_label')
-    ): Promise<void> {
-        // Mirrors to try in order
-        const mirrors = [
-            '', // Direct
-            'https://mirror.ghproxy.com/',
-            'https://ghproxy.net/'
-        ];
-
-        let downloadSuccess = false;
-        let lastError: unknown = null;
-
-        // wrapper to manage listener
-        let unlisten: (() => void) | undefined;
-        let lastDownloaded = 0;
-        let lastTime = Date.now();
-
-        // Generate a unique ID for this download request
-        const downloadId = Math.random().toString(36).substring(7);
-
-        if (signal) {
-            signal.addEventListener('abort', async () => {
-                try {
-                    await cancelDownload(downloadId);
-                } catch (e) {
-                    logger.error('Failed to cancel download:', e);
-                }
-            });
-        }
-
-        if (onProgress) {
-            unlisten = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
-                const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
-
-                // Filter by ID
-                if (id && id !== downloadId) return;
-
-                // Calculate speed
-                const now = Date.now();
-                const timeDiff = now - lastTime;
-
-                if (timeDiff > 500 || total === downloaded) { // Update every 500ms or on completion
-                    const bytesDiff = downloaded - lastDownloaded;
-                    const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-                    const speedStr = speedBytesPerSec > 1024 * 1024
-                        ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-                        : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
-
-                    lastDownloaded = downloaded;
-                    lastTime = now;
-
-                    if (total > 0) {
-                        const percentage = Math.round((downloaded / total) * 100);
-                        const downloadedMB = Math.round(downloaded / 1024 / 1024);
-                        const totalMB = Math.round(total / 1024 / 1024);
-                        onProgress(percentage, i18n.t('settings.model_download_status.downloading', {
-                            label,
-                            downloadedMB,
-                            totalMB,
-                            speed: speedStr,
-                        }));
-                    }
-                }
-            });
-        }
-
-        try {
-            for (const mirror of mirrors) {
-                if (signal?.aborted) throw new Error('Download cancelled');
-
-                try {
-                    const downloadUrl = mirror ? `${mirror}${url}` : url;
-
-                    if (onProgress) {
-                        onProgress(0, i18n.t(
-                            mirror
-                                ? 'settings.model_download_status.downloading_from_mirror'
-                                : 'settings.model_download_status.downloading_only',
-                            { label }
-                        ));
-                    }
-
-                    logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
-                    await downloadFile({
-                        url: downloadUrl,
-                        outputPath: outputPath,
-                        id: downloadId,
-                    });
-
-                    downloadSuccess = true;
-                    break; // Success!
-                } catch (error) {
-                    if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
-                        throw Object.assign(new Error('Download cancelled'), { cause: error });
-                    }
-                    logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
-                    lastError = error;
-                    // Continue to next mirror
-                }
-            }
-        } finally {
-            if (unlisten) unlisten();
-        }
-
-        if (!downloadSuccess) {
-            const lastErrorMessage = lastError ? extractErrorMessage(lastError) : 'Unknown error';
-            throw new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`);
-        }
-    }
-
-    /**
      * Downloads a model by its ID.
      *
      * Handles mirrors, progress reporting, and cancellation.
@@ -446,62 +290,13 @@ class ModelService {
         if (!model) throw new Error('Model not found');
 
         const modelsDir = this.latestCatalogSnapshot?.modelsDir ?? await this.getModelsDir();
-        const targetFilename = model.filename || `${modelId}.tar.bz2`;
-        const tempFilePath = catalogModel?.downloadPath ?? await join(modelsDir, targetFilename);
-
-        await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
-
-        if (model.isArchive === false) {
-            onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
-            return tempFilePath;
-        }
-
-        if (signal?.aborted) throw new Error('Download cancelled');
-
-        // No manual saving needed, Rust did it directly
-
-        onProgress?.(100, i18n.t('settings.model_download_status.extracting'), false);
-
-        let extractUnlisten: (() => void) | undefined;
-        if (onProgress) {
-            extractUnlisten = await listen<string>(TauriEvent.app.extractProgress, (event) => {
-                const filename = event.payload;
-                // Truncate filename if too long
-                const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
-                onProgress(100, i18n.t('settings.model_download_status.extracting_file', {
-                    filename: displayFilename,
-                }), false);
-            });
-        }
-
-        try {
-            logger.info('Starting extraction...');
-            // Try backend extraction
-            await this.extractArchive(tempFilePath, modelsDir, onProgress, signal);
-        } catch (error) {
-            throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
-        } finally {
-            if (extractUnlisten) extractUnlisten();
-        }
-
-        // Clean up archive
-        await remove(tempFilePath);
-
-        onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
-
-        if (catalogModel?.installPath) {
-            return catalogModel.installPath;
-        }
-        if (model.filename) {
-            return await join(modelsDir, model.filename);
-        }
-        if (model.type === 'punctuation') {
-            return await join(modelsDir, modelId);
-        }
-        if (model.type === 'vad') {
-            return tempFilePath;
-        }
-        return await join(modelsDir, modelId);
+        return await this.downloadService.downloadModel({
+            modelId,
+            model,
+            modelsDir,
+            onProgress,
+            signal,
+        });
     }
 
     /**
@@ -557,34 +352,6 @@ class ModelService {
         const modelPath = await this.getModelPath(modelId);
         if (await exists(modelPath)) {
             await remove(modelPath, { recursive: true });
-        }
-    }
-
-    /**
-     * Extracts an archive using the Rust backend.
-     *
-     * @param archivePath The path to the archive file.
-     * @param targetDir The directory to extract into.
-     * @param onProgress Optional callback for extraction progress.
-     * @param signal Optional AbortSignal.
-     * @return A promise that resolves when extraction is complete.
-     */
-    private async extractArchive(archivePath: string, targetDir: string, _onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
-        logger.info('[ModelService] Attempting extraction via Rust backend (extract_tar_bz2)...');
-
-        if (signal) {
-            signal.addEventListener('abort', () => {
-                logger.warn('Extraction cancellation requested, but not supported via Rust backend yet.');
-            });
-        }
-
-        try {
-            await extractTarBz2({
-                archivePath: archivePath,
-                targetDir: targetDir,
-            });
-        } catch (error) {
-            throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
         }
     }
 
