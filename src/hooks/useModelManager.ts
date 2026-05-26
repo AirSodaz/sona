@@ -6,14 +6,10 @@ import {
     modelService,
 } from '../services/modelService';
 import {
-    VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-    VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
-    createDefaultAsrConfig,
-    syncLegacyAsrSelectionFields,
-    syncOnlineAsrProviderConfig,
-    syncStreamingAsrSelectionFields,
-} from '../services/asrConfigService';
+    buildModelPathConfigPatch,
+    buildModelRemovalConfigPatch,
+    buildRestoreDefaultModelConfigPatch,
+} from '../services/modelManagerService';
 import type {
     ModelCatalogSelectedIds,
     ModelCatalogModel,
@@ -177,44 +173,7 @@ export function useModelManager(isOpen: boolean) {
     ]);
 
     const setModelPath = useCallback((model: ModelInfo, path: string) => {
-        const updates: Partial<typeof config> = {};
-
-        if (model.modes && model.modes.length > 0) {
-            if (model.modes.includes('streaming')) {
-                Object.assign(updates, syncStreamingAsrSelectionFields(config, {
-                    modelId: model.id,
-                    modelPath: path,
-                }));
-            }
-            if (model.modes.includes('offline')) {
-                Object.assign(updates, syncLegacyAsrSelectionFields(
-                    { ...config, ...updates },
-                    'batch',
-                    {
-                        modelId: model.id,
-                        modelPath: path,
-                    },
-                ));
-            }
-        } else {
-            switch (model.type) {
-                case 'vad':
-                    updates.vadModelPath = path;
-                    break;
-                case 'punctuation':
-                    updates.punctuationModelPath = path;
-                    break;
-                case 'speaker-segmentation':
-                    updates.speakerSegmentationModelPath = path;
-                    break;
-                case 'speaker-embedding':
-                    updates.speakerEmbeddingModelPath = path;
-                    break;
-                case 'itn':
-                    return;
-            }
-        }
-
+        const updates = buildModelPathConfigPatch(config, model, path);
         if (Object.keys(updates).length > 0) {
             updateConfig(updates);
         }
@@ -374,33 +333,7 @@ export function useModelManager(isOpen: boolean) {
             const deletedPath = await getModelInstallPath(model);
             await modelService.deleteModel(model.id);
             await refreshModelCatalogSnapshot();
-            const asr = createDefaultAsrConfig(config.streamingModelPath, config.offlineModelPath);
-            if (config.asr?.selections) {
-                asr.selections = { ...config.asr.selections };
-            }
-            if (config.streamingModelPath === deletedPath) {
-                updateConfig({ streamingModelPath: '' });
-                asr.selections.live = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
-                asr.selections.caption = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
-                asr.selections.voiceTyping = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
-            }
-            if (config.offlineModelPath === deletedPath) {
-                updateConfig({ offlineModelPath: '' });
-                asr.selections.batch = { engine: 'local-sherpa', mode: 'offline', modelId: null, modelPath: '' };
-            }
-            if (config.punctuationModelPath === deletedPath) {
-                updateConfig({ punctuationModelPath: '' });
-            }
-            if (config.vadModelPath === deletedPath) {
-                updateConfig({ vadModelPath: '' });
-            }
-            if (config.speakerSegmentationModelPath === deletedPath) {
-                updateConfig({ speakerSegmentationModelPath: '' });
-            }
-            if (config.speakerEmbeddingModelPath === deletedPath) {
-                updateConfig({ speakerEmbeddingModelPath: '' });
-            }
-            updateConfig({ asr });
+            updateConfig(buildModelRemovalConfigPatch(config, deletedPath));
         } catch (error) {
             await showError({
                 code: 'model.delete_failed',
@@ -423,48 +356,7 @@ export function useModelManager(isOpen: boolean) {
         try {
             const snapshot = await refreshModelCatalogSnapshot();
             const defaults = snapshot.restoreDefaults;
-
-            const updates: Partial<typeof config> = {
-                punctuationModelPath: defaults.punctuationModelPath ?? '',
-                vadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
-                maxConcurrent: Number.isFinite(defaults.maxConcurrent) ? defaults.maxConcurrent : 2,
-                enableITN: defaults.enableITN,
-                speakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
-                speakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
-            };
-
-            if (defaults.streamingModelPath !== undefined) {
-                Object.assign(updates, syncStreamingAsrSelectionFields(
-                    { ...config, ...updates },
-                    {
-                        modelId: null,
-                        modelPath: defaults.streamingModelPath,
-                    },
-                ));
-            }
-            if (defaults.offlineModelPath !== undefined) {
-                Object.assign(updates, syncLegacyAsrSelectionFields(
-                    { ...config, ...updates },
-                    'batch',
-                    {
-                        modelId: null,
-                        modelPath: defaults.offlineModelPath,
-                    },
-                ));
-            }
-            if (defaults.vadModelPath !== undefined) {
-                updates.vadModelPath = defaults.vadModelPath;
-            }
-            Object.assign(updates, syncOnlineAsrProviderConfig(
-                { ...config, ...updates },
-                VOLCENGINE_DOUBAO_PROVIDER_ID,
-                {
-                    batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-                    batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-                },
-            ));
-
-            updateConfig(updates);
+            updateConfig(buildRestoreDefaultModelConfigPatch(config, defaults));
         } catch (e) {
             logger.warn('Failed to restore default model settings', e);
         }
