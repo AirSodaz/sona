@@ -13,21 +13,13 @@ import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
 import { historyService } from './historyService';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
-import { normalizeError } from '../utils/errorUtils';
-import {
-  createLlmTaskId,
-  listenToLlmTaskProgress,
-  listenToLlmTaskText,
-  SummaryTranscriptLlmJobRequest,
-} from './llmTaskService';
+import type { SummaryTranscriptLlmJobRequest } from './llmTaskService';
+import { runTranscriptLlmTaskJob } from './llm/segmentTask';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
 import { runTranscriptLlmJob } from './tauri/llm';
 import {
-  buildLlmTaskLedgerRecord,
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
-  patchTaskLedgerRecord,
-  upsertTaskLedgerRecord,
 } from './taskLedgerRuntime';
 
 interface RetrySummaryTranscriptJobOptions {
@@ -215,121 +207,77 @@ class SummaryService {
       config.summaryCustomTemplates,
     );
     const activeTemplateId = resolvedTemplate.id;
-    const taskId = createLlmTaskId('summary');
-    const ledgerId = createLlmTaskLedgerId(taskId);
 
-    upsertTaskLedgerRecord(buildLlmTaskLedgerRecord({
-      taskId,
+    await runTranscriptLlmTaskJob({
       taskType: 'summary',
-      jobHistoryId,
+      segments,
+      sourceHistoryId: historyId,
       templateId: activeTemplateId,
-    }));
+      onStart: (startedHistoryId) => {
+        sidecarStore.updateSummaryState({
+          activeTemplateId,
+          isGenerating: true,
+          generationProgress: 0,
+          // Keep a dedicated transient buffer for streamed text so the final record can still
+          // be written atomically once the backend returns the finished summary payload.
+          streamingContent: '',
+        }, startedHistoryId);
+      },
+      onProgress: (generationProgress, progressHistoryId) => {
+        this.updateJobSummaryState(progressHistoryId, {
+          generationProgress,
+        });
+      },
+      onText: ({ text }, textHistoryId) => {
+        this.updateJobSummaryState(textHistoryId, {
+          streamingContent: text,
+        });
+      },
+      runTask: async (taskId, runningHistoryId) => {
+        const result = await runTranscriptLlmJob(
+          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments),
+        );
+        const summary = result.summary;
+        const summaryRecord = summary?.record;
 
-    sidecarStore.updateSummaryState({
-      activeTemplateId,
-      isGenerating: true,
-      generationProgress: 0,
-      // Keep a dedicated transient buffer for streamed text so the final record can still
-      // be written atomically once the backend returns the finished summary payload.
-      streamingContent: '',
-    }, jobHistoryId);
+        if (!summary || !summaryRecord) {
+          throw new Error('Summary job did not return a summary record.');
+        }
 
-    const unlistenProgress = await listenToLlmTaskProgress(taskId, 'summary', ({ completedChunks, totalChunks }) => {
-      if (isTaskLedgerCancelRequested(ledgerId)) {
-        return;
-      }
-      const generationProgress = Math.round((completedChunks / Math.max(totalChunks, 1)) * 100);
-      patchTaskLedgerRecord(ledgerId, {
-        status: 'running',
-        progress: generationProgress,
-      });
-      this.updateJobSummaryState(jobHistoryId, {
-        generationProgress,
-      });
+        if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+          return;
+        }
+
+        const resultTemplateId = coerceSummaryTemplateId(summary.activeTemplateId, config.summaryCustomTemplates);
+        const record: TranscriptSummaryRecord = {
+          templateId: coerceSummaryTemplateId(summaryRecord.templateId, config.summaryCustomTemplates),
+          content: summaryRecord.content,
+          generatedAt: summaryRecord.generatedAt,
+          sourceFingerprint: summaryRecord.sourceFingerprint,
+        };
+
+        const targetHistoryId = this.updateJobSummaryState(runningHistoryId, {
+          activeTemplateId: resultTemplateId,
+          record,
+          streamingContent: undefined,
+        });
+
+        if (runningHistoryId === 'current' && targetHistoryId !== 'current') {
+          await this.persistSummary(targetHistoryId);
+        }
+      },
+      onError: (errorHistoryId) => {
+        this.updateJobSummaryState(errorHistoryId, {
+          generationProgress: 0,
+        });
+      },
+      onFinally: (finishedHistoryId) => {
+        this.updateJobSummaryState(finishedHistoryId, {
+          isGenerating: false,
+          generationProgress: 0,
+        });
+      },
     });
-    const unlistenText = await listenToLlmTaskText(taskId, 'summary', ({ text }) => {
-      if (isTaskLedgerCancelRequested(ledgerId)) {
-        return;
-      }
-      this.updateJobSummaryState(jobHistoryId, {
-        streamingContent: text,
-      });
-    });
-
-    try {
-      const result = await runTranscriptLlmJob(
-        this.buildRequest(taskId, jobHistoryId, resolvedTemplate, segments),
-      );
-      const summary = result.summary;
-      const summaryRecord = summary?.record;
-
-      if (!summary || !summaryRecord) {
-        throw new Error('Summary job did not return a summary record.');
-      }
-
-      if (isTaskLedgerCancelRequested(ledgerId)) {
-        patchTaskLedgerRecord(ledgerId, {
-          status: 'cancelled',
-          progress: 0,
-          cancelable: false,
-          retryable: false,
-        });
-        return;
-      }
-
-      const resultTemplateId = coerceSummaryTemplateId(summary.activeTemplateId, config.summaryCustomTemplates);
-      const record: TranscriptSummaryRecord = {
-        templateId: coerceSummaryTemplateId(summaryRecord.templateId, config.summaryCustomTemplates),
-        content: summaryRecord.content,
-        generatedAt: summaryRecord.generatedAt,
-        sourceFingerprint: summaryRecord.sourceFingerprint,
-      };
-
-      const targetHistoryId = this.updateJobSummaryState(jobHistoryId, {
-        activeTemplateId: resultTemplateId,
-        record,
-        streamingContent: undefined,
-      });
-
-      if (jobHistoryId === 'current' && targetHistoryId !== 'current') {
-        await this.persistSummary(targetHistoryId);
-      }
-      patchTaskLedgerRecord(ledgerId, {
-        status: 'succeeded',
-        progress: 100,
-        cancelable: false,
-        retryable: false,
-      });
-    } catch (error) {
-      if (isTaskLedgerCancelRequested(ledgerId)) {
-        patchTaskLedgerRecord(ledgerId, {
-          status: 'cancelled',
-          progress: 0,
-          cancelable: false,
-          retryable: false,
-        });
-      } else {
-        patchTaskLedgerRecord(ledgerId, {
-          status: 'failed',
-          progress: 0,
-          cancelable: false,
-          retryable: true,
-          errorMessage: normalizeError(error).message,
-        });
-      }
-      this.updateJobSummaryState(jobHistoryId, {
-        generationProgress: 0,
-      });
-      throw Object.assign(new Error(normalizeError(error).message), { cause: error });
-    } finally {
-      unlistenProgress();
-      unlistenText();
-
-      this.updateJobSummaryState(jobHistoryId, {
-        isGenerating: false,
-        generationProgress: 0,
-      });
-    }
   }
 
   private buildRequest(

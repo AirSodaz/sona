@@ -6,7 +6,9 @@ import {
   createLlmTaskId,
   listenToLlmTaskChunks,
   listenToLlmTaskProgress,
+  listenToLlmTaskText,
   type LlmTaskType,
+  type LlmTaskTextPayload,
   type PolishedSegment,
   type PolishSegmentsRequest,
   type TranslatedSegment,
@@ -29,6 +31,7 @@ type SegmentTaskFeature = 'translation' | 'polish';
 type SegmentTaskType = Extract<LlmTaskType, 'translate' | 'polish'>;
 type SegmentTaskItem = PolishedSegment | TranslatedSegment;
 type SegmentTaskRequest = TranslateSegmentsRequest | PolishSegmentsRequest;
+type TranscriptLlmTaskType = LlmTaskType;
 
 interface RunConfiguredSegmentTaskOptions<
   TConfig extends Pick<AppConfig, 'llmSettings'>,
@@ -62,6 +65,23 @@ interface RunTranscriptSegmentTaskJobOptions<TTaskType extends SegmentTaskType> 
   onFinally?: (jobHistoryId: string) => void | Promise<void>;
 }
 
+interface RunTranscriptLlmTaskJobOptions<TTaskType extends TranscriptLlmTaskType> {
+  taskType: TTaskType;
+  segments: TranscriptSegment[];
+  sourceHistoryId: string | null;
+  targetLanguage?: string;
+  templateId?: string;
+  runTask: (taskId: string, jobHistoryId: string) => Promise<void>;
+  onStart?: (jobHistoryId: string) => void | Promise<void>;
+  onProgress?: (progress: number, jobHistoryId: string) => void | Promise<void>;
+  onText?: TTaskType extends 'summary'
+    ? (payload: LlmTaskTextPayload, jobHistoryId: string) => void | Promise<void>
+    : never;
+  onSuccess?: (jobHistoryId: string) => void | Promise<void>;
+  onError?: (jobHistoryId: string, error: unknown) => void | Promise<void>;
+  onFinally?: (jobHistoryId: string) => void | Promise<void>;
+}
+
 interface ApplySegmentItemsToTranscriptJobOptions<TItem> {
   jobHistoryId: string;
   items: TItem[];
@@ -75,6 +95,15 @@ interface ApplySegmentItemsToTranscriptJobOptions<TItem> {
 
 function calculateProgressPercent(completedChunks: number, totalChunks: number): number {
   return Math.round((completedChunks / Math.max(totalChunks, 1)) * 100);
+}
+
+function patchCancelledLlmTask(ledgerId: string): void {
+  patchTaskLedgerRecord(ledgerId, {
+    status: 'cancelled',
+    progress: 0,
+    cancelable: false,
+    retryable: false,
+  });
 }
 
 export async function runConfiguredSegmentTask<
@@ -138,18 +167,20 @@ export async function runConfiguredSegmentTask<
   }
 }
 
-export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskType>({
+export async function runTranscriptLlmTaskJob<TTaskType extends TranscriptLlmTaskType>({
   taskType,
   segments,
   sourceHistoryId,
   targetLanguage,
+  templateId,
   runTask,
   onStart,
   onProgress,
+  onText,
   onSuccess,
   onError,
   onFinally,
-}: RunTranscriptSegmentTaskJobOptions<TTaskType>): Promise<void> {
+}: RunTranscriptLlmTaskJobOptions<TTaskType>): Promise<void> {
   if (!segments || segments.length === 0) {
     return;
   }
@@ -158,6 +189,7 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
   const taskId = createLlmTaskId(taskType);
   const ledgerId = createLlmTaskLedgerId(taskId);
   let unlistenProgress: () => void = () => undefined;
+  let unlistenText: () => void = () => undefined;
 
   try {
     upsertTaskLedgerRecord(buildLlmTaskLedgerRecord({
@@ -165,7 +197,9 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
       taskType,
       jobHistoryId,
       targetLanguage,
+      templateId,
     }));
+    await onStart?.(jobHistoryId);
     unlistenProgress = await listenToLlmTaskProgress(
       taskId,
       taskType,
@@ -184,16 +218,26 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
         }
       },
     );
-    await onStart?.(jobHistoryId);
+    if (taskType === 'summary' && onText) {
+      unlistenText = await listenToLlmTaskText(
+        taskId,
+        'summary',
+        (payload) => {
+          if (isTaskLedgerCancelRequested(ledgerId)) {
+            return;
+          }
+
+          void (onText as (payload: LlmTaskTextPayload, jobHistoryId: string) => void | Promise<void>)(
+            payload,
+            jobHistoryId,
+          );
+        },
+      );
+    }
     await runTask(taskId, jobHistoryId);
 
     if (isTaskLedgerCancelRequested(ledgerId)) {
-      patchTaskLedgerRecord(ledgerId, {
-        status: 'cancelled',
-        progress: 0,
-        cancelable: false,
-        retryable: false,
-      });
+      patchCancelledLlmTask(ledgerId);
       return;
     }
 
@@ -205,19 +249,50 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
       retryable: false,
     });
   } catch (error) {
-    await onError?.(jobHistoryId, error);
-    patchTaskLedgerRecord(ledgerId, {
-      status: 'failed',
-      progress: 0,
-      cancelable: false,
-      retryable: true,
-      errorMessage: normalizeError(error).message,
-    });
+    if (isTaskLedgerCancelRequested(ledgerId)) {
+      patchCancelledLlmTask(ledgerId);
+    } else {
+      await onError?.(jobHistoryId, error);
+      patchTaskLedgerRecord(ledgerId, {
+        status: 'failed',
+        progress: 0,
+        cancelable: false,
+        retryable: true,
+        errorMessage: normalizeError(error).message,
+      });
+    }
     throw Object.assign(new Error(normalizeError(error).message), { cause: error });
   } finally {
     unlistenProgress();
+    unlistenText();
     await onFinally?.(jobHistoryId);
   }
+}
+
+export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskType>({
+  taskType,
+  segments,
+  sourceHistoryId,
+  targetLanguage,
+  runTask,
+  onStart,
+  onProgress,
+  onSuccess,
+  onError,
+  onFinally,
+}: RunTranscriptSegmentTaskJobOptions<TTaskType>): Promise<void> {
+  return runTranscriptLlmTaskJob({
+    taskType,
+    segments,
+    sourceHistoryId,
+    targetLanguage,
+    runTask,
+    onStart,
+    onProgress,
+    onSuccess,
+    onError,
+    onFinally,
+  });
 }
 
 export async function applySegmentItemsToTranscriptJob<TItem>({

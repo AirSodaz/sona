@@ -4,12 +4,14 @@ import type { AppConfig } from '../../../types/config';
 import {
   applySegmentItemsToTranscriptJob,
   runConfiguredSegmentTask,
+  runTranscriptLlmTaskJob,
   runTranscriptSegmentTaskJob,
 } from '../segmentTask';
 
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
+const mockListenToLlmTaskText = vi.fn();
 const mockGetFeatureLlmConfig = vi.fn();
 const mockIsLlmConfigComplete = vi.fn();
 const taskLedgerContext = vi.hoisted(() => ({
@@ -19,7 +21,11 @@ const taskLedgerContext = vi.hoisted(() => ({
   isTaskLedgerCancelRequested: vi.fn(() => false),
   buildLlmTaskLedgerRecord: vi.fn((input: any) => ({
     id: `llm-${input.taskId}`,
-    kind: input.taskType === 'polish' ? 'llmPolish' : 'llmTranslate',
+    kind: input.taskType === 'polish'
+      ? 'llmPolish'
+      : input.taskType === 'summary'
+        ? 'llmSummary'
+        : 'llmTranslate',
     status: 'running',
     title: input.taskType,
     progress: 0,
@@ -30,6 +36,7 @@ const taskLedgerContext = vi.hoisted(() => ({
     recoverable: false,
     historyId: input.jobHistoryId === 'current' ? undefined : input.jobHistoryId,
     targetLanguage: input.targetLanguage,
+    templateId: input.templateId,
   })),
 }));
 
@@ -41,6 +48,7 @@ vi.mock('../../llmTaskService', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
+  listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
 }));
 
 vi.mock('../runtime', () => ({
@@ -62,6 +70,7 @@ describe('segmentTask helpers', () => {
     mockCreateLlmTaskId.mockReturnValue('shared-task-id');
     mockListenToLlmTaskChunks.mockResolvedValue(vi.fn());
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockListenToLlmTaskText.mockResolvedValue(vi.fn());
     mockGetFeatureLlmConfig.mockReturnValue({
       provider: 'open_ai',
       apiKey: 'test-key',
@@ -186,6 +195,93 @@ describe('segmentTask helpers', () => {
     expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
       status: 'cancelled',
       progress: 0,
+    }));
+  });
+
+  it('runTranscriptLlmTaskJob wires summary progress, text updates, metadata, and cleanup', async () => {
+    const unlistenProgress = vi.fn();
+    const unlistenText = vi.fn();
+    mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
+      onProgress({
+        taskId: 'shared-task-id',
+        taskType: 'summary',
+        completedChunks: 1,
+        totalChunks: 4,
+      });
+      return unlistenProgress;
+    });
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      onText({
+        taskId: 'shared-task-id',
+        taskType: 'summary',
+        text: 'Partial summary',
+        delta: 'Partial summary',
+      });
+      return unlistenText;
+    });
+
+    const onStart = vi.fn();
+    const onProgress = vi.fn();
+    const onText = vi.fn();
+    const runTask = vi.fn().mockResolvedValue(undefined);
+    const onSuccess = vi.fn();
+    const onFinally = vi.fn();
+
+    await runTranscriptLlmTaskJob({
+      taskType: 'summary',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      sourceHistoryId: 'history-summary',
+      templateId: 'meeting',
+      onStart,
+      onProgress,
+      onText,
+      runTask,
+      onSuccess,
+      onFinally,
+    });
+
+    expect(onStart).toHaveBeenCalledWith('history-summary');
+    expect(onProgress).toHaveBeenCalledWith(25, 'history-summary');
+    expect(onText).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Partial summary' }),
+      'history-summary',
+    );
+    expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-summary');
+    expect(taskLedgerContext.buildLlmTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'shared-task-id',
+      taskType: 'summary',
+      jobHistoryId: 'history-summary',
+      templateId: 'meeting',
+    }));
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
+      status: 'succeeded',
+      progress: 100,
+    }));
+    expect(unlistenProgress).toHaveBeenCalledTimes(1);
+    expect(unlistenText).toHaveBeenCalledTimes(1);
+    expect(onFinally).toHaveBeenCalledWith('history-summary');
+  });
+
+  it('marks LLM jobs as cancelled instead of failed when a rejected task has a pending cancel request', async () => {
+    taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(true);
+    const runTask = vi.fn().mockRejectedValue(new Error('backend aborted'));
+    const onError = vi.fn();
+
+    await expect(runTranscriptLlmTaskJob({
+      taskType: 'summary',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      sourceHistoryId: 'history-a',
+      runTask,
+      onError,
+    })).rejects.toThrow('backend aborted');
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
+      status: 'cancelled',
+      progress: 0,
+    }));
+    expect(taskLedgerContext.patchTaskLedgerRecord).not.toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
+      status: 'failed',
     }));
   });
 
