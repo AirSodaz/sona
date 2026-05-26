@@ -3,12 +3,9 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import {
-    isAsrRequestConfigured,
-    resolveAsrTranscriptionRequest,
     type AsrTranscriptionRequest,
     type TranscriptPostprocessOptions,
 } from './asrConfigService';
@@ -21,6 +18,12 @@ import {
     startRecognizer,
     stopRecognizer,
 } from './tauri/recognizer';
+import {
+    buildBatchTranscriptionRequest,
+    buildRecognizerInitRequest,
+    buildStreamingAsrRequest,
+    isTranscriptionRequestConfigured,
+} from './transcription/transcriptionRequest';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -167,7 +170,7 @@ export class TranscriptionService {
 
     async prepare(): Promise<void> {
         if (this._isConfigMatch()) return;
-        if (!isAsrRequestConfigured(this._buildStreamingServiceConfig())) return;
+        if (!isTranscriptionRequestConfigured(this._buildStreamingServiceConfig())) return;
         return this._initBackend();
     }
 
@@ -175,7 +178,7 @@ export class TranscriptionService {
         this.onError = onError;
 
         const initialConfig = this._buildStreamingServiceConfig();
-        if (!isAsrRequestConfigured(initialConfig)) {
+        if (!isTranscriptionRequestConfigured(initialConfig)) {
             const errorMessage = 'ASR is not configured';
             onError(errorMessage);
             throw new Error(errorMessage);
@@ -263,35 +266,15 @@ export class TranscriptionService {
         await this._startStream();
     }
 
-    private _resolveStreamingSlot(): 'live' | 'caption' | 'voiceTyping' {
-        return this.instanceId === 'voice-typing'
-            ? 'voiceTyping'
-            : this.instanceId === 'caption'
-                ? 'caption'
-                : 'live';
-    }
-
     private _buildStreamingServiceConfig(): ServiceConfig {
         const appConfig = getEffectiveConfigSnapshot();
-        const request = resolveAsrTranscriptionRequest(
+        return buildStreamingAsrRequest({
             appConfig,
-            this._resolveStreamingSlot(),
-            { language: this.language },
-        );
-        const modelPath = request.engine === 'local-sherpa' && this.modelPath
-            ? this.modelPath
-            : request.modelPath;
-
-        return {
-            ...request,
-            modelPath,
+            instanceId: this.instanceId,
+            modelPathOverride: this.modelPath,
+            language: this.language,
             enableItn: this.enableITN,
-            normalizationOptions: {
-                enableTimeline: this.instanceId === 'record'
-                    ? (appConfig.enableTimeline ?? false)
-                    : false,
-            },
-        };
+        });
     }
 
     private async _initBackend(): Promise<void> {
@@ -299,27 +282,18 @@ export class TranscriptionService {
 
         this.startingPromise = (async () => {
             try {
-                const configToUse = this._buildStreamingServiceConfig();
-                if (!isAsrRequestConfigured(configToUse)) {
+                const { request, asrRequest: configToUse } = buildRecognizerInitRequest({
+                    appConfig: getEffectiveConfigSnapshot(),
+                    instanceId: this.instanceId,
+                    modelPathOverride: this.modelPath,
+                    language: this.language,
+                    enableItn: this.enableITN,
+                });
+                if (!isTranscriptionRequestConfigured(configToUse)) {
                     throw new Error('ASR is not configured');
                 }
 
-                await initRecognizer({
-                    instanceId: this.instanceId,
-                    modelPath: configToUse.modelPath,
-                    numThreads: configToUse.numThreads,
-                    enableItn: configToUse.enableItn,
-                    language: configToUse.language,
-                    punctuationModel: configToUse.punctuationModel,
-                    vadModel: configToUse.vadModel,
-                    vadBuffer: configToUse.vadBuffer,
-                    modelType: configToUse.modelType,
-                    fileConfig: configToUse.fileConfig,
-                    hotwords: configToUse.hotwords,
-                    normalizationOptions: configToUse.normalizationOptions,
-                    postprocessOptions: configToUse.postprocessOptions,
-                    asrRequest: configToUse,
-                });
+                await initRecognizer(request);
 
                 this.runningConfig = configToUse;
             } catch (error) {
@@ -414,7 +388,7 @@ export class TranscriptionService {
         }
 
         const nextConfig = this._buildStreamingServiceConfig();
-        if (!isAsrRequestConfigured(nextConfig)) {
+        if (!isTranscriptionRequestConfigured(nextConfig)) {
             const errorMessage = 'ASR is not configured';
             if (this.onError) this.onError(errorMessage);
             throw new Error(errorMessage);
@@ -492,38 +466,19 @@ export class TranscriptionService {
         configOverride?: AppConfig,
     ): Promise<TranscriptSegment[]> {
         const appConfig = configOverride || getEffectiveConfigSnapshot();
-        const resolvedBatchRequest = resolveAsrTranscriptionRequest(appConfig, 'batch', {
-                language: language || this.language || 'auto',
-            });
-        const asrRequest = {
-            ...resolvedBatchRequest,
-            modelPath: resolvedBatchRequest.engine === 'local-sherpa' && this.modelPath
-                ? this.modelPath
-                : resolvedBatchRequest.modelPath,
+        const { request: batchRequest, asrRequest } = buildBatchTranscriptionRequest({
+            appConfig,
+            filePath,
+            saveToPath: _saveToPath || null,
+            modelPathOverride: this.modelPath,
+            language: language || this.language || 'auto',
             enableItn: this.enableITN,
-        };
-        if (!isAsrRequestConfigured(asrRequest)) {
+        });
+        if (!isTranscriptionRequestConfigured(asrRequest)) {
             throw new Error('ASR is not configured');
         }
 
-        const segments = await processBatchFile({
-            filePath,
-            saveToPath: _saveToPath || null,
-            modelPath: asrRequest.modelPath,
-            numThreads: asrRequest.numThreads,
-            enableItn: asrRequest.enableItn,
-            language: asrRequest.language,
-            punctuationModel: asrRequest.punctuationModel,
-            vadModel: asrRequest.vadModel,
-            vadBuffer: asrRequest.vadBuffer,
-            modelType: asrRequest.modelType,
-            fileConfig: asrRequest.fileConfig,
-            hotwords: asrRequest.hotwords,
-            speakerProcessing: speakerService.buildProcessingConfig(appConfig),
-            normalizationOptions: asrRequest.normalizationOptions,
-            postprocessOptions: asrRequest.postprocessOptions,
-            asrRequest,
-        });
+        const segments = await processBatchFile(batchRequest);
 
         const processedSegments = normalizeTranscriptSegments(segments);
 
