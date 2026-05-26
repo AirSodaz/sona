@@ -1,6 +1,8 @@
+/* eslint-disable react-hooks/immutability */
 import React from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 import './PanelModal.css';
 
@@ -74,6 +76,18 @@ export function PanelModal({
   const resolvedBackLabel = backLabel ?? t('common.back', { defaultValue: 'Back' });
   const resolvedCloseLabel = closeLabel ?? t('common.close', { defaultValue: 'Close' });
 
+  const internalRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (typeof shellRef === 'function') {
+      shellRef(internalRef.current);
+    } else if (shellRef) {
+      (shellRef as React.MutableRefObject<HTMLDivElement | null>).current = internalRef.current;
+    }
+  }, [shellRef]);
+
+  useFocusTrap(isOpen, onClose, internalRef);
+
   if (!isOpen) {
     return null;
   }
@@ -88,13 +102,14 @@ export function PanelModal({
       onClick={onClose}
     >
       <div
-        ref={shellRef}
+        ref={internalRef}
         className={joinClassNames('panel-modal-shell', `panel-modal-size-${size}`, className)}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledby}
+        tabIndex={-1}
       >
         <div className={joinClassNames('panel-modal-header', headerClassName)}>
           <div className="panel-modal-top-row">

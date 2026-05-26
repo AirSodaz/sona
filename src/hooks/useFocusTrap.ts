@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useDialogStore } from '../stores/dialogStore';
+
 
 /**
  * Hook to trap focus inside a modal and handle Escape key.
@@ -28,15 +28,23 @@ export function useFocusTrap(
             });
 
             function handleKeyDown(e: KeyboardEvent) {
+                // If GlobalDialog is open, let it handle Escape
+                if (document.querySelector('.dialog-modal')) return;
+
+                const overlays = document.querySelectorAll('.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, [data-focus-trap-overlay]');
+                const topOverlay = overlays[overlays.length - 1];
+                const isTopMost = !topOverlay || (containerRef.current && topOverlay.contains(containerRef.current));
+
                 if (e.key === 'Escape') {
-                    // Only close if no other dialog is open (GlobalDialog)
-                    if (useDialogStore.getState().isOpen) return;
-                    onCloseRef.current();
+                    if (isTopMost) {
+                        e.preventDefault();
+                        onCloseRef.current();
+                    }
                     return;
                 }
 
                 if (e.key === 'Tab' && !e.ctrlKey) {
-                    if (!containerRef.current) return;
+                    if (!isTopMost || !containerRef.current) return;
 
                     // Trap focus inside modal
                     const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
@@ -47,7 +55,12 @@ export function useFocusTrap(
                     const firstElement = focusableElements[0] as HTMLElement;
                     const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
-                    if (e.shiftKey) {
+                    const isFocusInside = containerRef.current.contains(document.activeElement);
+
+                    if (!isFocusInside) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    } else if (e.shiftKey) {
                         if (document.activeElement === firstElement) {
                             e.preventDefault();
                             lastElement.focus();

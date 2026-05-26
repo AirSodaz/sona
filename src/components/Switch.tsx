@@ -1,6 +1,7 @@
 
 
 interface SwitchProps {
+    id?: string;
     checked: boolean;
     onChange: (checked: boolean) => void;
     label?: string;
@@ -10,7 +11,7 @@ interface SwitchProps {
     style?: React.CSSProperties;
 }
 
-export function Switch({ checked, onChange, label, className = '', disabled = false, 'aria-label': ariaLabel, style }: SwitchProps) {
+export function Switch({ id, checked, onChange, label, className = '', disabled = false, 'aria-label': ariaLabel, style }: SwitchProps) {
     const classNames = ['switch-container'];
     if (checked) classNames.push('checked');
     if (disabled) classNames.push('disabled');
@@ -18,6 +19,7 @@ export function Switch({ checked, onChange, label, className = '', disabled = fa
 
     return (
         <div
+            id={id}
             className={classNames.join(' ')}
             style={style}
             onClick={(e) => {

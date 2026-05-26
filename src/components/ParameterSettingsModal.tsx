@@ -1,150 +1,98 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
-import { XIcon } from './Icons';
 import { useConfigStore } from '../stores/configStore';
+import { Modal } from './Modal';
+import { FormField } from './FormField';
 
 interface ParameterSettingsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    disabled?: boolean;
+  isOpen: boolean;
+  onClose: () => void;
+  disabled?: boolean;
 }
 
 /**
  * Modal for configuring transcription parameters (Subtitle Mode, Language, Auto-Polish).
  */
 export function ParameterSettingsModal({
-    isOpen,
-    onClose,
-    disabled = false
+  isOpen,
+  onClose,
+  disabled = false,
 }: ParameterSettingsModalProps): React.JSX.Element | null {
-    const { t } = useTranslation();
-    const modalRef = useRef<HTMLDivElement>(null);
-    const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const { t } = useTranslation();
 
-    // Get config and setters from store
-    const config = useConfigStore((state) => state.config);
-    const setConfig = useConfigStore((state) => state.setConfig);
+  // Get config and setters from store
+  const config = useConfigStore((state) => state.config);
+  const setConfig = useConfigStore((state) => state.setConfig);
 
-    // Derived values
-    const enableTimeline = config.enableTimeline ?? false;
-    const language = config.language;
+  // Derived values
+  const enableTimeline = config.enableTimeline ?? false;
+  const language = config.language;
 
-    // Focus management
-    useEffect(() => {
-        if (isOpen) {
-            requestAnimationFrame(() => {
-                closeButtonRef.current?.focus();
-            });
-        }
-    }, [isOpen]);
+  if (!isOpen) return null;
 
-    // Keyboard support (Escape to close)
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isOpen) return;
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                onClose();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onClose]);
+  const dropdownStyle = {
+    width: '180px',
+    opacity: disabled ? 0.6 : 1,
+    pointerEvents: disabled ? 'none' : 'auto',
+  } as React.CSSProperties;
 
-    if (!isOpen) return null;
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
+      size="md"
+    >
+      {/* Content */}
+      <div 
+        className="options-container" 
+        style={{ 
+          padding: 0, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: 'var(--spacing-lg)',
+        }}
+      >
+        {/* Subtitle Mode */}
+        <FormField
+          id="parameter-settings-timeline"
+          label={t('batch.timeline_mode')}
+          description={t('batch.timeline_hint')}
+          layout="horizontal"
+        >
+          <Switch
+            id="parameter-settings-timeline"
+            checked={enableTimeline}
+            onChange={(val) => !disabled && setConfig({ enableTimeline: val })}
+            disabled={disabled}
+          />
+        </FormField>
 
-    const dropdownStyle = {
-        width: '180px',
-        opacity: disabled ? 0.6 : 1,
-        pointerEvents: disabled ? 'none' : 'auto'
-    } as React.CSSProperties;
-
-    return (
-        <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
-            <div
-                ref={modalRef}
-                className="dialog-modal"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="param-settings-title"
-                style={{
-                    background: 'var(--color-bg-elevated)',
-                    borderRadius: 'var(--radius-lg)',
-                    boxShadow: 'var(--shadow-xl)',
-                    width: '450px',
-                    maxWidth: '90vw',
-                    padding: 'var(--spacing-lg)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--spacing-md)',
-                    border: '1px solid var(--color-border)',
-                }}
-            >
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <h3
-                        id="param-settings-title"
-                        style={{
-                            fontSize: '1.125rem',
-                            fontWeight: 600,
-                            color: 'var(--color-text-primary)',
-                            margin: 0
-                        }}
-                    >
-                        {t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
-                    </h3>
-                    <button
-                        ref={closeButtonRef}
-                        className="btn btn-icon"
-                        onClick={onClose}
-                        aria-label={t('common.close')}
-                        data-tooltip={t('common.close')}
-                        data-tooltip-pos="bottom-left"
-                    >
-                        <XIcon />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="options-container" style={{ padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                    {/* Subtitle Mode */}
-                    <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div className="options-label">
-                            <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.timeline_mode')}</span>
-                            <span className="options-hint">{t('batch.timeline_hint')}</span>
-                        </div>
-                        <Switch
-                            checked={enableTimeline}
-                            onChange={(val) => !disabled && setConfig({ enableTimeline: val })}
-                            disabled={disabled}
-                        />
-                    </div>
-
-                    {/* Language */}
-                    <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div className="options-label">
-                            <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.language')}</span>
-                            <span className="options-hint">{t('batch.language_hint')}</span>
-                        </div>
-                        <Dropdown
-                            value={language}
-                            onChange={(val) => !disabled && setConfig({ language: val })}
-                            options={[
-                                { value: 'auto', label: 'Auto' },
-                                { value: 'zh', label: 'Chinese' },
-                                { value: 'en', label: 'English' },
-                                { value: 'ja', label: 'Japanese' },
-                                { value: 'ko', label: 'Korean' },
-                                { value: 'yue', label: 'Cantonese' }
-                            ]}
-                            style={dropdownStyle}
-                        />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+        {/* Language */}
+        <FormField
+          id="parameter-settings-language"
+          label={t('batch.language')}
+          description={t('batch.language_hint')}
+          layout="horizontal"
+        >
+          <Dropdown
+            id="parameter-settings-language"
+            value={language}
+            onChange={(val) => !disabled && setConfig({ language: val })}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'zh', label: 'Chinese' },
+              { value: 'en', label: 'English' },
+              { value: 'ja', label: 'Japanese' },
+              { value: 'ko', label: 'Korean' },
+              { value: 'yue', label: 'Cantonese' },
+            ]}
+            style={dropdownStyle}
+          />
+        </FormField>
+      </div>
+    </Modal>
+  );
 }
