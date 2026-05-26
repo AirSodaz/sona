@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../types/config';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
+import onlineAsrProviderManifest from '../../shared/online-asr-providers.json';
 import {
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
@@ -285,6 +286,12 @@ describe('asrConfigService', () => {
   });
 
   it('keeps the default Volcengine local batch provider on flash recognize mode', () => {
+    const volcengineManifest = onlineAsrProviderManifest.providers.find(
+      (provider) => provider.id === 'volcengine-doubao',
+    );
+
+    expect(volcengineManifest?.defaults.batchEndpoint).toBe(VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT);
+    expect(volcengineManifest?.defaults.batchResourceId).toBe(VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID);
     expect(DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG).toMatchObject({
       batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
       batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,

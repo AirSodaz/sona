@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+#[path = "../src/asr_providers.rs"]
+mod asr_providers;
 #[path = "../src/automation_repository.rs"]
 mod automation_repository;
 
@@ -200,6 +202,89 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
+}
+
+#[test]
+fn validation_uses_volcengine_batch_defaults_when_only_api_key_is_saved() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = dir.path().join("exports");
+    fs::create_dir_all(&watch_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        export_dir.to_string_lossy().into_owned(),
+        |_| {},
+    );
+    let mut global_config = valid_global_config("");
+    global_config["asr"] = json!({
+        "selections": {
+            "batch": {
+                "engine": "online",
+                "mode": "offline",
+                "modelId": null,
+                "modelPath": "",
+                "providerId": "volcengine-doubao",
+                "profileId": "volcengine-doubao-default"
+            }
+        },
+        "providers": {
+            "online": {
+                "volcengine-doubao": {
+                    "apiKey": "volc-test-key"
+                }
+            }
+        }
+    });
+
+    let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));
+
+    assert!(result.valid);
+    assert!(export_dir.is_dir());
+}
+
+#[test]
+fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_async() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = dir.path().join("exports");
+    fs::create_dir_all(&watch_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        export_dir.to_string_lossy().into_owned(),
+        |_| {},
+    );
+    let mut global_config = valid_global_config("");
+    global_config["asr"] = json!({
+        "selections": {
+            "batch": {
+                "engine": "online",
+                "mode": "offline",
+                "modelId": null,
+                "modelPath": "",
+                "providerId": "volcengine-doubao",
+                "profileId": "volcengine-doubao-default"
+            }
+        },
+        "providers": {
+            "online": {
+                "volcengine-doubao": {
+                    "apiKey": "volc-test-key",
+                    "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit",
+                    "batchResourceId": "volc.seedasr.auc",
+                    "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+                    "streamingResourceId": "volc.seedasr.sauc.duration"
+                }
+            }
+        }
+    });
+
+    let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));
+
+    assert!(!result.valid);
+    assert_eq!(
+        result.code.as_deref(),
+        Some("automation.offline_model_missing")
+    );
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod app_settings;
 mod archive;
+mod asr_providers;
 mod audio;
 mod automation_repository;
 mod automation_runtime;

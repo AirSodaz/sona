@@ -1,3 +1,4 @@
+import onlineAsrProviderManifest from '../shared/online-asr-providers.json';
 import type {
   AsrMode,
   AsrModelSelection,
@@ -31,47 +32,90 @@ export type OnlineAsrProviderDefinition<TConfig extends OnlineAsrProviderConfig 
   isConfigured: (config: TConfig, mode: AsrMode) => boolean;
 };
 
-export const VOLCENGINE_DOUBAO_PROVIDER_ID: OnlineAsrProviderId = 'volcengine-doubao';
-export const VOLCENGINE_DOUBAO_PROFILE_ID = 'volcengine-doubao-default';
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT =
-  'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = 'volc.bigasr.auc_turbo';
+type OnlineAsrProviderManifest = typeof onlineAsrProviderManifest;
+type OnlineAsrProviderManifestEntry = OnlineAsrProviderManifest['providers'][number];
+
+type VolcengineManifestEntry = OnlineAsrProviderManifestEntry & {
+  id: 'volcengine-doubao';
+  defaults: VolcengineDoubaoAsrProviderConfig;
+};
+
+function providerManifestEntry(providerId: OnlineAsrProviderId): OnlineAsrProviderManifestEntry {
+  const entry = onlineAsrProviderManifest.providers.find((provider) => provider.id === providerId);
+  if (!entry) {
+    throw new Error(`Missing online ASR provider manifest entry: ${providerId}`);
+  }
+  return entry;
+}
+
+const VOLCENGINE_DOUBAO_MANIFEST = providerManifestEntry('volcengine-doubao') as VolcengineManifestEntry;
+const VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH = VOLCENGINE_DOUBAO_MANIFEST.batch.localFileMode;
+
+export const VOLCENGINE_DOUBAO_PROVIDER_ID: OnlineAsrProviderId = VOLCENGINE_DOUBAO_MANIFEST.id;
+export const VOLCENGINE_DOUBAO_PROFILE_ID = VOLCENGINE_DOUBAO_MANIFEST.profileId;
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT = VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.endpoint;
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.resourceId;
 
 export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG: VolcengineDoubaoAsrProviderConfig = {
-  apiKey: '',
-  streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-  streamingResourceId: 'volc.seedasr.sauc.duration',
-  batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-  batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+  ...VOLCENGINE_DOUBAO_MANIFEST.defaults,
 };
+
+function normalizedEndpoint(endpoint: string | undefined): string {
+  return endpoint?.trim().replace(/\/+$/, '') ?? '';
+}
+
+function normalizedResourceId(resourceId: string | undefined): string {
+  return resourceId?.trim() ?? '';
+}
 
 export function isVolcengineFlashBatchMode(
   provider: Pick<VolcengineDoubaoAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
 ): boolean {
-  return provider?.batchEndpoint.trim().replace(/\/+$/, '') === VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT
-    && provider.batchResourceId.trim() === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+  return normalizedEndpoint(provider?.batchEndpoint) === normalizedEndpoint(VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT)
+    && normalizedResourceId(provider?.batchResourceId) === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
 }
 
 export function normalizeVolcengineDoubaoConfig(
   provider: Partial<VolcengineDoubaoAsrProviderConfig> | undefined,
 ): VolcengineDoubaoAsrProviderConfig {
-  const batchEndpoint = provider?.batchEndpoint?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT;
-  const batchResourceId = provider?.batchResourceId?.trim() || VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+  const defaults = DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG;
+  const batchEndpoint = provider?.batchEndpoint?.trim() || defaults.batchEndpoint;
+  const batchResourceId = provider?.batchResourceId?.trim() || defaults.batchResourceId;
   const flashBatch = isVolcengineFlashBatchMode({ batchEndpoint, batchResourceId })
     ? { batchEndpoint, batchResourceId }
     : {
-        batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-        batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
+        batchEndpoint: defaults.batchEndpoint,
+        batchResourceId: defaults.batchResourceId,
       };
 
   return {
-    apiKey: provider?.apiKey?.trim() ?? '',
-    streamingEndpoint: provider?.streamingEndpoint?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingEndpoint,
-    streamingResourceId: provider?.streamingResourceId?.trim()
-      || DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG.streamingResourceId,
+    apiKey: provider?.apiKey?.trim() ?? defaults.apiKey,
+    streamingEndpoint: provider?.streamingEndpoint?.trim() || defaults.streamingEndpoint,
+    streamingResourceId: provider?.streamingResourceId?.trim() || defaults.streamingResourceId,
     ...flashBatch,
   };
+}
+
+function hasRequiredConfigFields(
+  config: VolcengineDoubaoAsrProviderConfig,
+  requiredFields: readonly string[],
+): boolean {
+  return requiredFields.every((field) => {
+    switch (field) {
+      case 'apiKey':
+        return Boolean(config.apiKey.trim());
+      case 'streamingEndpoint':
+        return Boolean(config.streamingEndpoint.trim());
+      case 'streamingResourceId':
+        return Boolean(config.streamingResourceId.trim());
+      case 'batchEndpoint':
+        return Boolean(config.batchEndpoint.trim());
+      case 'batchResourceId':
+        return Boolean(config.batchResourceId.trim());
+      default:
+        return false;
+    }
+  });
 }
 
 function isVolcengineConfigured(
@@ -82,25 +126,32 @@ function isVolcengineConfigured(
     return false;
   }
   if (mode === 'streaming') {
-    return Boolean(config.streamingEndpoint.trim() && config.streamingResourceId.trim());
+    return hasRequiredConfigFields(config, VOLCENGINE_DOUBAO_MANIFEST.streaming.requiredConfigFields);
   }
-  return isVolcengineFlashBatchMode(config);
+  return hasRequiredConfigFields(config, VOLCENGINE_DOUBAO_MANIFEST.batch.requiredConfigFields)
+    && (!VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.supported || isVolcengineFlashBatchMode(config));
 }
 
-export const ONLINE_ASR_PROVIDER_DEFINITIONS = [
-  {
-    id: VOLCENGINE_DOUBAO_PROVIDER_ID,
-    profileId: VOLCENGINE_DOUBAO_PROFILE_ID,
-    optionLabelKey: 'settings.asr.volcengine_doubao_option',
-    optionDefaultLabel: '豆包语音 (云端)',
-    titleKey: 'settings.asr.volcengine_title',
-    titleDefault: '火山引擎语音服务 (火山 ASR)',
-    cloudUploadHintKey: 'settings.asr.cloud_upload_hint',
-    cloudUploadHintDefault: '音频会发送到火山引擎进行识别。',
+function definitionFromManifest(
+  entry: VolcengineManifestEntry,
+): OnlineAsrProviderDefinition<VolcengineDoubaoAsrProviderConfig> {
+  return {
+    id: entry.id,
+    profileId: entry.profileId,
+    optionLabelKey: entry.ui.optionLabelKey,
+    optionDefaultLabel: entry.ui.optionDefaultLabel,
+    titleKey: entry.ui.titleKey,
+    titleDefault: entry.ui.titleDefault,
+    cloudUploadHintKey: entry.ui.cloudUploadHintKey,
+    cloudUploadHintDefault: entry.ui.cloudUploadHintDefault,
     defaultConfig: DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
     normalizeConfig: normalizeVolcengineDoubaoConfig,
     isConfigured: isVolcengineConfigured,
-  } satisfies OnlineAsrProviderDefinition<VolcengineDoubaoAsrProviderConfig>,
+  };
+}
+
+export const ONLINE_ASR_PROVIDER_DEFINITIONS = [
+  definitionFromManifest(VOLCENGINE_DOUBAO_MANIFEST),
 ] as const;
 
 export const ONLINE_ASR_PROVIDER_MAP = new Map<OnlineAsrProviderId, OnlineAsrProviderDefinition>(

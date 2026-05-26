@@ -2,7 +2,7 @@ use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
-use super::online::{OnlineStreamingSession, VOLCENGINE_DOUBAO_PROVIDER_ID};
+use super::online::OnlineStreamingSession;
 use super::state::SherpaState;
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
@@ -12,6 +12,12 @@ use super::types::{
     TranscriptTimingSource, TranscriptTimingUnit, VolcengineDoubaoAsrConfig,
 };
 use super::TranscriptPostprocessor;
+use crate::asr_providers::{
+    fill_volcengine_doubao_config_fields, is_volcengine_doubao_provider_id,
+    is_volcengine_local_file_batch_config_fields_complete,
+    is_volcengine_streaming_config_fields_complete,
+    volcengine_local_file_batch_unsupported_message,
+};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
@@ -26,13 +32,6 @@ use tokio::sync::{Mutex, Notify};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
-
-const STREAMING_ENDPOINT_DEFAULT: &str =
-    "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async";
-const STREAMING_RESOURCE_DEFAULT: &str = "volc.seedasr.sauc.duration";
-const BATCH_ENDPOINT_DEFAULT: &str =
-    "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash";
-const BATCH_RESOURCE_DEFAULT: &str = "volc.bigasr.auc_turbo";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VolcengineMode {
@@ -54,36 +53,32 @@ type VolcengineWriter = futures_util::stream::SplitSink<
 >;
 
 fn normalized_config(config: &VolcengineDoubaoAsrConfig) -> VolcengineDoubaoAsrConfig {
+    let fields = fill_volcengine_doubao_config_fields(
+        Some(&config.api_key),
+        Some(&config.streaming_endpoint),
+        Some(&config.streaming_resource_id),
+        Some(&config.batch_endpoint),
+        Some(&config.batch_resource_id),
+    );
     VolcengineDoubaoAsrConfig {
-        api_key: config.api_key.trim().to_string(),
-        streaming_endpoint: non_empty_or_default(
-            &config.streaming_endpoint,
-            STREAMING_ENDPOINT_DEFAULT,
-        ),
-        streaming_resource_id: non_empty_or_default(
-            &config.streaming_resource_id,
-            STREAMING_RESOURCE_DEFAULT,
-        ),
-        batch_endpoint: non_empty_or_default(&config.batch_endpoint, BATCH_ENDPOINT_DEFAULT),
-        batch_resource_id: non_empty_or_default(&config.batch_resource_id, BATCH_RESOURCE_DEFAULT),
+        api_key: fields.api_key,
+        streaming_endpoint: fields.streaming_endpoint,
+        streaming_resource_id: fields.streaming_resource_id,
+        batch_endpoint: fields.batch_endpoint,
+        batch_resource_id: fields.batch_resource_id,
     }
 }
 
-fn non_empty_or_default(value: &str, default: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        default.to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn is_volcengine_flash_batch_endpoint(endpoint: &str) -> bool {
-    endpoint.trim().trim_end_matches('/') == BATCH_ENDPOINT_DEFAULT
-}
-
-fn is_volcengine_flash_batch_resource(resource_id: &str) -> bool {
-    resource_id.trim() == BATCH_RESOURCE_DEFAULT
+fn config_fields(
+    config: &VolcengineDoubaoAsrConfig,
+) -> crate::asr_providers::VolcengineDoubaoConfigFields {
+    fill_volcengine_doubao_config_fields(
+        Some(&config.api_key),
+        Some(&config.streaming_endpoint),
+        Some(&config.streaming_resource_id),
+        Some(&config.batch_endpoint),
+        Some(&config.batch_resource_id),
+    )
 }
 
 fn detect_audio_format(file_path: &str) -> &'static str {
@@ -116,26 +111,22 @@ pub fn validate_config(
     mode: VolcengineMode,
 ) -> Result<VolcengineDoubaoAsrConfig, String> {
     let config = normalized_config(config);
-    if config.api_key.is_empty() {
+    let fields = config_fields(&config);
+    if fields.api_key.is_empty() {
         return Err("火山 ASR API Key 未配置。".to_string());
     }
     match mode {
         VolcengineMode::Streaming => {
-            if config.streaming_endpoint.is_empty() || config.streaming_resource_id.is_empty() {
+            if !is_volcengine_streaming_config_fields_complete(&fields) {
                 return Err("火山实时 ASR endpoint 或 Resource ID 未配置。".to_string());
             }
         }
         VolcengineMode::Batch => {
-            if config.batch_endpoint.is_empty() || config.batch_resource_id.is_empty() {
+            if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
                 return Err("火山批量 ASR endpoint 或 Resource ID 未配置。".to_string());
             }
-            if !is_volcengine_flash_batch_endpoint(&config.batch_endpoint)
-                || !is_volcengine_flash_batch_resource(&config.batch_resource_id)
-            {
-                return Err(
-                    "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。"
-                        .to_string(),
-                );
+            if !is_volcengine_local_file_batch_config_fields_complete(&fields) {
+                return Err(volcengine_local_file_batch_unsupported_message().to_string());
             }
         }
     }
@@ -149,7 +140,7 @@ fn config_from_request(
     let Some(provider) = request.online_provider.as_ref() else {
         return Err("火山 ASR provider 配置缺失。".to_string());
     };
-    if provider.provider_id != VOLCENGINE_DOUBAO_PROVIDER_ID {
+    if !is_volcengine_doubao_provider_id(&provider.provider_id) {
         return Err(format!(
             "不支持的火山 ASR provider：{}",
             provider.provider_id
@@ -853,7 +844,7 @@ mod tests {
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
             online_provider: Some(OnlineAsrProviderRequest {
-                provider_id: VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
+                provider_id: crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
                 profile_id: "volcengine-doubao-default".to_string(),
                 config: serde_json::to_value(config("volc-test-key")).expect("config json"),
             }),

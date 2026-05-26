@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    {
+      "id": "volcengine-doubao",
+      "profileId": "volcengine-doubao-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.volcengine_doubao_option",
+        "optionDefaultLabel": "豆包语音 (云端)",
+        "titleKey": "settings.asr.volcengine_title",
+        "titleDefault": "火山引擎语音服务 (火山 ASR)",
+        "cloudUploadHintKey": "settings.asr.cloud_upload_hint",
+        "cloudUploadHintDefault": "音频会发送到火山引擎进行识别。"
+      },
+      "defaults": {
+        "apiKey": "",
+        "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+        "streamingResourceId": "volc.seedasr.sauc.duration",
+        "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+        "batchResourceId": "volc.bigasr.auc_turbo"
+      },
+      "streaming": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "streamingEndpoint",
+          "streamingResourceId"
+        ]
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "batchEndpoint",
+          "batchResourceId"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+          "resourceId": "volc.bigasr.auc_turbo",
+          "unsupportedMessage": "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。"
+        }
+      }
+    }
+  ]
+}

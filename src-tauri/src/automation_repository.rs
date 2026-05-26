@@ -1,3 +1,7 @@
+use crate::asr_providers::{
+    is_volcengine_doubao_selection, is_volcengine_local_file_batch_config_complete,
+    volcengine_provider_from_providers,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
@@ -432,21 +436,12 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
         .get("asr")
         .and_then(|asr| asr.get("selections"))
         .and_then(|selections| selections.get("batch"));
-    if is_volcengine_batch_selection(batch_selection) {
-        let provider = volcengine_batch_provider(global_config);
-        let api_key = provider
-            .and_then(|value| string_field(value, "apiKey"))
-            .map(str::trim)
-            .unwrap_or_default();
-        let endpoint = provider
-            .and_then(|value| string_field(value, "batchEndpoint"))
-            .map(str::trim)
-            .unwrap_or_default();
-        let resource_id = provider
-            .and_then(|value| string_field(value, "batchResourceId"))
-            .map(str::trim)
-            .unwrap_or_default();
-        return !api_key.is_empty() && !endpoint.is_empty() && !resource_id.is_empty();
+    if is_volcengine_doubao_selection(batch_selection) {
+        let provider = global_config
+            .get("asr")
+            .and_then(|asr| asr.get("providers"))
+            .and_then(|providers| volcengine_provider_from_providers(Some(providers)));
+        return is_volcengine_local_file_batch_config_complete(provider);
     }
 
     let offline_model_path = batch_selection
@@ -455,34 +450,6 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
         .or_else(|| string_field(global_config, "offlineModelPath"))
         .unwrap_or_default();
     !offline_model_path.trim().is_empty() && Path::new(offline_model_path.trim()).exists()
-}
-
-fn is_volcengine_batch_selection(selection: Option<&Value>) -> bool {
-    match selection
-        .and_then(|selection| string_field(selection, "engine"))
-        .map(str::trim)
-    {
-        Some("online") => {
-            selection
-                .and_then(|selection| string_field(selection, "providerId"))
-                .map(str::trim)
-                == Some("volcengine-doubao")
-        }
-        Some("volcengine-doubao") => true,
-        _ => false,
-    }
-}
-
-fn volcengine_batch_provider(global_config: &Value) -> Option<&Value> {
-    global_config
-        .get("asr")
-        .and_then(|asr| asr.get("providers"))
-        .and_then(|providers| {
-            providers
-                .get("online")
-                .and_then(|online| online.get("volcengine-doubao"))
-                .or_else(|| providers.get("volcengineDoubao"))
-        })
 }
 
 fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

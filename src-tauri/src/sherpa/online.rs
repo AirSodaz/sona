@@ -1,9 +1,8 @@
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
+pub use crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID;
 use tauri::{AppHandle, State};
-
-pub const VOLCENGINE_DOUBAO_PROVIDER_ID: &str = "volcengine-doubao";
 
 #[derive(Clone)]
 pub enum OnlineStreamingSession {
