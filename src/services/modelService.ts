@@ -1,4 +1,3 @@
-import { logger } from "../utils/logger";
 import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { listen } from '@tauri-apps/api/event';
@@ -11,6 +10,8 @@ import {
 } from './tauri/app';
 import type { ModelFileConfig } from '../types/model';
 import { createModelDownloadService } from './modelDownloadService';
+import { createModelFileService } from './modelFileService';
+import { createModelRegistryService } from './modelRegistryService';
 
 export type { ModelFileConfig } from '../types/model';
 
@@ -197,7 +198,21 @@ export type ProgressCallback = (percentage: number, status: string, isFinished?:
  * Service for managing AI models (downloading, verifying, path resolution).
  */
 class ModelService {
-    private latestCatalogSnapshot: ModelCatalogSnapshot | null = null;
+    private readonly fileService = createModelFileService({
+        appLocalDataDir,
+        join,
+        exists,
+        mkdir,
+        remove,
+    });
+    private readonly registryService = createModelRegistryService({
+        getModelCatalogSnapshot: getModelCatalogSnapshotFromRust,
+        resolveModelCatalogSelectedIds: resolveModelCatalogSelectedIdsFromRust,
+        getModelsDir: () => this.getModelsDir(),
+        join,
+        presetModelsMap: PRESET_MODELS_MAP,
+        defaultModelRules: DEFAULT_MODEL_RULES,
+    });
     private readonly downloadService = createModelDownloadService({
         downloadFile,
         extractTarBz2,
@@ -213,21 +228,6 @@ class ModelService {
         getModelsDir: () => this.getModelsDir(),
     });
 
-    private async getCatalogModelFromLatestSnapshot(modelId: string): Promise<ModelCatalogModel | undefined> {
-        const cachedModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
-        if (cachedModel) {
-            return cachedModel;
-        }
-
-        try {
-            const snapshot = await this.getModelCatalogSnapshot();
-            return snapshot.models.find(model => model.id === modelId);
-        } catch (error) {
-            logger.warn('[ModelService] Failed to resolve model metadata from Rust catalog snapshot:', error);
-            return undefined;
-        }
-    }
-
     /**
      * Gets the local directory where models are stored.
      *
@@ -236,13 +236,7 @@ class ModelService {
      * @return A promise that resolves to the absolute path of the models directory.
      */
     async getModelsDir(): Promise<string> {
-        const appDataDir = await appLocalDataDir();
-        const modelsDir = await join(appDataDir, 'models');
-        if (!(await exists(modelsDir))) {
-            await mkdir(modelsDir, { recursive: true });
-        }
-        logger.info('[ModelService] Models directory:', modelsDir);
-        return modelsDir;
+        return this.fileService.getModelsDir();
     }
 
     /**
@@ -251,13 +245,11 @@ class ModelService {
      * @return A promise resolving to grouped model metadata and install paths.
      */
     async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
-        const snapshot = await getModelCatalogSnapshotFromRust();
-        this.latestCatalogSnapshot = snapshot;
-        return snapshot;
+        return this.registryService.getModelCatalogSnapshot();
     }
 
     async resolveModelCatalogSelectedIds(paths: ModelSelectionPaths): Promise<ModelCatalogSelectedIds> {
-        return await resolveModelCatalogSelectedIdsFromRust(paths);
+        return await this.registryService.resolveModelCatalogSelectedIds(paths);
     }
 
     /**
@@ -285,11 +277,11 @@ class ModelService {
      * @throws {Error} If the model is not found or download fails.
      */
     async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
+        const catalogModel = await this.registryService.resolveCatalogModel(modelId);
         const model = catalogModel ?? PRESET_MODELS_MAP.get(modelId);
         if (!model) throw new Error('Model not found');
 
-        const modelsDir = this.latestCatalogSnapshot?.modelsDir ?? await this.getModelsDir();
+        const modelsDir = this.registryService.latestSnapshot?.modelsDir ?? await this.getModelsDir();
         return await this.downloadService.downloadModel({
             modelId,
             model,
@@ -306,24 +298,7 @@ class ModelService {
      * @return A promise resolving to the model's path.
      */
     async getModelPath(modelId: string): Promise<string> {
-        const cachedPath = this.latestCatalogSnapshot?.modelPathById[modelId];
-        if (cachedPath) {
-            return cachedPath;
-        }
-
-        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
-        if (catalogModel?.installPath) {
-            return catalogModel.installPath;
-        }
-
-        const model = PRESET_MODELS_MAP.get(modelId);
-        if (!model) throw new Error('Model not found');
-
-        const modelsDir = await this.getModelsDir();
-        if (model && model.filename) {
-            return await join(modelsDir, model.filename);
-        }
-        return await join(modelsDir, modelId);
+        return await this.registryService.getModelPath(modelId);
     }
 
     /**
@@ -333,7 +308,7 @@ class ModelService {
      * @return A promise resolving to true if installed, false otherwise.
      */
     async isModelInstalled(modelId: string): Promise<boolean> {
-        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
+        const catalogModel = await this.registryService.resolveCatalogModel(modelId);
         if (catalogModel) {
             return catalogModel.isInstalled;
         }
@@ -350,9 +325,7 @@ class ModelService {
      */
     async deleteModel(modelId: string): Promise<void> {
         const modelPath = await this.getModelPath(modelId);
-        if (await exists(modelPath)) {
-            await remove(modelPath, { recursive: true });
-        }
+        await this.fileService.removeIfExists(modelPath);
     }
 
     /**
@@ -364,16 +337,7 @@ class ModelService {
      * @returns The ModelRules for the model.
      */
     getModelRules(modelId: string): ModelRules {
-        const snapshotModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
-        if (snapshotModel?.rules) {
-            return snapshotModel.rules;
-        }
-
-        const model = PRESET_MODELS_MAP.get(modelId);
-        if (model && model.rules) {
-            return model.rules;
-        }
-        return DEFAULT_MODEL_RULES;
+        return this.registryService.getModelRules(modelId);
     }
 }
 
