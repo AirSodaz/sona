@@ -992,9 +992,7 @@ mod tests {
         )
         .unwrap();
 
-        let items = repository
-            .list_items_with_reconciled_live_drafts()
-            .unwrap();
+        let items = repository.list_items_with_reconciled_live_drafts().unwrap();
 
         assert_eq!(items[0].id, draft.item.id);
         assert_eq!(items[0].status, HistoryItemStatus::Complete);
@@ -1021,16 +1019,11 @@ mod tests {
             })
             .unwrap();
 
-        let items = repository
-            .list_items_with_reconciled_live_drafts()
-            .unwrap();
+        let items = repository.list_items_with_reconciled_live_drafts().unwrap();
 
         assert_eq!(items[0].id, draft.item.id);
         assert_eq!(items[0].status, HistoryItemStatus::Draft);
-        assert_eq!(
-            items[0].draft_source,
-            Some(HistoryDraftSource::LiveRecord)
-        );
+        assert_eq!(items[0].draft_source, Some(HistoryDraftSource::LiveRecord));
     }
 
     #[test]
@@ -1058,16 +1051,11 @@ mod tests {
         )
         .unwrap();
 
-        let items = repository
-            .list_items_with_reconciled_live_drafts()
-            .unwrap();
+        let items = repository.list_items_with_reconciled_live_drafts().unwrap();
 
         assert_eq!(items[0].id, draft.item.id);
         assert_eq!(items[0].status, HistoryItemStatus::Draft);
-        assert_eq!(
-            items[0].draft_source,
-            Some(HistoryDraftSource::LiveRecord)
-        );
+        assert_eq!(items[0].draft_source, Some(HistoryDraftSource::LiveRecord));
     }
 
     #[test]

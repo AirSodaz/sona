@@ -1,9 +1,9 @@
 use super::error::SherpaError;
+use super::groq;
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
-use super::groq;
-pub use crate::asr_providers::{VOLCENGINE_DOUBAO_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID};
+pub use crate::asr_providers::{GROQ_WHISPER_PROVIDER_ID, VOLCENGINE_DOUBAO_PROVIDER_ID};
 use tauri::{AppHandle, State};
 
 #[derive(Clone)]
@@ -157,9 +157,9 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         VOLCENGINE_DOUBAO_PROVIDER_ID => {
             volcengine::process_batch_file_impl(app, state, file_path, request).await
         }
-        GROQ_WHISPER_PROVIDER_ID => {
-            groq::process_batch_file_impl(app, state, file_path, request).await.map_err(Into::into)
-        }
+        GROQ_WHISPER_PROVIDER_ID => groq::process_batch_file_impl(app, state, file_path, request)
+            .await
+            .map_err(Into::into),
         _ => Err(SherpaError::UnsupportedOnlineProvider {
             provider_id: provider_id.to_string(),
         }),

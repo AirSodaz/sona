@@ -42,9 +42,9 @@ impl LlmProviderStrategy {
             "anthropic" => Self::Anthropic,
             "gemini" => Self::Gemini,
             "ollama" => Self::Ollama,
-            "deep_seek" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal"
-            | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq"
-            | "x_ai" | "mistral_ai" | "chatglm" => Self::OpenAiCompatible,
+            "deep_seek" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global"
+            | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai"
+            | "chatglm" => Self::OpenAiCompatible,
             "perplexity" => Self::Perplexity,
             "volcengine" => Self::OpenAiCompatibleCustomPath,
             "google_translate" => Self::GoogleTranslate,

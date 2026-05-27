@@ -139,8 +139,12 @@ impl Serialize for SherpaError {
             Self::VolcengineEndFrameSendFailed { .. } => "VOLCENGINE_END_FRAME_SEND_FAILED",
             Self::AudioFileReadFailed { .. } => "AUDIO_FILE_READ_FAILED",
             Self::VolcengineBatchRequestFailed { .. } => "VOLCENGINE_BATCH_REQUEST_FAILED",
-            Self::VolcengineBatchResponseParseFailed { .. } => "VOLCENGINE_BATCH_RESPONSE_PARSE_FAILED",
-            Self::VolcengineLocalFileBatchUnsupported { .. } => "VOLCENGINE_LOCAL_FILE_BATCH_UNSUPPORTED",
+            Self::VolcengineBatchResponseParseFailed { .. } => {
+                "VOLCENGINE_BATCH_RESPONSE_PARSE_FAILED"
+            }
+            Self::VolcengineLocalFileBatchUnsupported { .. } => {
+                "VOLCENGINE_LOCAL_FILE_BATCH_UNSUPPORTED"
+            }
             Self::VolcengineRealtimeOnlyForStreaming => "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING",
             Self::VolcengineBatchOnlyForOffline => "VOLCENGINE_BATCH_ONLY_FOR_OFFLINE",
             Self::Generic(_) => "GENERIC_ERROR",

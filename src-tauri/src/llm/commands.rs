@@ -214,8 +214,7 @@ where
     if matches!(
         config.strategy,
         LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
-    )
-    {
+    ) {
         let translate_strategy = config.strategy;
         let base_url = LlmApiUrl::parse(&config.base_url)?;
         let client = base_url.client()?;
@@ -521,7 +520,9 @@ pub(crate) async fn list_llm_models_command(
     let client = base_url.client()?;
 
     match strategy {
-        LlmProviderStrategy::Gemini => get_gemini_models(&client, &request.api_key, &base_url).await,
+        LlmProviderStrategy::Gemini => {
+            get_gemini_models(&client, &request.api_key, &base_url).await
+        }
         LlmProviderStrategy::Ollama => {
             get_openai_models(&client, &request.api_key, &base_url, true).await
         }

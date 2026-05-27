@@ -96,7 +96,8 @@ impl LlmAdapter for OpenAiAdapter {
             && strategy_uses_openai_chat_payload(config.strategy)
         {
             let base_url = LlmApiUrl::parse(&config.base_url)?;
-            let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
+            let url =
+                base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
             return generate_with_openai_chat_api(&url, config, &input, vec![]).await;
         }
 
@@ -307,9 +308,18 @@ impl LlmAdapter for GeminiAdapter {
                 .to_string();
 
             let usage = response.get("usageMetadata").map(|u| TokenUsage {
-                prompt_tokens: u.get("promptTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
-                completion_tokens: u.get("candidatesTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
-                total_tokens: u.get("totalTokenCount").and_then(Value::as_u64).unwrap_or(0) as u32,
+                prompt_tokens: u
+                    .get("promptTokenCount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
+                completion_tokens: u
+                    .get("candidatesTokenCount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
+                total_tokens: u
+                    .get("totalTokenCount")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
             });
 
             return Ok(StandardLlmResponse { text, usage });
@@ -365,13 +375,8 @@ impl LlmAdapter for GoogleTranslateAdapter {
                     let client = fetch_client.clone();
                     let base_url = base_url.clone();
                     async move {
-                        fetch_google_translate_free_translation(
-                            &client,
-                            &base_url,
-                            &target,
-                            &text,
-                        )
-                        .await
+                        fetch_google_translate_free_translation(&client, &base_url, &target, &text)
+                            .await
                     }
                 },
                 tokio::time::sleep,
@@ -429,27 +434,9 @@ impl LlmAdapter for GenericHttpAdapter {
                 )
                 .await?
             }
-            LlmProviderStrategy::AzureOpenAi => {
-                generate_with_azure_openai(
-                    config,
-                    &input,
-                )
-                .await?
-            }
-            LlmProviderStrategy::Perplexity => {
-                generate_with_perplexity(
-                    config,
-                    &input,
-                )
-                .await?
-            }
-            _ => {
-                generate_with_openai_custom_path(
-                    config,
-                    &input,
-                )
-                .await?
-            }
+            LlmProviderStrategy::AzureOpenAi => generate_with_azure_openai(config, &input).await?,
+            LlmProviderStrategy::Perplexity => generate_with_perplexity(config, &input).await?,
+            _ => generate_with_openai_custom_path(config, &input).await?,
         };
 
         Ok(response)
@@ -562,7 +549,7 @@ pub(crate) fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
 
 pub(crate) fn gemini_model_to_summary(model: GeminiModel) -> Option<LlmModelSummary> {
     if !is_gemini_text_generation_model(&model) {
-      return None;
+        return None;
     }
 
     let supports_tools = model

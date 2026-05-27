@@ -9,7 +9,7 @@ use super::normalization::{
     empty_snapshot, now_ms, recovered_item_from_queue_value, recovered_item_from_saved_value,
     snapshot_from_items, snapshot_from_value,
 };
-use super::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
+use super::types::{RecoverySnapshot, QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME};
 
 #[derive(Clone, Debug)]
 pub struct RecoveryRepository {
@@ -67,7 +67,10 @@ impl RecoveryRepository {
     }
 
     #[allow(dead_code)]
-    pub fn persist_queue_snapshot(&self, queue_items: Vec<Value>) -> Result<RecoverySnapshot, String> {
+    pub fn persist_queue_snapshot(
+        &self,
+        queue_items: Vec<Value>,
+    ) -> Result<RecoverySnapshot, String> {
         self.persist_queue_snapshot_with_resolved_ids(queue_items, Vec::new())
     }
 

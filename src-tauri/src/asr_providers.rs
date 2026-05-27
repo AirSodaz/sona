@@ -209,10 +209,7 @@ pub fn normalize_volcengine_doubao_provider_json(existing: Option<&Value>) -> Va
             (fields.batch_endpoint, fields.batch_resource_id)
         } else {
             let defaults = volcengine_doubao_defaults();
-            (
-                defaults.batch_endpoint,
-                defaults.batch_resource_id,
-            )
+            (defaults.batch_endpoint, defaults.batch_resource_id)
         };
 
     json!({
@@ -306,9 +303,7 @@ fn fields_from_provider_value(provider: Option<&Value>) -> VolcengineDoubaoConfi
 }
 
 #[allow(dead_code)]
-pub fn is_groq_whisper_batch_config_fields_complete(
-    config: &GroqWhisperConfigFields,
-) -> bool {
+pub fn is_groq_whisper_batch_config_fields_complete(config: &GroqWhisperConfigFields) -> bool {
     let definition = groq_whisper_provider();
     has_api_key(definition.batch.requires_api_key, &config.api_key)
         && !config.batch_endpoint.trim().is_empty()

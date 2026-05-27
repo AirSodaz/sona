@@ -3,16 +3,14 @@ use super::metrics::{
     AsrInferenceMetric,
 };
 use super::state::SherpaState;
-use super::types::{AsrTranscriptionRequest, TranscriptSegment, AsrMode};
-use crate::asr_providers::{
-    fill_groq_whisper_config_fields, GroqWhisperConfigFields,
-};
+use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
+use crate::asr_providers::{fill_groq_whisper_config_fields, GroqWhisperConfigFields};
 use crate::sherpa::postprocess::TranscriptPostprocessor;
 use crate::sherpa::transcript::apply_timeline_normalization;
+use reqwest::multipart;
 use serde_json::Value;
 use std::time::Instant;
 use tauri::AppHandle;
-use reqwest::multipart;
 use tauri::Emitter;
 
 #[derive(Debug)]
@@ -24,13 +22,20 @@ fn config_from_request(
     request: &AsrTranscriptionRequest,
     _mode: GroqMode,
 ) -> Result<GroqWhisperConfigFields, String> {
-    let provider_request = request.online_provider.as_ref().ok_or_else(|| {
-        "Online ASR provider request is missing for Groq Whisper.".to_string()
-    })?;
+    let provider_request = request
+        .online_provider
+        .as_ref()
+        .ok_or_else(|| "Online ASR provider request is missing for Groq Whisper.".to_string())?;
 
     let fields = fill_groq_whisper_config_fields(
-        provider_request.config.get("apiKey").and_then(Value::as_str),
-        provider_request.config.get("batchEndpoint").and_then(Value::as_str),
+        provider_request
+            .config
+            .get("apiKey")
+            .and_then(Value::as_str),
+        provider_request
+            .config
+            .get("batchEndpoint")
+            .and_then(Value::as_str),
         provider_request.config.get("model").and_then(Value::as_str),
     );
 
@@ -89,7 +94,10 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     let status = response.status();
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
-        return Err(format!("Groq Whisper API returned error status {}: {}", status, text));
+        return Err(format!(
+            "Groq Whisper API returned error status {}: {}",
+            status, text
+        ));
     }
 
     let response_value = response
@@ -100,7 +108,8 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     let mut segments = segments_from_groq_response(&response_value)?;
 
     segments = apply_timeline_normalization(segments, request.normalization_options);
-    segments = TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
+    segments =
+        TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
 
     let metric = AsrInferenceMetric {
         occurred_at_ms: current_time_millis(),
@@ -111,7 +120,8 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         audio_duration_ms: response_value
             .get("duration")
             .and_then(Value::as_f64)
-            .unwrap_or(0.0) * 1000.0,
+            .unwrap_or(0.0)
+            * 1000.0,
         buffered_samples: bytes.len() / 2,
         audio_extract_ms: None,
         decode_ms: duration_to_ms(started.elapsed()),
@@ -134,12 +144,17 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
 
 fn segments_from_groq_response(response: &Value) -> Result<Vec<TranscriptSegment>, String> {
     let mut segments = Vec::new();
-    let segments_array = response.get("segments").and_then(Value::as_array).ok_or_else(|| {
-        "Groq Whisper response is missing 'segments' array.".to_string()
-    })?;
+    let segments_array = response
+        .get("segments")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Groq Whisper response is missing 'segments' array.".to_string())?;
 
     for segment in segments_array {
-        let text = segment.get("text").and_then(Value::as_str).unwrap_or("").to_string();
+        let text = segment
+            .get("text")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let start = segment.get("start").and_then(Value::as_f64).unwrap_or(0.0);
         let end = segment.get("end").and_then(Value::as_f64).unwrap_or(0.0);
 

@@ -7,7 +7,7 @@ mod recovery;
 mod storage;
 
 use recovery::repository::RecoveryRepository;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::fs::{self, File};
 use std::path::Path;
 use tempfile::tempdir;
@@ -267,10 +267,7 @@ fn persist_queue_snapshot_resolved_ids_clear_recovery_when_queue_is_empty() {
         .unwrap();
 
     let snapshot = repository
-        .persist_queue_snapshot_with_resolved_ids(
-            vec![],
-            vec!["recovery-discarded".to_string()],
-        )
+        .persist_queue_snapshot_with_resolved_ids(vec![], vec!["recovery-discarded".to_string()])
         .unwrap();
 
     assert!(snapshot.items.is_empty());

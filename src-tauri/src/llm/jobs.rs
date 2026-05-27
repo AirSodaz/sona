@@ -84,13 +84,18 @@ pub(crate) fn compute_summary_source_fingerprint(segments: &[TranscriptSegment])
     segments
         .iter()
         .map(|segment| {
-            let (speaker_id, speaker_label, speaker_kind, speaker_score) =
-                segment.speaker.as_ref().map_or(("", "", "", String::new()), |speaker| {
+            let (speaker_id, speaker_label, speaker_kind, speaker_score) = segment
+                .speaker
+                .as_ref()
+                .map_or(("", "", "", String::new()), |speaker| {
                     (
                         speaker.id.as_str(),
                         speaker.label.as_str(),
                         speaker.kind.as_str(),
-                        speaker.score.map(|score| score.to_string()).unwrap_or_default(),
+                        speaker
+                            .score
+                            .map(|score| score.to_string())
+                            .unwrap_or_default(),
                     )
                 });
             format!(

@@ -351,7 +351,7 @@ fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>
             return true;
         }
     }
-    
+
     let existing_groq = groq_whisper_provider_from_providers(existing.get("providers"));
     let normalized_groq = groq_whisper_provider_from_providers(normalized.get("providers"));
     if existing_groq != normalized_groq {
@@ -363,7 +363,7 @@ fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>
             return true;
         }
     }
-    
+
     false
 }
 

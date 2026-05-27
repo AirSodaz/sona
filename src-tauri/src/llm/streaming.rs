@@ -544,7 +544,10 @@ where
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
-                if let Some(text) = event.pointer("/candidates/0/content/parts/0/text").and_then(Value::as_str) {
+                if let Some(text) = event
+                    .pointer("/candidates/0/content/parts/0/text")
+                    .and_then(Value::as_str)
+                {
                     accumulator.push(text)?;
                 }
             }
@@ -553,7 +556,10 @@ where
 
     for data in sse.flush() {
         if let Ok(event) = serde_json::from_str::<Value>(&data) {
-            if let Some(text) = event.pointer("/candidates/0/content/parts/0/text").and_then(Value::as_str) {
+            if let Some(text) = event
+                .pointer("/candidates/0/content/parts/0/text")
+                .and_then(Value::as_str)
+            {
                 accumulator.push(text)?;
             }
         }
@@ -564,8 +570,6 @@ where
         usage: None,
     })
 }
-
-
 
 async fn stream_openai_responses_completion<EmitFn>(
     config: &LlmConfig,
@@ -682,7 +686,10 @@ where
     let response = match request.config.strategy {
         LlmProviderStrategy::Anthropic => {
             if request.config.reasoning_enabled.unwrap_or(false) {
-                Some(stream_anthropic_custom_completion(&request.config, &input, accumulator).await?)
+                Some(
+                    stream_anthropic_custom_completion(&request.config, &input, accumulator)
+                        .await?,
+                )
             } else {
                 let client = anthropic::Client::builder()
                     .api_key(&request.config.api_key)
@@ -838,8 +845,12 @@ pub(crate) async fn generate_with_azure_openai(
 
     let payload = build_openai_chat_payload(config, input, false);
 
-    let response =
-        post_json_request(&endpoint, vec![("api-key", config.api_key.to_string())], payload).await?;
+    let response = post_json_request(
+        &endpoint,
+        vec![("api-key", config.api_key.to_string())],
+        payload,
+    )
+    .await?;
 
     Ok(StandardLlmResponse {
         text: extract_text_from_json_response(&response)?,

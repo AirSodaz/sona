@@ -144,10 +144,14 @@ fn config_from_request(
         return Err(SherpaError::VolcengineProviderConfigMissing);
     };
     if !is_volcengine_doubao_provider_id(&provider.provider_id) {
-        return Err(SherpaError::UnsupportedVolcengineProvider { provider_id: provider.provider_id.clone() });
+        return Err(SherpaError::UnsupportedVolcengineProvider {
+            provider_id: provider.provider_id.clone(),
+        });
     }
     let config = serde_json::from_value::<VolcengineDoubaoAsrConfig>(provider.config.clone())
-        .map_err(|error| SherpaError::VolcengineProviderConfigInvalid { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineProviderConfigInvalid {
+            error: error.to_string(),
+        })?;
     validate_config(&config, mode)
 }
 
@@ -246,7 +250,11 @@ fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, SherpaErro
         if frame.len() < 12 {
             return Err(SherpaError::VolcengineErrorFrame);
         }
-        let code = u32::from_be_bytes(frame[4..8].try_into().map_err(|_| SherpaError::VolcengineErrorCodeParseFailed)?);
+        let code = u32::from_be_bytes(
+            frame[4..8]
+                .try_into()
+                .map_err(|_| SherpaError::VolcengineErrorCodeParseFailed)?,
+        );
         let size = u32::from_be_bytes(
             frame[8..12]
                 .try_into()
@@ -256,7 +264,10 @@ fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, SherpaErro
             .get(12..12 + size)
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .unwrap_or("未知错误");
-        return Err(SherpaError::VolcengineApiError { code, message: message.to_string() });
+        return Err(SherpaError::VolcengineApiError {
+            code,
+            message: message.to_string(),
+        });
     }
     if message_type != 0x09 {
         return Ok(None);
@@ -276,9 +287,11 @@ fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, SherpaErro
     let Some(payload) = frame.get(payload_start..payload_start + payload_size) else {
         return Err(SherpaError::VolcenginePayloadIncomplete);
     };
-    serde_json::from_slice(payload)
-        .map(Some)
-        .map_err(|error| SherpaError::VolcengineResponseParseFailed { error: error.to_string() })
+    serde_json::from_slice(payload).map(Some).map_err(|error| {
+        SherpaError::VolcengineResponseParseFailed {
+            error: error.to_string(),
+        }
+    })
 }
 
 pub fn segments_from_response_value(
@@ -463,7 +476,9 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
         .streaming_endpoint
         .as_str()
         .into_client_request()
-        .map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineEndpointInvalid {
+            error: error.to_string(),
+        })?;
     insert_header(client_request.headers_mut(), "X-Api-Key", &config.api_key)?;
     insert_header(
         client_request.headers_mut(),
@@ -479,7 +494,9 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
 
     let (ws, response) = tokio_tungstenite::connect_async(client_request)
         .await
-        .map_err(|error| SherpaError::VolcengineConnectionFailed { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineConnectionFailed {
+            error: error.to_string(),
+        })?;
     if let Some(logid) = response
         .headers()
         .get("X-Tt-Logid")
@@ -498,7 +515,9 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     writer
         .send(Message::Binary(init_frame))
         .await
-        .map_err(|error| SherpaError::VolcengineInitFrameSendFailed { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineInitFrameSendFailed {
+            error: error.to_string(),
+        })?;
 
     {
         let mut writer_slot = session.writer.lock().await;
@@ -565,11 +584,16 @@ fn insert_header(
     name: &'static str,
     value: &str,
 ) -> Result<(), SherpaError> {
-    let header_name = HeaderName::from_bytes(name.as_bytes())
-        .map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?;
+    let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
+        SherpaError::VolcengineEndpointInvalid {
+            error: error.to_string(),
+        }
+    })?;
     headers.insert(
         header_name,
-        HeaderValue::from_str(value).map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?,
+        HeaderValue::from_str(value).map_err(|error| SherpaError::VolcengineEndpointInvalid {
+            error: error.to_string(),
+        })?,
     );
     Ok(())
 }
@@ -595,7 +619,9 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
     writer
         .send(Message::Binary(build_audio_frame(&samples, false)))
         .await
-        .map_err(|error| SherpaError::VolcengineAudioSendFailed { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineAudioSendFailed {
+            error: error.to_string(),
+        })?;
     let _ = app;
     Ok(())
 }
@@ -625,7 +651,9 @@ pub async fn feed_audio_samples_impl(
     writer
         .send(Message::Binary(build_audio_frame(&pcm_bytes, false)))
         .await
-        .map_err(|error| SherpaError::VolcengineAudioSendFailed { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineAudioSendFailed {
+            error: error.to_string(),
+        })?;
     Ok(())
 }
 
@@ -658,7 +686,9 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
         writer
             .send(Message::Binary(build_audio_frame(&[], true)))
             .await
-            .map_err(|error| SherpaError::VolcengineEndFrameSendFailed { error: error.to_string() })?;
+            .map_err(|error| SherpaError::VolcengineEndFrameSendFailed {
+                error: error.to_string(),
+            })?;
         let _ = tokio::time::timeout(
             Duration::from_millis(1500),
             session.final_response_received.notified(),
@@ -699,9 +729,12 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     }
     let config = config_from_request(&request, VolcengineMode::Batch)?;
     let started = Instant::now();
-    let bytes = tokio::fs::read(&file_path)
-        .await
-        .map_err(|error| SherpaError::AudioFileReadFailed { error: error.to_string() })?;
+    let bytes =
+        tokio::fs::read(&file_path)
+            .await
+            .map_err(|error| SherpaError::AudioFileReadFailed {
+                error: error.to_string(),
+            })?;
     let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let request_id = uuid::Uuid::new_v4().to_string();
     let body = build_flash_batch_request_body(&file_path, audio_data, &request);
@@ -716,7 +749,9 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .json(&body)
         .send()
         .await
-        .map_err(|error| SherpaError::VolcengineBatchRequestFailed { error: error.to_string() })?;
+        .map_err(|error| SherpaError::VolcengineBatchRequestFailed {
+            error: error.to_string(),
+        })?;
     let status = response.status();
     let headers = response.headers().clone();
     let api_code = headers
@@ -729,17 +764,16 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .map(str::to_string);
     if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
         return Err(SherpaError::VolcengineBatchRequestFailed {
-            error: map_status_error(
-                status.as_u16(),
-                api_code.as_deref(),
-                api_message.as_deref(),
-            ).to_string()
-        });    }
+            error: map_status_error(status.as_u16(), api_code.as_deref(), api_message.as_deref())
+                .to_string(),
+        });
+    }
 
-    let response_value = response
-        .json::<Value>()
-        .await
-        .map_err(|error| SherpaError::VolcengineBatchResponseParseFailed { error: error.to_string() })?;
+    let response_value = response.json::<Value>().await.map_err(|error| {
+        SherpaError::VolcengineBatchResponseParseFailed {
+            error: error.to_string(),
+        }
+    })?;
     let mut segments = segments_from_response_value(&response_value, true, "volc-batch")?;
     segments = apply_timeline_normalization(segments, request.normalization_options);
     segments =

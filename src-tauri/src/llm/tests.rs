@@ -307,7 +307,7 @@ fn gemini_model_summary_preserves_supported_capabilities() {
     assert_eq!(summary.max_output_tokens, Some(65_536));
     assert_eq!(summary.supports_tools, Some(true));
     assert_eq!(summary.supports_multimodal, Some(true));
-  }
+}
 
 #[test]
 fn openai_model_summary_defaults_missing_metadata_to_none() {
@@ -323,8 +323,12 @@ fn openai_model_summary_defaults_missing_metadata_to_none() {
 
 #[test]
 fn anthropic_listing_is_disabled() {
-    assert!(!strategy_supports_model_listing(LlmProviderStrategy::Anthropic));
-    assert!(!strategy_supports_model_listing(LlmProviderStrategy::AzureOpenAi));
+    assert!(!strategy_supports_model_listing(
+        LlmProviderStrategy::Anthropic
+    ));
+    assert!(!strategy_supports_model_listing(
+        LlmProviderStrategy::AzureOpenAi
+    ));
     assert!(!strategy_supports_model_listing(
         LlmProviderStrategy::OpenAiCompatibleCustomPath
     ));

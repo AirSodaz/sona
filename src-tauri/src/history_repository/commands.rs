@@ -1,5 +1,5 @@
-use serde_json::Value;
 use serde_json::to_value;
+use serde_json::Value;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -14,9 +14,9 @@ use super::{
     HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
     HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
-    LiveRecordingDraftResult,
-    PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord, HISTORY_DIR_NAME,
+    LiveRecordingDraftResult, PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HISTORY_DIR_NAME,
 };
 use crate::sherpa::TranscriptSegment;
 
@@ -604,13 +604,10 @@ mod tests {
 
         let mut translated = segment("seg-1", "before");
         translated.translation = Some("after".to_string());
-        let updated = update_llm_transcript_segments_record(
-            &repository,
-            &item.id,
-            vec![translated],
-        )
-        .unwrap()
-        .unwrap();
+        let updated =
+            update_llm_transcript_segments_record(&repository, &item.id, vec![translated])
+                .unwrap()
+                .unwrap();
 
         assert_eq!(snapshot.reason, TranscriptSnapshotReason::Translate);
         assert_eq!(updated.preview_text, "before...");
@@ -675,7 +672,10 @@ mod tests {
         .unwrap();
 
         assert!(snapshot.is_none());
-        assert!(repository.list_transcript_snapshots(&item.id).unwrap().is_empty());
+        assert!(repository
+            .list_transcript_snapshots(&item.id)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
