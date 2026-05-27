@@ -240,10 +240,26 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
 
     it('allows selecting Volcengine Doubao cloud ASR even when no local ASR model is installed', async () => {
+        setTestConfig({
+            asr: {
+                providers: {
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'test-api-key',
+                            streamingEndpoint: 'test-endpoint',
+                            streamingResourceId: 'test-resource-id',
+                            batchEndpoint: 'test-batch-endpoint',
+                            batchResourceId: 'test-batch-resource',
+                        }
+                    }
+                }
+            }
+        } as any);
+
         renderTab(new Set());
 
         fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
-        fireEvent.click(screen.getByRole('option', { name: '豆包语音 (云端)' }));
+        fireEvent.click(screen.getByRole('option', { name: '豆包语音 (火山)' }));
 
         await waitFor(() => {
             const config = useConfigStore.getState().config;
@@ -265,6 +281,17 @@ describe('SettingsModelsTab speaker model selections', () => {
     it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
         setTestConfig({
             asr: {
+                providers: {
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'test',
+                            streamingEndpoint: 'test',
+                            streamingResourceId: 'test',
+                            batchEndpoint: 'test',
+                            batchResourceId: 'test',
+                        }
+                    }
+                },
                 selections: {
                     live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
@@ -285,7 +312,7 @@ describe('SettingsModelsTab speaker model selections', () => {
         renderTab(new Set());
 
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: '豆包语音 (云端)' })).not.toBeNull();
+            expect(screen.getByRole('button', { name: '豆包语音 (火山)' })).not.toBeNull();
             expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
         });
     });

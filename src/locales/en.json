@@ -819,8 +819,8 @@
         "asr": {
             "volcengine_doubao_option": "Doubao (Volcengine)",
             "volcengine_title": "Doubao (Volcengine)",
-            "groq_whisper_option": "Groq (Whisper)",
-            "groq_title": "Groq (Whisper)",
+            "groq_whisper_option": "Whisper (Groq)",
+            "groq_title": "Whisper (Groq)",
             "groq_cloud_upload_hint": "Audio will be sent to Groq for transcription. Please note that Groq has a 25MB file size limit.",
             "groq_model_label": "Whisper Model",
             "batch_endpoint_label": "Batch Endpoint",

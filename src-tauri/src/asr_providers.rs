@@ -48,6 +48,7 @@ pub struct GroqWhisperDefaults {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrCapability {
+    #[allow(dead_code)]
     pub supported: Option<bool>,
     pub requires_api_key: bool,
     pub required_config_fields: Vec<String>,
@@ -304,6 +305,7 @@ fn fields_from_provider_value(provider: Option<&Value>) -> VolcengineDoubaoConfi
     )
 }
 
+#[allow(dead_code)]
 pub fn is_groq_whisper_batch_config_fields_complete(
     config: &GroqWhisperConfigFields,
 ) -> bool {
