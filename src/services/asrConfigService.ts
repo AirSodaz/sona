@@ -79,327 +79,364 @@ function isLegacyOnlineEngine(engine: unknown): boolean {
   return engine === 'volcengine-doubao';
 }
 
-export function createDefaultAsrConfig(
-  streamingModelPath = '',
-  offlineModelPath = '',
-): AsrConfig {
-  return {
-    selections: {
-      live: createLocalSherpaSelection('streaming', streamingModelPath),
-      caption: createLocalSherpaSelection('streaming', streamingModelPath),
-      voiceTyping: createLocalSherpaSelection('streaming', streamingModelPath),
-      batch: createLocalSherpaSelection('offline', offlineModelPath),
-    },
-    providers: createDefaultAsrProviders(),
-  };
+export interface AsrConfigServicePorts {
+  modelService: typeof modelService;
+  PRESET_MODELS_MAP: typeof PRESET_MODELS_MAP;
 }
 
-function createLocalSherpaSelection(mode: AsrMode, modelPath: string): AsrModelSelection {
-  return {
-    engine: 'local-sherpa',
-    mode,
-    modelId: null,
-    modelPath,
-  };
-}
+export class AsrConfigService {
+  constructor(private readonly ports: AsrConfigServicePorts) {}
 
-export function createVolcengineDoubaoSelection(mode: AsrMode): AsrModelSelection {
-  return createOnlineAsrSelection(VOLCENGINE_DOUBAO_PROVIDER_ID, mode);
-}
-
-function createDefaultAsrProviders(): AsrProviderConfig {
-  return {
-    online: {
-      [VOLCENGINE_DOUBAO_PROVIDER_ID]: { ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG },
-    },
-  };
-}
-
-function normalizeAsrProviders(
-  providers: Partial<AsrProviderConfig> | undefined,
-): AsrProviderConfig {
-  return {
-    online: {
-      [VOLCENGINE_DOUBAO_PROVIDER_ID]: getOnlineProviderConfig(providers, VOLCENGINE_DOUBAO_PROVIDER_ID),
-    },
-  };
-}
-
-function getLegacyModelPath(config: AppConfig, mode: AsrMode): string {
-  return mode === 'streaming'
-    ? config.streamingModelPath || ''
-    : config.offlineModelPath || '';
-}
-
-type AsrModelConfig = Pick<ModelConfig, 'asr' | 'streamingModelPath' | 'offlineModelPath'>;
-
-function normalizeAsrConfig(config: AsrModelConfig): AsrConfig {
-  const currentSelections = config.asr?.selections;
-  return {
-    selections: {
-      live: normalizeSelection(currentSelections?.live, 'streaming', config.streamingModelPath || ''),
-      caption: normalizeSelection(currentSelections?.caption, 'streaming', config.streamingModelPath || ''),
-      voiceTyping: normalizeSelection(currentSelections?.voiceTyping, 'streaming', config.streamingModelPath || ''),
-      batch: normalizeSelection(currentSelections?.batch, 'offline', config.offlineModelPath || ''),
-    },
-    providers: normalizeAsrProviders(config.asr?.providers),
-  };
-}
-
-function normalizeSelection(
-  selection: AsrModelSelection | undefined,
-  mode: AsrMode,
-  fallbackPath: string,
-): AsrModelSelection {
-  const rawSelection = selection as ({ engine?: string } & Partial<AsrModelSelection>) | undefined;
-  if (rawSelection && (rawSelection.engine === 'online' || isLegacyOnlineEngine(rawSelection.engine))) {
-    const providerId = isOnlineAsrProviderId(rawSelection.providerId)
-      ? rawSelection.providerId
-      : VOLCENGINE_DOUBAO_PROVIDER_ID;
-    const definition = getOnlineAsrProviderDefinition(providerId);
+  createDefaultAsrConfig = (
+    streamingModelPath = '',
+    offlineModelPath = '',
+  ): AsrConfig => {
     return {
-      engine: 'online',
-      mode,
-      modelId: null,
-      modelPath: '',
-      providerId,
-      profileId: rawSelection.profileId || definition?.profileId || providerId,
+      selections: {
+        live: this.createLocalSherpaSelection('streaming', streamingModelPath),
+        caption: this.createLocalSherpaSelection('streaming', streamingModelPath),
+        voiceTyping: this.createLocalSherpaSelection('streaming', streamingModelPath),
+        batch: this.createLocalSherpaSelection('offline', offlineModelPath),
+      },
+      providers: this.createDefaultAsrProviders(),
     };
   }
 
-  return {
-    engine: 'local-sherpa',
-    mode,
-    modelId: selection?.modelId ?? null,
-    modelPath: selection?.modelPath?.trim() ? selection.modelPath : fallbackPath,
-  };
-}
-
-function getSelection(config: AppConfig, slot: AsrSelectionSlot): AsrModelSelection {
-  const mode = SLOT_MODE[slot];
-  const selection = normalizeAsrConfig(config).selections[slot];
-  if (selection.engine === 'online') {
-    return selection;
-  }
-  if (selection.modelPath.trim()) {
-    return selection;
-  }
-  return createLocalSherpaSelection(mode, getLegacyModelPath(config, mode));
-}
-
-function resolveModelInfo(selection: AsrModelSelection): ModelInfo | null {
-  if (selection.engine !== 'local-sherpa') {
-    return null;
-  }
-  if (selection.modelId) {
-    return PRESET_MODELS_MAP.get(selection.modelId) ?? null;
-  }
-  return findSelectedModelByMode(selection.modelPath, selection.mode);
-}
-
-function buildHotwords(config: AppConfig): string | null {
-  const words = config.hotwordSets
-    ?.filter((set) => set.enabled)
-    .flatMap((set) => set.rules.map((rule) => rule.text.trim()))
-    .filter(Boolean) ?? [];
-  return words.length > 0 ? words.join(',') : null;
-}
-
-export function buildPostprocessOptions(config: AppConfig): TranscriptPostprocessOptions {
-  return {
-    textReplacementSets: config.textReplacementSets || [],
-    dropFinalDotSegments: true,
-  };
-}
-
-function buildOnlineProviderRequest(
-  providers: AsrProviderConfig,
-  selection: AsrModelSelection,
-): OnlineAsrProviderRequest | undefined {
-  if (!isOnlineAsrProviderId(selection.providerId)) {
-    return undefined;
-  }
-  const definition = getOnlineAsrProviderDefinition(selection.providerId);
-  if (!definition) {
-    return undefined;
-  }
-  return {
-    providerId: selection.providerId,
-    profileId: selection.profileId || definition.profileId,
-    config: getOnlineProviderConfig(providers, selection.providerId),
-  };
-}
-
-export function resolveAsrTranscriptionRequest(
-  config: AppConfig,
-  slot: AsrSelectionSlot,
-  overrides: Partial<Pick<AsrTranscriptionRequest, 'language'>> = {},
-): AsrTranscriptionRequest {
-  const normalizedAsr = normalizeAsrConfig(config);
-  const selection = getSelection({ ...config, asr: normalizedAsr }, slot);
-  const modelInfo = resolveModelInfo(selection);
-  const rules = modelInfo
-    ? modelService.getModelRules(modelInfo.id)
-    : { requiresPunctuation: false, requiresVad: false };
-
-  const vadModel = rules.requiresVad && config.vadModelPath
-    ? config.vadModelPath
-    : null;
-  const punctuationModel = rules.requiresPunctuation && config.punctuationModelPath
-    ? config.punctuationModelPath
-    : null;
-
-  return {
-    engine: selection.engine,
-    mode: selection.mode,
-    modelId: selection.modelId ?? modelInfo?.id ?? null,
-    modelPath: selection.modelPath,
-    providerId: selection.providerId ?? null,
-    profileId: selection.profileId ?? null,
-    numThreads: 4,
-    enableItn: config.enableITN ?? false,
-    language: overrides.language || config.language || 'auto',
-    punctuationModel,
-    vadModel,
-    vadBuffer: config.vadBufferSize || 5,
-    modelType: modelInfo?.type || 'sensevoice',
-    fileConfig: modelInfo?.fileConfig,
-    hotwords: buildHotwords(config),
-    normalizationOptions: {
-      enableTimeline: config.enableTimeline ?? false,
-    },
-    postprocessOptions: buildPostprocessOptions(config),
-    ...(selection.engine === 'online'
-      ? { onlineProvider: buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
-      : {}),
-  };
-}
-
-export function isAsrRequestConfigured(request: AsrTranscriptionRequest): boolean {
-  if (request.engine === 'local-sherpa') {
-    return Boolean(request.modelPath.trim());
+  createVolcengineDoubaoSelection = (mode: AsrMode): AsrModelSelection => {
+    return createOnlineAsrSelection(VOLCENGINE_DOUBAO_PROVIDER_ID, mode);
   }
 
-  if (request.engine === 'online') {
-    const onlineProvider = request.onlineProvider;
-    const definition = getOnlineAsrProviderDefinition(onlineProvider?.providerId);
-    return Boolean(
-      definition
-      && onlineProvider
-      && definition.isConfigured(onlineProvider.config as never, request.mode),
+  buildPostprocessOptions = (config: AppConfig): TranscriptPostprocessOptions => {
+    return {
+      textReplacementSets: config.textReplacementSets || [],
+      dropFinalDotSegments: true,
+    };
+  }
+
+  resolveAsrTranscriptionRequest = (
+    config: AppConfig,
+    slot: AsrSelectionSlot,
+    overrides: Partial<Pick<AsrTranscriptionRequest, 'language'>> = {},
+  ): AsrTranscriptionRequest => {
+    const normalizedAsr = this.normalizeAsrConfig(config);
+    const selection = this.getSelection({ ...config, asr: normalizedAsr }, slot);
+    const modelInfo = this.resolveModelInfo(selection);
+    const rules = modelInfo
+      ? this.ports.modelService.getModelRules(modelInfo.id)
+      : { requiresPunctuation: false, requiresVad: false };
+
+    const vadModel = rules.requiresVad && config.vadModelPath
+      ? config.vadModelPath
+      : null;
+    const punctuationModel = rules.requiresPunctuation && config.punctuationModelPath
+      ? config.punctuationModelPath
+      : null;
+
+    return {
+      engine: selection.engine,
+      mode: selection.mode,
+      modelId: selection.modelId ?? modelInfo?.id ?? null,
+      modelPath: selection.modelPath,
+      providerId: selection.providerId ?? null,
+      profileId: selection.profileId ?? null,
+      numThreads: 4,
+      enableItn: config.enableITN ?? false,
+      language: overrides.language || config.language || 'auto',
+      punctuationModel,
+      vadModel,
+      vadBuffer: config.vadBufferSize || 5,
+      modelType: modelInfo?.type || 'sensevoice',
+      fileConfig: modelInfo?.fileConfig,
+      hotwords: this.buildHotwords(config),
+      normalizationOptions: {
+        enableTimeline: config.enableTimeline ?? false,
+      },
+      postprocessOptions: this.buildPostprocessOptions(config),
+      ...(selection.engine === 'online'
+        ? { onlineProvider: this.buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
+        : {}),
+    };
+  }
+
+  isAsrRequestConfigured = (request: AsrTranscriptionRequest): boolean => {
+    if (request.engine === 'local-sherpa') {
+      return Boolean(request.modelPath.trim());
+    }
+
+    if (request.engine === 'online') {
+      const onlineProvider = request.onlineProvider;
+      const definition = getOnlineAsrProviderDefinition(onlineProvider?.providerId);
+      return Boolean(
+        definition
+        && onlineProvider
+        && definition.isConfigured(onlineProvider.config as never, request.mode),
+      );
+    }
+
+    return false;
+  }
+
+  syncOnlineAsrSelectionFields = (
+    config: ModelConfig,
+    slot: AsrSelectionSlot,
+    providerId: OnlineAsrProviderId,
+  ): Partial<AppConfig> => {
+    const asr = this.normalizeAsrConfig(config);
+    asr.selections[slot] = createOnlineAsrSelection(providerId, SLOT_MODE[slot]);
+    return { asr };
+  }
+
+  syncStreamingOnlineAsrSelectionFields = (
+    config: ModelConfig,
+    providerId: OnlineAsrProviderId,
+  ): Partial<AppConfig> => {
+    const asr = this.normalizeAsrConfig(config);
+    asr.selections.live = createOnlineAsrSelection(providerId, 'streaming');
+    asr.selections.caption = createOnlineAsrSelection(providerId, 'streaming');
+    asr.selections.voiceTyping = createOnlineAsrSelection(providerId, 'streaming');
+    return { asr };
+  }
+
+  syncOnlineAsrProviderConfig = <TProvider extends OnlineAsrProviderId>(
+    config: ModelConfig,
+    providerId: TProvider,
+    updates: Partial<VolcengineDoubaoAsrProviderConfig>,
+  ): Partial<AppConfig> => {
+    const asr = this.normalizeAsrConfig(config);
+    const existing = getOnlineProviderConfig(asr.providers, providerId);
+    asr.providers = {
+      ...asr.providers,
+      online: {
+        ...(asr.providers?.online ?? {}),
+        [providerId]: providerId === VOLCENGINE_DOUBAO_PROVIDER_ID
+          ? normalizeVolcengineDoubaoConfig({
+              ...(existing as VolcengineDoubaoAsrProviderConfig),
+              ...updates,
+            })
+          : {
+              ...(existing as unknown as Record<string, unknown>),
+              ...updates,
+            },
+      },
+    };
+    return { asr };
+  }
+
+  syncVolcengineDoubaoSelectionFields = (
+    config: ModelConfig,
+    slot: AsrSelectionSlot,
+  ): Partial<AppConfig> => {
+    return this.syncOnlineAsrSelectionFields(config, slot, VOLCENGINE_DOUBAO_PROVIDER_ID);
+  }
+
+  syncStreamingVolcengineDoubaoSelectionFields = (
+    config: ModelConfig,
+  ): Partial<AppConfig> => {
+    return this.syncStreamingOnlineAsrSelectionFields(config, VOLCENGINE_DOUBAO_PROVIDER_ID);
+  }
+
+  syncVolcengineDoubaoProviderConfig = (
+    config: ModelConfig,
+    updates: Partial<VolcengineDoubaoAsrProviderConfig>,
+  ): Partial<AppConfig> => {
+    return this.syncOnlineAsrProviderConfig(config, VOLCENGINE_DOUBAO_PROVIDER_ID, updates);
+  }
+
+  syncLegacyAsrSelectionFields = (
+    config: ModelConfig,
+    slot: AsrSelectionSlot,
+    updates: Pick<AsrModelSelection, 'modelId' | 'modelPath'>,
+  ): Partial<AppConfig> => {
+    const asr = this.normalizeAsrConfig(config);
+    const mode = SLOT_MODE[slot];
+    asr.selections[slot] = {
+      engine: 'local-sherpa',
+      mode,
+      modelId: updates.modelId ?? null,
+      modelPath: updates.modelPath,
+    };
+
+    const patch: Partial<AppConfig> = { asr };
+    if (mode === 'streaming') {
+      patch.streamingModelPath = updates.modelPath;
+    } else {
+      patch.offlineModelPath = updates.modelPath;
+    }
+    return patch;
+  }
+
+  syncStreamingAsrSelectionFields = (
+    config: ModelConfig,
+    updates: Pick<AsrModelSelection, 'modelId' | 'modelPath'>,
+  ): Partial<AppConfig> => {
+    const livePatch = this.syncLegacyAsrSelectionFields(config, 'live', updates);
+    const captionPatch = this.syncLegacyAsrSelectionFields(
+      { ...config, ...livePatch },
+      'caption',
+      updates,
     );
+    const voiceTypingPatch = this.syncLegacyAsrSelectionFields(
+      { ...config, ...livePatch, ...captionPatch },
+      'voiceTyping',
+      updates,
+    );
+
+    return {
+      ...livePatch,
+      asr: voiceTypingPatch.asr,
+    };
   }
 
-  return false;
-}
+  // --- Private helpers ---
 
-export function syncOnlineAsrSelectionFields(
-  config: AsrModelConfig,
-  slot: AsrSelectionSlot,
-  providerId: OnlineAsrProviderId,
-): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  asr.selections[slot] = createOnlineAsrSelection(providerId, SLOT_MODE[slot]);
-  return { asr };
-}
-
-export function syncStreamingOnlineAsrSelectionFields(
-  config: AsrModelConfig,
-  providerId: OnlineAsrProviderId,
-): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  asr.selections.live = createOnlineAsrSelection(providerId, 'streaming');
-  asr.selections.caption = createOnlineAsrSelection(providerId, 'streaming');
-  asr.selections.voiceTyping = createOnlineAsrSelection(providerId, 'streaming');
-  return { asr };
-}
-
-export function syncOnlineAsrProviderConfig<TProvider extends OnlineAsrProviderId>(
-  config: AsrModelConfig,
-  providerId: TProvider,
-  updates: Partial<VolcengineDoubaoAsrProviderConfig>,
-): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  const existing = getOnlineProviderConfig(asr.providers, providerId);
-  asr.providers = {
-    ...asr.providers,
-    online: {
-      ...(asr.providers?.online ?? {}),
-      [providerId]: providerId === VOLCENGINE_DOUBAO_PROVIDER_ID
-        ? normalizeVolcengineDoubaoConfig({
-            ...(existing as VolcengineDoubaoAsrProviderConfig),
-            ...updates,
-          })
-        : {
-            ...(existing as unknown as Record<string, unknown>),
-            ...updates,
-          },
-    },
-  };
-  return { asr };
-}
-
-export function syncVolcengineDoubaoSelectionFields(
-  config: AsrModelConfig,
-  slot: AsrSelectionSlot,
-): Partial<AppConfig> {
-  return syncOnlineAsrSelectionFields(config, slot, VOLCENGINE_DOUBAO_PROVIDER_ID);
-}
-
-export function syncStreamingVolcengineDoubaoSelectionFields(
-  config: AsrModelConfig,
-): Partial<AppConfig> {
-  return syncStreamingOnlineAsrSelectionFields(config, VOLCENGINE_DOUBAO_PROVIDER_ID);
-}
-
-export function syncVolcengineDoubaoProviderConfig(
-  config: AsrModelConfig,
-  updates: Partial<VolcengineDoubaoAsrProviderConfig>,
-): Partial<AppConfig> {
-  return syncOnlineAsrProviderConfig(config, VOLCENGINE_DOUBAO_PROVIDER_ID, updates);
-}
-
-export function syncLegacyAsrSelectionFields(
-  config: AsrModelConfig,
-  slot: AsrSelectionSlot,
-  updates: Pick<AsrModelSelection, 'modelId' | 'modelPath'>,
-): Partial<AppConfig> {
-  const asr = normalizeAsrConfig(config);
-  const mode = SLOT_MODE[slot];
-  asr.selections[slot] = {
-    engine: 'local-sherpa',
-    mode,
-    modelId: updates.modelId ?? null,
-    modelPath: updates.modelPath,
-  };
-
-  const patch: Partial<AppConfig> = { asr };
-  if (mode === 'streaming') {
-    patch.streamingModelPath = updates.modelPath;
-  } else {
-    patch.offlineModelPath = updates.modelPath;
+  private createLocalSherpaSelection = (mode: AsrMode, modelPath: string): AsrModelSelection => {
+    return {
+      engine: 'local-sherpa',
+      mode,
+      modelId: null,
+      modelPath,
+    };
   }
-  return patch;
+
+  private createDefaultAsrProviders = (): AsrProviderConfig => {
+    return {
+      online: {
+        [VOLCENGINE_DOUBAO_PROVIDER_ID]: { ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG },
+      },
+    };
+  }
+
+  private normalizeAsrProviders = (
+    providers: Partial<AsrProviderConfig> | undefined,
+  ): AsrProviderConfig => {
+    return {
+      online: {
+        [VOLCENGINE_DOUBAO_PROVIDER_ID]: getOnlineProviderConfig(providers, VOLCENGINE_DOUBAO_PROVIDER_ID),
+      },
+    };
+  }
+
+  private getLegacyModelPath = (config: AppConfig, mode: AsrMode): string => {
+    return mode === 'streaming'
+      ? config.streamingModelPath || ''
+      : config.offlineModelPath || '';
+  }
+
+  private normalizeAsrConfig = (config: ModelConfig): AsrConfig => {
+    const currentSelections = config.asr?.selections;
+    return {
+      selections: {
+        live: this.normalizeSelection(currentSelections?.live, 'streaming', config.streamingModelPath || ''),
+        caption: this.normalizeSelection(currentSelections?.caption, 'streaming', config.streamingModelPath || ''),
+        voiceTyping: this.normalizeSelection(currentSelections?.voiceTyping, 'streaming', config.streamingModelPath || ''),
+        batch: this.normalizeSelection(currentSelections?.batch, 'offline', config.offlineModelPath || ''),
+      },
+      providers: this.normalizeAsrProviders(config.asr?.providers),
+    };
+  }
+
+  private normalizeSelection = (
+    selection: AsrModelSelection | undefined,
+    mode: AsrMode,
+    fallbackPath: string,
+  ): AsrModelSelection => {
+    const rawSelection = selection as ({ engine?: string } & Partial<AsrModelSelection>) | undefined;
+    if (rawSelection && (rawSelection.engine === 'online' || isLegacyOnlineEngine(rawSelection.engine))) {
+      const providerId = isOnlineAsrProviderId(rawSelection.providerId)
+        ? rawSelection.providerId
+        : VOLCENGINE_DOUBAO_PROVIDER_ID;
+      const definition = getOnlineAsrProviderDefinition(providerId);
+      return {
+        engine: 'online',
+        mode,
+        modelId: null,
+        modelPath: '',
+        providerId,
+        profileId: rawSelection.profileId || definition?.profileId || providerId,
+      };
+    }
+
+    return {
+      engine: 'local-sherpa',
+      mode,
+      modelId: selection?.modelId ?? null,
+      modelPath: selection?.modelPath?.trim() ? selection.modelPath : fallbackPath,
+    };
+  }
+
+  private getSelection = (config: AppConfig, slot: AsrSelectionSlot): AsrModelSelection => {
+    const mode = SLOT_MODE[slot];
+    const selection = this.normalizeAsrConfig(config).selections[slot];
+    if (selection.engine === 'online') {
+      return selection;
+    }
+    if (selection.modelPath.trim()) {
+      return selection;
+    }
+    return this.createLocalSherpaSelection(mode, this.getLegacyModelPath(config, mode));
+  }
+
+  private resolveModelInfo = (selection: AsrModelSelection): ModelInfo | null => {
+    if (selection.engine !== 'local-sherpa') {
+      return null;
+    }
+    if (selection.modelId) {
+      return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
+    }
+    return findSelectedModelByMode(selection.modelPath, selection.mode);
+  }
+
+  private buildHotwords = (config: AppConfig): string | null => {
+    const words = config.hotwordSets
+      ?.filter((set) => set.enabled)
+      .flatMap((set) => set.rules.map((rule) => rule.text.trim()))
+      .filter(Boolean) ?? [];
+    return words.length > 0 ? words.join(',') : null;
+  }
+
+  private buildOnlineProviderRequest = (
+    providers: AsrProviderConfig,
+    selection: AsrModelSelection,
+  ): OnlineAsrProviderRequest | undefined => {
+    if (!isOnlineAsrProviderId(selection.providerId)) {
+      return undefined;
+    }
+    const definition = getOnlineAsrProviderDefinition(selection.providerId);
+    if (!definition) {
+      return undefined;
+    }
+    return {
+      providerId: selection.providerId,
+      profileId: selection.profileId || definition.profileId,
+      config: getOnlineProviderConfig(providers, selection.providerId),
+    };
+  }
 }
 
-export function syncStreamingAsrSelectionFields(
-  config: AsrModelConfig,
-  updates: Pick<AsrModelSelection, 'modelId' | 'modelPath'>,
-): Partial<AppConfig> {
-  const livePatch = syncLegacyAsrSelectionFields(config, 'live', updates);
-  const captionPatch = syncLegacyAsrSelectionFields(
-    { ...config, ...livePatch },
-    'caption',
-    updates,
-  );
-  const voiceTypingPatch = syncLegacyAsrSelectionFields(
-    { ...config, ...livePatch, ...captionPatch },
-    'voiceTyping',
-    updates,
-  );
-
-  return {
-    ...livePatch,
-    asr: voiceTypingPatch.asr,
-  };
+export function createAsrConfigService(ports: AsrConfigServicePorts): AsrConfigService {
+  return new AsrConfigService(ports);
 }
+
+export const asrConfigService = createAsrConfigService({
+  modelService,
+  PRESET_MODELS_MAP,
+});
+
+// For backwards compatibility and ease of import migration, we also export the unbound methods.
+// Wait, actually, let's export them unbound if possible, or just export the instance.
+// Since the prompt asks to convert Pattern C to Pattern D, we will replace usages.
+export const {
+  createDefaultAsrConfig,
+  createVolcengineDoubaoSelection,
+  buildPostprocessOptions,
+  resolveAsrTranscriptionRequest,
+  isAsrRequestConfigured,
+  syncOnlineAsrSelectionFields,
+  syncStreamingOnlineAsrSelectionFields,
+  syncOnlineAsrProviderConfig,
+  syncVolcengineDoubaoSelectionFields,
+  syncStreamingVolcengineDoubaoSelectionFields,
+  syncVolcengineDoubaoProviderConfig,
+  syncLegacyAsrSelectionFields,
+  syncStreamingAsrSelectionFields,
+} = asrConfigService;

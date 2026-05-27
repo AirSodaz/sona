@@ -78,7 +78,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   writeTextFile: testContext.writeTextFileMock,
 }));
 
-vi.mock('../automationService', () => ({
+vi.mock('../automation/automationService', () => ({
   loadAutomationProcessedEntries: testContext.loadAutomationProcessedEntriesMock,
   loadAutomationRules: testContext.loadAutomationRulesMock,
   saveAutomationProcessedEntries: testContext.saveAutomationProcessedEntriesMock,

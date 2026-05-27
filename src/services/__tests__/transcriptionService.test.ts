@@ -84,7 +84,19 @@ vi.mock('../../utils/logger', () => ({
 
 async function loadTranscriptionService() {
     const module = await import('../transcriptionService');
-    return module.TranscriptionService;
+    const { getEffectiveConfigSnapshot } = await import('../../stores/effectiveConfigStore');
+    const { initRecognizer, processBatchFile } = await import('../tauri/recognizer');
+
+    class TestTranscriptionService extends module.TranscriptionService {
+        constructor(instanceId: string) {
+            super(instanceId, {
+                getEffectiveConfigSnapshot,
+                initRecognizer,
+                processBatchFile,
+            });
+        }
+    }
+    return TestTranscriptionService;
 }
 
 async function syncTranscriptConfig() {

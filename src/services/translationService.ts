@@ -9,7 +9,7 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from './llmTaskTypes';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';;
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
 import {
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
@@ -46,14 +46,26 @@ function applyTranslatedChunkToSegments(
   });
 }
 
-class TranslationService {
+export interface TranslationServicePorts {
+  getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
+  getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
+  getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
+  runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
+  runTranscriptLlmJob: typeof runTranscriptLlmJob;
+  listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+}
+
+export class TranslationService {
+  constructor(private readonly ports: TranslationServicePorts) {}
+
   async translateSegmentsWithConfig(
     config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
     segments: TranscriptSegment[],
     onChunkTranslated?: (translatedChunk: TranslatedSegment[]) => void | Promise<void>,
     taskIdOverride?: string,
   ): Promise<TranslatedSegment[]> {
-    return runConfiguredSegmentTask({
+    return this.ports.runConfiguredSegmentTask({
       feature: 'translation',
       taskType: 'translate',
       config,
@@ -70,7 +82,7 @@ class TranslationService {
   }
 
   async translateCurrentTranscript() {
-    const sessionStore = useTranscriptSessionStore.getState();
+    const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retryTranslateTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
@@ -82,8 +94,8 @@ class TranslationService {
     historyId,
     targetLanguage,
   }: RetryTranslateTranscriptJobOptions): Promise<void> {
-    const sidecarStore = useTranscriptSidecarStore.getState();
-    const config = getEffectiveConfigSnapshot();
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    const config = this.ports.getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'translation');
 
     if (!isLlmConfigComplete(llm)) {
@@ -91,7 +103,7 @@ class TranslationService {
     }
 
     const resolvedTargetLanguage = targetLanguage || config.translationLanguage || 'zh';
-    await runTranscriptSegmentTaskJob({
+    await this.ports.runTranscriptSegmentTaskJob({
       taskType: 'translate',
       segments,
       sourceHistoryId: historyId,
@@ -102,10 +114,10 @@ class TranslationService {
       onProgress: (translationProgress, jobHistoryId) => {
         // Progress belongs to the job's original record even if the user navigates away
         // before the backend finishes, so keep writing against the captured history id.
-        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
-        const unlistenJobUpdates = await listenToTranscriptLlmJobUpdates(
+        const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
           taskId,
           'translate',
           (payload) => {
@@ -116,7 +128,7 @@ class TranslationService {
           },
         );
         try {
-          const result = await runTranscriptLlmJob({
+          const result = await this.ports.runTranscriptLlmJob({
             taskId,
             taskType: 'translate',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
@@ -133,13 +145,13 @@ class TranslationService {
         }
       },
       onSuccess: (jobHistoryId) => {
-        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress: 100 }, jobHistoryId);
       },
       onError: (jobHistoryId) => {
-        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress: 0 }, jobHistoryId);
       },
       onFinally: (jobHistoryId) => {
-        const currentSidecarStore = useTranscriptSidecarStore.getState();
+        const currentSidecarStore = this.ports.getTranscriptSidecarStore();
         currentSidecarStore.updateLlmState({ isTranslating: false }, jobHistoryId);
 
         if (!currentSidecarStore.getLlmState(jobHistoryId).isTranslationVisible) {
@@ -175,14 +187,26 @@ class TranslationService {
       return;
     }
 
-    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId || 'current';
+    const currentHistoryId = this.ports.getTranscriptSessionStore().sourceHistoryId || 'current';
     const payloadHistoryId = payload.jobHistoryId || 'current';
     if (currentHistoryId !== payloadHistoryId) {
       return;
     }
 
-    useTranscriptSessionStore.getState().setSegments(payload.segments);
+    this.ports.getTranscriptSessionStore().setSegments(payload.segments);
   }
 }
 
-export const translationService = new TranslationService();
+export function createTranslationService(ports: TranslationServicePorts): TranslationService {
+  return new TranslationService(ports);
+}
+
+export const translationService = createTranslationService({
+  getEffectiveConfigSnapshot,
+  getTranscriptSessionStore: useTranscriptSessionStore.getState,
+  getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  runConfiguredSegmentTask,
+  runTranscriptSegmentTaskJob,
+  runTranscriptLlmJob,
+  listenToTranscriptLlmJobUpdates,
+});

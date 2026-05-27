@@ -48,6 +48,12 @@ function areServiceConfigsEqual(
     return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export interface TranscriptionServicePorts {
+    getEffectiveConfigSnapshot: () => AppConfig;
+    initRecognizer: typeof initRecognizer;
+    processBatchFile: typeof processBatchFile;
+}
+
 /**
  * Service to manage the transcription process via the Rust backend.
  * Uses a Global Bus pattern for event reliability.
@@ -59,11 +65,12 @@ export class TranscriptionService {
     private startingPromise: Promise<void> | null = null;
     private runningConfig: ServiceConfig | null = null;
     private language: string = 'auto';
-    private instanceId: string;
     private readonly lifecycle: RecognizerLifecycle;
 
-    constructor(instanceId: string = 'default') {
-        this.instanceId = instanceId;
+    constructor(
+        private readonly instanceId: string = 'default',
+        private readonly ports: TranscriptionServicePorts
+    ) {
         this.lifecycle = new RecognizerLifecycle(instanceId);
     }
 
@@ -109,7 +116,7 @@ export class TranscriptionService {
     }
 
     private _buildStreamingServiceConfig(): ServiceConfig {
-        const appConfig = getEffectiveConfigSnapshot();
+        const appConfig = this.ports.getEffectiveConfigSnapshot();
         return buildStreamingAsrRequest({
             appConfig,
             instanceId: this.instanceId,
@@ -125,7 +132,7 @@ export class TranscriptionService {
         this.startingPromise = (async () => {
             try {
                 const { request, asrRequest: configToUse } = buildRecognizerInitRequest({
-                    appConfig: getEffectiveConfigSnapshot(),
+                    appConfig: this.ports.getEffectiveConfigSnapshot(),
                     instanceId: this.instanceId,
                     modelPathOverride: this.modelPath,
                     language: this.language,
@@ -135,7 +142,7 @@ export class TranscriptionService {
                     throw new Error('ASR is not configured');
                 }
 
-                await initRecognizer(request);
+                await this.ports.initRecognizer(request);
 
                 this.runningConfig = configToUse;
             } catch (error) {
@@ -273,7 +280,7 @@ export class TranscriptionService {
         _saveToPath?: string,
         configOverride?: AppConfig,
     ): Promise<TranscriptSegment[]> {
-        const appConfig = configOverride || getEffectiveConfigSnapshot();
+        const appConfig = configOverride || this.ports.getEffectiveConfigSnapshot();
         const { request: batchRequest, asrRequest } = buildBatchTranscriptionRequest({
             appConfig,
             filePath,
@@ -286,7 +293,7 @@ export class TranscriptionService {
             throw new Error('ASR is not configured');
         }
 
-        const segments = await processBatchFile(batchRequest);
+        const segments = await this.ports.processBatchFile(batchRequest);
 
         const processedSegments = normalizeTranscriptSegments(segments);
 
@@ -296,5 +303,18 @@ export class TranscriptionService {
     }
 }
 
-export const transcriptionService = new TranscriptionService('record');
-export const captionTranscriptionService = new TranscriptionService('caption');
+export function createTranscriptionService(
+    instanceId: string,
+    ports: TranscriptionServicePorts
+): TranscriptionService {
+    return new TranscriptionService(instanceId, ports);
+}
+
+const defaultPorts: TranscriptionServicePorts = {
+    getEffectiveConfigSnapshot,
+    initRecognizer,
+    processBatchFile,
+};
+
+export const transcriptionService = createTranscriptionService('record', defaultPorts);
+export const captionTranscriptionService = createTranscriptionService('caption', defaultPorts);

@@ -110,7 +110,7 @@ vi.mock('../../services/effectiveConfigService', () => ({
     resolveEffectiveConfig: testContext.resolveEffectiveConfigMock,
 }));
 
-vi.mock('../../services/automationService', () => ({
+vi.mock('../../services/automation/automationService', () => ({
     createAutomationFingerprint: vi.fn((filePath: string, size: number, mtimeMs: number) => (
         `${filePath.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()}::${size}::${mtimeMs}`
     )),

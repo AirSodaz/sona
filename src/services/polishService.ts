@@ -11,7 +11,7 @@ import type {
   PolishedSegment,
   TranscriptLlmJobResult,
 } from './llmTaskTypes';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';;
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
 import {
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
@@ -47,14 +47,26 @@ function applyPolishedChunkToSegments(
   });
 }
 
-class PolishService {
+export interface PolishServicePorts {
+  getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
+  getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
+  getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
+  runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
+  runTranscriptLlmJob: typeof runTranscriptLlmJob;
+  listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+}
+
+export class PolishService {
+  constructor(private readonly ports: PolishServicePorts) {}
+
   async polishSegmentsWithConfig(
     config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
     taskIdOverride?: string,
   ): Promise<PolishedSegment[]> {
-    return runConfiguredSegmentTask({
+    return this.ports.runConfiguredSegmentTask({
       feature: 'polish',
       taskType: 'polish',
       config,
@@ -74,11 +86,11 @@ class PolishService {
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
   ): Promise<PolishedSegment[]> {
-    return this.polishSegmentsWithConfig(getEffectiveConfigSnapshot(), segments, onChunkPolished);
+    return this.polishSegmentsWithConfig(this.ports.getEffectiveConfigSnapshot(), segments, onChunkPolished);
   }
 
   async polishTranscript() {
-    const sessionStore = useTranscriptSessionStore.getState();
+    const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retryPolishTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
@@ -89,15 +101,15 @@ class PolishService {
     segments,
     historyId,
   }: RetryPolishTranscriptJobOptions): Promise<void> {
-    const sidecarStore = useTranscriptSidecarStore.getState();
-    const config = getEffectiveConfigSnapshot();
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    const config = this.ports.getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'polish');
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
     }
 
-    await runTranscriptSegmentTaskJob({
+    await this.ports.runTranscriptSegmentTaskJob({
       taskType: 'polish',
       segments,
       sourceHistoryId: historyId,
@@ -107,11 +119,11 @@ class PolishService {
       onProgress: (polishProgress, jobHistoryId) => {
         // Progress tracks the transcript that launched the job, not whichever record the
         // user is viewing by the time a late chunk event arrives.
-        useTranscriptSidecarStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState({ polishProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
         const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
-        const unlistenJobUpdates = await listenToTranscriptLlmJobUpdates(
+        const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
           taskId,
           'polish',
           (payload) => {
@@ -122,7 +134,7 @@ class PolishService {
           },
         );
         try {
-          const result = await runTranscriptLlmJob({
+          const result = await this.ports.runTranscriptLlmJob({
             taskId,
             taskType: 'polish',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
@@ -140,7 +152,7 @@ class PolishService {
         }
       },
       onFinally: (jobHistoryId) => {
-        useTranscriptSidecarStore.getState().updateLlmState({
+        this.ports.getTranscriptSidecarStore().updateLlmState({
           isPolishing: false,
           polishProgress: 0,
         }, jobHistoryId);
@@ -177,14 +189,27 @@ class PolishService {
       return;
     }
 
-    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId || 'current';
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const currentHistoryId = sessionStore.sourceHistoryId || 'current';
     const payloadHistoryId = payload.jobHistoryId || 'current';
     if (currentHistoryId !== payloadHistoryId) {
       return;
     }
 
-    useTranscriptSessionStore.getState().setSegments(payload.segments);
+    sessionStore.setSegments(payload.segments);
   }
 }
 
-export const polishService = new PolishService();
+export function createPolishService(ports: PolishServicePorts): PolishService {
+  return new PolishService(ports);
+}
+
+export const polishService = createPolishService({
+  getEffectiveConfigSnapshot,
+  getTranscriptSessionStore: useTranscriptSessionStore.getState,
+  getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  runConfiguredSegmentTask,
+  runTranscriptSegmentTaskJob,
+  runTranscriptLlmJob,
+  listenToTranscriptLlmJobUpdates,
+});

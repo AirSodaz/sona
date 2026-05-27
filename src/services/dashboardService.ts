@@ -1,14 +1,26 @@
 import { getDashboardSnapshot } from './tauri/dashboard';
 import type { DashboardSnapshot } from '../types/dashboard';
 
-class DashboardService {
+export interface DashboardServicePorts {
+  getDashboardSnapshot: typeof getDashboardSnapshot;
+}
+
+export class DashboardService {
+  constructor(private readonly ports: DashboardServicePorts) {}
+
   async getFastSnapshot(): Promise<DashboardSnapshot> {
-    return getDashboardSnapshot({ deep: false });
+    return this.ports.getDashboardSnapshot({ deep: false });
   }
 
   async getDeepSnapshot(): Promise<DashboardSnapshot> {
-    return getDashboardSnapshot({ deep: true });
+    return this.ports.getDashboardSnapshot({ deep: true });
   }
 }
 
-export const dashboardService = new DashboardService();
+export function createDashboardService(ports: DashboardServicePorts): DashboardService {
+  return new DashboardService(ports);
+}
+
+export const dashboardService = createDashboardService({
+  getDashboardSnapshot,
+});

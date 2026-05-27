@@ -5,13 +5,20 @@ import type {
 import { getDashboardSnapshot } from './tauri/dashboard';
 import { llmUsageEnsureStorage } from './tauri/llmUsage';
 
-class LlmUsageService {
+export interface LlmUsageServicePorts {
+  llmUsageEnsureStorage: typeof llmUsageEnsureStorage;
+  getDashboardSnapshot: typeof getDashboardSnapshot;
+}
+
+export class LlmUsageService {
+  constructor(private readonly ports: LlmUsageServicePorts) {}
+
   async init(): Promise<void> {
-    await llmUsageEnsureStorage();
+    await this.ports.llmUsageEnsureStorage();
   }
 
   async getStats(): Promise<DashboardLlmUsageStats> {
-    return (await getDashboardSnapshot({ deep: false })).llmUsage;
+    return (await this.ports.getDashboardSnapshot({ deep: false })).llmUsage;
   }
 
   async recordUsage(payload: LlmUsageEventPayload): Promise<void> {
@@ -20,4 +27,11 @@ class LlmUsageService {
   }
 }
 
-export const llmUsageService = new LlmUsageService();
+export function createLlmUsageService(ports: LlmUsageServicePorts): LlmUsageService {
+  return new LlmUsageService(ports);
+}
+
+export const llmUsageService = createLlmUsageService({
+  llmUsageEnsureStorage,
+  getDashboardSnapshot,
+});

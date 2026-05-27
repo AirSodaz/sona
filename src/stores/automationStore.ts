@@ -6,9 +6,7 @@ import {
   toAutomationRuntimeRuleConfig,
   type AutomationRuntimeReplaceResult,
 } from '../services/automationRuntimeService';
-import {
-  clearAutomationRecoveryGuardEntry,
-} from '../services/recoveryService';
+
 import type {
   AutomationProcessedEntry,
   AutomationRule,
@@ -30,7 +28,30 @@ import {
   deriveRuntimeState,
   rebuildRuntimeStates,
   removeRuleNotifications,
+  applyRetryBlockedResults,
+  applyRetryFailureResults,
+  applyRuntimeBlockState,
+  applyRuntimeQueuedState,
+  applyTaskSettledState,
+  getUniqueFilePaths,
 } from '../services/automation/automationSessionState';
+import { resolveEffectiveConfig } from '../services/effectiveConfigService';
+import { isPathInsideDirectory, normalizeAutomationPath } from '../services/automation/automationService';
+import {
+  collectAutomationRuntimeRulePaths,
+  listenToAutomationRuntimeCandidates,
+} from '../services/automationRuntimeService';
+import {
+  subscribeAutomationTaskSettled,
+} from '../services/automationEventBus';
+import {
+  clearAutomationRecoveryGuardEntry,
+  isAutomationRecoveryBlocked,
+} from '../services/recoveryService';
+import { historyService } from '../services/historyService';
+import { useBatchQueueStore } from './batchQueueStore';
+import { useConfigStore } from './configStore';
+import { useProjectStore } from './projectStore';
 import {
   createAutomationRuntimeCoordinator,
   type AutomationRuntimeCoordinatorState,
@@ -404,6 +425,30 @@ const automationRuntimeCoordinator = createAutomationRuntimeCoordinator({
       return typeof update === 'function' ? update(currentState) : update;
     });
   },
+  resolveEffectiveConfig,
+  isPathInsideDirectory,
+  normalizeAutomationPath,
+  collectAutomationRuntimeRulePaths,
+  listenToAutomationRuntimeCandidates,
+  toAutomationRuntimeRuleConfig,
+  subscribeAutomationTaskSettled,
+  clearAutomationRecoveryGuardEntry,
+  isAutomationRecoveryBlocked,
+  historyService,
+  useBatchQueueStore,
+  useConfigStore,
+  useProjectStore,
+  persistAutomationProcessedEntries,
+  validateAutomationRuleActivation,
+  applyRetryBlockedResults,
+  applyRetryFailureResults,
+  applyRuntimeBlockState,
+  applyRuntimeFailureState,
+  applyRuntimeQueuedState,
+  applyTaskSettledState,
+  deriveRuntimeState,
+  getUniqueFilePaths,
+  removeRuleNotifications,
 });
 
 export async function __emitAutomationTaskSettledForTests(

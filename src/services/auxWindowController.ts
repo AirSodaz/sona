@@ -14,7 +14,7 @@ interface AuxWindowCreationState {
     visible: boolean;
 }
 
-interface AuxWindowControllerOptions {
+export interface AuxWindowControllerOptions {
     label: string;
     eventName: string;
     createWindow: (

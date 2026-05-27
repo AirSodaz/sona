@@ -8,8 +8,8 @@ import type { RecoveryItemStage } from '../../types/recovery';
 import type { TaskLedgerStatus } from '../../types/taskLedger';
 import type { TranscriptSegment } from '../../types/transcript';
 import { emitAutomationTaskSettled } from '../automationEventBus';
-import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../asrConfigService';
-import { processBatchQueueItem } from './batchItemProcessor';
+import { asrConfigService } from '../asrConfigService';
+import { batchItemProcessor } from './batchItemProcessor';
 import {
   createBatchTaskLedgerId,
   isTaskLedgerCancelRequested,
@@ -18,14 +18,14 @@ import {
 import { logger } from '../../utils/logger';
 import { extractErrorMessage } from '../../utils/errorUtils';
 
-interface BatchQueueSchedulerPorts {
+export interface BatchQueueSchedulerPorts {
   getQueueItems: () => BatchQueueItem[];
   getMaxConcurrent: () => number;
   setQueueProcessing: (isProcessing: boolean) => void;
   processItem: (itemId: string) => void | Promise<void>;
 }
 
-interface BatchQueueLifecyclePorts {
+export interface BatchQueueLifecyclePorts {
   getQueueItems: () => BatchQueueItem[];
   getQueueItem: (itemId: string) => BatchQueueItem | undefined;
   getFallbackConfigSnapshot: () => AppConfig;
@@ -43,182 +43,214 @@ interface BatchQueueLifecyclePorts {
   scheduleNext: () => void;
 }
 
-export function processNextBatchQueueItems({
-  getQueueItems,
-  getMaxConcurrent,
-  setQueueProcessing,
-  processItem,
-}: BatchQueueSchedulerPorts): void {
-  const queueItems = getQueueItems();
-  const maxConcurrent = getMaxConcurrent();
-  const processingCount = queueItems.filter((item) => item.status === 'processing').length;
-
-  if (processingCount >= maxConcurrent) {
-    return;
-  }
-
-  const pendingItems = queueItems.filter((item) => item.status === 'pending');
-  const slotsAvailable = maxConcurrent - processingCount;
-  const itemsToStart = pendingItems.slice(0, slotsAvailable);
-
-  if (itemsToStart.length === 0 && processingCount === 0) {
-    setQueueProcessing(false);
-    return;
-  }
-
-  setQueueProcessing(true);
-  itemsToStart.forEach((item) => {
-    void processItem(item.id);
-  });
+export interface BatchQueueCoordinatorPorts {
+  emitAutomationTaskSettled: typeof emitAutomationTaskSettled;
+  asrConfigService: typeof asrConfigService;
+  batchItemProcessor: typeof batchItemProcessor;
+  createBatchTaskLedgerId: typeof createBatchTaskLedgerId;
+  isTaskLedgerCancelRequested: typeof isTaskLedgerCancelRequested;
+  patchTaskLedgerRecord: typeof patchTaskLedgerRecord;
 }
 
-function toTaskLedgerStatus(status: BatchQueueItemStatus): TaskLedgerStatus {
-  switch (status) {
-    case 'pending':
-      return 'pending';
-    case 'processing':
-      return 'running';
-    case 'complete':
-      return 'succeeded';
-    case 'cancelled':
-      return 'cancelled';
-    case 'error':
-      return 'failed';
-  }
-}
+export class BatchQueueCoordinator {
+  constructor(private readonly ports: BatchQueueCoordinatorPorts) {}
 
-function patchQueueItemTask(item: BatchQueueItem, patch: Parameters<typeof patchTaskLedgerRecord>[1]): void {
-  patchTaskLedgerRecord(createBatchTaskLedgerId(item.id), patch);
-}
+  processNextBatchQueueItems = ({
+    getQueueItems,
+    getMaxConcurrent,
+    setQueueProcessing,
+    processItem,
+  }: BatchQueueSchedulerPorts): void => {
+    const queueItems = getQueueItems();
+    const maxConcurrent = getMaxConcurrent();
+    const processingCount = queueItems.filter((item) => item.status === 'processing').length;
 
-function resolveQueueItemConfig(
-  item: BatchQueueItem,
-  getFallbackConfigSnapshot: () => AppConfig,
-): AppConfig {
-  if (item.resolvedConfigSnapshot) {
-    return item.resolvedConfigSnapshot;
-  }
+    if (processingCount >= maxConcurrent) {
+      return;
+    }
 
-  return getFallbackConfigSnapshot();
-}
+    const pendingItems = queueItems.filter((item) => item.status === 'pending');
+    const slotsAvailable = maxConcurrent - processingCount;
+    const itemsToStart = pendingItems.slice(0, slotsAvailable);
 
-async function notifyAutomationResult(
-  item: BatchQueueItem,
-  status: 'complete' | 'error' | 'discarded',
-  getQueueItems: () => BatchQueueItem[],
-  errorMessage?: string,
-): Promise<void> {
-  if (
-    item.origin !== 'automation'
-    || !item.automationRuleId
-    || !item.sourceFingerprint
-    || !item.fileStat
-  ) {
-    return;
-  }
+    if (itemsToStart.length === 0 && processingCount === 0) {
+      setQueueProcessing(false);
+      return;
+    }
 
-  const latestItem = getQueueItems().find((queueItem) => queueItem.id === item.id) || item;
-  await emitAutomationTaskSettled({
-    ruleId: item.automationRuleId,
-    filePath: item.filePath,
-    sourceFingerprint: item.sourceFingerprint,
-    size: item.fileStat.size,
-    mtimeMs: item.fileStat.mtimeMs,
-    status,
-    processedAt: Date.now(),
-    historyId: latestItem.historyId,
-    exportPath: latestItem.exportPath,
-    errorMessage,
-    stage: latestItem.lastKnownStage,
-  });
-}
-
-async function settleCancelledItem(
-  item: BatchQueueItem,
-  ports: BatchQueueLifecyclePorts,
-): Promise<void> {
-  ports.updateItemStatus(item.id, 'cancelled', 0);
-  patchQueueItemTask(item, {
-    status: 'cancelled',
-    progress: 0,
-    cancelable: false,
-    retryable: false,
-    errorMessage: undefined,
-  });
-  await notifyAutomationResult(item, 'discarded', ports.getQueueItems);
-}
-
-export async function processBatchQueueItemLifecycle(
-  itemId: string,
-  ports: BatchQueueLifecyclePorts,
-): Promise<void> {
-  const item = ports.getQueueItem(itemId);
-  if (!item || item.status !== 'pending') {
-    return;
-  }
-
-  const config = resolveQueueItemConfig(item, ports.getFallbackConfigSnapshot);
-
-  if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
-    await settleCancelledItem(item, ports);
-    return;
-  }
-
-  if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'))) {
-    const message = 'Batch ASR is not configured.';
-    ports.setItemError(itemId, message);
-    await notifyAutomationResult(item, 'error', ports.getQueueItems, message);
-    return;
-  }
-
-  try {
-    await processBatchQueueItem({
-      item,
-      config,
-      callbacks: {
-        updateStatus: (status, progress, lastKnownStage) => {
-          ports.updateItemStatus(itemId, status, progress, lastKnownStage);
-        },
-        updateSegments: (segments) => {
-          ports.updateItemSegments(itemId, segments);
-        },
-        onHistorySaved: async (historyItem) => {
-          await ports.applySavedHistory(itemId, item, historyItem);
-        },
-        onExportComplete: (exportPath) => {
-          ports.setItemExportPath(itemId, exportPath);
-        },
-        isActiveItem: () => ports.isActiveItem(itemId),
-        isCancelRequested: () => isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId)),
-      },
+    setQueueProcessing(true);
+    itemsToStart.forEach((item) => {
+      void processItem(item.id);
     });
+  }
 
-    if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
-      await settleCancelledItem(item, ports);
-    } else {
-      ports.updateItemStatus(itemId, 'complete', 100);
-      patchQueueItemTask(item, {
-        status: 'succeeded',
-        progress: 100,
-        cancelable: false,
-        retryable: false,
-        errorMessage: undefined,
+  toTaskLedgerStatus = (status: BatchQueueItemStatus): TaskLedgerStatus => {
+    switch (status) {
+      case 'pending':
+        return 'pending';
+      case 'processing':
+        return 'running';
+      case 'complete':
+        return 'succeeded';
+      case 'cancelled':
+        return 'cancelled';
+      case 'error':
+        return 'failed';
+    }
+  }
+
+  private patchQueueItemTask = (item: BatchQueueItem, patch: Parameters<typeof patchTaskLedgerRecord>[1]): void => {
+    this.ports.patchTaskLedgerRecord(this.ports.createBatchTaskLedgerId(item.id), patch);
+  }
+
+  private resolveQueueItemConfig = (
+    item: BatchQueueItem,
+    getFallbackConfigSnapshot: () => AppConfig,
+  ): AppConfig => {
+    if (item.resolvedConfigSnapshot) {
+      return item.resolvedConfigSnapshot;
+    }
+
+    return getFallbackConfigSnapshot();
+  }
+
+  private notifyAutomationResult = async (
+    item: BatchQueueItem,
+    status: 'complete' | 'error' | 'discarded',
+    getQueueItems: () => BatchQueueItem[],
+    errorMessage?: string,
+  ): Promise<void> => {
+    if (
+      item.origin !== 'automation'
+      || !item.automationRuleId
+      || !item.sourceFingerprint
+      || !item.fileStat
+    ) {
+      return;
+    }
+
+    const latestItem = getQueueItems().find((queueItem) => queueItem.id === item.id) || item;
+    await this.ports.emitAutomationTaskSettled({
+      ruleId: item.automationRuleId,
+      filePath: item.filePath,
+      sourceFingerprint: item.sourceFingerprint,
+      size: item.fileStat.size,
+      mtimeMs: item.fileStat.mtimeMs,
+      status,
+      processedAt: Date.now(),
+      historyId: latestItem.historyId,
+      exportPath: latestItem.exportPath,
+      errorMessage,
+      stage: latestItem.lastKnownStage,
+    });
+  }
+
+  private settleCancelledItem = async (
+    item: BatchQueueItem,
+    lifecyclePorts: BatchQueueLifecyclePorts,
+  ): Promise<void> => {
+    lifecyclePorts.updateItemStatus(item.id, 'cancelled', 0);
+    this.patchQueueItemTask(item, {
+      status: 'cancelled',
+      progress: 0,
+      cancelable: false,
+      retryable: false,
+      errorMessage: undefined,
+    });
+    await this.notifyAutomationResult(item, 'discarded', lifecyclePorts.getQueueItems);
+  }
+
+  processBatchQueueItemLifecycle = async (
+    itemId: string,
+    lifecyclePorts: BatchQueueLifecyclePorts,
+  ): Promise<void> => {
+    const item = lifecyclePorts.getQueueItem(itemId);
+    if (!item || item.status !== 'pending') {
+      return;
+    }
+
+    const config = this.resolveQueueItemConfig(item, lifecyclePorts.getFallbackConfigSnapshot);
+
+    if (this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId))) {
+      await this.settleCancelledItem(item, lifecyclePorts);
+      return;
+    }
+
+    if (!this.ports.asrConfigService.isAsrRequestConfigured(
+      this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch')
+    )) {
+      const message = 'Batch ASR is not configured.';
+      lifecyclePorts.setItemError(itemId, message);
+      await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
+      return;
+    }
+
+    try {
+      await this.ports.batchItemProcessor.processBatchQueueItem({
+        item,
+        config,
+        callbacks: {
+          updateStatus: (status, progress, lastKnownStage) => {
+            lifecyclePorts.updateItemStatus(itemId, status, progress, lastKnownStage);
+          },
+          updateSegments: (segments) => {
+            lifecyclePorts.updateItemSegments(itemId, segments);
+          },
+          onHistorySaved: async (historyItem) => {
+            await lifecyclePorts.applySavedHistory(itemId, item, historyItem);
+          },
+          onExportComplete: (exportPath) => {
+            lifecyclePorts.setItemExportPath(itemId, exportPath);
+          },
+          isActiveItem: () => lifecyclePorts.isActiveItem(itemId),
+          isCancelRequested: () => this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId)),
+        },
       });
-      await notifyAutomationResult(item, 'complete', ports.getQueueItems);
-    }
-  } catch (error) {
-    const message = extractErrorMessage(error);
-    logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
 
-    if (message === 'Task cancelled.') {
-      await settleCancelledItem(item, ports);
-    } else {
-      ports.setItemError(itemId, message);
-      await notifyAutomationResult(item, 'error', ports.getQueueItems, message);
+      if (this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId))) {
+        await this.settleCancelledItem(item, lifecyclePorts);
+      } else {
+        lifecyclePorts.updateItemStatus(itemId, 'complete', 100);
+        this.patchQueueItemTask(item, {
+          status: 'succeeded',
+          progress: 100,
+          cancelable: false,
+          retryable: false,
+          errorMessage: undefined,
+        });
+        await this.notifyAutomationResult(item, 'complete', lifecyclePorts.getQueueItems);
+      }
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
+
+      if (message === 'Task cancelled.') {
+        await this.settleCancelledItem(item, lifecyclePorts);
+      } else {
+        lifecyclePorts.setItemError(itemId, message);
+        await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
+      }
+    } finally {
+      lifecyclePorts.scheduleNext();
     }
-  } finally {
-    ports.scheduleNext();
   }
 }
 
-export { toTaskLedgerStatus };
+export function createBatchQueueCoordinator(ports: BatchQueueCoordinatorPorts): BatchQueueCoordinator {
+  return new BatchQueueCoordinator(ports);
+}
+
+export const batchQueueCoordinator = createBatchQueueCoordinator({
+  emitAutomationTaskSettled,
+  asrConfigService,
+  batchItemProcessor,
+  createBatchTaskLedgerId,
+  isTaskLedgerCancelRequested,
+  patchTaskLedgerRecord,
+});
+
+export const {
+  processNextBatchQueueItems,
+  processBatchQueueItemLifecycle,
+  toTaskLedgerStatus,
+} = batchQueueCoordinator;

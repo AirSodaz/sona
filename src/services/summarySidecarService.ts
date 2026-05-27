@@ -38,9 +38,16 @@ function hasPersistableSummaryData(summaryState: TranscriptSummaryState): boolea
   );
 }
 
-class SummarySidecarService {
+export interface SummarySidecarServicePorts {
+  getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  historyService: typeof historyService;
+}
+
+export class SummarySidecarService {
+  constructor(private readonly ports: SummarySidecarServicePorts) {}
+
   async loadSummaryPayload(historyId: string): Promise<HistorySummaryPayload | null> {
-    return historyService.loadSummary(historyId);
+    return this.ports.historyService.loadSummary(historyId);
   }
 
   async loadSummary(historyId: string): Promise<void> {
@@ -48,19 +55,19 @@ class SummarySidecarService {
       return;
     }
 
-    const existingState = useTranscriptSidecarStore.getState().summaryStates[historyId];
+    const existingState = this.ports.getTranscriptSidecarStore().summaryStates[historyId];
     if (hasStoredSummaryState(existingState)) {
       return;
     }
 
     const payload = await this.loadSummaryPayload(historyId);
-    const latestState = useTranscriptSidecarStore.getState().summaryStates[historyId];
+    const latestState = this.ports.getTranscriptSidecarStore().summaryStates[historyId];
     if (hasStoredSummaryState(latestState)) {
       return;
     }
 
     if (payload) {
-      useTranscriptSidecarStore.getState().hydrateSummaryState(payload, historyId);
+      this.ports.getTranscriptSidecarStore().hydrateSummaryState(payload, historyId);
     }
   }
 
@@ -69,19 +76,26 @@ class SummarySidecarService {
       return;
     }
 
-    const storedSummaryState = useTranscriptSidecarStore.getState().summaryStates[historyId];
+    const storedSummaryState = this.ports.getTranscriptSidecarStore().summaryStates[historyId];
     if (!storedSummaryState) {
       return;
     }
 
-    const summaryState = useTranscriptSidecarStore.getState().getSummaryState(historyId);
+    const summaryState = this.ports.getTranscriptSidecarStore().getSummaryState(historyId);
     if (!hasPersistableSummaryData(summaryState)) {
-      await historyService.deleteSummary(historyId);
+      await this.ports.historyService.deleteSummary(historyId);
       return;
     }
 
-    await historyService.saveSummary(historyId, buildSummaryPayload(summaryState));
+    await this.ports.historyService.saveSummary(historyId, buildSummaryPayload(summaryState));
   }
 }
 
-export const summarySidecarService = new SummarySidecarService();
+export function createSummarySidecarService(ports: SummarySidecarServicePorts): SummarySidecarService {
+  return new SummarySidecarService(ports);
+}
+
+export const summarySidecarService = createSummarySidecarService({
+  getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  historyService,
+});

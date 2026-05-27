@@ -4,7 +4,7 @@ import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
-import { TranscriptionService } from './transcriptionService';
+import { createTranscriptionService, TranscriptionService } from './transcriptionService';
 import {
     getMousePosition,
     getTextCursorPosition,
@@ -22,39 +22,58 @@ import {
     type VoiceTypingConfigSnapshot,
     type VoiceTypingShortcutModifier,
 } from './voiceTyping/voiceTypingConfig';
+import { initRecognizer, processBatchFile } from './tauri/recognizer';
+import type { AppConfig } from '../types/config';
 
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 
-class VoiceTypingService {
+export interface VoiceTypingServicePorts {
+    getConfig: () => AppConfig;
+    subscribeConfig: typeof useConfigStore.subscribe;
+    getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
+    getVoiceTypingRuntimeStore: typeof useVoiceTypingRuntimeStore.getState;
+    injectText: typeof injectText;
+    getTextCursorPosition: typeof getTextCursorPosition;
+    getMousePosition: typeof getMousePosition;
+    transcriptionService: TranscriptionService;
+}
+
+export class VoiceTypingService {
     private initialized = false;
 
     private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
 
-    private readonly transcriptionService = new TranscriptionService('voice-typing');
+    private readonly transcriptionService: TranscriptionService;
     private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
     private readonly microphoneRuntime = new VoiceTypingMicrophoneRuntime();
-    private readonly sessionMachine = new VoiceTypingSessionMachine({
-        transcriptionService: this.transcriptionService,
-        overlayPresenter: this.overlayPresenter,
-        resolveOverlayPosition: () => this.getOverlayPosition(),
-        resolveOverlayPositionAfterCommit: () => this.getOverlayPositionAfterCommit(),
-        ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
-        injectText: async (text) => {
-            const shortcutModifiers = this.getCurrentShortcutModifiers();
-            await injectText(text, shortcutModifiers);
-        },
-        onRuntimeError: (error) => {
-            useVoiceTypingRuntimeStore.getState().reportRuntimeError('session', error);
-        },
-    });
-    private readonly shortcutController = new VoiceTypingShortcutController({
-        getMode: () => this.getVoiceTypingMode(),
-        isListening: () => this.sessionMachine.isActive(),
-        startListening: () => this.startListening(),
-        stopListening: () => this.stopListening(),
-    });
+    private readonly sessionMachine: VoiceTypingSessionMachine;
+    private readonly shortcutController: VoiceTypingShortcutController;
+
+    constructor(private readonly ports: VoiceTypingServicePorts) {
+        this.transcriptionService = ports.transcriptionService;
+        this.sessionMachine = new VoiceTypingSessionMachine({
+            transcriptionService: this.transcriptionService,
+            overlayPresenter: this.overlayPresenter,
+            resolveOverlayPosition: () => this.getOverlayPosition(),
+            resolveOverlayPositionAfterCommit: () => this.getOverlayPositionAfterCommit(),
+            ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
+            injectText: async (text) => {
+                const shortcutModifiers = this.getCurrentShortcutModifiers();
+                await this.ports.injectText(text, shortcutModifiers);
+            },
+            onRuntimeError: (error) => {
+                this.ports.getVoiceTypingRuntimeStore().reportRuntimeError('session', error);
+            },
+        });
+        this.shortcutController = new VoiceTypingShortcutController({
+            getMode: () => this.getVoiceTypingMode(),
+            isListening: () => this.sessionMachine.isActive(),
+            startListening: () => this.startListening(),
+            stopListening: () => this.stopListening(),
+        });
+    }
 
     public init() {
         if (this.initialized) {
@@ -65,7 +84,7 @@ class VoiceTypingService {
         this.initialized = true;
         logger.info('[VoiceTypingService] Initializing...');
 
-        const initialConfig = useConfigStore.getState().config;
+        const initialConfig = this.ports.getConfig();
         this.lastConfigSnapshot = resolveVoiceTypingConfigSnapshot(initialConfig);
 
         logger.info('[VoiceTypingService] Initial config', {
@@ -78,21 +97,21 @@ class VoiceTypingService {
             enableITN: this.lastConfigSnapshot.enableItn,
         });
 
-        useConfigStore.subscribe((state) => {
+        this.ports.subscribeConfig((state) => {
             const newConfig = state.config;
             const previousSnapshot = this.lastConfigSnapshot ?? resolveVoiceTypingConfigSnapshot(newConfig);
             const nextSnapshot = resolveVoiceTypingConfigSnapshot(newConfig);
             const change = resolveVoiceTypingRuntimeChange(previousSnapshot, nextSnapshot);
 
             if (!nextSnapshot.enabled) {
-                useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
+                this.ports.getVoiceTypingRuntimeStore().resetRuntimeStatus();
             } else if (change.enabledChanged) {
-                useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+                this.ports.getVoiceTypingRuntimeStore().clearRuntimeFailure({
                     resetShortcutRegistration: true,
                     resetWarmup: true,
                 });
             } else if (change.runtimeDependencyChanged) {
-                useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+                this.ports.getVoiceTypingRuntimeStore().clearRuntimeFailure({
                     resetShortcutRegistration: change.shortcutChanged,
                     resetWarmup:
                         change.asrChanged ||
@@ -127,15 +146,15 @@ class VoiceTypingService {
     }
 
     private async syncAndPrepare() {
-        const config = useConfigStore.getState().config;
-        const asr = resolveVoiceTypingAsr(getEffectiveConfigSnapshot());
+        const config = this.ports.getConfig();
+        const asr = resolveVoiceTypingAsr(this.ports.getEffectiveConfigSnapshot());
         if (!config.voiceTypingEnabled || !isAsrRequestConfigured(asr)) {
-            useVoiceTypingRuntimeStore.getState().setWarmupStatus('idle');
+            this.ports.getVoiceTypingRuntimeStore().setWarmupStatus('idle');
             return;
         }
 
         try {
-            useVoiceTypingRuntimeStore.getState().setWarmupStatus('preparing');
+            this.ports.getVoiceTypingRuntimeStore().setWarmupStatus('preparing');
             logger.info('[VoiceTypingService] Pre-warming transcription model and microphone...');
             this.configureTranscriptionService();
             await this.transcriptionService.prepare();
@@ -144,16 +163,16 @@ class VoiceTypingService {
             await this.overlayPresenter.prepare(lastPosition);
             await this.ensureMicrophoneStarted();
 
-            if (useVoiceTypingRuntimeStore.getState().warmup === 'error') {
+            if (this.ports.getVoiceTypingRuntimeStore().warmup === 'error') {
                 return;
             }
 
-            useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
+            this.ports.getVoiceTypingRuntimeStore().setWarmupStatus('ready');
 
             logger.info('[VoiceTypingService] Model and mic pre-warmed and ready.');
         } catch (error) {
             logger.error('[VoiceTypingService] Failed to pre-warm:', error);
-            useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
+            this.ports.getVoiceTypingRuntimeStore().setWarmupStatus('error', {
                 errorSource: 'warmup',
                 errorMessage: extractErrorMessage(error),
             });
@@ -161,7 +180,7 @@ class VoiceTypingService {
     }
 
     private configureTranscriptionService() {
-        const asr = resolveVoiceTypingAsr(getEffectiveConfigSnapshot());
+        const asr = resolveVoiceTypingAsr(this.ports.getEffectiveConfigSnapshot());
         if (asr.engine === 'local-sherpa') {
             this.transcriptionService.setModelPath(asr.modelPath);
         }
@@ -170,7 +189,7 @@ class VoiceTypingService {
     }
 
     private async ensureMicrophoneStarted() {
-        const config = useConfigStore.getState().config;
+        const config = this.ports.getConfig();
         await this.microphoneRuntime.ensureStarted(config.microphoneId);
     }
 
@@ -192,11 +211,11 @@ class VoiceTypingService {
     }
 
     private getVoiceTypingMode() {
-        return useConfigStore.getState().config.voiceTypingMode || 'hold';
+        return this.ports.getConfig().voiceTypingMode || 'hold';
     }
 
     private getCurrentShortcutModifiers(): VoiceTypingShortcutModifier[] {
-        const shortcut = useConfigStore.getState().config.voiceTypingShortcut ?? 'Alt+V';
+        const shortcut = this.ports.getConfig().voiceTypingShortcut ?? 'Alt+V';
         return getVoiceTypingShortcutModifiers(shortcut);
     }
 
@@ -216,7 +235,7 @@ class VoiceTypingService {
 
     private async tryGetTextCursorOverlayPosition() {
         try {
-            const cursorPosition = await getTextCursorPosition();
+            const cursorPosition = await this.ports.getTextCursorPosition();
             if (!cursorPosition) {
                 return null;
             }
@@ -242,7 +261,7 @@ class VoiceTypingService {
             return lastPosition;
         }
 
-        const [x, y] = await getMousePosition();
+        const [x, y] = await this.ports.getMousePosition();
         return [x - 4, y + MOUSE_POSITION_OFFSET - 4];
     }
 
@@ -305,7 +324,7 @@ class VoiceTypingService {
             return;
         }
 
-        useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+        this.ports.getVoiceTypingRuntimeStore().clearRuntimeFailure({
             resetWarmup: true,
         });
         await this.stopMicrophoneCapture();
@@ -319,8 +338,27 @@ class VoiceTypingService {
         this.shortcutController.resetForTest();
         this.overlayPresenter.resetForTest();
         this.sessionMachine.resetForTest();
-        useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
+        this.ports.getVoiceTypingRuntimeStore().resetRuntimeStatus();
     }
 }
 
-export const voiceTypingService = new VoiceTypingService();
+export function createVoiceTypingService(ports: VoiceTypingServicePorts): VoiceTypingService {
+    return new VoiceTypingService(ports);
+}
+
+const voiceTypingTranscriptionService = createTranscriptionService('voice-typing', {
+    getEffectiveConfigSnapshot,
+    initRecognizer,
+    processBatchFile,
+});
+
+export const voiceTypingService = createVoiceTypingService({
+    getConfig: () => useConfigStore.getState().config,
+    subscribeConfig: useConfigStore.subscribe,
+    getEffectiveConfigSnapshot,
+    getVoiceTypingRuntimeStore: useVoiceTypingRuntimeStore.getState,
+    injectText,
+    getTextCursorPosition,
+    getMousePosition,
+    transcriptionService: voiceTypingTranscriptionService,
+});

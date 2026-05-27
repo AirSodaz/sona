@@ -12,20 +12,46 @@ export interface ExportTranscriptToDirectoryOptions {
   mode: ExportMode;
 }
 
-export function sanitizeExportFileName(fileName: string): string {
-  return fileName.replace(/[\\/:*?"<>|]/g, '_').trim();
+export interface ExportServicePorts {
+  exportTranscriptFile: typeof exportTranscriptFile;
+  join: typeof join;
 }
 
-export async function exportTranscriptToDirectory(
-  options: ExportTranscriptToDirectoryOptions,
-): Promise<string> {
-  const extension = getFileExtension(options.format);
-  const fullPath = await join(options.directory, `${sanitizeExportFileName(options.baseFileName)}${extension}`);
-  const result = await exportTranscriptFile({
-    segments: options.segments,
-    format: options.format,
-    mode: options.mode,
-    outputPath: fullPath,
-  });
-  return result.outputPath;
+export class ExportService {
+  constructor(private readonly ports: ExportServicePorts) {}
+
+  sanitizeExportFileName = (fileName: string): string => {
+    return fileName.replace(/[\\/:*?"<>|]/g, '_').trim();
+  }
+
+  exportTranscriptToDirectory = async (
+    options: ExportTranscriptToDirectoryOptions,
+  ): Promise<string> => {
+    const extension = getFileExtension(options.format);
+    const fullPath = await this.ports.join(
+      options.directory,
+      `${this.sanitizeExportFileName(options.baseFileName)}${extension}`,
+    );
+    const result = await this.ports.exportTranscriptFile({
+      segments: options.segments,
+      format: options.format,
+      mode: options.mode,
+      outputPath: fullPath,
+    });
+    return result.outputPath;
+  }
 }
+
+export function createExportService(ports: ExportServicePorts): ExportService {
+  return new ExportService(ports);
+}
+
+export const exportService = createExportService({
+  exportTranscriptFile,
+  join,
+});
+
+export const {
+  sanitizeExportFileName,
+  exportTranscriptToDirectory,
+} = exportService;

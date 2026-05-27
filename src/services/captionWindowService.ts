@@ -1,5 +1,5 @@
 import { TranscriptSegment } from '../types/transcript';
-import { AuxWindowController } from './auxWindowController';
+import { AuxWindowController, AuxWindowControllerOptions, AuxWindowDisplayState } from './auxWindowController';
 import { TauriEvent } from './tauri/events';
 import { logger } from '../utils/logger';
 import { WebviewWindow } from './tauri/platform/windows';
@@ -70,33 +70,41 @@ async function applyCaptionWindowFlag(
     }
 }
 
-class CaptionWindowService {
-    private controller = new AuxWindowController<CaptionWindowState>({
-        label: CAPTION_WINDOW_LABEL,
-        eventName: CAPTION_EVENT_STATE,
-        createWindow: (displayState, creationState) =>
-            new WebviewWindow(CAPTION_WINDOW_LABEL, {
-                url: '/index.html?window=caption',
-                title: 'Sona Live Caption',
-                alwaysOnTop: displayState.alwaysOnTop ?? true,
-                decorations: false,
-                transparent: true,
-                skipTaskbar: true,
-                width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
-                height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
-                minWidth: 200,
-                minHeight: 32,
-                center: false,
-                focus: false,
-                resizable: true,
-                maximizable: false,
-                minimizable: false,
-                shadow: false,
-                visible: creationState.visible,
-            }),
-    });
+export interface CaptionWindowServicePorts {
+    createAuxWindowController: (options: AuxWindowControllerOptions) => AuxWindowController<CaptionWindowState>;
+    createWebviewWindow: (label: string, options: ConstructorParameters<typeof WebviewWindow>[1]) => WebviewWindow;
+}
 
+export class CaptionWindowService {
+    private controller: AuxWindowController<CaptionWindowState>;
     private state: CaptionWindowState = DEFAULT_CAPTION_WINDOW_STATE;
+
+    constructor(private readonly ports: CaptionWindowServicePorts) {
+        this.controller = this.ports.createAuxWindowController({
+            label: CAPTION_WINDOW_LABEL,
+            eventName: CAPTION_EVENT_STATE,
+            createWindow: (displayState: AuxWindowDisplayState, creationState: { visible: boolean }) =>
+                this.ports.createWebviewWindow(CAPTION_WINDOW_LABEL, {
+                    url: '/index.html?window=caption',
+                    title: 'Sona Live Caption',
+                    alwaysOnTop: displayState.alwaysOnTop ?? true,
+                    decorations: false,
+                    transparent: true,
+                    skipTaskbar: true,
+                    width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
+                    height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
+                    minWidth: 200,
+                    minHeight: 32,
+                    center: false,
+                    focus: false,
+                    resizable: true,
+                    maximizable: false,
+                    minimizable: false,
+                    shadow: false,
+                    visible: creationState.visible,
+                }),
+        });
+    }
 
     private buildState(partial: Partial<Omit<CaptionWindowState, 'revision'>>) {
         this.state = {
@@ -246,4 +254,11 @@ class CaptionWindowService {
     }
 }
 
-export const captionWindowService = new CaptionWindowService();
+export function createCaptionWindowService(ports: CaptionWindowServicePorts): CaptionWindowService {
+    return new CaptionWindowService(ports);
+}
+
+export const captionWindowService = createCaptionWindowService({
+    createAuxWindowController: (options) => new AuxWindowController<CaptionWindowState>(options),
+    createWebviewWindow: (label, options) => new WebviewWindow(label, options),
+});

@@ -37,19 +37,30 @@ export function isSummaryRecordStale(
   return record.sourceFingerprint !== computeSummarySourceFingerprint(segments);
 }
 
-class SummaryService {
+export interface SummaryServicePorts {
+  getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
+  getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
+  getTranscriptSidecarStore: typeof useTranscriptSidecarStore.getState;
+  runTranscriptLlmTaskJob: typeof runTranscriptLlmTaskJob;
+  runTranscriptLlmJob: typeof runTranscriptLlmJob;
+  summarySidecarService: typeof summarySidecarService;
+}
+
+export class SummaryService {
+  constructor(private readonly ports: SummaryServicePorts) {}
+
   async loadSummary(historyId: string): Promise<void> {
-    await summarySidecarService.loadSummary(historyId);
+    await this.ports.summarySidecarService.loadSummary(historyId);
   }
 
   async persistSummary(historyId: string): Promise<void> {
-    await summarySidecarService.persistSummary(historyId);
+    await this.ports.summarySidecarService.persistSummary(historyId);
   }
 
   async setActiveTemplate(templateId: SummaryTemplateId, historyId?: string): Promise<void> {
-    const sessionStore = useTranscriptSessionStore.getState();
-    const sidecarStore = useTranscriptSidecarStore.getState();
-    const config = getEffectiveConfigSnapshot();
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    const config = this.ports.getEffectiveConfigSnapshot();
     const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
     const resolvedTemplateId = coerceSummaryTemplateId(templateId, config.summaryCustomTemplates);
     sidecarStore.setActiveSummaryTemplate(resolvedTemplateId, targetHistoryId);
@@ -60,9 +71,9 @@ class SummaryService {
   }
 
   async updateSummaryRecord(content: string, historyId?: string): Promise<void> {
-    const sessionStore = useTranscriptSessionStore.getState();
-    const sidecarStore = useTranscriptSidecarStore.getState();
-    const config = getEffectiveConfigSnapshot();
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    const config = this.ports.getEffectiveConfigSnapshot();
     const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
     const summaryState = sidecarStore.getSummaryState(targetHistoryId);
     const activeTemplateId = coerceSummaryTemplateId(
@@ -93,7 +104,7 @@ class SummaryService {
   }
 
   async generateSummary(templateId?: SummaryTemplateId): Promise<void> {
-    const sessionStore = useTranscriptSessionStore.getState();
+    const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retrySummaryTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
@@ -118,8 +129,8 @@ class SummaryService {
     historyId,
     templateId,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
-    const sidecarStore = useTranscriptSidecarStore.getState();
-    const config = getEffectiveConfigSnapshot();
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    const config = this.ports.getEffectiveConfigSnapshot();
 
     if (config.summaryEnabled === false) {
       throw new Error('Summary is disabled.');
@@ -140,7 +151,7 @@ class SummaryService {
     );
     const activeTemplateId = resolvedTemplate.id;
 
-    await runTranscriptLlmTaskJob({
+    await this.ports.runTranscriptLlmTaskJob({
       taskType: 'summary',
       segments,
       sourceHistoryId: historyId,
@@ -166,7 +177,7 @@ class SummaryService {
         });
       },
       runTask: async (taskId, runningHistoryId) => {
-        const result = await runTranscriptLlmJob(
+        const result = await this.ports.runTranscriptLlmJob(
           this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments),
         );
         const summary = result.summary;
@@ -218,7 +229,7 @@ class SummaryService {
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
   ): SummaryTranscriptLlmJobRequest {
-    const config = getEffectiveConfigSnapshot();
+    const config = this.ports.getEffectiveConfigSnapshot();
 
     return {
       taskId,
@@ -235,7 +246,7 @@ class SummaryService {
     state: Partial<TranscriptSummaryState>,
   ): string {
     const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId);
-    useTranscriptSidecarStore.getState().updateSummaryState(state, targetHistoryId);
+    this.ports.getTranscriptSidecarStore().updateSummaryState(state, targetHistoryId);
     return targetHistoryId;
   }
 
@@ -244,7 +255,7 @@ class SummaryService {
       return jobHistoryId;
     }
 
-    const sessionStore = useTranscriptSessionStore.getState();
+    const sessionStore = this.ports.getTranscriptSessionStore();
     // A "current" job can become history-backed after save. The coordinator rekeys
     // the transient summary state during that save, so follow-up UI updates should
     // continue on the newly durable history id.
@@ -256,4 +267,15 @@ class SummaryService {
   }
 }
 
-export const summaryService = new SummaryService();
+export function createSummaryService(ports: SummaryServicePorts): SummaryService {
+  return new SummaryService(ports);
+}
+
+export const summaryService = createSummaryService({
+  getEffectiveConfigSnapshot,
+  getTranscriptSessionStore: useTranscriptSessionStore.getState,
+  getTranscriptSidecarStore: useTranscriptSidecarStore.getState,
+  runTranscriptLlmTaskJob,
+  runTranscriptLlmJob,
+  summarySidecarService,
+});

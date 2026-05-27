@@ -11,86 +11,99 @@ import type {
 } from '../types/transcriptSnapshot';
 import { historyService } from './historyService';
 
-interface SnapshotTarget {
-  historyId: string | null;
-  segments: TranscriptSegment[];
+export interface TranscriptSnapshotServicePorts {
+  useHistoryStore: typeof useHistoryStore;
+  useTranscriptSessionStore: typeof useTranscriptSessionStore;
+  historyService: typeof historyService;
 }
 
-function cloneSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
-  return JSON.parse(JSON.stringify(segments)) as TranscriptSegment[];
-}
+export class TranscriptSnapshotService {
+  constructor(private readonly ports: TranscriptSnapshotServicePorts) {}
 
-function resolveCurrentSnapshotTarget(): SnapshotTarget {
-  const session = useTranscriptSessionStore.getState();
-  return {
-    historyId: session.sourceHistoryId,
-    segments: session.segments,
-  };
-}
+  private cloneSegments = (segments: TranscriptSegment[]): TranscriptSegment[] => {
+    return JSON.parse(JSON.stringify(segments)) as TranscriptSegment[];
+  }
 
-function canSnapshotHistoryId(historyId: string | null | undefined): historyId is string {
-  return Boolean(historyId && historyId !== 'current');
-}
+  private resolveCurrentSnapshotTarget = (): { historyId: string | null; segments: TranscriptSegment[] } => {
+    const session = this.ports.useTranscriptSessionStore.getState();
+    return {
+      historyId: session.sourceHistoryId,
+      segments: session.segments,
+    };
+  }
 
-function isDraftHistoryItem(historyId: string): boolean {
-  const item = useHistoryStore.getState().items.find((candidate) => candidate.id === historyId);
-  return item ? isHistoryItemDraft(item) : false;
-}
+  private canSnapshotHistoryId = (historyId: string | null | undefined): historyId is string => {
+    return Boolean(historyId && historyId !== 'current');
+  }
 
-export const transcriptSnapshotService = {
-  async createSnapshot(
+  private isDraftHistoryItem = (historyId: string): boolean => {
+    const item = this.ports.useHistoryStore.getState().items.find((candidate) => candidate.id === historyId);
+    return item ? isHistoryItemDraft(item) : false;
+  }
+
+  createSnapshot = async (
     historyId: string,
     reason: TranscriptSnapshotReason,
     segments: TranscriptSegment[],
-  ): Promise<TranscriptSnapshotMetadata | null> {
-    if (!canSnapshotHistoryId(historyId) || isDraftHistoryItem(historyId) || segments.length === 0) {
+  ): Promise<TranscriptSnapshotMetadata | null> => {
+    if (!this.canSnapshotHistoryId(historyId) || this.isDraftHistoryItem(historyId) || segments.length === 0) {
       return null;
     }
 
-    return historyService.createTranscriptSnapshot(historyId, reason, cloneSegments(segments));
-  },
+    return this.ports.historyService.createTranscriptSnapshot(historyId, reason, this.cloneSegments(segments));
+  }
 
-  async createSnapshotForCurrentTranscript(
+  createSnapshotForCurrentTranscript = async (
     reason: TranscriptSnapshotReason,
-  ): Promise<TranscriptSnapshotMetadata | null> {
-    const { historyId, segments } = resolveCurrentSnapshotTarget();
-    if (!canSnapshotHistoryId(historyId)) {
+  ): Promise<TranscriptSnapshotMetadata | null> => {
+    const { historyId, segments } = this.resolveCurrentSnapshotTarget();
+    if (!this.canSnapshotHistoryId(historyId)) {
       return null;
     }
 
     return this.createSnapshot(historyId, reason, segments);
-  },
+  }
 
-  async listSnapshots(historyId: string): Promise<TranscriptSnapshotMetadata[]> {
-    if (!canSnapshotHistoryId(historyId)) {
+  listSnapshots = async (historyId: string): Promise<TranscriptSnapshotMetadata[]> => {
+    if (!this.canSnapshotHistoryId(historyId)) {
       return [];
     }
 
-    return historyService.listTranscriptSnapshots(historyId);
-  },
+    return this.ports.historyService.listTranscriptSnapshots(historyId);
+  }
 
-  async loadSnapshot(
+  loadSnapshot = async (
     historyId: string,
     snapshotId: string,
-  ): Promise<TranscriptSnapshotRecord | null> {
-    if (!canSnapshotHistoryId(historyId)) {
+  ): Promise<TranscriptSnapshotRecord | null> => {
+    if (!this.canSnapshotHistoryId(historyId)) {
       return null;
     }
 
-    return historyService.loadTranscriptSnapshot(historyId, snapshotId);
-  },
+    return this.ports.historyService.loadTranscriptSnapshot(historyId, snapshotId);
+  }
 
-  async buildDiff(
+  buildDiff = async (
     snapshotSegments: TranscriptSegment[],
     currentSegments: TranscriptSegment[],
-  ): Promise<TranscriptDiffResult> {
-    return historyService.buildTranscriptDiff(snapshotSegments, currentSegments);
-  },
+  ): Promise<TranscriptDiffResult> => {
+    return this.ports.historyService.buildTranscriptDiff(snapshotSegments, currentSegments);
+  }
 
-  async restoreDiffRows(
+  restoreDiffRows = async (
     rows: TranscriptDiffRow[],
     selectedRowIds: Iterable<string>,
-  ): Promise<TranscriptSegment[]> {
-    return historyService.restoreTranscriptDiffRows(rows, selectedRowIds);
-  },
-};
+  ): Promise<TranscriptSegment[]> => {
+    return this.ports.historyService.restoreTranscriptDiffRows(rows, selectedRowIds);
+  }
+}
+
+export function createTranscriptSnapshotService(ports: TranscriptSnapshotServicePorts): TranscriptSnapshotService {
+  return new TranscriptSnapshotService(ports);
+}
+
+export const transcriptSnapshotService = createTranscriptSnapshotService({
+  useHistoryStore,
+  useTranscriptSessionStore,
+  historyService,
+});

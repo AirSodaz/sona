@@ -28,6 +28,7 @@ vi.mock('../ModelCard', () => ({
 
 vi.mock('../../../services/modelService', () => ({
     PRESET_MODELS: [],
+    PRESET_MODELS_MAP: {},
     modelService: {
         getModelPath: vi.fn(async (id: string) => `/models/${id}`),
         getModelRules: vi.fn(() => ({ requiresVad: false, requiresPunctuation: false })),

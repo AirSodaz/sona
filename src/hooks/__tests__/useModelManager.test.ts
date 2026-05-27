@@ -156,6 +156,7 @@ vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
         { id: 'preset-a', name: 'Preset A', type: 'sensevoice' },
     ],
+    PRESET_MODELS_MAP: {},
     modelService: {
         isModelInstalled: vi.fn(),
         getModelPath: vi.fn(),

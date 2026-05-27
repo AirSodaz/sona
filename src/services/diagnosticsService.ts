@@ -17,17 +17,32 @@ import {
   type Translate,
 } from './diagnosticsSnapshotBuilders';
 
-export const diagnosticsService = {
-  async collectSnapshot(t: Translate): Promise<DiagnosticsSnapshot> {
-    const config = useConfigStore.getState().config;
-    const voiceTypingRuntime = useVoiceTypingRuntimeStore.getState();
+export interface DiagnosticsServicePorts {
+  useConfigStore: typeof useConfigStore;
+  useOnboardingStore: typeof useOnboardingStore;
+  useVoiceTypingRuntimeStore: typeof useVoiceTypingRuntimeStore;
+  getMicrophonePermissionState: typeof getMicrophonePermissionState;
+  probeMicrophoneDeviceOptions: typeof probeMicrophoneDeviceOptions;
+  probeSystemAudioDeviceOptions: typeof probeSystemAudioDeviceOptions;
+  resolveVoiceTypingReadinessSnapshot: typeof resolveVoiceTypingReadinessSnapshot;
+  getDiagnosticsCoreSnapshot: typeof getDiagnosticsCoreSnapshot;
+  buildDiagnosticsSnapshot: typeof buildDiagnosticsSnapshot;
+  getResumeOnboardingStep: typeof getResumeOnboardingStep;
+}
+
+export class DiagnosticsService {
+  constructor(private readonly ports: DiagnosticsServicePorts) {}
+
+  collectSnapshot = async (t: Translate): Promise<DiagnosticsSnapshot> => {
+    const config = this.ports.useConfigStore.getState().config;
+    const voiceTypingRuntime = this.ports.useVoiceTypingRuntimeStore.getState();
     const [permissionState, microphoneProbe, systemAudioProbe] = await Promise.all([
-      getMicrophonePermissionState(),
-      probeMicrophoneDeviceOptions(t('settings.mic_auto')),
-      probeSystemAudioDeviceOptions(t('settings.mic_auto')),
+      this.ports.getMicrophonePermissionState(),
+      this.ports.probeMicrophoneDeviceOptions(t('settings.mic_auto')),
+      this.ports.probeSystemAudioDeviceOptions(t('settings.mic_auto')),
     ]);
 
-    const voiceTypingReadiness = resolveVoiceTypingReadinessSnapshot(
+    const voiceTypingReadiness = this.ports.resolveVoiceTypingReadinessSnapshot(
       {
         voiceTypingEnabled: config.voiceTypingEnabled ?? false,
         voiceTypingShortcut: config.voiceTypingShortcut ?? '',
@@ -38,7 +53,7 @@ export const diagnosticsService = {
       voiceTypingRuntime,
     );
 
-    const coreSnapshot = await getDiagnosticsCoreSnapshot({
+    const coreSnapshot = await this.ports.getDiagnosticsCoreSnapshot({
       config: {
         streamingModelPath: config.streamingModelPath,
         offlineModelPath: config.offlineModelPath,
@@ -52,12 +67,29 @@ export const diagnosticsService = {
       voiceTypingReadiness,
     });
 
-    return buildDiagnosticsSnapshot(t, coreSnapshot);
-  },
+    return this.ports.buildDiagnosticsSnapshot(t, coreSnapshot);
+  }
 
-  getResumeOnboardingStep() {
-    const config = useConfigStore.getState().config;
-    const state = useOnboardingStore.getState().persistedState;
-    return getResumeOnboardingStep(config, 'startup', state);
-  },
-};
+  getResumeOnboardingStep = () => {
+    const config = this.ports.useConfigStore.getState().config;
+    const state = this.ports.useOnboardingStore.getState().persistedState;
+    return this.ports.getResumeOnboardingStep(config, 'startup', state);
+  }
+}
+
+export function createDiagnosticsService(ports: DiagnosticsServicePorts): DiagnosticsService {
+  return new DiagnosticsService(ports);
+}
+
+export const diagnosticsService = createDiagnosticsService({
+  useConfigStore,
+  useOnboardingStore,
+  useVoiceTypingRuntimeStore,
+  getMicrophonePermissionState,
+  probeMicrophoneDeviceOptions,
+  probeSystemAudioDeviceOptions,
+  resolveVoiceTypingReadinessSnapshot,
+  getDiagnosticsCoreSnapshot,
+  buildDiagnosticsSnapshot,
+  getResumeOnboardingStep,
+});

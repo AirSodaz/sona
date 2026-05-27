@@ -5,19 +5,31 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
 import { transcriptSnapshotService } from './transcriptSnapshotService';
-import { transcriptionService } from './transcriptionService';
+import { transcriptionService, type TranscriptionService } from './transcriptionService';
 import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from './asrConfigService';
 import { logger } from '../utils/logger';
 
-class RetranscribeService {
+export interface RetranscribeServicePorts {
+    getEffectiveConfigSnapshot: typeof getEffectiveConfigSnapshot;
+    getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
+    getHistoryStore: typeof useHistoryStore.getState;
+    setTranscriptSegments: typeof setTranscriptSegments;
+    historyService: typeof historyService;
+    transcriptSnapshotService: typeof transcriptSnapshotService;
+    transcriptionService: TranscriptionService;
+}
+
+export class RetranscribeService {
+    constructor(private readonly ports: RetranscribeServicePorts) {}
+
     async retranscribeCurrentRecord(onProgress?: (progress: number) => void): Promise<void> {
-        const historyId = useTranscriptSessionStore.getState().sourceHistoryId;
+        const historyId = this.ports.getTranscriptSessionStore().sourceHistoryId;
 
         if (!historyId || historyId === 'current') {
             throw new Error('No saved history record found. Please ensure the recording is saved.');
         }
 
-        const items = await historyService.getAll();
+        const items = await this.ports.historyService.getAll();
         const item = items.find(i => i.id === historyId);
 
         if (!item || !item.audioPath) {
@@ -27,12 +39,12 @@ class RetranscribeService {
             throw new Error('Live recording draft must be completed before re-transcribing.');
         }
 
-        const audioAbsolutePath = await historyService.getAudioAbsolutePath(item.audioPath);
+        const audioAbsolutePath = await this.ports.historyService.getAudioAbsolutePath(item.audioPath);
         if (!audioAbsolutePath) {
             throw new Error('Audio file not found on disk.');
         }
 
-        const config = getEffectiveConfigSnapshot();
+        const config = this.ports.getEffectiveConfigSnapshot();
         const batchAsr = resolveAsrTranscriptionRequest(config, 'batch');
         if (!isAsrRequestConfigured(batchAsr)) {
             throw new Error('Batch ASR is not configured.');
@@ -40,16 +52,16 @@ class RetranscribeService {
 
         // Configure transcription service for batch mode
         if (batchAsr.engine === 'local-sherpa') {
-            transcriptionService.setModelPath(batchAsr.modelPath);
+            this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
         }
-        transcriptionService.setEnableITN(config.enableITN ?? false);
+        this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
         const language = config.language;
-        const currentSegments = useTranscriptSessionStore.getState().segments;
+        const currentSegments = this.ports.getTranscriptSessionStore().segments;
 
-        await transcriptSnapshotService.createSnapshot(historyId, 'retranscribe', currentSegments);
+        await this.ports.transcriptSnapshotService.createSnapshot(historyId, 'retranscribe', currentSegments);
 
         // Perform transcription
-        const segments = await transcriptionService.transcribeFile(
+        const segments = await this.ports.transcriptionService.transcribeFile(
             audioAbsolutePath,
             onProgress,
             undefined, // We'll just collect the final array
@@ -57,12 +69,24 @@ class RetranscribeService {
         );
 
         // Update Store
-        setTranscriptSegments(segments);
+        this.ports.setTranscriptSegments(segments);
 
         // Save to History File
-        await useHistoryStore.getState().updateTranscript(historyId, segments);
+        await this.ports.getHistoryStore().updateTranscript(historyId, segments);
         logger.info(`[RetranscribeService] Successfully re-transcribed and saved history item: ${historyId}`);
     }
 }
 
-export const retranscribeService = new RetranscribeService();
+export function createRetranscribeService(ports: RetranscribeServicePorts): RetranscribeService {
+    return new RetranscribeService(ports);
+}
+
+export const retranscribeService = createRetranscribeService({
+    getEffectiveConfigSnapshot,
+    getTranscriptSessionStore: useTranscriptSessionStore.getState,
+    getHistoryStore: useHistoryStore.getState,
+    setTranscriptSegments,
+    historyService,
+    transcriptSnapshotService,
+    transcriptionService,
+});

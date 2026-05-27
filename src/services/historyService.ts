@@ -72,47 +72,74 @@ function inferAudioExtensionFromBlob(blob: Blob): string {
     return 'webm';
 }
 
-export const historyService = {
+export interface HistoryServicePorts {
+    historyListItems: typeof historyListItems;
+    historyCreateLiveDraft: typeof historyCreateLiveDraft;
+    historyCompleteLiveDraft: typeof historyCompleteLiveDraft;
+    historyDeleteItems: typeof historyDeleteItems;
+    historyDeleteSummary: typeof historyDeleteSummary;
+    historyCreateTranscriptSnapshot: typeof historyCreateTranscriptSnapshot;
+    historyBuildTranscriptDiff: typeof historyBuildTranscriptDiff;
+    historyLoadSummary: typeof historyLoadSummary;
+    historyLoadTranscript: typeof historyLoadTranscript;
+    historyListTranscriptSnapshots: typeof historyListTranscriptSnapshots;
+    historyLoadTranscriptSnapshot: typeof historyLoadTranscriptSnapshot;
+    historyOpenFolder: typeof historyOpenFolder;
+    historyReassignProject: typeof historyReassignProject;
+    historyRestoreTranscriptDiffRows: typeof historyRestoreTranscriptDiffRows;
+    historyResolveAudioPath: typeof historyResolveAudioPath;
+    historySaveImportedFile: typeof historySaveImportedFile;
+    historySaveRecording: typeof historySaveRecording;
+    historySaveSummary: typeof historySaveSummary;
+    historyUpdateItemMeta: typeof historyUpdateItemMeta;
+    historyUpdateProjectAssignments: typeof historyUpdateProjectAssignments;
+    historyUpdateTranscript: typeof historyUpdateTranscript;
+    convertFileSrc: typeof convertFileSrc;
+}
+
+export class HistoryService {
+    constructor(private readonly ports: HistoryServicePorts) {}
+
     async getAll(): Promise<HistoryItem[]> {
         try {
-            const items = await historyListItems();
+            const items = await this.ports.historyListItems();
             return Array.isArray(items) ? items.map((item) => normalizeHistoryItem(item)) : [];
         } catch (error) {
             logger.error('[History] Failed to load history:', error);
             return [];
         }
-    },
+    }
 
     async createLiveRecordingDraft(
         audioExtension: string,
         projectId: string | null = null,
         icon: string | null = 'system:mic',
     ): Promise<LiveRecordingDraftHandle> {
-        const result = await historyCreateLiveDraft(audioExtension, projectId, icon);
+        const result = await this.ports.historyCreateLiveDraft(audioExtension, projectId, icon);
 
         return {
             item: normalizeHistoryItem(result?.item),
             audioAbsolutePath: result?.audioAbsolutePath || '',
         };
-    },
+    }
 
     async completeLiveRecordingDraft(
         historyId: string,
         segments: TranscriptSegment[],
         duration: number,
     ): Promise<HistoryItem> {
-        const item = await historyCompleteLiveDraft(
+        const item = await this.ports.historyCompleteLiveDraft(
             historyId,
             segments,
             duration,
         );
 
         return normalizeHistoryItem(item);
-    },
+    }
 
     async discardLiveRecordingDraft(historyId: string): Promise<void> {
         await this.deleteRecording(historyId);
-    },
+    }
 
     async saveNativeRecording(
         absoluteWavPath: string,
@@ -128,7 +155,7 @@ export const historyService = {
         }
 
         try {
-            const item = await historySaveRecording({
+            const item = await this.ports.historySaveRecording({
                 segments,
                 duration,
                 projectId,
@@ -141,7 +168,7 @@ export const historyService = {
             logger.error('[History] Failed to save native recording:', error);
             return null;
         }
-    },
+    }
 
     async saveRecording(
         audioBlob: Blob,
@@ -159,7 +186,7 @@ export const historyService = {
         try {
             const audioBytes = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
 
-            const item = await historySaveRecording({
+            const item = await this.ports.historySaveRecording({
                 segments,
                 duration,
                 projectId,
@@ -172,7 +199,7 @@ export const historyService = {
             logger.error('[History] Failed to save recording:', error);
             return null;
         }
-    },
+    }
 
     async saveImportedFile(
         filePath: string,
@@ -189,7 +216,7 @@ export const historyService = {
         }
 
         try {
-            const item = await historySaveImportedFile({
+            const item = await this.ports.historySaveImportedFile({
                 sourcePath: filePath,
                 segments,
                 duration,
@@ -202,146 +229,175 @@ export const historyService = {
             logger.error('[History] Failed to save imported file:', error);
             return null;
         }
-    },
+    }
 
     async deleteRecording(id: string): Promise<void> {
         try {
-            await historyDeleteItems([id]);
+            await this.ports.historyDeleteItems([id]);
         } catch (error) {
             logger.error('Failed to delete recording:', error);
         }
-    },
+    }
 
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
-            await historyDeleteItems(ids);
+            await this.ports.historyDeleteItems(ids);
         } catch (error) {
             logger.error('Failed to delete recordings:', error);
             throw error;
         }
-    },
+    }
 
     async loadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
         try {
-            return await historyLoadTranscript(filename);
+            return await this.ports.historyLoadTranscript(filename);
         } catch (error) {
             logger.error('Failed to load transcript:', error);
             return null;
         }
-    },
+    }
 
     async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<HistoryItem> {
         try {
-            const item = await historyUpdateTranscript(historyId, segments);
+            const item = await this.ports.historyUpdateTranscript(historyId, segments);
             return normalizeHistoryItem(item);
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
             throw error;
         }
-    },
+    }
 
     async createTranscriptSnapshot(
         historyId: string,
         reason: TranscriptSnapshotReason,
         segments: TranscriptSegment[],
     ): Promise<TranscriptSnapshotMetadata> {
-        return historyCreateTranscriptSnapshot(historyId, reason, segments);
-    },
+        return this.ports.historyCreateTranscriptSnapshot(historyId, reason, segments);
+    }
 
     async listTranscriptSnapshots(historyId: string): Promise<TranscriptSnapshotMetadata[]> {
-        return historyListTranscriptSnapshots(historyId);
-    },
+        return this.ports.historyListTranscriptSnapshots(historyId);
+    }
 
     async loadTranscriptSnapshot(
         historyId: string,
         snapshotId: string,
     ): Promise<TranscriptSnapshotRecord | null> {
-        return historyLoadTranscriptSnapshot(historyId, snapshotId);
-    },
+        return this.ports.historyLoadTranscriptSnapshot(historyId, snapshotId);
+    }
 
     async buildTranscriptDiff(
         snapshotSegments: TranscriptSegment[],
         currentSegments: TranscriptSegment[],
     ): Promise<TranscriptDiffResult> {
-        return historyBuildTranscriptDiff(snapshotSegments, currentSegments);
-    },
+        return this.ports.historyBuildTranscriptDiff(snapshotSegments, currentSegments);
+    }
 
     async restoreTranscriptDiffRows(
         rows: TranscriptDiffRow[],
         selectedRowIds: Iterable<string>,
     ): Promise<TranscriptSegment[]> {
-        return historyRestoreTranscriptDiffRows(rows, selectedRowIds);
-    },
+        return this.ports.historyRestoreTranscriptDiffRows(rows, selectedRowIds);
+    }
 
     async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {
-        await historyUpdateItemMeta(id, updates);
-    },
+        await this.ports.historyUpdateItemMeta(id, updates);
+    }
 
     async updateProjectAssignments(ids: string[], projectId: string | null): Promise<void> {
         if (ids.length === 0) {
             return;
         }
 
-        await historyUpdateProjectAssignments(ids, projectId);
-    },
+        await this.ports.historyUpdateProjectAssignments(ids, projectId);
+    }
 
     async updateProjectAssignmentsByCurrentProject(
         currentProjectId: string,
         nextProjectId: string | null,
     ): Promise<void> {
-        await historyReassignProject(currentProjectId, nextProjectId);
-    },
+        await this.ports.historyReassignProject(currentProjectId, nextProjectId);
+    }
 
     async loadSummary(historyId: string): Promise<HistorySummaryPayload | null> {
         try {
-            return await historyLoadSummary(historyId);
+            return await this.ports.historyLoadSummary(historyId);
         } catch (error) {
             logger.error('[History] Failed to load summary sidecar:', error);
             return null;
         }
-    },
+    }
 
     async saveSummary(historyId: string, summaryPayload: HistorySummaryPayload): Promise<void> {
         try {
-            await historySaveSummary(historyId, summaryPayload);
+            await this.ports.historySaveSummary(historyId, summaryPayload);
         } catch (error) {
             logger.error('[History] Failed to save summary sidecar:', error);
             throw error;
         }
-    },
+    }
 
     async deleteSummary(historyId: string): Promise<void> {
         try {
-            await historyDeleteSummary(historyId);
+            await this.ports.historyDeleteSummary(historyId);
         } catch (error) {
             logger.error('[History] Failed to delete summary sidecar:', error);
         }
-    },
+    }
 
     async getAudioAbsolutePath(filename: string): Promise<string | null> {
         try {
-            return await historyResolveAudioPath(filename);
+            return await this.ports.historyResolveAudioPath(filename);
         } catch (error) {
             logger.error('Failed to get audio absolute path:', error);
             return null;
         }
-    },
+    }
 
     async getAudioUrl(filename: string): Promise<string | null> {
         try {
             const fullPath = await this.getAudioAbsolutePath(filename);
-            return fullPath ? convertFileSrc(fullPath) : null;
+            return fullPath ? this.ports.convertFileSrc(fullPath) : null;
         } catch (error) {
             logger.error('Failed to get audio URL:', error);
             return null;
         }
-    },
+    }
 
     async openHistoryFolder(): Promise<void> {
         try {
-            await historyOpenFolder();
+            await this.ports.historyOpenFolder();
         } catch (error) {
             logger.error('[History] Failed to open history folder:', error);
         }
-    },
-};
+    }
+}
+
+export function createHistoryService(ports: HistoryServicePorts): HistoryService {
+    return new HistoryService(ports);
+}
+
+export const historyService = createHistoryService({
+    historyListItems,
+    historyCreateLiveDraft,
+    historyCompleteLiveDraft,
+    historyDeleteItems,
+    historyDeleteSummary,
+    historyCreateTranscriptSnapshot,
+    historyBuildTranscriptDiff,
+    historyLoadSummary,
+    historyLoadTranscript,
+    historyListTranscriptSnapshots,
+    historyLoadTranscriptSnapshot,
+    historyOpenFolder,
+    historyReassignProject,
+    historyRestoreTranscriptDiffRows,
+    historyResolveAudioPath,
+    historySaveImportedFile,
+    historySaveRecording,
+    historySaveSummary,
+    historyUpdateItemMeta,
+    historyUpdateProjectAssignments,
+    historyUpdateTranscript,
+    convertFileSrc,
+});

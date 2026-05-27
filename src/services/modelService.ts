@@ -194,39 +194,17 @@ export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
  */
 export type ProgressCallback = (percentage: number, status: string, isFinished?: boolean) => void;
 
+export interface ModelServicePorts {
+    fileService: ReturnType<typeof createModelFileService>;
+    registryService: ReturnType<typeof createModelRegistryService>;
+    downloadService: ReturnType<typeof createModelDownloadService>;
+}
+
 /**
  * Service for managing AI models (downloading, verifying, path resolution).
  */
-class ModelService {
-    private readonly fileService = createModelFileService({
-        appLocalDataDir,
-        join,
-        exists,
-        mkdir,
-        remove,
-    });
-    private readonly registryService = createModelRegistryService({
-        getModelCatalogSnapshot: getModelCatalogSnapshotFromRust,
-        resolveModelCatalogSelectedIds: resolveModelCatalogSelectedIdsFromRust,
-        getModelsDir: () => this.getModelsDir(),
-        join,
-        presetModelsMap: PRESET_MODELS_MAP,
-        defaultModelRules: DEFAULT_MODEL_RULES,
-    });
-    private readonly downloadService = createModelDownloadService({
-        downloadFile,
-        extractTarBz2,
-        cancelDownload: async (id: string) => {
-            const { cancelDownload } = await import('./tauri/app');
-            await cancelDownload(id);
-        },
-        remove: async (path: string) => {
-            await remove(path);
-        },
-        listen,
-        join,
-        getModelsDir: () => this.getModelsDir(),
-    });
+export class ModelService {
+    constructor(private readonly ports: ModelServicePorts) {}
 
     /**
      * Gets the local directory where models are stored.
@@ -236,7 +214,7 @@ class ModelService {
      * @return A promise that resolves to the absolute path of the models directory.
      */
     async getModelsDir(): Promise<string> {
-        return this.fileService.getModelsDir();
+        return this.ports.fileService.getModelsDir();
     }
 
     /**
@@ -245,11 +223,11 @@ class ModelService {
      * @return A promise resolving to grouped model metadata and install paths.
      */
     async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
-        return this.registryService.getModelCatalogSnapshot();
+        return this.ports.registryService.getModelCatalogSnapshot();
     }
 
     async resolveModelCatalogSelectedIds(paths: ModelSelectionPaths): Promise<ModelCatalogSelectedIds> {
-        return await this.registryService.resolveModelCatalogSelectedIds(paths);
+        return await this.ports.registryService.resolveModelCatalogSelectedIds(paths);
     }
 
     /**
@@ -277,12 +255,12 @@ class ModelService {
      * @throws {Error} If the model is not found or download fails.
      */
     async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const catalogModel = await this.registryService.resolveCatalogModel(modelId);
+        const catalogModel = await this.ports.registryService.resolveCatalogModel(modelId);
         const model = catalogModel ?? PRESET_MODELS_MAP.get(modelId);
         if (!model) throw new Error('Model not found');
 
-        const modelsDir = this.registryService.latestSnapshot?.modelsDir ?? await this.getModelsDir();
-        return await this.downloadService.downloadModel({
+        const modelsDir = this.ports.registryService.latestSnapshot?.modelsDir ?? await this.getModelsDir();
+        return await this.ports.downloadService.downloadModel({
             modelId,
             model,
             modelsDir,
@@ -298,7 +276,7 @@ class ModelService {
      * @return A promise resolving to the model's path.
      */
     async getModelPath(modelId: string): Promise<string> {
-        return await this.registryService.getModelPath(modelId);
+        return await this.ports.registryService.getModelPath(modelId);
     }
 
     /**
@@ -308,7 +286,7 @@ class ModelService {
      * @return A promise resolving to true if installed, false otherwise.
      */
     async isModelInstalled(modelId: string): Promise<boolean> {
-        const catalogModel = await this.registryService.resolveCatalogModel(modelId);
+        const catalogModel = await this.ports.registryService.resolveCatalogModel(modelId);
         if (catalogModel) {
             return catalogModel.isInstalled;
         }
@@ -325,7 +303,7 @@ class ModelService {
      */
     async deleteModel(modelId: string): Promise<void> {
         const modelPath = await this.getModelPath(modelId);
-        await this.fileService.removeIfExists(modelPath);
+        await this.ports.fileService.removeIfExists(modelPath);
     }
 
     /**
@@ -337,9 +315,48 @@ class ModelService {
      * @returns The ModelRules for the model.
      */
     getModelRules(modelId: string): ModelRules {
-        return this.registryService.getModelRules(modelId);
+        return this.ports.registryService.getModelRules(modelId);
     }
 }
 
+export function createModelService(ports: ModelServicePorts): ModelService {
+    return new ModelService(ports);
+}
 
-export const modelService = new ModelService();
+const fileService = createModelFileService({
+    appLocalDataDir,
+    join,
+    exists,
+    mkdir,
+    remove,
+});
+
+const registryService = createModelRegistryService({
+    getModelCatalogSnapshot: getModelCatalogSnapshotFromRust,
+    resolveModelCatalogSelectedIds: resolveModelCatalogSelectedIdsFromRust,
+    getModelsDir: () => fileService.getModelsDir(),
+    join,
+    presetModelsMap: PRESET_MODELS_MAP,
+    defaultModelRules: DEFAULT_MODEL_RULES,
+});
+
+const downloadService = createModelDownloadService({
+    downloadFile,
+    extractTarBz2,
+    cancelDownload: async (id: string) => {
+        const { cancelDownload } = await import('./tauri/app');
+        await cancelDownload(id);
+    },
+    remove: async (path: string) => {
+        await remove(path);
+    },
+    listen,
+    join,
+    getModelsDir: () => fileService.getModelsDir(),
+});
+
+export const modelService = createModelService({
+    fileService,
+    registryService,
+    downloadService,
+});

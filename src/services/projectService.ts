@@ -10,25 +10,38 @@ import {
   projectUpdate,
 } from './tauri/project';
 
-export const projectService = {
+export interface ProjectServicePorts {
+  projectCreate: typeof projectCreate;
+  projectDelete: typeof projectDelete;
+  projectGetActiveId: typeof projectGetActiveId;
+  projectList: typeof projectList;
+  projectReorder: typeof projectReorder;
+  projectSaveAll: typeof projectSaveAll;
+  projectSetActiveId: typeof projectSetActiveId;
+  projectUpdate: typeof projectUpdate;
+}
+
+export class ProjectService {
+  constructor(private readonly ports: ProjectServicePorts) {}
+
   async init(): Promise<void> {
-    await projectList();
-  },
+    await this.ports.projectList();
+  }
 
   async getAll(options?: {
     fallbackEnabledPolishKeywordSetIds?: string[];
     fallbackEnabledSpeakerProfileIds?: string[];
   }): Promise<ProjectRecord[]> {
-    return projectList(options);
-  },
+    return this.ports.projectList(options);
+  }
 
   async saveAll(projects: ProjectRecord[]): Promise<void> {
-    await projectSaveAll(projects);
-  },
+    await this.ports.projectSaveAll(projects);
+  }
 
   async reorder(projectIds: string[]): Promise<void> {
-    await projectReorder(projectIds);
-  },
+    await this.ports.projectReorder(projectIds);
+  }
 
   async create(input: {
     name: string;
@@ -36,25 +49,40 @@ export const projectService = {
     icon?: string;
     defaults: ProjectDefaults;
   }): Promise<ProjectRecord> {
-    return projectCreate(input);
-  },
+    return this.ports.projectCreate(input);
+  }
 
   async update(
     id: string,
     updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>,
   ): Promise<ProjectRecord | null> {
-    return projectUpdate(id, updates);
-  },
+    return this.ports.projectUpdate(id, updates);
+  }
 
   async delete(id: string): Promise<void> {
-    await projectDelete(id);
-  },
+    await this.ports.projectDelete(id);
+  }
 
   async getActiveProjectId(): Promise<string | null> {
-    return projectGetActiveId();
-  },
+    return this.ports.projectGetActiveId();
+  }
 
   async setActiveProjectId(projectId: string | null): Promise<void> {
-    await projectSetActiveId(projectId);
-  },
-};
+    await this.ports.projectSetActiveId(projectId);
+  }
+}
+
+export function createProjectService(ports: ProjectServicePorts): ProjectService {
+  return new ProjectService(ports);
+}
+
+export const projectService = createProjectService({
+  projectCreate,
+  projectDelete,
+  projectGetActiveId,
+  projectList,
+  projectReorder,
+  projectSaveAll,
+  projectSetActiveId,
+  projectUpdate,
+});

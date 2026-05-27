@@ -87,6 +87,7 @@ vi.mock('../transcriptionService', () => {
 
     return {
         TranscriptionService: MockTranscriptionService,
+        createTranscriptionService: () => new MockTranscriptionService(),
     };
 });
 
@@ -141,7 +142,7 @@ function emitConfigChange(patch: Record<string, any>) {
 
 describe('voiceTypingService', () => {
     beforeEach(() => {
-        vi.useRealTimers();
+        vi.useFakeTimers();
         vi.clearAllMocks();
         vi.resetModules();
 
@@ -177,6 +178,10 @@ describe('voiceTypingService', () => {
             }
             return undefined;
         });
+    });
+
+    afterEach(() => {
+        vi.clearAllTimers();
     });
 
     it('pre-warms the model and overlay window during initialization if enabled', async () => {

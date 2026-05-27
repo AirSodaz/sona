@@ -1,4 +1,4 @@
-import { AuxWindowController } from './auxWindowController';
+import { AuxWindowController, AuxWindowControllerOptions, AuxWindowDisplayState } from './auxWindowController';
 import { TauriEvent } from './tauri/events';
 import { WebviewWindow } from './tauri/platform/windows';
 
@@ -29,31 +29,40 @@ export const DEFAULT_VOICE_TYPING_OVERLAY_STATE: VoiceTypingOverlayPayload = {
     revision: 0,
 };
 
-class VoiceTypingWindowService {
-    private controller = new AuxWindowController<VoiceTypingOverlayPayload>({
-        label: VOICE_TYPING_WINDOW_LABEL,
-        eventName: VOICE_TYPING_EVENT_TEXT,
-        createWindow: (displayState, creationState) =>
-            new WebviewWindow(VOICE_TYPING_WINDOW_LABEL, {
-                url: '/index.html?window=voice-typing',
-                title: 'Sona Voice Typing',
-                alwaysOnTop: true,
-                decorations: false,
-                transparent: true,
-                skipTaskbar: true,
-                width: displayState.size?.width ?? VOICE_TYPING_WINDOW_SIZE.width,
-                height: displayState.size?.height ?? VOICE_TYPING_WINDOW_SIZE.height,
-                x: displayState.position?.[0] ?? 0,
-                y: displayState.position?.[1] ?? 0,
-                center: false,
-                focus: false,
-                resizable: false,
-                maximizable: false,
-                minimizable: false,
-                shadow: false,
-                visible: creationState.visible,
-            }),
-    });
+export interface VoiceTypingWindowServicePorts {
+    createAuxWindowController: (options: AuxWindowControllerOptions) => AuxWindowController<VoiceTypingOverlayPayload>;
+    createWebviewWindow: (label: string, options: ConstructorParameters<typeof WebviewWindow>[1]) => WebviewWindow;
+}
+
+export class VoiceTypingWindowService {
+    private controller: AuxWindowController<VoiceTypingOverlayPayload>;
+
+    constructor(private readonly ports: VoiceTypingWindowServicePorts) {
+        this.controller = this.ports.createAuxWindowController({
+            label: VOICE_TYPING_WINDOW_LABEL,
+            eventName: VOICE_TYPING_EVENT_TEXT,
+            createWindow: (displayState: AuxWindowDisplayState, creationState: { visible: boolean }) =>
+                this.ports.createWebviewWindow(VOICE_TYPING_WINDOW_LABEL, {
+                    url: '/index.html?window=voice-typing',
+                    title: 'Sona Voice Typing',
+                    alwaysOnTop: true,
+                    decorations: false,
+                    transparent: true,
+                    skipTaskbar: true,
+                    width: displayState.size?.width ?? VOICE_TYPING_WINDOW_SIZE.width,
+                    height: displayState.size?.height ?? VOICE_TYPING_WINDOW_SIZE.height,
+                    x: displayState.position?.[0] ?? 0,
+                    y: displayState.position?.[1] ?? 0,
+                    center: false,
+                    focus: false,
+                    resizable: false,
+                    maximizable: false,
+                    minimizable: false,
+                    shadow: false,
+                    visible: creationState.visible,
+                }),
+        });
+    }
 
     async prepare(position: [number, number]) {
         await this.controller.prepare({
@@ -90,4 +99,11 @@ class VoiceTypingWindowService {
     }
 }
 
-export const voiceTypingWindowService = new VoiceTypingWindowService();
+export function createVoiceTypingWindowService(ports: VoiceTypingWindowServicePorts): VoiceTypingWindowService {
+    return new VoiceTypingWindowService(ports);
+}
+
+export const voiceTypingWindowService = createVoiceTypingWindowService({
+    createAuxWindowController: (options) => new AuxWindowController<VoiceTypingOverlayPayload>(options),
+    createWebviewWindow: (label, options) => new WebviewWindow(label, options),
+});

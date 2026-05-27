@@ -174,7 +174,9 @@ describe('performSegmentSplit', () => {
                     { text: 'Hello', start: 10.0, end: 12.0 },
                     { text: ' ', start: 12.0, end: 13.0 },
                     { text: 'World', start: 13.0, end: 15.0 },
-                ]
+                ],
+                level: 'token' as const,
+                source: 'model' as const
             }
         };
 

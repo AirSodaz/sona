@@ -15,7 +15,14 @@ type SpeakerConfigInput = Pick<
   'speakerSegmentationModelPath' | 'speakerEmbeddingModelPath' | 'speakerProfiles'
 >;
 
-class SpeakerService {
+export interface SpeakerServicePorts {
+  annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
+  importSpeakerProfileSample: typeof importSpeakerProfileSample;
+}
+
+export class SpeakerService {
+  constructor(private readonly ports: SpeakerServicePorts) {}
+
   isConfigured(config: SpeakerConfigInput): boolean {
     return Boolean(
       config.speakerSegmentationModelPath?.trim()
@@ -51,7 +58,7 @@ class SpeakerService {
       return segments;
     }
 
-    return annotateSpeakerSegmentsFromFile(filePath, segments, speakerProcessing);
+    return this.ports.annotateSpeakerSegmentsFromFile(filePath, segments, speakerProcessing);
   }
 
   async importProfileSample(
@@ -59,8 +66,15 @@ class SpeakerService {
     sourcePath: string,
     sourceName?: string,
   ): Promise<SpeakerProfileSample> {
-    return importSpeakerProfileSample(profileId, sourcePath, sourceName);
+    return this.ports.importSpeakerProfileSample(profileId, sourcePath, sourceName);
   }
 }
 
-export const speakerService = new SpeakerService();
+export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService {
+  return new SpeakerService(ports);
+}
+
+export const speakerService = createSpeakerService({
+  annotateSpeakerSegmentsFromFile,
+  importSpeakerProfileSample,
+});

@@ -54,17 +54,29 @@ export function buildSpeakerCorrectionProfileSections(
   };
 }
 
-class SpeakerCorrectionService {
+export interface SpeakerCorrectionServicePorts {
+  getConfigStore: typeof useConfigStore.getState;
+  getEffectiveConfigStore: typeof useEffectiveConfigStore.getState;
+  getProjectStore: typeof useProjectStore.getState;
+  getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
+  applySpeakerProfileToGroup: typeof applySpeakerProfileToGroup;
+  confirmSpeakerGroupReview: typeof confirmSpeakerGroupReviewInRust;
+  resetSpeakerGroupToAnonymous: typeof resetSpeakerGroupToAnonymousInRust;
+}
+
+export class SpeakerCorrectionService {
+  constructor(private readonly ports: SpeakerCorrectionServicePorts) {}
+
   async assignProfileToSpeakerGroup(
     sourceGroupId: string,
     targetProfileId: string,
   ): Promise<TranscriptSegment[]> {
-    const profiles = normalizeSpeakerProfiles(useConfigStore.getState().config.speakerProfiles);
-    const sessionStore = useTranscriptSessionStore.getState();
-    const projectStore = useProjectStore.getState();
+    const profiles = normalizeSpeakerProfiles(this.ports.getConfigStore().config.speakerProfiles);
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const projectStore = this.ports.getProjectStore();
     const activeProject = projectStore.getActiveProject();
 
-    const response = await applySpeakerProfileToGroup({
+    const response = await this.ports.applySpeakerProfileToGroup({
       segments: sessionStore.segments,
       groupId: sourceGroupId,
       targetProfileId,
@@ -80,13 +92,13 @@ class SpeakerCorrectionService {
       });
     }
 
-    await useEffectiveConfigStore.getState().syncConfig();
+    await this.ports.getEffectiveConfigStore().syncConfig();
     return response.segments;
   }
 
   async resetGroupToAnonymous(groupId: string): Promise<TranscriptSegment[]> {
-    const sessionStore = useTranscriptSessionStore.getState();
-    const response = await resetSpeakerGroupToAnonymousInRust({
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const response = await this.ports.resetSpeakerGroupToAnonymous({
       segments: sessionStore.segments,
       groupId,
     });
@@ -95,8 +107,8 @@ class SpeakerCorrectionService {
   }
 
   async confirmSpeakerGroupReview(groupId: string): Promise<TranscriptSegment[]> {
-    const sessionStore = useTranscriptSessionStore.getState();
-    const response = await confirmSpeakerGroupReviewInRust({
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const response = await this.ports.confirmSpeakerGroupReview({
       segments: sessionStore.segments,
       groupId,
     });
@@ -105,4 +117,16 @@ class SpeakerCorrectionService {
   }
 }
 
-export const speakerCorrectionService = new SpeakerCorrectionService();
+export function createSpeakerCorrectionService(ports: SpeakerCorrectionServicePorts): SpeakerCorrectionService {
+  return new SpeakerCorrectionService(ports);
+}
+
+export const speakerCorrectionService = createSpeakerCorrectionService({
+  getConfigStore: useConfigStore.getState,
+  getEffectiveConfigStore: useEffectiveConfigStore.getState,
+  getProjectStore: useProjectStore.getState,
+  getTranscriptSessionStore: useTranscriptSessionStore.getState,
+  applySpeakerProfileToGroup,
+  confirmSpeakerGroupReview: confirmSpeakerGroupReviewInRust,
+  resetSpeakerGroupToAnonymous: resetSpeakerGroupToAnonymousInRust,
+});
