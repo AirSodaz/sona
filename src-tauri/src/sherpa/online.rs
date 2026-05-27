@@ -1,5 +1,6 @@
 use super::error::SherpaError;
 use super::groq;
+use super::mistral;
 use super::online_traits::OnlineAsrProviderAdapter;
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
@@ -17,6 +18,8 @@ fn online_adapters() -> &'static HashMap<&'static str, Box<dyn OnlineAsrProvider
         map.insert(volcengine.provider_id(), Box::new(volcengine));
         let groq = groq::GroqWhisperAdapter;
         map.insert(groq.provider_id(), Box::new(groq));
+        let mistral = mistral::MistralVoxtralAdapter;
+        map.insert(mistral.provider_id(), Box::new(mistral));
         map
     })
 }

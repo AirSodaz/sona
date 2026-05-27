@@ -80,6 +80,44 @@
           "unsupportedMessage": ""
         }
       }
+    },
+    {
+      "id": "mistral-voxtral",
+      "profileId": "mistral-voxtral-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.mistral_voxtral_option",
+        "optionDefaultLabel": "Voxtral (Mistral)",
+        "titleKey": "settings.asr.mistral_title",
+        "titleDefault": "Voxtral (Mistral)",
+        "cloudUploadHintKey": "settings.asr.mistral_cloud_upload_hint",
+        "cloudUploadHintDefault": "音频会发送到 Mistral 进行识别。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" }
+        ]
+      },
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://api.mistral.ai/v1/audio/transcriptions",
+        "model": "mistral-small-latest"
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "batchEndpoint",
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.mistral.ai/v1/audio/transcriptions",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
     }
   ]
 }

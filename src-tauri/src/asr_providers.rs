@@ -9,6 +9,7 @@ pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const VOLCENGINE_DOUBAO_LEGACY_ENGINE_ID: &str = "volcengine-doubao";
 
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
+pub const MISTRAL_VOXTRAL_PROVIDER_ID: &str = "mistral-voxtral";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +41,14 @@ pub struct VolcengineDoubaoDefaults {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroqWhisperDefaults {
+    pub api_key: String,
+    pub batch_endpoint: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MistralVoxtralDefaults {
     pub api_key: String,
     pub batch_endpoint: String,
     pub model: String,
@@ -82,6 +91,13 @@ pub struct VolcengineDoubaoConfigFields {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroqWhisperConfigFields {
+    pub api_key: String,
+    pub batch_endpoint: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MistralVoxtralConfigFields {
     pub api_key: String,
     pub batch_endpoint: String,
     pub model: String,
@@ -156,6 +172,33 @@ pub fn groq_whisper_profile_id() -> &'static str {
 
 pub fn default_groq_whisper_provider_json() -> Value {
     let defaults = groq_whisper_defaults();
+    json!({
+        "apiKey": defaults.api_key,
+        "batchEndpoint": defaults.batch_endpoint,
+        "model": defaults.model,
+    })
+}
+
+pub fn mistral_voxtral_provider() -> &'static OnlineAsrProvider {
+    find_online_asr_provider(MISTRAL_VOXTRAL_PROVIDER_ID)
+        .expect("Mistral Voxtral provider should exist in shared online ASR manifest")
+}
+
+pub fn mistral_voxtral_defaults() -> MistralVoxtralDefaults {
+    serde_json::from_value(mistral_voxtral_provider().defaults.clone())
+        .expect("valid Mistral Voxtral defaults")
+}
+
+pub fn is_mistral_voxtral_provider_id(provider_id: &str) -> bool {
+    provider_id == mistral_voxtral_provider().id
+}
+
+pub fn mistral_voxtral_profile_id() -> &'static str {
+    "mistral-voxtral-default"
+}
+
+pub fn default_mistral_voxtral_provider_json() -> Value {
+    let defaults = mistral_voxtral_defaults();
     json!({
         "apiKey": defaults.api_key,
         "batchEndpoint": defaults.batch_endpoint,
@@ -337,6 +380,45 @@ pub fn fill_groq_whisper_config_fields(
         api_key: trim_or_default(api_key, &defaults.api_key),
         batch_endpoint: trim_or_default(batch_endpoint, &defaults.batch_endpoint),
         model: trim_or_default(model, &defaults.model),
+    }
+}
+
+#[allow(dead_code)]
+pub fn is_mistral_voxtral_batch_config_fields_complete(config: &MistralVoxtralConfigFields) -> bool {
+    let definition = mistral_voxtral_provider();
+    has_api_key(definition.batch.requires_api_key, &config.api_key)
+        && !config.batch_endpoint.trim().is_empty()
+        && !config.model.trim().is_empty()
+}
+
+pub fn mistral_voxtral_provider_from_providers(providers: Option<&Value>) -> Option<&Value> {
+    online_provider_from_providers(providers, MISTRAL_VOXTRAL_PROVIDER_ID)
+}
+
+pub fn normalize_mistral_voxtral_provider_json(existing: Option<&Value>) -> Value {
+    let fields = fill_mistral_voxtral_config_fields(
+        existing.and_then(|value| string_field(value, "apiKey")),
+        existing.and_then(|value| string_field(value, "batchEndpoint")),
+        existing.and_then(|value| string_field(value, "model")),
+    );
+    json!({
+        "apiKey": fields.api_key,
+        "batchEndpoint": fields.batch_endpoint,
+        "model": fields.model,
+    })
+}
+
+pub fn fill_mistral_voxtral_config_fields(
+    api_key: Option<&str>,
+    batch_endpoint: Option<&str>,
+    model: Option<&str>,
+) -> MistralVoxtralConfigFields {
+    let defaults = mistral_voxtral_defaults();
+    MistralVoxtralConfigFields {
+        api_key: trim_or_default(api_key, &defaults.api_key),
+        batch_endpoint: trim_or_default(batch_endpoint, &defaults.batch_endpoint),
+        model: trim_or_default(model, &defaults.model),
+
     }
 }
 

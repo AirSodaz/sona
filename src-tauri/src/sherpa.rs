@@ -6,6 +6,7 @@ mod batch;
 mod error;
 mod groq;
 mod metrics;
+mod mistral;
 mod model_config;
 mod online;
 mod online_traits;
