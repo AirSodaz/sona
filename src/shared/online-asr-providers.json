@@ -6,9 +6,9 @@
       "profileId": "volcengine-doubao-default",
       "ui": {
         "optionLabelKey": "settings.asr.volcengine_doubao_option",
-        "optionDefaultLabel": "豆包语音 (云端)",
+        "optionDefaultLabel": "豆包语音 (火山)",
         "titleKey": "settings.asr.volcengine_title",
-        "titleDefault": "火山引擎 (豆包语音)",
+        "titleDefault": "豆包语音 (火山)",
         "cloudUploadHintKey": "settings.asr.cloud_upload_hint",
         "cloudUploadHintDefault": "音频会发送到火山引擎进行识别。"
       },

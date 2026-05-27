@@ -25,7 +25,7 @@ import {
 import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
 import { Settings2, PlaySquare } from 'lucide-react';
-import { ModelIcon, RestoreIcon } from '../Icons';
+import { ModelIcon, RestoreIcon, CloudIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 import type { VolcengineDoubaoAsrProviderConfig, GroqWhisperAsrProviderConfig } from '../../types/config';
@@ -218,7 +218,12 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 })
                 .map((provider) => ({
                     value: provider.id,
-                    label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
+                    label: (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
+                            <CloudIcon style={{ color: 'var(--color-text-muted)' }} />
+                        </span>
+                    ),
                 })),
         ];
     }, [selectedStreamingModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
@@ -236,7 +241,12 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 })
                 .map((provider) => ({
                 value: provider.id,
-                label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
+                label: (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
+                        <CloudIcon style={{ color: 'var(--color-text-muted)' }} />
+                    </span>
+                ),
             })),
         ];
     }, [selectedOfflineModelId, selectionOptions.offline, t, modelConfig.asr?.providers]);

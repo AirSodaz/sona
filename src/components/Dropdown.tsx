@@ -3,7 +3,7 @@ import { ChevronDownIcon } from './Icons';
 
 export interface DropdownOption {
     value: string;
-    label: string;
+    label: React.ReactNode;
     description?: string;
     disabled?: boolean;
     ariaLabel?: string;
