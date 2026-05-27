@@ -149,6 +149,19 @@ pub fn is_groq_whisper_provider_id(provider_id: &str) -> bool {
     provider_id == groq_whisper_provider().id
 }
 
+pub fn groq_whisper_profile_id() -> &'static str {
+    "groq-whisper"
+}
+
+pub fn default_groq_whisper_provider_json() -> Value {
+    let defaults = groq_whisper_defaults();
+    json!({
+        "apiKey": defaults.api_key,
+        "batchEndpoint": defaults.batch_endpoint,
+        "model": defaults.model,
+    })
+}
+
 pub fn default_volcengine_doubao_provider_json() -> Value {
     let defaults = volcengine_doubao_defaults();
     json!({
@@ -302,6 +315,19 @@ pub fn is_groq_whisper_batch_config_fields_complete(
 
 pub fn groq_whisper_provider_from_providers(providers: Option<&Value>) -> Option<&Value> {
     online_provider_from_providers(providers, GROQ_WHISPER_PROVIDER_ID)
+}
+
+pub fn normalize_groq_whisper_provider_json(existing: Option<&Value>) -> Value {
+    let fields = fill_groq_whisper_config_fields(
+        existing.and_then(|value| string_field(value, "apiKey")),
+        existing.and_then(|value| string_field(value, "batchEndpoint")),
+        existing.and_then(|value| string_field(value, "model")),
+    );
+    json!({
+        "apiKey": fields.api_key,
+        "batchEndpoint": fields.batch_endpoint,
+        "model": fields.model,
+    })
 }
 
 pub fn fill_groq_whisper_config_fields(

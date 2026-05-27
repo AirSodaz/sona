@@ -1,5 +1,7 @@
 use crate::asr_providers::{
-    default_volcengine_doubao_provider_json, is_volcengine_doubao_provider_id,
+    default_groq_whisper_provider_json, default_volcengine_doubao_provider_json,
+    groq_whisper_profile_id, groq_whisper_provider_from_providers, is_groq_whisper_provider_id,
+    is_volcengine_doubao_provider_id, normalize_groq_whisper_provider_json,
     normalize_volcengine_doubao_provider_json, volcengine_doubao_profile_id,
     volcengine_provider_from_providers, VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
@@ -338,12 +340,31 @@ fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>
     if existing.get("selections") != normalized.get("selections") {
         return true;
     }
-    let existing_provider = volcengine_provider_from_providers(existing.get("providers"));
-    let normalized_provider = volcengine_provider_from_providers(normalized.get("providers"));
-    match (existing_provider, normalized_provider) {
-        (None, Some(provider)) if *provider == default_volcengine_doubao_provider() => false,
-        _ => existing.get("providers") != normalized.get("providers"),
+    let existing_volcengine = volcengine_provider_from_providers(existing.get("providers"));
+    let normalized_volcengine = volcengine_provider_from_providers(normalized.get("providers"));
+    if existing_volcengine != normalized_volcengine {
+        if let (None, Some(provider)) = (existing_volcengine, normalized_volcengine) {
+            if *provider != default_volcengine_doubao_provider() {
+                return true;
+            }
+        } else {
+            return true;
+        }
     }
+    
+    let existing_groq = groq_whisper_provider_from_providers(existing.get("providers"));
+    let normalized_groq = groq_whisper_provider_from_providers(normalized.get("providers"));
+    if existing_groq != normalized_groq {
+        if let (None, Some(provider)) = (existing_groq, normalized_groq) {
+            if *provider != default_groq_whisper_provider_json() {
+                return true;
+            }
+        } else {
+            return true;
+        }
+    }
+    
+    false
 }
 
 fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
@@ -728,6 +749,7 @@ fn default_asr_config() -> Value {
         "providers": {
             "online": {
                 "volcengine-doubao": default_volcengine_doubao_provider(),
+                "groq-whisper": default_groq_whisper_provider_json(),
             },
         }
     })
@@ -742,6 +764,9 @@ fn normalize_asr_providers(providers: Option<&Value>) -> Value {
         "online": {
             "volcengine-doubao": normalize_volcengine_doubao_provider(
                 volcengine_provider_from_providers(providers)
+            ),
+            "groq-whisper": normalize_groq_whisper_provider_json(
+                groq_whisper_provider_from_providers(providers)
             ),
         },
     })
@@ -781,6 +806,7 @@ fn has_valid_asr_config(config: &Value) -> bool {
                 .and_then(Value::as_str)
                 .map_or(true, |provider_id| {
                     !is_volcengine_doubao_provider_id(provider_id)
+                        && !is_groq_whisper_provider_id(provider_id)
                 })
                 || !selection.get("profileId").is_some_and(Value::is_string))
         {
@@ -844,13 +870,21 @@ fn normalize_asr_selection(
         let provider_id = existing
             .and_then(|value| value.get("providerId"))
             .and_then(non_empty_str)
-            .filter(|value| is_volcengine_doubao_provider_id(value))
+            .filter(|value| {
+                is_volcengine_doubao_provider_id(value) || is_groq_whisper_provider_id(value)
+            })
             .unwrap_or(VOLCENGINE_DOUBAO_PROVIDER_ID);
         let profile_id = existing
             .and_then(|value| value.get("profileId"))
             .and_then(non_empty_str)
             .map(str::to_string)
-            .unwrap_or_else(|| volcengine_doubao_profile_id().to_string());
+            .unwrap_or_else(|| {
+                if is_groq_whisper_provider_id(provider_id) {
+                    groq_whisper_profile_id().to_string()
+                } else {
+                    volcengine_doubao_profile_id().to_string()
+                }
+            });
         return json!({
             "engine": "online",
             "mode": expected_mode,
