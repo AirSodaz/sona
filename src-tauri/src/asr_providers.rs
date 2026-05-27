@@ -48,6 +48,7 @@ pub struct GroqWhisperDefaults {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrCapability {
+    pub supported: Option<bool>,
     pub requires_api_key: bool,
     pub required_config_fields: Vec<String>,
 }

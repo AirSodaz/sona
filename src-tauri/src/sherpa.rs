@@ -35,11 +35,11 @@ pub use types::{
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
-async fn route_engine(state: &SherpaState, instance_id: &str) -> AsrEngine {
+async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, String> {
     state
         .instance_engine(instance_id)
         .await
-        .unwrap_or(AsrEngine::LocalSherpa)
+        .ok_or_else(|| format!("ASR engine not configured for instance: {}", instance_id))
 }
 
 #[derive(Default)]
@@ -131,7 +131,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), String> {
-    match route_engine(state, instance_id).await {
+    match route_engine(state, instance_id).await? {
         AsrEngine::Online => online::feed_audio_samples_impl(state, instance_id, samples).await,
         AsrEngine::LocalSherpa => {
             runtime::feed_audio_samples(app, state, instance_id, samples).await
@@ -224,7 +224,7 @@ pub async fn start_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    match route_engine(&state, &instance_id).await {
+    match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::start_streaming_recognizer_impl(app, state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id).await,
     }
@@ -235,7 +235,7 @@ pub async fn stop_recognizer(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    match route_engine(&state, &instance_id).await {
+    match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::stop_streaming_recognizer_impl(state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id).await,
     }
@@ -247,7 +247,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
-    match route_engine(&state, &instance_id).await {
+    match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::flush_streaming_recognizer_impl(app, state, instance_id).await,
         AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id).await,
     }
@@ -265,7 +265,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         instance_id,
         samples.len()
     );
-    match route_engine(&state, &instance_id).await {
+    match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::feed_audio_chunk_impl(app, state, instance_id, samples).await,
         AsrEngine::LocalSherpa => {
             runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
@@ -344,15 +344,15 @@ mod tests {
         let state = SherpaState::new();
         state.set_instance_engine("record", AsrEngine::Online).await;
 
-        assert_eq!(route_engine(&state, "record").await, AsrEngine::Online);
+        assert_eq!(route_engine(&state, "record").await.unwrap(), AsrEngine::Online);
         assert!(!state.has_online_session("record").await);
     }
 
     #[tokio::test]
-    async fn route_engine_defaults_to_local_for_legacy_instances() {
+    async fn route_engine_returns_error_for_unconfigured_instances() {
         let state = SherpaState::new();
 
-        assert_eq!(route_engine(&state, "record").await, AsrEngine::LocalSherpa);
+        assert!(route_engine(&state, "record").await.is_err());
     }
 
     fn local_request(mode: AsrMode, model_path: &str) -> AsrTranscriptionRequest {

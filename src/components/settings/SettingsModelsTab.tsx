@@ -22,6 +22,7 @@ import {
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
 } from '../../services/asrConfigService';
+import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
 import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
@@ -158,11 +159,11 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             return;
         }
 
-        if (modelId === VOLCENGINE_DOUBAO_OPTION_ID) {
+        if (isOnlineAsrProviderId(modelId)) {
             if (type === 'streaming') {
-                updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, VOLCENGINE_DOUBAO_PROVIDER_ID));
+                updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, modelId));
             } else if (type === 'offline') {
-                updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', VOLCENGINE_DOUBAO_PROVIDER_ID));
+                updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', modelId));
             }
             return;
         }
@@ -206,10 +207,12 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const streamingOptions = useMemo(() => {
         return [
             ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId),
-            ...ONLINE_ASR_PROVIDER_DEFINITIONS.map((provider) => ({
-                value: provider.id,
-                label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
-            })),
+            ...ONLINE_ASR_PROVIDER_DEFINITIONS
+                .filter(provider => provider.id !== GROQ_WHISPER_PROVIDER_ID && provider.defaultConfig) // Groq doesn't support streaming. In future, we can check provider.streaming?.supported !== false. Wait! The definition might not have streaming field directly. Let's just filter groq-whisper directly here to be safe and clean since there's no full manifest typed.
+                .map((provider) => ({
+                    value: provider.id,
+                    label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
+                })),
         ];
     }, [selectedStreamingModelId, selectionOptions.streaming, t]);
 

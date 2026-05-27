@@ -57,6 +57,7 @@
         "model": "whisper-large-v3-turbo"
       },
       "streaming": {
+        "supported": false,
         "requiresApiKey": false,
         "requiredConfigFields": []
       },

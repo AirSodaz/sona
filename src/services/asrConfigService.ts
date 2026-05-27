@@ -348,9 +348,7 @@ export class AsrConfigService {
   ): AsrModelSelection => {
     const rawSelection = selection as ({ engine?: string } & Partial<AsrModelSelection>) | undefined;
     if (rawSelection && (rawSelection.engine === 'online' || isLegacyOnlineEngine(rawSelection.engine))) {
-      const providerId = isOnlineAsrProviderId(rawSelection.providerId)
-        ? rawSelection.providerId
-        : VOLCENGINE_DOUBAO_PROVIDER_ID;
+      const providerId = rawSelection.providerId || '';
       const definition = getOnlineAsrProviderDefinition(providerId);
       return {
         engine: 'online',
