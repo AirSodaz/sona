@@ -1,4 +1,4 @@
-import type { TranscriptSegment, TranscriptUpdate, TranscriptTimingUnit } from '../types/transcript';
+import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { useTranscriptPlaybackStore } from './transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './transcriptRuntimeStore';
@@ -6,7 +6,7 @@ import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptSidecarStore } from './transcriptSidecarStore';
 import { v4 as uuidv4 } from 'uuid';
 import { editorHtmlToTranscriptText, splitTranscriptText } from '../components/transcript/richText';
-import { stripHtmlTags } from '../utils/segmentUtils';
+import { stripHtmlTags, performSegmentSplit } from '../utils/segmentUtils';
 
 interface OpenTranscriptSessionArgs {
   segments: TranscriptSegment[];
@@ -115,110 +115,18 @@ export function splitTranscriptSegment(
 
   const fullText = editorHtmlToTranscriptText(currentHtml);
   const [leftText, rightText] = splitTranscriptText(fullText, caretOffset);
-
   const plainText = stripHtmlTags(fullText);
-  const totalLength = plainText.length;
-
-  const leftUnits: TranscriptTimingUnit[] = [];
-  const rightUnits: TranscriptTimingUnit[] = [];
-  let splitTime = segment.start;
-  let splitTimeFound = false;
-
-  if (segment.timing && segment.timing.units && segment.timing.units.length > 0) {
-    const units = segment.timing.units;
-    let cumulativeLen = 0;
-    for (const unit of units) {
-      cumulativeLen += stripHtmlTags(unit.text).length;
-      if (cumulativeLen <= caretOffset) {
-        leftUnits.push(unit);
-      } else {
-        rightUnits.push(unit);
-      }
-    }
-    if (rightUnits.length > 0) {
-      splitTime = rightUnits[0].start;
-      splitTimeFound = true;
-    } else if (leftUnits.length > 0) {
-      splitTime = leftUnits[leftUnits.length - 1].end;
-      splitTimeFound = true;
-    }
-  }
-
-  const leftTokens: string[] = [];
-  const rightTokens: string[] = [];
-  const leftTimestamps: number[] = [];
-  const rightTimestamps: number[] = [];
-  const leftDurations: number[] = [];
-  const rightDurations: number[] = [];
-
-  const hasLegacyTimestamps = Boolean(segment.tokens && segment.timestamps && segment.tokens.length > 0 && segment.tokens.length === segment.timestamps.length);
-
-  if (hasLegacyTimestamps && segment.tokens && segment.timestamps) {
-    let cumulativeLen = 0;
-    for (let i = 0; i < segment.tokens.length; i++) {
-      const token = segment.tokens[i];
-      cumulativeLen += stripHtmlTags(token).length;
-      if (cumulativeLen <= caretOffset) {
-        leftTokens.push(token);
-        leftTimestamps.push(segment.timestamps[i]);
-        if (segment.durations) leftDurations.push(segment.durations[i]);
-      } else {
-        rightTokens.push(token);
-        rightTimestamps.push(segment.timestamps[i]);
-        if (segment.durations) rightDurations.push(segment.durations[i]);
-      }
-    }
-    if (!splitTimeFound) {
-      if (rightTimestamps.length > 0) {
-        splitTime = rightTimestamps[0];
-        splitTimeFound = true;
-      } else if (leftTimestamps.length > 0 && segment.durations && leftDurations.length > 0) {
-        splitTime = leftTimestamps[leftTimestamps.length - 1] + leftDurations[leftDurations.length - 1];
-        splitTimeFound = true;
-      }
-    }
-  }
-
-  if (!splitTimeFound) {
-    const ratio = totalLength > 0 ? Math.min(1, Math.max(0, caretOffset / totalLength)) : 0.5;
-    const duration = segment.end - segment.start;
-    splitTime = Math.round((segment.start + ratio * duration) * 100) / 100;
-  }
-
-  // Bound splitTime safety
-  splitTime = Math.min(segment.end, Math.max(segment.start, splitTime));
 
   const newSegmentId = uuidv4();
 
-  const segmentLeft: TranscriptSegment = {
-    ...segment,
-    end: splitTime,
-    text: leftText,
-    timing: segment.timing ? {
-      ...segment.timing,
-      units: leftUnits,
-    } : undefined,
-    tokens: segment.tokens ? leftTokens : undefined,
-    timestamps: segment.timestamps ? leftTimestamps : undefined,
-    durations: segment.durations ? leftDurations : undefined,
-  };
-
-  const segmentRight: TranscriptSegment = {
-    id: newSegmentId,
-    start: splitTime,
-    end: segment.end,
-    text: rightText,
-    isFinal: true,
-    speaker: segment.speaker,
-    speakerAttribution: segment.speakerAttribution,
-    timing: segment.timing ? {
-      ...segment.timing,
-      units: rightUnits,
-    } : undefined,
-    tokens: segment.tokens ? rightTokens : undefined,
-    timestamps: segment.timestamps ? rightTimestamps : undefined,
-    durations: segment.durations ? rightDurations : undefined,
-  };
+  const { segmentLeft, segmentRight } = performSegmentSplit(
+    segment,
+    caretOffset,
+    plainText,
+    leftText,
+    rightText,
+    newSegmentId
+  );
 
   // Replace segment with segmentLeft, and insert segmentRight after it
   const nextSegments = [...sessionStore.segments];

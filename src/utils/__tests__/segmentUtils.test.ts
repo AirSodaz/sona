@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitByPunctuation } from '../segmentUtils';
+import { splitByPunctuation, performSegmentSplit } from '../segmentUtils';
 import { TranscriptSegment } from '../../types/transcript';
 
 describe('splitByPunctuation', () => {
@@ -157,5 +157,98 @@ describe('splitByPunctuation', () => {
         // Start should be token[2] ("World") + segment.start = 2.0 + 100 = 102.0
         expect(result[1].text.trim()).toBe('World.');
         expect(result[1].start).toBe(102.0);
+    });
+});
+
+describe('performSegmentSplit', () => {
+
+    it('correctly splits a segment with modern timing units', () => {
+        const segment: TranscriptSegment = {
+            id: 'seg-1',
+            start: 10.0,
+            end: 20.0,
+            text: 'Hello World',
+            isFinal: true,
+            timing: {
+                units: [
+                    { text: 'Hello', start: 10.0, end: 12.0 },
+                    { text: ' ', start: 12.0, end: 13.0 },
+                    { text: 'World', start: 13.0, end: 15.0 },
+                ]
+            }
+        };
+
+        const { segmentLeft, segmentRight } = performSegmentSplit(
+            segment,
+            6, // caretOffset after 'Hello ' (length 6)
+            'Hello World',
+            'Hello',
+            'World',
+            'new-id-123'
+        );
+
+        expect(segmentLeft.end).toBe(13.0); // start of 'World' unit
+        expect(segmentLeft.text).toBe('Hello');
+        expect(segmentLeft.timing?.units).toHaveLength(2); // 'Hello' and ' '
+
+        expect(segmentRight.id).toBe('new-id-123');
+        expect(segmentRight.start).toBe(13.0);
+        expect(segmentRight.end).toBe(20.0);
+        expect(segmentRight.text).toBe('World');
+        expect(segmentRight.timing?.units).toHaveLength(1); // 'World'
+    });
+
+    it('correctly splits a segment with legacy tokens and timestamps', () => {
+        const segment: TranscriptSegment = {
+            id: 'seg-2',
+            start: 0,
+            end: 5.0,
+            text: 'LeftRight',
+            isFinal: true,
+            tokens: ['Left', 'Right'],
+            timestamps: [1.0, 3.0],
+            durations: [1.0, 1.0]
+        };
+
+        const { segmentLeft, segmentRight } = performSegmentSplit(
+            segment,
+            4, // caretOffset after 'Left' (length 4)
+            'LeftRight',
+            'Left',
+            'Right',
+            'new-id-456'
+        );
+
+        expect(segmentLeft.end).toBe(3.0); // timestamp of 'Right'
+        expect(segmentLeft.tokens).toEqual(['Left']);
+        expect(segmentLeft.timestamps).toEqual([1.0]);
+        expect(segmentLeft.durations).toEqual([1.0]);
+
+        expect(segmentRight.start).toBe(3.0);
+        expect(segmentRight.tokens).toEqual(['Right']);
+        expect(segmentRight.timestamps).toEqual([3.0]);
+        expect(segmentRight.durations).toEqual([1.0]);
+    });
+
+    it('falls back to proportional timing when no timing information is available', () => {
+        const segment: TranscriptSegment = {
+            id: 'seg-3',
+            start: 10.0,
+            end: 20.0,
+            text: 'abcdefghij',
+            isFinal: true
+        };
+
+        const { segmentLeft, segmentRight } = performSegmentSplit(
+            segment,
+            3, // caretOffset
+            'abcdefghij',
+            'abc',
+            'defghij',
+            'new-id-789'
+        );
+
+        expect(segmentLeft.end).toBe(13.0); // 10.0 + 0.3 * 10
+        expect(segmentRight.start).toBe(13.0);
     });
 });

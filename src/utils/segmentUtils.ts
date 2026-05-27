@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { TranscriptSegment } from '../types/transcript';
+import { TranscriptSegment, TranscriptTimingUnit } from '../types/transcript';
 import { alignTextToTimedTokens, stripHtmlTags } from './transcriptTextUtils';
 
 // Constants
@@ -512,4 +512,126 @@ export function alignTokensToText(
         text: unit.text,
         timestamp: unit.timing,
     }));
+}
+
+/**
+ * Pure mathematical timing/token split calculation for a single TranscriptSegment.
+ * Resolves both modern timing units and legacy token arrays, then constructs
+ * the resulting left and right segment halves.
+ */
+export function performSegmentSplit(
+  segment: TranscriptSegment,
+  caretOffset: number,
+  plainText: string,
+  leftText: string,
+  rightText: string,
+  newSegmentId: string
+): { segmentLeft: TranscriptSegment; segmentRight: TranscriptSegment } {
+  const totalLength = plainText.length;
+
+  const leftUnits: TranscriptTimingUnit[] = [];
+  const rightUnits: TranscriptTimingUnit[] = [];
+  let splitTime = segment.start;
+  let splitTimeFound = false;
+
+  if (segment.timing && segment.timing.units && segment.timing.units.length > 0) {
+    const units = segment.timing.units;
+    let cumulativeLen = 0;
+    for (const unit of units) {
+      cumulativeLen += stripHtmlTags(unit.text).length;
+      if (cumulativeLen <= caretOffset) {
+        leftUnits.push(unit);
+      } else {
+        rightUnits.push(unit);
+      }
+    }
+    if (rightUnits.length > 0) {
+      splitTime = rightUnits[0].start;
+      splitTimeFound = true;
+    } else if (leftUnits.length > 0) {
+      splitTime = leftUnits[leftUnits.length - 1].end;
+      splitTimeFound = true;
+    }
+  }
+
+  const leftTokens: string[] = [];
+  const rightTokens: string[] = [];
+  const leftTimestamps: number[] = [];
+  const rightTimestamps: number[] = [];
+  const leftDurations: number[] = [];
+  const rightDurations: number[] = [];
+
+  const hasLegacyTimestamps = Boolean(
+    segment.tokens &&
+    segment.timestamps &&
+    segment.tokens.length > 0 &&
+    segment.tokens.length === segment.timestamps.length
+  );
+
+  if (hasLegacyTimestamps && segment.tokens && segment.timestamps) {
+    let cumulativeLen = 0;
+    for (let i = 0; i < segment.tokens.length; i++) {
+      const token = segment.tokens[i];
+      cumulativeLen += stripHtmlTags(token).length;
+      if (cumulativeLen <= caretOffset) {
+        leftTokens.push(token);
+        leftTimestamps.push(segment.timestamps[i]);
+        if (segment.durations) leftDurations.push(segment.durations[i]);
+      } else {
+        rightTokens.push(token);
+        rightTimestamps.push(segment.timestamps[i]);
+        if (segment.durations) rightDurations.push(segment.durations[i]);
+      }
+    }
+    if (!splitTimeFound) {
+      if (rightTimestamps.length > 0) {
+        splitTime = rightTimestamps[0];
+        splitTimeFound = true;
+      } else if (leftTimestamps.length > 0 && segment.durations && leftDurations.length > 0) {
+        splitTime = leftTimestamps[leftTimestamps.length - 1] + leftDurations[leftDurations.length - 1];
+        splitTimeFound = true;
+      }
+    }
+  }
+
+  if (!splitTimeFound) {
+    const ratio = totalLength > 0 ? Math.min(1, Math.max(0, caretOffset / totalLength)) : 0.5;
+    const duration = segment.end - segment.start;
+    splitTime = Math.round((segment.start + ratio * duration) * 100) / 100;
+  }
+
+  // Bound splitTime safety
+  splitTime = Math.min(segment.end, Math.max(segment.start, splitTime));
+
+  const segmentLeft: TranscriptSegment = {
+    ...segment,
+    end: splitTime,
+    text: leftText,
+    timing: segment.timing ? {
+      ...segment.timing,
+      units: leftUnits,
+    } : undefined,
+    tokens: segment.tokens ? leftTokens : undefined,
+    timestamps: segment.timestamps ? leftTimestamps : undefined,
+    durations: segment.durations ? leftDurations : undefined,
+  };
+
+  const segmentRight: TranscriptSegment = {
+    id: newSegmentId,
+    start: splitTime,
+    end: segment.end,
+    text: rightText,
+    isFinal: true,
+    speaker: segment.speaker,
+    speakerAttribution: segment.speakerAttribution,
+    timing: segment.timing ? {
+      ...segment.timing,
+      units: rightUnits,
+    } : undefined,
+    tokens: segment.tokens ? rightTokens : undefined,
+    timestamps: segment.timestamps ? rightTimestamps : undefined,
+    durations: segment.durations ? rightDurations : undefined,
+  };
+
+  return { segmentLeft, segmentRight };
 }
