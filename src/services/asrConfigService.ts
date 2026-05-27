@@ -9,7 +9,7 @@ import type {
   ModelConfig,
   OnlineAsrProviderId,
   TextReplacementRuleSet,
-  VolcengineDoubaoAsrProviderConfig,
+  OnlineAsrProviderConfig,
 } from '../types/config';
 import type { ModelFileConfig } from '../types/model';
 import { findSelectedModelByMode } from '../utils/modelSelection';
@@ -242,7 +242,7 @@ export class AsrConfigService {
 
   syncVolcengineDoubaoProviderConfig = (
     config: ModelConfig,
-    updates: Partial<VolcengineDoubaoAsrProviderConfig>,
+    updates: Partial<OnlineAsrProviderConfig>,
   ): Partial<AppConfig> => {
     return this.syncOnlineAsrProviderConfig(config, VOLCENGINE_DOUBAO_PROVIDER_ID, updates);
   }
@@ -388,7 +388,7 @@ export class AsrConfigService {
     if (selection.modelId) {
       return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
     }
-    return findSelectedModelByMode(selection.modelPath, selection.mode);
+    return findSelectedModelByMode(selection.modelPath, selection.mode === 'batch' ? 'offline' : selection.mode);
   }
 
   private buildHotwords = (config: AppConfig): string | null => {

@@ -65,7 +65,7 @@ export interface AudioConfig {
 // ---------------------------------------------------------------------------
 
 export type AsrEngine = 'local-sherpa' | 'online';
-export type AsrMode = 'streaming' | 'offline';
+export type AsrMode = 'streaming' | 'offline' | 'batch';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
 export type OnlineAsrProviderId = string;
 
@@ -78,7 +78,8 @@ export interface AsrModelSelection {
   profileId?: string | null;
 }
 
-export type OnlineAsrProviderConfig = Record<string, string | number | boolean>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type OnlineAsrProviderConfig = Record<string, any>;
 
 export interface AsrProviderConfig {
   online?: Record<string, OnlineAsrProviderConfig>;

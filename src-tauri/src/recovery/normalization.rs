@@ -447,7 +447,7 @@ fn resolve_source_path_status(path: &str) -> SourcePathStatus {
 }
 
 fn filename_from_path(path: &str) -> String {
-    path.rsplit(|ch| ch == '/' || ch == '\\')
+    path.rsplit(['/', '\\'])
         .next()
         .filter(|value| !value.is_empty())
         .unwrap_or(path)

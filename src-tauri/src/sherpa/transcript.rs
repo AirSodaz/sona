@@ -802,7 +802,7 @@ pub(crate) fn finalize_transcript_text(
 
 pub(crate) fn preview_text_for_log(text: &str) -> String {
     const MAX_PREVIEW_CHARS: usize = 24;
-    let flattened = text.replace('\r', " ").replace('\n', " ");
+    let flattened = text.replace(['\r', '\n'], " ");
     let mut preview = flattened
         .chars()
         .take(MAX_PREVIEW_CHARS)

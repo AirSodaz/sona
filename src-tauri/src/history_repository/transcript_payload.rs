@@ -62,7 +62,7 @@ fn parse_history_transcript_segment(
                 .and_then(Value::as_f64)
                 .unwrap_or(0.0);
             ensure_number_field(&mut normalized, "end", start);
-            if !normalized.get("isFinal").and_then(Value::as_bool).is_some() {
+            if normalized.get("isFinal").and_then(Value::as_bool).is_none() {
                 normalized.insert("isFinal".to_string(), Value::Bool(true));
             }
 

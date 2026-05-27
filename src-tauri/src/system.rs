@@ -246,7 +246,7 @@ pub fn inject_text(
                     injection_mode,
                     text.chars().count(),
                 );
-                return Ok(());
+                Ok(())
             }
             Err(failure) => {
                 let remaining_text =
@@ -270,7 +270,7 @@ pub fn inject_text(
                 // SendInput can partially succeed, so only the unsent suffix is
                 // retried through the broader-but-less-precise Enigo fallback.
                 inject_text_with_enigo(&remaining_text)?;
-                return Ok(());
+                Ok(())
             }
         }
     }

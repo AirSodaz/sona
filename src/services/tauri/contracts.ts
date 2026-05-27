@@ -108,7 +108,7 @@ type TranscriptPostprocessOptions = {
 
 type AsrTranscriptionRequest = {
   engine: 'local-sherpa' | 'online';
-  mode: 'streaming' | 'offline';
+  mode: 'streaming' | 'offline' | 'batch';
   modelId?: string | null;
   modelPath: string;
   providerId?: string | null;

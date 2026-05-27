@@ -162,7 +162,7 @@ fn response_is_collection(node: Node<'_, '_>) -> bool {
 fn decode_file_name_from_href(resolved_url: &Url) -> Option<String> {
     resolved_url
         .path_segments()
-        .and_then(|segments| segments.filter(|segment| !segment.is_empty()).last())
+        .and_then(|segments| segments.filter(|segment| !segment.is_empty()).next_back())
         .and_then(|segment| urlencoding::decode(segment).ok())
         .map(|decoded| decoded.into_owned())
 }

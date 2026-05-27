@@ -174,7 +174,7 @@ export function DynamicProviderSettings({ provider }: ProviderSettingsProps) {
             title={t(provider.titleKey, { defaultValue: provider.titleDefault })}
             status={<span className={`status-badge ${status.type}`}>{status.text}</span>}
         >
-            {(provider.manifestEntry.ui.fields || []).map((field: any) => (
+            {(provider.manifestEntry.ui.fields || []).map((field: { name: string; labelKey: string; labelDefault: string; type?: string }) => (
                 <SettingsItem
                     key={field.name}
                     title={t(field.labelKey, { defaultValue: field.labelDefault })}

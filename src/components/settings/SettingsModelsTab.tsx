@@ -9,14 +9,8 @@ import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
     GROQ_WHISPER_PROVIDER_ID,
-    DEFAULT_GROQ_WHISPER_ASR_CONFIG,
-    DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
     ONLINE_ASR_PROVIDER_DEFINITIONS,
     VOLCENGINE_DOUBAO_PROVIDER_ID,
-    VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-    VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-    isVolcengineFlashBatchMode,
-    syncOnlineAsrProviderConfig,
     syncOnlineAsrSelectionFields,
     syncStreamingOnlineAsrSelectionFields,
     syncLegacyAsrSelectionFields,
@@ -284,30 +278,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         };
     };
 
-    const getOnlineServiceStatus = (providerId: string, isConfigured: boolean) => {
-        const isEnabled = Object.values(modelConfig.asr?.selections ?? {}).some(
-            (selection) => selection.engine === 'online' && selection.providerId === providerId,
-        );
 
-        if (isEnabled) {
-            return {
-                type: 'ready',
-                text: t('settings.asr.active', { defaultValue: '已启用' })
-            };
-        }
-
-        if (isConfigured) {
-            return {
-                type: 'off',
-                text: t('settings.asr.configured', { defaultValue: '已就绪' })
-            };
-        }
-
-        return {
-            type: 'off',
-            text: t('settings.asr.not_configured', { defaultValue: '未配置' })
-        };
-    };
 
     const speakerSegmentationOptions = useMemo(() => {
         const installedOptions = toDropdownOptions(

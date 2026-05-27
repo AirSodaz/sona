@@ -130,7 +130,7 @@ fn fallback_attribution(segment: &TranscriptSegment) -> Option<SpeakerAttributio
     let group_id = existing
         .map(|attribution| attribution.group_id.as_str())
         .filter(|group_id| !group_id.is_empty())
-        .unwrap_or_else(|| {
+        .unwrap_or({
             if speaker.id.is_empty() {
                 segment.id.as_str()
             } else {

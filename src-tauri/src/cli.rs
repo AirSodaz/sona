@@ -869,7 +869,7 @@ fn default_models_dir_candidates() -> Vec<PathBuf> {
         let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
             return Vec::new();
         };
-        return vec![base.join("com.asoda.sona"), base.join("Sona")];
+        vec![base.join("com.asoda.sona"), base.join("Sona")]
     }
 
     #[cfg(target_os = "macos")]

@@ -39,7 +39,7 @@ export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG = onlineAsrProviderManifest.pr
 export const DEFAULT_GROQ_WHISPER_ASR_CONFIG = onlineAsrProviderManifest.providers.find(p => p.id === GROQ_WHISPER_PROVIDER_ID)?.defaults as Record<string, unknown> || {};
 
 export function isVolcengineFlashBatchMode(
-  provider: Pick<OnlineAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
+  provider: Partial<OnlineAsrProviderConfig> | undefined,
 ): boolean {
   const endpoint = (provider?.batchEndpoint as string)?.trim().replace(/\/+$/, '') ?? '';
   const expectedEndpoint = VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT.replace(/\/+$/, '');
@@ -78,7 +78,7 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] = on
   const isConfigured = (config: OnlineAsrProviderConfig, mode: AsrMode): boolean => {
     const capabilities = mode === 'streaming' ? entry.streaming : entry.batch;
     
-    if ((capabilities as any).supported === false) {
+    if ((capabilities as Record<string, unknown>).supported === false) {
       return false;
     }
 

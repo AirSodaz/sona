@@ -443,7 +443,7 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
             .and_then(Value::as_str)
             .unwrap_or("");
 
-        let Some(provider_def) = online_asr_providers().into_iter().find(|p| p.id == provider_id) else {
+        let Some(provider_def) = online_asr_providers().iter().find(|p| p.id == provider_id) else {
             return false;
         };
 

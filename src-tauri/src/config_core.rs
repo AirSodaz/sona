@@ -186,7 +186,7 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         "polishPresetId",
         "summaryTemplateId",
     ] {
-        if !config.get(key).and_then(non_empty_str).is_some()
+        if config.get(key).and_then(non_empty_str).is_none()
             && (key == "polishPresetId" || key == "summaryTemplateId")
         {
             return true;

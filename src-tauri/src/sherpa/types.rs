@@ -157,17 +157,11 @@ pub struct TranscriptTiming {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TranscriptNormalizationOptions {
     pub enable_timeline: bool,
 }
 
-impl Default for TranscriptNormalizationOptions {
-    fn default() -> Self {
-        Self {
-            enable_timeline: false,
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
