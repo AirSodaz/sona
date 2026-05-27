@@ -67,7 +67,7 @@ export interface AudioConfig {
 export type AsrEngine = 'local-sherpa' | 'online';
 export type AsrMode = 'streaming' | 'offline';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
-export type OnlineAsrProviderId = 'volcengine-doubao' | 'groq-whisper';
+export type OnlineAsrProviderId = string;
 
 export interface AsrModelSelection {
   engine: AsrEngine;
@@ -78,26 +78,14 @@ export interface AsrModelSelection {
   profileId?: string | null;
 }
 
-export interface VolcengineDoubaoAsrProviderConfig {
-  apiKey: string;
-  streamingEndpoint: string;
-  streamingResourceId: string;
-  batchEndpoint: string;
-  batchResourceId: string;
-}
-
-export interface GroqWhisperAsrProviderConfig {
-  apiKey: string;
-  batchEndpoint: string;
-  model: string;
-}
+export type OnlineAsrProviderConfig = Record<string, string | number | boolean>;
 
 export interface AsrProviderConfig {
-  online?: Record<string, unknown>;
+  online?: Record<string, OnlineAsrProviderConfig>;
   /** @deprecated Older config snapshots stored Volcengine directly here. */
-  volcengineDoubao?: VolcengineDoubaoAsrProviderConfig;
+  volcengineDoubao?: OnlineAsrProviderConfig;
   /** @deprecated Used for migration if needed. */
-  groqWhisper?: GroqWhisperAsrProviderConfig;
+  groqWhisper?: OnlineAsrProviderConfig;
 }
 
 export interface AsrConfig {

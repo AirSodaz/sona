@@ -28,7 +28,7 @@ import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon, CloudIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
-import type { VolcengineDoubaoAsrProviderConfig, GroqWhisperAsrProviderConfig } from '../../types/config';
+import { CUSTOM_PROVIDER_COMPONENTS, DynamicProviderSettings } from './OnlineAsrSettingsCards';
 
 const onlineAsrProvider = ONLINE_ASR_PROVIDER_DEFINITIONS[0];
 const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
@@ -251,29 +251,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         ];
     }, [selectedOfflineModelId, selectionOptions.offline, t, modelConfig.asr?.providers]);
 
-    const volcengineConfig = (
-        modelConfig.asr?.providers?.online?.[VOLCENGINE_DOUBAO_PROVIDER_ID]
-        ?? modelConfig.asr?.providers?.volcengineDoubao
-        ?? DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG
-    ) as VolcengineDoubaoAsrProviderConfig;
     const isVolcengineSelected = Object.values(modelConfig.asr?.selections ?? {}).some(
         (selection) => selection.engine === 'online' && selection.providerId === VOLCENGINE_DOUBAO_PROVIDER_ID,
     );
-    const updateVolcengineConfig = (updates: Partial<typeof volcengineConfig>) => {
-        updateConfig(syncOnlineAsrProviderConfig(modelConfig, VOLCENGINE_DOUBAO_PROVIDER_ID, updates));
-    };
-    const volcengineBatchUrlOnlyUnavailable = t('settings.asr.volcengine_batch_mode_url_only_unavailable', {
-        defaultValue: '需要公网音频 URL，当前本地批量导入暂不支持。',
-    });
-
-    const groqProvider = ONLINE_ASR_PROVIDER_DEFINITIONS.find(p => p.id === GROQ_WHISPER_PROVIDER_ID)!;
-    const groqConfig = (
-        modelConfig.asr?.providers?.online?.[GROQ_WHISPER_PROVIDER_ID]
-        ?? DEFAULT_GROQ_WHISPER_ASR_CONFIG
-    ) as GroqWhisperAsrProviderConfig;
-    const updateGroqConfig = (updates: Partial<typeof groqConfig>) => {
-        updateConfig(syncOnlineAsrProviderConfig(modelConfig, GROQ_WHISPER_PROVIDER_ID, updates as Record<string, unknown>));
-    };
 
     const getSectionStatus = (type: ModelCatalogSectionType) => {
         const groups = getSectionGroups(type);
@@ -505,97 +485,10 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 title={t('settings.online_model_management', { defaultValue: '在线模型管理' })}
                 icon={<Settings2 size={20} />}
             >
-                <SettingsAccordion
-                    title={t(onlineAsrProvider.titleKey, { defaultValue: onlineAsrProvider.titleDefault })}
-                    status={<span className={`status-badge ${getOnlineServiceStatus(VOLCENGINE_DOUBAO_PROVIDER_ID, Boolean(volcengineConfig.apiKey)).type}`}>{getOnlineServiceStatus(VOLCENGINE_DOUBAO_PROVIDER_ID, Boolean(volcengineConfig.apiKey)).text}</span>}
-                    defaultOpen={true}
-                >
-                    <SettingsItem
-                        title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
-                        hint={t('settings.asr.api_key_hint', { defaultValue: '新版控制台的 X-Api-Key；不会写入日志。' })}
-                    >
-                        <div style={{ width: '320px' }}>
-                            <input
-                                id="settings-volcengine-api-key"
-                                type="password"
-                                className="settings-input"
-                                value={volcengineConfig.apiKey}
-                                onChange={(event) => updateVolcengineConfig({ apiKey: event.target.value })}
-                                placeholder="X-Api-Key"
-                            />
-                        </div>
-                    </SettingsItem>
-                    <SettingsItem
-                        title={t('settings.asr.volcengine_batch_mode_label', { defaultValue: 'Recording File Mode' })}
-                        hint={t('settings.asr.volcengine_batch_mode_hint', { defaultValue: '普通和闲时为异步任务；极速为同步直回，适合快速转录。' })}
-                    >
-                        <div style={{ width: '220px' }}>
-                            <Dropdown
-                                id="settings-volcengine-batch-mode"
-                                value={isVolcengineFlashBatchMode(volcengineConfig) ? 'flash' : 'flash'}
-                                onChange={(value) => {
-                                    if (value === 'flash') {
-                                        updateVolcengineConfig({
-                                            batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-                                            batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
-                                        });
-                                    }
-                                }}
-                                options={[
-                                    {
-                                        value: 'standard',
-                                        label: t('settings.asr.volcengine_batch_mode_standard', { defaultValue: '普通 (异步轮询)' }),
-                                        description: volcengineBatchUrlOnlyUnavailable,
-                                        disabled: true,
-                                    },
-                                    { value: 'flash', label: t('settings.asr.volcengine_batch_mode_flash', { defaultValue: '急速 (同步直回)' }) },
-                                    {
-                                        value: 'offpeak',
-                                        label: t('settings.asr.volcengine_batch_mode_offpeak', { defaultValue: '闲时 (特惠异步)' }),
-                                        description: volcengineBatchUrlOnlyUnavailable,
-                                        disabled: true,
-                                    },
-                                ]}
-                            />
-                        </div>
-                    </SettingsItem>
-                </SettingsAccordion>
-
-                <SettingsAccordion
-                    title={t(groqProvider.titleKey, { defaultValue: groqProvider.titleDefault })}
-                    status={<span className={`status-badge ${getOnlineServiceStatus(GROQ_WHISPER_PROVIDER_ID, Boolean(groqConfig.apiKey)).type}`}>{getOnlineServiceStatus(GROQ_WHISPER_PROVIDER_ID, Boolean(groqConfig.apiKey)).text}</span>}
-                >
-                    <SettingsItem
-                        title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
-                        hint={t('settings.asr.api_key_hint', { defaultValue: '不写入日志' })}
-                    >
-                        <div style={{ width: '320px' }}>
-                            <input
-                                id="settings-groq-api-key"
-                                type="password"
-                                className="settings-input"
-                                value={groqConfig.apiKey}
-                                onChange={(event) => updateGroqConfig({ apiKey: event.target.value })}
-                                placeholder="gsk_..."
-                            />
-                        </div>
-                    </SettingsItem>
-                    <SettingsItem
-                        title={t('settings.asr.groq_model_label', { defaultValue: 'Whisper 模型' })}
-                    >
-                        <div style={{ width: '220px' }}>
-                            <Dropdown
-                                id="settings-groq-model"
-                                value={groqConfig.model}
-                                onChange={(value) => updateGroqConfig({ model: value })}
-                                options={[
-                                    { value: 'whisper-large-v3-turbo', label: 'whisper-large-v3-turbo' },
-                                    { value: 'whisper-large-v3', label: 'whisper-large-v3' },
-                                ]}
-                            />
-                        </div>
-                    </SettingsItem>
-                </SettingsAccordion>
+                {ONLINE_ASR_PROVIDER_DEFINITIONS.map(provider => {
+                    const Component = CUSTOM_PROVIDER_COMPONENTS[provider.id] || DynamicProviderSettings;
+                    return <Component key={provider.id} provider={provider} />;
+                })}
             </SettingsSection>
 
             <SettingsSection

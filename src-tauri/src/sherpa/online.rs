@@ -1,28 +1,24 @@
 use super::error::SherpaError;
 use super::groq;
+use super::online_traits::OnlineAsrProviderAdapter;
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
-pub use crate::asr_providers::{GROQ_WHISPER_PROVIDER_ID, VOLCENGINE_DOUBAO_PROVIDER_ID};
+use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 
-#[derive(Clone)]
-pub enum OnlineStreamingSession {
-    Volcengine(volcengine::VolcengineStreamingSession),
-}
-
-impl OnlineStreamingSession {
-    pub fn provider_id(&self) -> &'static str {
-        match self {
-            Self::Volcengine(_) => VOLCENGINE_DOUBAO_PROVIDER_ID,
-        }
-    }
-
-    pub fn as_volcengine(&self) -> Option<&volcengine::VolcengineStreamingSession> {
-        match self {
-            Self::Volcengine(session) => Some(session),
-        }
-    }
+fn online_adapters() -> &'static HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> {
+    static ONLINE_ADAPTERS: OnceLock<HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>>> = OnceLock::new();
+    ONLINE_ADAPTERS.get_or_init(|| {
+        let mut map: HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> = HashMap::new();
+        let volcengine = volcengine::VolcengineAdapter;
+        map.insert(volcengine.provider_id(), Box::new(volcengine));
+        let groq = groq::GroqWhisperAdapter;
+        map.insert(groq.provider_id(), Box::new(groq));
+        map
+    })
 }
 
 fn provider_id_from_request(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
@@ -33,27 +29,15 @@ fn provider_id_from_request(request: &AsrTranscriptionRequest) -> Result<&str, S
         .ok_or(SherpaError::OnlineProviderConfigMissing)
 }
 
-fn ensure_provider(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
+fn ensure_provider(request: &AsrTranscriptionRequest) -> Result<&'static str, SherpaError> {
     let provider_id = provider_id_from_request(request)?;
-    match provider_id {
-        VOLCENGINE_DOUBAO_PROVIDER_ID | GROQ_WHISPER_PROVIDER_ID => Ok(provider_id),
-        _ => Err(SherpaError::UnsupportedOnlineProvider {
+    online_adapters()
+        .keys()
+        .find(|k| **k == provider_id)
+        .copied()
+        .ok_or_else(|| SherpaError::UnsupportedOnlineProvider {
             provider_id: provider_id.to_string(),
-        }),
-    }
-}
-
-async fn provider_id_from_session(
-    state: &SherpaState,
-    instance_id: &str,
-) -> Result<&'static str, SherpaError> {
-    state
-        .online_sessions
-        .lock()
-        .await
-        .get(instance_id)
-        .map(OnlineStreamingSession::provider_id)
-        .ok_or(SherpaError::OnlineSessionNotInitialized)
+        })
 }
 
 pub async fn init_streaming_recognizer_impl(
@@ -62,8 +46,13 @@ pub async fn init_streaming_recognizer_impl(
     request: AsrTranscriptionRequest,
 ) -> Result<(), SherpaError> {
     let provider_id = ensure_provider(&request)?;
-    if provider_id == VOLCENGINE_DOUBAO_PROVIDER_ID {
-        volcengine::init_streaming_recognizer_impl(state, instance_id, request).await
+    let adapter = online_adapters().get(provider_id).unwrap();
+    let config_val = &request.online_provider.as_ref().unwrap().config;
+
+    if let Some(session) = adapter.create_streaming_session(config_val, &request)? {
+        let mut sessions = state.online_sessions.lock().await;
+        sessions.insert(instance_id, Arc::from(session));
+        Ok(())
     } else {
         Err(SherpaError::StreamingNotSupported {
             provider_id: provider_id.to_string(),
@@ -71,64 +60,66 @@ pub async fn init_streaming_recognizer_impl(
     }
 }
 
-pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn start_streaming_recognizer_impl(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match provider_id_from_session(&state, &instance_id).await? {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::start_streaming_recognizer_impl(app, state, instance_id).await
-        }
-        provider_id => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let session = {
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(&instance_id)
+            .cloned()
+            .ok_or(SherpaError::OnlineSessionNotInitialized)?
+    };
+    session.start(app.clone(), &instance_id).await
 }
 
 pub async fn stop_streaming_recognizer_impl(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match provider_id_from_session(&state, &instance_id).await? {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::stop_streaming_recognizer_impl(state, instance_id).await
-        }
-        provider_id => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let session = {
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(&instance_id)
+            .cloned()
+            .ok_or(SherpaError::OnlineSessionNotInitialized)?
+    };
+    session.stop(&state, &instance_id).await
 }
 
-pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn flush_streaming_recognizer_impl(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match provider_id_from_session(&state, &instance_id).await? {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::flush_streaming_recognizer_impl(app, state, instance_id).await
-        }
-        provider_id => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let session = {
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(&instance_id)
+            .cloned()
+            .ok_or(SherpaError::OnlineSessionNotInitialized)?
+    };
+    session.flush(app.clone(), &state, &instance_id).await
 }
 
-pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn feed_audio_chunk_impl(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
-    match provider_id_from_session(&state, &instance_id).await? {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::feed_audio_chunk_impl(app, state, instance_id, samples).await
-        }
-        provider_id => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let session = {
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(&instance_id)
+            .cloned()
+            .ok_or(SherpaError::OnlineSessionNotInitialized)?
+    };
+    session
+        .feed_audio_chunk(app.clone(), &state, &instance_id, samples)
+        .await
 }
 
 pub async fn feed_audio_samples_impl(
@@ -136,32 +127,31 @@ pub async fn feed_audio_samples_impl(
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
-    match provider_id_from_session(state, instance_id).await? {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::feed_audio_samples_impl(state, instance_id, samples).await
-        }
-        provider_id => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let session = {
+        let sessions = state.online_sessions.lock().await;
+        sessions
+            .get(instance_id)
+            .cloned()
+            .ok_or(SherpaError::OnlineSessionNotInitialized)?
+    };
+    session.feed_audio_samples(state, instance_id, samples).await
 }
 
-pub async fn process_batch_file_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn process_batch_file_impl(
+    app: AppHandle,
     state: &SherpaState,
     file_path: String,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<super::TranscriptSegment>, SherpaError> {
     let provider_id = ensure_provider(&request)?;
-    match provider_id {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            volcengine::process_batch_file_impl(app, state, file_path, request).await
-        }
-        GROQ_WHISPER_PROVIDER_ID => groq::process_batch_file_impl(app, state, file_path, request)
-            .await
-            .map_err(Into::into),
-        _ => Err(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
-        }),
-    }
+    let adapter = online_adapters().get(provider_id).unwrap();
+    let config_val = &request.online_provider.as_ref().unwrap().config;
+
+    let processor = adapter.create_batch_processor(config_val)?.ok_or_else(|| {
+        SherpaError::Generic(format!("Batch mode not supported for provider {}", provider_id))
+    })?;
+
+    processor
+        .process_file(app.clone(), state, file_path, request)
+        .await
 }

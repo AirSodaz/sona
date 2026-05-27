@@ -3,8 +3,9 @@ use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
-use super::online::OnlineStreamingSession;
+use super::online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 use super::state::SherpaState;
+use async_trait::async_trait;
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
@@ -28,7 +29,7 @@ use std::sync::{
     Arc,
 };
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, Notify};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
@@ -436,41 +437,92 @@ pub fn map_status_error(status: u16, api_code: Option<&str>, api_message: Option
     }
 }
 
-pub async fn init_streaming_recognizer_impl(
-    state: State<'_, SherpaState>,
-    instance_id: String,
-    request: AsrTranscriptionRequest,
-) -> Result<(), SherpaError> {
-    if request.mode != AsrMode::Streaming {
-        return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
+pub struct VolcengineAdapter;
+
+impl OnlineAsrProviderAdapter for VolcengineAdapter {
+    fn provider_id(&self) -> &'static str {
+        crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
     }
-    config_from_request(&request, VolcengineMode::Streaming)?;
-    let mut sessions = state.online_sessions.lock().await;
-    sessions.insert(
-        instance_id,
-        OnlineStreamingSession::Volcengine(VolcengineStreamingSession {
-            request,
+
+    fn create_batch_processor(
+        &self,
+        _config: &Value,
+    ) -> Result<Option<Box<dyn OnlineBatchProcessor>>, SherpaError> {
+        Ok(Some(Box::new(VolcengineBatchProcessor)))
+    }
+
+    fn create_streaming_session(
+        &self,
+        _config: &Value,
+        request: &AsrTranscriptionRequest,
+    ) -> Result<Option<Box<dyn OnlineStreamingSession>>, SherpaError> {
+        if request.mode != AsrMode::Streaming {
+            return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
+        }
+        config_from_request(request, VolcengineMode::Streaming)?;
+        Ok(Some(Box::new(VolcengineStreamingSession {
+            request: request.clone(),
             writer: Arc::new(Mutex::new(None)),
             flushing: Arc::new(AtomicBool::new(false)),
             final_response_received: Arc::new(Notify::new()),
-        }),
-    );
-    Ok(())
+        })))
+    }
 }
 
-pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
+pub struct VolcengineBatchProcessor;
+
+#[async_trait]
+impl OnlineBatchProcessor for VolcengineBatchProcessor {
+    async fn process_file(
+        &self,
+        app: AppHandle,
+        state: &SherpaState,
+        file_path: String,
+        request: AsrTranscriptionRequest,
+    ) -> Result<Vec<TranscriptSegment>, SherpaError> {
+        process_batch_file_impl(app, state, file_path, request).await
+    }
+}
+
+#[async_trait]
+impl OnlineStreamingSession for VolcengineStreamingSession {
+    async fn start(&self, app: AppHandle, instance_id: &str) -> Result<(), SherpaError> {
+        start_streaming_recognizer_impl(app, self, instance_id).await
+    }
+
+    async fn stop(&self, _state: &SherpaState, _instance_id: &str) -> Result<(), SherpaError> {
+        stop_streaming_recognizer_impl(self).await
+    }
+
+    async fn flush(&self, _app: AppHandle, _state: &SherpaState, _instance_id: &str) -> Result<(), SherpaError> {
+        flush_streaming_recognizer_impl(self).await
+    }
+
+    async fn feed_audio_chunk(
+        &self,
+        _app: AppHandle,
+        _state: &SherpaState,
+        _instance_id: &str,
+        samples: Vec<u8>,
+    ) -> Result<(), SherpaError> {
+        feed_audio_chunk_impl(self, samples).await
+    }
+
+    async fn feed_audio_samples(
+        &self,
+        _state: &SherpaState,
+        _instance_id: &str,
+        samples: &[f32],
+    ) -> Result<(), SherpaError> {
+        feed_audio_samples_impl(self, samples).await
+    }
+}
+
+async fn start_streaming_recognizer_impl(
+    app: AppHandle,
+    session: &VolcengineStreamingSession,
+    instance_id: &str,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.online_sessions.lock().await;
-        sessions
-            .get(&instance_id)
-            .and_then(OnlineStreamingSession::as_volcengine)
-            .cloned()
-            .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
-    };
     let config = config_from_request(&session.request, VolcengineMode::Streaming)?;
     let mut client_request = config
         .streaming_endpoint
@@ -524,7 +576,7 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
         *writer_slot = Some(writer);
     }
 
-    let instance_id_for_task = instance_id.clone();
+    let instance_id_for_task = instance_id.to_string();
     let normalization_options = session.request.normalization_options;
     let postprocessor =
         TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
@@ -598,20 +650,10 @@ fn insert_header(
     Ok(())
 }
 
-pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn feed_audio_chunk_impl(
+    session: &VolcengineStreamingSession,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.online_sessions.lock().await;
-        sessions
-            .get(&instance_id)
-            .and_then(OnlineStreamingSession::as_volcengine)
-            .cloned()
-            .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
-    };
     let mut writer = session.writer.lock().await;
     let Some(writer) = writer.as_mut() else {
         return Err(SherpaError::VolcengineWebSocketNotConnected);
@@ -622,25 +664,15 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
         .map_err(|error| SherpaError::VolcengineAudioSendFailed {
             error: error.to_string(),
         })?;
-    let _ = app;
     Ok(())
 }
 
 /// Feed f32 audio samples from the hardware capture worker to a Volcengine
 /// streaming session. Converts f32 → i16 PCM bytes and sends via WebSocket.
-pub async fn feed_audio_samples_impl(
-    state: &SherpaState,
-    instance_id: &str,
+async fn feed_audio_samples_impl(
+    session: &VolcengineStreamingSession,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.online_sessions.lock().await;
-        sessions
-            .get(instance_id)
-            .and_then(OnlineStreamingSession::as_volcengine)
-            .cloned()
-            .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
-    };
     let mut writer_guard = session.writer.lock().await;
     let Some(writer) = writer_guard.as_mut() else {
         // WebSocket not yet connected — silently skip. The session may still
@@ -667,19 +699,9 @@ fn f32_samples_to_i16_pcm_bytes(samples: &[f32]) -> Vec<u8> {
     bytes
 }
 
-pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
-    _app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn flush_streaming_recognizer_impl(
+    session: &VolcengineStreamingSession,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.online_sessions.lock().await;
-        sessions
-            .get(&instance_id)
-            .and_then(OnlineStreamingSession::as_volcengine)
-            .cloned()
-            .ok_or_else(|| "火山 ASR session 未初始化。".to_string())?
-    };
     let mut writer = session.writer.lock().await;
     if let Some(writer) = writer.as_mut() {
         session.flushing.store(true, Ordering::SeqCst);
@@ -698,17 +720,10 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
     Ok(())
 }
 
-pub async fn stop_streaming_recognizer_impl(
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn stop_streaming_recognizer_impl(
+    session: &VolcengineStreamingSession,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.online_sessions.lock().await;
-        sessions
-            .get(&instance_id)
-            .and_then(OnlineStreamingSession::as_volcengine)
-            .cloned()
-    };
+    let session = Some(session);
     if let Some(session) = session {
         let mut writer = session.writer.lock().await;
         if let Some(mut writer) = writer.take() {
@@ -718,8 +733,8 @@ pub async fn stop_streaming_recognizer_impl(
     Ok(())
 }
 
-pub async fn process_batch_file_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn process_batch_file_impl(
+    app: AppHandle,
     state: &SherpaState,
     file_path: String,
     request: AsrTranscriptionRequest,

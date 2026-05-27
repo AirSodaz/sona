@@ -8,6 +8,7 @@ mod groq;
 mod metrics;
 mod model_config;
 mod online;
+mod online_traits;
 mod postprocess;
 mod runtime;
 mod state;
@@ -36,6 +37,7 @@ pub use types::{
     TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
+pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 
 async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, SherpaError> {
     state.instance_engine(instance_id).await.ok_or_else(|| {
@@ -226,8 +228,8 @@ pub async fn init_recognizer(
 }
 
 #[tauri::command]
-pub async fn start_recognizer<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn start_recognizer(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
@@ -253,8 +255,8 @@ pub async fn stop_recognizer(
 }
 
 #[tauri::command]
-pub async fn flush_recognizer<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn flush_recognizer(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
@@ -267,8 +269,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn feed_audio_chunk<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn feed_audio_chunk(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     instance_id: String,
     samples: Vec<u8>,
@@ -288,8 +290,8 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-pub async fn process_batch_file<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn process_batch_file(
+    app: AppHandle,
     state: State<'_, SherpaState>,
     file_path: String,
     save_to_path: Option<String>,

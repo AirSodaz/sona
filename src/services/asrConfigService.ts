@@ -28,7 +28,6 @@ import {
   getOnlineProviderConfig,
   isOnlineAsrProviderId,
   isVolcengineFlashBatchMode,
-  normalizeVolcengineDoubaoConfig,
   type OnlineAsrProviderRequest,
 } from './onlineAsrProviders';
 
@@ -208,17 +207,19 @@ export class AsrConfigService {
   ): Partial<AppConfig> => {
     const asr = this.normalizeAsrConfig(config);
     const existing = getOnlineProviderConfig(asr.providers, providerId);
+    const definition = getOnlineAsrProviderDefinition(providerId);
+    
     asr.providers = {
       ...asr.providers,
       online: {
         ...(asr.providers?.online ?? {}),
-        [providerId]: providerId === VOLCENGINE_DOUBAO_PROVIDER_ID
-          ? normalizeVolcengineDoubaoConfig({
-              ...(existing as VolcengineDoubaoAsrProviderConfig),
+        [providerId]: definition
+          ? definition.normalizeConfig({
+              ...(existing as Record<string, unknown>),
               ...updates,
             })
           : {
-              ...(existing as unknown as Record<string, unknown>),
+              ...(existing as Record<string, unknown>),
               ...updates,
             },
       },

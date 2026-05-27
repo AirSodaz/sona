@@ -4,7 +4,7 @@ use super::metrics::{
     AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
-use super::online::OnlineStreamingSession;
+use super::online_traits::OnlineStreamingSession;
 use super::types::{AsrEngine, TranscriptNormalizationOptions, TranscriptSegment};
 use super::TranscriptPostprocessor;
 use log::info;
@@ -176,7 +176,7 @@ pub struct SherpaState {
     // Each logical instance keeps its own runtime buffers and stream state,
     // while recognizers are pooled separately by configuration.
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
-    pub online_sessions: Mutex<HashMap<String, OnlineStreamingSession>>,
+    pub online_sessions: Mutex<HashMap<String, Arc<dyn OnlineStreamingSession>>>,
     pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
     pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
     pub(crate) metrics: AsrMetricsStore,

@@ -2,9 +2,12 @@ use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
+use super::error::SherpaError;
+use super::online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 use super::state::SherpaState;
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
 use crate::asr_providers::{fill_groq_whisper_config_fields, GroqWhisperConfigFields};
+use async_trait::async_trait;
 use crate::sherpa::postprocess::TranscriptPostprocessor;
 use crate::sherpa::transcript::apply_timeline_normalization;
 use reqwest::multipart;
@@ -16,6 +19,44 @@ use tauri::Emitter;
 #[derive(Debug)]
 pub enum GroqMode {
     Batch,
+}
+
+pub struct GroqWhisperAdapter;
+
+impl OnlineAsrProviderAdapter for GroqWhisperAdapter {
+    fn provider_id(&self) -> &'static str {
+        crate::asr_providers::GROQ_WHISPER_PROVIDER_ID
+    }
+
+    fn create_batch_processor(
+        &self,
+        _config: &Value,
+    ) -> Result<Option<Box<dyn OnlineBatchProcessor>>, SherpaError> {
+        Ok(Some(Box::new(GroqWhisperBatchProcessor)))
+    }
+
+    fn create_streaming_session(
+        &self,
+        _config: &Value,
+        _request: &AsrTranscriptionRequest,
+    ) -> Result<Option<Box<dyn OnlineStreamingSession>>, SherpaError> {
+        Ok(None)
+    }
+}
+
+pub struct GroqWhisperBatchProcessor;
+
+#[async_trait]
+impl OnlineBatchProcessor for GroqWhisperBatchProcessor {
+    async fn process_file(
+        &self,
+        app: AppHandle,
+        state: &SherpaState,
+        file_path: String,
+        request: AsrTranscriptionRequest,
+    ) -> Result<Vec<TranscriptSegment>, SherpaError> {
+        process_batch_file_impl(app, state, file_path, request).await.map_err(SherpaError::Generic)
+    }
 }
 
 fn config_from_request(

@@ -10,7 +10,8 @@
         "titleKey": "settings.asr.volcengine_title",
         "titleDefault": "豆包语音 (火山)",
         "cloudUploadHintKey": "settings.asr.cloud_upload_hint",
-        "cloudUploadHintDefault": "音频会发送到火山引擎进行识别。"
+        "cloudUploadHintDefault": "音频会发送到火山引擎进行识别。",
+        "fields": []
       },
       "defaults": {
         "apiKey": "",
@@ -49,7 +50,12 @@
         "titleKey": "settings.asr.groq_title",
         "titleDefault": "Whisper (Groq)",
         "cloudUploadHintKey": "settings.asr.groq_cloud_upload_hint",
-        "cloudUploadHintDefault": "音频会发送到 Groq 进行识别。请注意 Groq 存在单文件最大 25MB 的限制。"
+        "cloudUploadHintDefault": "音频会发送到 Groq 进行识别。请注意 Groq 存在单文件最大 25MB 的限制。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" },
+          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint", "labelDefault": "Endpoint" }
+        ]
       },
       "defaults": {
         "apiKey": "",

@@ -3,16 +3,9 @@ import type {
   AsrMode,
   AsrModelSelection,
   OnlineAsrProviderId,
-  VolcengineDoubaoAsrProviderConfig,
-  GroqWhisperAsrProviderConfig,
+  OnlineAsrProviderConfig,
+  AsrProviderConfig,
 } from '../types/config';
-
-export type OnlineAsrProviderConfigMap = {
-  'volcengine-doubao': VolcengineDoubaoAsrProviderConfig;
-  'groq-whisper': GroqWhisperAsrProviderConfig;
-};
-
-export type OnlineAsrProviderConfig = OnlineAsrProviderConfigMap[OnlineAsrProviderId];
 
 export type OnlineAsrProviderRequest = {
   providerId: OnlineAsrProviderId;
@@ -20,7 +13,7 @@ export type OnlineAsrProviderRequest = {
   config: OnlineAsrProviderConfig;
 };
 
-export type OnlineAsrProviderDefinition<TConfig extends OnlineAsrProviderConfig = OnlineAsrProviderConfig> = {
+export type OnlineAsrProviderDefinition = {
   id: OnlineAsrProviderId;
   profileId: string;
   optionLabelKey: string;
@@ -29,149 +22,87 @@ export type OnlineAsrProviderDefinition<TConfig extends OnlineAsrProviderConfig 
   titleDefault: string;
   cloudUploadHintKey: string;
   cloudUploadHintDefault: string;
-  defaultConfig: TConfig;
-  normalizeConfig: (config: Partial<TConfig> | undefined) => TConfig;
-  isConfigured: (config: TConfig, mode: AsrMode) => boolean;
+  defaultConfig: OnlineAsrProviderConfig;
+  manifestEntry: typeof onlineAsrProviderManifest.providers[number];
+  normalizeConfig: (config: Partial<OnlineAsrProviderConfig> | undefined) => OnlineAsrProviderConfig;
+  isConfigured: (config: OnlineAsrProviderConfig, mode: AsrMode) => boolean;
 };
 
-type OnlineAsrProviderManifest = typeof onlineAsrProviderManifest;
-type OnlineAsrProviderManifestEntry = OnlineAsrProviderManifest['providers'][number];
+export const VOLCENGINE_DOUBAO_PROVIDER_ID = 'volcengine-doubao';
+export const VOLCENGINE_DOUBAO_PROFILE_ID = 'volcengine-doubao';
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT = 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
+export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = 'volc.bigasr.auc_turbo';
 
-type VolcengineManifestEntry = OnlineAsrProviderManifestEntry & {
-  id: 'volcengine-doubao';
-  defaults: VolcengineDoubaoAsrProviderConfig;
-};
+export const GROQ_WHISPER_PROVIDER_ID = 'groq-whisper';
 
-type GroqWhisperManifestEntry = OnlineAsrProviderManifestEntry & {
-  id: 'groq-whisper';
-  defaults: GroqWhisperAsrProviderConfig;
-};
-
-function providerManifestEntry(providerId: OnlineAsrProviderId): OnlineAsrProviderManifestEntry {
-  const entry = onlineAsrProviderManifest.providers.find((provider) => provider.id === providerId);
-  if (!entry) {
-    throw new Error(`Missing online ASR provider manifest entry: ${providerId}`);
-  }
-  return entry;
-}
-
-const VOLCENGINE_DOUBAO_MANIFEST = providerManifestEntry('volcengine-doubao') as VolcengineManifestEntry;
-const VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH = VOLCENGINE_DOUBAO_MANIFEST.batch.localFileMode;
-
-export const VOLCENGINE_DOUBAO_PROVIDER_ID: OnlineAsrProviderId = VOLCENGINE_DOUBAO_MANIFEST.id;
-export const VOLCENGINE_DOUBAO_PROFILE_ID = VOLCENGINE_DOUBAO_MANIFEST.profileId;
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT = VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.endpoint;
-export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.resourceId;
-
-export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG: VolcengineDoubaoAsrProviderConfig = {
-  ...VOLCENGINE_DOUBAO_MANIFEST.defaults,
-};
-
-const GROQ_WHISPER_MANIFEST = providerManifestEntry('groq-whisper') as GroqWhisperManifestEntry;
-
-export const GROQ_WHISPER_PROVIDER_ID: OnlineAsrProviderId = GROQ_WHISPER_MANIFEST.id;
-export const GROQ_WHISPER_PROFILE_ID = GROQ_WHISPER_MANIFEST.profileId;
-
-export const DEFAULT_GROQ_WHISPER_ASR_CONFIG: GroqWhisperAsrProviderConfig = {
-  ...GROQ_WHISPER_MANIFEST.defaults,
-};
-
-function normalizedEndpoint(endpoint: string | undefined): string {
-  return endpoint?.trim().replace(/\/+$/, '') ?? '';
-}
-
-function normalizedResourceId(resourceId: string | undefined): string {
-  return resourceId?.trim() ?? '';
-}
+export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG = onlineAsrProviderManifest.providers.find(p => p.id === VOLCENGINE_DOUBAO_PROVIDER_ID)?.defaults as Record<string, unknown> || {};
+export const DEFAULT_GROQ_WHISPER_ASR_CONFIG = onlineAsrProviderManifest.providers.find(p => p.id === GROQ_WHISPER_PROVIDER_ID)?.defaults as Record<string, unknown> || {};
 
 export function isVolcengineFlashBatchMode(
-  provider: Pick<VolcengineDoubaoAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
+  provider: Pick<OnlineAsrProviderConfig, 'batchEndpoint' | 'batchResourceId'> | undefined,
 ): boolean {
-  return normalizedEndpoint(provider?.batchEndpoint) === normalizedEndpoint(VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT)
-    && normalizedResourceId(provider?.batchResourceId) === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+  const endpoint = (provider?.batchEndpoint as string)?.trim().replace(/\/+$/, '') ?? '';
+  const expectedEndpoint = VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT.replace(/\/+$/, '');
+  const resourceId = (provider?.batchResourceId as string)?.trim() ?? '';
+  return endpoint === expectedEndpoint && resourceId === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
 }
 
-export function normalizeVolcengineDoubaoConfig(
-  provider: Partial<VolcengineDoubaoAsrProviderConfig> | undefined,
-): VolcengineDoubaoAsrProviderConfig {
-  const defaults = DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG;
-  const batchEndpoint = provider?.batchEndpoint?.trim() || defaults.batchEndpoint;
-  const batchResourceId = provider?.batchResourceId?.trim() || defaults.batchResourceId;
-  const flashBatch = isVolcengineFlashBatchMode({ batchEndpoint, batchResourceId })
-    ? { batchEndpoint, batchResourceId }
-    : {
-        batchEndpoint: defaults.batchEndpoint,
-        batchResourceId: defaults.batchResourceId,
-      };
-
-  return {
-    apiKey: provider?.apiKey?.trim() ?? defaults.apiKey,
-    streamingEndpoint: provider?.streamingEndpoint?.trim() || defaults.streamingEndpoint,
-    streamingResourceId: provider?.streamingResourceId?.trim() || defaults.streamingResourceId,
-    ...flashBatch,
-  };
-}
-
-function hasRequiredConfigFields(
-  config: VolcengineDoubaoAsrProviderConfig,
-  requiredFields: readonly string[],
-): boolean {
-  return requiredFields.every((field) => {
-    switch (field) {
-      case 'apiKey':
-        return Boolean(config.apiKey.trim());
-      case 'streamingEndpoint':
-        return Boolean(config.streamingEndpoint.trim());
-      case 'streamingResourceId':
-        return Boolean(config.streamingResourceId.trim());
-      case 'batchEndpoint':
-        return Boolean(config.batchEndpoint.trim());
-      case 'batchResourceId':
-        return Boolean(config.batchResourceId.trim());
-      default:
-        return false;
+export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] = onlineAsrProviderManifest.providers.map(entry => {
+  const normalizeConfig = (config: Partial<OnlineAsrProviderConfig> | undefined): OnlineAsrProviderConfig => {
+    const defaults = entry.defaults as OnlineAsrProviderConfig;
+    if (!config) return { ...defaults };
+    
+    const normalized: OnlineAsrProviderConfig = { ...defaults };
+    for (const key of Object.keys(defaults)) {
+      if (config[key] !== undefined) {
+        if (typeof config[key] === 'string') {
+          if ((config[key] as string).trim() !== '') {
+            normalized[key] = (config[key] as string).trim();
+          }
+        } else {
+          normalized[key] = config[key]!;
+        }
+      }
     }
-  });
-}
+    
+    if (entry.id === VOLCENGINE_DOUBAO_PROVIDER_ID) {
+      if (!isVolcengineFlashBatchMode(normalized)) {
+        normalized.batchEndpoint = defaults.batchEndpoint;
+        normalized.batchResourceId = defaults.batchResourceId;
+      }
+    }
 
-function isVolcengineConfigured(
-  config: VolcengineDoubaoAsrProviderConfig,
-  mode: AsrMode,
-): boolean {
-  if (!config.apiKey.trim()) {
-    return false;
-  }
-  if (mode === 'streaming') {
-    return hasRequiredConfigFields(config, VOLCENGINE_DOUBAO_MANIFEST.streaming!.requiredConfigFields);
-  }
-  return hasRequiredConfigFields(config, VOLCENGINE_DOUBAO_MANIFEST.batch.requiredConfigFields)
-    && (!VOLCENGINE_DOUBAO_LOCAL_FILE_BATCH.supported || isVolcengineFlashBatchMode(config));
-}
-
-export function normalizeGroqWhisperConfig(
-  provider: Partial<GroqWhisperAsrProviderConfig> | undefined,
-): GroqWhisperAsrProviderConfig {
-  const defaults = DEFAULT_GROQ_WHISPER_ASR_CONFIG;
-  return {
-    apiKey: provider?.apiKey?.trim() ?? defaults.apiKey,
-    batchEndpoint: provider?.batchEndpoint?.trim() || defaults.batchEndpoint,
-    model: provider?.model?.trim() || defaults.model,
+    return normalized;
   };
-}
 
-function isGroqWhisperConfigured(
-  config: GroqWhisperAsrProviderConfig,
-  mode: AsrMode,
-): boolean {
-  if (mode === 'streaming') {
-    return false;
-  }
-  return Boolean(config.apiKey.trim()) && Boolean(config.batchEndpoint.trim()) && Boolean(config.model.trim());
-}
+  const isConfigured = (config: OnlineAsrProviderConfig, mode: AsrMode): boolean => {
+    const capabilities = mode === 'streaming' ? entry.streaming : entry.batch;
+    
+    if ((capabilities as any).supported === false) {
+      return false;
+    }
 
-function definitionFromManifest(
-  entry: VolcengineManifestEntry,
-): OnlineAsrProviderDefinition<VolcengineDoubaoAsrProviderConfig> {
+    if (capabilities.requiresApiKey && !(config.apiKey as string)?.trim()) {
+      return false;
+    }
+    
+    if (capabilities.requiredConfigFields) {
+      for (const field of capabilities.requiredConfigFields) {
+        if (!(config[field] as string)?.trim()) {
+          return false;
+        }
+      }
+    }
+    
+    if (mode === 'offline' && entry.id === VOLCENGINE_DOUBAO_PROVIDER_ID) {
+       if (!entry.batch.localFileMode.supported || !isVolcengineFlashBatchMode(config)) {
+         return false;
+       }
+    }
+
+    return true;
+  };
+
   return {
     id: entry.id,
     profileId: entry.profileId,
@@ -181,41 +112,19 @@ function definitionFromManifest(
     titleDefault: entry.ui.titleDefault,
     cloudUploadHintKey: entry.ui.cloudUploadHintKey,
     cloudUploadHintDefault: entry.ui.cloudUploadHintDefault,
-    defaultConfig: DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
-    normalizeConfig: normalizeVolcengineDoubaoConfig,
-    isConfigured: isVolcengineConfigured,
+    defaultConfig: entry.defaults as OnlineAsrProviderConfig,
+    manifestEntry: entry,
+    normalizeConfig,
+    isConfigured,
   };
-}
-
-function definitionFromGroqWhisperManifest(
-  entry: GroqWhisperManifestEntry,
-): OnlineAsrProviderDefinition<GroqWhisperAsrProviderConfig> {
-  return {
-    id: entry.id,
-    profileId: entry.profileId,
-    optionLabelKey: entry.ui.optionLabelKey,
-    optionDefaultLabel: entry.ui.optionDefaultLabel,
-    titleKey: entry.ui.titleKey,
-    titleDefault: entry.ui.titleDefault,
-    cloudUploadHintKey: entry.ui.cloudUploadHintKey,
-    cloudUploadHintDefault: entry.ui.cloudUploadHintDefault,
-    defaultConfig: DEFAULT_GROQ_WHISPER_ASR_CONFIG,
-    normalizeConfig: normalizeGroqWhisperConfig,
-    isConfigured: isGroqWhisperConfigured,
-  };
-}
-
-export const ONLINE_ASR_PROVIDER_DEFINITIONS = [
-  definitionFromManifest(VOLCENGINE_DOUBAO_MANIFEST) as OnlineAsrProviderDefinition,
-  definitionFromGroqWhisperManifest(GROQ_WHISPER_MANIFEST) as OnlineAsrProviderDefinition,
-] as const;
+});
 
 export const ONLINE_ASR_PROVIDER_MAP = new Map<OnlineAsrProviderId, OnlineAsrProviderDefinition>(
   ONLINE_ASR_PROVIDER_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
 
 export function isOnlineAsrProviderId(value: string | null | undefined): value is OnlineAsrProviderId {
-  return value === VOLCENGINE_DOUBAO_PROVIDER_ID || value === GROQ_WHISPER_PROVIDER_ID;
+  return value != null && ONLINE_ASR_PROVIDER_MAP.has(value);
 }
 
 export function getOnlineAsrProviderDefinition(
@@ -241,10 +150,10 @@ export function createOnlineAsrSelection(
   };
 }
 
-export function getOnlineProviderConfig<TProvider extends OnlineAsrProviderId>(
-  providers: { online?: Record<string, unknown>; volcengineDoubao?: VolcengineDoubaoAsrProviderConfig } | undefined,
-  providerId: TProvider,
-): OnlineAsrProviderConfigMap[TProvider] {
+export function getOnlineProviderConfig(
+  providers: AsrProviderConfig | undefined,
+  providerId: OnlineAsrProviderId,
+): OnlineAsrProviderConfig {
   const definition = getOnlineAsrProviderDefinition(providerId);
   if (!definition) {
     throw new Error(`Unsupported online ASR provider: ${providerId}`);
@@ -252,13 +161,16 @@ export function getOnlineProviderConfig<TProvider extends OnlineAsrProviderId>(
   const modernConfig = providers?.online?.[providerId];
   const legacyConfig = providerId === VOLCENGINE_DOUBAO_PROVIDER_ID
     ? providers?.volcengineDoubao
-    : undefined;
+    : providerId === 'groq-whisper'
+      ? providers?.groqWhisper
+      : undefined;
+      
   const normalizedModern = modernConfig
-    ? definition.normalizeConfig(modernConfig as never)
+    ? definition.normalizeConfig(modernConfig)
     : undefined;
   const rawConfig = legacyConfig
     && (!normalizedModern || JSON.stringify(normalizedModern) === JSON.stringify(definition.defaultConfig))
     ? legacyConfig
     : modernConfig;
-  return definition.normalizeConfig(rawConfig as never) as OnlineAsrProviderConfigMap[TProvider];
+  return definition.normalizeConfig(rawConfig);
 }
