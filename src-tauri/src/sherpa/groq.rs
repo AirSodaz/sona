@@ -6,7 +6,6 @@ use super::error::SherpaError;
 use super::online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 use super::state::SherpaState;
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
-use crate::asr_providers::{fill_groq_whisper_config_fields, GroqWhisperConfigFields};
 use async_trait::async_trait;
 use crate::sherpa::postprocess::TranscriptPostprocessor;
 use crate::sherpa::transcript::apply_timeline_normalization;
@@ -19,6 +18,13 @@ use tauri::Emitter;
 #[derive(Debug)]
 pub enum GroqMode {
     Batch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroqWhisperConfigFields {
+    pub api_key: String,
+    pub batch_endpoint: String,
+    pub model: String,
 }
 
 pub struct GroqWhisperAdapter;
@@ -68,22 +74,30 @@ fn config_from_request(
         .as_ref()
         .ok_or_else(|| "Online ASR provider request is missing for Groq Whisper.".to_string())?;
 
-    let fields = fill_groq_whisper_config_fields(
+    let get_string = |key: &str, default_val: &str| -> String {
         provider_request
             .config
-            .get("apiKey")
-            .and_then(Value::as_str),
-        provider_request
-            .config
-            .get("batchEndpoint")
-            .and_then(Value::as_str),
-        provider_request.config.get("model").and_then(Value::as_str),
-    );
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| default_val.to_string())
+    };
 
-    if fields.api_key.trim().is_empty() {
+    let manifest = crate::asr_providers::find_online_asr_provider(crate::asr_providers::GROQ_WHISPER_PROVIDER_ID)
+        .ok_or_else(|| "Groq Whisper provider not found in manifest".to_string())?;
+    let defaults = manifest.defaults.as_object().unwrap();
+
+    let fields = GroqWhisperConfigFields {
+        api_key: get_string("apiKey", defaults.get("apiKey").and_then(Value::as_str).unwrap_or("")),
+        batch_endpoint: get_string("batchEndpoint", defaults.get("batchEndpoint").and_then(Value::as_str).unwrap_or("")),
+        model: get_string("model", defaults.get("model").and_then(Value::as_str).unwrap_or("")),
+    };
+
+    if fields.api_key.is_empty() {
         return Err("Groq API Key is not configured.".to_string());
     }
-    if fields.batch_endpoint.trim().is_empty() || fields.model.trim().is_empty() {
+    if fields.batch_endpoint.is_empty() || fields.model.is_empty() {
         return Err("Groq batch endpoint or model is not configured.".to_string());
     }
 

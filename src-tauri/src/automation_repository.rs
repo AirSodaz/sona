@@ -1,6 +1,6 @@
 use crate::asr_providers::{
-    is_volcengine_doubao_selection, is_volcengine_local_file_batch_config_complete,
-    volcengine_provider_from_providers,
+    online_asr_providers, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY,
+    VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -436,12 +436,66 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
         .get("asr")
         .and_then(|asr| asr.get("selections"))
         .and_then(|selections| selections.get("batch"));
-    if is_volcengine_doubao_selection(batch_selection) {
-        let provider = global_config
+        
+    if batch_selection.and_then(|v| v.get("engine")).and_then(Value::as_str) == Some("online") {
+        let provider_id = batch_selection
+            .and_then(|v| v.get("providerId"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+
+        let Some(provider_def) = online_asr_providers().into_iter().find(|p| p.id == provider_id) else {
+            return false;
+        };
+
+        if !provider_def.batch.local_file_mode.supported {
+            return false;
+        }
+
+        let provider_settings = global_config
             .get("asr")
             .and_then(|asr| asr.get("providers"))
-            .and_then(|providers| volcengine_provider_from_providers(Some(providers)));
-        return is_volcengine_local_file_batch_config_complete(provider);
+            .and_then(|providers| providers.get("online"))
+            .and_then(|online| online.get(provider_id))
+            .or_else(|| {
+                if provider_id == VOLCENGINE_DOUBAO_PROVIDER_ID {
+                    global_config
+                        .get("asr")
+                        .and_then(|asr| asr.get("providers"))
+                        .and_then(|providers| providers.get(VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY))
+                } else {
+                    None
+                }
+            });
+
+        let Some(settings) = provider_settings else {
+            return false;
+        };
+
+        let api_key = string_field(settings, "apiKey").unwrap_or("").trim();
+        if api_key.is_empty() {
+            return false;
+        }
+
+        // Check required fields from defaults if missing in settings
+        if let Some(defaults) = provider_def.defaults.as_object() {
+            for (key, default_val) in defaults {
+                if key == "apiKey" || key == "unknownKey" { continue; }
+                let val = string_field(settings, key).unwrap_or(default_val.as_str().unwrap_or("")).trim();
+                if val.is_empty() {
+                    return false;
+                }
+            }
+        }
+
+        if provider_id == VOLCENGINE_DOUBAO_PROVIDER_ID {
+            let batch_endpoint = string_field(settings, "batchEndpoint")
+                .unwrap_or(provider_def.defaults["batchEndpoint"].as_str().unwrap_or(""))
+                .trim();
+            if batch_endpoint.contains("idle/submit") || batch_endpoint.ends_with("/submit") {
+                return false;
+            }
+        }
+        return true;
     }
 
     let offline_model_path = batch_selection

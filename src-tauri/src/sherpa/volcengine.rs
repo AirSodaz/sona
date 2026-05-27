@@ -11,15 +11,9 @@ use super::transcript::{
 };
 use super::types::{
     AsrMode, AsrTranscriptionRequest, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
-    TranscriptTimingSource, TranscriptTimingUnit, VolcengineDoubaoAsrConfig,
+    TranscriptTimingSource, TranscriptTimingUnit,
 };
-use super::TranscriptPostprocessor;
-use crate::asr_providers::{
-    fill_volcengine_doubao_config_fields, is_volcengine_doubao_provider_id,
-    is_volcengine_local_file_batch_config_fields_complete,
-    is_volcengine_streaming_config_fields_complete,
-    volcengine_local_file_batch_unsupported_message,
-};
+use crate::sherpa::postprocess::TranscriptPostprocessor;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
@@ -54,33 +48,38 @@ type VolcengineWriter = futures_util::stream::SplitSink<
     Message,
 >;
 
-fn normalized_config(config: &VolcengineDoubaoAsrConfig) -> VolcengineDoubaoAsrConfig {
-    let fields = fill_volcengine_doubao_config_fields(
-        Some(&config.api_key),
-        Some(&config.streaming_endpoint),
-        Some(&config.streaming_resource_id),
-        Some(&config.batch_endpoint),
-        Some(&config.batch_resource_id),
-    );
-    VolcengineDoubaoAsrConfig {
-        api_key: fields.api_key,
-        streaming_endpoint: fields.streaming_endpoint,
-        streaming_resource_id: fields.streaming_resource_id,
-        batch_endpoint: fields.batch_endpoint,
-        batch_resource_id: fields.batch_resource_id,
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VolcengineDoubaoConfigFields {
+    pub api_key: String,
+    pub streaming_endpoint: String,
+    pub streaming_resource_id: String,
+    pub batch_endpoint: String,
+    pub batch_resource_id: String,
+}
+
+fn get_string(config: &Value, key: &str, default_val: &str) -> String {
+    config
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| default_val.to_string())
 }
 
 fn config_fields(
-    config: &VolcengineDoubaoAsrConfig,
-) -> crate::asr_providers::VolcengineDoubaoConfigFields {
-    fill_volcengine_doubao_config_fields(
-        Some(&config.api_key),
-        Some(&config.streaming_endpoint),
-        Some(&config.streaming_resource_id),
-        Some(&config.batch_endpoint),
-        Some(&config.batch_resource_id),
-    )
+    request_config: &Value,
+) -> VolcengineDoubaoConfigFields {
+    let manifest = crate::asr_providers::find_online_asr_provider(crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID)
+        .expect("Volcengine Doubao provider not found in manifest");
+    let defaults = manifest.defaults.as_object().unwrap();
+
+    VolcengineDoubaoConfigFields {
+        api_key: get_string(request_config, "apiKey", defaults.get("apiKey").and_then(Value::as_str).unwrap_or("")),
+        streaming_endpoint: get_string(request_config, "streamingEndpoint", defaults.get("streamingEndpoint").and_then(Value::as_str).unwrap_or("")),
+        streaming_resource_id: get_string(request_config, "streamingResourceId", defaults.get("streamingResourceId").and_then(Value::as_str).unwrap_or("")),
+        batch_endpoint: get_string(request_config, "batchEndpoint", defaults.get("batchEndpoint").and_then(Value::as_str).unwrap_or("")),
+        batch_resource_id: get_string(request_config, "batchResourceId", defaults.get("batchResourceId").and_then(Value::as_str).unwrap_or("")),
+    }
 }
 
 fn detect_audio_format(file_path: &str) -> &'static str {
@@ -109,17 +108,16 @@ fn detect_audio_format(file_path: &str) -> &'static str {
 }
 
 pub fn validate_config(
-    config: &VolcengineDoubaoAsrConfig,
+    request_config: &Value,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoAsrConfig, SherpaError> {
-    let config = normalized_config(config);
-    let fields = config_fields(&config);
+) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
+    let fields = config_fields(request_config);
     if fields.api_key.is_empty() {
         return Err(SherpaError::VolcengineApiKeyMissing);
     }
     match mode {
         VolcengineMode::Streaming => {
-            if !is_volcengine_streaming_config_fields_complete(&fields) {
+            if fields.streaming_endpoint.is_empty() || fields.streaming_resource_id.is_empty() {
                 return Err(SherpaError::VolcengineStreamingConfigMissing);
             }
         }
@@ -127,33 +125,34 @@ pub fn validate_config(
             if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
                 return Err(SherpaError::VolcengineBatchConfigMissing);
             }
-            if !is_volcengine_local_file_batch_config_fields_complete(&fields) {
+            if !fields.batch_endpoint.starts_with("https://") && !fields.batch_endpoint.starts_with("http://") {
                 return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
-                    message: volcengine_local_file_batch_unsupported_message().to_string(),
+                    message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
+                });
+            }
+            if fields.batch_endpoint.contains("idle/submit") || fields.batch_endpoint.ends_with("/submit") {
+                return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
+                    message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
                 });
             }
         }
     }
-    Ok(config)
+    Ok(fields)
 }
 
 fn config_from_request(
     request: &AsrTranscriptionRequest,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoAsrConfig, SherpaError> {
+) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
     let Some(provider) = request.online_provider.as_ref() else {
         return Err(SherpaError::VolcengineProviderConfigMissing);
     };
-    if !is_volcengine_doubao_provider_id(&provider.provider_id) {
+    if provider.provider_id != crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID {
         return Err(SherpaError::UnsupportedVolcengineProvider {
             provider_id: provider.provider_id.clone(),
         });
     }
-    let config = serde_json::from_value::<VolcengineDoubaoAsrConfig>(provider.config.clone())
-        .map_err(|error| SherpaError::VolcengineProviderConfigInvalid {
-            error: error.to_string(),
-        })?;
-    validate_config(&config, mode)
+    validate_config(&provider.config, mode)
 }
 
 pub fn build_full_client_request_frame(
@@ -831,15 +830,14 @@ mod tests {
     };
     use super::*;
 
-    fn config(api_key: &str) -> VolcengineDoubaoAsrConfig {
-        VolcengineDoubaoAsrConfig {
-            api_key: api_key.to_string(),
-            streaming_endpoint: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
-            streaming_resource_id: "volc.seedasr.sauc.duration".to_string(),
-            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
-                .to_string(),
-            batch_resource_id: "volc.bigasr.auc_turbo".to_string(),
-        }
+    fn config(api_key: &str) -> Value {
+        serde_json::json!({
+            "apiKey": api_key.to_string(),
+            "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
+            "streamingResourceId": "volc.seedasr.sauc.duration".to_string(),
+            "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash".to_string(),
+            "batchResourceId": "volc.bigasr.auc_turbo".to_string(),
+        })
     }
 
     #[test]
@@ -852,18 +850,13 @@ mod tests {
 
     #[test]
     fn volcengine_local_batch_rejects_async_recording_file_endpoints() {
-        let standard = VolcengineDoubaoAsrConfig {
-            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit"
-                .to_string(),
-            batch_resource_id: "volc.seedasr.auc".to_string(),
-            ..config("volc-test-key")
-        };
-        let offpeak = VolcengineDoubaoAsrConfig {
-            batch_endpoint: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit"
-                .to_string(),
-            batch_resource_id: "volc.bigasr.auc_idle".to_string(),
-            ..config("volc-test-key")
-        };
+        let mut standard = config("volc-test-key");
+        standard["batchEndpoint"] = serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit");
+        standard["batchResourceId"] = serde_json::json!("volc.seedasr.auc");
+        
+        let mut offpeak = config("volc-test-key");
+        offpeak["batchEndpoint"] = serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit");
+        offpeak["batchResourceId"] = serde_json::json!("volc.bigasr.auc_idle");
 
         let standard_error = validate_config(&standard, VolcengineMode::Batch)
             .expect_err("standard async endpoint requires a public audio URL");

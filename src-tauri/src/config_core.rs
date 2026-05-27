@@ -1,10 +1,5 @@
 use crate::asr_providers::{
-    default_groq_whisper_provider_json, default_mistral_voxtral_provider_json, default_volcengine_doubao_provider_json,
-    groq_whisper_profile_id, groq_whisper_provider_from_providers, is_groq_whisper_provider_id,
-    is_mistral_voxtral_provider_id, mistral_voxtral_profile_id, mistral_voxtral_provider_from_providers,
-    is_volcengine_doubao_provider_id, normalize_groq_whisper_provider_json, normalize_mistral_voxtral_provider_json,
-    normalize_volcengine_doubao_provider_json, volcengine_doubao_profile_id,
-    volcengine_provider_from_providers, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    online_asr_providers, VOLCENGINE_DOUBAO_PROVIDER_ID, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -341,39 +336,29 @@ fn asr_config_needs_persist(existing: Option<&Value>, normalized: Option<&Value>
     if existing.get("selections") != normalized.get("selections") {
         return true;
     }
-    let existing_volcengine = volcengine_provider_from_providers(existing.get("providers"));
-    let normalized_volcengine = volcengine_provider_from_providers(normalized.get("providers"));
-    if existing_volcengine != normalized_volcengine {
-        if let (None, Some(provider)) = (existing_volcengine, normalized_volcengine) {
-            if *provider != default_volcengine_doubao_provider() {
-                return true;
-            }
+    
+    let existing_providers = existing.get("providers").and_then(|v| v.get("online"));
+    let normalized_providers = normalized.get("providers").and_then(|v| v.get("online"));
+    
+    for provider in online_asr_providers() {
+        let existing_provider = existing_providers.and_then(|v| v.get(&provider.id));
+        let normalized_provider = normalized_providers.and_then(|v| v.get(&provider.id));
+        
+        // Handle legacy Volcengine provider key lookup
+        let existing_provider = if provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID && existing_provider.is_none() {
+            existing.get("providers").and_then(|v| v.get(VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY))
         } else {
-            return true;
-        }
-    }
+            existing_provider
+        };
 
-    let existing_groq = groq_whisper_provider_from_providers(existing.get("providers"));
-    let normalized_groq = groq_whisper_provider_from_providers(normalized.get("providers"));
-    if existing_groq != normalized_groq {
-        if let (None, Some(provider)) = (existing_groq, normalized_groq) {
-            if *provider != default_groq_whisper_provider_json() {
+        if existing_provider != normalized_provider {
+            if let (None, Some(norm_prov)) = (existing_provider, normalized_provider) {
+                if *norm_prov != provider.defaults {
+                    return true;
+                }
+            } else {
                 return true;
             }
-        } else {
-            return true;
-        }
-    }
-
-    let existing_mistral = mistral_voxtral_provider_from_providers(existing.get("providers"));
-    let normalized_mistral = mistral_voxtral_provider_from_providers(normalized.get("providers"));
-    if existing_mistral != normalized_mistral {
-        if let (None, Some(provider)) = (existing_mistral, normalized_mistral) {
-            if *provider != default_mistral_voxtral_provider_json() {
-                return true;
-            }
-        } else {
-            return true;
         }
     }
 
@@ -747,11 +732,12 @@ fn default_asr_selection(mode: &str, model_path: String) -> Value {
     })
 }
 
-fn default_volcengine_doubao_provider() -> Value {
-    default_volcengine_doubao_provider_json()
-}
-
 fn default_asr_config() -> Value {
+    let mut online_providers = Map::new();
+    for provider in online_asr_providers() {
+        online_providers.insert(provider.id.clone(), provider.defaults.clone());
+    }
+
     json!({
         "selections": {
             "live": default_asr_selection("streaming", String::new()),
@@ -760,11 +746,7 @@ fn default_asr_config() -> Value {
             "batch": default_asr_selection("offline", String::new()),
         },
         "providers": {
-            "online": {
-                "volcengine-doubao": default_volcengine_doubao_provider(),
-                "groq-whisper": default_groq_whisper_provider_json(),
-                "mistral-voxtral": default_mistral_voxtral_provider_json(),
-            },
+            "online": online_providers
         }
     })
 }
@@ -774,18 +756,49 @@ fn is_online_asr_engine(engine: Option<&str>) -> bool {
 }
 
 fn normalize_asr_providers(providers: Option<&Value>) -> Value {
+    let mut online = Map::new();
+    let online_providers_val = providers.and_then(|v| v.get("online"));
+    
+    for provider in online_asr_providers() {
+        let existing = online_providers_val.and_then(|v| v.get(&provider.id));
+        
+        let existing = if provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID && existing.is_none() {
+            providers.and_then(|v| v.get(VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY))
+        } else {
+            existing
+        };
+
+        let mut norm = provider.defaults.as_object().unwrap().clone();
+        if let Some(existing_obj) = existing.and_then(Value::as_object) {
+            for (k, default_v) in &norm.clone() {
+                if let Some(existing_v) = existing_obj.get(k) {
+                    if std::mem::discriminant(existing_v) == std::mem::discriminant(default_v) {
+                        if let (Some(ext_s), Some(def_s)) = (existing_v.as_str(), default_v.as_str()) {
+                            let ext_s = ext_s.trim();
+                            if ext_s.is_empty() && !def_s.is_empty() {
+                                continue;
+                            }
+                            if provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID {
+                                if k == "batchEndpoint" && (ext_s.contains("idle/submit") || ext_s.ends_with("/submit")) {
+                                    continue;
+                                }
+                                if k == "batchResourceId" && (ext_s == "volc.bigasr.auc_idle" || ext_s == "volc.seedasr.auc") {
+                                    continue;
+                                }
+                            }
+                            norm.insert(k.clone(), Value::String(ext_s.to_string()));
+                        } else {
+                            norm.insert(k.clone(), existing_v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        online.insert(provider.id.clone(), Value::Object(norm));
+    }
+    
     json!({
-        "online": {
-            "volcengine-doubao": normalize_volcengine_doubao_provider(
-                volcengine_provider_from_providers(providers)
-            ),
-            "groq-whisper": normalize_groq_whisper_provider_json(
-                groq_whisper_provider_from_providers(providers)
-            ),
-            "mistral-voxtral": normalize_mistral_voxtral_provider_json(
-                mistral_voxtral_provider_from_providers(providers)
-            ),
-        },
+        "online": online
     })
 }
 
@@ -817,26 +830,18 @@ fn has_valid_asr_config(config: &Value) -> bool {
         if !selection.get("modelPath").is_some_and(Value::is_string) {
             return false;
         }
-        if engine == Some("online")
-            && (selection
-                .get("providerId")
-                .and_then(Value::as_str)
-                .map_or(true, |provider_id| {
-                    !is_volcengine_doubao_provider_id(provider_id)
-                        && !is_groq_whisper_provider_id(provider_id)
-                        && !is_mistral_voxtral_provider_id(provider_id)
-                })
-                || !selection.get("profileId").is_some_and(Value::is_string))
-        {
-            return false;
+        if engine == Some("online") {
+            let provider_id = selection.get("providerId").and_then(Value::as_str);
+            if provider_id.is_none() || !online_asr_providers().iter().any(|p| Some(p.id.as_str()) == provider_id) {
+                return false;
+            }
+            if !selection.get("profileId").is_some_and(Value::is_string) {
+                return false;
+            }
         }
     }
 
-    if !volcengine_provider_from_providers(
-        config.get("asr").and_then(|value| value.get("providers")),
-    )
-    .is_some_and(Value::is_object)
-    {
+    if config.get("asr").and_then(|v| v.get("providers")).and_then(Value::as_object).is_none() {
         return false;
     }
 
@@ -888,22 +893,18 @@ fn normalize_asr_selection(
         let provider_id = existing
             .and_then(|value| value.get("providerId"))
             .and_then(non_empty_str)
-            .filter(|value| {
-                is_volcengine_doubao_provider_id(value) || is_groq_whisper_provider_id(value) || is_mistral_voxtral_provider_id(value)
-            })
+            .filter(|value| online_asr_providers().iter().any(|p| p.id == *value))
             .unwrap_or(VOLCENGINE_DOUBAO_PROVIDER_ID);
         let profile_id = existing
             .and_then(|value| value.get("profileId"))
             .and_then(non_empty_str)
             .map(str::to_string)
             .unwrap_or_else(|| {
-                if is_groq_whisper_provider_id(provider_id) {
-                    groq_whisper_profile_id().to_string()
-                } else if is_mistral_voxtral_provider_id(provider_id) {
-                    mistral_voxtral_profile_id().to_string()
-                } else {
-                    volcengine_doubao_profile_id().to_string()
-                }
+                online_asr_providers()
+                    .iter()
+                    .find(|p| p.id == provider_id)
+                    .map(|p| p.profile_id.clone())
+                    .unwrap_or_default()
             });
         return json!({
             "engine": "online",
@@ -935,9 +936,7 @@ fn normalize_asr_selection(
     })
 }
 
-fn normalize_volcengine_doubao_provider(existing: Option<&Value>) -> Value {
-    normalize_volcengine_doubao_provider_json(existing)
-}
+
 
 fn normalize_asr_config(config: &Value) -> Value {
     let streaming_model_path = string_at(config, "streamingModelPath").unwrap_or_default();
@@ -2459,11 +2458,11 @@ mod tests {
         assert!(result.migrated);
         assert_eq!(
             result.config["asr"]["providers"]["online"]["volcengine-doubao"]["batchEndpoint"],
-            default_volcengine_doubao_provider()["batchEndpoint"]
+            "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
         );
         assert_eq!(
             result.config["asr"]["providers"]["online"]["volcengine-doubao"]["batchResourceId"],
-            default_volcengine_doubao_provider()["batchResourceId"]
+            "volc.bigasr.auc_turbo"
         );
     }
 
@@ -2676,5 +2675,58 @@ mod tests {
         assert_eq!(resolved["polishKeywordSets"][1]["enabled"], false);
         assert_eq!(resolved["speakerProfiles"][0]["enabled"], false);
         assert_eq!(resolved["speakerProfiles"][1]["enabled"], true);
+    }
+
+    #[test]
+    fn config_core_cleans_up_dirty_data_in_online_providers_and_falls_back_to_defaults() {
+        let saved = json!({
+            "configVersion": 7,
+            "asr": {
+                "selections": {
+                    "live": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
+                    "caption": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
+                    "voiceTyping": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
+                    "batch": { "engine": "online", "mode": "offline", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" }
+                },
+                "providers": {
+                    "online": {
+                        "volcengine-doubao": {
+                            "apiKey": 12345, // invalid type
+                            "streamingEndpoint": "custom-endpoint",
+                            "unknownKey": "garbage"
+                        },
+                        "groq-whisper": {
+                            "apiKey": "groq-key"
+                        },
+                        "garbage-provider": {
+                            "apiKey": "should-be-deleted"
+                        }
+                    }
+                }
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        
+        // Volcengine cleanup: invalid apiKey type falls back to default empty string, unknownKey is removed, valid string is kept
+        let volc = &result.config["asr"]["providers"]["online"]["volcengine-doubao"];
+        assert_eq!(volc["apiKey"], "");
+        assert_eq!(volc["streamingEndpoint"], "custom-endpoint");
+        assert!(volc.get("unknownKey").is_none());
+
+        // Groq kept its api key, other defaults populated
+        let groq = &result.config["asr"]["providers"]["online"]["groq-whisper"];
+        assert_eq!(groq["apiKey"], "groq-key");
+        assert_eq!(groq["batchEndpoint"], "https://api.groq.com/openai/v1/audio/transcriptions");
+
+        // Unknown providers are garbage collected
+        assert!(result.config["asr"]["providers"]["online"].get("garbage-provider").is_none());
+        
+        // Mistral should be fully hydrated from defaults
+        let mistral = &result.config["asr"]["providers"]["online"]["mistral-voxtral"];
+        assert_eq!(mistral["apiKey"], "");
+        assert_eq!(mistral["batchEndpoint"], "https://api.mistral.ai/v1/audio/transcriptions");
     }
 }
