@@ -1,18 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDialogStore } from '../stores/dialogStore';
-import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { setTranscriptSegments } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { polishService } from '../services/polishService';
-import { retranscribeService } from '../services/retranscribeService';
 import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon, SettingsIcon } from './Icons';
-import { TranscriptSegment } from '../types/transcript';
 import { isHistoryItemDraft } from '../types/history';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
 import { PolishSettingsModal } from './PolishSettingsModal';
+import { usePolishActions } from '../hooks/usePolishActions';
 
 /** Props for PolishButton. */
 interface PolishButtonProps {
@@ -28,7 +21,6 @@ interface PolishButtonProps {
  */
 export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -36,23 +28,25 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Undo/Redo state
-    const [undoSegments, setUndoSegments] = useState<TranscriptSegment[] | null>(null);
-    const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
+    const {
+        isPolishing,
+        polishProgress,
+        isRetranscribing,
+        retranscribeProgress,
+        undoSegments,
+        redoSegments,
+        handleStartPolish,
+        handleRetranscribe,
+        handleUndoPolish,
+        handleRedoPolish,
+    } = usePolishActions();
 
     const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
 
-    // LLM state
     const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
     const currentHistoryItem = useHistoryStore((state) => (
         sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
     ));
-    const llmState = useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
-    const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = llmState;
-    const updateLlmState = useTranscriptSidecarStore((state) => state.updateLlmState);
-
-    const config = useEffectiveConfigStore((state) => state.config);
-    const segments = useTranscriptSessionStore((state) => state.segments);
     const canRetranscribeCurrentHistory = !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
     // Close dropdown when clicking outside
@@ -130,95 +124,25 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         }
     };
 
-    const handleRetranscribe = async () => {
-        if (isRetranscribing) return;
-
-        if (!config.offlineModelPath) {
-            await showError({
-                code: 'config.offline_model_missing',
-                messageKey: 'errors.config.offline_model_missing',
-                showCause: false,
-            });
-            return;
-        }
-
+    const onActionStart = () => {
         setIsOpen(false);
         triggerRef.current?.focus();
-
-        updateLlmState({ isRetranscribing: true, retranscribeProgress: 0 });
-
-        try {
-            await retranscribeService.retranscribeCurrentRecord((progress) => {
-                updateLlmState({ retranscribeProgress: progress });
-            });
-
-            // Clear old polish undo/redo states only after successful re-transcription
-            setUndoSegments(null);
-            setRedoSegments(null);
-        } catch (error) {
-            await showError({
-                code: 'polish.retranscribe_failed',
-                messageKey: 'errors.polish.retranscribe_failed',
-                cause: error,
-            });
-        } finally {
-            updateLlmState({ isRetranscribing: false, retranscribeProgress: 0 });
-        }
     };
 
-    const handleStartPolish = async () => {
-        if (isPolishing) return;
-
-        const llm = getFeatureLlmConfig(config, 'polish');
-        if (!isLlmConfigComplete(llm)) {
-            await showError({
-                code: 'config.polish_model_missing',
-                messageKey: 'errors.config.polish_model_missing',
-                showCause: false,
-            });
-            return;
-        }
-
-        // Save current segments for undo
-        setUndoSegments(JSON.parse(JSON.stringify(segments)));
-        setRedoSegments(null);
-
-        setIsOpen(false);
-        triggerRef.current?.focus();
-
-        try {
-            await polishService.polishTranscript();
-        } catch (error) {
-            await showError({
-                code: 'polish.failed',
-                messageKey: 'errors.polish.failed',
-                cause: error,
-            });
-        }
+    const onRetranscribeClick = () => {
+        handleRetranscribe(onActionStart);
     };
 
-    const handleUndoPolish = () => {
-        if (undoSegments) {
-            // Save current state for redo
-            setRedoSegments(JSON.parse(JSON.stringify(segments)));
-
-            setTranscriptSegments(undoSegments);
-            setUndoSegments(null);
-            setIsOpen(false);
-            triggerRef.current?.focus();
-        }
+    const onStartPolishClick = () => {
+        handleStartPolish(onActionStart);
     };
 
-    const handleRedoPolish = () => {
-        if (redoSegments) {
-            // Save current state (original) back to undo
-            setUndoSegments(JSON.parse(JSON.stringify(segments)));
+    const onUndoPolishClick = () => {
+        handleUndoPolish(onActionStart);
+    };
 
-            setTranscriptSegments(redoSegments);
-            setRedoSegments(null);
-            setIsOpen(false);
-            triggerRef.current?.focus();
-        }
+    const onRedoPolishClick = () => {
+        handleRedoPolish(onActionStart);
     };
 
     if (segmentsLength === 0) {
@@ -287,7 +211,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <button
                             type="button"
                             className="export-dropdown-item"
-                            onClick={handleRetranscribe}
+                            onClick={onRetranscribeClick}
                             disabled={isRetranscribing || isPolishing}
                             role="menuitem"
                             tabIndex={-1}
@@ -304,7 +228,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                     <button
                         type="button"
                         className="export-dropdown-item"
-                        onClick={handleStartPolish}
+                        onClick={onStartPolishClick}
                         disabled={isPolishing || isRetranscribing}
                         role="menuitem"
                         tabIndex={-1}
@@ -321,7 +245,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <button
                             type="button"
                             className="export-dropdown-item"
-                            onClick={handleUndoPolish}
+                            onClick={onUndoPolishClick}
                             disabled={isPolishing}
                             role="menuitem"
                             tabIndex={-1}
@@ -335,7 +259,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <button
                             type="button"
                             className="export-dropdown-item"
-                            onClick={handleRedoPolish}
+                            onClick={onRedoPolishClick}
                             disabled={isPolishing}
                             role="menuitem"
                             tabIndex={-1}
