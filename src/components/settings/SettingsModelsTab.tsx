@@ -8,6 +8,8 @@ import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
+    GROQ_WHISPER_PROVIDER_ID,
+    DEFAULT_GROQ_WHISPER_ASR_CONFIG,
     DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
     ONLINE_ASR_PROVIDER_DEFINITIONS,
     VOLCENGINE_DOUBAO_PROVIDER_ID,
@@ -25,7 +27,7 @@ import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
-import type { VolcengineDoubaoAsrProviderConfig } from '../../types/config';
+import type { VolcengineDoubaoAsrProviderConfig, GroqWhisperAsrProviderConfig } from '../../types/config';
 
 const onlineAsrProvider = ONLINE_ASR_PROVIDER_DEFINITIONS[0];
 const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
@@ -236,6 +238,15 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         defaultValue: '需要公网音频 URL，当前本地批量导入暂不支持。',
     });
 
+    const groqProvider = ONLINE_ASR_PROVIDER_DEFINITIONS.find(p => p.id === GROQ_WHISPER_PROVIDER_ID)!;
+    const groqConfig = (
+        modelConfig.asr?.providers?.online?.[GROQ_WHISPER_PROVIDER_ID]
+        ?? DEFAULT_GROQ_WHISPER_ASR_CONFIG
+    ) as GroqWhisperAsrProviderConfig;
+    const updateGroqConfig = (updates: Partial<typeof groqConfig>) => {
+        updateConfig(syncOnlineAsrProviderConfig(modelConfig, GROQ_WHISPER_PROVIDER_ID, updates as Record<string, unknown>));
+    };
+
     const getSectionStatus = (type: ModelCatalogSectionType) => {
         const groups = getSectionGroups(type);
         const allModels = groups.flatMap(group => group.models);
@@ -265,9 +276,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         };
     };
 
-    const getOnlineServiceStatus = () => {
+    const getOnlineServiceStatus = (providerId: string, isConfigured: boolean) => {
         const isEnabled = Object.values(modelConfig.asr?.selections ?? {}).some(
-            (selection) => selection.engine === 'online' && selection.providerId === VOLCENGINE_DOUBAO_PROVIDER_ID,
+            (selection) => selection.engine === 'online' && selection.providerId === providerId,
         );
 
         if (isEnabled) {
@@ -277,7 +288,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             };
         }
 
-        if (volcengineConfig.apiKey) {
+        if (isConfigured) {
             return {
                 type: 'off',
                 text: t('settings.asr.configured', { defaultValue: '已就绪' })
@@ -468,7 +479,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             >
                 <SettingsAccordion
                     title={t(onlineAsrProvider.titleKey, { defaultValue: onlineAsrProvider.titleDefault })}
-                    status={<span className={`status-badge ${getOnlineServiceStatus().type}`}>{getOnlineServiceStatus().text}</span>}
+                    status={<span className={`status-badge ${getOnlineServiceStatus(VOLCENGINE_DOUBAO_PROVIDER_ID, Boolean(volcengineConfig.apiKey)).type}`}>{getOnlineServiceStatus(VOLCENGINE_DOUBAO_PROVIDER_ID, Boolean(volcengineConfig.apiKey)).text}</span>}
                     defaultOpen={true}
                 >
                     <SettingsItem
@@ -516,6 +527,42 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                                         description: volcengineBatchUrlOnlyUnavailable,
                                         disabled: true,
                                     },
+                                ]}
+                            />
+                        </div>
+                    </SettingsItem>
+                </SettingsAccordion>
+
+                <SettingsAccordion
+                    title={t(groqProvider.titleKey, { defaultValue: groqProvider.titleDefault })}
+                    status={<span className={`status-badge ${getOnlineServiceStatus(GROQ_WHISPER_PROVIDER_ID, Boolean(groqConfig.apiKey)).type}`}>{getOnlineServiceStatus(GROQ_WHISPER_PROVIDER_ID, Boolean(groqConfig.apiKey)).text}</span>}
+                >
+                    <SettingsItem
+                        title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
+                        hint={t('settings.asr.api_key_hint', { defaultValue: '不写入日志' })}
+                    >
+                        <div style={{ width: '320px' }}>
+                            <input
+                                id="settings-groq-api-key"
+                                type="password"
+                                className="settings-input"
+                                value={groqConfig.apiKey}
+                                onChange={(event) => updateGroqConfig({ apiKey: event.target.value })}
+                                placeholder="gsk_..."
+                            />
+                        </div>
+                    </SettingsItem>
+                    <SettingsItem
+                        title={t('settings.asr.groq_model_label', { defaultValue: 'Whisper 模型' })}
+                    >
+                        <div style={{ width: '220px' }}>
+                            <Dropdown
+                                id="settings-groq-model"
+                                value={groqConfig.model}
+                                onChange={(value) => updateGroqConfig({ model: value })}
+                                options={[
+                                    { value: 'whisper-large-v3-turbo', label: 'whisper-large-v3-turbo' },
+                                    { value: 'whisper-large-v3', label: 'whisper-large-v3' },
                                 ]}
                             />
                         </div>

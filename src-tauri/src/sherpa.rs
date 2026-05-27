@@ -12,6 +12,7 @@ mod state;
 mod transcript;
 mod types;
 mod volcengine;
+mod groq;
 
 const BATCH_PROGRESS_EVENT: &str = "batch-progress";
 

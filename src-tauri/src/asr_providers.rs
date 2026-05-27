@@ -8,6 +8,8 @@ pub const VOLCENGINE_DOUBAO_PROVIDER_ID: &str = "volcengine-doubao";
 pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const VOLCENGINE_DOUBAO_LEGACY_ENGINE_ID: &str = "volcengine-doubao";
 
+pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OnlineAsrProviderManifest {
@@ -20,7 +22,7 @@ struct OnlineAsrProviderManifest {
 pub struct OnlineAsrProvider {
     pub id: String,
     pub profile_id: String,
-    pub defaults: VolcengineDoubaoDefaults,
+    pub defaults: Value,
     pub streaming: OnlineAsrCapability,
     pub batch: OnlineAsrBatchCapability,
 }
@@ -33,6 +35,14 @@ pub struct VolcengineDoubaoDefaults {
     pub streaming_resource_id: String,
     pub batch_endpoint: String,
     pub batch_resource_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroqWhisperDefaults {
+    pub api_key: String,
+    pub batch_endpoint: String,
+    pub model: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,6 +76,13 @@ pub struct VolcengineDoubaoConfigFields {
     pub streaming_resource_id: String,
     pub batch_endpoint: String,
     pub batch_resource_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroqWhisperConfigFields {
+    pub api_key: String,
+    pub batch_endpoint: String,
+    pub model: String,
 }
 
 static ONLINE_ASR_PROVIDER_MANIFEST: OnceLock<OnlineAsrProviderManifest> = OnceLock::new();
@@ -104,6 +121,11 @@ pub fn volcengine_doubao_provider() -> &'static OnlineAsrProvider {
         .expect("Volcengine Doubao provider should exist in shared online ASR manifest")
 }
 
+pub fn volcengine_doubao_defaults() -> VolcengineDoubaoDefaults {
+    serde_json::from_value(volcengine_doubao_provider().defaults.clone())
+        .expect("valid Volcengine Doubao defaults")
+}
+
 pub fn is_volcengine_doubao_provider_id(provider_id: &str) -> bool {
     provider_id == volcengine_doubao_provider().id
 }
@@ -112,8 +134,22 @@ pub fn volcengine_doubao_profile_id() -> &'static str {
     volcengine_doubao_provider().profile_id.as_str()
 }
 
+pub fn groq_whisper_provider() -> &'static OnlineAsrProvider {
+    find_online_asr_provider(GROQ_WHISPER_PROVIDER_ID)
+        .expect("Groq Whisper provider should exist in shared online ASR manifest")
+}
+
+pub fn groq_whisper_defaults() -> GroqWhisperDefaults {
+    serde_json::from_value(groq_whisper_provider().defaults.clone())
+        .expect("valid Groq Whisper defaults")
+}
+
+pub fn is_groq_whisper_provider_id(provider_id: &str) -> bool {
+    provider_id == groq_whisper_provider().id
+}
+
 pub fn default_volcengine_doubao_provider_json() -> Value {
-    let defaults = &volcengine_doubao_provider().defaults;
+    let defaults = volcengine_doubao_defaults();
     json!({
         "apiKey": defaults.api_key,
         "streamingEndpoint": defaults.streaming_endpoint,
@@ -157,10 +193,10 @@ pub fn normalize_volcengine_doubao_provider_json(existing: Option<&Value>) -> Va
         if is_volcengine_local_file_batch_mode(&fields.batch_endpoint, &fields.batch_resource_id) {
             (fields.batch_endpoint, fields.batch_resource_id)
         } else {
-            let defaults = &volcengine_doubao_provider().defaults;
+            let defaults = volcengine_doubao_defaults();
             (
-                defaults.batch_endpoint.clone(),
-                defaults.batch_resource_id.clone(),
+                defaults.batch_endpoint,
+                defaults.batch_resource_id,
             )
         };
 
@@ -180,7 +216,7 @@ pub fn fill_volcengine_doubao_config_fields(
     batch_endpoint: Option<&str>,
     batch_resource_id: Option<&str>,
 ) -> VolcengineDoubaoConfigFields {
-    let defaults = &volcengine_doubao_provider().defaults;
+    let defaults = volcengine_doubao_defaults();
     VolcengineDoubaoConfigFields {
         api_key: trim_or_default(api_key, &defaults.api_key),
         streaming_endpoint: trim_or_default(streaming_endpoint, &defaults.streaming_endpoint),
@@ -252,6 +288,32 @@ fn fields_from_provider_value(provider: Option<&Value>) -> VolcengineDoubaoConfi
         provider.and_then(|value| string_field(value, "batchEndpoint")),
         provider.and_then(|value| string_field(value, "batchResourceId")),
     )
+}
+
+pub fn is_groq_whisper_batch_config_fields_complete(
+    config: &GroqWhisperConfigFields,
+) -> bool {
+    let definition = groq_whisper_provider();
+    has_api_key(definition.batch.requires_api_key, &config.api_key)
+        && !config.batch_endpoint.trim().is_empty()
+        && !config.model.trim().is_empty()
+}
+
+pub fn groq_whisper_provider_from_providers(providers: Option<&Value>) -> Option<&Value> {
+    online_provider_from_providers(providers, GROQ_WHISPER_PROVIDER_ID)
+}
+
+pub fn fill_groq_whisper_config_fields(
+    api_key: Option<&str>,
+    batch_endpoint: Option<&str>,
+    model: Option<&str>,
+) -> GroqWhisperConfigFields {
+    let defaults = groq_whisper_defaults();
+    GroqWhisperConfigFields {
+        api_key: trim_or_default(api_key, &defaults.api_key),
+        batch_endpoint: trim_or_default(batch_endpoint, &defaults.batch_endpoint),
+        model: trim_or_default(model, &defaults.model),
+    }
 }
 
 fn has_api_key(requires_api_key: bool, api_key: &str) -> bool {

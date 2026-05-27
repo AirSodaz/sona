@@ -1,7 +1,8 @@
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
-pub use crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID;
+use super::groq;
+pub use crate::asr_providers::{VOLCENGINE_DOUBAO_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID};
 use tauri::{AppHandle, State};
 
 #[derive(Clone)]
@@ -31,12 +32,12 @@ fn provider_id_from_request(request: &AsrTranscriptionRequest) -> Result<&str, S
         .ok_or_else(|| "在线 ASR provider 配置缺失。".to_string())
 }
 
-fn ensure_volcengine_provider(request: &AsrTranscriptionRequest) -> Result<(), String> {
+fn ensure_provider(request: &AsrTranscriptionRequest) -> Result<&str, String> {
     let provider_id = provider_id_from_request(request)?;
-    if provider_id != VOLCENGINE_DOUBAO_PROVIDER_ID {
-        return Err(format!("不支持的在线 ASR provider：{provider_id}"));
+    match provider_id {
+        VOLCENGINE_DOUBAO_PROVIDER_ID | GROQ_WHISPER_PROVIDER_ID => Ok(provider_id),
+        _ => Err(format!("不支持的在线 ASR provider：{provider_id}")),
     }
-    Ok(())
 }
 
 async fn provider_id_from_session(
@@ -57,8 +58,12 @@ pub async fn init_streaming_recognizer_impl(
     instance_id: String,
     request: AsrTranscriptionRequest,
 ) -> Result<(), String> {
-    ensure_volcengine_provider(&request)?;
-    volcengine::init_streaming_recognizer_impl(state, instance_id, request).await
+    let provider_id = ensure_provider(&request)?;
+    if provider_id == VOLCENGINE_DOUBAO_PROVIDER_ID {
+        volcengine::init_streaming_recognizer_impl(state, instance_id, request).await
+    } else {
+        Err(format!("provider {} 不支持流式识别", provider_id))
+    }
 }
 
 pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
@@ -132,6 +137,14 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     file_path: String,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<super::TranscriptSegment>, String> {
-    ensure_volcengine_provider(&request)?;
-    volcengine::process_batch_file_impl(app, state, file_path, request).await
+    let provider_id = ensure_provider(&request)?;
+    match provider_id {
+        VOLCENGINE_DOUBAO_PROVIDER_ID => {
+            volcengine::process_batch_file_impl(app, state, file_path, request).await
+        }
+        GROQ_WHISPER_PROVIDER_ID => {
+            groq::process_batch_file_impl(app, state, file_path, request).await
+        }
+        _ => Err(format!("不支持的在线 ASR provider：{provider_id}")),
+    }
 }

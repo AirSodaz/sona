@@ -818,6 +818,11 @@
         "downloading_progress": "Downloading ({{progress}}%)",
         "asr": {
             "volcengine_title": "Volcengine Speech Service (Volcano ASR)",
+            "groq_whisper_option": "Groq (Whisper)",
+            "groq_title": "Groq Whisper API",
+            "groq_cloud_upload_hint": "Audio will be sent to Groq for transcription. Please note that Groq has a 25MB file size limit.",
+            "groq_model_label": "Whisper Model",
+            "batch_endpoint_label": "Batch Endpoint",
             "active": "Active",
             "configured": "Ready",
             "not_configured": "Not Configured",

@@ -21,6 +21,8 @@ import {
   VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
   VOLCENGINE_DOUBAO_PROFILE_ID,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
+  DEFAULT_GROQ_WHISPER_ASR_CONFIG,
+  GROQ_WHISPER_PROVIDER_ID,
   createOnlineAsrSelection,
   getOnlineAsrProviderDefinition,
   getOnlineProviderConfig,
@@ -37,6 +39,8 @@ export {
   VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
   VOLCENGINE_DOUBAO_PROFILE_ID,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
+  DEFAULT_GROQ_WHISPER_ASR_CONFIG,
+  GROQ_WHISPER_PROVIDER_ID,
   isVolcengineFlashBatchMode,
 };
 
@@ -200,7 +204,7 @@ export class AsrConfigService {
   syncOnlineAsrProviderConfig = <TProvider extends OnlineAsrProviderId>(
     config: ModelConfig,
     providerId: TProvider,
-    updates: Partial<VolcengineDoubaoAsrProviderConfig>,
+    updates: Record<string, unknown>,
   ): Partial<AppConfig> => {
     const asr = this.normalizeAsrConfig(config);
     const existing = getOnlineProviderConfig(asr.providers, providerId);
@@ -302,6 +306,7 @@ export class AsrConfigService {
     return {
       online: {
         [VOLCENGINE_DOUBAO_PROVIDER_ID]: { ...DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG },
+        [GROQ_WHISPER_PROVIDER_ID]: { ...DEFAULT_GROQ_WHISPER_ASR_CONFIG },
       },
     };
   }
@@ -312,6 +317,7 @@ export class AsrConfigService {
     return {
       online: {
         [VOLCENGINE_DOUBAO_PROVIDER_ID]: getOnlineProviderConfig(providers, VOLCENGINE_DOUBAO_PROVIDER_ID),
+        [GROQ_WHISPER_PROVIDER_ID]: getOnlineProviderConfig(providers, GROQ_WHISPER_PROVIDER_ID),
       },
     };
   }

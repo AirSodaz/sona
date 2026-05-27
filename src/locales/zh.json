@@ -815,7 +815,13 @@
         "not_installed": "未安装",
         "downloading_progress": "正在下载 ({{progress}}%)",
         "asr": {
+            "cloud_upload_hint": "音频会发送到云端进行识别。",
             "volcengine_title": "火山引擎语音服务 (火山 ASR)",
+            "groq_whisper_option": "Groq (Whisper)",
+            "groq_title": "Groq Whisper API",
+            "groq_cloud_upload_hint": "音频会发送到 Groq 进行识别。请注意 Groq 存在单文件最大 25MB 的限制。",
+            "groq_model_label": "Whisper 模型",
+            "batch_endpoint_label": "批量接口",
             "active": "已启用",
             "configured": "已就绪",
             "not_configured": "未配置",

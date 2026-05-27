@@ -127,15 +127,9 @@ type AsrTranscriptionRequest = {
   };
   postprocessOptions: TranscriptPostprocessOptions;
   onlineProvider?: {
-    providerId: 'volcengine-doubao';
+    providerId: string;
     profileId: string;
-    config: {
-      apiKey: string;
-      streamingEndpoint: string;
-      streamingResourceId: string;
-      batchEndpoint: string;
-      batchResourceId: string;
-    };
+    config: unknown;
   };
 };
 
