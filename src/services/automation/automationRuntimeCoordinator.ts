@@ -1,5 +1,5 @@
 import { resolveEffectiveConfig } from '../effectiveConfigService';
-import { isPathInsideDirectory, normalizeAutomationPath } from '../automationService';
+import { isPathInsideDirectory, normalizeAutomationPath } from '../automation/automationService';
 import {
   collectAutomationRuntimeRulePaths,
   type AutomationRuntimeCandidatePayload,
@@ -10,7 +10,7 @@ import {
 import {
   subscribeAutomationTaskSettled,
   type AutomationTaskSettledPayload,
-} from '../automationRuntimeBridge';
+} from '../automationEventBus';
 import {
   clearAutomationRecoveryGuardEntry,
   isAutomationRecoveryBlocked,

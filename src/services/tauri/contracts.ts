@@ -38,7 +38,7 @@ import type {
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
-} from '../llmTaskService';
+} from '../llmTaskTypes';
 import type { ModelFileConfig } from '../../types/model';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {

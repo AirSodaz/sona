@@ -7,7 +7,7 @@ import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TaskLedgerStatus } from '../../types/taskLedger';
 import type { TranscriptSegment } from '../../types/transcript';
-import { emitAutomationTaskSettled } from '../automationRuntimeBridge';
+import { emitAutomationTaskSettled } from '../automationEventBus';
 import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../asrConfigService';
 import { processBatchQueueItem } from './batchItemProcessor';
 import {

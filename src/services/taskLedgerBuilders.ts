@@ -1,7 +1,7 @@
 import type { BatchQueueItem } from '../types/batchQueue';
 import type { RecoveryItemStage, RecoveredQueueItem } from '../types/recovery';
 import type { TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord } from '../types/taskLedger';
-import type { LlmTaskType } from './llmTaskService';
+import type { LlmTaskType } from './llmTaskTypes';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { logger } from '../utils/logger';
 

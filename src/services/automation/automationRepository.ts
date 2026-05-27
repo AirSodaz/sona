@@ -4,7 +4,7 @@ import {
   saveAutomationRepositoryState,
   saveAutomationRules,
   validateAutomationRuleForActivation,
-} from '../automationService';
+} from '../automation/automationService';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { AutomationProcessedEntry, AutomationRule } from '../../types/automation';

@@ -70,8 +70,11 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../llmTaskService', () => ({
+vi.mock('../llmTaskTypes', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
+}));
+
+vi.mock('../llmTaskEvents', () => ({
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
   listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),
@@ -199,7 +202,7 @@ describe('TranslationService', () => {
         taskId: 'translate-task-id',
         taskType: 'translate',
         jobHistoryId: 'history-a',
-        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' }],
+        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' }],
       });
       return vi.fn();
     });
@@ -207,7 +210,7 @@ describe('TranslationService', () => {
       taskId: 'translate-task-id',
       taskType: 'translate',
       jobHistoryId: 'history-a',
-      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' }],
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' }],
     });
 
     await translationService.translateCurrentTranscript();

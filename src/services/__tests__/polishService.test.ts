@@ -70,8 +70,11 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../llmTaskService', () => ({
+vi.mock('../llmTaskTypes', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
+}));
+
+vi.mock('../llmTaskEvents', () => ({
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
   listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),

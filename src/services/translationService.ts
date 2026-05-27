@@ -8,8 +8,8 @@ import type {
   TranscriptLlmJobResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
-} from './llmTaskService';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskService';
+} from './llmTaskTypes';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';;
 import {
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,

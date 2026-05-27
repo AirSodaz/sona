@@ -36,7 +36,7 @@ import {
   saveAutomationRepositoryState,
   saveAutomationRules,
   validateAutomationRuleForActivation,
-} from '../automationService';
+} from '../automation/automationService';
 
 function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   return {

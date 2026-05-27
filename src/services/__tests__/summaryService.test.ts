@@ -33,15 +33,18 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../llmTaskService', async () => {
-  const actual = await vi.importActual<typeof import('../llmTaskService')>('../llmTaskService');
+vi.mock('../llmTaskTypes', async () => {
+  const actual = await vi.importActual<typeof import('../llmTaskTypes')>('../llmTaskTypes');
   return {
     ...actual,
     createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
-    listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
-    listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
   };
 });
+
+vi.mock('../llmTaskEvents', () => ({
+  listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
+  listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
+}));
 
 vi.mock('../historyService', () => ({
   historyService: {

@@ -44,8 +44,11 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../../llmTaskService', () => ({
+vi.mock('../../llmTaskTypes', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
+}));
+
+vi.mock('../../llmTaskEvents', () => ({
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
   listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
@@ -86,7 +89,7 @@ describe('segmentTask helpers', () => {
     const unlistenChunk = vi.fn();
     mockListenToLlmTaskChunks.mockResolvedValue(unlistenChunk);
     (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'seg-1', translation: '你好' },
+      { id: 'seg-1', translation: '浣犲ソ' },
     ]);
 
     const onChunk = vi.fn();
@@ -128,8 +131,8 @@ describe('segmentTask helpers', () => {
       }),
     });
 
-    expect(result).toEqual([{ id: 'seg-1', translation: '你好' }]);
-    expect(onChunk).toHaveBeenCalledWith([{ id: 'seg-1', translation: '你好' }]);
+    expect(result).toEqual([{ id: 'seg-1', translation: '浣犲ソ' }]);
+    expect(onChunk).toHaveBeenCalledWith([{ id: 'seg-1', translation: '浣犲ソ' }]);
     expect(unlistenChunk).toHaveBeenCalledTimes(1);
   });
 

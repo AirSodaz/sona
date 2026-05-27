@@ -1,7 +1,7 @@
 import {
   createAutomationFingerprint,
   normalizeAutomationPath,
-} from '../automationService';
+} from '../automation/automationService';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
@@ -13,7 +13,7 @@ import type {
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
 } from '../automationRuntimeService';
-import type { AutomationTaskSettledPayload } from '../automationRuntimeBridge';
+import type { AutomationTaskSettledPayload } from '../automationEventBus';
 import type { RecoveryItemStage } from '../../types/recovery';
 
 const RETRY_SOURCE_MISSING_SIZE = 0;

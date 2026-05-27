@@ -1,5 +1,5 @@
 import packageJson from '../../package.json';
-import { loadAutomationProcessedEntries, loadAutomationRules, saveAutomationProcessedEntries, saveAutomationRules } from './automationService';
+import { loadAutomationProcessedEntries, loadAutomationRules, saveAutomationProcessedEntries, saveAutomationRules } from './automation/automationService';
 import { migrateConfig } from './configMigrationService';
 import { historyService } from './historyService';
 import { projectService } from './projectService';

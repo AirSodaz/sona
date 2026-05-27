@@ -10,8 +10,8 @@ import type {
   PolishSegmentsRequest,
   PolishedSegment,
   TranscriptLlmJobResult,
-} from './llmTaskService';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskService';
+} from './llmTaskTypes';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';;
 import {
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,

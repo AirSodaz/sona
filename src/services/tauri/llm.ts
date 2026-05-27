@@ -7,7 +7,7 @@ import type {
   TranscriptLlmJobResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
-} from '../llmTaskService';
+} from '../llmTaskTypes';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type { LlmDiscoveredModelSummary } from '../../types/transcript';
 import { TauriCommand } from './commands';

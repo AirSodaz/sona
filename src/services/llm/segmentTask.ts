@@ -2,18 +2,8 @@ import type { AppConfig } from '../../types/config';
 import type { LlmConfig, TranscriptSegment } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
-import {
-  createLlmTaskId,
-  listenToLlmTaskChunks,
-  listenToLlmTaskProgress,
-  listenToLlmTaskText,
-  type LlmTaskType,
-  type LlmTaskTextPayload,
-  type PolishedSegment,
-  type PolishSegmentsRequest,
-  type TranslatedSegment,
-  type TranslateSegmentsRequest,
-} from '../llmTaskService';
+import { createLlmTaskId, type LlmTaskType, type LlmTaskTextPayload, type PolishedSegment, type PolishSegmentsRequest, type TranslatedSegment, type TranslateSegmentsRequest } from '../llmTaskTypes';
+import { listenToLlmTaskChunks, listenToLlmTaskProgress, listenToLlmTaskText } from '../llmTaskEvents';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './configUtils';
 import {
   polishTranscriptSegments,

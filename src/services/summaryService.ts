@@ -10,7 +10,7 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
-import type { SummaryTranscriptLlmJobRequest } from './llmTaskService';
+import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
 import { runTranscriptLlmTaskJob } from './llm/segmentTask';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
 import { runTranscriptLlmJob } from './tauri/llm';

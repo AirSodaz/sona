@@ -4,7 +4,7 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../../../types/automation';
-import type { AutomationTaskSettledPayload } from '../../../services/automationRuntimeBridge';
+import type { AutomationTaskSettledPayload } from '../../../services/automationEventBus';
 import {
   applyRetryBlockedResults,
   applyRetryFailureResults,

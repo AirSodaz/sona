@@ -1,10 +1,10 @@
-import type { AppConfig } from '../types/config';
+import type { AppConfig } from '../../types/config';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
   AutomationRuleValidationResult,
-} from '../types/automation';
-import type { ProjectRecord } from '../types/project';
+} from '../../types/automation';
+import type { ProjectRecord } from '../../types/project';
 import {
   automationLoadRepositoryState,
   automationPersistProcessedEntries,
@@ -12,7 +12,7 @@ import {
   automationPersistRules,
   automationValidateRuleActivation,
   type AutomationRepositoryState,
-} from './tauri/automationRepository';
+} from '../tauri/automationRepository';
 
 export async function ensureAutomationStorage(): Promise<void> {
   await automationLoadRepositoryState();

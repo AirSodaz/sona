@@ -5,7 +5,7 @@ import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
-import { emitAutomationTaskSettled } from '../../services/automationRuntimeBridge';
+import { emitAutomationTaskSettled } from '../../services/automationEventBus';
 
 // Mock dependencies
 vi.mock('uuid', () => ({
@@ -85,7 +85,7 @@ vi.mock('../../services/historyService', () => ({
     }
 }));
 
-vi.mock('../../services/automationRuntimeBridge', () => ({
+vi.mock('../../services/automationEventBus', () => ({
     emitAutomationTaskSettled: vi.fn().mockResolvedValue(undefined),
 }));
 

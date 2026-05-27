@@ -9,7 +9,7 @@ import {
     buildModelPathConfigPatch,
     buildModelRemovalConfigPatch,
     buildRestoreDefaultModelConfigPatch,
-} from '../services/modelManagerService';
+} from '../services/modelConfigPatches';
 import type {
     ModelCatalogSelectedIds,
     ModelCatalogModel,

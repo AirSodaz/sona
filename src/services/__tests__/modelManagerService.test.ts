@@ -4,7 +4,7 @@ import {
   buildModelPathConfigPatch,
   buildModelRemovalConfigPatch,
   buildRestoreDefaultModelConfigPatch,
-} from '../modelManagerService';
+} from '../modelConfigPatches';
 import type { ModelCatalogRestoreDefaults, ModelInfo } from '../modelService';
 
 const streamingModel: ModelInfo = {
@@ -42,7 +42,7 @@ function makeRestoreDefaults(overrides: Partial<ModelCatalogRestoreDefaults> = {
   };
 }
 
-describe('modelManagerService', () => {
+describe('modelConfigPatches', () => {
   it('builds ASR selection patches for streaming/offline model loads', () => {
     const config = buildTestConfig();
 
