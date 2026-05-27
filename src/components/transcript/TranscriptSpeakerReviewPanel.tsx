@@ -550,6 +550,7 @@ export function TranscriptSpeakerReviewPanel({
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm transcript-speaker-review-expand"
+                      aria-expanded={showAllProfiles}
                       onClick={() => toggleExpanded(group.groupId)}
                     >
                       {showAllProfiles ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

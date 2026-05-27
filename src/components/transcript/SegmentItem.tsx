@@ -418,6 +418,7 @@ function SegmentItemComponent({
                                     <button
                                         type="button"
                                         className="speaker-correction-expand"
+                                        aria-expanded={showAllSpeakerProfiles}
                                         data-testid={`speaker-correction-expand-${segment.id}`}
                                         onClick={() => setShowAllSpeakerProfiles((current) => !current)}
                                     >
