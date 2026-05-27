@@ -302,7 +302,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             if (asrRequest.engine === 'online') {
                 void showError({
                     code: 'asr.not_configured',
-                    messageKey: 'errors.no_model_error',
+                    messageKey: 'batch.no_model_error',
                 });
                 return false;
             }

@@ -129,7 +129,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             if (asrRequest.engine === 'online') {
                 void showError({
                     code: 'asr.not_configured',
-                    messageKey: 'errors.no_model_error',
+                    messageKey: 'batch.no_model_error',
                 });
                 return;
             }
