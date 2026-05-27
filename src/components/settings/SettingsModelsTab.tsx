@@ -209,22 +209,37 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId),
             ...ONLINE_ASR_PROVIDER_DEFINITIONS
                 .filter(provider => provider.id !== GROQ_WHISPER_PROVIDER_ID && provider.defaultConfig) // Groq doesn't support streaming. In future, we can check provider.streaming?.supported !== false. Wait! The definition might not have streaming field directly. Let's just filter groq-whisper directly here to be safe and clean since there's no full manifest typed.
+                .filter(provider => {
+                    if (provider.id === selectedStreamingModelId) return true;
+                    const providerConfig = modelConfig.asr?.providers?.online?.[provider.id]
+                        ?? (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID ? modelConfig.asr?.providers?.volcengineDoubao : undefined)
+                        ?? provider.defaultConfig;
+                    return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'streaming');
+                })
                 .map((provider) => ({
                     value: provider.id,
                     label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
                 })),
         ];
-    }, [selectedStreamingModelId, selectionOptions.streaming, t]);
+    }, [selectedStreamingModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
 
     const offlineOptions = useMemo(() => {
         return [
             ...toDropdownOptions(selectionOptions.offline, selectedOfflineModelId),
-            ...ONLINE_ASR_PROVIDER_DEFINITIONS.map((provider) => ({
+            ...ONLINE_ASR_PROVIDER_DEFINITIONS
+                .filter(provider => {
+                    if (provider.id === selectedOfflineModelId) return true;
+                    const providerConfig = modelConfig.asr?.providers?.online?.[provider.id]
+                        ?? (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID ? modelConfig.asr?.providers?.volcengineDoubao : undefined)
+                        ?? provider.defaultConfig;
+                    return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'offline');
+                })
+                .map((provider) => ({
                 value: provider.id,
                 label: t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel }),
             })),
         ];
-    }, [selectedOfflineModelId, selectionOptions.offline, t]);
+    }, [selectedOfflineModelId, selectionOptions.offline, t, modelConfig.asr?.providers]);
 
     const volcengineConfig = (
         modelConfig.asr?.providers?.online?.[VOLCENGINE_DOUBAO_PROVIDER_ID]
