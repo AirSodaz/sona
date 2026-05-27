@@ -1,7 +1,7 @@
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -10,7 +10,7 @@ const { autoScrollSpy } = vi.hoisted(() => ({
     autoScrollSpy: vi.fn(),
 }));
 
-vi.mock('../../hooks/useAutoScroll', () => ({
+vi.mock('../../../hooks/useAutoScroll', () => ({
     useAutoScroll: () => autoScrollSpy()
 }));
 
@@ -53,11 +53,11 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
     ask: vi.fn(),
 }));
 
-vi.mock('../transcript/SegmentItem', () => ({
+vi.mock('../SegmentItem', () => ({
     SegmentItem: () => <div>Segment</div>
 }));
 
-vi.mock('../SearchUI', () => ({
+vi.mock('../../SearchUI', () => ({
     SearchUI: () => <div>SearchUI</div>
 }));
 

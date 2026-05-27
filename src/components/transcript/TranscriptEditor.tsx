@@ -1,25 +1,25 @@
 import React, { useRef, useCallback, useMemo, useEffect } from 'react';
-import { useAutoScroll } from '../hooks/useAutoScroll';
+import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { useDialogStore } from '../stores/dialogStore';
+import { useDialogStore } from '../../stores/dialogStore';
 import {
     deleteTranscriptSegment,
     mergeTranscriptSegments,
     updateTranscriptSegment,
     splitTranscriptSegment,
-} from '../stores/transcriptCoordinator';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { TranscriptSegment } from '../types/transcript';
-import { PlusCircleIcon } from './Icons';
-import { SegmentItem } from './transcript/SegmentItem';
-import { TranscriptUIContext } from './transcript/TranscriptUIContext';
-import { SearchUI } from './SearchUI';
-import { EditorToolbar } from './EditorToolbar';
-import { useSearchStore } from '../stores/searchStore';
-import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
-import { areSpeakerTagsEqual } from '../types/speaker';
+} from '../../stores/transcriptCoordinator';
+import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { TranscriptSegment } from '../../types/transcript';
+import { PlusCircleIcon } from '../Icons';
+import { SegmentItem } from './SegmentItem';
+import { TranscriptUIContext } from './TranscriptUIContext';
+import { SearchUI } from '../SearchUI';
+import { EditorToolbar } from '../EditorToolbar';
+import { useSearchStore } from '../../stores/searchStore';
+import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
+import { areSpeakerTagsEqual } from '../../types/speaker';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
     return (

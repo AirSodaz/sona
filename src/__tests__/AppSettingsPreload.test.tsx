@@ -23,7 +23,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNavigation</div> }));
-vi.mock('../components/TranscriptWorkbench', async () => {
+vi.mock('../components/transcript/TranscriptWorkbench', async () => {
   const React = await import('react');
 
   return {

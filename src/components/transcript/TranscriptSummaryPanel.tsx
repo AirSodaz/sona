@@ -1,19 +1,19 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDialogStore } from '../stores/dialogStore';
-import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { isSummaryLlmConfigComplete } from '../services/llm/configUtils';
-import { isSummaryRecordStale, summaryService } from '../services/summaryService';
+import { useDialogStore } from '../../stores/dialogStore';
+import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
+import { isSummaryLlmConfigComplete } from '../../services/llm/configUtils';
+import { isSummaryRecordStale, summaryService } from '../../services/summaryService';
 import {
   getSummaryTemplateOptions,
   resolveSummaryTemplate,
-} from '../utils/summaryTemplates';
-import { useEscapeKey } from '../hooks/useEscapeKey';
-import { Dropdown } from './Dropdown';
-import { ProcessingIcon, SummaryIcon, XIcon } from './Icons';
+} from '../../utils/summaryTemplates';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { Dropdown } from '../Dropdown';
+import { ProcessingIcon, SummaryIcon, XIcon } from '../Icons';
 
 interface TranscriptSummaryPanelProps {
   isOpen: boolean;

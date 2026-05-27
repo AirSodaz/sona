@@ -1,12 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptVersionPanel } from '../TranscriptVersionPanel';
-import { transcriptSnapshotService } from '../../services/transcriptSnapshotService';
-import { useHistoryStore } from '../../stores/historyStore';
+import { transcriptSnapshotService } from '../../../services/transcriptSnapshotService';
+import { useHistoryStore } from '../../../stores/historyStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
-} from '../../test-utils/transcriptStoreTestUtils';
+} from '../../../test-utils/transcriptStoreTestUtils';
 
 const confirmMock = vi.fn();
 const showErrorMock = vi.fn();
@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../services/transcriptSnapshotService', () => ({
+vi.mock('../../../services/transcriptSnapshotService', () => ({
   transcriptSnapshotService: {
     buildDiff: vi.fn(),
     createSnapshot: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('../../services/transcriptSnapshotService', () => ({
   },
 }));
 
-vi.mock('../../stores/dialogStore', () => ({
+vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (selector: (state: { confirm: typeof confirmMock; showError: typeof showErrorMock }) => unknown) => selector({
     confirm: confirmMock,
     showError: showErrorMock,

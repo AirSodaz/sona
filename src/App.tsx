@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Type } from 'lucide-react';
 import { TabNavigation } from './components/TabNavigation';
-import { TranscriptWorkbench } from './components/TranscriptWorkbench';
+import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';

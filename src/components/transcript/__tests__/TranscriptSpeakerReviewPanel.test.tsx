@@ -1,14 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptSpeakerReviewPanel } from '../TranscriptSpeakerReviewPanel';
-import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
-import { useConfigStore } from '../../stores/configStore';
-import { useProjectStore } from '../../stores/projectStore';
-import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
-import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { speakerCorrectionService } from '../../services/speakerCorrectionService';
-import type { SpeakerProfile } from '../../types/speaker';
-import type { TranscriptSegment } from '../../types/transcript';
+import { resetTranscriptStores } from '../../../test-utils/transcriptStoreTestUtils';
+import { useConfigStore } from '../../../stores/configStore';
+import { useProjectStore } from '../../../stores/projectStore';
+import { useTranscriptPlaybackStore } from '../../../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
+import { speakerCorrectionService } from '../../../services/speakerCorrectionService';
+import type { SpeakerProfile } from '../../../types/speaker';
+import type { TranscriptSegment } from '../../../types/transcript';
 
 const translations: Record<string, string | ((options: Record<string, unknown>) => string)> = {
   'common.close': 'Close',
@@ -66,7 +66,7 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
-vi.mock('../../services/tauri/invoke', () => ({
+vi.mock('../../../services/tauri/invoke', () => ({
   invokeTauri: tauriMocks.invokeTauri,
 }));
 

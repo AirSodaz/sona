@@ -13,7 +13,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNavigation</div> }));
-vi.mock('../components/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
+vi.mock('../components/transcript/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
 vi.mock('../components/ExportButton', () => ({ ExportButton: () => <div>ExportButton</div> }));
 vi.mock('../components/TranslateButton', () => ({ TranslateButton: () => <div>TranslateButton</div> }));
 vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));

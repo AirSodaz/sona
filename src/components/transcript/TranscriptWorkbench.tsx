@@ -1,25 +1,25 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { History as VersionHistoryIcon, Users as SpeakerReviewIcon } from 'lucide-react';
-import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useHistoryStore } from '../stores/historyStore';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { ErrorBoundary } from './ErrorBoundary';
+import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
+import { useHistoryStore } from '../../stores/historyStore';
+import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
-import { AudioPlayer } from './AudioPlayer';
+import { AudioPlayer } from '../AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
-import { RenameModal } from './RenameModal';
-import { PolishButton } from './PolishButton';
-import { TranslateButton } from './TranslateButton';
-import { ExportButton } from './ExportButton';
+import { RenameModal } from '../RenameModal';
+import { PolishButton } from '../PolishButton';
+import { TranslateButton } from '../TranslateButton';
+import { ExportButton } from '../ExportButton';
 import { TranscriptVersionPanel } from './TranscriptVersionPanel';
-import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
-import { generateAiTitle } from '../services/aiRenameService';
-import { isHistoryItemDraft } from '../types/history';
-import { useEscapeKey } from '../hooks/useEscapeKey';
+import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from '../Icons';
+import { generateAiTitle } from '../../services/aiRenameService';
+import { isHistoryItemDraft } from '../../types/history';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */

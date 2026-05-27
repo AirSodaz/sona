@@ -1,9 +1,9 @@
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { SegmentItem } from '../transcript/SegmentItem';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { SegmentItem } from '../SegmentItem';
+import { DEFAULT_CONFIG } from '../../../stores/configStore';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -61,7 +61,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 }));
 
 // Mock SegmentItem for performance tracking
-vi.mock('../transcript/SegmentItem', async () => {
+vi.mock('../SegmentItem', async () => {
     const React = await import('react');
     const mockFn = vi.fn(() => <div>Segment</div>);
     const Memoized = React.memo(mockFn);

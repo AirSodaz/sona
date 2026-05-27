@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptWorkbench } from '../TranscriptWorkbench';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_CONFIG } from '../../../stores/configStore';
 
 const mockUpdateItemMeta = vi.fn();
 const mockHistoryItems = vi.hoisted(() => ({ current: [] as any[] }));
@@ -17,14 +17,14 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
-vi.mock('../../stores/historyStore', () => ({
+vi.mock('../../../stores/historyStore', () => ({
   useHistoryStore: (selector: (state: { items: any[]; updateItemMeta: typeof mockUpdateItemMeta }) => unknown) => selector({
     items: mockHistoryItems.current,
     updateItemMeta: mockUpdateItemMeta,
   }),
 }));
 
-vi.mock('../Icons', () => ({
+vi.mock('../../Icons', () => ({
   CloseIcon: () => <span data-testid="icon-close" />,
   SummaryIcon: () => <span data-testid="icon-summary" />,
   EditIcon: () => <span data-testid="icon-edit" />,
@@ -34,7 +34,7 @@ vi.mock('../Icons', () => ({
   CodeIcon: () => <span data-testid="icon-code" />,
 }));
 
-vi.mock('../ErrorBoundary', () => ({
+vi.mock('../../ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: any }) => <>{children}</>,
 }));
 
@@ -42,7 +42,7 @@ vi.mock('../TranscriptEditor', () => ({
   TranscriptEditor: () => <div>TranscriptEditor</div>,
 }));
 
-vi.mock('../AudioPlayer', () => ({
+vi.mock('../../AudioPlayer', () => ({
   AudioPlayer: () => <div>AudioPlayer</div>,
 }));
 
@@ -58,29 +58,29 @@ vi.mock('../TranscriptVersionPanel', () => ({
   TranscriptVersionPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptVersionPanel</div> : null),
 }));
 
-vi.mock('../RenameModal', () => ({
+vi.mock('../../RenameModal', () => ({
   RenameModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>RenameModal</div> : null),
 }));
 
-vi.mock('../PolishButton', () => ({
+vi.mock('../../PolishButton', () => ({
   PolishButton: ({ className = '' }: { className?: string }) => (
     <button type="button" className={className} aria-label="PolishButton">PolishButton</button>
   ),
 }));
 
-vi.mock('../TranslateButton', () => ({
+vi.mock('../../TranslateButton', () => ({
   TranslateButton: ({ className = '' }: { className?: string }) => (
     <button type="button" className={className} aria-label="TranslateButton">TranslateButton</button>
   ),
 }));
 
-vi.mock('../ExportButton', () => ({
+vi.mock('../../ExportButton', () => ({
   ExportButton: ({ className = '' }: { className?: string }) => (
     <button type="button" className={className} aria-label="ExportButton">ExportButton</button>
   ),
 }));
 
-vi.mock('../../services/aiRenameService', () => ({
+vi.mock('../../../services/aiRenameService', () => ({
   generateAiTitle: vi.fn().mockResolvedValue('AI Title'),
 }));
 

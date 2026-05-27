@@ -1,14 +1,14 @@
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { TranscriptSegment } from '../../types/transcript';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { TranscriptSegment } from '../../../types/transcript';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // Mock useAutoScroll
-vi.mock('../../hooks/useAutoScroll', () => ({
+vi.mock('../../../hooks/useAutoScroll', () => ({
     useAutoScroll: vi.fn()
 }));
 
@@ -48,17 +48,17 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 }));
 
 // Mock SearchUI
-vi.mock('../SearchUI', () => ({
+vi.mock('../../SearchUI', () => ({
     SearchUI: () => <div>SearchUI</div>
 }));
 
 // Mock SegmentItem to inspect isNew state
-vi.mock('../transcript/SegmentItem', async () => {
+vi.mock('../SegmentItem', async () => {
     const React = await import('react');
     const { useContext } = React;
     const { useStore } = await import('zustand');
     const { createStore } = await import('zustand/vanilla');
-    const { TranscriptUIContext } = await import('../transcript/TranscriptUIContext');
+    const { TranscriptUIContext } = await import('../TranscriptUIContext');
     const fallbackStore = createStore(() => ({ newSegmentIds: new Set<string>() }));
 
     return {

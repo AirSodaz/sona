@@ -11,15 +11,15 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
-import { useDialogStore } from '../stores/dialogStore';
-import { useConfigStore } from '../stores/configStore';
-import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useDialogStore } from '../../stores/dialogStore';
+import { useConfigStore } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
-} from '../services/speakerCorrectionService';
+} from '../../services/speakerCorrectionService';
 import {
   buildSpeakerReviewSnapshot,
   type SpeakerReviewCounts,
@@ -27,8 +27,8 @@ import {
   type SpeakerReviewFilterOption,
   type SpeakerReviewGroup,
   type SpeakerReviewSnapshot,
-} from '../services/speakerReviewService';
-import { PanelModal } from './PanelModal';
+} from '../../services/speakerReviewService';
+import { PanelModal } from '../PanelModal';
 import './TranscriptSpeakerReviewPanel.css';
 
 interface TranscriptSpeakerReviewPanelProps {

@@ -9,19 +9,19 @@ import {
   Square,
   Undo2,
 } from 'lucide-react';
-import { useDialogStore } from '../stores/dialogStore';
-import { useHistoryStore } from '../stores/historyStore';
-import { setTranscriptSegments } from '../stores/transcriptCoordinator';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { transcriptSnapshotService } from '../services/transcriptSnapshotService';
-import type { TranscriptSegment } from '../types/transcript';
+import { useDialogStore } from '../../stores/dialogStore';
+import { useHistoryStore } from '../../stores/historyStore';
+import { setTranscriptSegments } from '../../stores/transcriptCoordinator';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { transcriptSnapshotService } from '../../services/transcriptSnapshotService';
+import type { TranscriptSegment } from '../../types/transcript';
 import type {
   TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotRecord,
   TranscriptSnapshotReason,
-} from '../types/transcriptSnapshot';
-import { PanelModal } from './PanelModal';
+} from '../../types/transcriptSnapshot';
+import { PanelModal } from '../PanelModal';
 import './TranscriptVersionPanel.css';
 
 interface TranscriptVersionPanelProps {

@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptSummaryPanel } from '../TranscriptSummaryPanel';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llm/state';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_CONFIG } from '../../../stores/configStore';
+import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../../services/llm/state';
 
 const mockLoadSummary = vi.fn();
 const mockSetActiveTemplate = vi.fn();
@@ -29,8 +29,8 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
-vi.mock('../../services/summaryService', async () => {
-  const actual = await vi.importActual<typeof import('../../services/summaryService')>('../../services/summaryService');
+vi.mock('../../../services/summaryService', async () => {
+  const actual = await vi.importActual<typeof import('../../../services/summaryService')>('../../../services/summaryService');
   return {
     ...actual,
     summaryService: {
