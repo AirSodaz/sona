@@ -1,3 +1,4 @@
+use super::error::SherpaError;
 use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
@@ -109,24 +110,26 @@ fn detect_audio_format(file_path: &str) -> &'static str {
 pub fn validate_config(
     config: &VolcengineDoubaoAsrConfig,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoAsrConfig, String> {
+) -> Result<VolcengineDoubaoAsrConfig, SherpaError> {
     let config = normalized_config(config);
     let fields = config_fields(&config);
     if fields.api_key.is_empty() {
-        return Err("火山 ASR API Key 未配置。".to_string());
+        return Err(SherpaError::VolcengineApiKeyMissing);
     }
     match mode {
         VolcengineMode::Streaming => {
             if !is_volcengine_streaming_config_fields_complete(&fields) {
-                return Err("火山实时 ASR endpoint 或 Resource ID 未配置。".to_string());
+                return Err(SherpaError::VolcengineStreamingConfigMissing);
             }
         }
         VolcengineMode::Batch => {
             if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
-                return Err("火山批量 ASR endpoint 或 Resource ID 未配置。".to_string());
+                return Err(SherpaError::VolcengineBatchConfigMissing);
             }
             if !is_volcengine_local_file_batch_config_fields_complete(&fields) {
-                return Err(volcengine_local_file_batch_unsupported_message().to_string());
+                return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
+                    message: volcengine_local_file_batch_unsupported_message().to_string(),
+                });
             }
         }
     }
@@ -136,18 +139,15 @@ pub fn validate_config(
 fn config_from_request(
     request: &AsrTranscriptionRequest,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoAsrConfig, String> {
+) -> Result<VolcengineDoubaoAsrConfig, SherpaError> {
     let Some(provider) = request.online_provider.as_ref() else {
-        return Err("火山 ASR provider 配置缺失。".to_string());
+        return Err(SherpaError::VolcengineProviderConfigMissing);
     };
     if !is_volcengine_doubao_provider_id(&provider.provider_id) {
-        return Err(format!(
-            "不支持的火山 ASR provider：{}",
-            provider.provider_id
-        ));
+        return Err(SherpaError::UnsupportedVolcengineProvider { provider_id: provider.provider_id.clone() });
     }
     let config = serde_json::from_value::<VolcengineDoubaoAsrConfig>(provider.config.clone())
-        .map_err(|error| format!("火山 ASR provider 配置无效：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineProviderConfigInvalid { error: error.to_string() })?;
     validate_config(&config, mode)
 }
 
@@ -156,7 +156,7 @@ pub fn build_full_client_request_frame(
     enable_punc: bool,
     language: &str,
     hotwords: Option<&str>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, SherpaError> {
     let mut request = json!({
         "user": {
             "uid": "sona"
@@ -193,7 +193,7 @@ pub fn build_full_client_request_frame(
         });
     }
 
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+    let payload = serde_json::to_vec(&request).map_err(|e| SherpaError::Generic(e.to_string()))?;
     Ok(build_frame(0x10, 0x10, &payload))
 }
 
@@ -237,26 +237,26 @@ fn build_flash_batch_request_body(
     })
 }
 
-fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, String> {
+fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, SherpaError> {
     if frame.len() < 8 {
-        return Err("火山 ASR 响应帧过短。".to_string());
+        return Err(SherpaError::VolcengineFrameTooShort);
     }
     let message_type = frame[1] >> 4;
     if message_type == 0x0f {
         if frame.len() < 12 {
-            return Err("火山 ASR 返回错误帧。".to_string());
+            return Err(SherpaError::VolcengineErrorFrame);
         }
-        let code = u32::from_be_bytes(frame[4..8].try_into().map_err(|_| "火山错误码解析失败。")?);
+        let code = u32::from_be_bytes(frame[4..8].try_into().map_err(|_| SherpaError::VolcengineErrorCodeParseFailed)?);
         let size = u32::from_be_bytes(
             frame[8..12]
                 .try_into()
-                .map_err(|_| "火山错误长度解析失败。")?,
+                .map_err(|_| SherpaError::VolcengineErrorLengthParseFailed)?,
         ) as usize;
         let message = frame
             .get(12..12 + size)
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .unwrap_or("未知错误");
-        return Err(format!("火山 ASR 返回错误：{code} {message}"));
+        return Err(SherpaError::VolcengineApiError { code, message: message.to_string() });
     }
     if message_type != 0x09 {
         return Ok(None);
@@ -265,27 +265,27 @@ fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, String> {
     let header_size = ((frame[0] & 0x0f) as usize) * 4;
     let offset = header_size + 4;
     if frame.len() < offset + 4 {
-        return Err("火山 ASR 响应 payload 长度缺失。".to_string());
+        return Err(SherpaError::VolcenginePayloadLengthMissing);
     }
     let payload_size = u32::from_be_bytes(
         frame[offset..offset + 4]
             .try_into()
-            .map_err(|_| "火山 ASR 响应 payload 长度解析失败。")?,
+            .map_err(|_| SherpaError::VolcenginePayloadLengthParseFailed)?,
     ) as usize;
     let payload_start = offset + 4;
     let Some(payload) = frame.get(payload_start..payload_start + payload_size) else {
-        return Err("火山 ASR 响应 payload 不完整。".to_string());
+        return Err(SherpaError::VolcenginePayloadIncomplete);
     };
     serde_json::from_slice(payload)
         .map(Some)
-        .map_err(|error| format!("火山 ASR 响应解析失败：{error}"))
+        .map_err(|error| SherpaError::VolcengineResponseParseFailed { error: error.to_string() })
 }
 
 pub fn segments_from_response_value(
     response: &Value,
     default_final: bool,
     id_prefix: &str,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let result = response.get("result").unwrap_or(response);
     let utterances = result.get("utterances").and_then(Value::as_array);
     if let Some(utterances) = utterances {
@@ -335,7 +335,7 @@ pub fn segments_from_response_value(
 fn segments_from_streaming_response_value(
     response: &Value,
     flush_final: bool,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     segments_from_response_value(response, flush_final, "volc-live")
 }
 
@@ -427,9 +427,9 @@ pub async fn init_streaming_recognizer_impl(
     state: State<'_, SherpaState>,
     instance_id: String,
     request: AsrTranscriptionRequest,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     if request.mode != AsrMode::Streaming {
-        return Err("火山实时 ASR 只能用于 streaming 槽位。".to_string());
+        return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
     }
     config_from_request(&request, VolcengineMode::Streaming)?;
     let mut sessions = state.online_sessions.lock().await;
@@ -449,7 +449,7 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let session = {
         let sessions = state.online_sessions.lock().await;
         sessions
@@ -463,7 +463,7 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
         .streaming_endpoint
         .as_str()
         .into_client_request()
-        .map_err(|error| format!("火山 ASR WebSocket endpoint 无效：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?;
     insert_header(client_request.headers_mut(), "X-Api-Key", &config.api_key)?;
     insert_header(
         client_request.headers_mut(),
@@ -479,7 +479,7 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
 
     let (ws, response) = tokio_tungstenite::connect_async(client_request)
         .await
-        .map_err(|error| format!("火山 ASR WebSocket 连接失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineConnectionFailed { error: error.to_string() })?;
     if let Some(logid) = response
         .headers()
         .get("X-Tt-Logid")
@@ -498,7 +498,7 @@ pub async fn start_streaming_recognizer_impl<R: tauri::Runtime>(
     writer
         .send(Message::Binary(init_frame))
         .await
-        .map_err(|error| format!("火山 ASR 初始化帧发送失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineInitFrameSendFailed { error: error.to_string() })?;
 
     {
         let mut writer_slot = session.writer.lock().await;
@@ -564,12 +564,12 @@ fn insert_header(
     headers: &mut tokio_tungstenite::tungstenite::http::HeaderMap,
     name: &'static str,
     value: &str,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let header_name = HeaderName::from_bytes(name.as_bytes())
-        .map_err(|error| format!("火山 ASR header 名称无效：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?;
     headers.insert(
         header_name,
-        HeaderValue::from_str(value).map_err(|error| format!("火山 ASR header 无效：{error}"))?,
+        HeaderValue::from_str(value).map_err(|error| SherpaError::VolcengineEndpointInvalid { error: error.to_string() })?,
     );
     Ok(())
 }
@@ -579,7 +579,7 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
     samples: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let session = {
         let sessions = state.online_sessions.lock().await;
         sessions
@@ -590,12 +590,12 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
     };
     let mut writer = session.writer.lock().await;
     let Some(writer) = writer.as_mut() else {
-        return Err("火山 ASR WebSocket 尚未连接。".to_string());
+        return Err(SherpaError::VolcengineWebSocketNotConnected);
     };
     writer
         .send(Message::Binary(build_audio_frame(&samples, false)))
         .await
-        .map_err(|error| format!("火山 ASR 音频发送失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineAudioSendFailed { error: error.to_string() })?;
     let _ = app;
     Ok(())
 }
@@ -606,7 +606,7 @@ pub async fn feed_audio_samples_impl(
     state: &SherpaState,
     instance_id: &str,
     samples: &[f32],
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let session = {
         let sessions = state.online_sessions.lock().await;
         sessions
@@ -625,7 +625,7 @@ pub async fn feed_audio_samples_impl(
     writer
         .send(Message::Binary(build_audio_frame(&pcm_bytes, false)))
         .await
-        .map_err(|error| format!("火山 ASR 音频发送失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineAudioSendFailed { error: error.to_string() })?;
     Ok(())
 }
 
@@ -643,7 +643,7 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
     _app: AppHandle<R>,
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let session = {
         let sessions = state.online_sessions.lock().await;
         sessions
@@ -658,7 +658,7 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
         writer
             .send(Message::Binary(build_audio_frame(&[], true)))
             .await
-            .map_err(|error| format!("火山 ASR 结束帧发送失败：{error}"))?;
+            .map_err(|error| SherpaError::VolcengineEndFrameSendFailed { error: error.to_string() })?;
         let _ = tokio::time::timeout(
             Duration::from_millis(1500),
             session.final_response_received.notified(),
@@ -671,7 +671,7 @@ pub async fn flush_streaming_recognizer_impl<R: tauri::Runtime>(
 pub async fn stop_streaming_recognizer_impl(
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let session = {
         let sessions = state.online_sessions.lock().await;
         sessions
@@ -693,15 +693,15 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     state: &SherpaState,
     file_path: String,
     request: AsrTranscriptionRequest,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     if request.mode != AsrMode::Offline {
-        return Err("火山批量 ASR 只能用于 offline/batch 槽位。".to_string());
+        return Err(SherpaError::VolcengineBatchOnlyForOffline);
     }
     let config = config_from_request(&request, VolcengineMode::Batch)?;
     let started = Instant::now();
     let bytes = tokio::fs::read(&file_path)
         .await
-        .map_err(|error| format!("读取音频文件失败：{error}"))?;
+        .map_err(|error| SherpaError::AudioFileReadFailed { error: error.to_string() })?;
     let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let request_id = uuid::Uuid::new_v4().to_string();
     let body = build_flash_batch_request_body(&file_path, audio_data, &request);
@@ -716,7 +716,7 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .json(&body)
         .send()
         .await
-        .map_err(|error| format!("火山批量 ASR 网络请求失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineBatchRequestFailed { error: error.to_string() })?;
     let status = response.status();
     let headers = response.headers().clone();
     let api_code = headers
@@ -728,17 +728,18 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .and_then(|value| value.to_str().ok())
         .map(str::to_string);
     if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
-        return Err(map_status_error(
-            status.as_u16(),
-            api_code.as_deref(),
-            api_message.as_deref(),
-        ));
-    }
+        return Err(SherpaError::VolcengineBatchRequestFailed {
+            error: map_status_error(
+                status.as_u16(),
+                api_code.as_deref(),
+                api_message.as_deref(),
+            ).to_string()
+        });    }
 
     let response_value = response
         .json::<Value>()
         .await
-        .map_err(|error| format!("火山批量 ASR 响应解析失败：{error}"))?;
+        .map_err(|error| SherpaError::VolcengineBatchResponseParseFailed { error: error.to_string() })?;
     let mut segments = segments_from_response_value(&response_value, true, "volc-batch")?;
     segments = apply_timeline_normalization(segments, request.normalization_options);
     segments =
@@ -797,7 +798,7 @@ mod tests {
         let error = validate_config(&config("  "), VolcengineMode::Batch)
             .expect_err("missing API key should fail before network access");
 
-        assert!(error.contains("API Key"));
+        assert!(error.to_string().contains("API Key"));
     }
 
     #[test]
@@ -820,9 +821,9 @@ mod tests {
         let offpeak_error = validate_config(&offpeak, VolcengineMode::Batch)
             .expect_err("off-peak async endpoint requires a public audio URL");
 
-        assert!(standard_error.contains("本地批量导入"));
-        assert!(standard_error.contains("极速版"));
-        assert!(offpeak_error.contains("公网音频 URL"));
+        assert!(standard_error.to_string().contains("本地批量导入"));
+        assert!(standard_error.to_string().contains("极速版"));
+        assert!(offpeak_error.to_string().contains("公网音频 URL"));
     }
 
     #[test]

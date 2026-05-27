@@ -3,6 +3,7 @@ use tauri::{AppHandle, State};
 
 mod adapter;
 mod batch;
+mod error;
 mod metrics;
 mod model_config;
 mod online;
@@ -22,6 +23,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::{AsrEngineAdapter, LocalSherpaAdapter};
 pub use batch::transcribe_batch_with_progress;
+pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
 pub use postprocess::TranscriptPostprocessor;
@@ -35,11 +37,11 @@ pub use types::{
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
-async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, String> {
+async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, SherpaError> {
     state
         .instance_engine(instance_id)
         .await
-        .ok_or_else(|| format!("ASR engine not configured for instance: {}", instance_id))
+        .ok_or_else(|| SherpaError::Generic(format!("ASR engine not configured for instance: {}", instance_id)))
 }
 
 #[derive(Default)]
@@ -130,11 +132,11 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     state: &SherpaState,
     instance_id: &str,
     samples: &[f32],
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     match route_engine(state, instance_id).await? {
         AsrEngine::Online => online::feed_audio_samples_impl(state, instance_id, samples).await,
         AsrEngine::LocalSherpa => {
-            runtime::feed_audio_samples(app, state, instance_id, samples).await
+            runtime::feed_audio_samples(app, state, instance_id, samples).await.map_err(SherpaError::from)
         }
     }
 }
@@ -157,7 +159,7 @@ pub async fn init_recognizer(
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
     asr_request: Option<AsrTranscriptionRequest>,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     let request = resolve_transport_asr_request(
         asr_request,
         LegacyLocalSherpaTransportRequest {
@@ -176,10 +178,10 @@ pub async fn init_recognizer(
         },
         AsrMode::Streaming,
         "init_recognizer",
-    )?;
+    ).map_err(SherpaError::from)?;
     match request.engine {
         AsrEngine::LocalSherpa => {
-            LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)?;
+            LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming).map_err(SherpaError::from)?;
             let init_result = runtime::init_recognizer_impl(
                 state.clone(),
                 instance_id.clone(),
@@ -196,7 +198,7 @@ pub async fn init_recognizer(
                 Some(request.normalization_options),
                 Some(request.postprocess_options),
             )
-            .await;
+            .await.map_err(SherpaError::from);
             if init_result.is_ok() {
                 state
                     .set_instance_engine(&instance_id, AsrEngine::LocalSherpa)
@@ -223,10 +225,10 @@ pub async fn start_recognizer<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::start_streaming_recognizer_impl(app, state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id).await,
+        AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id).await.map_err(SherpaError::from),
     }
 }
 
@@ -234,10 +236,10 @@ pub async fn start_recognizer<R: tauri::Runtime>(
 pub async fn stop_recognizer(
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::stop_streaming_recognizer_impl(state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id).await,
+        AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id).await.map_err(SherpaError::from),
     }
 }
 
@@ -246,10 +248,10 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: State<'_, SherpaState>,
     instance_id: String,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::flush_streaming_recognizer_impl(app, state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id).await,
+        AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id).await.map_err(SherpaError::from),
     }
 }
 
@@ -259,7 +261,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
     samples: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<(), SherpaError> {
     trace!(
         "feed_audio_chunk called with id: {}, samples bytes: {}",
         instance_id,
@@ -268,7 +270,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     match route_engine(&state, &instance_id).await? {
         AsrEngine::Online => online::feed_audio_chunk_impl(app, state, instance_id, samples).await,
         AsrEngine::LocalSherpa => {
-            runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await
+            runtime::feed_audio_chunk_impl(app, state, instance_id, samples).await.map_err(SherpaError::from)
         }
     }
 }
@@ -294,7 +296,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
     asr_request: Option<AsrTranscriptionRequest>,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let request = resolve_transport_asr_request(
         asr_request,
         LegacyLocalSherpaTransportRequest {
@@ -313,13 +315,13 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         },
         AsrMode::Offline,
         "process_batch_file",
-    )?;
+    ).map_err(SherpaError::from)?;
     match request.engine {
         AsrEngine::LocalSherpa => {
             let adapter = LocalSherpaAdapter;
             let batch_request =
-                adapter.batch_request(file_path, save_to_path, request, speaker_processing)?;
-            batch::process_batch_request_impl(app, state.inner(), batch_request).await
+                adapter.batch_request(file_path, save_to_path, request, speaker_processing).map_err(SherpaError::from)?;
+            batch::process_batch_request_impl(app, state.inner(), batch_request).await.map_err(SherpaError::from)
         }
         AsrEngine::Online => {
             online::process_batch_file_impl(app, state.inner(), file_path, request).await
