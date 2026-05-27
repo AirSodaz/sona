@@ -297,7 +297,15 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
     const startRecording = useCallback(async () => {
         const effectiveConfig = getEffectiveConfigSnapshot();
-        if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(effectiveConfig, 'live'))) {
+        const asrRequest = resolveAsrTranscriptionRequest(effectiveConfig, 'live');
+        if (!isAsrRequestConfigured(asrRequest)) {
+            if (asrRequest.engine === 'online') {
+                void showError({
+                    code: 'asr.not_configured',
+                    messageKey: 'errors.no_model_error',
+                });
+                return false;
+            }
             const onboardingStore = useOnboardingStore.getState();
             useTranscriptRuntimeStore.getState().setMode('live');
             onboardingStore.reopen(
@@ -308,7 +316,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
         peakLevelRef.current = 0;
         return recordController.startRecording();
-    }, [recordController]);
+    }, [recordController, showError]);
 
     const stopRecording = useCallback(async () => {
         return recordController.stopRecording();

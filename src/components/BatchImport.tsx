@@ -125,6 +125,15 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     const queueFiles = useCallback((files: string[]) => {
         if (!batchAsrConfigured) {
+            const asrRequest = resolveAsrTranscriptionRequest(config, 'batch');
+            if (asrRequest.engine === 'online') {
+                void showError({
+                    code: 'asr.not_configured',
+                    messageKey: 'errors.no_model_error',
+                });
+                return;
+            }
+
             const onboardingStore = useOnboardingStore.getState();
             onboardingStore.reopen(
                 getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
@@ -134,7 +143,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         }
 
         addFiles(files);
-    }, [addFiles, batchAsrConfigured, config]);
+    }, [addFiles, batchAsrConfigured, config, showError]);
 
     const handleTauriDrop = useCallback((payload: unknown): void => {
         let files: string[] = [];
