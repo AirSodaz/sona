@@ -29,8 +29,6 @@ pub struct OnlineAsrProvider {
     pub batch: OnlineAsrBatchCapability,
 }
 
-
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -58,8 +56,6 @@ pub struct OnlineAsrLocalFileBatchMode {
     pub resource_id: String,
     pub unsupported_message: String,
 }
-
-
 
 static ONLINE_ASR_PROVIDER_MANIFEST: OnceLock<OnlineAsrProviderManifest> = OnceLock::new();
 
@@ -91,6 +87,3 @@ pub fn find_online_asr_provider(provider_id: &str) -> Option<&'static OnlineAsrP
         .iter()
         .find(|provider| provider.id == provider_id)
 }
-
-
-

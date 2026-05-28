@@ -140,7 +140,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 ### Notes
 
 - If no offline batch model is configured, Sona reopens onboarding instead of starting import.
-- `Settings > Model Settings` includes `VAD Buffer Size` and `Max Concurrent Transcriptions`, which affect batch behavior.
+- `Settings > Model Settings` includes `Batch VAD Segmentation`, `VAD Buffer Size`, and `Max Concurrent Transcriptions`, which affect batch behavior. Turning off batch VAD makes local batch transcription recognize the whole file at once.
 
 ## 6. Transcript Editing And Playback
 
@@ -345,7 +345,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Voice Typing`
   enable `Voice Typing`, assign its global shortcut, choose `Push to Talk (Hold)` or `Toggle (Press once)`, and check readiness
 - `Settings > Model Settings`
-  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, speaker, and VAD models
+  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `Batch VAD Segmentation`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, speaker, and VAD models
 - `Settings > Vocabulary`
   `Text Replacement`, `Hotwords`, polish keyword sets, polish context presets, summary templates, and `Speaker Profiles`
 - `Settings > Automation`

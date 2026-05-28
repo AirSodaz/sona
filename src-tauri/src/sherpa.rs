@@ -28,17 +28,17 @@ pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
+pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 pub use postprocess::TranscriptPostprocessor;
 pub use state::SherpaState;
 pub(crate) use transcript::ensure_transcript_segment_timing;
 pub use types::{
-    AsrEngine, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest,
+    AsrEngine, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptSegment, TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet,
     TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
-pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 
 async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, SherpaError> {
     state.instance_engine(instance_id).await.ok_or_else(|| {

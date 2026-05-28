@@ -119,6 +119,7 @@ type AsrTranscriptionRequest = {
   punctuationModel: string | null;
   vadModel: string | null;
   vadBuffer: number;
+  batchSegmentationMode?: 'vad' | 'whole';
   modelType: string;
   fileConfig?: ModelFileConfig;
   hotwords: string | null;

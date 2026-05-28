@@ -146,6 +146,8 @@ export interface TranscriptionConfig {
   enableTimeline?: boolean;
   /** Enable Inverse Text Normalization. */
   enableITN?: boolean;
+  /** Whether batch transcription uses VAD speech segmentation. Default: true. */
+  batchVadEnabled?: boolean;
   /** VAD buffer size in seconds. Default: 5. */
   vadBufferSize?: number;
   /** Max concurrent transcription tasks. Default: 2. */

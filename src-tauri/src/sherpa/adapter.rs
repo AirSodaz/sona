@@ -53,6 +53,7 @@ impl AsrEngineAdapter for LocalSherpaAdapter {
             punctuation_model: request.punctuation_model,
             vad_model: request.vad_model,
             vad_buffer: request.vad_buffer,
+            batch_segmentation_mode: request.batch_segmentation_mode,
             model_type: request.model_type,
             file_config: request.file_config,
             hotwords: request.hotwords,

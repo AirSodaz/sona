@@ -104,6 +104,7 @@ export function buildRestoreDefaultModelConfigPatch(
 ): Partial<AppConfig> {
   const updates: Partial<AppConfig> = {
     punctuationModelPath: defaults.punctuationModelPath ?? '',
+    batchVadEnabled: defaults.batchVadEnabled ?? true,
     vadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
     maxConcurrent: Number.isFinite(defaults.maxConcurrent) ? defaults.maxConcurrent : 2,
     enableITN: defaults.enableITN,

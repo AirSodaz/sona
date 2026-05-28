@@ -184,10 +184,28 @@ describe('asrConfigService', () => {
       vadModel: 'C:/models/silero_vad.onnx',
       punctuationModel: 'C:/models/punct',
       vadBuffer: 8,
+      batchSegmentationMode: 'vad',
     });
     expect(request.fileConfig).toEqual({
       model: 'model.onnx',
       tokens: 'tokens.txt',
+    });
+  });
+
+  it('resolves a local sherpa batch request without VAD when batch VAD is disabled', () => {
+    const request = resolveAsrTranscriptionRequest(buildAsrConfig({
+      batchVadEnabled: false,
+    }), 'batch');
+
+    expect(request).toMatchObject({
+      engine: 'local-sherpa',
+      mode: 'offline',
+      modelId: 'local-batch',
+      modelPath: 'C:/models/local-batch',
+      vadModel: null,
+      punctuationModel: 'C:/models/punct',
+      vadBuffer: 8,
+      batchSegmentationMode: 'whole',
     });
   });
 

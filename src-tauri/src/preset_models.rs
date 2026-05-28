@@ -206,6 +206,7 @@ pub struct ModelCatalogRestoreDefaults {
     pub speaker_segmentation_model_path: Option<String>,
     pub speaker_embedding_model_path: Option<String>,
     pub enable_itn: bool,
+    pub batch_vad_enabled: bool,
     pub vad_buffer_size: f64,
     pub max_concurrent: u32,
 }
@@ -484,6 +485,7 @@ fn build_restore_defaults(models: &[ModelCatalogModel]) -> ModelCatalogRestoreDe
         speaker_segmentation_model_path: Some(String::new()),
         speaker_embedding_model_path: Some(String::new()),
         enable_itn: true,
+        batch_vad_enabled: true,
         vad_buffer_size: 5.0,
         max_concurrent: 2,
     }
@@ -804,6 +806,7 @@ mod tests {
             Some(String::new())
         );
         assert!(snapshot.restore_defaults.enable_itn);
+        assert!(snapshot.restore_defaults.batch_vad_enabled);
         assert_eq!(snapshot.restore_defaults.vad_buffer_size, 5.0);
         assert_eq!(snapshot.restore_defaults.max_concurrent, 2);
 

@@ -64,6 +64,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const vadBufferSize = transcriptionConfig.vadBufferSize || 5;
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
+    const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
 
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
@@ -474,6 +475,16 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                     <Switch
                         checked={enableITN}
                         onChange={(checked) => updateConfig({ enableITN: checked })}
+                    />
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.batch_vad_enabled')}
+                    hint={t('settings.batch_vad_enabled_hint')}
+                >
+                    <Switch
+                        checked={batchVadEnabled}
+                        onChange={(checked) => updateConfig({ batchVadEnabled: checked })}
                     />
                 </SettingsItem>
 

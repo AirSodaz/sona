@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { SettingsModelsTab } from '../SettingsModelsTab';
 import { useConfigStore } from '../../../stores/configStore';
 import { ModelManagerContext } from '../../../hooks/useModelManager';
@@ -165,7 +165,17 @@ function renderTab(installedModels: Set<string>) {
             handleDownload: vi.fn(),
             handleCancelDownload: vi.fn(),
             handleLoad: vi.fn(),
-            restoreDefaultModelSettings: vi.fn(),
+            restoreDefaultModelSettings: () => {
+                useConfigStore.getState().setConfig({
+                    batchVadEnabled: true,
+                    punctuationModelPath: '',
+                    speakerSegmentationModelPath: '',
+                    speakerEmbeddingModelPath: '',
+                    enableITN: true,
+                    vadBufferSize: 5,
+                    maxConcurrent: 2,
+                });
+            },
         } as any;
 
         return (
@@ -184,6 +194,46 @@ describe('SettingsModelsTab speaker model selections', () => {
         setTestConfig({
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
+            batchVadEnabled: true,
+        });
+    });
+
+    it('toggles the batch VAD setting from the transcription settings section', async () => {
+        renderTab(new Set());
+
+        expect(screen.getByText('settings.batch_vad_enabled')).toBeDefined();
+        expect(screen.getByText('settings.batch_vad_enabled_hint')).toBeDefined();
+
+        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+        expect(row).not.toBeNull();
+        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+        expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+
+        fireEvent.click(batchVadSwitch);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
+            expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
+        });
+    });
+
+    it('restores batch VAD setting to true when restoring default settings', async () => {
+        setTestConfig({
+            batchVadEnabled: false,
+        });
+
+        renderTab(new Set());
+
+        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+        expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
+
+        const restoreButton = screen.getByText('settings.restore_defaults');
+        fireEvent.click(restoreButton);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.batchVadEnabled).toBe(true);
+            expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
         });
     });
 

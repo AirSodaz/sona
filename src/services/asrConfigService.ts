@@ -56,6 +56,7 @@ export type AsrTranscriptionRequest = {
   punctuationModel: string | null;
   vadModel: string | null;
   vadBuffer: number;
+  batchSegmentationMode?: 'vad' | 'whole';
   modelType: string;
   fileConfig?: ModelFileConfig;
   hotwords: string | null;
@@ -128,14 +129,15 @@ export class AsrConfigService {
       ? this.ports.modelService.getModelRules(modelInfo.id)
       : { requiresPunctuation: false, requiresVad: false };
 
-    const vadModel = rules.requiresVad && config.vadModelPath
+    const batchVadEnabled = slot !== 'batch' || config.batchVadEnabled !== false;
+    const vadModel = batchVadEnabled && rules.requiresVad && config.vadModelPath
       ? config.vadModelPath
       : null;
     const punctuationModel = rules.requiresPunctuation && config.punctuationModelPath
       ? config.punctuationModelPath
       : null;
 
-    return {
+    const request: AsrTranscriptionRequest = {
       engine: selection.engine,
       mode: selection.mode,
       modelId: selection.modelId ?? modelInfo?.id ?? null,
@@ -148,6 +150,9 @@ export class AsrConfigService {
       punctuationModel,
       vadModel,
       vadBuffer: config.vadBufferSize || 5,
+      ...(slot === 'batch' && selection.engine === 'local-sherpa'
+        ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' }
+        : {}),
       modelType: modelInfo?.type || 'sensevoice',
       fileConfig: modelInfo?.fileConfig,
       hotwords: this.buildHotwords(config),
@@ -159,6 +164,8 @@ export class AsrConfigService {
         ? { onlineProvider: this.buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
         : {}),
     };
+
+    return request;
   }
 
   isAsrRequestConfigured = (request: AsrTranscriptionRequest): boolean => {

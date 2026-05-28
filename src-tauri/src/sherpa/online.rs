@@ -5,13 +5,14 @@ use super::online_traits::OnlineAsrProviderAdapter;
 use super::state::SherpaState;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
-use std::sync::OnceLock;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tauri::{AppHandle, State};
 
 fn online_adapters() -> &'static HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> {
-    static ONLINE_ADAPTERS: OnceLock<HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>>> = OnceLock::new();
+    static ONLINE_ADAPTERS: OnceLock<HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>>> =
+        OnceLock::new();
     ONLINE_ADAPTERS.get_or_init(|| {
         let mut map: HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> = HashMap::new();
         let volcengine = volcengine::VolcengineAdapter;
@@ -137,7 +138,9 @@ pub async fn feed_audio_samples_impl(
             .cloned()
             .ok_or(SherpaError::OnlineSessionNotInitialized)?
     };
-    session.feed_audio_samples(state, instance_id, samples).await
+    session
+        .feed_audio_samples(state, instance_id, samples)
+        .await
 }
 
 pub async fn process_batch_file_impl(
@@ -151,7 +154,10 @@ pub async fn process_batch_file_impl(
     let config_val = &request.online_provider.as_ref().unwrap().config;
 
     let processor = adapter.create_batch_processor(config_val)?.ok_or_else(|| {
-        SherpaError::Generic(format!("Batch mode not supported for provider {}", provider_id))
+        SherpaError::Generic(format!(
+            "Batch mode not supported for provider {}",
+            provider_id
+        ))
     })?;
 
     processor

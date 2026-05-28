@@ -132,6 +132,18 @@ pub fn fixed_chunk_audio(
         .collect()
 }
 
+pub fn whole_audio_segment(samples: &[f32], sample_rate: u32) -> Vec<AudioSegment> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    vec![AudioSegment {
+        samples: samples.to_vec(),
+        start_time: 0.0,
+        duration: samples.len() as f32 / sample_rate as f32,
+    }]
+}
+
 pub fn vad_segment_audio(
     samples: &[f32],
     sample_rate: u32,
@@ -235,5 +247,24 @@ mod tests {
         assert_eq!(segments[1].start_time, 2.0);
         assert_eq!(segments[2].duration, 1.0);
         assert_eq!(segments[2].start_time, 4.0);
+    }
+
+    #[test]
+    fn test_whole_audio_segment() {
+        let sample_rate = 16000;
+        let samples = vec![0.0; 16000 * 5];
+        let segments = whole_audio_segment(&samples, sample_rate);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start_time, 0.0);
+        assert_eq!(segments[0].duration, 5.0);
+        assert_eq!(segments[0].samples.len(), samples.len());
+    }
+
+    #[test]
+    fn test_whole_audio_segment_omits_empty_audio() {
+        let segments = whole_audio_segment(&[], 16000);
+
+        assert!(segments.is_empty());
     }
 }

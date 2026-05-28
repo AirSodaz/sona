@@ -188,6 +188,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentationModelPath: '/current/speaker-segmentation',
             speakerEmbeddingModelPath: '/current/speaker-embedding',
             enableITN: false,
+            batchVadEnabled: false,
             vadBufferSize: 9,
             maxConcurrent: 4,
             asr: {
@@ -300,6 +301,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
             enableITN: true,
+            batchVadEnabled: true,
             vadBufferSize: 5,
             maxConcurrent: 2,
             asr: {
@@ -334,6 +336,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
             enableITN: true,
+            batchVadEnabled: true,
             vadBufferSize: 5,
             maxConcurrent: 2,
         });
@@ -358,6 +361,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
             enableITN: true,
+            batchVadEnabled: true,
             vadBufferSize: 5,
             maxConcurrent: 2,
         });
@@ -382,6 +386,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
             enableITN: true,
+            batchVadEnabled: true,
             vadBufferSize: 5,
             maxConcurrent: 2,
         });

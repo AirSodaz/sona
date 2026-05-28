@@ -892,6 +892,8 @@
         "toggle_model": "Toggle {{name}}",
         "vad_models": "VAD Models",
         "vad_path_label": "VAD Model",
+        "batch_vad_enabled": "Batch VAD Segmentation",
+        "batch_vad_enabled_hint": "Split local batch transcription by speech activity. Turn this off to recognize the whole file at once, which may be slower and use more memory.",
         "vad_buffer_size": "VAD Buffer Size (s)",
         "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
         "max_concurrent_label": "Max Concurrent Transcriptions",

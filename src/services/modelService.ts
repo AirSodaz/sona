@@ -142,6 +142,7 @@ export interface ModelCatalogRestoreDefaults {
     speakerSegmentationModelPath?: string;
     speakerEmbeddingModelPath?: string;
     enableITN: boolean;
+    batchVadEnabled?: boolean;
     vadBufferSize: number;
     maxConcurrent: number;
 }

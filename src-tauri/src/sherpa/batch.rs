@@ -10,7 +10,7 @@ use super::model_config::{
 };
 use super::state::SherpaState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
-use super::types::{BatchTranscriptionRequest, TranscriptSegment};
+use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptSegment};
 use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
@@ -107,6 +107,7 @@ where
                 &samples,
                 request.vad_model.clone(),
                 request.vad_buffer,
+                request.batch_segmentation_mode,
                 punctuation.as_ref(),
                 &mut on_progress,
             )
@@ -158,38 +159,14 @@ async fn process_batch_offline<F>(
     samples: &[f32],
     vad_model: Option<String>,
     vad_buffer: f32,
+    batch_segmentation_mode: BatchSegmentationMode,
     punctuation: Option<&Punctuation>,
     on_progress: &mut F,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
 {
-    let segments = if let Some(v_path) = vad_model {
-        if !v_path.is_empty() && Path::new(&v_path).exists() {
-            let silero_vad = sherpa_onnx::SileroVadModelConfig {
-                model: Some(v_path),
-                threshold: 0.35,
-                min_silence_duration: 1.0,
-                min_speech_duration: 0.25,
-                window_size: 512,
-                ..Default::default()
-            };
-
-            let vad_config = sherpa_onnx::VadModelConfig {
-                silero_vad,
-                sample_rate: 16000,
-                num_threads: 1,
-                ..Default::default()
-            };
-
-            crate::pipeline::vad_segment_audio(samples, 16000, &vad_config, vad_buffer)
-                .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0))
-        } else {
-            crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
-        }
-    } else {
-        crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
-    };
+    let segments = segment_batch_audio(samples, vad_model, vad_buffer, batch_segmentation_mode);
 
     let mut results = Vec::new();
     let total_segments = segments.len();
@@ -239,6 +216,44 @@ where
         tokio::task::yield_now().await;
     }
     Ok(results)
+}
+
+fn segment_batch_audio(
+    samples: &[f32],
+    vad_model: Option<String>,
+    vad_buffer: f32,
+    batch_segmentation_mode: BatchSegmentationMode,
+) -> Vec<crate::pipeline::AudioSegment> {
+    if batch_segmentation_mode == BatchSegmentationMode::Whole {
+        return crate::pipeline::whole_audio_segment(samples, 16000);
+    }
+
+    if let Some(v_path) = vad_model {
+        if !v_path.is_empty() && Path::new(&v_path).exists() {
+            let silero_vad = sherpa_onnx::SileroVadModelConfig {
+                model: Some(v_path),
+                threshold: 0.35,
+                min_silence_duration: 1.0,
+                min_speech_duration: 0.25,
+                window_size: 512,
+                ..Default::default()
+            };
+
+            let vad_config = sherpa_onnx::VadModelConfig {
+                silero_vad,
+                sample_rate: 16000,
+                num_threads: 1,
+                ..Default::default()
+            };
+
+            crate::pipeline::vad_segment_audio(samples, 16000, &vad_config, vad_buffer)
+                .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0))
+        } else {
+            crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
+        }
+    } else {
+        crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
+    }
 }
 
 async fn process_batch_online<F>(
@@ -343,4 +358,34 @@ where
     }
     on_progress(100.0);
     Ok(segments)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn whole_segmentation_uses_one_full_audio_segment() {
+        let samples = vec![0.0; 16000 * 65];
+        let segments = segment_batch_audio(&samples, None, 5.0, BatchSegmentationMode::Whole);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start_time, 0.0);
+        assert_eq!(segments[0].duration, 65.0);
+        assert_eq!(segments[0].samples.len(), samples.len());
+    }
+
+    #[test]
+    fn default_vad_segmentation_falls_back_to_fixed_chunks_without_vad_model() {
+        let samples = vec![0.0; 16000 * 65];
+        let segments = segment_batch_audio(&samples, None, 5.0, BatchSegmentationMode::Vad);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0].start_time, 0.0);
+        assert_eq!(segments[0].duration, 30.0);
+        assert_eq!(segments[1].start_time, 30.0);
+        assert_eq!(segments[1].duration, 30.0);
+        assert_eq!(segments[2].start_time, 60.0);
+        assert_eq!(segments[2].duration, 5.0);
+    }
 }

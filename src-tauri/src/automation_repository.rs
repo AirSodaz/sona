@@ -1,6 +1,5 @@
 use crate::asr_providers::{
-    online_asr_providers, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY,
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
+    online_asr_providers, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -436,8 +435,12 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
         .get("asr")
         .and_then(|asr| asr.get("selections"))
         .and_then(|selections| selections.get("batch"));
-        
-    if batch_selection.and_then(|v| v.get("engine")).and_then(Value::as_str) == Some("online") {
+
+    if batch_selection
+        .and_then(|v| v.get("engine"))
+        .and_then(Value::as_str)
+        == Some("online")
+    {
         let provider_id = batch_selection
             .and_then(|v| v.get("providerId"))
             .and_then(Value::as_str)
@@ -479,8 +482,12 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
         // Check required fields from defaults if missing in settings
         if let Some(defaults) = provider_def.defaults.as_object() {
             for (key, default_val) in defaults {
-                if key == "apiKey" || key == "unknownKey" { continue; }
-                let val = string_field(settings, key).unwrap_or(default_val.as_str().unwrap_or("")).trim();
+                if key == "apiKey" || key == "unknownKey" {
+                    continue;
+                }
+                let val = string_field(settings, key)
+                    .unwrap_or(default_val.as_str().unwrap_or(""))
+                    .trim();
                 if val.is_empty() {
                     return false;
                 }
@@ -489,7 +496,11 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
 
         if provider_id == VOLCENGINE_DOUBAO_PROVIDER_ID {
             let batch_endpoint = string_field(settings, "batchEndpoint")
-                .unwrap_or(provider_def.defaults["batchEndpoint"].as_str().unwrap_or(""))
+                .unwrap_or(
+                    provider_def.defaults["batchEndpoint"]
+                        .as_str()
+                        .unwrap_or(""),
+                )
                 .trim();
             if batch_endpoint.contains("idle/submit") || batch_endpoint.ends_with("/submit") {
                 return false;

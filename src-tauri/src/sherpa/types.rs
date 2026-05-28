@@ -17,6 +17,14 @@ pub enum AsrMode {
     Offline,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BatchSegmentationMode {
+    #[default]
+    Vad,
+    Whole,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AsrTranscriptionRequest {
@@ -33,6 +41,8 @@ pub struct AsrTranscriptionRequest {
     #[serde(default)]
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
+    #[serde(default)]
+    pub batch_segmentation_mode: BatchSegmentationMode,
     pub model_type: String,
     #[serde(default)]
     pub file_config: Option<ModelFileConfig>,
@@ -72,6 +82,7 @@ impl AsrTranscriptionRequest {
             punctuation_model,
             vad_model,
             vad_buffer,
+            batch_segmentation_mode: BatchSegmentationMode::Vad,
             model_type,
             file_config,
             hotwords,
@@ -117,6 +128,7 @@ pub struct BatchTranscriptionRequest {
     pub punctuation_model: Option<String>,
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
+    pub batch_segmentation_mode: BatchSegmentationMode,
     pub model_type: String,
     pub file_config: Option<ModelFileConfig>,
     pub hotwords: Option<String>,
@@ -161,7 +173,6 @@ pub struct TranscriptTiming {
 pub struct TranscriptNormalizationOptions {
     pub enable_timeline: bool,
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

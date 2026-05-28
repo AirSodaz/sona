@@ -11,7 +11,12 @@ use crate::sherpa::TranscriptSegment;
 pub trait OnlineStreamingSession: Send + Sync {
     async fn start(&self, app: AppHandle, instance_id: &str) -> Result<(), SherpaError>;
     async fn stop(&self, state: &SherpaState, instance_id: &str) -> Result<(), SherpaError>;
-    async fn flush(&self, app: AppHandle, state: &SherpaState, instance_id: &str) -> Result<(), SherpaError>;
+    async fn flush(
+        &self,
+        app: AppHandle,
+        state: &SherpaState,
+        instance_id: &str,
+    ) -> Result<(), SherpaError>;
     async fn feed_audio_chunk(
         &self,
         app: AppHandle,

@@ -99,6 +99,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   language: 'auto',
   enableTimeline: false,
   enableITN: true,
+  batchVadEnabled: true,
   vadBufferSize: 5,
   maxConcurrent: 2,
 
@@ -180,7 +181,7 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
   'language', 'enableTimeline', 'enableITN',
-  'vadBufferSize', 'maxConcurrent',
+  'batchVadEnabled', 'vadBufferSize', 'maxConcurrent',
 ];
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [

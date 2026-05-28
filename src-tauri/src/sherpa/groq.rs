@@ -1,14 +1,16 @@
+use super::error::SherpaError;
 use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
-use super::error::SherpaError;
-use super::online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
+use super::online_traits::{
+    OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,
+};
 use super::state::SherpaState;
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
-use async_trait::async_trait;
 use crate::sherpa::postprocess::TranscriptPostprocessor;
 use crate::sherpa::transcript::apply_timeline_normalization;
+use async_trait::async_trait;
 use reqwest::multipart;
 use serde_json::Value;
 use std::time::Instant;
@@ -61,7 +63,9 @@ impl OnlineBatchProcessor for GroqWhisperBatchProcessor {
         file_path: String,
         request: AsrTranscriptionRequest,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
-        process_batch_file_impl(app, state, file_path, request).await.map_err(SherpaError::Generic)
+        process_batch_file_impl(app, state, file_path, request)
+            .await
+            .map_err(SherpaError::Generic)
     }
 }
 
@@ -84,14 +88,28 @@ fn config_from_request(
             .unwrap_or_else(|| default_val.to_string())
     };
 
-    let manifest = crate::asr_providers::find_online_asr_provider(crate::asr_providers::GROQ_WHISPER_PROVIDER_ID)
-        .ok_or_else(|| "Groq Whisper provider not found in manifest".to_string())?;
+    let manifest = crate::asr_providers::find_online_asr_provider(
+        crate::asr_providers::GROQ_WHISPER_PROVIDER_ID,
+    )
+    .ok_or_else(|| "Groq Whisper provider not found in manifest".to_string())?;
     let defaults = manifest.defaults.as_object().unwrap();
 
     let fields = GroqWhisperConfigFields {
-        api_key: get_string("apiKey", defaults.get("apiKey").and_then(Value::as_str).unwrap_or("")),
-        batch_endpoint: get_string("batchEndpoint", defaults.get("batchEndpoint").and_then(Value::as_str).unwrap_or("")),
-        model: get_string("model", defaults.get("model").and_then(Value::as_str).unwrap_or("")),
+        api_key: get_string(
+            "apiKey",
+            defaults.get("apiKey").and_then(Value::as_str).unwrap_or(""),
+        ),
+        batch_endpoint: get_string(
+            "batchEndpoint",
+            defaults
+                .get("batchEndpoint")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ),
+        model: get_string(
+            "model",
+            defaults.get("model").and_then(Value::as_str).unwrap_or(""),
+        ),
     };
 
     if fields.api_key.is_empty() {

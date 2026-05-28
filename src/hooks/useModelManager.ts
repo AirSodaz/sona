@@ -44,6 +44,7 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
         speakerSegmentationModelPath: '',
         speakerEmbeddingModelPath: '',
         enableITN: true,
+        batchVadEnabled: true,
         vadBufferSize: 5,
         maxConcurrent: 2,
     },

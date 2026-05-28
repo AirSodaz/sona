@@ -3,9 +3,10 @@ use super::metrics::{
     current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
     AsrInferenceMetric,
 };
-use super::online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
+use super::online_traits::{
+    OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,
+};
 use super::state::SherpaState;
-use async_trait::async_trait;
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
@@ -14,6 +15,7 @@ use super::types::{
     TranscriptTimingSource, TranscriptTimingUnit,
 };
 use crate::sherpa::postprocess::TranscriptPostprocessor;
+use async_trait::async_trait;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
@@ -66,19 +68,51 @@ fn get_string(config: &Value, key: &str, default_val: &str) -> String {
         .unwrap_or_else(|| default_val.to_string())
 }
 
-fn config_fields(
-    request_config: &Value,
-) -> VolcengineDoubaoConfigFields {
-    let manifest = crate::asr_providers::find_online_asr_provider(crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID)
-        .expect("Volcengine Doubao provider not found in manifest");
+fn config_fields(request_config: &Value) -> VolcengineDoubaoConfigFields {
+    let manifest = crate::asr_providers::find_online_asr_provider(
+        crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID,
+    )
+    .expect("Volcengine Doubao provider not found in manifest");
     let defaults = manifest.defaults.as_object().unwrap();
 
     VolcengineDoubaoConfigFields {
-        api_key: get_string(request_config, "apiKey", defaults.get("apiKey").and_then(Value::as_str).unwrap_or("")),
-        streaming_endpoint: get_string(request_config, "streamingEndpoint", defaults.get("streamingEndpoint").and_then(Value::as_str).unwrap_or("")),
-        streaming_resource_id: get_string(request_config, "streamingResourceId", defaults.get("streamingResourceId").and_then(Value::as_str).unwrap_or("")),
-        batch_endpoint: get_string(request_config, "batchEndpoint", defaults.get("batchEndpoint").and_then(Value::as_str).unwrap_or("")),
-        batch_resource_id: get_string(request_config, "batchResourceId", defaults.get("batchResourceId").and_then(Value::as_str).unwrap_or("")),
+        api_key: get_string(
+            request_config,
+            "apiKey",
+            defaults.get("apiKey").and_then(Value::as_str).unwrap_or(""),
+        ),
+        streaming_endpoint: get_string(
+            request_config,
+            "streamingEndpoint",
+            defaults
+                .get("streamingEndpoint")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ),
+        streaming_resource_id: get_string(
+            request_config,
+            "streamingResourceId",
+            defaults
+                .get("streamingResourceId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ),
+        batch_endpoint: get_string(
+            request_config,
+            "batchEndpoint",
+            defaults
+                .get("batchEndpoint")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ),
+        batch_resource_id: get_string(
+            request_config,
+            "batchResourceId",
+            defaults
+                .get("batchResourceId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ),
     }
 }
 
@@ -125,12 +159,16 @@ pub fn validate_config(
             if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
                 return Err(SherpaError::VolcengineBatchConfigMissing);
             }
-            if !fields.batch_endpoint.starts_with("https://") && !fields.batch_endpoint.starts_with("http://") {
+            if !fields.batch_endpoint.starts_with("https://")
+                && !fields.batch_endpoint.starts_with("http://")
+            {
                 return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
                     message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
                 });
             }
-            if fields.batch_endpoint.contains("idle/submit") || fields.batch_endpoint.ends_with("/submit") {
+            if fields.batch_endpoint.contains("idle/submit")
+                || fields.batch_endpoint.ends_with("/submit")
+            {
                 return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
                     message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
                 });
@@ -493,7 +531,12 @@ impl OnlineStreamingSession for VolcengineStreamingSession {
         stop_streaming_recognizer_impl(self).await
     }
 
-    async fn flush(&self, _app: AppHandle, _state: &SherpaState, _instance_id: &str) -> Result<(), SherpaError> {
+    async fn flush(
+        &self,
+        _app: AppHandle,
+        _state: &SherpaState,
+        _instance_id: &str,
+    ) -> Result<(), SherpaError> {
         flush_streaming_recognizer_impl(self).await
     }
 
@@ -851,11 +894,13 @@ mod tests {
     #[test]
     fn volcengine_local_batch_rejects_async_recording_file_endpoints() {
         let mut standard = config("volc-test-key");
-        standard["batchEndpoint"] = serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit");
+        standard["batchEndpoint"] =
+            serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit");
         standard["batchResourceId"] = serde_json::json!("volc.seedasr.auc");
-        
+
         let mut offpeak = config("volc-test-key");
-        offpeak["batchEndpoint"] = serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit");
+        offpeak["batchEndpoint"] =
+            serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit");
         offpeak["batchResourceId"] = serde_json::json!("volc.bigasr.auc_idle");
 
         let standard_error = validate_config(&standard, VolcengineMode::Batch)
@@ -881,6 +926,7 @@ mod tests {
             punctuation_model: None,
             vad_model: None,
             vad_buffer: 5.0,
+            batch_segmentation_mode: crate::sherpa::BatchSegmentationMode::Vad,
             model_type: "sensevoice".to_string(),
             file_config: None,
             hotwords: None,

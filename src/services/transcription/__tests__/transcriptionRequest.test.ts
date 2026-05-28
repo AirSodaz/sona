@@ -117,6 +117,7 @@ describe('transcriptionRequest helpers', () => {
       modelPath: '/models/runtime-offline',
       language: 'zh',
       enableItn: false,
+      batchSegmentationMode: 'vad',
       postprocessOptions: {
         textReplacementSets: config.textReplacementSets,
         dropFinalDotSegments: true,
@@ -134,5 +135,27 @@ describe('transcriptionRequest helpers', () => {
       },
       asrRequest,
     });
+  });
+
+  it('builds batch process requests in whole-file mode when batch VAD is disabled', () => {
+    const config = buildTestConfig({
+      offlineModelPath: '/models/offline',
+      batchVadEnabled: false,
+    });
+
+    const { request, asrRequest } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      language: 'auto',
+      enableItn: true,
+    });
+
+    expect(asrRequest).toEqual(expect.objectContaining({
+      mode: 'offline',
+      modelPath: '/models/offline',
+      vadModel: null,
+      batchSegmentationMode: 'whole',
+    }));
+    expect(request.asrRequest).toBe(asrRequest);
   });
 });
