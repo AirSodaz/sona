@@ -22,7 +22,8 @@ import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon, CloudIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
-import { CUSTOM_PROVIDER_COMPONENTS, DynamicProviderSettings } from './OnlineAsrSettingsCards';
+import { DynamicProviderSettings } from './OnlineAsrSettingsCards';
+import { CUSTOM_PROVIDER_COMPONENTS } from './OnlineAsrProviderComponents';
 
 const onlineAsrProvider = ONLINE_ASR_PROVIDER_DEFINITIONS[0];
 const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
