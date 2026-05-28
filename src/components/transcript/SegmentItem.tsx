@@ -520,7 +520,7 @@ function SegmentItemComponent({
                                 onMergeWithNext(segment.id);
                             }}
                             disabled={!canMergeWithNext}
-                            data-tooltip={t('editor.merge_tooltip')}
+                            data-tooltip={canMergeWithNext ? t('editor.merge_tooltip') : t('editor.merge_disabled_speaker', { defaultValue: 'Cannot merge different speakers' })}
                             aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
                         >
                             <MergeIcon />
