@@ -84,7 +84,7 @@ vi.mock('../hooks/useTrayHandling', () => ({ useTrayHandling: vi.fn() }));
 vi.mock('../hooks/useTranscriptionServiceSync', () => ({ useTranscriptionServiceSync: vi.fn() }));
 vi.mock('../services/diagnosticsService', () => ({
   diagnosticsService: {
-    getResumeOnboardingStep: vi.fn(() => 'welcome'),
+    getResumeOnboardingStep: vi.fn(() => 'microphone'),
   },
 }));
 

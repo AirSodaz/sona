@@ -29,12 +29,10 @@ export interface DownloadProgressState {
 
 function getActiveStepIndex(currentStep: OnboardingStep): number {
   switch (currentStep) {
-    case 'welcome':
+    case 'microphone':
       return 0;
     case 'models':
       return 1;
-    case 'microphone':
-      return 2;
     default:
       return 0;
   }
@@ -161,7 +159,6 @@ export function useFirstRunGuide() {
 
       setConfig(getRecommendedOnboardingConfig(paths));
       setModelStepStatus('idle');
-      setStep('microphone');
     } catch (error) {
       logger.error('[Onboarding] Failed to download recommended models:', error);
       setModelStepStatus('error');
@@ -176,29 +173,19 @@ export function useFirstRunGuide() {
     setMicrophoneRefreshToken((currentValue) => currentValue + 1);
   }
 
-  function handleContinueFromWelcome(): void {
-    if (hasModelsConfigured) {
-      setStep('microphone');
-      return;
-    }
-
+  function handleContinueFromMicrophone(): void {
+    setConfig({ microphoneId: selectedMicrophoneId });
     setStep('models');
   }
 
   function handleFinish(): void {
-    setConfig({ microphoneId: selectedMicrophoneId });
     setMode('live');
     complete();
   }
 
   function handleBack(): void {
-    if (currentStep === 'microphone') {
-      setStep('models');
-      return;
-    }
-
     if (currentStep === 'models') {
-      setStep('welcome');
+      setStep('microphone');
     }
   }
 
@@ -224,7 +211,7 @@ export function useFirstRunGuide() {
     noopClose,
     handleModelDownload,
     handleRetryPermission,
-    handleContinueFromWelcome,
+    handleContinueFromMicrophone,
     handleFinish,
     handleBack,
     setStep,

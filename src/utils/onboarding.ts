@@ -123,7 +123,7 @@ export function getResumeOnboardingStep(
   }
 
   if (entryContext === 'startup' && state?.status === 'pending') {
-    return 'welcome';
+    return 'microphone';
   }
 
   return 'models';

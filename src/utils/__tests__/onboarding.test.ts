@@ -102,4 +102,24 @@ describe('onboarding utils', () => {
       ),
     ).toBe('microphone');
   });
+
+  it('starts at microphone for brand new users', () => {
+    expect(
+      getResumeOnboardingStep(
+        { streamingModelPath: '', offlineModelPath: '' },
+        'startup',
+        { version: 1, status: 'pending' },
+      ),
+    ).toBe('microphone');
+  });
+
+  it('returns models if microphone is likely done but models are missing', () => {
+    expect(
+      getResumeOnboardingStep(
+        { streamingModelPath: '', offlineModelPath: '' },
+        'startup',
+        { version: 1, status: 'deferred' },
+      ),
+    ).toBe('models');
+  });
 });

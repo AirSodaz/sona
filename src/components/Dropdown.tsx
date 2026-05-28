@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDownIcon } from './Icons';
+import { ModalPortal } from './ModalPortal';
 
 export interface DropdownOption {
     value: string;
@@ -33,6 +34,7 @@ export function Dropdown({
 }: DropdownProps): React.JSX.Element {
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
+    const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -41,13 +43,21 @@ export function Dropdown({
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
 
+        const handleScroll = () => {
+            setIsOpen(false);
+        };
+
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true); // Capture to catch any scroll
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
     }, []);
 
     // Focus management when opening
@@ -67,19 +77,32 @@ export function Dropdown({
     }, [isOpen]);
 
     React.useLayoutEffect(() => {
-        if (isOpen && dropdownRef.current && menuRef.current) {
+        if (isOpen && dropdownRef.current) {
             const rect = dropdownRef.current.getBoundingClientRect();
-            const menuHeight = menuRef.current.offsetHeight;
+            const menuMaxHeight = 280; 
             const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
 
-            // buffer for visuals (e.g. shadow, margin)
-            const buffer = 10;
-
-            if (spaceBelow < menuHeight + buffer && rect.top > menuHeight + buffer) {
-                setPosition('top');
-            } else {
-                setPosition('bottom');
+            let newPosition: 'bottom' | 'top' = 'bottom';
+            if (spaceBelow < menuMaxHeight + 20 && spaceAbove > spaceBelow) {
+                newPosition = 'top';
             }
+
+            const style: React.CSSProperties = {
+                position: 'fixed',
+                left: rect.left,
+                width: rect.width,
+                zIndex: 2500,
+            };
+
+            if (newPosition === 'top') {
+                style.bottom = window.innerHeight - rect.top + 4;
+            } else {
+                style.top = rect.bottom + 4;
+            }
+
+            setPosition(newPosition);
+            setMenuStyle(style);
         }
     }, [isOpen]);
 
@@ -154,8 +177,11 @@ export function Dropdown({
     };
 
     const handleBlur = (e: React.FocusEvent) => {
-        // Close menu if focus leaves the component
-        if (!dropdownRef.current?.contains(e.relatedTarget as Node)) {
+        // Close menu if focus leaves the component (either trigger or portal menu)
+        if (
+            !dropdownRef.current?.contains(e.relatedTarget as Node) &&
+            !menuRef.current?.contains(e.relatedTarget as Node)
+        ) {
             setIsOpen(false);
         }
     };
@@ -183,31 +209,38 @@ export function Dropdown({
             </button>
 
             {isOpen && (
-                <div ref={menuRef} className={`dropdown-menu position-${position}`} role="listbox">
-                    {options.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
-                            onClick={() => handleSelect(option)}
-                            role="option"
-                            aria-selected={option.value === value}
-                            aria-label={option.ariaLabel}
-                            aria-disabled={option.disabled || undefined}
-                            disabled={option.disabled}
-                            tabIndex={-1}
-                            style={option.style}
-                            title={option.description}
-                        >
-                            <span className="dropdown-item-content">
-                                <span>{option.label}</span>
-                                {option.description && (
-                                    <span className="dropdown-item-description">{option.description}</span>
-                                )}
-                            </span>
-                        </button>
-                    ))}
-                </div>
+                <ModalPortal>
+                    <div
+                        ref={menuRef}
+                        className={`dropdown-menu position-${position}`}
+                        role="listbox"
+                        style={menuStyle}
+                    >
+                        {options.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
+                                onClick={() => handleSelect(option)}
+                                role="option"
+                                aria-selected={option.value === value}
+                                aria-label={option.ariaLabel}
+                                aria-disabled={option.disabled || undefined}
+                                disabled={option.disabled}
+                                tabIndex={-1}
+                                style={option.style}
+                                title={option.description}
+                            >
+                                <span className="dropdown-item-content">
+                                    <span>{option.label}</span>
+                                    {option.description && (
+                                        <span className="dropdown-item-description">{option.description}</span>
+                                    )}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </ModalPortal>
             )}
         </div>
     );

@@ -30,7 +30,7 @@ const defaultState: OnboardingState = { version: 1, status: 'pending' };
 /** Shared store for onboarding visibility, progress, and completion state. */
 export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
   persistedState: defaultState,
-  currentStep: 'welcome',
+  currentStep: 'microphone',
   entryContext: 'startup',
   isOpen: false,
   focusStartRecordingToken: 0,
@@ -45,7 +45,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     });
   },
 
-  open: (step = 'welcome', context = 'startup') =>
+  open: (step = 'microphone', context = 'startup') =>
     set({
       currentStep: step,
       entryContext: context,

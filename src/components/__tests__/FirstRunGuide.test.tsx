@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FirstRunGuide } from '../FirstRunGuide';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useConfigStore } from '../../stores/configStore';
@@ -118,72 +118,72 @@ describe('FirstRunGuide', () => {
     });
     useOnboardingStore.setState({
       persistedState: { version: 1, status: 'pending' },
-      currentStep: 'welcome',
+      currentStep: 'microphone',
       entryContext: 'startup',
       isOpen: true,
       focusStartRecordingToken: 0,
     });
   });
 
-  it('shows only later and continue on the welcome step', () => {
+  it('shows only later and continue on the microphone step', async () => {
     render(<FirstRunGuide />);
 
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
     expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'first_run.actions.continue' })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'first_run.actions.back' })).toBeNull();
   });
 
-  it('walks through welcome, model download, and microphone setup', async () => {
+  it('walks through microphone and model download', async () => {
     render(<FirstRunGuide />);
 
-    expect(screen.getByText('first_run.welcome.heading')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
-    expect(screen.getByText('first_run.models.heading')).toBeDefined();
+    
+    await waitFor(() => {
+      expect(screen.getByText('first_run.models.heading')).toBeDefined();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
 
     await waitFor(() => {
-      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
-    });
-
-    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'first_run.actions.finish' })).toBeDefined();
       expect((screen.getByRole('button', { name: 'first_run.actions.finish' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('onboarding-microphone-select'), {
-        target: { value: 'desk-mic' },
-      });
-    });
-
-    await waitFor(() => {
-      expect((screen.getByLabelText('onboarding-microphone-select') as HTMLSelectElement).value).toBe('desk-mic');
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
 
     expect(useConfigStore.getState().config.streamingModelPath).toBe('/models/live');
     expect(useConfigStore.getState().config.offlineModelPath).toBe('/models/offline');
-    expect(useConfigStore.getState().config.microphoneId).toBe('desk-mic');
     expect(useTranscriptStore.getState().mode).toBe('live');
     expect(useOnboardingStore.getState().persistedState.status).toBe('completed');
     expect(useOnboardingStore.getState().isOpen).toBe(false);
   });
 
-  it('shows later, back, and disables both while model download is in progress', () => {
+  it('shows later, back, and disables both while model download is in progress', async () => {
     vi.mocked(downloadRecommendedOnboardingModels).mockImplementation(
       () => new Promise(() => {})
     );
 
     render(<FirstRunGuide />);
 
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
+    });
+
     expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'first_run.actions.download_recommended' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
@@ -194,51 +194,39 @@ describe('FirstRunGuide', () => {
       .toBe(true);
   });
 
-  it('shows later, back, and finish on the microphone step, and can navigate back', async () => {
-    useTranscriptStore.setState({
-      mode: 'batch',
-    });
-    useConfigStore.setState({
-      config: {
-        ...useConfigStore.getState().config,
-        streamingModelPath: '/models/live',
-        offlineModelPath: '/models/offline',
-        microphoneId: 'default',
-      },
-    });
-    useOnboardingStore.setState({
-      persistedState: { version: 1, status: 'deferred' },
-      currentStep: 'microphone',
-      entryContext: 'startup',
-      isOpen: true,
-      focusStartRecordingToken: 0,
-    });
-
+  it('can navigate back to microphone from models', async () => {
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
-    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'first_run.actions.finish' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
 
     await waitFor(() => {
+      expect(screen.getByText('first_run.models.heading')).toBeDefined();
       expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.back' }));
 
-    expect(screen.getByText('first_run.models.heading')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+    });
   });
 
-  it('allows deferring from the welcome step', () => {
+  it('allows deferring from the microphone step', async () => {
     render(<FirstRunGuide />);
+
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement).disabled).toBe(false);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.later' }));
 
-    expect(useOnboardingStore.getState().persistedState.status).toBe('deferred');
-    expect(useOnboardingStore.getState().isOpen).toBe(false);
+    await waitFor(() => {
+      expect(useOnboardingStore.getState().persistedState.status).toBe('deferred');
+      expect(useOnboardingStore.getState().isOpen).toBe(false);
+    });
   });
 });

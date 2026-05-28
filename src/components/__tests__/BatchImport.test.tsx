@@ -116,7 +116,7 @@ describe('BatchImport Integration', () => {
         });
         useOnboardingStore.setState({
             persistedState: { version: 1, status: 'pending' },
-            currentStep: 'welcome',
+            currentStep: 'microphone',
             entryContext: 'startup',
             isOpen: false,
             focusStartRecordingToken: 0,

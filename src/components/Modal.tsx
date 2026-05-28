@@ -18,6 +18,8 @@ export interface ModalProps {
   footer?: React.ReactNode;
   closeOnOverlayClick?: boolean;
   closeOnEsc?: boolean;
+  hideCloseButton?: boolean;
+  className?: string;
   initialFocusRef?: React.RefObject<HTMLElement | null>;
   autoFocus?: boolean;
   overlayClassName?: string;
@@ -36,6 +38,8 @@ export function Modal({
   footer,
   closeOnOverlayClick = true,
   closeOnEsc = true,
+  hideCloseButton = false,
+  className,
   initialFocusRef,
   autoFocus = true,
   overlayClassName,
@@ -149,7 +153,7 @@ export function Modal({
       >
         <div
           ref={modalRef}
-          className={`shared-modal-shell shared-modal-${size}`}
+          className={joinClassNames(`shared-modal-shell shared-modal-${size}`, className)}
           style={shellStyle}
           onClick={(e) => e.stopPropagation()}
           role={role}
@@ -166,16 +170,18 @@ export function Modal({
                 <div className="shared-modal-title" id={titleId}>{title}</div>
               )
             )}
-            <button
-              type="button"
-              className="btn btn-icon shared-modal-close-btn"
-              onClick={onClose}
-              aria-label={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip={t('common.close', { defaultValue: 'Close' })}
-              data-tooltip-pos="bottom-left"
-            >
-              <X size={18} />
-            </button>
+            {!hideCloseButton && (
+              <button
+                type="button"
+                className="btn btn-icon shared-modal-close-btn"
+                onClick={onClose}
+                aria-label={t('common.close', { defaultValue: 'Close' })}
+                data-tooltip={t('common.close', { defaultValue: 'Close' })}
+                data-tooltip-pos="bottom-left"
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
 
           {/* Body */}

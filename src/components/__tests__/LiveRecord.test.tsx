@@ -300,7 +300,7 @@ describe('LiveRecord', () => {
             });
             useOnboardingStore.setState({
                 persistedState: { version: 1, status: 'pending' },
-                currentStep: 'welcome',
+                currentStep: 'microphone',
                 entryContext: 'startup',
                 isOpen: false,
                 focusStartRecordingToken: 0,
@@ -333,7 +333,7 @@ describe('LiveRecord', () => {
             });
             useOnboardingStore.setState({
                 persistedState: { version: 1, status: 'pending' },
-                currentStep: 'welcome',
+                currentStep: 'microphone',
                 entryContext: 'startup',
                 isOpen: false,
                 focusStartRecordingToken: 0,

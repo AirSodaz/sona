@@ -1,7 +1,7 @@
 /** Persisted onboarding completion states. */
 export type OnboardingStatus = 'pending' | 'deferred' | 'completed';
 /** Individual onboarding wizard steps. */
-export type OnboardingStep = 'welcome' | 'models' | 'microphone';
+export type OnboardingStep = 'microphone' | 'models';
 /** Entry points that can reopen onboarding. */
 export type OnboardingEntryContext = 'startup' | 'live_record' | 'batch_import';
 
