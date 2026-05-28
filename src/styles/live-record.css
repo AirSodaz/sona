@@ -64,10 +64,20 @@
   transform: scale(0.95);
 }
 
+.control-button:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .control-button.start,
 .control-button.stop {
   background-color: var(--color-recording);
   box-shadow: 0 4px 12px var(--color-recording-glow);
+}
+
+.control-button.start:focus-visible,
+.control-button.stop:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), 0 4px 12px var(--color-recording-glow);
 }
 
 .control-button.pause {
@@ -80,6 +90,10 @@
 
 .control-button.pause:hover {
   background-color: var(--color-bg-hover);
+}
+
+.control-button.pause:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), var(--apple-control-shadow-hover);
 }
 
 .control-button-inner {

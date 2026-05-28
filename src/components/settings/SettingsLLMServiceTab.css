@@ -643,8 +643,8 @@
 }
 
 .feature-temperature-slider:focus-visible {
-  outline: 2px solid var(--temperature-focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
   border-radius: var(--radius-full);
 }
 

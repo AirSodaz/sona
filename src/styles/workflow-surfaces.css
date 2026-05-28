@@ -28,7 +28,7 @@
 }
 
 .drop-zone:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .drop-zone.drag-over {
@@ -663,6 +663,13 @@
 
 .about-card-clickable {
   cursor: pointer;
+}
+
+.about-card-clickable:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-hover);
 }
 
 .about-card-clickable:hover {

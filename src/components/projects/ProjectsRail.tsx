@@ -75,13 +75,13 @@ function SortableProjectItem({
       ref={setNodeRef}
       style={style}
       className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''}`}
-      {...attributes}
-      {...listeners}
     >
       <button
         type="button"
         className={`projects-rail-item ${isActive ? 'active' : ''}`}
         onClick={() => void onSwitchScope(project.id)}
+        {...attributes}
+        {...listeners}
         aria-pressed={isActive}
       >
         <RailItemContent

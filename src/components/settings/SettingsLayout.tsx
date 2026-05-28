@@ -12,7 +12,6 @@ export function SettingsTabContainer({ children, id, ariaLabelledby }: { childre
             role="tabpanel"
             id={id}
             aria-labelledby={ariaLabelledby}
-            tabIndex={0}
         >
             {children}
         </div>
@@ -128,9 +127,9 @@ interface SettingsAccordionProps {
 
 export function SettingsAccordion({ title, status, defaultOpen = false, isOpen, onToggle, children }: SettingsAccordionProps) {
     const [localOpen, setLocalOpen] = useState(defaultOpen);
-    
+
     const isExpanded = isOpen !== undefined ? isOpen : localOpen;
-    
+
     const handleToggle = () => {
         if (onToggle) {
             onToggle();

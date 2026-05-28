@@ -153,7 +153,7 @@ export function SearchUI(): React.JSX.Element | null {
                     color: var(--color-text-primary);
                     outline: none;
                 }
-                
+
                 .search-input:focus {
                     box-shadow: none;
                     background: transparent;
@@ -200,10 +200,10 @@ export function SearchUI(): React.JSX.Element | null {
                     background: var(--color-bg-hover);
                     color: var(--color-text-primary);
                 }
-                
+
                 .btn-icon-sm:focus-visible {
-                    outline: 2px solid var(--color-accent-primary);
-                    outline-offset: 2px;
+                    outline: none;
+                    box-shadow: var(--apple-control-focus-ring);
                 }
 
                 .btn-icon-sm svg {

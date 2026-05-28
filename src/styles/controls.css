@@ -150,6 +150,31 @@
   transform: scale(0.98);
 }
 
+.btn-icon-sm {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-icon-sm:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.btn-icon-sm:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .btn-secondary-soft {
   background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
@@ -161,6 +186,11 @@
   background: var(--color-bg-hover);
   border-color: var(--color-border-hover);
   box-shadow: var(--apple-control-shadow-flat);
+}
+
+.btn-secondary-soft:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .btn-danger-soft {
@@ -177,6 +207,11 @@
     0 1px 2px rgba(0, 0, 0, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.56),
     inset 0 0 0 0.5px color-mix(in srgb, var(--color-error) 24%, transparent);
+}
+
+.btn-danger-soft:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px color-mix(in srgb, var(--color-error) 24%, transparent);
 }
 
 .btn-danger-soft:active:not(:disabled),

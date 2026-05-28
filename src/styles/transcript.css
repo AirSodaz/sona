@@ -290,8 +290,8 @@
 }
 
 .segment-timestamp:focus-visible {
-  outline: 2px solid var(--color-accent-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
   border-radius: var(--radius-sm);
 }
 
@@ -341,8 +341,8 @@
 }
 
 .speaker-badge-button:focus-visible {
-  outline: 2px solid var(--color-accent-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .speaker-correction-menu {

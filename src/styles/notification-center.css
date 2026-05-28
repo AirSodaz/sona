@@ -187,8 +187,8 @@
 }
 
 .notification-center-item-main:focus-visible {
-  outline: 2px solid var(--color-info);
-  outline-offset: 3px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
   border-radius: var(--radius-sm);
 }
 

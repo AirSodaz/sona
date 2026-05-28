@@ -140,6 +140,13 @@
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
 }
 
+.settings-dashboard-kpi-card:focus-visible,
+.settings-dashboard-chart-card:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+  border-color: var(--color-text-muted);
+}
+
 .settings-dashboard-kpi-card,
 .settings-dashboard-chart-card {
   --dashboard-accent: var(--color-primary);
@@ -286,6 +293,12 @@
 .settings-dashboard-recharts-surface {
   width: 100%;
   min-width: 0;
+}
+
+.settings-dashboard-recharts-surface:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+  border-radius: var(--radius-md);
 }
 
 .settings-dashboard-recharts-surface.trend {

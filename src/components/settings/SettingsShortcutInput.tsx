@@ -86,6 +86,7 @@ export function SettingsShortcutInput({
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <input
                     type="text"
+                    className="settings-input-minimal"
                     value={tempValue}
                     aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                     onChange={(e) => setTempValue(e.target.value)}
@@ -110,10 +111,6 @@ export function SettingsShortcutInput({
                         width: '120px',
                         padding: '4px 8px',
                         textAlign: 'center',
-                        background: 'var(--color-bg-secondary)',
-                        color: 'var(--color-text-primary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-sm)',
                     }}
                 />
             </div>
@@ -137,6 +134,7 @@ export function SettingsShortcutInput({
             </button>
             <button
                 type="button"
+                className="btn-icon-sm"
                 onClick={() => {
                     setTempValue(value);
                     setIsEditing(true);
@@ -144,16 +142,6 @@ export function SettingsShortcutInput({
                 aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip-pos="top"
-                style={{
-                    padding: '4px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--color-text-muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
             >
                 <FilePenLine size={16} />
             </button>

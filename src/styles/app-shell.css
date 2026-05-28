@@ -77,12 +77,21 @@
   color: var(--color-text-secondary);
 }
 
+.tab-button:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .tab-button.active {
   color: var(--color-text-primary);
   background: var(--color-bg-elevated);
   /* White pill */
   box-shadow: var(--shadow-sm);
   font-weight: 600;
+}
+
+.tab-button.active:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
 }
 
 .tab-button svg {

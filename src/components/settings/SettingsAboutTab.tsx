@@ -112,7 +112,6 @@ export function SettingsAboutTab(): React.JSX.Element {
             role="tabpanel"
             id="settings-panel-about"
             aria-labelledby="settings-tab-about"
-            tabIndex={0}
         >
             {/* Hero Section */}
             <div className="about-header">

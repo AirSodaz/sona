@@ -78,7 +78,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: var(--spacing-md) var(--spacing-xl);
+  padding: 8px calc(var(--spacing-xl) - 4px) var(--spacing-md);
 }
 
 .projects-rail-list {
@@ -87,7 +87,7 @@
   gap: var(--spacing-sm);
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 4px;
 }
 
 .projects-rail-item {
@@ -101,9 +101,13 @@
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
   color: inherit;
-  cursor: pointer;
+  cursor: grab;
   text-align: left;
   transition: all var(--transition-fast);
+}
+
+.projects-rail-item:active {
+  cursor: grabbing;
 }
 
 .projects-rail-item-copy {
@@ -143,9 +147,19 @@
   border-color: var(--color-border-hover);
 }
 
+.projects-rail-item:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .projects-rail-item.active {
   border-color: color-mix(in srgb, var(--color-text-primary) 72%, var(--color-border));
   background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.projects-rail-item.active:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
 }
 
 .projects-rail-item:hover .projects-rail-item-icon,

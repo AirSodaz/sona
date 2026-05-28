@@ -36,7 +36,21 @@
   border-color: var(--color-text-muted);
 }
 
+.theme-card:focus-visible {
+  outline: none;
+}
+
+.theme-card:focus-visible .theme-preview {
+  box-shadow: var(--apple-control-focus-ring);
+  border-color: var(--color-text-muted);
+}
+
 .theme-card.active .theme-preview {
+  border-color: #007aff;
+}
+
+.theme-card.active:focus-visible .theme-preview {
+  box-shadow: var(--apple-control-focus-ring);
   border-color: #007aff;
 }
 
@@ -256,8 +270,8 @@
 }
 
 .history-item-content:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-primary) 36%, transparent);
-  outline-offset: 4px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
   border-radius: var(--radius-sm);
 }
 

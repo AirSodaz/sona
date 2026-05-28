@@ -139,7 +139,7 @@
 .queue-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-xs);
+  padding: var(--spacing-sm);
 }
 
 .queue-item {
@@ -158,8 +158,8 @@
 }
 
 .queue-item:focus-visible {
-  outline: 2px solid var(--color-accent-primary);
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .queue-item-active {
