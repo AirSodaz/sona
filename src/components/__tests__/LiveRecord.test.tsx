@@ -328,7 +328,7 @@ describe('LiveRecord', () => {
                 segments: [],
                 audioUrl: null,
                 sourceHistoryId: null,
-                title: null,
+                title: '',
                 icon: null,
             });
             useOnboardingStore.setState({

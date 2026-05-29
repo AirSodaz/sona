@@ -58,7 +58,7 @@ interface SessionPatch {
   editingSegmentId?: string | null;
   aligningSegmentIds?: Set<string>;
   sourceHistoryId?: string | null;
-  title?: string | null;
+  title?: string;
   icon?: string | null;
 }
 
@@ -333,7 +333,9 @@ export function getTranscriptTestState() {
     getSummaryState: useTranscriptSidecarStore.getState().getSummaryState,
     setSummaryState: useTranscriptSidecarStore.getState().setSummaryState,
     updateSummaryState: useTranscriptSidecarStore.getState().updateSummaryState,
-    setActiveSummaryTemplate: useTranscriptSidecarStore.getState().setActiveSummaryTemplate,
+    setActiveSummaryTemplate: (templateId: SummaryTemplateId) => {
+      useTranscriptSidecarStore.getState().updateSummaryState({ activeTemplateId: templateId });
+    },
     hydrateSummaryState: (payload: HistorySummaryPayload, historyId?: string) => {
       useTranscriptSidecarStore.getState().hydrateSummaryState(payload, historyId);
     },
@@ -368,7 +370,7 @@ export function getTranscriptTestState() {
       syncEffectiveConfig();
     },
     setSummaryTemplate: (templateId: SummaryTemplateId) => {
-      useTranscriptSidecarStore.getState().setActiveSummaryTemplate(templateId);
+      useTranscriptSidecarStore.getState().updateSummaryState({ activeTemplateId: templateId });
     },
     defaultLlmState: { ...DEFAULT_LLM_STATE },
   };

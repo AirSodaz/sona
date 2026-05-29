@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useTranslation } from 'react-i18next';
 import { useModelConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsItem, SettingsAccordion } from './SettingsLayout';
@@ -12,7 +12,7 @@ import {
 } from '../../services/onlineAsrProviders';
 import { syncOnlineAsrProviderConfig } from '../../services/asrConfigService';
 
-interface ProviderSettingsProps {
+export interface ProviderSettingsProps {
     provider: OnlineAsrProviderDefinition;
 }
 

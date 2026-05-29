@@ -63,7 +63,7 @@ export class SummaryService {
     const config = this.ports.getEffectiveConfigSnapshot();
     const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
     const resolvedTemplateId = coerceSummaryTemplateId(templateId, config.summaryCustomTemplates);
-    sidecarStore.setActiveSummaryTemplate(resolvedTemplateId, targetHistoryId);
+    sidecarStore.updateSummaryState({ activeTemplateId: resolvedTemplateId }, targetHistoryId);
 
     if (targetHistoryId !== 'current') {
       await this.persistSummary(targetHistoryId);

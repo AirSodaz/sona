@@ -65,6 +65,7 @@ export type AsrTranscriptionRequest = {
   };
   postprocessOptions: TranscriptPostprocessOptions;
   onlineProvider?: OnlineAsrProviderRequest;
+  gpuAcceleration?: string;
 };
 
 export type TranscriptPostprocessOptions = {
@@ -163,6 +164,7 @@ export class AsrConfigService {
       ...(selection.engine === 'online'
         ? { onlineProvider: this.buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
         : {}),
+      gpuAcceleration: config.gpuAcceleration ?? 'cpu',
     };
 
     return request;

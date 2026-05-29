@@ -64,10 +64,11 @@ export interface TranscriptStore {
 
   // --- Actions ---
   // Coordinator / Session Pointers
-  openSession: (args: { segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null, audioUrl?: string | null }) => void;
+  openSession: (args: string | { segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null, audioUrl?: string | null }) => void;
   loadTranscriptSession: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean, title?: string | null }) => void;
   clearTranscriptSegments: () => void;
+  clearSegments: () => void;
   syncSavedRecordingMeta: (title: string, historyId: string, icon: string | null | undefined, audioUrl?: string | null) => void;
 
   // Runtime

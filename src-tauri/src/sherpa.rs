@@ -63,6 +63,7 @@ struct LegacyLocalSherpaTransportRequest {
     hotwords: Option<String>,
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
+    gpu_acceleration: Option<String>,
 }
 
 impl LegacyLocalSherpaTransportRequest {
@@ -112,6 +113,7 @@ impl LegacyLocalSherpaTransportRequest {
             self.hotwords,
             self.normalization_options.unwrap_or_default(),
             self.postprocess_options.unwrap_or_default(),
+            self.gpu_acceleration.clone(),
         ))
     }
 }
@@ -163,6 +165,7 @@ pub async fn init_recognizer(
     hotwords: Option<String>,
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
+    gpu_acceleration: Option<String>,
     asr_request: Option<AsrTranscriptionRequest>,
 ) -> Result<(), SherpaError> {
     let request = resolve_transport_asr_request(
@@ -180,6 +183,7 @@ pub async fn init_recognizer(
             hotwords,
             normalization_options,
             postprocess_options,
+            gpu_acceleration,
         },
         AsrMode::Streaming,
         "init_recognizer",
@@ -204,6 +208,7 @@ pub async fn init_recognizer(
                 request.hotwords,
                 Some(request.normalization_options),
                 Some(request.postprocess_options),
+                request.gpu_acceleration.clone(),
             )
             .await
             .map_err(SherpaError::from);
@@ -309,6 +314,7 @@ pub async fn process_batch_file(
     speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
+    gpu_acceleration: Option<String>,
     asr_request: Option<AsrTranscriptionRequest>,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let request = resolve_transport_asr_request(
@@ -326,6 +332,7 @@ pub async fn process_batch_file(
             hotwords,
             normalization_options,
             postprocess_options,
+            gpu_acceleration,
         },
         AsrMode::Offline,
         "process_batch_file",
@@ -393,6 +400,7 @@ mod tests {
             None,
             TranscriptNormalizationOptions::default(),
             TranscriptPostprocessOptions::default(),
+            None,
         )
     }
 
@@ -429,6 +437,7 @@ mod tests {
                     enable_timeline: true,
                 }),
                 postprocess_options: None,
+                gpu_acceleration: None,
             },
             AsrMode::Offline,
             "process_batch_file",

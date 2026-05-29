@@ -418,6 +418,7 @@ pub fn resolve_transcribe_options(
                 cli.hotwords,
                 TranscriptNormalizationOptions::default(),
                 TranscriptPostprocessOptions::default(),
+                None,
             ),
             None,
         )?,

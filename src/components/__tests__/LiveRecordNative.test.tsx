@@ -377,7 +377,7 @@ describe('LiveRecord Native Capture', () => {
                 segments: [],
                 audioUrl: null,
                 sourceHistoryId: null,
-                title: null,
+                title: '',
                 icon: null,
             });
         });

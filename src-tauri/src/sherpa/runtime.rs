@@ -252,12 +252,14 @@ pub async fn init_recognizer_impl(
     hotwords: Option<String>,
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
+    gpu_acceleration: Option<String>,
 ) -> Result<(), String> {
     info!(
-        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?}",
+        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?}",
         punctuation_model,
         vad_model,
-        hotwords
+        hotwords,
+        gpu_acceleration
     );
 
     let config_key = ModelConfigKey {
@@ -291,7 +293,11 @@ pub async fn init_recognizer_impl(
                 &language,
                 hotwords,
             )?;
-            let r = Arc::new(Recognizer::new(config_type, num_threads)?);
+            let r = Arc::new(Recognizer::new(
+                config_type,
+                num_threads,
+                gpu_acceleration.clone(),
+            )?);
             pool.insert(config_key, r.clone());
             r
         }

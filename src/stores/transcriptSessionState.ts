@@ -13,7 +13,7 @@ export interface TranscriptActiveSessionState {
   lastSeekTimestamp: number;
   seekRequest: { time: number; timestamp: number } | null;
   sourceHistoryId: string | null;
-  title: string | null;
+  title: string;
   icon: string | null;
 }
 
@@ -40,7 +40,7 @@ export const INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE: TranscriptActiveSessionSta
   lastSeekTimestamp: 0,
   seekRequest: null,
   sourceHistoryId: null,
-  title: null,
+  title: '',
   icon: null,
 };
 
@@ -49,7 +49,7 @@ export const INITIAL_TRANSCRIPT_SESSION_STATE: TranscriptSessionStateFields = {
   editingSegmentId: null,
   aligningSegmentIds: new Set<string>(),
   sourceHistoryId: null,
-  title: null,
+  title: '',
   icon: null,
 };
 

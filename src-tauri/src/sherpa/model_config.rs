@@ -219,7 +219,11 @@ pub struct Recognizer {
     pub inner: RecognizerInner,
 }
 
-fn get_base_online_config(num_threads: i32, tokens: &Path) -> OnlineRecognizerConfig {
+fn get_base_online_config(
+    num_threads: i32,
+    tokens: &Path,
+    provider: Option<String>,
+) -> OnlineRecognizerConfig {
     let mut config = OnlineRecognizerConfig {
         rule1_min_trailing_silence: 1.2,
         rule2_min_trailing_silence: 1.2,
@@ -228,7 +232,7 @@ fn get_base_online_config(num_threads: i32, tokens: &Path) -> OnlineRecognizerCo
     };
     config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
     config.model_config.num_threads = num_threads;
-    config.model_config.provider = Some("cpu".to_string());
+    config.model_config.provider = Some(provider.unwrap_or_else(|| "cpu".to_string()));
     config.model_config.model_type = Some("paraformer".to_string());
     config.feat_config.sample_rate = 16000;
     config.feat_config.feature_dim = 80;
@@ -236,11 +240,15 @@ fn get_base_online_config(num_threads: i32, tokens: &Path) -> OnlineRecognizerCo
     config
 }
 
-fn get_base_offline_config(num_threads: i32, tokens: Option<&Path>) -> OfflineRecognizerConfig {
+fn get_base_offline_config(
+    num_threads: i32,
+    tokens: Option<&Path>,
+    provider: Option<String>,
+) -> OfflineRecognizerConfig {
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.tokens = tokens.map(|path| path.to_string_lossy().to_string());
     config.model_config.num_threads = num_threads;
-    config.model_config.provider = Some("cpu".to_string());
+    config.model_config.provider = Some(provider.unwrap_or_else(|| "cpu".to_string()));
     config.feat_config.sample_rate = 16000;
     config.feat_config.feature_dim = 80;
     config
@@ -254,7 +262,11 @@ impl Recognizer {
         }
     }
 
-    pub fn new(model_type: ModelType, num_threads: i32) -> Result<Self, String> {
+    pub fn new(
+        model_type: ModelType,
+        num_threads: i32,
+        provider: Option<String>,
+    ) -> Result<Self, String> {
         info!(
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
             model_type
@@ -270,7 +282,7 @@ impl Recognizer {
                 hotwords,
             } => {
                 info!("[Recognizer::new] branch=OnlineTransducer");
-                let mut config = get_base_online_config(num_threads, &tokens);
+                let mut config = get_base_online_config(num_threads, &tokens, provider.clone());
                 config.model_config.model_type = Some("transducer".to_string());
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
@@ -296,7 +308,7 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OnlineParaformer");
-                let mut config = get_base_online_config(num_threads, &tokens);
+                let mut config = get_base_online_config(num_threads, &tokens, provider.clone());
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.paraformer.decoder =
@@ -315,7 +327,8 @@ impl Recognizer {
                 use_itn,
             } => {
                 info!("[Recognizer::new] branch=OfflineSenseVoice");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens));
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
@@ -333,7 +346,8 @@ impl Recognizer {
                 language,
             } => {
                 info!("[Recognizer::new] branch=OfflineWhisper");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens));
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
@@ -353,7 +367,8 @@ impl Recognizer {
                 language,
             } => {
                 info!("[Recognizer::new] branch=OfflineFunASRNano");
-                let mut config = get_base_offline_config(num_threads, tokens.as_deref());
+                let mut config =
+                    get_base_offline_config(num_threads, tokens.as_deref(), provider.clone());
                 config.model_config.funasr_nano.encoder_adaptor =
                     Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
@@ -375,7 +390,8 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OfflineFireRedAsr");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens));
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
                 config.model_config.fire_red_asr.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.fire_red_asr.decoder =
@@ -389,7 +405,8 @@ impl Recognizer {
             }
             ModelType::OfflineDolphin { model, tokens } => {
                 info!("[Recognizer::new] branch=OfflineDolphin");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens));
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
@@ -406,7 +423,7 @@ impl Recognizer {
                 hotwords,
             } => {
                 info!("[Recognizer::new] branch=OfflineQwen3Asr");
-                let mut config = get_base_offline_config(num_threads, None);
+                let mut config = get_base_offline_config(num_threads, None, provider.clone());
                 config.model_config.qwen3_asr.conv_frontend =
                     Some(conv_frontend.to_string_lossy().to_string());
                 config.model_config.qwen3_asr.encoder = Some(encoder.to_string_lossy().to_string());

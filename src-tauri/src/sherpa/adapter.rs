@@ -60,6 +60,7 @@ impl AsrEngineAdapter for LocalSherpaAdapter {
             speaker_processing,
             normalization_options: request.normalization_options,
             postprocessor: TranscriptPostprocessor::compile(request.postprocess_options)?,
+            gpu_acceleration: request.gpu_acceleration.clone(),
         })
     }
 }
@@ -84,6 +85,7 @@ mod tests {
             Some("Sona".to_string()),
             TranscriptNormalizationOptions::default(),
             TranscriptPostprocessOptions::default(),
+            None,
         )
     }
 

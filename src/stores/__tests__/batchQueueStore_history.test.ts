@@ -118,7 +118,7 @@ describe('batchQueueStore History Integration', () => {
         useTranscriptStore.getState().clearSegments();
         useTranscriptStore.setState({
             sourceHistoryId: null,
-            title: null,
+            title: '',
             icon: null,
         });
         useConfigStore.setState({

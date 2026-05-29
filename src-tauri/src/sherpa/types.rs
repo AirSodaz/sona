@@ -52,6 +52,8 @@ pub struct AsrTranscriptionRequest {
     pub postprocess_options: TranscriptPostprocessOptions,
     #[serde(default)]
     pub online_provider: Option<OnlineAsrProviderRequest>,
+    #[serde(default)]
+    pub gpu_acceleration: Option<String>,
 }
 
 impl AsrTranscriptionRequest {
@@ -70,6 +72,7 @@ impl AsrTranscriptionRequest {
         hotwords: Option<String>,
         normalization_options: TranscriptNormalizationOptions,
         postprocess_options: TranscriptPostprocessOptions,
+        gpu_acceleration: Option<String>,
     ) -> Self {
         Self {
             engine: AsrEngine::LocalSherpa,
@@ -89,6 +92,7 @@ impl AsrTranscriptionRequest {
             normalization_options,
             postprocess_options,
             online_provider: None,
+            gpu_acceleration,
         }
     }
 }
@@ -135,6 +139,7 @@ pub struct BatchTranscriptionRequest {
     pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
+    pub gpu_acceleration: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

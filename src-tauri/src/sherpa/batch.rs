@@ -74,7 +74,11 @@ where
         &request.language,
         request.hotwords.clone(),
     )?;
-    let recognizer = Recognizer::new(config_type, request.num_threads)?;
+    let recognizer = Recognizer::new(
+        config_type,
+        request.num_threads,
+        request.gpu_acceleration.clone(),
+    )?;
     let model_load_ms = duration_to_ms(model_load_started.elapsed());
     let rss_after_mb = capture_process_memory_mb();
 

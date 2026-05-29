@@ -70,6 +70,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
     const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
+    const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'cpu';
 
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
@@ -532,6 +533,26 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             max={4}
                             step={1}
                             style={{ textAlign: 'center' }}
+                        />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.gpu_acceleration_label', { defaultValue: 'GPU Acceleration' })}
+                    hint={t('settings.gpu_acceleration_hint', { defaultValue: 'Hardware acceleration for local models. Note: CoreML is for Apple Silicon.' })}
+                >
+                    <div style={{ width: '120px' }}>
+                        <Dropdown
+                            id="settings-gpu-acceleration"
+                            value={gpuAcceleration}
+                            onChange={(value) => updateConfig({ gpuAcceleration: value as 'cpu' | 'cuda' | 'coreml' | 'directml' })}
+                            options={[
+                                { value: 'cpu', label: t('settings.value_off', { defaultValue: 'Off' }) },
+                                { value: 'cuda', label: 'CUDA' },
+                                { value: 'coreml', label: 'CoreML' },
+                                { value: 'directml', label: 'DirectML' },
+                            ]}
+                            style={{ flex: 1 }}
                         />
                     </div>
                 </SettingsItem>

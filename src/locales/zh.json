@@ -900,6 +900,8 @@
         "vad_buffer_hint": "在检测到语音之前采集的缓冲时长。有助于避免切掉句首。",
         "max_concurrent_label": "最大并行转录数",
         "max_concurrent_hint": "同时进行并行转录的文件数量。",
+        "gpu_acceleration_label": "GPU 硬件加速",
+        "gpu_acceleration_hint": "用于本地模型的硬件加速。注意：CoreML 适用于 Apple 芯片。",
         "model_not_installed": "请先在模型设置中下载模型。",
         "transcription_settings": "转录设置",
         "transcription_settings_hint": "配置本地处理行为。",
