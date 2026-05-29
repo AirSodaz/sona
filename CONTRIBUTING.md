@@ -140,4 +140,4 @@ The staged safety check currently does two things:
 - blocks unresolved merge conflict markers in staged text/config files
 - blocks invalid staged JSON files
 
-`pnpm run lint` is still a manual quality task for now. The current lint baseline is not clean enough to make full ESLint a hard commit gate yet.
+`pnpm run lint` is a hard requirement. The codebase maintains a clean ESLint baseline.

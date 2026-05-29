@@ -4,8 +4,6 @@ import { useModelConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsItem, SettingsAccordion } from './SettingsLayout';
 import { Dropdown } from '../Dropdown';
 import {
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
-    GROQ_WHISPER_PROVIDER_ID,
     VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
     VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
     isVolcengineFlashBatchMode,
@@ -193,8 +191,3 @@ export function DynamicProviderSettings({ provider }: ProviderSettingsProps) {
         </SettingsAccordion>
     );
 }
-
-export const CUSTOM_PROVIDER_COMPONENTS: Record<string, React.ComponentType<ProviderSettingsProps>> = {
-    [VOLCENGINE_DOUBAO_PROVIDER_ID]: VolcengineSettingsCard,
-    [GROQ_WHISPER_PROVIDER_ID]: GroqWhisperSettingsCard,
-};
