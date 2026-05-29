@@ -99,7 +99,8 @@ describe('llm providers', () => {
 
     expect(openAiProvider).toEqual(expect.objectContaining({
       id: 'custom-openai',
-      label: 'Private Gateway',
+      labelKey: 'Private Gateway',
+      labelDefault: 'Private Gateway',
       defaultApiHost: '',
       defaultApiPath: '/v1/chat/completions',
       requiresApiKey: true,
@@ -133,7 +134,8 @@ describe('llm providers', () => {
     const definitions = listProviderDefinitions(customProviders);
     expect(definitions[definitions.length - 1]).toEqual(expect.objectContaining({
       id: 'custom-private-gateway',
-      label: 'Private Gateway',
+      labelKey: 'Private Gateway',
+      labelDefault: 'Private Gateway',
     }));
     expect(getProviderDefinition('custom-private-gateway', customProviders)).toEqual(expect.objectContaining({
       id: 'custom-private-gateway',

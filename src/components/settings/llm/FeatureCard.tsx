@@ -30,7 +30,7 @@ interface FeatureCardProps {
   icon: React.ReactNode;
   config: LlmAssistantConfig;
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   isActive?: boolean;
   featureEnabled?: boolean;
   headerAction?: React.ReactNode;
@@ -117,9 +117,9 @@ export const FeatureCard = React.memo(function FeatureCard({
 
     return filtered.map((p) => ({
       value: p.id,
-      label: p.label,
+      label: t(p.labelKey, { defaultValue: p.labelDefault }),
     }));
-  }, [config, featureId, currentLlmState.customProviders, currentLlmState.providers, selectedProvider]);
+  }, [config, featureId, currentLlmState.customProviders, currentLlmState.providers, selectedProvider, t]);
 
   const persistedProviderModels = useMemo(
     () => getProviderLlmModels(currentLlmState, localProvider),

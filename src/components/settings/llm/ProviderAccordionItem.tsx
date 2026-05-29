@@ -19,7 +19,7 @@ interface ProviderAccordionItemProps {
   onToggle: () => void;
   applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
   onOpenDetails?: () => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
@@ -70,7 +70,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
       <div className="accordion-header" onClick={onToggle}>
         <div className="accordion-title-container">
           {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-          <span>{def.label}</span>
+          <span>{t(def.labelKey, { defaultValue: def.labelDefault })}</span>
         </div>
         <div className="accordion-header-status">
           {isConfigured && (
@@ -90,7 +90,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
           ) : (
             <>
               <div className="settings-item">
-                <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabel || t('settings.llm.base_url')}</label>
+                <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabelKey ? t(def.apiHostLabelKey, { defaultValue: def.apiHostLabelDefault }) : t('settings.llm.base_url')}</label>
                 {def.editableApiHost === false ? (
                   <div className="settings-input provider-readonly-field" id={`llm-${def.id}-host`}>
                     {setting?.apiHost || def.defaultApiHost}

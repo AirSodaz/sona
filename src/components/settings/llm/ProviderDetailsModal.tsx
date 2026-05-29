@@ -333,7 +333,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
           <span>{t('settings.llm.model_library')}</span>
         </>
       )}
-      title={<h2>{definition.label}</h2>}
+      title={<h2>{t(definition.labelKey, { defaultValue: definition.labelDefault })}</h2>}
       headerActions={(
         <div className="provider-details-actions">
           <div className="provider-details-add-group">

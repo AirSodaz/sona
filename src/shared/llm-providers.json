@@ -1,0 +1,397 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    {
+      "id": "open_ai",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.open_ai",
+        "labelDefault": "OpenAI"
+      },
+      "defaults": {
+        "apiHost": "https://api.openai.com"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "open_ai_responses",
+      "strategy": "openai_responses",
+      "ui": {
+        "labelKey": "settings.llm_providers.open_ai_responses",
+        "labelDefault": "OpenAI Responses"
+      },
+      "defaults": {
+        "apiHost": "https://api.openai.com",
+        "apiPath": "/v1/responses"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "azure_openai",
+      "strategy": "azure_openai",
+      "ui": {
+        "labelKey": "settings.llm_providers.azure_openai",
+        "labelDefault": "Azure OpenAI",
+        "apiHostLabelKey": "settings.llm_providers.azure_openai_endpoint",
+        "apiHostLabelDefault": "Endpoint",
+        "modelLabelKey": "settings.llm_providers.azure_openai_deployment",
+        "modelLabelDefault": "Deployment Name"
+      },
+      "defaults": {
+        "apiHost": "",
+        "apiVersion": "2024-10-21"
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "anthropic",
+      "strategy": "anthropic",
+      "ui": {
+        "labelKey": "settings.llm_providers.anthropic",
+        "labelDefault": "Claude"
+      },
+      "defaults": {
+        "apiHost": "https://api.anthropic.com"
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "gemini",
+      "strategy": "gemini",
+      "ui": {
+        "labelKey": "settings.llm_providers.gemini",
+        "labelDefault": "Gemini"
+      },
+      "defaults": {
+        "apiHost": "https://generativelanguage.googleapis.com"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "ollama",
+      "strategy": "ollama",
+      "ui": {
+        "labelKey": "settings.llm_providers.ollama",
+        "labelDefault": "Ollama"
+      },
+      "defaults": {
+        "apiHost": "http://127.0.0.1:11434"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "deep_seek",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.deep_seek",
+        "labelDefault": "DeepSeek"
+      },
+      "defaults": {
+        "apiHost": "https://api.deepseek.com"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "moonshot_ai",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.moonshot_ai",
+        "labelDefault": "Moonshot AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.moonshot.ai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "moonshot_cn",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.moonshot_cn",
+        "labelDefault": "Moonshot CN"
+      },
+      "defaults": {
+        "apiHost": "https://api.moonshot.cn"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "xiaomi",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.xiaomi",
+        "labelDefault": "Xiaomi"
+      },
+      "defaults": {
+        "apiHost": "https://api.xiaomimimo.com"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "kimi",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.kimi",
+        "labelDefault": "Kimi"
+      },
+      "defaults": {
+        "apiHost": "https://api.moonshot.cn"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "silicon_flow",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.silicon_flow",
+        "labelDefault": "SiliconFlow"
+      },
+      "defaults": {
+        "apiHost": "https://api.siliconflow.cn"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "qwen",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.qwen",
+        "labelDefault": "Qwen"
+      },
+      "defaults": {
+        "apiHost": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "qwen_portal",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.qwen_portal",
+        "labelDefault": "Qwen Portal"
+      },
+      "defaults": {
+        "apiHost": "https://portal.qwen.ai/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "minimax_global",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.minimax_global",
+        "labelDefault": "MiniMax Global"
+      },
+      "defaults": {
+        "apiHost": "https://api.minimaxi.chat/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "minimax_cn",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.minimax_cn",
+        "labelDefault": "MiniMax CN"
+      },
+      "defaults": {
+        "apiHost": "https://api.minimax.chat/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "openrouter",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.openrouter",
+        "labelDefault": "OpenRouter"
+      },
+      "defaults": {
+        "apiHost": "https://openrouter.ai/api/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "lm_studio",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.lm_studio",
+        "labelDefault": "LM Studio"
+      },
+      "defaults": {
+        "apiHost": "http://localhost:1234/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "groq",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.groq",
+        "labelDefault": "Groq"
+      },
+      "defaults": {
+        "apiHost": "https://api.groq.com/openai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "x_ai",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.x_ai",
+        "labelDefault": "xAI"
+      },
+      "defaults": {
+        "apiHost": "https://api.x.ai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "mistral_ai",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.mistral_ai",
+        "labelDefault": "Mistral AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.mistral.ai/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "perplexity",
+      "strategy": "perplexity",
+      "ui": {
+        "labelKey": "settings.llm_providers.perplexity",
+        "labelDefault": "Perplexity"
+      },
+      "defaults": {
+        "apiHost": "https://api.perplexity.ai",
+        "apiPath": "/chat/completions"
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": false
+      }
+    },
+    {
+      "id": "volcengine",
+      "strategy": "openai_compatible_custom_path",
+      "ui": {
+        "labelKey": "settings.llm_providers.volcengine",
+        "labelDefault": "VolcEngine"
+      },
+      "defaults": {
+        "apiHost": "https://ark.cn-beijing.volces.com",
+        "apiPath": "/api/v3/chat/completions"
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "chatglm",
+      "strategy": "openai_compatible",
+      "ui": {
+        "labelKey": "settings.llm_providers.chatglm",
+        "labelDefault": "ChatGLM"
+      },
+      "defaults": {
+        "apiHost": "https://open.bigmodel.cn/api/paas/v4/"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    }
+  ]
+}

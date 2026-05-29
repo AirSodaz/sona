@@ -20,8 +20,14 @@ import { buildTestConfig } from '../../../test-utils/configTestUtils';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (key.startsWith('settings.llm_providers.')) {
+        return (options?.defaultValue as string) || key;
+      }
+      return key;
+    },
   }),
+  initReactI18next: { type: '3rdParty', init: vi.fn() },
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({

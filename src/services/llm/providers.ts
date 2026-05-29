@@ -1,3 +1,4 @@
+import llmProvidersManifest from '../../shared/llm-providers.json';
 import {
   BuiltInLlmProvider,
   CustomLlmProvider,
@@ -11,15 +12,18 @@ import {
 
 export interface LlmProviderDefinition {
   id: LlmProvider;
-  label: string;
+  labelKey: string;
+  labelDefault: string;
   strategy: LlmProviderStrategy;
   defaultApiHost: string;
   defaultApiPath?: string;
   defaultApiVersion?: string;
   supportsModelListing: boolean;
   requiresApiKey: boolean;
-  apiHostLabel?: string;
-  modelLabel?: string;
+  apiHostLabelKey?: string;
+  apiHostLabelDefault?: string;
+  modelLabelKey?: string;
+  modelLabelDefault?: string;
   editableApiHost?: boolean;
 }
 
@@ -35,7 +39,8 @@ export type CustomLlmProviderInput = Omit<CustomLlmProvider, 'id'> & {
 export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
   {
     id: 'google_translate_free',
-    label: 'Google Translate (Free)',
+    labelKey: 'settings.llm_providers.google_translate_free',
+    labelDefault: 'Google Translate (Free)',
     strategy: 'google_translate_free',
     defaultApiHost: 'https://translate.googleapis.com/translate_a/single',
     supportsModelListing: false,
@@ -43,211 +48,29 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
   },
   {
     id: 'google_translate',
-    label: 'Google Translate (API)',
+    labelKey: 'settings.llm_providers.google_translate',
+    labelDefault: 'Google Translate (API)',
     strategy: 'google_translate',
     defaultApiHost: 'https://translation.googleapis.com/language/translate/v2',
     supportsModelListing: false,
     requiresApiKey: true,
   },
-  {
-    id: 'open_ai',
-    label: 'OpenAI',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.openai.com',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'open_ai_responses',
-    label: 'OpenAI Responses',
-    strategy: 'openai_responses',
-    defaultApiHost: 'https://api.openai.com',
-    defaultApiPath: '/v1/responses',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'azure_openai',
-    label: 'Azure OpenAI',
-    strategy: 'azure_openai',
-    defaultApiHost: '',
-    defaultApiVersion: '2024-10-21',
-    supportsModelListing: false,
-    requiresApiKey: true,
-    apiHostLabel: 'Endpoint',
-    modelLabel: 'Deployment Name',
-  },
-  {
-    id: 'anthropic',
-    label: 'Claude',
-    strategy: 'anthropic',
-    defaultApiHost: 'https://api.anthropic.com',
-    supportsModelListing: false,
-    requiresApiKey: true,
-  },
-  {
-    id: 'gemini',
-    label: 'Gemini',
-    strategy: 'gemini',
-    defaultApiHost: 'https://generativelanguage.googleapis.com',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'ollama',
-    label: 'Ollama',
-    strategy: 'ollama',
-    defaultApiHost: 'http://127.0.0.1:11434',
-    supportsModelListing: true,
-    requiresApiKey: false,
-  },
-  {
-    id: 'deep_seek',
-    label: 'DeepSeek',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.deepseek.com',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'moonshot_ai',
-    label: 'Moonshot AI',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.moonshot.ai',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'moonshot_cn',
-    label: 'Moonshot CN',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.moonshot.cn',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'xiaomi',
-    label: 'Xiaomi',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.xiaomimimo.com',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'kimi',
-    label: 'Kimi',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.moonshot.cn',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'silicon_flow',
-    label: 'SiliconFlow',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.siliconflow.cn',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'qwen',
-    label: 'Qwen',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'qwen_portal',
-    label: 'Qwen Portal',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://portal.qwen.ai/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'minimax_global',
-    label: 'MiniMax Global',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.minimaxi.chat/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'minimax_cn',
-    label: 'MiniMax CN',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.minimax.chat/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://openrouter.ai/api/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'lm_studio',
-    label: 'LM Studio',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'http://localhost:1234/v1',
-    supportsModelListing: true,
-    requiresApiKey: false,
-  },
-  {
-    id: 'groq',
-    label: 'Groq',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.groq.com/openai',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'x_ai',
-    label: 'xAI',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.x.ai',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'mistral_ai',
-    label: 'Mistral AI',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://api.mistral.ai/v1',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
-  {
-    id: 'perplexity',
-    label: 'Perplexity',
-    strategy: 'perplexity',
-    defaultApiHost: 'https://api.perplexity.ai',
-    defaultApiPath: '/chat/completions',
-    supportsModelListing: false,
-    requiresApiKey: true,
-    editableApiHost: false,
-  },
-  {
-    id: 'volcengine',
-    label: 'VolcEngine',
-    strategy: 'openai_compatible_custom_path',
-    defaultApiHost: 'https://ark.cn-beijing.volces.com',
-    defaultApiPath: '/api/v3/chat/completions',
-    supportsModelListing: false,
-    requiresApiKey: true,
-  },
-  {
-    id: 'chatglm',
-    label: 'ChatGLM',
-    strategy: 'openai_compatible',
-    defaultApiHost: 'https://open.bigmodel.cn/api/paas/v4/',
-    supportsModelListing: true,
-    requiresApiKey: true,
-  },
+  ...llmProvidersManifest.providers.map((p) => ({
+    id: p.id as LlmProvider,
+    labelKey: p.ui.labelKey,
+    labelDefault: p.ui.labelDefault,
+    strategy: p.strategy as LlmProviderStrategy,
+    defaultApiHost: p.defaults.apiHost,
+    defaultApiPath: p.defaults.apiPath,
+    defaultApiVersion: p.defaults.apiVersion,
+    supportsModelListing: p.capabilities.supportsModelListing,
+    requiresApiKey: p.capabilities.requiresApiKey,
+    editableApiHost: p.capabilities.editableApiHost,
+    apiHostLabelKey: p.ui.apiHostLabelKey,
+    apiHostLabelDefault: p.ui.apiHostLabelDefault,
+    modelLabelKey: p.ui.modelLabelKey,
+    modelLabelDefault: p.ui.modelLabelDefault,
+  })),
 ];
 
 export const LLM_PROVIDER_DEFINITIONS = BUILT_IN_LLM_PROVIDER_DEFINITIONS;
@@ -353,7 +176,8 @@ function customProviderDefaults(strategy: CustomLlmProviderStrategy): Pick<LlmPr
 export function createCustomProviderDefinition(provider: CustomLlmProvider): LlmProviderDefinition {
   return {
     id: provider.id,
-    label: provider.name,
+    labelKey: provider.name,
+    labelDefault: provider.name,
     strategy: provider.strategy,
     editableApiHost: true,
     ...customProviderDefaults(provider.strategy),

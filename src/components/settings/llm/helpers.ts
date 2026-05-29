@@ -3,6 +3,7 @@ import { LlmAssistantConfig } from '../../../types/config';
 import { ensureLlmState } from '../../../services/llm/migration';
 import { getProviderDefinition } from '../../../services/llm/providers';
 import { isProviderConfigComplete } from '../../../services/llm/configUtils';
+import i18n from '../../../i18n';
 
 export function getCurrentLlmSettings(config: LlmAssistantConfig) {
   return config.llmSettings ?? ensureLlmState(config).llmSettings;
@@ -45,5 +46,6 @@ export function isProviderConfiguredForConfig(
 }
 
 export function getProviderLabel(config: LlmAssistantConfig, provider: LlmProvider): string {
-  return getProviderDefinition(provider, getCurrentLlmSettings(config).customProviders).label;
+  const def = getProviderDefinition(provider, getCurrentLlmSettings(config).customProviders);
+  return i18n.t(def.labelKey, { defaultValue: def.labelDefault });
 }
