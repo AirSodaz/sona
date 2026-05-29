@@ -1475,6 +1475,9 @@ fn normalize_provider_str(provider: &str) -> String {
         "anthropic"
         | "azure_openai"
         | "deep_seek"
+        | "moonshot_ai"
+        | "moonshot_cn"
+        | "xiaomi"
         | "gemini"
         | "kimi"
         | "ollama"
@@ -1571,6 +1574,9 @@ fn provider_defaults(
         "gemini" => ("https://generativelanguage.googleapis.com", None, None),
         "ollama" => ("http://127.0.0.1:11434", None, None),
         "deep_seek" => ("https://api.deepseek.com", None, None),
+        "moonshot_ai" => ("https://api.moonshot.ai", None, None),
+        "moonshot_cn" => ("https://api.moonshot.cn", None, None),
+        "xiaomi" => ("https://api.xiaomimimo.com", None, None),
         "kimi" => ("https://api.moonshot.cn", None, None),
         "silicon_flow" => ("https://api.siliconflow.cn", None, None),
         "qwen" => (

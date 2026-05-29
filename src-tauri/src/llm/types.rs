@@ -11,6 +11,9 @@ pub enum LlmProviderStrategy {
     Gemini,
     Ollama,
     DeepSeek,
+    MoonshotAi,
+    MoonshotCn,
+    Xiaomi,
     Kimi,
     SiliconFlow,
     Qwen,
@@ -42,6 +45,9 @@ impl LlmProviderStrategy {
             "anthropic" => Self::Anthropic,
             "gemini" => Self::Gemini,
             "ollama" => Self::Ollama,
+            "moonshot_ai" => Self::MoonshotAi,
+            "moonshot_cn" => Self::MoonshotCn,
+            "xiaomi" => Self::Xiaomi,
             "deep_seek" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global"
             | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai"
             | "chatglm" => Self::OpenAiCompatible,

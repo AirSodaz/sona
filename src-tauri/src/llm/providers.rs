@@ -52,6 +52,9 @@ fn strategy_uses_openai_chat_payload(strategy: LlmProviderStrategy) -> bool {
             | LlmProviderStrategy::OpenAiCompatible
             | LlmProviderStrategy::OpenAiCompatibleCustomPath
             | LlmProviderStrategy::DeepSeek
+            | LlmProviderStrategy::MoonshotAi
+            | LlmProviderStrategy::MoonshotCn
+            | LlmProviderStrategy::Xiaomi
             | LlmProviderStrategy::Kimi
             | LlmProviderStrategy::SiliconFlow
             | LlmProviderStrategy::Qwen
@@ -450,6 +453,9 @@ impl AdapterFactory {
         match strategy {
             LlmProviderStrategy::OpenAi
             | LlmProviderStrategy::DeepSeek
+            | LlmProviderStrategy::MoonshotAi
+            | LlmProviderStrategy::MoonshotCn
+            | LlmProviderStrategy::Xiaomi
             | LlmProviderStrategy::Kimi
             | LlmProviderStrategy::SiliconFlow
             | LlmProviderStrategy::Qwen

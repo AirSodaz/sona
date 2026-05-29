@@ -599,6 +599,18 @@ fn provider_definition(
             default_api_host: "https://api.deepseek.com".to_string(),
             requires_api_key: true,
         },
+        "moonshot_ai" => ProviderDefinition {
+            default_api_host: "https://api.moonshot.ai".to_string(),
+            requires_api_key: true,
+        },
+        "moonshot_cn" => ProviderDefinition {
+            default_api_host: "https://api.moonshot.cn".to_string(),
+            requires_api_key: true,
+        },
+        "xiaomi" => ProviderDefinition {
+            default_api_host: "https://api.xiaomimimo.com".to_string(),
+            requires_api_key: true,
+        },
         "kimi" => ProviderDefinition {
             default_api_host: "https://api.moonshot.cn".to_string(),
             requires_api_key: true,
