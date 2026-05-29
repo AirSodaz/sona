@@ -932,6 +932,7 @@ mod tests {
             hotwords: None,
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
+            gpu_acceleration: None,
             online_provider: Some(OnlineAsrProviderRequest {
                 provider_id: crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
                 profile_id: "volcengine-doubao-default".to_string(),

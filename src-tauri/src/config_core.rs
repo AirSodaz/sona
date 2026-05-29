@@ -1471,41 +1471,18 @@ fn normalize_provider_str(provider: &str) -> String {
     if is_custom_provider_id(provider) {
         return provider.to_string();
     }
-    match provider {
-        "anthropic"
-        | "azure_openai"
-        | "deep_seek"
-        | "moonshot_ai"
-        | "moonshot_cn"
-        | "xiaomi"
-        | "gemini"
-        | "kimi"
-        | "ollama"
-        | "open_ai"
-        | "open_ai_responses"
-        | "google_translate"
-        | "google_translate_free"
-        | "silicon_flow"
-        | "qwen"
-        | "qwen_portal"
-        | "minimax_global"
-        | "minimax_cn"
-        | "openrouter"
-        | "lm_studio"
-        | "groq"
-        | "x_ai"
-        | "mistral_ai"
-        | "perplexity"
-        | "volcengine"
-        | "chatglm" => provider.to_string(),
-        "azure_open_ai" => "azure_openai".to_string(),
-        "deepseek" => "deep_seek".to_string(),
-        "moonshot" => "kimi".to_string(),
-        "openai" => "open_ai".to_string(),
-        "openai_compatible" | "open_ai_compatible" => LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string(),
-        "siliconflow" => "silicon_flow".to_string(),
-        _ => DEFAULT_LLM_PROVIDER.to_string(),
+    if provider == "google_translate" || provider == "google_translate_free" {
+        return provider.to_string();
     }
+    if provider == "openai_compatible" || provider == "open_ai_compatible" {
+        return LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string();
+    }
+    
+    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
+        return llm_provider.id.clone();
+    }
+    
+    DEFAULT_LLM_PROVIDER.to_string()
 }
 
 fn is_custom_provider_id(value: &str) -> bool {
@@ -1549,67 +1526,36 @@ fn provider_defaults(
         return defaults;
     }
 
-    let (api_host, api_path, api_version) = match provider {
-        "google_translate_free" => (
-            "https://translate.googleapis.com/translate_a/single",
-            None,
-            None,
-        ),
-        "google_translate" => (
-            "https://translation.googleapis.com/language/translate/v2",
-            None,
-            None,
-        ),
-        "open_ai" | "open_ai_responses" => (
-            "https://api.openai.com",
-            if provider == "open_ai_responses" {
-                Some("/v1/responses")
-            } else {
-                None
-            },
-            None,
-        ),
-        "azure_openai" => ("", None, Some("2024-10-21")),
-        "anthropic" => ("https://api.anthropic.com", None, None),
-        "gemini" => ("https://generativelanguage.googleapis.com", None, None),
-        "ollama" => ("http://127.0.0.1:11434", None, None),
-        "deep_seek" => ("https://api.deepseek.com", None, None),
-        "moonshot_ai" => ("https://api.moonshot.ai", None, None),
-        "moonshot_cn" => ("https://api.moonshot.cn", None, None),
-        "xiaomi" => ("https://api.xiaomimimo.com", None, None),
-        "kimi" => ("https://api.moonshot.cn", None, None),
-        "silicon_flow" => ("https://api.siliconflow.cn", None, None),
-        "qwen" => (
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            None,
-            None,
-        ),
-        "qwen_portal" => ("https://portal.qwen.ai/v1", None, None),
-        "minimax_global" => ("https://api.minimaxi.chat/v1", None, None),
-        "minimax_cn" => ("https://api.minimax.chat/v1", None, None),
-        "openrouter" => ("https://openrouter.ai/api/v1", None, None),
-        "lm_studio" => ("http://localhost:1234/v1", None, None),
-        "groq" => ("https://api.groq.com/openai", None, None),
-        "x_ai" => ("https://api.x.ai", None, None),
-        "mistral_ai" => ("https://api.mistral.ai/v1", None, None),
-        "perplexity" => ("https://api.perplexity.ai", Some("/chat/completions"), None),
-        "volcengine" => (
-            "https://ark.cn-beijing.volces.com",
-            Some("/api/v3/chat/completions"),
-            None,
-        ),
-        "chatglm" => ("https://open.bigmodel.cn/api/paas/v4/", None, None),
-        _ => ("", None, None),
-    };
+    if provider == "google_translate_free" {
+        let mut defaults = Map::new();
+        defaults.insert("apiHost".to_string(), json!("https://translate.googleapis.com/translate_a/single"));
+        defaults.insert("apiKey".to_string(), json!(""));
+        return defaults;
+    }
+    
+    if provider == "google_translate" {
+        let mut defaults = Map::new();
+        defaults.insert("apiHost".to_string(), json!("https://translation.googleapis.com/language/translate/v2"));
+        defaults.insert("apiKey".to_string(), json!(""));
+        return defaults;
+    }
+
+    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
+        let mut defaults = Map::new();
+        defaults.insert("apiHost".to_string(), json!(llm_provider.defaults.api_host));
+        defaults.insert("apiKey".to_string(), json!(""));
+        if let Some(api_path) = &llm_provider.defaults.api_path {
+            defaults.insert("apiPath".to_string(), json!(api_path));
+        }
+        if let Some(api_version) = &llm_provider.defaults.api_version {
+            defaults.insert("apiVersion".to_string(), json!(api_version));
+        }
+        return defaults;
+    }
+
     let mut defaults = Map::new();
-    defaults.insert("apiHost".to_string(), json!(api_host));
+    defaults.insert("apiHost".to_string(), json!(""));
     defaults.insert("apiKey".to_string(), json!(""));
-    if let Some(api_path) = api_path {
-        defaults.insert("apiPath".to_string(), json!(api_path));
-    }
-    if let Some(api_version) = api_version {
-        defaults.insert("apiVersion".to_string(), json!(api_version));
-    }
     defaults
 }
 
