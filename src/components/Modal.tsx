@@ -50,9 +50,82 @@ export function Modal({
 }: ModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const bodyContentRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const generatedTitleId = useId();
   const titleId = title ? `${generatedTitleId}-title` : undefined;
+
+  const hasTitle = Boolean(title);
+  const hasFooter = Boolean(footer);
+
+  // Smooth resize logic
+  useEffect(() => {
+    if (!isOpen) {
+      if (modalRef.current) {
+        modalRef.current.style.height = '';
+      }
+      return;
+    }
+
+    let cachedPaddingTotal: number | null = null;
+    let isInitialMeasurement = true;
+    let rafId: number | null = null;
+
+    const updateHeight = () => {
+      if (!modalRef.current) return;
+
+      const headerH = headerRef.current?.offsetHeight || 0;
+      const footerH = footerRef.current?.offsetHeight || 0;
+      const bodyContentH = bodyContentRef.current?.offsetHeight || 0;
+
+      if (cachedPaddingTotal === null && bodyContentRef.current?.parentElement) {
+        const style = window.getComputedStyle(bodyContentRef.current.parentElement);
+        cachedPaddingTotal = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      }
+
+      const paddingTotal = cachedPaddingTotal || 0;
+      // Add 2px for the top and bottom borders of .shared-modal-shell
+      const totalHeight = headerH + footerH + bodyContentH + paddingTotal + 2;
+
+      if (isInitialMeasurement) {
+        modalRef.current.style.transition = 'none';
+        modalRef.current.style.height = `${totalHeight}px`;
+        // Force reflow
+        void modalRef.current.offsetHeight;
+        modalRef.current.style.transition = '';
+        isInitialMeasurement = false;
+      } else {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+        rafId = requestAnimationFrame(() => {
+          if (modalRef.current) {
+            modalRef.current.style.height = `${totalHeight}px`;
+          }
+        });
+      }
+    };
+
+    const observer = new ResizeObserver(updateHeight);
+
+    if (headerRef.current) observer.observe(headerRef.current);
+    if (bodyContentRef.current) observer.observe(bodyContentRef.current);
+    if (footerRef.current) observer.observe(footerRef.current);
+
+    // Initial measurement
+    const timeoutId = setTimeout(updateHeight, 0);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeoutId);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [isOpen, hasTitle, hasFooter]);
 
   // Focus trap and focus restoration
   useEffect(() => {
@@ -143,6 +216,10 @@ export function Modal({
     }
   };
 
+  const combinedShellStyle: React.CSSProperties = {
+    ...shellStyle,
+  };
+
   return (
     <ModalPortal>
       <div
@@ -154,7 +231,7 @@ export function Modal({
         <div
           ref={modalRef}
           className={joinClassNames(`shared-modal-shell shared-modal-${size}`, className)}
-          style={shellStyle}
+          style={combinedShellStyle}
           onClick={(e) => e.stopPropagation()}
           role={role}
           aria-modal="true"
@@ -162,7 +239,7 @@ export function Modal({
           tabIndex={-1}
         >
           {/* Header */}
-          <div className="shared-modal-header">
+          <div className="shared-modal-header" ref={headerRef}>
             {title && (
               typeof title === 'string' ? (
                 <h3 className="shared-modal-title" id={titleId}>{title}</h3>
@@ -186,12 +263,14 @@ export function Modal({
 
           {/* Body */}
           <div className="shared-modal-body" style={bodyStyle}>
-            {children}
+            <div ref={bodyContentRef}>
+              {children}
+            </div>
           </div>
 
           {/* Footer */}
           {footer && (
-            <div className="shared-modal-footer">
+            <div className="shared-modal-footer" ref={footerRef}>
               {footer}
             </div>
           )}
