@@ -34,6 +34,7 @@ import {
   updateTranscriptSegment,
   upsertTranscriptSegmentAndSetActive,
 } from '../stores/transcriptCoordinator';
+import { useTranscriptStore as useRealTranscriptStore, DEFAULT_SESSION_DATA, type TranscriptStore } from '../stores/transcriptStore';
 import { buildTestConfig } from './configTestUtils';
 
 type LegacyTranscriptState = ReturnType<typeof getTranscriptTestState>;
@@ -130,10 +131,14 @@ function applySessionPatch(patch: SessionPatch): void {
   if (Object.keys(patch).length === 0) {
     return;
   }
-
-  useTranscriptSessionStore.setState((state) => ({
-    ...state,
-    ...patch,
+  useRealTranscriptStore.setState((state: TranscriptStore) => ({
+    sessions: {
+      ...state.sessions,
+      [state.activeSessionId]: {
+        ...state.sessions[state.activeSessionId],
+        ...patch,
+      }
+    }
   }));
 }
 
@@ -141,10 +146,14 @@ function applyPlaybackPatch(patch: PlaybackPatch): void {
   if (Object.keys(patch).length === 0) {
     return;
   }
-
-  useTranscriptPlaybackStore.setState((state) => ({
-    ...state,
-    ...patch,
+  useRealTranscriptStore.setState((state: TranscriptStore) => ({
+    sessions: {
+      ...state.sessions,
+      [state.activeSessionId]: {
+        ...state.sessions[state.activeSessionId],
+        ...patch,
+      }
+    }
   }));
 }
 
@@ -152,22 +161,14 @@ function applyRuntimePatch(patch: RuntimePatch): void {
   if (Object.keys(patch).length === 0) {
     return;
   }
-
-  useTranscriptRuntimeStore.setState((state) => ({
-    ...state,
-    ...patch,
-  }));
+  useRealTranscriptStore.setState(patch);
 }
 
 function applySidecarPatch(patch: SidecarPatch): void {
   if (Object.keys(patch).length === 0) {
     return;
   }
-
-  useTranscriptSidecarStore.setState((state) => ({
-    ...state,
-    ...patch,
-  }));
+  useRealTranscriptStore.setState(patch);
 }
 
 function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void {
@@ -228,28 +229,28 @@ export function resetTranscriptStores(): void {
     isLoading: false,
     error: null,
   }));
-  useTranscriptSessionStore.setState((state) => ({
-    ...state,
-    ...INITIAL_TRANSCRIPT_SESSION_STATE,
-    aligningSegmentIds: new Set<string>(),
-  }));
-  useTranscriptPlaybackStore.setState((state) => ({
-    ...state,
-    ...INITIAL_TRANSCRIPT_PLAYBACK_STATE,
-  }));
-  useTranscriptRuntimeStore.setState((state) => ({
-    ...state,
+
+  const store = useRealTranscriptStore;
+
+  store.setState({
+    activeSessionId: 'default',
+    sessions: {
+      'default': {
+        ...DEFAULT_SESSION_DATA,
+        ...INITIAL_TRANSCRIPT_SESSION_STATE,
+        ...INITIAL_TRANSCRIPT_PLAYBACK_STATE,
+        aligningSegmentIds: new Set<string>(),
+      }
+    },
     mode: 'live',
     processingStatus: 'idle',
     processingProgress: 0,
     isRecording: false,
     isCaptionMode: false,
     isPaused: false,
-  }));
-  useTranscriptSidecarStore.setState((state) => ({
-    ...state,
     ...INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE,
-  }));
+  });
+
   syncEffectiveConfig();
 }
 

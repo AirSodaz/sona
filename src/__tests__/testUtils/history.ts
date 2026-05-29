@@ -36,6 +36,7 @@ export function createHistoryServiceMockModule(options?: {
     historyService: {
       saveImportedFile: vi.fn().mockResolvedValue(importedItem),
       updateTranscript: vi.fn().mockResolvedValue(undefined),
+      deleteSummary: vi.fn().mockResolvedValue(undefined),
     },
   };
 }

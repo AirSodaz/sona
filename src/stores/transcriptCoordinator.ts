@@ -1,215 +1,55 @@
-import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
-import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
-import { useTranscriptPlaybackStore } from './transcriptPlaybackStore';
-import { useTranscriptRuntimeStore } from './transcriptRuntimeStore';
-import { useTranscriptSessionStore } from './transcriptSessionStore';
-import { useTranscriptSidecarStore } from './transcriptSidecarStore';
-import { v4 as uuidv4 } from 'uuid';
-import { editorHtmlToTranscriptText, splitTranscriptText } from '../components/transcript/richText';
-import { stripHtmlTags, performSegmentSplit } from '../utils/segmentUtils';
+import { useTranscriptStore, type TranscriptStore } from './transcriptStore';
 
-interface OpenTranscriptSessionArgs {
-  segments: TranscriptSegment[];
-  sourceHistoryId: string | null;
-  title?: string | null;
-  icon?: string | null;
-  audioUrl?: string | null;
-}
+export { useTranscriptStore } from './transcriptStore';
 
-export function openTranscriptSession({
-  segments,
-  sourceHistoryId,
-  title,
-  icon,
-  audioUrl,
-}: OpenTranscriptSessionArgs): void {
-  const previousHistoryId = useTranscriptSessionStore.getState().sourceHistoryId;
-  if (sourceHistoryId && sourceHistoryId !== previousHistoryId) {
-    useTranscriptSidecarStore.getState().clearAutoSaveState(sourceHistoryId);
-  }
+export const openTranscriptSession = (...args: Parameters<TranscriptStore['openSession']>) => {
+  return useTranscriptStore.getState().openSession(...args);
+};
 
-  useTranscriptSessionStore.getState().openSession({
-    segments,
-    sourceHistoryId,
-    title,
-    icon,
-  });
-  useTranscriptPlaybackStore.getState().openSession(audioUrl);
-}
+export const loadTranscriptSession = (...args: Parameters<TranscriptStore['loadTranscriptSession']>) => {
+  return useTranscriptStore.getState().loadTranscriptSession(...args);
+};
 
-export function loadTranscriptSession(
-  segments: TranscriptSegment[],
-  sourceHistoryId: string | null,
-  title?: string | null,
-  icon?: string | null,
-): void {
-  openTranscriptSession({
-    segments,
-    sourceHistoryId,
-    title,
-    icon,
-  });
-}
+export const clearActiveTranscriptSession = (...args: Parameters<TranscriptStore['clearActiveTranscriptSession']>) => {
+  return useTranscriptStore.getState().clearActiveTranscriptSession(...args);
+};
 
-export function clearActiveTranscriptSession(options?: {
-  clearAudio?: boolean;
-  title?: string | null;
-}): void {
-  useTranscriptSessionStore.getState().clearSegments({ title: options?.title });
-  useTranscriptPlaybackStore.getState().clearSession({ clearAudio: options?.clearAudio });
-  useTranscriptSidecarStore.getState().clearSummaryState('current');
-}
+export const clearTranscriptSegments = (...args: Parameters<TranscriptStore['clearTranscriptSegments']>) => {
+  return useTranscriptStore.getState().clearTranscriptSegments(...args);
+};
 
-export function clearTranscriptSegments(): void {
-  clearActiveTranscriptSession();
-}
+export const syncSavedRecordingMeta = (...args: Parameters<TranscriptStore['syncSavedRecordingMeta']>) => {
+  return useTranscriptStore.getState().syncSavedRecordingMeta(...args);
+};
 
-export function syncSavedRecordingMeta(
-  title: string,
-  historyId: string,
-  icon: string | undefined | null,
-  audioUrl?: string | null,
-): void {
-  useTranscriptSessionStore.getState().setSourceHistoryId(historyId);
-  useTranscriptSidecarStore.getState().rekeyCurrentSummaryState(historyId);
-  useTranscriptSessionStore.getState().setTitle(title);
-  useTranscriptSessionStore.getState().setIcon(icon || null);
-  if (audioUrl !== undefined) {
-    useTranscriptPlaybackStore.getState().setAudioUrl(audioUrl);
-  }
-}
+export const setTranscriptSegments = (...args: Parameters<TranscriptStore['setSegments']>) => {
+  return useTranscriptStore.getState().setSegments(...args);
+};
 
-export function setTranscriptSegments(segments: TranscriptSegment[]): void {
-  useTranscriptSessionStore.getState().setSegments(segments);
-  useTranscriptPlaybackStore.getState().resetActiveSegmentIndex();
-}
+export const updateTranscriptSegment = (...args: Parameters<TranscriptStore['updateSegment']>) => {
+  return useTranscriptStore.getState().updateSegment(...args);
+};
 
-export function updateTranscriptSegment(
-  id: string,
-  updates: Partial<Omit<TranscriptSegment, 'id'>>,
-): void {
-  useTranscriptSessionStore.getState().updateSegment(id, updates);
-}
+export const deleteTranscriptSegment = (...args: Parameters<TranscriptStore['deleteSegment']>) => {
+  return useTranscriptStore.getState().deleteSegment(...args);
+};
 
-export function deleteTranscriptSegment(id: string): void {
-  useTranscriptSessionStore.getState().deleteSegment(id);
+export const mergeTranscriptSegments = (...args: Parameters<TranscriptStore['mergeSegments']>) => {
+  return useTranscriptStore.getState().mergeSegments(...args);
+};
 
-  const playbackStore = useTranscriptPlaybackStore.getState();
-  if (playbackStore.activeSegmentId === id) {
-    playbackStore.setActiveSegmentId(null);
-  }
-}
+export const splitTranscriptSegment = (...args: Parameters<TranscriptStore['splitTranscriptSegment']>) => {
+  return useTranscriptStore.getState().splitTranscriptSegment(...args);
+};
 
-export function mergeTranscriptSegments(id1: string, id2: string): void {
-  useTranscriptSessionStore.getState().mergeSegments(id1, id2);
-}
+export const finalizeLastTranscriptSegment = (...args: Parameters<TranscriptStore['finalizeLastSegment']>) => {
+  return useTranscriptStore.getState().finalizeLastSegment(...args);
+};
 
-export function splitTranscriptSegment(
-  id: string,
-  caretOffset: number,
-  currentHtml: string
-): string | null {
-  const sessionStore = useTranscriptSessionStore.getState();
-  const segment = sessionStore.segments.find((s) => s.id === id);
-  if (!segment) return null;
+export const applyTranscriptUpdate = (...args: Parameters<TranscriptStore['applyTranscriptUpdate']>) => {
+  return useTranscriptStore.getState().applyTranscriptUpdate(...args);
+};
 
-  const fullText = editorHtmlToTranscriptText(currentHtml);
-  const [leftText, rightText] = splitTranscriptText(fullText, caretOffset);
-  const plainText = stripHtmlTags(fullText);
-
-  const newSegmentId = uuidv4();
-
-  const { segmentLeft, segmentRight } = performSegmentSplit(
-    segment,
-    caretOffset,
-    plainText,
-    leftText,
-    rightText,
-    newSegmentId
-  );
-
-  // Replace segment with segmentLeft, and insert segmentRight after it
-  const nextSegments = [...sessionStore.segments];
-  const index = nextSegments.findIndex((s) => s.id === id);
-  if (index !== -1) {
-    nextSegments[index] = segmentLeft;
-    nextSegments.splice(index + 1, 0, segmentRight);
-  } else {
-    // Fallback if not found in list (should not happen)
-    nextSegments.push(segmentLeft, segmentRight);
-  }
-
-  sessionStore.setSegments(nextSegments);
-  sessionStore.setEditingSegmentId(newSegmentId);
-
-  return newSegmentId;
-}
-
-export function finalizeLastTranscriptSegment(): void {
-  useTranscriptSessionStore.getState().finalizeLastSegment();
-}
-
-export function applyTranscriptUpdate(update: TranscriptUpdate, activeSegmentId?: string | null): void {
-  const normalizedUpdate = normalizeTranscriptUpdate(update);
-  const sessionStore = useTranscriptSessionStore.getState();
-  const playbackStore = useTranscriptPlaybackStore.getState();
-  const removeIds = new Set(normalizedUpdate.removeIds);
-  let nextSegments = removeIds.size > 0
-    ? sessionStore.segments.filter((segment) => !removeIds.has(segment.id))
-    : [...sessionStore.segments];
-
-  normalizedUpdate.upsertSegments.forEach((segment) => {
-    const existingIndex = nextSegments.findIndex((candidate) => candidate.id === segment.id);
-    if (existingIndex !== -1) {
-      nextSegments = nextSegments.map((candidate, index) => (
-        index === existingIndex ? segment : candidate
-      ));
-      return;
-    }
-
-    nextSegments = [...nextSegments, segment].sort((a, b) => a.start - b.start);
-  });
-
-  sessionStore.setSegments(nextSegments);
-
-  let nextActiveSegmentId = playbackStore.activeSegmentId;
-  let nextActiveSegmentIndex: number;
-
-  if (activeSegmentId !== undefined) {
-    nextActiveSegmentId = activeSegmentId;
-    nextActiveSegmentIndex = activeSegmentId
-      ? nextSegments.findIndex((segment) => segment.id === activeSegmentId)
-      : -1;
-  } else if (nextActiveSegmentId && removeIds.has(nextActiveSegmentId)) {
-    const activeIndex = nextSegments.findIndex((segment) => segment.id === nextActiveSegmentId);
-    if (activeIndex === -1) {
-      nextActiveSegmentId = null;
-      nextActiveSegmentIndex = -1;
-    } else {
-      nextActiveSegmentIndex = activeIndex;
-    }
-  } else {
-    nextActiveSegmentIndex = -1;
-  }
-
-  playbackStore.setActiveSegmentId(nextActiveSegmentId, nextActiveSegmentIndex);
-}
-
-export function upsertTranscriptSegmentAndSetActive(segment: TranscriptSegment): void {
-  const sessionStore = useTranscriptSessionStore.getState();
-  sessionStore.upsertSegment(segment);
-
-  let nextSegments = useTranscriptSessionStore.getState().segments;
-  const MAX_CAPTION_SEGMENTS = 50;
-  const isCaptionMode = useTranscriptRuntimeStore.getState().isCaptionMode;
-  if (isCaptionMode && nextSegments.length > MAX_CAPTION_SEGMENTS) {
-    nextSegments = nextSegments.slice(-MAX_CAPTION_SEGMENTS);
-    sessionStore.setSegments(nextSegments);
-  }
-
-  const activeIndex = nextSegments.findIndex((candidate) => candidate.id === segment.id);
-  useTranscriptPlaybackStore.getState().setActiveSegmentId(
-    segment.id,
-    activeIndex === -1 ? nextSegments.length - 1 : activeIndex,
-  );
-}
+export const upsertTranscriptSegmentAndSetActive = (...args: Parameters<TranscriptStore['upsertTranscriptSegmentAndSetActive']>) => {
+  return useTranscriptStore.getState().upsertTranscriptSegmentAndSetActive(...args);
+};

@@ -45,6 +45,14 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 }));
 
 // Mock transcription service
+vi.mock('../../services/tauri/taskLedger', () => ({
+    taskLedgerUpsertTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerPatchTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerRemoveTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerClearResolved: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerLoadSnapshot: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+}));
+
 vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
         setModelPath: vi.fn(),

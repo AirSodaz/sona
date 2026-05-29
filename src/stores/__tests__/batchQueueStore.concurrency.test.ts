@@ -38,7 +38,16 @@ vi.mock('../../services/historyService', () => ({
     historyService: {
         saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id', projectId: null }),
         updateTranscript: vi.fn().mockResolvedValue(undefined),
+        deleteSummary: vi.fn().mockResolvedValue(undefined),
     }
+}));
+
+vi.mock('../../services/tauri/taskLedger', () => ({
+    taskLedgerUpsertTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerPatchTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerRemoveTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerClearResolved: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+    taskLedgerLoadSnapshot: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
 }));
 
 vi.mock('../projectStore', () => ({

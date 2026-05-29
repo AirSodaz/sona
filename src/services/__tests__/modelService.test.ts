@@ -572,7 +572,7 @@ describe('ModelService', () => {
             expect(enLocale.settings).toMatchObject({
                 audio_files: 'Audio Files',
                 speaker_segmentation_model_label: 'Speaker Segmentation Model',
-                speaker_segmentation_model_hint: 'Used to split offline recordings into anonymous speaker turns.',
+                speaker_segmentation_model_hint: 'Used to split local recordings into anonymous speaker turns.',
                 select_speaker_segmentation_model: 'Select speaker segmentation model...',
                 speaker_embedding_model_label: 'Speaker Embedding Model',
                 speaker_embedding_model_hint: 'Used to match diarized speakers against your known speaker profiles.',
@@ -600,7 +600,7 @@ describe('ModelService', () => {
             expect(zhLocale.settings).toMatchObject({
                 audio_files: '音频文件',
                 speaker_segmentation_model_label: '说话人分离模型',
-                speaker_segmentation_model_hint: '用于将离线录音拆分为匿名说话人片段。',
+                speaker_segmentation_model_hint: '用于将本地录音拆分为匿名说话人片段。',
                 select_speaker_segmentation_model: '选择说话人分离模型...',
                 speaker_embedding_model_label: '说话人特征模型',
                 speaker_embedding_model_hint: '用于将分离出的说话人与已知说话人档案匹配。',
