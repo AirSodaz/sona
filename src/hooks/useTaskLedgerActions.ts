@@ -20,7 +20,8 @@ export type TaskCenterActionId =
   | 'dismiss'
   | 'clear'
   | 'installUpdate'
-  | 'relaunchUpdate';
+  | 'relaunchUpdate'
+  | 'onboard';
 
 export type TaskCenterActionVariant = 'primary' | 'secondary' | 'secondarySoft';
 
@@ -64,11 +65,16 @@ export interface TaskCenterActionDependencies {
   onOpenRecoveryCenter: () => void;
   onOpenAutomationSettings: () => void;
   closePanel: () => void;
+  onboard: {
+    reopen: () => void;
+    dismiss: () => void;
+  };
 }
 
 export interface TaskCenterActionRegistry {
   getLedgerTaskActions: (task: TaskLedgerRecord) => TaskCenterAction[];
   getUpdateTaskActions: (entry: TaskCenterUpdateActionInput) => TaskCenterResolvedActions;
+  getOnboardingReminderActions: () => TaskCenterResolvedActions;
 }
 
 export interface UseTaskLedgerActionsInput {
@@ -80,6 +86,10 @@ export interface UseTaskLedgerActionsInput {
     installUpdate: () => Promise<void>;
     dismissNotification: () => void;
     relaunchToUpdate: () => Promise<void>;
+  };
+  onboard: {
+    reopen: () => void;
+    dismiss: () => void;
   };
 }
 
@@ -261,6 +271,28 @@ export function createTaskCenterActionRegistry(
         },
       };
     },
+
+    getOnboardingReminderActions: () => {
+      return {
+        row: [
+          {
+            id: 'onboard',
+            label: deps.t('first_run.banner.cta'),
+            variant: 'primary',
+            run: () => {
+              deps.closePanel();
+              deps.onboard.reopen();
+            },
+          },
+        ],
+        close: {
+          id: 'dismiss',
+          label: deps.t('first_run.banner.dismiss_aria_label'),
+          variant: 'secondarySoft',
+          run: deps.onboard.dismiss,
+        },
+      };
+    },
   };
 }
 
@@ -270,6 +302,7 @@ export function useTaskLedgerActions({
   onOpenAutomationSettings,
   closePanel,
   updater,
+  onboard,
 }: UseTaskLedgerActionsInput): TaskCenterActionRegistry {
   const requestTaskCancel = useTaskLedgerStore((state) => state.requestCancel);
   const removeTask = useTaskLedgerStore((state) => state.removeTask);
@@ -292,6 +325,7 @@ export function useTaskLedgerActions({
     onOpenRecoveryCenter,
     onOpenAutomationSettings,
     closePanel,
+    onboard,
   }), [
     addBatchFiles,
     closePanel,
@@ -305,5 +339,6 @@ export function useTaskLedgerActions({
     updater.dismissNotification,
     updater.installUpdate,
     updater.relaunchToUpdate,
+    onboard,
   ]);
 }

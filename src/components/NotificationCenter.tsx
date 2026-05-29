@@ -26,6 +26,11 @@ import {
     isTaskLedgerActiveStatus,
 } from '../types/taskLedger';
 import { useRecoveryStore } from '../stores/recoveryStore';
+import { useConfigStore } from '../stores/configStore';
+import { useDialogStore } from '../stores/dialogStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import { useShallow } from 'zustand/react/shallow';
+import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/onboarding';
 
 interface NotificationCenterProps {
     onOpenRecoveryCenter: () => void;
@@ -53,8 +58,16 @@ interface UpdateTaskEntry {
     isBusy: boolean;
 }
 
-type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry;
-type NotificationTone = 'update' | 'recovery' | 'automation-failure' | 'automation-success' | 'task-active' | 'task-recent';
+interface OnboardingTaskEntry {
+    source: 'onboarding';
+    id: 'onboarding';
+    section: 'needsAction';
+    title: string;
+    body: string;
+}
+
+type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry | OnboardingTaskEntry;
+type NotificationTone = 'update' | 'recovery' | 'onboarding' | 'automation-failure' | 'automation-success' | 'task-active' | 'task-recent';
 
 function getFileName(filePath?: string): string | null {
     if (!filePath) {
@@ -317,6 +330,22 @@ export function NotificationCenter({
     const tasks = useTaskLedgerStore((state) => state.tasks);
     const clearResolvedTasks = useTaskLedgerStore((state) => state.clearResolved);
     const isRecoveryLoaded = useRecoveryStore((state) => state.isLoaded);
+    const config = useConfigStore((state) => state.config);
+    const confirm = useDialogStore((state) => state.confirm);
+    const { 
+        isOpen: isOnboardingOpen, 
+        persistedState: onboardingState, 
+        dismissReminder: dismissOnboardingReminder, 
+        reopen: reopenOnboarding 
+    } = useOnboardingStore(
+        useShallow((state) => ({
+            isOpen: state.isOpen,
+            persistedState: state.persistedState,
+            dismissReminder: state.dismissReminder,
+            reopen: state.reopen,
+        }))
+    );
+
     const {
         status,
         updateInfo,
@@ -326,12 +355,28 @@ export function NotificationCenter({
         dismissNotification: dismissUpdateNotification,
         relaunchToUpdate,
     } = useAppUpdater();
+
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const panelId = useId();
+
     const closePanel = useCallback(() => {
         setIsOpen(false);
     }, []);
+
+    const handleDismissOnboarding = useCallback(async () => {
+        const confirmed = await confirm(t('first_run.banner.dismiss_confirm_message'), {
+            title: t('first_run.banner.dismiss_confirm_title'),
+            variant: 'warning',
+            confirmLabel: t('first_run.banner.dismiss_confirm_action'),
+        });
+        if (!confirmed) {
+            return;
+        }
+
+        dismissOnboardingReminder();
+    }, [confirm, dismissOnboardingReminder, t]);
+
     const taskActions = useTaskLedgerActions({
         t,
         onOpenRecoveryCenter,
@@ -341,6 +386,10 @@ export function NotificationCenter({
             installUpdate,
             dismissNotification: dismissUpdateNotification,
             relaunchToUpdate,
+        },
+        onboard: {
+            reopen: () => reopenOnboarding(getResumeOnboardingStep(config, 'startup', onboardingState), 'startup'),
+            dismiss: () => { void handleDismissOnboarding(); },
         },
     });
 
@@ -383,11 +432,21 @@ export function NotificationCenter({
             });
         }
 
+        if (!isOnboardingOpen && shouldShowOnboardingReminder(config, onboardingState)) {
+            nextEntries.push({
+                source: 'onboarding',
+                id: 'onboarding',
+                section: 'needsAction',
+                title: t('first_run.banner.title'),
+                body: t('first_run.banner.body'),
+            });
+        }
+
         const getUpdatedAt = (entry: TaskCenterEntry): number => {
             if (entry.source === 'ledger') {
                 return entry.task.updatedAt;
             }
-            if (entry.source === 'update') {
+            if (entry.source === 'update' || entry.source === 'onboarding') {
                 return Number.MAX_SAFE_INTEGER;
             }
             return 0;
@@ -404,6 +463,9 @@ export function NotificationCenter({
         tasks,
         updateInfo,
         isRecoveryLoaded,
+        isOnboardingOpen,
+        config,
+        onboardingState,
     ]);
 
     const groupedEntries = useMemo(() => ({
@@ -594,9 +656,29 @@ export function NotificationCenter({
         );
     };
 
+    const renderOnboardingEntry = (entry: OnboardingTaskEntry) => {
+        const actions = taskActions.getOnboardingReminderActions();
+        return (
+            <NotificationCard
+                key={entry.id}
+                tone="onboarding"
+                itemClassName="notification-center-item-onboarding"
+                icon={<SparklesIcon />}
+                title={entry.title}
+                body={entry.body}
+                closeButton={renderCloseAction(actions.close)}
+                actions={renderActions(actions.row)}
+            />
+        );
+    };
+
     const renderEntry = (entry: TaskCenterEntry) => {
         if (entry.source === 'update') {
             return renderUpdateEntry(entry);
+        }
+
+        if (entry.source === 'onboarding') {
+            return renderOnboardingEntry(entry);
         }
 
         return renderLedgerTask(entry);

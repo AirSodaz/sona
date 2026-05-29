@@ -10,7 +10,6 @@ import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { NotificationCenter } from './components/NotificationCenter';
-import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useProjectStore } from './stores/projectStore';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
@@ -266,8 +265,6 @@ function App(): React.JSX.Element {
           </button>
         </div>
       </header>
-
-      <OnboardingReminderBanner />
 
       {/* Main Content */}
       <main id="main-content" className={appMainClassName}>

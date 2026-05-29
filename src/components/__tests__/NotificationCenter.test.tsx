@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NotificationCenter } from '../NotificationCenter';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { shouldShowOnboardingReminder } from '../../utils/onboarding';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 
 const taskLedgerState = {
@@ -26,6 +27,21 @@ const automationState = {
 
 const batchQueueState = {
   addFiles: vi.fn(),
+};
+
+const onboardingState = {
+  isOpen: false,
+  persistedState: { version: 1, status: 'completed' },
+  dismissReminder: vi.fn(),
+  reopen: vi.fn(),
+};
+
+const configState = {
+  config: {},
+};
+
+const dialogState = {
+  confirm: vi.fn(),
 };
 
 const retryAutomationTaskFromLedgerMock = vi.fn();
@@ -91,6 +107,24 @@ vi.mock('../../stores/batchQueueStore', () => ({
   useBatchQueueStore: (selector: any) => selector(batchQueueState),
 }));
 
+vi.mock('../../stores/onboardingStore', () => ({
+  useOnboardingStore: (selector: any) => selector(onboardingState),
+}));
+
+vi.mock('../../stores/configStore', () => ({
+  useConfigStore: (selector: any) => selector(configState),
+  DEFAULT_CONFIG: {},
+}));
+
+vi.mock('../../stores/dialogStore', () => ({
+  useDialogStore: (selector: any) => selector(dialogState),
+}));
+
+vi.mock('../../utils/onboarding', () => ({
+  getResumeOnboardingStep: vi.fn(() => 'microphone'),
+  shouldShowOnboardingReminder: vi.fn(() => false),
+}));
+
 function interpolate(template: string, options?: Record<string, unknown>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
 }
@@ -126,6 +160,10 @@ function translate(key: string, options?: Record<string, unknown>): string {
   if (key === 'automation.notifications.stage_detail') return `Latest stage: ${options?.stage}`;
   if (key === 'automation.notifications.file_unknown') return 'Latest item unavailable';
   if (key === 'recovery.stage.transcribing') return 'Transcribing';
+  if (key === 'first_run.banner.title') return 'Complete Setup';
+  if (key === 'first_run.banner.body') return 'Recommended local models are missing.';
+  if (key === 'first_run.banner.cta') return 'Continue Setup';
+  if (key === 'first_run.banner.dismiss_aria_label') return 'Dismiss';
   return key;
 }
 
@@ -174,6 +212,9 @@ describe('NotificationCenter task center', () => {
     taskLedgerState.tasks = [];
     recoveryState.isLoaded = true;
     automationState.notifications = [];
+    onboardingState.isOpen = false;
+    onboardingState.persistedState = { version: 1, status: 'completed' };
+    vi.mocked(shouldShowOnboardingReminder).mockReturnValue(false);
     retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
@@ -610,5 +651,26 @@ describe('NotificationCenter task center', () => {
       expect(screen.getByText('Relaunch to update')).toBeDefined();
       expect(screen.getByRole('button', { name: 'Relaunch' })).toBeDefined();
     });
+  });
+
+  it('renders a high-priority onboarding reminder when setup is incomplete', () => {
+    vi.mocked(shouldShowOnboardingReminder).mockReturnValue(true);
+    onboardingState.persistedState = { version: 1, status: 'pending' };
+
+    const { container } = render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    expect(screen.getByText('Complete Setup')).toBeDefined();
+    expect(screen.getByText('Recommended local models are missing.')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Continue Setup' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeDefined();
   });
 });

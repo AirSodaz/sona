@@ -43,6 +43,10 @@ function makeDeps(
     onOpenRecoveryCenter: vi.fn(),
     onOpenAutomationSettings: vi.fn(),
     closePanel: vi.fn(),
+    onboard: {
+      reopen: vi.fn(),
+      dismiss: vi.fn(),
+    },
     ...overrides,
   };
 }
@@ -207,5 +211,21 @@ describe('createTaskCenterActionRegistry', () => {
     })), 'retry').run()).rejects.toThrow('Transcript is no longer available for retry.');
 
     expect(deps.removeTask).not.toHaveBeenCalled();
+  });
+
+  it('maps onboarding reminder state to onboard and dismiss actions', () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getOnboardingReminderActions();
+    expect(actions.row.map((action) => action.id)).toEqual(['onboard']);
+    expect(actions.close?.id).toBe('dismiss');
+
+    getAction(actions.row, 'onboard').run();
+    expect(deps.closePanel).toHaveBeenCalled();
+    expect(deps.onboard.reopen).toHaveBeenCalled();
+
+    actions.close?.run();
+    expect(deps.onboard.dismiss).toHaveBeenCalled();
   });
 });
