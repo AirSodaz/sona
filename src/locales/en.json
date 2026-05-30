@@ -1075,13 +1075,17 @@
             "description": "Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.",
             "restart_warning": "Changes to the API Server take effect on the next application launch.",
             "enable_label": "Enable API Server",
+            "enable_hint": "Start an HTTP server to control Sona via external applications.",
             "host_label": "Host",
+            "host_hint": "Bind address for the server. '127.0.0.1' restricts access to localhost, while '0.0.0.0' allows remote access.",
             "port_label": "Port",
+            "port_hint": "TCP port for the API server. Must be between 1 and 65535 (default: 14200).",
             "api_key_label": "API Key",
+            "api_key_hint": "Optional Bearer token for authenticating HTTP requests.",
             "api_key_placeholder": "Optional bearer token",
             "generate_key": "Generate",
             "copy_key": "Copy",
-            "copied": "Copied"
+            "copied": "Copied!"
         },
         "llm": {
             "title": "LLM Service",

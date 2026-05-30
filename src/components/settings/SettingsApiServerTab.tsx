@@ -1,8 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Server, RefreshCw, Copy, Check } from 'lucide-react';
+
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
-import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
+import { SettingsPageHeader, SettingsSection, SettingsTabContainer, SettingsItem } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { invokeTauri } from '../../services/tauri/invoke';
 import { TauriCommand } from '../../services/tauri/commands';
@@ -84,67 +85,53 @@ export function SettingsApiServerTab(): React.JSX.Element {
 
             <SettingsSection>
                 {/* Enable Toggle */}
-                <div className="settings-item-container layout-horizontal">
-                    <div className="settings-item-info">
-                        <div className="settings-item-title">
-                            {t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
-                        </div>
-                    </div>
-                    <div className="settings-item-action">
-                        <Switch
-                            checked={config.httpServerEnabled ?? false}
-                            onChange={(checked) => setConfig({ httpServerEnabled: checked })}
-                            aria-label={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
-                        />
-                    </div>
-                </div>
+                <SettingsItem
+                    title={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
+                    hint={t('settings.api_server.enable_hint', { defaultValue: 'Start an HTTP server to control Sona via external applications.' })}
+                >
+                    <Switch
+                        checked={config.httpServerEnabled ?? false}
+                        onChange={(checked) => setConfig({ httpServerEnabled: checked })}
+                        aria-label={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
+                    />
+                </SettingsItem>
 
                 {/* Host */}
-                <div className="settings-item-container layout-horizontal">
-                    <div className="settings-item-info">
-                        <div className="settings-item-title">
-                            {t('settings.api_server.host_label', { defaultValue: 'Host' })}
-                        </div>
-                    </div>
-                    <div className="settings-item-action">
-                        <input
-                            type="text"
-                            className="input-text"
-                            value={config.httpServerHost ?? '127.0.0.1'}
-                            onChange={handleHostChange}
-                            style={{ width: '200px' }}
-                        />
-                    </div>
-                </div>
+                <SettingsItem
+                    title={t('settings.api_server.host_label', { defaultValue: 'Host' })}
+                    hint={t('settings.api_server.host_hint', { defaultValue: "Bind address for the server. '127.0.0.1' restricts access to localhost, while '0.0.0.0' allows remote access." })}
+                >
+                    <input
+                        type="text"
+                        className="input-text"
+                        value={config.httpServerHost ?? '127.0.0.1'}
+                        onChange={handleHostChange}
+                        style={{ width: '200px' }}
+                    />
+                </SettingsItem>
 
                 {/* Port */}
-                <div className="settings-item-container layout-horizontal">
-                    <div className="settings-item-info">
-                        <div className="settings-item-title">
-                            {t('settings.api_server.port_label', { defaultValue: 'Port' })}
-                        </div>
-                    </div>
-                    <div className="settings-item-action">
-                        <input
-                            type="number"
-                            className="input-text"
-                            value={config.httpServerPort ?? 14200}
-                            onChange={handlePortChange}
-                            min={1}
-                            max={65535}
-                            style={{ width: '200px' }}
-                        />
-                    </div>
-                </div>
+                <SettingsItem
+                    title={t('settings.api_server.port_label', { defaultValue: 'Port' })}
+                    hint={t('settings.api_server.port_hint', { defaultValue: 'TCP port for the API server. Must be between 1 and 65535 (default: 14200).' })}
+                >
+                    <input
+                        type="number"
+                        className="input-text"
+                        value={config.httpServerPort ?? 14200}
+                        onChange={handlePortChange}
+                        min={1}
+                        max={65535}
+                        style={{ width: '200px' }}
+                    />
+                </SettingsItem>
 
                 {/* API Key */}
-                <div className="settings-item-container layout-horizontal">
-                    <div className="settings-item-info">
-                        <div className="settings-item-title">
-                            {t('settings.api_server.api_key_label', { defaultValue: 'API Key' })}
-                        </div>
-                    </div>
-                    <div className="settings-item-action" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <SettingsItem
+                    title={t('settings.api_server.api_key_label', { defaultValue: 'API Key' })}
+                    hint={t('settings.api_server.api_key_hint', { defaultValue: 'Optional Bearer token for authenticating HTTP requests.' })}
+                >
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <input
                             type="password"
                             className="input-text"
@@ -156,7 +143,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         <button 
                             className="btn btn-icon" 
                             onClick={handleGenerateKey}
-                            title={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
+                            data-tooltip={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
+                            data-tooltip-pos="top"
                             aria-label={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
                         >
                             <RefreshCw size={16} />
@@ -164,13 +152,14 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         <button 
                             className="btn btn-icon" 
                             onClick={handleCopyKey}
-                            title={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
+                            data-tooltip={copied ? t('settings.api_server.copied', { defaultValue: 'Copied!' }) : t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
+                            data-tooltip-pos="top"
                             aria-label={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
                         >
                             {copied ? <Check size={16} color="green" /> : <Copy size={16} />}
                         </button>
                     </div>
-                </div>
+                </SettingsItem>
 
             </SettingsSection>
         </SettingsTabContainer>

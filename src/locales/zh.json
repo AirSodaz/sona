@@ -1074,13 +1074,17 @@
             "description": "通过暴露本地 HTTP API，使外部应用能够通过编程的方式调用 Sona。支持批量音频转写任务提交与状态轮询等。",
             "restart_warning": "修改后的 API 服务设置将在下一次启动客户端时生效。",
             "enable_label": "启用 API 服务",
+            "enable_hint": "启动 HTTP 服务，允许外部程序调用 Sona。",
             "host_label": "监听地址",
+            "host_hint": "服务绑定的 IP 地址。'127.0.0.1' 仅限本机访问，'0.0.0.0' 允许局域网或公网外部访问。",
             "port_label": "端口",
+            "port_hint": "API 服务运行的 TCP 端口。必须介于 1 到 65535 之间（默认：14200）。",
             "api_key_label": "安全密钥",
+            "api_key_hint": "用于验证 HTTP 请求的可选 Bearer 令牌，确保接口安全。",
             "api_key_placeholder": "可选的 Bearer 令牌",
             "generate_key": "生成",
             "copy_key": "复制",
-            "copied": "已复制"
+            "copied": "已复制！"
         },
         "llm": {
             "title": "大模型服务",
