@@ -231,6 +231,7 @@
         "seek_tooltip": "Click to seek",
         "edit_tooltip": "Edit segment",
         "merge_tooltip": "Merge with next",
+        "cannot_merge_tooltip": "Cannot merge with different speaker",
         "delete_tooltip": "Delete segment",
         "seek_label": "Seek to {{time}}",
         "edit_label": "Edit segment at {{time}}",

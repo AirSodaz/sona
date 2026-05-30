@@ -231,6 +231,7 @@
         "seek_tooltip": "点击跳转",
         "edit_tooltip": "编辑分段",
         "merge_tooltip": "合并至下一段",
+        "cannot_merge_tooltip": "无法与不同的说话人合并",
         "delete_tooltip": "删除分段",
         "seek_label": "跳转至 {{time}}",
         "edit_label": "编辑 {{time}} 处的分段",
