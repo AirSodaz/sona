@@ -291,6 +291,22 @@ export interface VoiceTypingConfig {
 }
 
 // ---------------------------------------------------------------------------
+// API Server
+// ---------------------------------------------------------------------------
+
+/** HTTP API Server settings. */
+export interface ApiServerConfig {
+  /** Whether the HTTP API Server is enabled. Default: false. */
+  httpServerEnabled?: boolean;
+  /** Host address for the HTTP API Server. Default: '127.0.0.1'. */
+  httpServerHost?: string;
+  /** Port for the HTTP API Server. Default: 14200. */
+  httpServerPort?: number;
+  /** API Key (Bearer token) for the HTTP API Server. Default: ''. */
+  httpServerApiKey?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -310,4 +326,5 @@ export type AppConfig =
   TranscriptionConfig &
   VocabularyConfig &
   VoiceTypingConfig &
+  ApiServerConfig &
   LlmAssistantConfig;

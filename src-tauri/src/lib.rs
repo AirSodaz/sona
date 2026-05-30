@@ -20,6 +20,7 @@ pub mod preset_models;
 mod project_repository;
 mod recovery;
 mod runtime_status;
+pub mod server;
 pub mod sherpa;
 pub mod speaker;
 mod speaker_correction;
@@ -211,7 +212,48 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|app| tray::setup_tray(app))
+        .setup(|app| {
+            tray::setup_tray(app)?;
+
+            // Start HTTP API Server if enabled
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let config_path = app_handle.path().app_data_dir().unwrap().join("settings.json");
+                let mut http_server_enabled = false;
+                let mut host = "127.0.0.1".to_string();
+                let mut port = 14200;
+                let mut api_key = "".to_string();
+
+                if let Ok(content) = std::fs::read_to_string(&config_path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(config) = json.get("sona-config") {
+                            if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool()) {
+                                http_server_enabled = enabled;
+                            }
+                            if let Some(h) = config.get("httpServerHost").and_then(|v| v.as_str()) {
+                                host = h.to_string();
+                            }
+                            if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
+                                port = p as u16;
+                            }
+                            if let Some(key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
+                                api_key = key.to_string();
+                            }
+                        }
+                    }
+                }
+
+                if http_server_enabled {
+                    let temp_dir = app_handle.path().app_local_data_dir().unwrap().join("api_temp");
+                    let models_dir = app_handle.path().app_local_data_dir().unwrap().join("models");
+                    if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir).await {
+                        log::error!("HTTP API Server failed: {}", e);
+                    }
+                }
+            });
+
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();

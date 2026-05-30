@@ -160,6 +160,10 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         return true;
     }
 
+    if config.get("httpServerEnabled").is_none() {
+        return true;
+    }
+
     for key in [
         "polishCustomPresets",
         "polishKeywordSets",
@@ -264,8 +268,17 @@ fn normalize_current_config(existing: Value) -> Value {
         "speakerEmbeddingModelPath",
         json!(speaker_embedding_model_path),
     );
+    let http_server_enabled = bool_at(&config, "httpServerEnabled").unwrap_or(false);
+    let http_server_port = number_or_default(&config, "httpServerPort", 14200);
+    let http_server_host = string_or_default(&config, "httpServerHost", "127.0.0.1");
+    let http_server_api_key = string_or_default(&config, "httpServerApiKey", "");
+
     set(&mut config, "speakerProfiles", speaker_profiles);
     set(&mut config, "asr", asr_config);
+    set(&mut config, "httpServerEnabled", json!(http_server_enabled));
+    set(&mut config, "httpServerPort", json!(http_server_port));
+    set(&mut config, "httpServerHost", json!(http_server_host));
+    set(&mut config, "httpServerApiKey", json!(http_server_api_key));
     set(&mut config, "__original", original);
     config
 }
@@ -318,6 +331,13 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         return true;
     }
     if asr_config_needs_persist(existing.get("asr"), normalized.get("asr")) {
+        return true;
+    }
+    if existing.get("httpServerEnabled") != normalized.get("httpServerEnabled")
+        || existing.get("httpServerPort") != normalized.get("httpServerPort")
+        || existing.get("httpServerHost") != normalized.get("httpServerHost")
+        || existing.get("httpServerApiKey") != normalized.get("httpServerApiKey")
+    {
         return true;
     }
     existing.get("logLevel") != normalized.get("logLevel")
@@ -598,6 +618,22 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             "speakerEmbeddingModelPath",
             json!(string_at(&parsed, "speakerEmbeddingModelPath").unwrap_or_default()),
         ),
+        (
+            "httpServerEnabled",
+            json!(bool_at(&parsed, "httpServerEnabled").unwrap_or(false)),
+        ),
+        (
+            "httpServerPort",
+            json!(number_or_default(&parsed, "httpServerPort", 14200)),
+        ),
+        (
+            "httpServerHost",
+            json!(string_or_default(&parsed, "httpServerHost", "127.0.0.1")),
+        ),
+        (
+            "httpServerApiKey",
+            json!(string_or_default(&parsed, "httpServerApiKey", "")),
+        ),
     ] {
         set(&mut config, key, value);
     }
@@ -715,6 +751,10 @@ fn default_config() -> Value {
         ("polishKeywordSets", json!([])),
         ("speakerProfiles", json!([])),
         ("hotwords", json!([])),
+        ("httpServerEnabled", json!(false)),
+        ("httpServerPort", json!(14200)),
+        ("httpServerHost", json!("127.0.0.1")),
+        ("httpServerApiKey", json!("")),
     ] {
         config.insert(key.to_string(), value);
     }
@@ -2235,7 +2275,11 @@ mod tests {
                     "translationModelId": "model-1",
                     "summaryModelId": "model-1"
                 }
-            }
+            },
+            "httpServerEnabled": false,
+            "httpServerHost": "127.0.0.1",
+            "httpServerPort": 14200,
+            "httpServerApiKey": ""
         });
 
         let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());

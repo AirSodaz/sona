@@ -10,6 +10,7 @@ export const SETTINGS_TABS = [
     'models',
     'vocabulary',
     'automation',
+    'api_server',
     'llm_service',
     'shortcuts',
     'about',
@@ -69,6 +70,11 @@ export const loadSettingsAutomationTab = memoizeLoader(async () => {
     return { default: module.SettingsAutomationTab };
 });
 
+export const loadSettingsApiServerTab = memoizeLoader(async () => {
+    const module = await import('./SettingsApiServerTab');
+    return { default: module.SettingsApiServerTab };
+});
+
 export const loadSettingsLLMServiceTab = memoizeLoader(async () => {
     const module = await import('./SettingsLLMServiceTab');
     return { default: module.SettingsLLMServiceTab };
@@ -100,6 +106,7 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
     models: () => loadSettingsModelsPane().then(() => undefined),
     vocabulary: () => loadSettingsVocabularyTab().then(() => undefined),
     automation: () => loadSettingsAutomationTab().then(() => undefined),
+    api_server: () => loadSettingsApiServerTab().then(() => undefined),
     llm_service: () => loadSettingsLLMServiceTab().then(() => undefined),
     shortcuts: () => loadSettingsShortcutsTab().then(() => undefined),
     about: () => loadSettingsAboutTab().then(() => undefined),

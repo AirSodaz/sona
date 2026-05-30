@@ -13,7 +13,8 @@ export type SettingsTab =
     | 'about'
     | 'llm_service'
     | 'vocabulary'
-    | 'automation';
+    | 'automation'
+    | 'api_server';
 export type SettingsTabInput = SettingsTab | 'context';
 
 interface SettingsTabState {

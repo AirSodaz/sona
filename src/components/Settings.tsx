@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Type } from 'lucide-react';
+import { BarChart3, Type, Server } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogStore } from '../stores/dialogStore';
@@ -56,6 +56,7 @@ const SettingsVoiceTypingTab = lazy(loadSettingsVoiceTypingTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
+const SettingsApiServerTab = lazy(() => import('./settings/settingsLoaders').then(m => m.loadSettingsApiServerTab()));
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);
@@ -96,6 +97,8 @@ function renderSettingsPane(
             return <SettingsVocabularyTab />;
         case 'automation':
             return <SettingsAutomationTab />;
+        case 'api_server':
+            return <SettingsApiServerTab />;
         case 'llm_service':
             return <SettingsLLMServiceTab isActive={isActive} onOpenProviderDetails={onOpenLlmProviderDetails} />;
         case 'shortcuts':
@@ -461,6 +464,14 @@ export function Settings({
                             activeTab={renderedTab}
                             setActiveTab={navigateToTab}
                             tabIndex={renderedTab === 'automation' ? 0 : -1}
+                        />
+                        <SettingsTabButton
+                            id="api_server"
+                            label={t('api_server.title', { defaultValue: 'API Server' })}
+                            Icon={() => <Server size={18} />}
+                            activeTab={renderedTab}
+                            setActiveTab={navigateToTab}
+                            tabIndex={renderedTab === 'api_server' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="llm_service"

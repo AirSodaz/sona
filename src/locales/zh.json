@@ -1069,8 +1069,20 @@
             "by_category": "按类别",
             "calls_and_tokens": "{{calls}} 次调用 · {{tokens}} tokens"
         },
+        "api_server": {
+            "title": "API 服务",
+            "description": "通过暴露本地 HTTP API，使外部应用能够通过编程的方式调用 Sona。支持批量音频转写任务提交与状态轮询等。",
+            "restart_warning": "修改后的 API 服务设置将在下一次启动客户端时生效。",
+            "enable_label": "启用 API 服务",
+            "host_label": "监听地址",
+            "port_label": "端口",
+            "api_key_label": "安全密钥",
+            "generate_key": "生成",
+            "copy_key": "复制",
+            "copied": "已复制"
+        },
         "llm": {
-            "title": "LLM 服务",
+            "title": "大模型服务",
             "description": "配置用于润色、翻译和生成摘要的 LLM 供应商及模型。",
             "service_type": "LLM 服务类型",
             "credential_provider": "凭据供应商",

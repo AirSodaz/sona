@@ -16,9 +16,10 @@ use tokio::io::AsyncWriteExt;
 const DEFAULT_THREADS: i32 = 4;
 const DEFAULT_LANGUAGE: &str = "auto";
 const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
-const CLI_COMMANDS: [&str; 7] = [
+const CLI_COMMANDS: [&str; 8] = [
     "transcribe",
     "models",
+    "serve",
     "--help",
     "-h",
     "--version",
@@ -45,6 +46,24 @@ enum Commands {
     Transcribe(TranscribeArgs),
     /// Lists or downloads preset models.
     Models(ModelsArgs),
+    /// Starts the HTTP API server in headless mode.
+    Serve(ServeArgs),
+}
+
+#[derive(Debug, Args)]
+struct ServeArgs {
+    #[arg(long, default_value = "14200")]
+    port: u16,
+    #[arg(long, default_value = "0.0.0.0")]
+    host: String,
+    #[arg(long, default_value = "")]
+    api_key: String,
+    /// Models directory containing installed presets.
+    #[arg(
+        long,
+        help = "Override the models directory used to resolve installed models"
+    )]
+    models_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -243,7 +262,14 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> Resu
     match cli.command {
         Commands::Transcribe(args) => run_transcribe(args).await,
         Commands::Models(args) => run_models(args).await,
+        Commands::Serve(args) => run_serve(args).await,
     }
+}
+
+async fn run_serve(args: ServeArgs) -> Result<(), String> {
+    let models_dir = resolve_models_dir(args.models_dir)?;
+    let temp_dir = std::env::temp_dir().join("sona_api");
+    crate::server::run_server(&args.host, args.port, &args.api_key, temp_dir, models_dir).await
 }
 
 /// File-backed CLI configuration loaded from TOML.

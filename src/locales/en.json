@@ -1070,6 +1070,18 @@
             "by_category": "By Category",
             "calls_and_tokens": "{{calls}} calls · {{tokens}} tokens"
         },
+        "api_server": {
+            "title": "API Server",
+            "description": "Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.",
+            "restart_warning": "Changes to the API Server take effect on the next application launch.",
+            "enable_label": "Enable API Server",
+            "host_label": "Host",
+            "port_label": "Port",
+            "api_key_label": "API Key",
+            "generate_key": "Generate",
+            "copy_key": "Copy",
+            "copied": "Copied"
+        },
         "llm": {
             "title": "LLM Service",
             "description": "Configure LLM providers and models used for polishing, translating, and summarizing transcripts.",

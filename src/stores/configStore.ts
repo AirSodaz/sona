@@ -15,6 +15,7 @@ import type {
   TranscriptionConfig,
   VocabularyConfig,
   VoiceTypingConfig,
+  ApiServerConfig,
   LlmAssistantConfig,
 } from '../types/config';
 
@@ -120,6 +121,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingShortcut: 'Alt+V',
   voiceTypingMode: 'hold',
 
+  // API Server
+  httpServerEnabled: false,
+  httpServerHost: '127.0.0.1',
+  httpServerPort: 14200,
+  httpServerApiKey: '',
+
   // Vocabulary
   textReplacementSets: [],
   hotwordSets: [],
@@ -203,6 +210,10 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingEnabled', 'voiceTypingShortcut', 'voiceTypingMode'
 ];
 
+const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
+  'httpServerEnabled', 'httpServerHost', 'httpServerPort', 'httpServerApiKey'
+];
+
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -255,6 +266,11 @@ export function useVoiceTypingConfig(): VoiceTypingConfig {
 /** LLM assistant and auto-polish settings. */
 export function useLlmAssistantConfig(): LlmAssistantConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, LLM_KEYS)));
+}
+
+/** HTTP API Server settings. */
+export function useApiServerConfig(): ApiServerConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, API_SERVER_KEYS)));
 }
 
 // ---------------------------------------------------------------------------
