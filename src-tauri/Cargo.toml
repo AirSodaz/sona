@@ -1,10 +1,10 @@
 [package]
-name = "tauri-appsona"
+name = "sona"
 version = "0.6.9"
-description = "A Tauri App"
-authors = ["you"]
+description = "Sona - A privacy-first, offline transcript editor"
+authors = ["AirSodaz"]
 edition = "2021"
-default-run = "tauri-appsona"
+default-run = "sona"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -89,3 +89,4 @@ windows = { version = "0.61", features = [
 
 [dev-dependencies]
 tempfile = "3.20.0"
+tower = { version = "0.5", features = ["util"] }

@@ -1517,11 +1517,11 @@ fn normalize_provider_str(provider: &str) -> String {
     if provider == "openai_compatible" || provider == "open_ai_compatible" {
         return LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string();
     }
-    
+
     if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
         return llm_provider.id.clone();
     }
-    
+
     DEFAULT_LLM_PROVIDER.to_string()
 }
 
@@ -1568,14 +1568,20 @@ fn provider_defaults(
 
     if provider == "google_translate_free" {
         let mut defaults = Map::new();
-        defaults.insert("apiHost".to_string(), json!("https://translate.googleapis.com/translate_a/single"));
+        defaults.insert(
+            "apiHost".to_string(),
+            json!("https://translate.googleapis.com/translate_a/single"),
+        );
         defaults.insert("apiKey".to_string(), json!(""));
         return defaults;
     }
-    
+
     if provider == "google_translate" {
         let mut defaults = Map::new();
-        defaults.insert("apiHost".to_string(), json!("https://translation.googleapis.com/language/translate/v2"));
+        defaults.insert(
+            "apiHost".to_string(),
+            json!("https://translation.googleapis.com/language/translate/v2"),
+        );
         defaults.insert("apiKey".to_string(), json!(""));
         return defaults;
     }

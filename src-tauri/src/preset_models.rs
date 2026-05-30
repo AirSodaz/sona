@@ -8,8 +8,8 @@ const PRESET_MODELS_JSON: &str = include_str!("../../src/shared/preset-models.js
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =
     "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17";
 const DEFAULT_SENSEVOICE_FP32_MODEL_ID: &str = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
-const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-vad";
-const DEFAULT_PUNCTUATION_MODEL_ID: &str =
+pub const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-vad";
+pub const DEFAULT_PUNCTUATION_MODEL_ID: &str =
     "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8";
 
 /// Default model rules used when a preset omits explicit requirements.

@@ -5,6 +5,8 @@ use axum::{
     Json, Router,
 };
 use futures_util::stream::StreamExt;
+use hmac::{Hmac, KeyInit, Mac};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,8 +16,6 @@ use tower_http::{
     cors::{Any, CorsLayer},
     validate_request::ValidateRequestHeaderLayer,
 };
-use hmac::{Hmac, Mac, KeyInit};
-use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -75,28 +75,49 @@ impl JobManager {
 }
 
 async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
-    let Some(webhook_url) = &job.webhook_url else { return; };
-    if webhook_url.is_empty() { return; }
+    let Some(webhook_url) = &job.webhook_url else {
+        return;
+    };
+    if webhook_url.is_empty() {
+        return;
+    }
 
     let mut payload = serde_json::Map::new();
-    payload.insert("job_id".to_string(), serde_json::Value::String(job.job_id.clone()));
-    
+    payload.insert(
+        "job_id".to_string(),
+        serde_json::Value::String(job.job_id.clone()),
+    );
+
     match status {
         JobStatus::Completed(segments) => {
-            payload.insert("status".to_string(), serde_json::Value::String("Completed".to_string()));
-            payload.insert("segments".to_string(), serde_json::to_value(segments).unwrap_or_default());
+            payload.insert(
+                "status".to_string(),
+                serde_json::Value::String("Completed".to_string()),
+            );
+            payload.insert(
+                "segments".to_string(),
+                serde_json::to_value(segments).unwrap_or_default(),
+            );
         }
         JobStatus::Failed(error) => {
-            payload.insert("status".to_string(), serde_json::Value::String("Failed".to_string()));
-            payload.insert("error".to_string(), serde_json::Value::String(error.clone()));
+            payload.insert(
+                "status".to_string(),
+                serde_json::Value::String("Failed".to_string()),
+            );
+            payload.insert(
+                "error".to_string(),
+                serde_json::Value::String(error.clone()),
+            );
         }
         _ => return, // Only send on completion or failure
     }
 
     let payload_str = serde_json::to_string(&payload).unwrap_or_default();
-    
+
     let client = reqwest::Client::new();
-    let mut request = client.post(webhook_url).header("Content-Type", "application/json");
+    let mut request = client
+        .post(webhook_url)
+        .header("Content-Type", "application/json");
 
     if let Some(secret) = &job.webhook_secret {
         if !secret.is_empty() {
@@ -118,15 +139,17 @@ async fn start_worker_loop(
     models_dir: PathBuf,
 ) {
     while let Some(job) = receiver.recv().await {
-        manager
-            .update_job(&job.job_id, JobStatus::Processing)
-            .await;
+        manager.update_job(&job.job_id, JobStatus::Processing).await;
 
         let options = TranscribeCliOptions {
             input: job.file_path.clone(),
             output: None,
             format: None,
-            language: if job.language == "auto" { None } else { Some(job.language.clone()) },
+            language: if job.language == "auto" {
+                None
+            } else {
+                Some(job.language.clone())
+            },
             model_id: Some(job.model_id.clone()),
             models_dir: Some(models_dir.clone()),
             vad_model_id: None,
@@ -140,12 +163,10 @@ async fn start_worker_loop(
         };
 
         let final_status = match resolve_transcribe_options(options, None) {
-            Ok(resolved) => {
-                match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
-                    Ok(segments) => JobStatus::Completed(segments),
-                    Err(e) => JobStatus::Failed(e),
-                }
-            }
+            Ok(resolved) => match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
+                Ok(segments) => JobStatus::Completed(segments),
+                Err(e) => JobStatus::Failed(e),
+            },
             Err(e) => JobStatus::Failed(e),
         };
 
@@ -169,6 +190,7 @@ pub struct ServerState {
     pub job_manager: JobManager,
     pub temp_dir: PathBuf,
     pub models_dir: PathBuf,
+    pub start_time: std::time::Instant,
 }
 
 pub async fn handle_transcribe(
@@ -247,6 +269,78 @@ pub async fn handle_job_status(
     Ok(Json(status))
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthResponse {
+    pub status: String,
+    pub version: String,
+    pub uptime: u64,
+}
+
+pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
+    let uptime = state.start_time.elapsed().as_secs();
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        uptime,
+    })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InfoResponse {
+    pub platform: String,
+    pub gpu_available: bool,
+    pub models: Vec<String>,
+    pub vad_installed: bool,
+    pub punctuation_installed: bool,
+}
+
+pub async fn handle_info(
+    State(state): State<ServerState>,
+) -> Result<Json<InfoResponse>, (StatusCode, String)> {
+    let gpu_available = crate::hardware::check_gpu_availability()
+        .await
+        .unwrap_or(false);
+
+    let models_dir = state.models_dir.clone();
+    let snapshot = tokio::task::spawn_blocking(move || {
+        crate::preset_models::build_model_catalog_snapshot(&models_dir)
+    })
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to build model snapshot: {e}"),
+        )
+    })?;
+
+    let installed_models: Vec<String> = snapshot
+        .models
+        .iter()
+        .filter(|m| m.is_installed)
+        .map(|m| m.id.clone())
+        .collect();
+
+    let vad_installed = snapshot
+        .models
+        .iter()
+        .any(|m| m.id == crate::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed);
+
+    let punctuation_installed = snapshot
+        .models
+        .iter()
+        .any(|m| m.id == crate::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed);
+
+    Ok(Json(InfoResponse {
+        platform: std::env::consts::OS.to_string(),
+        gpu_available,
+        models: installed_models,
+        vad_installed,
+        punctuation_installed,
+    }))
+}
+
 pub async fn run_server(
     host: &str,
     port: u16,
@@ -274,6 +368,7 @@ pub async fn run_server(
         job_manager,
         temp_dir,
         models_dir,
+        start_time: std::time::Instant::now(),
     };
 
     let cors = CorsLayer::new()
@@ -281,17 +376,23 @@ pub async fn run_server(
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let mut router = Router::new()
+    // Create public routes
+    let router = Router::new()
+        .route("/health", get(handle_health))
+        .route("/info", get(handle_info));
+
+    // Create private/transcriptions routes
+    let mut api_router = Router::new()
         .route("/v1/transcriptions", post(handle_transcribe))
-        .route("/v1/transcriptions/:job_id", get(handle_job_status))
-        .layer(cors);
+        .route("/v1/transcriptions/:job_id", get(handle_job_status));
 
     #[allow(deprecated)]
     if !api_key.is_empty() {
-        router = router.route_layer(ValidateRequestHeaderLayer::bearer(api_key));
+        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(api_key));
     }
 
-    let router = router.with_state(state);
+    // Merge and apply CORS & state
+    let router = router.merge(api_router).layer(cors).with_state(state);
     let addr = format!("{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
@@ -305,4 +406,110 @@ pub async fn run_server(
         })
         .await
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_health_endpoint() {
+        let temp_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let models_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+
+        let state = ServerState {
+            job_manager,
+            temp_dir,
+            models_dir,
+            start_time: std::time::Instant::now(),
+        };
+
+        let app = Router::new()
+            .route("/health", get(handle_health))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .expect("Failed to build request"),
+            )
+            .await
+            .expect("Failed to dispatch request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read response body buffer");
+        let body: serde_json::Value =
+            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
+
+        assert_eq!(body["status"], "ok");
+        assert!(body["version"].is_string());
+        assert!(body["uptime"].is_number());
+    }
+
+    #[tokio::test]
+    async fn test_info_endpoint() {
+        let temp_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let models_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+
+        let state = ServerState {
+            job_manager,
+            temp_dir,
+            models_dir,
+            start_time: std::time::Instant::now(),
+        };
+
+        let app = Router::new()
+            .route("/info", get(handle_info))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/info")
+                    .body(Body::empty())
+                    .expect("Failed to build request"),
+            )
+            .await
+            .expect("Failed to dispatch request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read response body buffer");
+        let body: serde_json::Value =
+            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
+
+        assert!(body["platform"].is_string());
+        assert!(body["gpuAvailable"].is_boolean());
+        assert!(body["models"].is_array());
+        assert!(body["vadInstalled"].is_boolean());
+        assert!(body["punctuationInstalled"].is_boolean());
+    }
 }

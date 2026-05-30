@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn resolves_ffmpeg_sidecar_path_from_executable() {
-        let exe_path = Path::new("/tmp/sona/tauri-appsona");
+        let exe_path = Path::new("/tmp/sona/sona");
         let ffmpeg_path = resolve_ffmpeg_sidecar_path_from_exe(exe_path).expect("path");
 
         #[cfg(windows)]

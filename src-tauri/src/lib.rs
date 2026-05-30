@@ -1,7 +1,6 @@
 mod app_settings;
 mod archive;
 mod asr_providers;
-mod llm_providers;
 mod audio;
 mod automation_repository;
 mod automation_runtime;
@@ -15,6 +14,7 @@ pub mod export;
 mod hardware;
 mod history_repository;
 mod llm;
+mod llm_providers;
 pub mod pipeline;
 pub mod preset_models;
 mod project_repository;
@@ -69,7 +69,9 @@ async fn start_api_server(
     let models_dir = app.path().app_local_data_dir().unwrap().join("models");
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await {
+        if let Err(e) =
+            crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await
+        {
             log::error!("HTTP API Server failed: {}", e);
         }
     });
@@ -78,9 +80,7 @@ async fn start_api_server(
 }
 
 #[tauri::command]
-async fn stop_api_server(
-    controller: tauri::State<'_, ApiServerController>,
-) -> Result<(), String> {
+async fn stop_api_server(controller: tauri::State<'_, ApiServerController>) -> Result<(), String> {
     let mut sender_lock = controller.shutdown_sender.lock().await;
     if let Some(sender) = sender_lock.take() {
         let _ = sender.send(());
@@ -88,7 +88,6 @@ async fn stop_api_server(
     }
     Ok(())
 }
-
 
 /// Returns a greeting message.
 ///
@@ -274,7 +273,11 @@ pub fn run() {
             // Start HTTP API Server if enabled
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let config_path = app_handle.path().app_data_dir().unwrap().join("settings.json");
+                let config_path = app_handle
+                    .path()
+                    .app_data_dir()
+                    .unwrap()
+                    .join("settings.json");
                 let mut http_server_enabled = false;
                 let mut host = "127.0.0.1".to_string();
                 let mut port = 14200;
@@ -283,7 +286,9 @@ pub fn run() {
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                         if let Some(config) = json.get("sona-config") {
-                            if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool()) {
+                            if let Some(enabled) =
+                                config.get("httpServerEnabled").and_then(|v| v.as_bool())
+                            {
                                 http_server_enabled = enabled;
                             }
                             if let Some(h) = config.get("httpServerHost").and_then(|v| v.as_str()) {
@@ -292,7 +297,9 @@ pub fn run() {
                             if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
                                 port = p as u16;
                             }
-                            if let Some(key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
+                            if let Some(key) =
+                                config.get("httpServerApiKey").and_then(|v| v.as_str())
+                            {
                                 api_key = key.to_string();
                             }
                         }
@@ -300,14 +307,25 @@ pub fn run() {
                 }
 
                 if http_server_enabled {
-                    let temp_dir = app_handle.path().app_local_data_dir().unwrap().join("api_temp");
-                    let models_dir = app_handle.path().app_local_data_dir().unwrap().join("models");
+                    let temp_dir = app_handle
+                        .path()
+                        .app_local_data_dir()
+                        .unwrap()
+                        .join("api_temp");
+                    let models_dir = app_handle
+                        .path()
+                        .app_local_data_dir()
+                        .unwrap()
+                        .join("models");
 
                     let (tx, rx) = tokio::sync::oneshot::channel();
                     let controller = app_handle.state::<ApiServerController>();
                     *controller.shutdown_sender.lock().await = Some(tx);
 
-                    if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await {
+                    if let Err(e) =
+                        crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx)
+                            .await
+                    {
                         log::error!("HTTP API Server failed: {}", e);
                     }
                 }
