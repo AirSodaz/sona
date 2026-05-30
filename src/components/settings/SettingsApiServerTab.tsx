@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Server, RefreshCw, Copy, Check } from 'lucide-react';
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
+import { invokeTauri } from '../../services/tauri/invoke';
+import { TauriCommand } from '../../services/tauri/commands';
 
 export function SettingsApiServerTab(): React.JSX.Element {
     const { t } = useTranslation();
@@ -47,9 +49,31 @@ export function SettingsApiServerTab(): React.JSX.Element {
         navigator.clipboard.writeText(key).then(() => {
             setCopied(true);
         }).catch((err) => {
+            // eslint-disable-next-line no-console
             console.error('Failed to copy API key: ', err);
         });
     }, [config.httpServerApiKey]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (config.httpServerEnabled) {
+                invokeTauri(TauriCommand.apiServer.start, {
+                    host: config.httpServerHost ?? '127.0.0.1',
+                    port: config.httpServerPort ?? 14200,
+                    apiKey: config.httpServerApiKey ?? ''
+                }).catch((e) => {
+                    // eslint-disable-next-line no-console
+                    console.error(e);
+                });
+            } else {
+                invokeTauri(TauriCommand.apiServer.stop).catch((e) => {
+                    // eslint-disable-next-line no-console
+                    console.error(e);
+                });
+            }
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [config.httpServerEnabled, config.httpServerHost, config.httpServerPort, config.httpServerApiKey]);
 
     return (
         <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
@@ -60,10 +84,6 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     defaultValue: 'Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.',
                 })}
             />
-
-            <div className="settings-banner warning" style={{ marginBottom: '24px', padding: '12px 16px', backgroundColor: 'var(--color-bg-warning, #fff3cd)', color: 'var(--color-text-warning, #856404)', borderRadius: '6px', fontSize: '14px' }}>
-                {t('api_server.restart_warning', { defaultValue: 'Changes to the API Server take effect on the next application launch.' })}
-            </div>
 
             <SettingsSection>
                 {/* Enable Toggle */}

@@ -804,6 +804,18 @@ export type TauriCommandContractMap = {
     args: undefined;
     result: [number, number] | null;
   };
+  [TauriCommand.apiServer.start]: {
+    args: {
+      host: string;
+      port: number;
+      apiKey: string;
+    };
+    result: void;
+  };
+  [TauriCommand.apiServer.stop]: {
+    args: undefined;
+    result: void;
+  };
 };
 
 type Assert<T extends true> = T;

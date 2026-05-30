@@ -147,6 +147,10 @@ export const TauriCommand = {
     getMousePosition: 'get_mouse_position',
     getTextCursorPosition: 'get_text_cursor_position',
   },
+  apiServer: {
+    start: 'start_api_server',
+    stop: 'stop_api_server',
+  },
 } as const;
 
 export type TauriCommandName = DeepValueOf<typeof TauriCommand>;

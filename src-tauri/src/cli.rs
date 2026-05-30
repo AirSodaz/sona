@@ -269,7 +269,8 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> Resu
 async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let models_dir = resolve_models_dir(args.models_dir)?;
     let temp_dir = std::env::temp_dir().join("sona_api");
-    crate::server::run_server(&args.host, args.port, &args.api_key, temp_dir, models_dir).await
+    let (_tx, rx) = tokio::sync::oneshot::channel();
+    crate::server::run_server(&args.host, args.port, &args.api_key, temp_dir, models_dir, rx).await
 }
 
 /// File-backed CLI configuration loaded from TOML.

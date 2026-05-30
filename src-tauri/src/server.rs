@@ -253,6 +253,7 @@ pub async fn run_server(
     api_key: &str,
     temp_dir: PathBuf,
     models_dir: PathBuf,
+    shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
@@ -298,6 +299,10 @@ pub async fn run_server(
 
     log::info!("Starting HTTP API server on {}", addr);
     axum::serve(listener, router)
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+            log::info!("HTTP API server shutting down gracefully");
+        })
         .await
         .map_err(|e| e.to_string())
 }

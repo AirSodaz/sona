@@ -33,6 +33,62 @@ mod tray;
 mod webdav;
 
 use tauri::{Emitter, Manager};
+use tokio::sync::Mutex as AsyncMutex;
+
+pub struct ApiServerController {
+    shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+}
+
+impl Default for ApiServerController {
+    fn default() -> Self {
+        Self {
+            shutdown_sender: std::sync::Arc::new(AsyncMutex::new(None)),
+        }
+    }
+}
+
+#[tauri::command]
+async fn start_api_server(
+    app: tauri::AppHandle,
+    controller: tauri::State<'_, ApiServerController>,
+    host: String,
+    port: u16,
+    api_key: String,
+) -> Result<(), String> {
+    let mut sender_lock = controller.shutdown_sender.lock().await;
+
+    // Stop existing server if running
+    if let Some(sender) = sender_lock.take() {
+        let _ = sender.send(());
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    *sender_lock = Some(tx);
+
+    let temp_dir = app.path().app_local_data_dir().unwrap().join("api_temp");
+    let models_dir = app.path().app_local_data_dir().unwrap().join("models");
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await {
+            log::error!("HTTP API Server failed: {}", e);
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_api_server(
+    controller: tauri::State<'_, ApiServerController>,
+) -> Result<(), String> {
+    let mut sender_lock = controller.shutdown_sender.lock().await;
+    if let Some(sender) = sender_lock.take() {
+        let _ = sender.send(());
+        log::info!("Sent shutdown signal to API server.");
+    }
+    Ok(())
+}
+
 
 /// Returns a greeting message.
 ///
@@ -246,7 +302,12 @@ pub fn run() {
                 if http_server_enabled {
                     let temp_dir = app_handle.path().app_local_data_dir().unwrap().join("api_temp");
                     let models_dir = app_handle.path().app_local_data_dir().unwrap().join("models");
-                    if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir).await {
+
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    let controller = app_handle.state::<ApiServerController>();
+                    *controller.shutdown_sender.lock().await = Some(tx);
+
+                    if let Err(e) = crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await {
                         log::error!("HTTP API Server failed: {}", e);
                     }
                 }
@@ -284,6 +345,7 @@ pub fn run() {
             }
         }))
         .manage(downloads::DownloadState::new())
+        .manage(ApiServerController::default())
         .manage(app_settings)
         .manage(aux_window_state::AuxWindowStateStore::default())
         .manage(automation_runtime::AutomationRuntimeState::default())
@@ -412,7 +474,9 @@ pub fn run() {
             speaker_review::build_speaker_review_snapshot,
             speaker_correction::apply_speaker_profile_to_group,
             speaker_correction::reset_speaker_group_to_anonymous,
-            speaker_correction::confirm_speaker_group_review
+            speaker_correction::confirm_speaker_group_review,
+            start_api_server,
+            stop_api_server
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
