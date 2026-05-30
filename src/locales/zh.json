@@ -1077,6 +1077,7 @@
             "host_label": "监听地址",
             "port_label": "端口",
             "api_key_label": "安全密钥",
+            "api_key_placeholder": "可选的 Bearer 令牌",
             "generate_key": "生成",
             "copy_key": "复制",
             "copied": "已复制"

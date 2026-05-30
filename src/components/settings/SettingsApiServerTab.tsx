@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Server, RefreshCw, Copy, Check } from 'lucide-react';
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
+import { Switch } from '../Switch';
 import { invokeTauri } from '../../services/tauri/invoke';
 import { TauriCommand } from '../../services/tauri/commands';
 
@@ -19,10 +20,6 @@ export function SettingsApiServerTab(): React.JSX.Element {
             return () => clearTimeout(timer);
         }
     }, [copied]);
-
-    const handleEnableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setConfig({ httpServerEnabled: e.target.checked });
-    };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setConfig({ httpServerHost: e.target.value });
@@ -79,8 +76,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
         <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
             <SettingsPageHeader
                 icon={<Server width={28} height={28} />}
-                title={t('api_server.title', { defaultValue: 'API Server' })}
-                description={t('api_server.description', {
+                title={t('settings.api_server.title', { defaultValue: 'API Server' })}
+                description={t('settings.api_server.description', {
                     defaultValue: 'Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.',
                 })}
             />
@@ -90,18 +87,15 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 <div className="settings-item-container layout-horizontal">
                     <div className="settings-item-info">
                         <div className="settings-item-title">
-                            {t('api_server.enable_label', { defaultValue: 'Enable API Server' })}
+                            {t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
                         </div>
                     </div>
                     <div className="settings-item-action">
-                        <label className="toggle-switch">
-                            <input
-                                type="checkbox"
-                                checked={config.httpServerEnabled ?? false}
-                                onChange={handleEnableChange}
-                            />
-                            <span className="toggle-slider"></span>
-                        </label>
+                        <Switch
+                            checked={config.httpServerEnabled ?? false}
+                            onChange={(checked) => setConfig({ httpServerEnabled: checked })}
+                            aria-label={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
+                        />
                     </div>
                 </div>
 
@@ -109,7 +103,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 <div className="settings-item-container layout-horizontal">
                     <div className="settings-item-info">
                         <div className="settings-item-title">
-                            {t('api_server.host_label', { defaultValue: 'Host' })}
+                            {t('settings.api_server.host_label', { defaultValue: 'Host' })}
                         </div>
                     </div>
                     <div className="settings-item-action">
@@ -127,7 +121,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 <div className="settings-item-container layout-horizontal">
                     <div className="settings-item-info">
                         <div className="settings-item-title">
-                            {t('api_server.port_label', { defaultValue: 'Port' })}
+                            {t('settings.api_server.port_label', { defaultValue: 'Port' })}
                         </div>
                     </div>
                     <div className="settings-item-action">
@@ -147,7 +141,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 <div className="settings-item-container layout-horizontal">
                     <div className="settings-item-info">
                         <div className="settings-item-title">
-                            {t('api_server.api_key_label', { defaultValue: 'API Key' })}
+                            {t('settings.api_server.api_key_label', { defaultValue: 'API Key' })}
                         </div>
                     </div>
                     <div className="settings-item-action" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -157,21 +151,21 @@ export function SettingsApiServerTab(): React.JSX.Element {
                             value={config.httpServerApiKey ?? ''}
                             onChange={handleKeyChange}
                             style={{ width: '280px' }}
-                            placeholder="Optional bearer token"
+                            placeholder={t('settings.api_server.api_key_placeholder', { defaultValue: 'Optional bearer token' })}
                         />
                         <button 
                             className="btn btn-icon" 
                             onClick={handleGenerateKey}
-                            title={t('api_server.generate_key', { defaultValue: 'Generate' })}
-                            aria-label={t('api_server.generate_key', { defaultValue: 'Generate' })}
+                            title={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
+                            aria-label={t('settings.api_server.generate_key', { defaultValue: 'Generate' })}
                         >
                             <RefreshCw size={16} />
                         </button>
                         <button 
                             className="btn btn-icon" 
                             onClick={handleCopyKey}
-                            title={t('api_server.copy_key', { defaultValue: 'Copy' })}
-                            aria-label={t('api_server.copy_key', { defaultValue: 'Copy' })}
+                            title={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
+                            aria-label={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
                         >
                             {copied ? <Check size={16} color="green" /> : <Copy size={16} />}
                         </button>

@@ -467,7 +467,7 @@ export function Settings({
                         />
                         <SettingsTabButton
                             id="api_server"
-                            label={t('api_server.title', { defaultValue: 'API Server' })}
+                            label={t('settings.api_server.title', { defaultValue: 'API Server' })}
                             Icon={() => <Server size={18} />}
                             activeTab={renderedTab}
                             setActiveTab={navigateToTab}

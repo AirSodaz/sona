@@ -1078,6 +1078,7 @@
             "host_label": "Host",
             "port_label": "Port",
             "api_key_label": "API Key",
+            "api_key_placeholder": "Optional bearer token",
             "generate_key": "Generate",
             "copy_key": "Copy",
             "copied": "Copied"

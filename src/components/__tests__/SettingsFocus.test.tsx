@@ -213,7 +213,7 @@ describe('Settings Focus Trap & Navigation', () => {
             'settings.model_hub',
             'settings.vocabulary',
             'settings.automation',
-            'api_server.title',
+            'settings.api_server.title',
             'settings.llm.title',
             'shortcuts.title',
             'settings.about',
