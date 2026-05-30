@@ -53,15 +53,15 @@ pub async fn init_streaming_recognizer_impl(
     let adapter = online_adapters().get(provider_id).unwrap();
     let config_val = &request.online_provider.as_ref().unwrap().config;
 
-    if let Some(session) = adapter.create_streaming_session(config_val, &request)? {
+    match adapter.create_streaming_session(config_val, &request)? { Some(session) => {
         let mut sessions = state.online_sessions.lock().await;
         sessions.insert(instance_id, Arc::from(session));
         Ok(())
-    } else {
+    } _ => {
         Err(SherpaError::StreamingNotSupported {
             provider_id: provider_id.to_string(),
         })
-    }
+    }}
 }
 
 pub async fn start_streaming_recognizer_impl(

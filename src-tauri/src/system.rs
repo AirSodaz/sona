@@ -636,7 +636,7 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 }
 
 #[cfg(target_os = "windows")]
-unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> {
+unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> { unsafe {
     use windows::core::*;
     use windows::Win32::System::Com::*;
     use windows::Win32::UI::Accessibility::*;
@@ -689,12 +689,12 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
     }
 
     Ok(None)
-}
+}}
 
 #[cfg(target_os = "windows")]
 unsafe fn safearray_to_f64_vec(
     psa: *mut windows::Win32::System::Com::SAFEARRAY,
-) -> windows::core::Result<Vec<f64>> {
+) -> windows::core::Result<Vec<f64>> { unsafe {
     use windows::Win32::System::Ole::*;
     if psa.is_null() {
         return Ok(Vec::new());
@@ -715,7 +715,7 @@ unsafe fn safearray_to_f64_vec(
     SafeArrayDestroy(psa)?;
 
     Ok(vec)
-}
+}}
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]

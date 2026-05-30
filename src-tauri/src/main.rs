@@ -7,12 +7,12 @@ use std::process::ExitCode;
 fn fix_console() {
     unsafe {
         #[link(name = "kernel32")]
-        extern "system" {
+        unsafe extern "system" {
             fn AllocConsole() -> i32;
             fn GetConsoleWindow() -> *mut std::ffi::c_void;
         }
         #[link(name = "user32")]
-        extern "system" {
+        unsafe extern "system" {
             fn ShowWindow(hwnd: *mut std::ffi::c_void, cmd: i32) -> i32;
         }
 
