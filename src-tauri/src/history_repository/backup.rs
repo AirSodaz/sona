@@ -11,15 +11,15 @@ use super::fs_utils::{
     ensure_json_array_value, ensure_json_object_value, ensure_safe_file_name,
     extract_tar_bz2_archive, read_json_value, remove_path_if_exists, write_json_pretty_atomic,
 };
-use super::repository::{normalize_history_item_value, HistoryRepository};
+use super::repository::{HistoryRepository, normalize_history_item_value};
 use super::types::PreparedBackupImportSnapshot;
 use super::{
-    BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
-    HistoryItemStatus, PreparedBackupImport, ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME,
-    AUTOMATION_DIR_NAME, AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME,
-    BACKUP_HISTORY_MODE, BACKUP_SCHEMA_VERSION, CONFIG_DIR_NAME, CONFIG_FILE_NAME,
-    HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
-    SUMMARY_FILE_SUFFIX,
+    ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
+    AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, BACKUP_HISTORY_MODE,
+    BACKUP_SCHEMA_VERSION, BackupManifest, BackupManifestCounts, BackupManifestScopes,
+    CONFIG_DIR_NAME, CONFIG_FILE_NAME, ExportBackupArchiveRequest, HISTORY_DIR_NAME,
+    HISTORY_VERSIONS_DIR_NAME, HistoryItemStatus, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
+    PreparedBackupImport, SUMMARY_FILE_SUFFIX,
 };
 
 pub(super) fn build_backup_manifest(
@@ -648,7 +648,7 @@ mod tests {
         CONFIG_FILE_NAME, HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, PROJECTS_DIR_NAME,
         PROJECTS_INDEX_FILE_NAME,
     };
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::fs;
     use tempfile::tempdir;
 
@@ -735,15 +735,19 @@ mod tests {
             .join("keep")
             .join(PROJECTS_INDEX_FILE_NAME);
         assert!(keep_index.exists());
-        assert!(exported_versions_dir
-            .join("keep")
-            .join(format!("{}.json", keep_snapshot.id))
-            .exists());
+        assert!(
+            exported_versions_dir
+                .join("keep")
+                .join(format!("{}.json", keep_snapshot.id))
+                .exists()
+        );
         assert!(!exported_versions_dir.join("draft").exists());
-        assert!(!exported_versions_dir
-            .join("draft")
-            .join(format!("{}.json", draft_snapshot.id))
-            .exists());
+        assert!(
+            !exported_versions_dir
+                .join("draft")
+                .join(format!("{}.json", draft_snapshot.id))
+                .exists()
+        );
     }
 
     #[test]

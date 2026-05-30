@@ -1,5 +1,5 @@
 use crate::asr_providers::{
-    online_asr_providers, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

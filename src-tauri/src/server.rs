@@ -1,8 +1,8 @@
 use axum::{
+    Json, Router,
     extract::{Multipart, Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use futures_util::stream::StreamExt;
 use hmac::{Hmac, KeyInit, Mac};
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tower_http::{
     cors::{Any, CorsLayer},
     validate_request::ValidateRequestHeaderLayer,
@@ -19,7 +19,7 @@ use tower_http::{
 
 type HmacSha256 = Hmac<Sha256>;
 
-use crate::cli::{resolve_transcribe_options, TranscribeCliOptions};
+use crate::cli::{TranscribeCliOptions, resolve_transcribe_options};
 use crate::sherpa::transcribe_batch_with_progress;
 
 #[derive(Debug, Clone, serde::Serialize)]

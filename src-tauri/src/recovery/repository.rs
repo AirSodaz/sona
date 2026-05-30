@@ -9,7 +9,7 @@ use super::normalization::{
     empty_snapshot, now_ms, recovered_item_from_queue_value, recovered_item_from_saved_value,
     snapshot_from_items, snapshot_from_value,
 };
-use super::types::{RecoverySnapshot, QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME};
+use super::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
 
 #[derive(Clone, Debug)]
 pub struct RecoveryRepository {

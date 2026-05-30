@@ -1,15 +1,16 @@
+use super::TranscriptPostprocessor;
 use super::metrics::{
-    calculate_rss_delta_mb, calculate_rtf, capture_process_memory_mb, current_time_millis,
-    duration_to_ms, log_inference_metric, log_model_load_metric, samples_to_ms,
-    set_live_inference_metric, AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric,
+    AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
+    capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
+    log_model_load_metric, samples_to_ms, set_live_inference_metric,
 };
 use super::model_config::{
-    build_model_config, load_punctuation, load_vad, ModelFileConfig, Punctuation, Recognizer,
-    RecognizerInner, SafeStream, SafeVad,
+    ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeStream, SafeVad,
+    build_model_config, load_punctuation, load_vad,
 };
 use super::state::{
-    buffered_sample_count, diagnostics_instance_label, start_instance_runtime,
-    stop_instance_runtime, ModelConfigKey, OfflineState, SherpaInstance, SherpaState,
+    ModelConfigKey, OfflineState, SherpaInstance, SherpaState, buffered_sample_count,
+    diagnostics_instance_label, start_instance_runtime, stop_instance_runtime,
 };
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
@@ -19,12 +20,11 @@ use super::transcript::{
 use super::types::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
 };
-use super::TranscriptPostprocessor;
 use log::{debug, info, trace};
 use sherpa_onnx::OfflineRecognizer;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use tauri::{AppHandle, State};
 
@@ -129,7 +129,11 @@ fn run_offline_inference<R: tauri::Runtime>(
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] {label} offline inference finished. stage={} segment_id={} final={} buffered_chunks={} buffered_samples={}",
-            stage, segment_id, is_final, speech_buffer.len(), full_audio.len()
+            stage,
+            segment_id,
+            is_final,
+            speech_buffer.len(),
+            full_audio.len()
         );
     }
 
@@ -256,10 +260,7 @@ pub async fn init_recognizer_impl(
 ) -> Result<(), String> {
     info!(
         "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?}",
-        punctuation_model,
-        vad_model,
-        hotwords,
-        gpu_acceleration
+        punctuation_model, vad_model, hotwords, gpu_acceleration
     );
 
     let config_key = ModelConfigKey {
@@ -464,7 +465,9 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                 if let Some(label) = diagnostics_instance_label(&instance_id) {
                     info!(
                         "[Sherpa] {label} flush triggering offline inference. segment_id={} buffered_chunks={} buffered_samples={}",
-                        seg_id, offline_copy.len(), buffered_sample_count(&offline_copy)
+                        seg_id,
+                        offline_copy.len(),
+                        buffered_sample_count(&offline_copy)
                     );
                 }
 

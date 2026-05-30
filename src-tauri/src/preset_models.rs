@@ -694,23 +694,29 @@ mod tests {
         assert_eq!(streaming_option.install_path, int8_path);
         assert!(streaming_option.is_installed);
 
-        assert!(snapshot
-            .selection_options
-            .offline
-            .iter()
-            .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"));
-        assert!(!snapshot
-            .selection_options
-            .streaming
-            .iter()
-            .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"));
-        assert!(snapshot
-            .selection_options
-            .speaker_segmentation
-            .iter()
-            .any(|option| {
-                option.id == "sherpa-onnx-pyannote-segmentation-3-0" && !option.is_installed
-            }));
+        assert!(
+            snapshot
+                .selection_options
+                .offline
+                .iter()
+                .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25")
+        );
+        assert!(
+            !snapshot
+                .selection_options
+                .streaming
+                .iter()
+                .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25")
+        );
+        assert!(
+            snapshot
+                .selection_options
+                .speaker_segmentation
+                .iter()
+                .any(|option| {
+                    option.id == "sherpa-onnx-pyannote-segmentation-3-0" && !option.is_installed
+                })
+        );
     }
 
     #[test]

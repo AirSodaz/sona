@@ -7,7 +7,7 @@ mod recovery;
 mod storage;
 
 use recovery::repository::RecoveryRepository;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs::{self, File};
 use std::path::Path;
 use tempfile::tempdir;

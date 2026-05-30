@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use super::repository::TaskLedgerRepository;
-use super::types::{TaskLedgerRecord, TaskLedgerSnapshot, TASK_LEDGER_UPDATED_EVENT};
+use super::types::{TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot};
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()

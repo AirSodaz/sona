@@ -1,9 +1,9 @@
-use crate::export::{export_segments, ExportFormat};
-use crate::preset_models::{find_preset_model, preset_models, PresetModel};
+use crate::export::{ExportFormat, export_segments};
+use crate::preset_models::{PresetModel, find_preset_model, preset_models};
 use crate::sherpa::{
-    transcribe_batch_with_progress, AsrEngineAdapter, AsrMode, AsrTranscriptionRequest,
-    BatchTranscriptionRequest, LocalSherpaAdapter, TranscriptNormalizationOptions,
-    TranscriptPostprocessOptions,
+    AsrEngineAdapter, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest,
+    LocalSherpaAdapter, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    transcribe_batch_with_progress,
 };
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;

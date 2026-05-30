@@ -1,11 +1,11 @@
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
-use ringbuf::traits::{Consumer, Producer, Split};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
+use ringbuf::traits::{Consumer, Producer, Split};
 use rubato::{FftFixedOut, Resampler};
 use std::collections::HashSet;
-use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
+use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 

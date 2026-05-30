@@ -1,8 +1,8 @@
 use crate::asr_providers::{
-    online_asr_providers, VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
 const CURRENT_CONFIG_VERSION: i64 = 7;
@@ -2749,9 +2749,11 @@ mod tests {
         );
 
         // Unknown providers are garbage collected
-        assert!(result.config["asr"]["providers"]["online"]
-            .get("garbage-provider")
-            .is_none());
+        assert!(
+            result.config["asr"]["providers"]["online"]
+                .get("garbage-provider")
+                .is_none()
+        );
 
         // Mistral should be fully hydrated from defaults
         let mistral = &result.config["asr"]["providers"]["online"]["mistral-voxtral"];

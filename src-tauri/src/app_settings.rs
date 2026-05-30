@@ -1,6 +1,6 @@
 use std::sync::{
-    atomic::{AtomicU8, Ordering},
     Arc, Mutex,
+    atomic::{AtomicU8, Ordering},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,8 +150,8 @@ pub(crate) fn resolve_main_window_close_action(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_log_level, resolve_main_window_close_action, should_log_level, AppLogLevel,
-        AppSettings, MainWindowCloseAction,
+        AppLogLevel, AppSettings, MainWindowCloseAction, parse_log_level,
+        resolve_main_window_close_action, should_log_level,
     };
 
     #[test]

@@ -136,9 +136,9 @@ fn resolve_model_catalog_selected_ids<R: tauri::Runtime>(
 fn set_mute_windows(mute: bool) -> Result<(), String> {
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::Media::Audio::{
-        eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+        IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender,
     };
-    use windows::Win32::System::Com::{CoCreateInstance, CoInitialize, CLSCTX_ALL};
+    use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoInitialize};
 
     unsafe {
         // We can ignore the result of CoInitialize as it might already be initialized by Tauri

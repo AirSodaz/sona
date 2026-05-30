@@ -5,9 +5,9 @@ use serde::Deserialize;
 use windows::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, SendInput, VkKeyScanW, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-    KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN,
-    VK_SHIFT,
+    GetAsyncKeyState, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+    KEYEVENTF_UNICODE, SendInput, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    VkKeyScanW,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -573,7 +573,7 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
+        GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId,
     };
 
     unsafe {
@@ -636,48 +636,29 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 }
 
 #[cfg(target_os = "windows")]
-unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> { unsafe {
-    use windows::core::*;
-    use windows::Win32::System::Com::*;
-    use windows::Win32::UI::Accessibility::*;
+unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> {
+    unsafe {
+        use windows::Win32::System::Com::*;
+        use windows::Win32::UI::Accessibility::*;
+        use windows::core::*;
 
-    // Initialize COM for this thread
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        // Initialize COM for this thread
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
-    let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
-    let focused_element = automation.GetFocusedElement()?;
+        let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
+        let focused_element = automation.GetFocusedElement()?;
 
-    // TextPattern2 exposes the caret directly when the focused element supports
-    // it; this is the most reliable path for modern text controls.
-    // Try TextPattern2 (Windows 8.1+)
-    if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPattern2Id) {
-        if let Ok(text_pattern2) = pattern.cast::<IUIAutomationTextPattern2>() {
-            let mut is_active = Default::default();
-            if let Ok(range) = text_pattern2.GetCaretRange(&mut is_active) {
-                if let Ok(rects) = range.GetBoundingRectangles() {
-                    let rect_data = safearray_to_f64_vec(rects)?;
-                    if rect_data.len() >= 4 {
-                        // rects is an array of [left, top, width, height]
-                        let x = rect_data[0] as i32;
-                        let y = (rect_data[1] + rect_data[3]) as i32;
-                        return Ok(Some((x, y)));
-                    }
-                }
-            }
-        }
-    }
-
-    // Some apps expose only TextPattern selection rectangles, so fall back to
-    // the first selected range when caret-specific APIs are unavailable.
-    // Fallback to TextPattern selection
-    if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId) {
-        if let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>() {
-            if let Ok(selection) = text_pattern.GetSelection() {
-                if selection.Length()? > 0 {
-                    let range = selection.GetElement(0)?;
+        // TextPattern2 exposes the caret directly when the focused element supports
+        // it; this is the most reliable path for modern text controls.
+        // Try TextPattern2 (Windows 8.1+)
+        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPattern2Id) {
+            if let Ok(text_pattern2) = pattern.cast::<IUIAutomationTextPattern2>() {
+                let mut is_active = Default::default();
+                if let Ok(range) = text_pattern2.GetCaretRange(&mut is_active) {
                     if let Ok(rects) = range.GetBoundingRectangles() {
                         let rect_data = safearray_to_f64_vec(rects)?;
                         if rect_data.len() >= 4 {
+                            // rects is an array of [left, top, width, height]
                             let x = rect_data[0] as i32;
                             let y = (rect_data[1] + rect_data[3]) as i32;
                             return Ok(Some((x, y)));
@@ -686,36 +667,59 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
                 }
             }
         }
-    }
 
-    Ok(None)
-}}
+        // Some apps expose only TextPattern selection rectangles, so fall back to
+        // the first selected range when caret-specific APIs are unavailable.
+        // Fallback to TextPattern selection
+        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId) {
+            if let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>() {
+                if let Ok(selection) = text_pattern.GetSelection() {
+                    if selection.Length()? > 0 {
+                        let range = selection.GetElement(0)?;
+                        if let Ok(rects) = range.GetBoundingRectangles() {
+                            let rect_data = safearray_to_f64_vec(rects)?;
+                            if rect_data.len() >= 4 {
+                                let x = rect_data[0] as i32;
+                                let y = (rect_data[1] + rect_data[3]) as i32;
+                                return Ok(Some((x, y)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
 
 #[cfg(target_os = "windows")]
 unsafe fn safearray_to_f64_vec(
     psa: *mut windows::Win32::System::Com::SAFEARRAY,
-) -> windows::core::Result<Vec<f64>> { unsafe {
-    use windows::Win32::System::Ole::*;
-    if psa.is_null() {
-        return Ok(Vec::new());
+) -> windows::core::Result<Vec<f64>> {
+    unsafe {
+        use windows::Win32::System::Ole::*;
+        if psa.is_null() {
+            return Ok(Vec::new());
+        }
+
+        let lbound = SafeArrayGetLBound(psa, 1)?;
+        let ubound = SafeArrayGetUBound(psa, 1)?;
+        let len = (ubound - lbound + 1) as usize;
+
+        let mut data_ptr = std::ptr::null_mut();
+        SafeArrayAccessData(psa, &mut data_ptr)?;
+        let slice = std::slice::from_raw_parts(data_ptr as *const f64, len);
+        let vec = slice.to_vec();
+        SafeArrayUnaccessData(psa)?;
+
+        // UIA returns a SAFEARRAY owned by the caller here, so this helper consumes
+        // it fully and frees it before returning the copied coordinates.
+        SafeArrayDestroy(psa)?;
+
+        Ok(vec)
     }
-
-    let lbound = SafeArrayGetLBound(psa, 1)?;
-    let ubound = SafeArrayGetUBound(psa, 1)?;
-    let len = (ubound - lbound + 1) as usize;
-
-    let mut data_ptr = std::ptr::null_mut();
-    SafeArrayAccessData(psa, &mut data_ptr)?;
-    let slice = std::slice::from_raw_parts(data_ptr as *const f64, len);
-    let vec = slice.to_vec();
-    SafeArrayUnaccessData(psa)?;
-
-    // UIA returns a SAFEARRAY owned by the caller here, so this helper consumes
-    // it fully and frees it before returning the copied coordinates.
-    SafeArrayDestroy(psa)?;
-
-    Ok(vec)
-}}
+}
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
@@ -726,10 +730,10 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_injection_steps, build_unicode_key_input_specs, format_modifier_wait_result,
-        injection_plan_mode, poll_shortcut_modifiers_release_with_probe,
-        remaining_text_after_sent_prefix, InjectionStep, InjectionStepKind, ModifierWaitResult,
-        ShortcutModifier, UnicodeKeyInputSpec,
+        InjectionStep, InjectionStepKind, ModifierWaitResult, ShortcutModifier,
+        UnicodeKeyInputSpec, build_injection_steps, build_unicode_key_input_specs,
+        format_modifier_wait_result, injection_plan_mode,
+        poll_shortcut_modifiers_release_with_probe, remaining_text_after_sent_prefix,
     };
 
     #[test]

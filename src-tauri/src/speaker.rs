@@ -1,8 +1,8 @@
 use crate::pipeline;
 use crate::sherpa::{
-    ensure_transcript_segment_timing, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
+    TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
-use crate::text_alignment::{align_text_units_to_tokens, AlignedTextUnit};
+use crate::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use sherpa_onnx::{

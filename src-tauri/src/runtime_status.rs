@@ -112,7 +112,7 @@ pub(crate) async fn get_path_statuses(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_runtime_path_status, RuntimePathKind};
+    use super::{RuntimePathKind, resolve_runtime_path_status};
     use std::fs::File;
     use tempfile::tempdir;
 

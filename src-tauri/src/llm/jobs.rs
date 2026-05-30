@@ -7,11 +7,11 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::*;
 use crate::history_repository::{
+    HistoryRepositoryState, TranscriptSnapshotReason,
     commands::{
         history_create_llm_transcript_snapshot, history_save_llm_summary,
         history_update_llm_transcript_segments,
     },
-    HistoryRepositoryState, TranscriptSnapshotReason,
 };
 use crate::sherpa::TranscriptSegment;
 

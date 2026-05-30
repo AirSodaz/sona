@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tauri::AppHandle;
 
+use crate::sherpa::TranscriptSegment;
 use crate::sherpa::error::SherpaError;
 use crate::sherpa::state::SherpaState;
 use crate::sherpa::types::AsrTranscriptionRequest;
-use crate::sherpa::TranscriptSegment;
 
 #[async_trait]
 pub trait OnlineStreamingSession: Send + Sync {

@@ -1,7 +1,7 @@
 use super::error::SherpaError;
 use super::metrics::{
-    current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
-    AsrInferenceMetric,
+    AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
+    set_batch_inference_metric,
 };
 use super::online_traits::{
     OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,
@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};

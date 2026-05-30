@@ -286,7 +286,7 @@ fn snapshot_candidate_for_rule(
     let metadata = match std::fs::metadata(file_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(AutomationRuntimePathIssue::Missing)
+            return Err(AutomationRuntimePathIssue::Missing);
         }
         Err(error) => return Err(AutomationRuntimePathIssue::Error(error.to_string())),
     };
@@ -634,11 +634,11 @@ pub async fn collect_automation_runtime_rule_paths(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_candidate_paths, collect_rule_path_result, is_path_inside_directory,
-        is_path_within_watch_scope, is_supported_media_path, normalize_automation_path,
-        replace_rule_runtimes_with, schedule_candidate, snapshot_candidate,
         AutomationRuntimeCandidatePayload, AutomationRuntimePathCollectionOutcome,
-        AutomationRuntimeRuleConfig, AutomationRuntimeState,
+        AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_candidate_paths,
+        collect_rule_path_result, is_path_inside_directory, is_path_within_watch_scope,
+        is_supported_media_path, normalize_automation_path, replace_rule_runtimes_with,
+        schedule_candidate, snapshot_candidate,
     };
     use std::fs;
     use std::sync::{Arc, Mutex};

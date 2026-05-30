@@ -6,12 +6,12 @@ use super::jobs::{
 use super::network::LlmApiUrl;
 use super::*;
 use futures_util::future::BoxFuture;
-use reqwest::{header::RETRY_AFTER, StatusCode};
+use reqwest::{StatusCode, header::RETRY_AFTER};
 use serde_json::json;
 use std::{
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -501,10 +501,10 @@ fn build_translate_prompt_contains_language_name() {
 #[test]
 fn build_summary_chunk_prompt_requires_same_language_and_structure() {
     let template = sample_summary_template(
-            "meeting",
-            "Meeting",
-            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.",
-        );
+        "meeting",
+        "Meeting",
+        "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.",
+    );
     let prompt = build_summary_chunk_prompt(&template, &sample_summary_segments()[..2], 1, 2);
 
     assert!(prompt.contains("Use the same language as the transcript."));
@@ -515,10 +515,10 @@ fn build_summary_chunk_prompt_requires_same_language_and_structure() {
 #[test]
 fn build_summary_finalize_prompt_requires_same_language_and_structure() {
     let template = sample_summary_template(
-            "lecture",
-            "Lecture",
-            "1. Lecture overview.\n2. Core concepts or arguments.\n3. Important examples, evidence, or explanations.",
-        );
+        "lecture",
+        "Lecture",
+        "1. Lecture overview.\n2. Core concepts or arguments.\n3. Important examples, evidence, or explanations.",
+    );
     let prompt = build_summary_finalize_prompt(
         &template,
         &["Chunk 1 summary".to_string(), "Chunk 2 summary".to_string()],
@@ -1410,10 +1410,10 @@ async fn run_summary_task_emits_chunk_and_final_progress() {
     ];
     let mut progress_events = Vec::new();
     let template = sample_summary_template(
-            "meeting",
-            "Meeting",
-            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.\n4. Open questions, blockers, or risks.",
-        );
+        "meeting",
+        "Meeting",
+        "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.\n4. Open questions, blockers, or risks.",
+    );
     let streamed_calls = Arc::new(AtomicUsize::new(0));
 
     let result = run_summary_task(

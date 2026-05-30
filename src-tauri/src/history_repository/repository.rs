@@ -1,4 +1,4 @@
-use serde_json::{to_value, Map, Value};
+use serde_json::{Map, Value, to_value};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -15,14 +15,14 @@ use super::item_factory::{
 use super::transcript_payload::normalize_history_transcript_segments;
 use super::types::HistoryBackupSnapshot;
 use super::{
+    HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
+    TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
+};
+use super::{
     HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
     HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
     HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, LiveRecordingDraftResult,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
-};
-use super::{
-    HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
-    TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
 };
 
 #[derive(Clone)]
@@ -909,14 +909,18 @@ mod tests {
 
         let items = repository.list_items().unwrap();
         assert_eq!(items, vec![keep_item]);
-        assert!(!repository
-            .audio_path(&delete_item.audio_path)
-            .unwrap()
-            .exists());
-        assert!(!repository
-            .transcript_path(&delete_item.transcript_path)
-            .unwrap()
-            .exists());
+        assert!(
+            !repository
+                .audio_path(&delete_item.audio_path)
+                .unwrap()
+                .exists()
+        );
+        assert!(
+            !repository
+                .transcript_path(&delete_item.transcript_path)
+                .unwrap()
+                .exists()
+        );
         assert!(!repository.summary_path(&delete_item.id).unwrap().exists());
     }
 
@@ -1364,9 +1368,11 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
 
         assert!(repository.list_transcript_snapshots("../bad").is_err());
-        assert!(repository
-            .load_transcript_snapshot("history-1", "../bad")
-            .is_err());
+        assert!(
+            repository
+                .load_transcript_snapshot("history-1", "../bad")
+                .is_err()
+        );
     }
 
     #[test]
@@ -1451,12 +1457,14 @@ mod tests {
 
         let search_match = result.search_match_by_item_id.get("alpha").unwrap();
         assert_eq!(search_match.as_ref().unwrap().matched_field, "previewText");
-        assert!(search_match
-            .as_ref()
-            .unwrap()
-            .display_snippet
-            .text
-            .contains("Roadmap"));
+        assert!(
+            search_match
+                .as_ref()
+                .unwrap()
+                .display_snippet
+                .text
+                .contains("Roadmap")
+        );
     }
 
     #[test]

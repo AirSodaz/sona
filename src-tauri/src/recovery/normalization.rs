@@ -1,13 +1,13 @@
 use serde::Deserialize;
 use serde_json::Value;
-use serde_with::{serde_as, DefaultOnError};
+use serde_with::{DefaultOnError, serde_as};
 use std::fs;
 use std::io::ErrorKind;
 use std::time::SystemTime;
 
 use super::types::{
-    RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
-    RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoverySnapshot, RECOVERY_VERSION,
+    RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
+    RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoverySnapshot,
 };
 
 enum SourcePathStatus {

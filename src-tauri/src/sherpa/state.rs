@@ -1,16 +1,16 @@
+use super::TranscriptPostprocessor;
 use super::metrics::{
+    AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
-    set_model_load_metric, snapshot_metrics, AsrInferenceMetric, AsrMetricsStore,
-    AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+    set_model_load_metric, snapshot_metrics,
 };
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
 use super::online_traits::OnlineStreamingSession;
 use super::types::{AsrEngine, TranscriptNormalizationOptions, TranscriptSegment};
-use super::TranscriptPostprocessor;
 use log::info;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 
 pub struct OfflineState {
@@ -268,10 +268,12 @@ mod tests {
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
         assert!(!instance.record_diagnostics.skipped_while_stopped_logged);
-        assert!(!instance
-            .record_diagnostics
-            .first_segment_emitted
-            .load(Ordering::SeqCst));
+        assert!(
+            !instance
+                .record_diagnostics
+                .first_segment_emitted
+                .load(Ordering::SeqCst)
+        );
     }
 
     #[test]
@@ -301,10 +303,12 @@ mod tests {
         assert!(instance.offline_state.speech_buffer.is_empty());
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
-        assert!(!instance
-            .record_diagnostics
-            .first_segment_emitted
-            .load(Ordering::SeqCst));
+        assert!(
+            !instance
+                .record_diagnostics
+                .first_segment_emitted
+                .load(Ordering::SeqCst)
+        );
     }
 
     #[tokio::test]

@@ -1,5 +1,5 @@
-use super::types::{AsrEngine, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest};
 use super::TranscriptPostprocessor;
+use super::types::{AsrEngine, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest};
 
 pub trait AsrEngineAdapter {
     fn engine(&self) -> AsrEngine;

@@ -1,7 +1,7 @@
 use super::error::SherpaError;
 use super::metrics::{
-    current_time_millis, duration_to_ms, log_inference_metric, set_batch_inference_metric,
-    AsrInferenceMetric,
+    AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
+    set_batch_inference_metric,
 };
 use super::online_traits::{
     OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,

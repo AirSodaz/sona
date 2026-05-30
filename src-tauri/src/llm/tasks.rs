@@ -1,9 +1,9 @@
-use super::network::{validate_llm_api_host, LlmApiUrl};
+use super::network::{LlmApiUrl, validate_llm_api_host};
 use super::*;
-use futures_util::{future::BoxFuture, stream, StreamExt};
+use futures_util::{StreamExt, future::BoxFuture, stream};
 use log::{info, warn};
-use reqwest::{header::RETRY_AFTER, Client, StatusCode};
-use serde::{de::DeserializeOwned, Serialize};
+use reqwest::{Client, StatusCode, header::RETRY_AFTER};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::{future::Future, time::Duration};
 
@@ -239,11 +239,7 @@ where
 }
 
 fn format_attempt_label(attempts: usize) -> &'static str {
-    if attempts == 1 {
-        "attempt"
-    } else {
-        "attempts"
-    }
+    if attempts == 1 { "attempt" } else { "attempts" }
 }
 
 pub(crate) fn parse_google_translate_free_retry_after(

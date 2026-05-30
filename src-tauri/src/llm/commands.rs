@@ -1,4 +1,4 @@
-use super::network::{validate_llm_api_host, LlmApiUrl};
+use super::network::{LlmApiUrl, validate_llm_api_host};
 use super::*;
 use futures_util::future::BoxFuture;
 use log::info;

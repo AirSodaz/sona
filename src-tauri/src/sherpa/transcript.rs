@@ -7,8 +7,8 @@ use super::types::{
 };
 use crate::text_alignment::{align_text_units_to_tokens, is_cjk_char};
 use log::info;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tauri::{AppHandle, Emitter};
 
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;

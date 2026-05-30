@@ -1,17 +1,16 @@
+use super::BATCH_PROGRESS_EVENT;
 use super::metrics::{
-    calculate_rss_delta_mb, calculate_rtf, capture_process_memory_mb, current_time_millis,
-    duration_to_ms, log_inference_metric, log_model_load_metric, samples_to_ms,
-    set_batch_inference_metric, set_model_load_metric, AsrInferenceMetric, AsrMetricsStore,
-    AsrModelLoadMetric,
+    AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
+    capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
+    log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
 use super::model_config::{
-    build_model_config, load_punctuation, Punctuation, Recognizer, RecognizerInner,
-    SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
+    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
+    SafeStream, build_model_config, load_punctuation,
 };
 use super::state::SherpaState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
 use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptSegment};
-use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
 use std::time::Instant;

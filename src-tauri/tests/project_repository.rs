@@ -4,8 +4,8 @@
 mod project_repository;
 
 use project_repository::{
-    get_active_project_id_from_dir, set_active_project_id_in_dir, ProjectCreateInput,
-    ProjectDefaultsInput, ProjectListOptions, ProjectRepository,
+    ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRepository,
+    get_active_project_id_from_dir, set_active_project_id_in_dir,
 };
 use serde_json::json;
 use std::fs;

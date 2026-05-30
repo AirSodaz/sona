@@ -1,14 +1,14 @@
-use super::network::{post_json_request, LlmApiUrl};
+use super::network::{LlmApiUrl, post_json_request};
 use super::*;
 use futures_util::StreamExt;
 use log::warn;
-use reqwest::{header::CONTENT_TYPE, Client};
+use reqwest::{Client, header::CONTENT_TYPE};
 use rig::client::{CompletionClient, Nothing};
 use rig::completion::{CompletionModel, GetTokenUsage};
 use rig::providers::{anthropic, gemini, ollama};
 use rig::streaming::StreamedAssistantContent;
 use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Keeps the progressively built response text and emits both the full text and
 /// the latest delta, because downstream listeners render partial output while

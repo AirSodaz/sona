@@ -545,10 +545,12 @@ mod tests {
 
         assert_eq!(parsed["schemaVersion"], 1);
         assert_eq!(parsed["totals"]["callCount"], 0);
-        assert!(parsed["byProvider"]
-            .as_object()
-            .expect("providers")
-            .is_empty());
+        assert!(
+            parsed["byProvider"]
+                .as_object()
+                .expect("providers")
+                .is_empty()
+        );
         assert!(temp_dir.path().join("analytics/llm-usage.json").exists());
     }
 

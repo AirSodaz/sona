@@ -1,4 +1,4 @@
-use super::network::{post_json_request, LlmApiUrl};
+use super::network::{LlmApiUrl, post_json_request};
 use super::*;
 use async_trait::async_trait;
 use log::warn;
@@ -7,7 +7,7 @@ use rig::client::{CompletionClient, Nothing};
 use rig::completion::CompletionModel;
 use rig::providers::{anthropic, gemini, ollama, openai};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Serialize)]

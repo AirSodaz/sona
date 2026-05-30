@@ -1,5 +1,5 @@
-use serde_json::to_value;
 use serde_json::Value;
+use serde_json::to_value;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -10,13 +10,13 @@ use super::fs_utils::remove_path_if_exists;
 use super::repository::HistoryRepository;
 use super::state::{HistoryRepositoryState, PreparedBackupImportState};
 use super::{
-    BackupManifest, ExportBackupArchiveRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
-    HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
-    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
-    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
-    LiveRecordingDraftResult, PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow,
-    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
-    HISTORY_DIR_NAME,
+    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
+    HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
+    HistoryWorkspaceSortOrder, LiveRecordingDraftResult, PreparedBackupImport,
+    TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
 use crate::sherpa::TranscriptSegment;
 
@@ -672,10 +672,12 @@ mod tests {
         .unwrap();
 
         assert!(snapshot.is_none());
-        assert!(repository
-            .list_transcript_snapshots(&item.id)
-            .unwrap()
-            .is_empty());
+        assert!(
+            repository
+                .list_transcript_snapshots(&item.id)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

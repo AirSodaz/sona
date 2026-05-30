@@ -529,9 +529,11 @@ mod tests {
             body_match.title_match,
             Some(HistoryWorkspaceSearchRange { start: 0, end: 7 })
         );
-        assert!(body_match
-            .display_snippet
-            .text
-            .contains("Quarterly roadmap discussion"));
+        assert!(
+            body_match
+                .display_snippet
+                .text
+                .contains("Quarterly roadmap discussion")
+        );
     }
 }

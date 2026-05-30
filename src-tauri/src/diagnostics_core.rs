@@ -1,6 +1,6 @@
 use crate::preset_models::{
-    build_model_catalog_snapshot, resolve_model_catalog_selected_ids, ModelCatalogModel,
-    ModelRules as PresetModelRules, ModelSelectionPaths,
+    ModelCatalogModel, ModelRules as PresetModelRules, ModelSelectionPaths,
+    build_model_catalog_snapshot, resolve_model_catalog_selected_ids,
 };
 use crate::runtime_status;
 use crate::sherpa::{AsrRuntimeMetricsSnapshot, SherpaState};
@@ -373,10 +373,12 @@ mod tests {
         assert!(value.get("selectedModels").is_some());
         assert!(value.get("pathStatuses").is_some());
         assert!(value.to_string().find("settingsTab").is_none());
-        assert!(value
-            .to_string()
-            .find("settings.diagnostics.open_model_settings")
-            .is_none());
+        assert!(
+            value
+                .to_string()
+                .find("settings.diagnostics.open_model_settings")
+                .is_none()
+        );
     }
 
     #[test]

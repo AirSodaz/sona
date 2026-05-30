@@ -485,8 +485,8 @@ pub async fn webdav_download_backup(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_collection_url, parse_propfind_entries, resolve_warning_message,
-        WebDavConnectionStatus,
+        WebDavConnectionStatus, build_collection_url, parse_propfind_entries,
+        resolve_warning_message,
     };
     use reqwest::Url;
 

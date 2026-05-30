@@ -1,7 +1,7 @@
-use serde_json::{from_value, Map, Value};
+use serde_json::{Map, Value, from_value};
 
 use super::fs_utils::ensure_json_array_value;
-use crate::sherpa::{ensure_transcript_segment_timing, TranscriptSegment};
+use crate::sherpa::{TranscriptSegment, ensure_transcript_segment_timing};
 
 pub(super) struct NormalizedHistoryTranscript {
     pub(super) segments: Vec<TranscriptSegment>,

@@ -6,10 +6,10 @@ mod asr_providers;
 mod automation_repository;
 
 use automation_repository::{
-    create_automation_fingerprint, normalize_automation_path, validate_rule_activation_inner,
     AutomationRepository, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
+    create_automation_fingerprint, normalize_automation_path, validate_rule_activation_inner,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use tempfile::tempdir;
 
