@@ -809,6 +809,9 @@ export type TauriCommandContractMap = {
       host: string;
       port: number;
       apiKey: string;
+      maxConcurrent: number;
+      maxQueueSize: number;
+      maxUploadSizeMb: number;
     };
     result: void;
   };

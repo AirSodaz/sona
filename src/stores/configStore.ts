@@ -126,6 +126,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   httpServerHost: '127.0.0.1',
   httpServerPort: 14200,
   httpServerApiKey: '',
+  httpServerMaxConcurrent: 2,
+  httpServerMaxQueueSize: 100,
+  httpServerMaxUploadSizeMB: 50,
 
   // Vocabulary
   textReplacementSets: [],
@@ -209,11 +212,15 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
 const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingEnabled', 'voiceTypingShortcut', 'voiceTypingMode'
 ];
-
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
-  'httpServerEnabled', 'httpServerHost', 'httpServerPort', 'httpServerApiKey'
+  'httpServerEnabled',
+  'httpServerHost',
+  'httpServerPort',
+  'httpServerApiKey',
+  'httpServerMaxConcurrent',
+  'httpServerMaxQueueSize',
+  'httpServerMaxUploadSizeMB',
 ];
-
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;

@@ -141,51 +141,63 @@ async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
     manager: JobManager,
     models_dir: PathBuf,
+    max_concurrent: usize,
 ) {
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
+
     while let Some(job) = receiver.recv().await {
-        manager.update_job(&job.job_id, JobStatus::Processing).await;
+        let manager = manager.clone();
+        let models_dir = models_dir.clone();
+        let semaphore = semaphore.clone();
 
-        let options = TranscribeCliOptions {
-            input: job.file_path.clone(),
-            output: None,
-            format: None,
-            language: if job.language == "auto" {
-                None
-            } else {
-                Some(job.language.clone())
-            },
-            model_id: Some(job.model_id.clone()),
-            models_dir: Some(models_dir.clone()),
-            vad_model_id: None,
-            punctuation_model_id: None,
-            threads: None,
-            enable_itn: None,
-            hotwords: job.hotwords.clone(),
-            vad_buffer: None,
-            save_wav: None,
-            quiet: true,
-        };
+        tokio::spawn(async move {
+            let _permit = semaphore.acquire().await.unwrap();
+            manager.update_job(&job.job_id, JobStatus::Processing).await;
 
-        let final_status = match resolve_transcribe_options(options, None) {
-            Ok(resolved) => match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
-                Ok(segments) => JobStatus::Completed(segments),
+            let options = TranscribeCliOptions {
+                input: job.file_path.clone(),
+                output: None,
+                format: None,
+                language: if job.language == "auto" {
+                    None
+                } else {
+                    Some(job.language.clone())
+                },
+                model_id: Some(job.model_id.clone()),
+                models_dir: Some(models_dir.clone()),
+                vad_model_id: None,
+                punctuation_model_id: None,
+                threads: None,
+                enable_itn: None,
+                hotwords: job.hotwords.clone(),
+                vad_buffer: None,
+                save_wav: None,
+                quiet: true,
+            };
+
+            let final_status = match resolve_transcribe_options(options, None) {
+                Ok(resolved) => {
+                    match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
+                        Ok(segments) => JobStatus::Completed(segments),
+                        Err(e) => JobStatus::Failed(e),
+                    }
+                }
                 Err(e) => JobStatus::Failed(e),
-            },
-            Err(e) => JobStatus::Failed(e),
-        };
+            };
 
-        manager.update_job(&job.job_id, final_status.clone()).await;
+            manager.update_job(&job.job_id, final_status.clone()).await;
 
-        if job.webhook_url.is_some() {
-            let job_clone = job.clone();
-            let status_clone = final_status.clone();
-            tokio::spawn(async move {
-                send_webhook(&job_clone, &status_clone).await;
-            });
-        }
+            if job.webhook_url.is_some() {
+                let job_clone = job.clone();
+                let status_clone = final_status.clone();
+                tokio::spawn(async move {
+                    send_webhook(&job_clone, &status_clone).await;
+                });
+            }
 
-        // Cleanup
-        let _ = tokio::fs::remove_file(&job.file_path).await;
+            // Cleanup
+            let _ = tokio::fs::remove_file(&job.file_path).await;
+        });
     }
 }
 
@@ -256,7 +268,7 @@ pub async fn handle_transcribe(
         .job_manager
         .submit_job(job)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e))?;
 
     Ok(Json(serde_json::json!({ "job_id": job_id })))
 }
@@ -284,16 +296,47 @@ pub async fn handle_list_jobs(
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
     pub status: String,
-    pub version: String,
     pub uptime: u64,
+    pub active_jobs: usize,
+    pub pending_jobs: usize,
+    pub cache_space_bytes: u64,
 }
 
 pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
     let uptime = state.start_time.elapsed().as_secs();
+
+    let cache_space_bytes: u64 = tokio::task::spawn_blocking({
+        let temp_dir = state.temp_dir.clone();
+        move || {
+            walkdir::WalkDir::new(&temp_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter_map(|e| e.metadata().ok())
+                .filter(|m| m.is_file())
+                .map(|m| m.len())
+                .sum()
+        }
+    })
+    .await
+    .unwrap_or(0);
+
+    let jobs = state.job_manager.list_jobs().await;
+    let mut active_jobs = 0;
+    let mut pending_jobs = 0;
+    for status in jobs.values() {
+        match status {
+            JobStatus::Pending => pending_jobs += 1,
+            JobStatus::Processing => active_jobs += 1,
+            _ => {}
+        }
+    }
+
     Json(HealthResponse {
         status: "ok".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
         uptime,
+        active_jobs,
+        pending_jobs,
+        cache_space_bytes,
     })
 }
 
@@ -358,6 +401,9 @@ pub async fn run_server(
     api_key: &str,
     temp_dir: PathBuf,
     models_dir: PathBuf,
+    max_concurrent: usize,
+    max_queue_size: usize,
+    max_upload_size_mb: usize,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
@@ -366,13 +412,13 @@ pub async fn run_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let (tx, rx) = mpsc::channel(100);
+    let (tx, rx) = mpsc::channel(max_queue_size);
     let job_manager = JobManager::new(tx);
     let manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
 
     tokio::spawn(async move {
-        start_worker_loop(rx, manager_clone, models_dir_clone).await;
+        start_worker_loop(rx, manager_clone, models_dir_clone, max_concurrent).await;
     });
 
     let state = ServerState {
@@ -396,7 +442,10 @@ pub async fn run_server(
     let mut api_router = Router::new()
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/{job_id}", get(handle_job_status));
+        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
+        .layer(axum::extract::DefaultBodyLimit::max(
+            max_upload_size_mb * 1024 * 1024,
+        ));
 
     #[allow(deprecated)]
     if !api_key.is_empty() {
@@ -472,8 +521,10 @@ mod tests {
             serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
 
         assert_eq!(body["status"], "ok");
-        assert!(body["version"].is_string());
         assert!(body["uptime"].is_number());
+        assert!(body["activeJobs"].is_number());
+        assert!(body["pendingJobs"].is_number());
+        assert!(body["cacheSpaceBytes"].is_number());
     }
 
     #[tokio::test]

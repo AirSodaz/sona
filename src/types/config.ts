@@ -304,6 +304,12 @@ export interface ApiServerConfig {
   httpServerPort?: number;
   /** API Key (Bearer token) for the HTTP API Server. Default: ''. */
   httpServerApiKey?: string;
+  /** Maximum number of concurrent transcription tasks. Default: 2. */
+  httpServerMaxConcurrent?: number;
+  /** Maximum number of tasks waiting in the queue. Default: 100. */
+  httpServerMaxQueueSize?: number;
+  /** Maximum file upload size in MB. Default: 50. */
+  httpServerMaxUploadSizeMB?: number;
 }
 
 // ---------------------------------------------------------------------------

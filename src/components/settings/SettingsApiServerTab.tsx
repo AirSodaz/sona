@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Server, RefreshCw, Copy, Check, Activity, Info, Clock, Zap } from 'lucide-react';
+import { Server, RefreshCw, Copy, Activity, Clock, Zap, HardDrive, List } from 'lucide-react';
 
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer, SettingsItem } from './SettingsLayout';
@@ -10,8 +10,10 @@ import { TauriCommand } from '../../services/tauri/commands';
 
 interface ServerHealth {
   status: string;
-  version: string;
   uptime: number;
+  activeJobs: number;
+  pendingJobs: number;
+  cacheSpaceBytes: number;
 }
 
 interface ServerInfo {
@@ -121,6 +123,14 @@ export function SettingsApiServerTab(): React.JSX.Element {
         return `${h}h ${m}m ${s}s`;
     };
 
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    };
+
     const getStatusLabel = (status: JobStatus) => {
         if (status === 'Pending') return <span className="badge badge-pending">Pending</span>;
         if (status === 'Processing') return <span className="badge badge-processing">Processing</span>;
@@ -167,7 +177,10 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 invokeTauri(TauriCommand.apiServer.start, {
                     host: config.httpServerHost ?? '127.0.0.1',
                     port: config.httpServerPort ?? 14200,
-                    apiKey: config.httpServerApiKey ?? ''
+                    apiKey: config.httpServerApiKey ?? '',
+                    maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+                    maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+                    maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
                 }).catch((e) => {
                     // eslint-disable-next-line no-console
                     console.error(e);
@@ -180,7 +193,15 @@ export function SettingsApiServerTab(): React.JSX.Element {
             }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [config.httpServerEnabled, config.httpServerHost, config.httpServerPort, config.httpServerApiKey]);
+    }, [
+        config.httpServerEnabled,
+        config.httpServerHost,
+        config.httpServerPort,
+        config.httpServerApiKey,
+        config.httpServerMaxConcurrent,
+        config.httpServerMaxQueueSize,
+        config.httpServerMaxUploadSizeMB
+    ]);
 
     return (
         <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
@@ -265,10 +286,58 @@ export function SettingsApiServerTab(): React.JSX.Element {
                             data-tooltip-pos="top"
                             aria-label={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
                         >
-                            {copied ? <Check size={16} color="green" /> : <Copy size={16} />}
+                            <Copy size={16} />
                         </button>
-                    </div>
-                </SettingsItem>
+                        </div>
+                        </SettingsItem>
+
+                        {/* Max Concurrent Tasks */}
+                        <SettingsItem
+                        title={t('settings.api_server.max_concurrent_label', { defaultValue: 'Max Concurrent Tasks' })}
+                        hint={t('settings.api_server.max_concurrent_hint', { defaultValue: 'Number of concurrent transcription tasks allowed (default: 2).' })}
+                        >
+                        <input
+                        type="number"
+                        className="input-text"
+                        value={config.httpServerMaxConcurrent ?? 2}
+                        onChange={(e) => setConfig({ httpServerMaxConcurrent: parseInt(e.target.value, 10) || 2 })}
+                        min={1}
+                        max={32}
+                        style={{ width: '200px' }}
+                        />
+                        </SettingsItem>
+
+                        {/* Max Queue Size */}
+                        <SettingsItem
+                        title={t('settings.api_server.max_queue_size_label', { defaultValue: 'Max Queue Size' })}
+                        hint={t('settings.api_server.max_queue_size_hint', { defaultValue: 'Maximum number of tasks allowed in the queue (default: 100).' })}
+                        >
+                        <input
+                        type="number"
+                        className="input-text"
+                        value={config.httpServerMaxQueueSize ?? 100}
+                        onChange={(e) => setConfig({ httpServerMaxQueueSize: parseInt(e.target.value, 10) || 100 })}
+                        min={1}
+                        max={1000}
+                        style={{ width: '200px' }}
+                        />
+                        </SettingsItem>
+
+                        {/* Max Upload Size */}
+                        <SettingsItem
+                            title={t('settings.api_server.max_upload_size_label', { defaultValue: 'Max Upload Size (MB)' })}
+                            hint={t('settings.api_server.max_upload_size_hint', { defaultValue: 'Maximum file size allowed for API uploads (default: 50MB).' })}
+                        >
+                            <input
+                                type="number"
+                                className="input-text"
+                                value={config.httpServerMaxUploadSizeMB ?? 50}
+                                onChange={(e) => setConfig({ httpServerMaxUploadSizeMB: parseInt(e.target.value, 10) || 50 })}
+                                min={1}
+                                max={10000}
+                                style={{ width: '200px' }}
+                            />
+                        </SettingsItem>
 
             </SettingsSection>
 
@@ -301,10 +370,24 @@ export function SettingsApiServerTab(): React.JSX.Element {
                                     </div>
                                 </div>
                                 <div className="status-card">
-                                    <div className="status-card-icon"><Info size={20} /></div>
+                                    <div className="status-card-icon"><Activity size={20} /></div>
                                     <div className="status-card-content">
-                                        <div className="status-card-label">{t('settings.api_server.status_label_version', { defaultValue: 'Version' })}</div>
-                                        <div className="status-card-value">{health?.version || '-'}</div>
+                                        <div className="status-card-label">{t('settings.api_server.status_label_active_jobs', { defaultValue: 'Active Tasks' })}</div>
+                                        <div className="status-card-value">{health ? health.activeJobs : '-'}</div>
+                                    </div>
+                                </div>
+                                <div className="status-card">
+                                    <div className="status-card-icon"><List size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_pending_jobs', { defaultValue: 'Pending Tasks' })}</div>
+                                        <div className="status-card-value">{health ? health.pendingJobs : '-'}</div>
+                                    </div>
+                                </div>
+                                <div className="status-card">
+                                    <div className="status-card-icon"><HardDrive size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_cache_space', { defaultValue: 'Cache Usage' })}</div>
+                                        <div className="status-card-value">{health ? formatBytes(health.cacheSpaceBytes) : '-'}</div>
                                     </div>
                                 </div>
                             </div>

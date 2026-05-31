@@ -54,6 +54,9 @@ async fn start_api_server(
     host: String,
     port: u16,
     api_key: String,
+    max_concurrent: usize,
+    max_queue_size: usize,
+    max_upload_size_mb: usize,
 ) -> Result<(), String> {
     let mut sender_lock = controller.shutdown_sender.lock().await;
 
@@ -69,8 +72,18 @@ async fn start_api_server(
     let models_dir = app.path().app_local_data_dir().unwrap().join("models");
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) =
-            crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx).await
+        if let Err(e) = crate::server::run_server(
+            &host,
+            port,
+            &api_key,
+            temp_dir,
+            models_dir,
+            max_concurrent,
+            max_queue_size,
+            max_upload_size_mb,
+            rx,
+        )
+        .await
         {
             log::error!("HTTP API Server failed: {}", e);
         }
@@ -282,6 +295,9 @@ pub fn run() {
                 let mut host = "127.0.0.1".to_string();
                 let mut port = 14200;
                 let mut api_key = "".to_string();
+                let mut max_concurrent = 2;
+                let mut max_queue_size = 100;
+                let mut max_upload_size_mb = 50;
 
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -301,6 +317,22 @@ pub fn run() {
                                 config.get("httpServerApiKey").and_then(|v| v.as_str())
                             {
                                 api_key = key.to_string();
+                            }
+                            if let Some(mc) =
+                                config.get("httpServerMaxConcurrent").and_then(|v| v.as_u64())
+                            {
+                                max_concurrent = mc as usize;
+                            }
+                            if let Some(mq) =
+                                config.get("httpServerMaxQueueSize").and_then(|v| v.as_u64())
+                            {
+                                max_queue_size = mq as usize;
+                            }
+                            if let Some(ms) = config
+                                .get("httpServerMaxUploadSizeMB")
+                                .and_then(|v| v.as_u64())
+                            {
+                                max_upload_size_mb = ms as usize;
                             }
                         }
                     }
@@ -322,9 +354,18 @@ pub fn run() {
                     let controller = app_handle.state::<ApiServerController>();
                     *controller.shutdown_sender.lock().await = Some(tx);
 
-                    if let Err(e) =
-                        crate::server::run_server(&host, port, &api_key, temp_dir, models_dir, rx)
-                            .await
+                    if let Err(e) = crate::server::run_server(
+                        &host,
+                        port,
+                        &api_key,
+                        temp_dir,
+                        models_dir,
+                        max_concurrent,
+                        max_queue_size,
+                        max_upload_size_mb,
+                        rx,
+                    )
+                    .await
                     {
                         log::error!("HTTP API Server failed: {}", e);
                     }
