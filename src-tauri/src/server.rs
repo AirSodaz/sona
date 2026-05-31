@@ -396,7 +396,7 @@ pub async fn run_server(
     let mut api_router = Router::new()
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/:job_id", get(handle_job_status));
+        .route("/v1/transcriptions/{job_id}", get(handle_job_status));
 
     #[allow(deprecated)]
     if !api_key.is_empty() {
@@ -539,7 +539,11 @@ mod tests {
         let job_manager = JobManager::new(tx);
 
         // Add a mock job
-        job_manager.jobs.write().await.insert("test-job-id".to_string(), JobStatus::Pending);
+        job_manager
+            .jobs
+            .write()
+            .await
+            .insert("test-job-id".to_string(), JobStatus::Pending);
 
         let state = ServerState {
             job_manager,

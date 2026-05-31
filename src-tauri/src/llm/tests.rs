@@ -492,7 +492,8 @@ fn build_polish_prompt_contains_context_and_keywords() {
 
 #[test]
 fn build_translate_prompt_contains_language_name() {
-    let prompt = build_translate_prompt(&sample_segments()[..2], "zh", Some("Chinese (Simplified)"));
+    let prompt =
+        build_translate_prompt(&sample_segments()[..2], "zh", Some("Chinese (Simplified)"));
 
     assert!(prompt.contains("Chinese (Simplified)"));
     assert!(prompt.contains("replace 'text' with 'translation'"));
