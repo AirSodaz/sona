@@ -11,6 +11,7 @@ pub enum ExportFormat {
     Txt,
     Srt,
     Vtt,
+    Md,
 }
 
 impl ExportFormat {
@@ -21,6 +22,7 @@ impl ExportFormat {
             "txt" => Ok(Self::Txt),
             "srt" => Ok(Self::Srt),
             "vtt" => Ok(Self::Vtt),
+            "md" => Ok(Self::Md),
             other => Err(format!("Unsupported export format: {other}")),
         }
     }
@@ -94,6 +96,7 @@ pub fn export_segments_with_mode(
         ExportFormat::Txt => Ok(export_txt(segments, mode)),
         ExportFormat::Srt => Ok(export_srt(segments, mode)),
         ExportFormat::Vtt => Ok(export_vtt(segments, mode)),
+        ExportFormat::Md => Ok(export_md(segments, mode)),
     }
 }
 
@@ -153,7 +156,20 @@ fn export_txt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
     segments
         .iter()
         .filter(|segment| segment.is_final)
-        .map(|segment| segment_export_text(segment, mode, false, false))
+        .map(|segment| segment_export_text_with_speaker(segment, mode, false, false))
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn export_md(segments: &[TranscriptSegment], mode: ExportMode) -> String {
+    segments
+        .iter()
+        .filter(|segment| segment.is_final)
+        .map(|segment| {
+            let text = segment_export_text(segment, mode, false, false);
+            prefix_md_speaker_label(segment, &text)
+        })
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -164,7 +180,7 @@ fn export_srt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
         .iter()
         .filter(|segment| segment.is_final)
         .filter_map(|segment| {
-            let text = segment_export_text(segment, mode, true, true);
+            let text = segment_export_text_with_speaker(segment, mode, true, true);
             if text.is_empty() {
                 return None;
             }
@@ -189,7 +205,7 @@ fn export_vtt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
         .iter()
         .filter(|segment| segment.is_final)
         .filter_map(|segment| {
-            let text = segment_export_text(segment, mode, true, true);
+            let text = segment_export_text_with_speaker(segment, mode, true, true);
             if text.is_empty() {
                 return None;
             }
@@ -248,13 +264,21 @@ fn segment_export_text(
         html_to_plain_text(segment.translation.as_deref().unwrap_or("").trim())
     };
 
-    let text = match mode {
+    match mode {
         ExportMode::Translation => translation,
         ExportMode::Bilingual if is_subtitle => format!("{translation}\n{original}"),
         ExportMode::Bilingual => format!("{original}\n{translation}"),
         ExportMode::Original => original,
-    };
+    }
+}
 
+fn segment_export_text_with_speaker(
+    segment: &TranscriptSegment,
+    mode: ExportMode,
+    is_html_formatted: bool,
+    is_subtitle: bool,
+) -> String {
+    let text = segment_export_text(segment, mode, is_html_formatted, is_subtitle);
     prefix_speaker_label(segment, &text)
 }
 
@@ -395,6 +419,20 @@ fn prefix_speaker_label(segment: &TranscriptSegment, text: &str) -> String {
     }
 }
 
+fn prefix_md_speaker_label(segment: &TranscriptSegment, text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    match segment.speaker.as_ref() {
+        Some(speaker) if !speaker.label.trim().is_empty() => {
+            format!("**{}**: {}", speaker.label.trim(), trimmed)
+        }
+        _ => trimmed.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,7 +479,13 @@ mod tests {
     fn parses_export_formats() {
         assert_eq!(ExportFormat::parse("json").unwrap(), ExportFormat::Json);
         assert_eq!(ExportFormat::parse("SRT").unwrap(), ExportFormat::Srt);
-        assert!(ExportFormat::parse("md").is_err());
+        assert_eq!(ExportFormat::parse("md").unwrap(), ExportFormat::Md);
+    }
+
+    #[test]
+    fn exports_md_segments() {
+        let output = export_segments(&sample_segments(), ExportFormat::Md).unwrap();
+        assert_eq!(output, "**Alice**: Hello\n\nWorld");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 export type ExportMode = 'original' | 'translation' | 'bilingual';
 
-export type ExportFormat = 'srt' | 'json' | 'txt' | 'vtt';
+export type ExportFormat = 'srt' | 'json' | 'txt' | 'vtt' | 'md';
 
 /**
  * Formats seconds to display format (MM:SS.m).
@@ -38,6 +38,8 @@ export function getMimeType(format: ExportFormat): string {
     case 'vtt':
     case 'txt':
       return 'text/plain';
+    case 'md':
+      return 'text/markdown';
     case 'json':
       return 'application/json';
     default:

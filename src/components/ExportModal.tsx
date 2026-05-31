@@ -38,6 +38,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
         { value: 'vtt', label: 'WebVTT (.vtt)' },
         { value: 'json', label: 'JSON (.json)' },
         { value: 'txt', label: 'Plain Text (.txt)' },
+        { value: 'md', label: 'Markdown (.md)' },
     ];
 
     return (

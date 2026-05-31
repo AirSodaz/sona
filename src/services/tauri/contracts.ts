@@ -184,7 +184,7 @@ type WorkspaceQueryResult = {
 
 type ExportTranscriptFileArgs = {
   segments: TranscriptSegment[];
-  format: 'srt' | 'json' | 'txt' | 'vtt';
+  format: 'srt' | 'json' | 'txt' | 'vtt' | 'md';
   mode: 'original' | 'translation' | 'bilingual';
   outputPath: string;
 };
