@@ -72,6 +72,10 @@ impl JobManager {
     pub async fn get_job(&self, job_id: &str) -> Option<JobStatus> {
         self.jobs.read().await.get(job_id).cloned()
     }
+
+    pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
+        self.jobs.read().await.clone()
+    }
 }
 
 async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
@@ -269,6 +273,13 @@ pub async fn handle_job_status(
     Ok(Json(status))
 }
 
+pub async fn handle_list_jobs(
+    State(state): State<ServerState>,
+) -> Json<HashMap<String, JobStatus>> {
+    let jobs = state.job_manager.list_jobs().await;
+    Json(jobs)
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
@@ -384,6 +395,7 @@ pub async fn run_server(
     // Create private/transcriptions routes
     let mut api_router = Router::new()
         .route("/v1/transcriptions", post(handle_transcribe))
+        .route("/v1/transcriptions/jobs", get(handle_list_jobs))
         .route("/v1/transcriptions/:job_id", get(handle_job_status));
 
     #[allow(deprecated)]
@@ -511,5 +523,54 @@ mod tests {
         assert!(body["models"].is_array());
         assert!(body["vadInstalled"].is_boolean());
         assert!(body["punctuationInstalled"].is_boolean());
+    }
+
+    #[tokio::test]
+    async fn test_list_jobs_endpoint() {
+        let temp_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let models_dir = tempfile::tempdir()
+            .expect("Failed to create temporary directory")
+            .path()
+            .to_path_buf();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+
+        // Add a mock job
+        job_manager.jobs.write().await.insert("test-job-id".to_string(), JobStatus::Pending);
+
+        let state = ServerState {
+            job_manager,
+            temp_dir,
+            models_dir,
+            start_time: std::time::Instant::now(),
+        };
+
+        let app = Router::new()
+            .route("/v1/transcriptions/jobs", get(handle_list_jobs))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs")
+                    .body(Body::empty())
+                    .expect("Failed to build request"),
+            )
+            .await
+            .expect("Failed to dispatch request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read response body buffer");
+        let body: serde_json::Value =
+            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
+
+        assert!(body.is_object());
+        assert_eq!(body["test-job-id"], "Pending");
     }
 }

@@ -1085,7 +1085,19 @@
             "api_key_placeholder": "Optional bearer token",
             "generate_key": "Generate",
             "copy_key": "Copy",
-            "copied": "Copied!"
+            "copied": "Copied!",
+            "status_title": "Server Status",
+            "status_label_state": "State",
+            "state_running": "Running",
+            "state_stopped": "Stopped",
+            "status_label_uptime": "Uptime",
+            "status_label_gpu": "GPU Acceleration",
+            "status_label_version": "Version",
+            "connection_error": "Connection Error",
+            "jobs_title": "Job Queue",
+            "no_jobs": "No active or recent jobs.",
+            "job_id": "Job ID",
+            "job_status": "Status"
         },
         "llm": {
             "title": "LLM Service",

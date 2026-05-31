@@ -1,6 +1,6 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Server, RefreshCw, Copy, Check } from 'lucide-react';
+import { Server, RefreshCw, Copy, Check, Activity, Info, Clock, Zap } from 'lucide-react';
 
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer, SettingsItem } from './SettingsLayout';
@@ -8,12 +8,34 @@ import { Switch } from '../Switch';
 import { invokeTauri } from '../../services/tauri/invoke';
 import { TauriCommand } from '../../services/tauri/commands';
 
+interface ServerHealth {
+  status: string;
+  version: string;
+  uptime: number;
+}
+
+interface ServerInfo {
+  platform: string;
+  gpuAvailable: boolean;
+  models: string[];
+  vadInstalled: boolean;
+  punctuationInstalled: boolean;
+}
+
+type JobStatus = 'Pending' | 'Processing' | { Completed: unknown } | { Failed: string };
+
 export function SettingsApiServerTab(): React.JSX.Element {
     const { t } = useTranslation();
     const config = useApiServerConfig();
     const setConfig = useSetConfig();
 
     const [copied, setCopied] = useState(false);
+    const [health, setHealth] = useState<ServerHealth | null>(null);
+    const [info, setInfo] = useState<ServerInfo | null>(null);
+    const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
+    const [lastError, setLastError] = useState<string | null>(null);
+
+    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (copied) {
@@ -21,6 +43,93 @@ export function SettingsApiServerTab(): React.JSX.Element {
             return () => clearTimeout(timer);
         }
     }, [copied]);
+
+    const fetchData = useCallback(async () => {
+        if (!config.httpServerEnabled) return;
+
+        const host = config.httpServerHost || '127.0.0.1';
+        const port = config.httpServerPort || 14200;
+        const apiKey = config.httpServerApiKey || '';
+        const baseUrl = `http://${host}:${port}`;
+
+        const headers: Record<string, string> = {};
+        if (apiKey) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        try {
+            // Fetch Health (Public)
+            const healthRes = await fetch(`${baseUrl}/health`);
+            if (healthRes.ok) {
+                const healthData = await healthRes.json();
+                setHealth(healthData);
+            } else {
+                setHealth(null);
+            }
+
+            // Fetch Info (Public)
+            const infoRes = await fetch(`${baseUrl}/info`);
+            if (infoRes.ok) {
+                const infoData = await infoRes.json();
+                setInfo(infoData);
+            } else {
+                setInfo(null);
+            }
+
+            // Fetch Jobs (Private)
+            const jobsRes = await fetch(`${baseUrl}/v1/transcriptions/jobs`, { headers });
+            if (jobsRes.ok) {
+                const jobsData = await jobsRes.json();
+                setJobs(jobsData);
+            } else {
+                setJobs({});
+            }
+
+            setLastError(null);
+        } catch (err) {
+            setHealth(null);
+            setInfo(null);
+            setJobs({});
+            setLastError(err instanceof Error ? err.message : String(err));
+        }
+    }, [config.httpServerEnabled, config.httpServerHost, config.httpServerPort, config.httpServerApiKey]);
+
+    useEffect(() => {
+        if (config.httpServerEnabled) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            void fetchData();
+            pollIntervalRef.current = setInterval(fetchData, 3000);
+        } else {
+            setHealth(null);
+            setInfo(null);
+            setJobs({});
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+            }
+        }
+        return () => {
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+            }
+        };
+    }, [config.httpServerEnabled, fetchData]);
+
+    const formatUptime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h}h ${m}m ${s}s`;
+    };
+
+    const getStatusLabel = (status: JobStatus) => {
+        if (status === 'Pending') return <span className="badge badge-pending">Pending</span>;
+        if (status === 'Processing') return <span className="badge badge-processing">Processing</span>;
+        if (typeof status === 'object') {
+            if ('Completed' in status) return <span className="badge badge-completed">Completed</span>;
+            if ('Failed' in status) return <span className="badge badge-failed" title={status.Failed}>Failed</span>;
+        }
+        return <span className="badge">Unknown</span>;
+    };
 
     const handleHostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setConfig({ httpServerHost: e.target.value });
@@ -162,6 +271,81 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 </SettingsItem>
 
             </SettingsSection>
+
+            {config.httpServerEnabled && (
+                <>
+                    <SettingsSection title={t('settings.api_server.status_title', { defaultValue: 'Server Status' })}>
+                        <div className="settings-api-server-panel">
+                            <div className="api-server-status-grid">
+                                <div className="status-card">
+                                    <div className="status-card-icon"><Activity size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_state', { defaultValue: 'State' })}</div>
+                                        <div className={`status-card-value ${health ? 'text-success' : 'text-error'}`}>
+                                            {health ? t('settings.api_server.state_running', { defaultValue: 'Running' }) : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="status-card">
+                                    <div className="status-card-icon"><Clock size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_uptime', { defaultValue: 'Uptime' })}</div>
+                                        <div className="status-card-value">{health ? formatUptime(health.uptime) : '-'}</div>
+                                    </div>
+                                </div>
+                                <div className="status-card">
+                                    <div className="status-card-icon"><Zap size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_gpu', { defaultValue: 'GPU Acceleration' })}</div>
+                                        <div className="status-card-value">{info?.gpuAvailable ? t('common.enabled', { defaultValue: 'Enabled' }) : t('common.disabled', { defaultValue: 'Disabled' })}</div>
+                                    </div>
+                                </div>
+                                <div className="status-card">
+                                    <div className="status-card-icon"><Info size={20} /></div>
+                                    <div className="status-card-content">
+                                        <div className="status-card-label">{t('settings.api_server.status_label_version', { defaultValue: 'Version' })}</div>
+                                        <div className="status-card-value">{health?.version || '-'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {lastError && !health && (
+                                <div className="settings-error-notice" style={{ marginTop: '12px' }}>
+                                    {t('settings.api_server.connection_error', { defaultValue: 'Connection Error' })}: {lastError}
+                                </div>
+                            )}
+                        </div>
+                    </SettingsSection>
+
+                    <SettingsSection title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}>
+                        <div className="settings-api-server-panel">
+                            <div className="api-server-jobs-container">
+                                {Object.keys(jobs).length === 0 ? (
+                                    <div className="empty-state-mini">
+                                        <p>{t('settings.api_server.no_jobs', { defaultValue: 'No active or recent jobs.' })}</p>
+                                    </div>
+                                ) : (
+                                    <table className="jobs-table">
+                                        <thead>
+                                            <tr>
+                                                <th>{t('settings.api_server.job_id', { defaultValue: 'Job ID' })}</th>
+                                                <th>{t('settings.api_server.job_status', { defaultValue: 'Status' })}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Object.entries(jobs).map(([id, status]) => (
+                                                <tr key={id}>
+                                                    <td className="job-id-cell" title={id}>{id.slice(0, 8)}...</td>
+                                                    <td>{getStatusLabel(status)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </SettingsSection>
+                </>
+            )}
         </SettingsTabContainer>
     );
 }

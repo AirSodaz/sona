@@ -1084,7 +1084,19 @@
             "api_key_placeholder": "可选的 Bearer 令牌",
             "generate_key": "生成",
             "copy_key": "复制",
-            "copied": "已复制！"
+            "copied": "已复制！",
+            "status_title": "服务状态",
+            "status_label_state": "运行状态",
+            "state_running": "正在运行",
+            "state_stopped": "已停止",
+            "status_label_uptime": "运行时长",
+            "status_label_gpu": "GPU 硬件加速",
+            "status_label_version": "服务版本",
+            "connection_error": "连接错误",
+            "jobs_title": "任务队列",
+            "no_jobs": "当前没有正在处理的任务。",
+            "job_id": "任务 ID",
+            "job_status": "状态"
         },
         "llm": {
             "title": "大模型服务",

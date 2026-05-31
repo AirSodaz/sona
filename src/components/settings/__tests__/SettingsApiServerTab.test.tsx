@@ -154,4 +154,45 @@ describe('SettingsApiServerTab', () => {
       expect(copyBtn.getAttribute('data-tooltip')).toBe('Copied!');
     });
   });
+
+  it('renders Server Status and Job Queue when enabled', async () => {
+    currentConfig.httpServerEnabled = true;
+
+    // Mock fetch
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.endsWith('/health')) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ status: 'ok', version: '1.0.0', uptime: 3600 })
+            });
+        }
+        if (url.endsWith('/info')) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ platform: 'win32', gpuAvailable: true, models: [], vadInstalled: true, punctuationInstalled: true })
+            });
+        }
+        if (url.endsWith('/jobs')) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ 'test-job': 'Processing' })
+            });
+        }
+        return Promise.reject(new Error('Unknown URL'));
+    });
+    global.fetch = mockFetch as any;
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    expect(screen.getByText('Server Status')).toBeDefined();
+    expect(screen.getByText('Job Queue')).toBeDefined();
+
+    await waitFor(() => {
+        expect(screen.getByText('Running')).toBeDefined();
+        expect(screen.getByText('1h 0m 0s')).toBeDefined();
+        expect(screen.getByText('Processing')).toBeDefined();
+    });
+  });
 });
