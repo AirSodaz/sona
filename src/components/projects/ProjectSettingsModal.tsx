@@ -4,12 +4,13 @@ import type { AppConfig } from '../../types/config';
 import type { ProjectDefaults, ProjectRecord } from '../../types/project';
 import { getPolishPresetOptions } from '../../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
+import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { Checkbox } from '../Checkbox';
 import { Dropdown } from '../Dropdown';
 import { IconPicker } from '../IconPicker';
 import { FolderIcon } from '../Icons';
 import { Modal } from '../Modal';
-import { LANGUAGE_OPTIONS } from './constants';
+import { LANGUAGE_OPTIONS } from '../../constants/languages';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export function ProjectSettingsModal({
   onIconChange,
   onDefaultsChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   if (!isOpen || !project || !draftDefaults) {
     return null;
@@ -52,8 +53,8 @@ export function ProjectSettingsModal({
 
   const summaryTemplateOptions = getSummaryTemplateOptions(globalConfig.summaryCustomTemplates, t);
   const languageOptions = LANGUAGE_OPTIONS.map((language) => ({
-    value: language,
-    label: t(`translation.languages.${language}`),
+    value: language.code,
+    label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
   }));
   const polishPresetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
 

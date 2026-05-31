@@ -304,6 +304,7 @@ pub struct TranslateSegmentsRequest {
     pub segments: Vec<LlmSegmentInput>,
     pub chunk_size: Option<usize>,
     pub target_language: String,
+    pub target_language_name: Option<String>, // Decoupled English name payload
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -384,6 +385,7 @@ pub struct TranscriptLlmJobRequest {
     pub config: LlmConfig,
     pub segments: Vec<crate::sherpa::TranscriptSegment>,
     pub target_language: Option<String>,
+    pub target_language_name: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
     pub template: Option<SummaryTemplateConfig>,

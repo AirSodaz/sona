@@ -1276,6 +1276,11 @@
         "error_config_missing": "Please configure LLM service in Settings before translating.",
         "error_failed": "Translation failed: ",
         "target_language": "Target Language",
+        "commonly_used": "Commonly Used",
+        "all_languages": "All Languages",
+        "search_results": "Search Results",
+        "search_placeholder": "Search languages...",
+        "no_results": "No languages found",
         "languages": {
             "zh": "Chinese (Simplified)",
             "en": "English",

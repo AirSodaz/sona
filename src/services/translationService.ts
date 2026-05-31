@@ -2,6 +2,7 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
+import { LANGUAGE_OPTIONS } from '../constants/languages';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
@@ -128,6 +129,7 @@ export class TranslationService {
           },
         );
         try {
+          const langOpt = LANGUAGE_OPTIONS.find(l => l.code === resolvedTargetLanguage);
           const result = await this.ports.runTranscriptLlmJob({
             taskId,
             taskType: 'translate',
@@ -135,6 +137,7 @@ export class TranslationService {
             config: llm!,
             segments,
             targetLanguage: resolvedTargetLanguage,
+            targetLanguageName: langOpt ? langOpt.englishName : undefined,
           });
           if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
             return;
@@ -174,11 +177,14 @@ export class TranslationService {
     config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
     segments: TranscriptSegment[],
   ): TranslateSegmentsRequest {
+    const targetCode = config.translationLanguage || 'zh';
+    const langOpt = LANGUAGE_OPTIONS.find(l => l.code === targetCode);
     return {
       taskId,
       config: llmConfig,
       segments: segments.map(({ id, text }) => ({ id, text })),
-      targetLanguage: config.translationLanguage || 'zh',
+      targetLanguage: targetCode,
+      targetLanguageName: langOpt ? langOpt.englishName : undefined
     };
   }
 

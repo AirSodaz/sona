@@ -637,24 +637,13 @@ pub(crate) fn build_polish_prompt(
     prompt
 }
 
-fn language_name(code: &str) -> String {
-    match code {
-        "zh" => "Chinese (Simplified)".to_string(),
-        "en" => "English".to_string(),
-        "ja" => "Japanese".to_string(),
-        "ko" => "Korean".to_string(),
-        "fr" => "French".to_string(),
-        "de" => "German".to_string(),
-        "es" => "Spanish".to_string(),
-        _ => code.to_string(),
-    }
-}
-
 pub(crate) fn build_translate_prompt(
     segments: &[LlmSegmentInput],
     target_language: &str,
+    target_language_name: Option<&str>,
 ) -> String {
     let json_str = serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string());
+    let resolved_name = target_language_name.unwrap_or(target_language);
 
     format!(
         "You are a professional translator. Translate the following array of text segments into {}.\n\
@@ -665,7 +654,7 @@ CRITICAL INSTRUCTIONS:\n\
 4. Do not combine or split segments. There must be exactly {} JSON lines in the output.\n\n\
 Input:\n\
 {}",
-        language_name(target_language),
+        resolved_name,
         segments.len(),
         json_str
     )

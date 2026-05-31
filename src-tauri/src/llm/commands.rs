@@ -207,6 +207,7 @@ where
 
     let config = request.config.clone();
     let target_language = request.target_language.clone();
+    let target_language_name = request.target_language_name.clone();
     let events = CommandEventEmitter::new(app.clone());
     let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Translation);
     let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
@@ -417,7 +418,7 @@ where
         },
         StreamingSegmentTaskConfig {
             build_prompt: move |chunk: &[LlmSegmentInput]| {
-                build_translate_prompt(chunk, &target_language)
+                build_translate_prompt(chunk, &target_language, target_language_name.as_deref())
             },
             parse_chunk: parse_translate_chunk,
             build_request: move |prompt: String| LlmGenerateRequest {

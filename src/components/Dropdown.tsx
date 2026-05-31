@@ -35,10 +35,12 @@ export function Dropdown({
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+    const [searchQuery, setSearchQuery] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
+    const showSearch = options.length > 10;
     const selectedOption = options.find((opt) => opt.value === value);
 
     useEffect(() => {
@@ -63,18 +65,25 @@ export function Dropdown({
     // Focus management when opening
     useEffect(() => {
         if (isOpen && menuRef.current) {
+            if (showSearch) {
+                const searchInput = menuRef.current.querySelector<HTMLInputElement>('.dropdown-search-input');
+                if (searchInput) {
+                    requestAnimationFrame(() => searchInput.focus());
+                    return;
+                }
+            }
             // Try to find selected option first
             const selectedBtn = menuRef.current.querySelector<HTMLButtonElement>('.selected:not(:disabled)');
             if (selectedBtn) {
                 requestAnimationFrame(() => selectedBtn.focus());
             } else {
-                const firstButton = menuRef.current.querySelector<HTMLButtonElement>('button:not(:disabled)');
+                const firstButton = menuRef.current.querySelector<HTMLButtonElement>('.dropdown-item:not(:disabled)');
                 if (firstButton) {
                     requestAnimationFrame(() => firstButton.focus());
                 }
             }
         }
-    }, [isOpen]);
+    }, [isOpen, showSearch]);
 
     React.useLayoutEffect(() => {
         if (isOpen && dropdownRef.current) {
@@ -112,6 +121,7 @@ export function Dropdown({
         }
         onChange(option.value);
         setIsOpen(false);
+        setSearchQuery('');
         triggerRef.current?.focus();
     };
 
@@ -119,72 +129,99 @@ export function Dropdown({
         if (e.key === 'Escape') {
             e.preventDefault();
             setIsOpen(false);
+            setSearchQuery('');
             triggerRef.current?.focus();
             return;
         }
 
-        // If not open, Open on ArrowDown/Enter/Space
         if (!isOpen) {
-            switch (e.key) {
-                case 'ArrowDown':
-                case 'Enter':
-                case ' ':
-                    e.preventDefault();
-                    setIsOpen(true);
-                    break;
-                default:
-                    break;
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setSearchQuery('');
+                setIsOpen(true);
             }
             return;
         }
 
         if (menuRef.current) {
-            const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-            if (buttons.length === 0) {
+            const searchInput = menuRef.current.querySelector<HTMLInputElement>('.dropdown-search-input');
+            const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('.dropdown-item:not(:disabled)'));
+            const activeElement = document.activeElement;
+
+            if (searchInput && activeElement === searchInput) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    buttons[0]?.focus();
+                }
                 return;
             }
-            const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+
+            const currentIndex = buttons.indexOf(activeElement as HTMLButtonElement);
 
             switch (e.key) {
-                case 'ArrowDown': {
+                case 'ArrowDown':
                     e.preventDefault();
-                    const nextIndex = (currentIndex + 1) % buttons.length;
-                    buttons[nextIndex].focus();
+                    if (buttons.length === 0) return;
+                    if (currentIndex === buttons.length - 1) {
+                        if (searchInput) {
+                            searchInput.focus();
+                        } else {
+                            buttons[0]?.focus();
+                        }
+                    } else {
+                        buttons[currentIndex + 1]?.focus();
+                    }
                     break;
-                }
-                case 'ArrowUp': {
+
+                case 'ArrowUp':
                     e.preventDefault();
-                    const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-                    buttons[prevIndex].focus();
+                    if (buttons.length === 0) return;
+                    if (currentIndex === 0 || currentIndex === -1) {
+                        if (searchInput) {
+                            searchInput.focus();
+                        } else {
+                            buttons[buttons.length - 1]?.focus();
+                        }
+                    } else {
+                        buttons[currentIndex - 1]?.focus();
+                    }
                     break;
-                }
+
                 case 'Home':
                     e.preventDefault();
-                    buttons[0].focus();
+                    buttons[0]?.focus();
                     break;
+
                 case 'End':
                     e.preventDefault();
-                    buttons[buttons.length - 1].focus();
+                    buttons[buttons.length - 1]?.focus();
                     break;
+
                 case 'Tab':
-                    // Close on tab (default behavior of tabbing away)
                     setIsOpen(false);
                     break;
-                default:
+
+                default: {
+                    // Standard key redirects typing back to search input
+                    const isAlphanumeric = /^[a-zA-Z0-9]$/.test(e.key);
+                    if (searchInput && isAlphanumeric && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        e.preventDefault();
+                        searchInput.focus();
+                        setSearchQuery(prev => prev + e.key);
+                    }
                     break;
+                }
             }
         }
     };
 
-    const handleBlur = (e: React.FocusEvent) => {
-        // Close menu if focus leaves the component (either trigger or portal menu)
-        if (
-            !dropdownRef.current?.contains(e.relatedTarget as Node) &&
-            !menuRef.current?.contains(e.relatedTarget as Node)
-        ) {
-            setIsOpen(false);
-        }
-    };
+    const filteredOptions = showSearch
+        ? options.filter(opt => {
+            const labelText = typeof opt.label === 'string' ? opt.label : '';
+            return labelText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                   opt.value.toLowerCase().includes(searchQuery.toLowerCase());
+          })
+        : options;
 
     return (
         <div
@@ -192,14 +229,18 @@ export function Dropdown({
             ref={dropdownRef}
             style={style}
             onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
         >
             <button
                 ref={triggerRef}
                 type="button"
                 id={id}
                 className={`dropdown-trigger ${isOpen ? 'active' : ''}`}
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => {
+                    if (!isOpen) {
+                        setSearchQuery('');
+                    }
+                    setIsOpen(!isOpen);
+                }}
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
                 aria-label={ariaLabel}
@@ -215,8 +256,26 @@ export function Dropdown({
                         className={`dropdown-menu position-${position}`}
                         role="listbox"
                         style={menuStyle}
+                        onKeyDown={(e) => {
+                            e.stopPropagation();
+                            handleKeyDown(e);
+                        }}
                     >
-                        {options.map((option) => (
+                        {showSearch && (
+                            <div className="dropdown-search-wrapper" style={{ padding: '8px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 10 }}>
+                                <input
+                                    type="text"
+                                    className="dropdown-search-input"
+                                    placeholder="Search..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '0.85rem', outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                                    onClick={(e) => e.stopPropagation()} // Prevent clicking search from triggering select/close
+                                    autoFocus
+                                />
+                            </div>
+                        )}
+                        {filteredOptions.map((option) => (
                             <button
                                 key={option.value}
                                 type="button"

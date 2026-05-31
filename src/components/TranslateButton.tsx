@@ -9,8 +9,10 @@ import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
+import { LANGUAGE_OPTIONS } from '../constants/languages';
+import { getLocalizedLanguageName } from '../utils/languageUtils';
 
-const LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
+const STATIC_COMMON_LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'pt', 'ru', 'it'];
 
 /** Props for TranslateButton. */
 interface TranslateButtonProps {
@@ -25,10 +27,30 @@ interface TranslateButtonProps {
  * @return The translate button component.
  */
 export function TranslateButton({ className = '' }: TranslateButtonProps): React.JSX.Element | null {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [recentLanguages, setRecentLanguages] = useState<string[]>(() => {
+        try {
+            const stored = localStorage.getItem('sona_recent_translation_languages');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    return parsed.filter((l): l is string => typeof l === 'string');
+                }
+            }
+        } catch {
+            // Quietly ignore storage errors
+        }
+        return [];
+    });
+
+    const closeMenu = () => {
+        setIsOpen(false);
+        setSearchQuery('');
+    };
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -53,7 +75,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
+                closeMenu();
             }
         };
 
@@ -84,44 +106,46 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
         }
     }, [isOpen]);
 
-    const handleBlur = (e: React.FocusEvent) => {
-        // Close menu if focus leaves the component
-        if (!dropdownRef.current?.contains(e.relatedTarget as Node)) {
-            setIsOpen(false);
-        }
-    };
-
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (!isOpen) return;
 
         if (e.key === 'Escape') {
             e.preventDefault();
-            setIsOpen(false);
+            closeMenu();
             triggerRef.current?.focus();
             return;
         }
 
-        if (menuRef.current) {
-            const buttons = Array.from(menuRef.current.querySelectorAll('button'));
-            const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const activeEl = document.activeElement;
+        const isInputActive = activeEl instanceof HTMLInputElement;
 
-            switch (e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    buttons[(currentIndex + 1) % buttons.length].focus();
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    buttons[(currentIndex - 1 + buttons.length) % buttons.length].focus();
-                    break;
-                case 'Home':
-                    e.preventDefault();
-                    buttons[0].focus();
-                    break;
-                case 'End':
-                    e.preventDefault();
-                    buttons[buttons.length - 1].focus();
-                    break;
+        if (menuRef.current) {
+            const focusables = Array.from(menuRef.current.querySelectorAll('button, input'));
+            const currentIndex = focusables.indexOf(activeEl as HTMLElement);
+
+            if (currentIndex !== -1) {
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        (focusables[(currentIndex + 1) % focusables.length] as HTMLElement).focus();
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        (focusables[(currentIndex - 1 + focusables.length) % focusables.length] as HTMLElement).focus();
+                        break;
+                    case 'Home':
+                        if (!isInputActive) {
+                            e.preventDefault();
+                            (focusables[0] as HTMLElement).focus();
+                        }
+                        break;
+                    case 'End':
+                        if (!isInputActive) {
+                            e.preventDefault();
+                            (focusables[focusables.length - 1] as HTMLElement).focus();
+                        }
+                        break;
+                }
             }
         }
     };
@@ -139,7 +163,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
             return;
         }
 
-        setIsOpen(false);
+        closeMenu();
         triggerRef.current?.focus();
 
         try {
@@ -155,11 +179,22 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
     const handleToggleVisibility = () => {
         updateLlmState({ isTranslationVisible: !isTranslationVisible });
-        setIsOpen(false);
+        closeMenu();
         triggerRef.current?.focus();
     };
 
     const handleLanguageSelect = async (langCode: string) => {
+        // Update state & localStorage for recently used languages
+        setRecentLanguages(prev => {
+            const updated = [langCode, ...prev.filter(l => l !== langCode)].slice(0, 3);
+            try {
+                localStorage.setItem('sona_recent_translation_languages', JSON.stringify(updated));
+            } catch {
+                // Quietly ignore storage errors
+            }
+            return updated;
+        });
+
         if (activeProjectId) {
             await updateProjectDefaults(activeProjectId, { translationLanguage: langCode });
         } else {
@@ -167,9 +202,19 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
         }
         // Don't close menu to allow quick translation start after selection?
         // Or close it to indicate selection made. Let's close it.
-        setIsOpen(false);
+        closeMenu();
         triggerRef.current?.focus();
     };
+
+    const commonLanguages = Array.from(new Set([...recentLanguages, ...STATIC_COMMON_LANGUAGES])).slice(0, 10);
+
+    const filteredLanguages = LANGUAGE_OPTIONS.filter(lang => {
+        const localized = getLocalizedLanguageName(lang.code, i18n.language);
+        const search = searchQuery.toLowerCase();
+        return localized.toLowerCase().includes(search) ||
+               lang.englishName.toLowerCase().includes(search) ||
+               lang.code.toLowerCase().includes(search);
+    });
 
     // Only show if there's transcript content
     if (segmentsLength === 0) {
@@ -181,14 +226,19 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
             className={`export-menu ${className}`} // Reuse export-menu styles for consistency
             ref={dropdownRef}
             onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
             style={{ display: 'inline-block' }}
         >
             <button
                 ref={triggerRef}
                 id="translate-menu-button"
                 className="btn btn-icon"
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => {
+                    if (isOpen) {
+                        closeMenu();
+                    } else {
+                        setIsOpen(true);
+                    }
+                }}
                 disabled={isRetranscribing}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
@@ -215,6 +265,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                     className={`export-dropdown position-${position}`} // Reuse export-dropdown styles
                     role="menu"
                     aria-labelledby="translate-menu-button"
+                    style={{ minWidth: '250px' }}
                 >
                     <button
                         type="button"
@@ -249,25 +300,130 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                     </button>
 
                     <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
-                    <div style={{ padding: '8px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                    <div style={{ padding: '8px 12px 4px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
                         {t('translation.target_language', { defaultValue: 'Target Language' })}
                     </div>
 
-                    {LANGUAGES.map((lang) => (
-                        <button
-                            key={lang}
-                            type="button"
-                            className="export-dropdown-item"
-                            onClick={() => void handleLanguageSelect(lang)}
-                            role="menuitem"
-                            tabIndex={-1}
-                        >
-                            <span style={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                {(config.translationLanguage || 'zh') === lang && <CheckIcon />}
-                            </span>
-                            <span>{t(`translation.languages.${lang}`)}</span>
-                        </button>
-                    ))}
+                    <div style={{ padding: '4px 8px 8px 8px' }}>
+                        <input
+                            type="text"
+                            placeholder={t('translation.search_placeholder', { defaultValue: 'Search languages...' })}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                                if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    if (menuRef.current) {
+                                        const buttons = Array.from(menuRef.current.querySelectorAll('button'));
+                                        if (buttons.length > 2) {
+                                            buttons[2].focus();
+                                        }
+                                    }
+                                } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    closeMenu();
+                                    triggerRef.current?.focus();
+                                } else {
+                                    e.stopPropagation();
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '6px 8px',
+                                fontSize: '0.8rem',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-md)',
+                                background: 'var(--color-bg-primary)',
+                                color: 'var(--color-text-primary)',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                            }}
+                        />
+                    </div>
+
+                    {!searchQuery && (
+                        <div style={{ padding: '0 8px 8px 8px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {t('translation.commonly_used', { defaultValue: 'Commonly Used' })}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                                {commonLanguages.map((lang) => {
+                                    const isSelected = (config.translationLanguage || 'zh') === lang;
+                                    return (
+                                        <button
+                                            key={`common-${lang}`}
+                                            type="button"
+                                            onClick={() => void handleLanguageSelect(lang)}
+                                            style={{
+                                                padding: '4px 6px',
+                                                fontSize: '0.75rem',
+                                                background: isSelected ? 'var(--color-bg-hover)' : 'var(--color-bg-secondary)',
+                                                border: isSelected ? '1px solid var(--color-accent-primary)' : '1px solid var(--color-border)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                color: isSelected ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                                cursor: 'pointer',
+                                                textAlign: 'center',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                fontWeight: isSelected ? '600' : 'normal',
+                                                transition: 'all 0.15s ease',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'var(--color-bg-hover)';
+                                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isSelected) {
+                                                    e.currentTarget.style.background = 'var(--color-bg-secondary)';
+                                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                                }
+                                            }}
+                                            title={getLocalizedLanguageName(lang, i18n.language)}
+                                        >
+                                            {getLocalizedLanguageName(lang, i18n.language)}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '6px' }}>
+                        <div style={{ padding: '4px 12px 6px 12px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {searchQuery
+                                ? t('translation.search_results', { defaultValue: 'Search Results' })
+                                : t('translation.all_languages', { defaultValue: 'All Languages' })}
+                        </div>
+                        <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '2px 0' }}>
+                            {filteredLanguages.length === 0 ? (
+                                <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+                                    {t('translation.no_results', { defaultValue: 'No languages found' })}
+                                </div>
+                            ) : (
+                                filteredLanguages.map((lang) => {
+                                    const isSelected = (config.translationLanguage || 'zh') === lang.code;
+                                    return (
+                                        <button
+                                            key={lang.code}
+                                            type="button"
+                                            className="export-dropdown-item"
+                                            onClick={() => void handleLanguageSelect(lang.code)}
+                                            role="menuitem"
+                                            tabIndex={-1}
+                                            style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}
+                                        >
+                                            <span style={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                {isSelected && <CheckIcon />}
+                                            </span>
+                                            <span>{getLocalizedLanguageName(lang.code, i18n.language)}</span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

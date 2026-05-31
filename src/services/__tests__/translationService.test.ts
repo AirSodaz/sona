@@ -138,14 +138,15 @@ describe('TranslationService', () => {
     await translationService.translateCurrentTranscript();
 
     expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
-      request: {
+      request: expect.objectContaining({
         taskId: 'translate-task-id',
         taskType: 'translate',
         jobHistoryId: null,
         config: expect.objectContaining({ apiKey: 'test-key', temperature: 0.7 }),
         segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
         targetLanguage: 'ja',
-      },
+        targetLanguageName: 'Japanese',
+      }),
     });
     expect(useTranscriptStore.getState().segments[0]?.translation).toBe('こんにちは');
     expect(useTranscriptStore.getState().getLlmState('current')).toEqual(expect.objectContaining({

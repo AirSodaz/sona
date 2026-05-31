@@ -184,6 +184,7 @@ async fn run_translate_job(
         segments: segment_inputs_from_transcript(&request.segments),
         chunk_size: request.chunk_size,
         target_language: request.target_language.unwrap_or_else(|| "zh".to_string()),
+        target_language_name: request.target_language_name.clone(),
     };
 
     commands::translate_transcript_segments_with_observer(app.clone(), llm_request, move |items| {

@@ -7,6 +7,8 @@ import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { getPolishPresetOptions } from '../../utils/polishPresets';
+import { getLocalizedLanguageName } from '../../utils/languageUtils';
+import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import type {
     AutomationRule,
@@ -17,7 +19,6 @@ import { AutomationRuleEditor } from './automation/AutomationRuleEditor';
 import {
     createDraftFromRule,
     createRuleDraft,
-    LANGUAGE_OPTIONS,
     NEW_RULE_KEY,
     normalizeAutomationRuleDraft,
     setDraftField,
@@ -34,7 +35,7 @@ type SelectOption = {
 };
 
 export function SettingsAutomationTab(): React.JSX.Element {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const rules = useAutomationStore((state) => state.rules);
     const runtimeStates = useAutomationStore((state) => state.runtimeStates);
     const saveRule = useAutomationStore((state) => state.saveRule);
@@ -79,10 +80,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
 
     const languageOptions = useMemo<SelectOption[]>(() => (
         LANGUAGE_OPTIONS.map((language) => ({
-            value: language,
-            label: t(`translation.languages.${language}`),
+            value: language.code,
+            label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
         }))
-    ), [t]);
+    ), [i18n?.language]);
 
     const polishPresetOptions = useMemo<SelectOption[]>(() => (
         getPolishPresetOptions(config.polishCustomPresets, t)

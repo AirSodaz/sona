@@ -46,6 +46,7 @@ export interface TranslateSegmentsRequest {
   segments: LlmSegmentInput[];
   chunkSize?: number;
   targetLanguage: string;
+  targetLanguageName?: string; // Add English descriptive name field
 }
 
 export interface SummarySegmentInput extends LlmSegmentInput {
@@ -78,6 +79,7 @@ interface TranscriptLlmJobRequestBase {
 export interface TranslateTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {
   taskType: 'translate';
   targetLanguage: string;
+  targetLanguageName?: string; // Add English descriptive name field
 }
 
 export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {

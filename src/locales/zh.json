@@ -1275,6 +1275,11 @@
         "error_config_missing": "翻译前请先在设置中配置 LLM 服务。",
         "error_failed": "翻译失败：",
         "target_language": "目标语言",
+        "commonly_used": "常用语言",
+        "all_languages": "所有语言",
+        "search_results": "搜索结果",
+        "search_placeholder": "搜索语言...",
+        "no_results": "未找到相关语言",
         "languages": {
             "zh": "中文 (简体)",
             "en": "英语",
