@@ -48,6 +48,7 @@ impl Default for ApiServerController {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn start_api_server(
     app: tauri::AppHandle,
     controller: tauri::State<'_, ApiServerController>,
@@ -57,6 +58,7 @@ async fn start_api_server(
     max_concurrent: usize,
     max_queue_size: usize,
     max_upload_size_mb: usize,
+    job_ttl_minutes: u64,
 ) -> Result<(), String> {
     let mut sender_lock = controller.shutdown_sender.lock().await;
 
@@ -81,6 +83,7 @@ async fn start_api_server(
             max_concurrent,
             max_queue_size,
             max_upload_size_mb,
+            job_ttl_minutes,
             rx,
         )
         .await
@@ -298,6 +301,7 @@ pub fn run() {
                 let mut max_concurrent = 2;
                 let mut max_queue_size = 100;
                 let mut max_upload_size_mb = 50;
+                let mut job_ttl_minutes = 60;
 
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -334,6 +338,12 @@ pub fn run() {
                             {
                                 max_upload_size_mb = ms as usize;
                             }
+                            if let Some(ttl) = config
+                                .get("httpServerJobTtlMinutes")
+                                .and_then(|v| v.as_u64())
+                            {
+                                job_ttl_minutes = ttl;
+                            }
                         }
                     }
                 }
@@ -363,6 +373,7 @@ pub fn run() {
                         max_concurrent,
                         max_queue_size,
                         max_upload_size_mb,
+                        job_ttl_minutes,
                         rx,
                     )
                     .await

@@ -171,13 +171,9 @@ impl LlmAdapter for AnthropicAdapter {
             )
             .await?;
 
-            let text = response
-                .pointer("/content/0/text")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "Anthropic response did not contain text output".to_string())?
-                .to_string();
+            let (text, usage) = extract_anthropic_text_response(&response)?;
 
-            return Ok(StandardLlmResponse { text, usage: None });
+            return Ok(StandardLlmResponse { text, usage });
         }
 
         let client = anthropic::Client::builder()
@@ -812,6 +808,33 @@ pub(crate) fn extract_text_from_json_response(response: &Value) -> Result<String
     }
 
     Ok(text)
+}
+
+fn extract_anthropic_text_response(response: &Value) -> Result<(String, Option<TokenUsage>), String> {
+    let content = response
+        .get("content")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Anthropic response missing content array".to_string())?;
+
+    let text_parts: Vec<&str> = content
+        .iter()
+        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|block| block.get("text").and_then(Value::as_str))
+        .collect();
+
+    if text_parts.is_empty() {
+        return Err("Anthropic response did not contain text output".to_string());
+    }
+
+    let usage = response.get("usage").and_then(|u| {
+        normalize_token_usage(
+            u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
+            u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
+            0,
+        )
+    });
+
+    Ok((text_parts.join("\n"), usage))
 }
 
 fn normalize_token_usage(

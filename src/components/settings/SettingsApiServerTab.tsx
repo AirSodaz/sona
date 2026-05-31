@@ -181,6 +181,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     maxConcurrent: config.httpServerMaxConcurrent ?? 2,
                     maxQueueSize: config.httpServerMaxQueueSize ?? 100,
                     maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
+                    jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
                 }).catch((e) => {
                     // eslint-disable-next-line no-console
                     console.error(e);
@@ -200,7 +201,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
         config.httpServerApiKey,
         config.httpServerMaxConcurrent,
         config.httpServerMaxQueueSize,
-        config.httpServerMaxUploadSizeMB
+        config.httpServerMaxUploadSizeMB,
+        config.httpServerJobTtlMinutes
     ]);
 
     return (
@@ -335,6 +337,22 @@ export function SettingsApiServerTab(): React.JSX.Element {
                                 onChange={(e) => setConfig({ httpServerMaxUploadSizeMB: parseInt(e.target.value, 10) || 50 })}
                                 min={1}
                                 max={10000}
+                                style={{ width: '200px' }}
+                            />
+                        </SettingsItem>
+
+                        {/* Job TTL */}
+                        <SettingsItem
+                            title={t('settings.api_server.job_ttl_label', { defaultValue: 'Job TTL (Minutes)' })}
+                            hint={t('settings.api_server.job_ttl_hint', { defaultValue: 'Time to keep completed or failed jobs before auto-cleanup (default: 60).' })}
+                        >
+                            <input
+                                type="number"
+                                className="input-text"
+                                value={config.httpServerJobTtlMinutes ?? 60}
+                                onChange={(e) => setConfig({ httpServerJobTtlMinutes: parseInt(e.target.value, 10) || 60 })}
+                                min={1}
+                                max={10080}
                                 style={{ width: '200px' }}
                             />
                         </SettingsItem>

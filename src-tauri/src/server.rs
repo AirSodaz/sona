@@ -42,8 +42,14 @@ pub struct TranscriptionJob {
 }
 
 #[derive(Clone)]
+pub struct JobEntry {
+    pub status: JobStatus,
+    pub completed_at: Option<std::time::Instant>,
+}
+
+#[derive(Clone)]
 pub struct JobManager {
-    jobs: Arc<RwLock<HashMap<String, JobStatus>>>,
+    jobs: Arc<RwLock<HashMap<String, JobEntry>>>,
     sender: mpsc::Sender<TranscriptionJob>,
 }
 
@@ -59,22 +65,34 @@ impl JobManager {
         self.jobs
             .write()
             .await
-            .insert(job.job_id.clone(), JobStatus::Pending);
+            .insert(job.job_id.clone(), JobEntry {
+                status: JobStatus::Pending,
+                completed_at: None,
+            });
         self.sender.send(job).await.map_err(|e| e.to_string())
     }
 
     pub async fn update_job(&self, job_id: &str, status: JobStatus) {
         if let Some(job) = self.jobs.write().await.get_mut(job_id) {
-            *job = status;
+            let is_finished = matches!(status, JobStatus::Completed(_) | JobStatus::Failed(_));
+            job.status = status;
+            if is_finished {
+                job.completed_at = Some(std::time::Instant::now());
+            }
         }
     }
 
     pub async fn get_job(&self, job_id: &str) -> Option<JobStatus> {
-        self.jobs.read().await.get(job_id).cloned()
+        self.jobs.read().await.get(job_id).map(|entry| entry.status.clone())
     }
 
     pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
-        self.jobs.read().await.clone()
+        self.jobs
+            .read()
+            .await
+            .iter()
+            .map(|(k, v)| (k.clone(), v.status.clone()))
+            .collect()
     }
 }
 
@@ -395,6 +413,7 @@ pub async fn handle_info(
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_server(
     host: &str,
     port: u16,
@@ -404,6 +423,7 @@ pub async fn run_server(
     max_concurrent: usize,
     max_queue_size: usize,
     max_upload_size_mb: usize,
+    job_ttl_minutes: u64,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
@@ -419,6 +439,23 @@ pub async fn run_server(
 
     tokio::spawn(async move {
         start_worker_loop(rx, manager_clone, models_dir_clone, max_concurrent).await;
+    });
+
+    let manager_ttl_clone = job_manager.clone();
+    tokio::spawn(async move {
+        let ttl_duration = std::time::Duration::from_secs(job_ttl_minutes * 60);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            let mut jobs = manager_ttl_clone.jobs.write().await;
+            jobs.retain(|_, entry| {
+                if let Some(completed_at) = entry.completed_at {
+                    completed_at.elapsed() <= ttl_duration
+                } else {
+                    true
+                }
+            });
+        }
     });
 
     let state = ServerState {
@@ -594,7 +631,10 @@ mod tests {
             .jobs
             .write()
             .await
-            .insert("test-job-id".to_string(), JobStatus::Pending);
+            .insert("test-job-id".to_string(), JobEntry {
+                status: JobStatus::Pending,
+                completed_at: None,
+            });
 
         let state = ServerState {
             job_manager,

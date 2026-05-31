@@ -310,6 +310,8 @@ export interface ApiServerConfig {
   httpServerMaxQueueSize?: number;
   /** Maximum file upload size in MB. Default: 50. */
   httpServerMaxUploadSizeMB?: number;
+  /** Time-to-Live for completed/failed jobs in minutes. Default: 60. */
+  httpServerJobTtlMinutes?: number;
 }
 
 // ---------------------------------------------------------------------------

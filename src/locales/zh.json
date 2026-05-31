@@ -1088,6 +1088,8 @@
             "max_queue_size_hint": "允许在队列中等待处理的最大任务数量（默认：100）。超出后将拒绝新任务。",
             "max_upload_size_label": "最大文件大小 (MB)",
             "max_upload_size_hint": "通过 API 上传的音频文件大小上限（默认：50MB）。",
+            "job_ttl_label": "任务保留时间 (分钟)",
+            "job_ttl_hint": "自动清理前保留已完成或失败任务的时间（默认：60）。",
             "generate_key": "生成",
             "copy_key": "复制",
             "copied": "已复制！",

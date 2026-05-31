@@ -1089,6 +1089,8 @@
             "max_queue_size_hint": "Maximum number of tasks allowed in the queue (default: 100).",
             "max_upload_size_label": "Max Upload Size (MB)",
             "max_upload_size_hint": "Maximum file size allowed for API uploads (default: 50MB).",
+            "job_ttl_label": "Job TTL (Minutes)",
+            "job_ttl_hint": "Time to keep completed or failed jobs before auto-cleanup (default: 60).",
             "generate_key": "Generate",
             "copy_key": "Copy",
             "copied": "Copied!",

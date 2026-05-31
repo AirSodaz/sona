@@ -279,6 +279,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         2,    // max_concurrent
         100,  // max_queue_size
         50,   // max_upload_size_mb
+        60,   // job_ttl_minutes
         rx,
     )
     .await

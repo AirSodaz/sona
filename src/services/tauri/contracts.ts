@@ -812,6 +812,7 @@ export type TauriCommandContractMap = {
       maxConcurrent: number;
       maxQueueSize: number;
       maxUploadSizeMb: number;
+      jobTtlMinutes: number;
     };
     result: void;
   };

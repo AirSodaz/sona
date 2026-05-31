@@ -281,6 +281,9 @@ pub(crate) fn build_openai_chat_payload(config: &LlmConfig, input: &str, stream:
 
     if stream {
         payload["stream"] = json!(true);
+        if config.strategy != LlmProviderStrategy::AzureOpenAi {
+            payload["stream_options"] = json!({"include_usage": true});
+        }
     }
 
     payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
@@ -302,6 +305,7 @@ async fn stream_openai_chat_completion<EmitFn>(
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
+    let mut last_usage: Option<TokenUsage> = None;
     let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
     let client = url.client()?;
     let payload = build_openai_chat_payload(config, input, true);
@@ -357,6 +361,9 @@ where
             }
 
             let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+            if let Some(usage) = extract_usage_from_json_response(&event) {
+                last_usage = Some(usage);
+            }
             if let Some(delta) = event
                 .pointer("/choices/0/delta/content")
                 .and_then(Value::as_str)
@@ -372,6 +379,9 @@ where
         }
 
         let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+        if let Some(usage) = extract_usage_from_json_response(&event) {
+            last_usage = Some(usage);
+        }
         if let Some(delta) = event
             .pointer("/choices/0/delta/content")
             .and_then(Value::as_str)
@@ -386,7 +396,7 @@ where
 
     Ok(StandardLlmResponse {
         text: accumulator.text(),
-        usage: None,
+        usage: last_usage,
     })
 }
 
@@ -398,6 +408,8 @@ async fn stream_anthropic_custom_completion<EmitFn>(
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
+    let mut input_tokens = 0;
+    let mut output_tokens = 0;
     let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
     let client = url.client()?;
 
@@ -449,6 +461,17 @@ where
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
+                if let Some(t) = event.get("type").and_then(Value::as_str) {
+                    if t == "message_start" {
+                        if let Some(tokens) = event.pointer("/message/usage/input_tokens").and_then(Value::as_u64) {
+                            input_tokens = tokens;
+                        }
+                    } else if t == "message_delta" {
+                        if let Some(tokens) = event.pointer("/usage/output_tokens").and_then(Value::as_u64) {
+                            output_tokens = tokens;
+                        }
+                    }
+                }
                 if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
                     accumulator.push(delta)?;
                 }
@@ -458,15 +481,36 @@ where
 
     for data in sse.flush() {
         if let Ok(event) = serde_json::from_str::<Value>(&data) {
+            if let Some(t) = event.get("type").and_then(Value::as_str) {
+                if t == "message_start" {
+                    if let Some(tokens) = event.pointer("/message/usage/input_tokens").and_then(Value::as_u64) {
+                        input_tokens = tokens;
+                    }
+                } else if t == "message_delta" {
+                    if let Some(tokens) = event.pointer("/usage/output_tokens").and_then(Value::as_u64) {
+                        output_tokens = tokens;
+                    }
+                }
+            }
             if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
                 accumulator.push(delta)?;
             }
         }
     }
 
+    let last_usage = if input_tokens > 0 || output_tokens > 0 {
+        Some(TokenUsage {
+            prompt_tokens: input_tokens as u32,
+            completion_tokens: output_tokens as u32,
+            total_tokens: (input_tokens + output_tokens) as u32,
+        })
+    } else {
+        None
+    };
+
     Ok(StandardLlmResponse {
         text: accumulator.text(),
-        usage: None,
+        usage: last_usage,
     })
 }
 
@@ -478,6 +522,7 @@ async fn stream_gemini_custom_completion<EmitFn>(
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
+    let mut last_usage: Option<TokenUsage> = None;
     let cleaned_base = clean_gemini_base_url(&config.base_url);
     let is_gemini_2_5 = config.model.contains("gemini-2.5");
 
@@ -544,6 +589,19 @@ where
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
+                if let Some(usage) = event.get("usageMetadata") {
+                    if let (Some(prompt), Some(candidates), Some(total)) = (
+                        usage.get("promptTokenCount").and_then(Value::as_u64),
+                        usage.get("candidatesTokenCount").and_then(Value::as_u64),
+                        usage.get("totalTokenCount").and_then(Value::as_u64),
+                    ) {
+                        last_usage = Some(TokenUsage {
+                            prompt_tokens: prompt as u32,
+                            completion_tokens: candidates as u32,
+                            total_tokens: total as u32,
+                        });
+                    }
+                }
                 if let Some(text) = event
                     .pointer("/candidates/0/content/parts/0/text")
                     .and_then(Value::as_str)
@@ -556,6 +614,19 @@ where
 
     for data in sse.flush() {
         if let Ok(event) = serde_json::from_str::<Value>(&data) {
+            if let Some(usage) = event.get("usageMetadata") {
+                if let (Some(prompt), Some(candidates), Some(total)) = (
+                    usage.get("promptTokenCount").and_then(Value::as_u64),
+                    usage.get("candidatesTokenCount").and_then(Value::as_u64),
+                    usage.get("totalTokenCount").and_then(Value::as_u64),
+                ) {
+                    last_usage = Some(TokenUsage {
+                        prompt_tokens: prompt as u32,
+                        completion_tokens: candidates as u32,
+                        total_tokens: total as u32,
+                    });
+                }
+            }
             if let Some(text) = event
                 .pointer("/candidates/0/content/parts/0/text")
                 .and_then(Value::as_str)
@@ -567,7 +638,7 @@ where
 
     Ok(StandardLlmResponse {
         text: accumulator.text(),
-        usage: None,
+        usage: last_usage,
     })
 }
 

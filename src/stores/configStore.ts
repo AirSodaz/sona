@@ -129,6 +129,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   httpServerMaxConcurrent: 2,
   httpServerMaxQueueSize: 100,
   httpServerMaxUploadSizeMB: 50,
+  httpServerJobTtlMinutes: 60,
 
   // Vocabulary
   textReplacementSets: [],
@@ -220,6 +221,7 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerMaxConcurrent',
   'httpServerMaxQueueSize',
   'httpServerMaxUploadSizeMB',
+  'httpServerJobTtlMinutes',
 ];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
