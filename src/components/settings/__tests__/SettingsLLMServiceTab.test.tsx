@@ -339,7 +339,7 @@ describe('SettingsLLMServiceTab', () => {
 
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
     expect(screen.getAllByText('settings.llm.temperature')).toHaveLength(3);
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
   });
 
   it('updates polish temperature independently', async () => {

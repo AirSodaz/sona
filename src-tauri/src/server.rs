@@ -1,17 +1,17 @@
 use axum::{
     Json, Router,
-    extract::{Multipart, Path, State, ConnectInfo, Request},
+    extract::{ConnectInfo, Multipart, Path, Request, State},
     http::StatusCode,
-    routing::{get, post},
     middleware::Next,
     response::Response,
+    routing::{get, post},
 };
-use std::net::{IpAddr, SocketAddr};
-use ipnet::IpNet;
 use futures_util::stream::StreamExt;
 use hmac::{Hmac, KeyInit, Mac};
+use ipnet::IpNet;
 use sha2::Sha256;
 use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
@@ -66,13 +66,13 @@ impl JobManager {
     }
 
     pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), String> {
-        self.jobs
-            .write()
-            .await
-            .insert(job.job_id.clone(), JobEntry {
+        self.jobs.write().await.insert(
+            job.job_id.clone(),
+            JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
-            });
+            },
+        );
         self.sender.send(job).await.map_err(|e| e.to_string())
     }
 
@@ -87,7 +87,11 @@ impl JobManager {
     }
 
     pub async fn get_job(&self, job_id: &str) -> Option<JobStatus> {
-        self.jobs.read().await.get(job_id).map(|entry| entry.status.clone())
+        self.jobs
+            .read()
+            .await
+            .get(job_id)
+            .map(|entry| entry.status.clone())
     }
 
     pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
@@ -161,14 +165,18 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
             if !response.status().is_success() {
                 log::warn!(
                     "[Server] webhook delivery failed: job_id={} url={} status={}",
-                    job.job_id, webhook_url, response.status()
+                    job.job_id,
+                    webhook_url,
+                    response.status()
                 );
             }
         }
         Err(error) => {
             log::warn!(
                 "[Server] webhook delivery error: job_id={} url={} error={}",
-                job.job_id, webhook_url, error
+                job.job_id,
+                webhook_url,
+                error
             );
         }
     }
@@ -192,7 +200,12 @@ async fn start_worker_loop(
                 Ok(permit) => permit,
                 Err(_) => {
                     log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    manager.update_job(&job.job_id, JobStatus::Failed("Internal: worker pool closed".to_string())).await;
+                    manager
+                        .update_job(
+                            &job.job_id,
+                            JobStatus::Failed("Internal: worker pool closed".to_string()),
+                        )
+                        .await;
                     return;
                 }
             };
@@ -284,10 +297,10 @@ pub async fn handle_transcribe(
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
             temp_file_path = Some(file_path);
-            
+
             const ALLOWED_EXTENSIONS: &[&str] = &[
-                "wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus",
-                "mp4", "mkv", "avi", "mov", "webm", "ts",
+                "wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus", "mp4", "mkv", "avi",
+                "mov", "webm", "ts",
             ];
             let ext = std::path::Path::new(&original_name)
                 .extension()
@@ -298,7 +311,10 @@ pub async fn handle_transcribe(
                 if let Some(ref path) = temp_file_path {
                     let _ = tokio::fs::remove_file(path).await;
                 }
-                return Err((StatusCode::BAD_REQUEST, format!("Unsupported file type: .{}", ext)));
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("Unsupported file type: .{}", ext),
+                ));
             }
         } else if name == "model_id" {
             model_id = Some(field.text().await.unwrap_or_default());
@@ -457,10 +473,11 @@ pub async fn handle_info(
 }
 
 fn check_ip_allowed(ip: IpAddr, whitelist_str: &str) -> bool {
-    let rules = whitelist_str.split(',')
+    let rules = whitelist_str
+        .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty());
-    
+
     let mut has_rules = false;
     for rule in rules {
         has_rules = true;
@@ -483,7 +500,7 @@ fn check_ip_allowed(ip: IpAddr, whitelist_str: &str) -> bool {
             }
         }
     }
-    
+
     if !has_rules {
         return ip.is_loopback();
     }
@@ -562,15 +579,14 @@ pub async fn run_server(
         .allow_headers(Any);
 
     // Create public routes
-    let router = Router::new()
-        .route("/health", get(handle_health));
+    let router = Router::new().route("/health", get(handle_health));
 
     // Create private/transcriptions routes
     let mut api_router = Router::new()
         .route("/info", get(handle_info))
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/:job_id", get(handle_job_status))
+        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             ip_whitelist.to_string(),
@@ -593,13 +609,16 @@ pub async fn run_server(
         .map_err(|e| e.to_string())?;
 
     log::info!("Starting HTTP API server on {}", addr);
-    axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.await;
-            log::info!("HTTP API server shutting down gracefully");
-        })
-        .await
-        .map_err(|e| e.to_string())
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        let _ = shutdown_rx.await;
+        log::info!("HTTP API server shutting down gracefully");
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -723,14 +742,13 @@ mod tests {
         let job_manager = JobManager::new(tx);
 
         // Add a mock job
-        job_manager
-            .jobs
-            .write()
-            .await
-            .insert("test-job-id".to_string(), JobEntry {
+        job_manager.jobs.write().await.insert(
+            "test-job-id".to_string(),
+            JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
-            });
+            },
+        );
 
         let state = ServerState {
             job_manager,

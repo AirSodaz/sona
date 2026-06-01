@@ -218,7 +218,7 @@ where
     ) {
         let translate_strategy = config.strategy;
         let base_url = LlmApiUrl::parse(&config.base_url)?;
-        let client = base_url.client()?;
+        let client = base_url.client(config.timeout_seconds)?;
         let chunk_events = events.clone();
         let progress_events = events.clone();
         let usage = usage.clone();
@@ -518,7 +518,7 @@ pub(crate) async fn list_llm_models_command(
     validate_llm_api_host(&request.base_url)?;
 
     let base_url = LlmApiUrl::parse(&request.base_url)?;
-    let client = base_url.client()?;
+    let client = base_url.client(None)?;
 
     match strategy {
         LlmProviderStrategy::Gemini => {

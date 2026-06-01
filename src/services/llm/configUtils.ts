@@ -46,9 +46,13 @@ export function getActiveProviderSetting(config: Pick<AppConfig, 'llmSettings'>)
   return ensureProviderSetting(config.llmSettings, provider);
 }
 
-export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings'>): LlmConfig {
+export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>): LlmConfig {
   const provider = getActiveProvider(config);
-  return buildLlmConfig(provider, getActiveProviderSetting(config), config.llmSettings?.customProviders);
+  const baseConfig = buildLlmConfig(provider, getActiveProviderSetting(config), config.llmSettings?.customProviders);
+  return {
+    ...baseConfig,
+    timeoutSeconds: config.llmRequestTimeoutSeconds,
+  };
 }
 
 function getFeatureTemperature(
@@ -81,7 +85,7 @@ const FEATURE_REASONING_LEVEL_KEYS = {
 } as const;
 
 export function getFeatureLlmConfig(
-  config: Pick<AppConfig, 'llmSettings'>,
+  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
   feature: LlmFeature,
 ): LlmConfig | null {
   const modelEntry = getFeatureModelEntry(config, feature);
@@ -103,6 +107,7 @@ export function getFeatureLlmConfig(
     temperature: getFeatureTemperature(config, feature),
     reasoningEnabled,
     reasoningLevel: reasoningEnabled ? reasoningLevel : undefined,
+    timeoutSeconds: config.llmRequestTimeoutSeconds,
   };
 }
 
@@ -132,14 +137,14 @@ export function isProviderConfigComplete(
 }
 
 export function isFeatureLlmConfigComplete(
-  config: Pick<AppConfig, 'llmSettings'>,
+  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
   feature: LlmFeature,
 ): boolean {
   return isLlmConfigComplete(getFeatureLlmConfig(config, feature));
 }
 
 export function isSummaryLlmConfigComplete(
-  config: Pick<AppConfig, 'llmSettings'>,
+  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
 ): boolean {
   return isFeatureLlmConfigComplete(config, 'summary');
 }

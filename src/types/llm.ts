@@ -174,6 +174,8 @@ export interface LlmConfig {
   temperature?: number;
   reasoningEnabled?: boolean;
   reasoningLevel?: 'low' | 'medium' | 'high';
+  /** Global LLM Request timeout in seconds. */
+  timeoutSeconds?: number;
 }
 
 export type SummaryTemplateId = string;

@@ -115,6 +115,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   polishCustomPresets: [],
   autoPolish: false,
   autoPolishFrequency: 5,
+  llmRequestTimeoutSeconds: 180,
 
   // Voice Typing
   voiceTypingEnabled: false,
@@ -200,7 +201,7 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'llmSettings', 'summaryEnabled', 'translationLanguage',
   'summaryTemplateId', 'summaryCustomTemplates',
   'polishKeywords', 'polishPresetId', 'polishCustomPresets',
-  'autoPolish', 'autoPolishFrequency',
+  'autoPolish', 'autoPolishFrequency', 'llmRequestTimeoutSeconds',
 ];
 
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [

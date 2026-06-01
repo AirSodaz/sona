@@ -13,7 +13,7 @@ import {
   updateProviderSetting,
 } from '../../services/llm/state';
 import { listProviderDefinitions } from '../../services/llm/providers';
-import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
+import { SettingsTabContainer, SettingsPageHeader, SettingsSection, SettingsItem } from './SettingsLayout';
 import { FeatureCard } from './llm/FeatureCard';
 import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import { getCurrentLlmSettings, getCurrentLlmState } from './llm/helpers';
@@ -192,6 +192,23 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
             </button>
           </div>
         </div>
+      </SettingsSection>
+
+      <SettingsSection>
+        <SettingsItem
+          title={t('settings.llm.timeout_label', { defaultValue: 'Request Timeout (s)' })}
+          hint={t('settings.llm.timeout_hint', { defaultValue: 'Maximum time allowed for an LLM request to complete, in seconds. Default is 180.' })}
+        >
+          <input
+            type="number"
+            className="input-text"
+            value={config.llmRequestTimeoutSeconds ?? 180}
+            onChange={(e) => updateConfig({ llmRequestTimeoutSeconds: parseInt(e.target.value, 10) || 180 })}
+            min={1}
+            max={3600}
+            style={{ width: '120px' }}
+          />
+        </SettingsItem>
       </SettingsSection>
 
       {isAddProviderOpen && (

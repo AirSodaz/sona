@@ -1114,6 +1114,8 @@
         "llm": {
             "title": "LLM Service",
             "description": "Configure LLM providers and models used for polishing, translating, and summarizing transcripts.",
+            "timeout_label": "Request Timeout (s)",
+            "timeout_hint": "Maximum time allowed for an LLM request to complete, in seconds. Default is 180.",
             "service_type": "LLM Service Type",
             "credential_provider": "Credential Provider",
             "credentials_section": "Provider Credentials",

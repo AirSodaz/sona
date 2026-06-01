@@ -325,13 +325,15 @@ pub fn run() {
                             {
                                 api_key = key.to_string();
                             }
-                            if let Some(mc) =
-                                config.get("httpServerMaxConcurrent").and_then(|v| v.as_u64())
+                            if let Some(mc) = config
+                                .get("httpServerMaxConcurrent")
+                                .and_then(|v| v.as_u64())
                             {
                                 max_concurrent = mc as usize;
                             }
-                            if let Some(mq) =
-                                config.get("httpServerMaxQueueSize").and_then(|v| v.as_u64())
+                            if let Some(mq) = config
+                                .get("httpServerMaxQueueSize")
+                                .and_then(|v| v.as_u64())
                             {
                                 max_queue_size = mq as usize;
                             }
@@ -347,9 +349,8 @@ pub fn run() {
                             {
                                 job_ttl_minutes = ttl;
                             }
-                            if let Some(ip_list) = config
-                                .get("httpServerIpWhitelist")
-                                .and_then(|v| v.as_str())
+                            if let Some(ip_list) =
+                                config.get("httpServerIpWhitelist").and_then(|v| v.as_str())
                             {
                                 ip_whitelist = ip_list.to_string();
                             }

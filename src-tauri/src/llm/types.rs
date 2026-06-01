@@ -159,6 +159,7 @@ pub struct LlmConfig {
     pub temperature: Option<f32>,
     pub reasoning_enabled: Option<bool>,
     pub reasoning_level: Option<String>,
+    pub timeout_seconds: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -174,6 +175,7 @@ struct RawLlmConfig {
     temperature: Option<f32>,
     reasoning_enabled: Option<bool>,
     reasoning_level: Option<String>,
+    timeout_seconds: Option<u64>,
 }
 
 impl<'de> Deserialize<'de> for LlmConfig {
@@ -195,6 +197,7 @@ impl<'de> Deserialize<'de> for LlmConfig {
             temperature: raw.temperature,
             reasoning_enabled: raw.reasoning_enabled,
             reasoning_level: raw.reasoning_level,
+            timeout_seconds: raw.timeout_seconds,
         })
     }
 }

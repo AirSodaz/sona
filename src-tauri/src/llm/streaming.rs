@@ -307,7 +307,7 @@ where
 {
     let mut last_usage: Option<TokenUsage> = None;
     let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
-    let client = url.client()?;
+    let client = url.client(config.timeout_seconds)?;
     let payload = build_openai_chat_payload(config, input, true);
 
     let mut request = client
@@ -411,7 +411,7 @@ where
     let mut input_tokens = 0;
     let mut output_tokens = 0;
     let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
-    let client = url.client()?;
+    let client = url.client(config.timeout_seconds)?;
 
     let budget_tokens = match config.reasoning_level.as_deref() {
         Some("low") => 1024,
@@ -463,11 +463,17 @@ where
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
                 if let Some(t) = event.get("type").and_then(Value::as_str) {
                     if t == "message_start" {
-                        if let Some(tokens) = event.pointer("/message/usage/input_tokens").and_then(Value::as_u64) {
+                        if let Some(tokens) = event
+                            .pointer("/message/usage/input_tokens")
+                            .and_then(Value::as_u64)
+                        {
                             input_tokens = tokens;
                         }
                     } else if t == "message_delta" {
-                        if let Some(tokens) = event.pointer("/usage/output_tokens").and_then(Value::as_u64) {
+                        if let Some(tokens) = event
+                            .pointer("/usage/output_tokens")
+                            .and_then(Value::as_u64)
+                        {
                             output_tokens = tokens;
                         }
                     }
@@ -483,11 +489,17 @@ where
         if let Ok(event) = serde_json::from_str::<Value>(&data) {
             if let Some(t) = event.get("type").and_then(Value::as_str) {
                 if t == "message_start" {
-                    if let Some(tokens) = event.pointer("/message/usage/input_tokens").and_then(Value::as_u64) {
+                    if let Some(tokens) = event
+                        .pointer("/message/usage/input_tokens")
+                        .and_then(Value::as_u64)
+                    {
                         input_tokens = tokens;
                     }
                 } else if t == "message_delta" {
-                    if let Some(tokens) = event.pointer("/usage/output_tokens").and_then(Value::as_u64) {
+                    if let Some(tokens) = event
+                        .pointer("/usage/output_tokens")
+                        .and_then(Value::as_u64)
+                    {
                         output_tokens = tokens;
                     }
                 }
@@ -531,7 +543,7 @@ where
         cleaned_base, config.model, config.api_key
     );
     let url = LlmApiUrl::parse(&url_str)?;
-    let client = url.client()?;
+    let client = url.client(config.timeout_seconds)?;
 
     let budget_tokens = match config.reasoning_level.as_deref() {
         Some("low") => 1024,
@@ -652,7 +664,7 @@ where
 {
     let base_url = LlmApiUrl::parse(&config.base_url)?;
     let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/responses"))?;
-    let client = url.client()?;
+    let client = url.client(config.timeout_seconds)?;
     let response = client
         .post(url.reqwest_url())
         .header("Content-Type", "application/json")
@@ -864,7 +876,7 @@ pub(crate) async fn generate_with_openai_chat_api(
 
     let payload = build_openai_chat_payload(config, input, false);
 
-    let response = post_json_request(url, headers, payload).await?;
+    let response = post_json_request(url, headers, payload, config.timeout_seconds).await?;
     Ok(StandardLlmResponse {
         text: extract_text_from_json_response(&response)?,
         usage: extract_usage_from_json_response(&response),
@@ -891,6 +903,7 @@ pub(crate) async fn generate_with_openai_responses_api(
         &url,
         vec![("Authorization", format!("Bearer {}", api_key))],
         payload,
+        None,
     )
     .await?;
 
@@ -920,6 +933,7 @@ pub(crate) async fn generate_with_azure_openai(
         &endpoint,
         vec![("api-key", config.api_key.to_string())],
         payload,
+        config.timeout_seconds,
     )
     .await?;
 

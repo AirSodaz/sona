@@ -195,6 +195,8 @@ export interface LlmAssistantConfig {
   autoPolish?: boolean;
   /** Frequency of auto-polishing in segments (for live recording). */
   autoPolishFrequency?: number;
+  /** Global LLM Request timeout in seconds. */
+  llmRequestTimeoutSeconds?: number;
 }
 
 // ---------------------------------------------------------------------------

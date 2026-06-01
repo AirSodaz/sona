@@ -1113,6 +1113,8 @@
         "llm": {
             "title": "大模型服务",
             "description": "配置用于润色、翻译和生成摘要的 LLM 供应商及模型。",
+            "timeout_label": "请求超时 (秒)",
+            "timeout_hint": "允许 LLM 请求的最长执行时间（秒）。默认：180。",
             "service_type": "LLM 服务类型",
             "credential_provider": "凭据供应商",
             "credentials_section": "供应商凭据",

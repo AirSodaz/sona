@@ -278,10 +278,10 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         &args.api_key,
         temp_dir,
         models_dir,
-        2,    // max_concurrent
-        100,  // max_queue_size
-        50,   // max_upload_size_mb
-        60,   // job_ttl_minutes
+        2,   // max_concurrent
+        100, // max_queue_size
+        50,  // max_upload_size_mb
+        60,  // job_ttl_minutes
         &args.ip_whitelist,
         rx,
     )

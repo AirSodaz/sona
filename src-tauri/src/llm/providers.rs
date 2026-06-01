@@ -79,9 +79,11 @@ impl LlmAdapter for OpenAiAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = openai::Client::builder()
             .api_key(&config.api_key)
             .base_url(&config.base_url)
+            .http_client(reqwest_client)
             .build()
             .map_err(|error| error.to_string())?;
 
@@ -168,6 +170,7 @@ impl LlmAdapter for AnthropicAdapter {
                     ("anthropic-version", "2023-06-01".to_string()),
                 ],
                 payload,
+                config.timeout_seconds,
             )
             .await?;
 
@@ -176,9 +179,11 @@ impl LlmAdapter for AnthropicAdapter {
             return Ok(StandardLlmResponse { text, usage });
         }
 
+        let reqwest_client =
+            LlmApiUrl::parse("https://api.anthropic.com")?.client(config.timeout_seconds)?;
         let client = anthropic::Client::builder()
             .api_key(&config.api_key)
-            .base_url(&config.base_url)
+            .http_client(reqwest_client)
             .build()
             .map_err(|error| error.to_string())?;
 
@@ -207,9 +212,11 @@ impl LlmAdapter for OllamaAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = ollama::Client::builder()
             .api_key(Nothing)
             .base_url(config.base_url.trim_end_matches("/v1"))
+            .http_client(reqwest_client)
             .build()
             .map_err(|error| error.to_string())?;
 
@@ -298,7 +305,7 @@ impl LlmAdapter for GeminiAdapter {
                 }
             });
 
-            let response = post_json_request(&url, vec![], payload).await?;
+            let response = post_json_request(&url, vec![], payload, config.timeout_seconds).await?;
 
             let text = response
                 .pointer("/candidates/0/content/parts/0/text")
@@ -324,9 +331,11 @@ impl LlmAdapter for GeminiAdapter {
             return Ok(StandardLlmResponse { text, usage });
         }
 
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = gemini::Client::builder()
             .api_key(&config.api_key)
             .base_url(clean_gemini_base_url(&config.base_url))
+            .http_client(reqwest_client)
             .build()
             .map_err(|error| error.to_string())?;
 
@@ -397,6 +406,7 @@ impl LlmAdapter for GoogleTranslateAdapter {
             &url,
             vec![("x-goog-api-key", config.api_key.clone())],
             json!(payload),
+            config.timeout_seconds,
         )
         .await?;
         let text = extract_text_from_json_response(&response)?;
@@ -810,7 +820,9 @@ pub(crate) fn extract_text_from_json_response(response: &Value) -> Result<String
     Ok(text)
 }
 
-fn extract_anthropic_text_response(response: &Value) -> Result<(String, Option<TokenUsage>), String> {
+fn extract_anthropic_text_response(
+    response: &Value,
+) -> Result<(String, Option<TokenUsage>), String> {
     let content = response
         .get("content")
         .and_then(Value::as_array)

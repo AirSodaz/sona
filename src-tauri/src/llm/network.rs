@@ -65,15 +65,15 @@ impl LlmApiUrl {
         Self::parse(url.as_str())
     }
 
-    pub(crate) fn client(&self) -> Result<Client, String> {
+    pub(crate) fn client(&self, timeout_seconds: Option<u64>) -> Result<Client, String> {
+        let mut builder = Client::builder();
         if self.https_only {
-            return Client::builder()
-                .https_only(true)
-                .build()
-                .map_err(|error| error.to_string());
+            builder = builder.https_only(true);
         }
-
-        Ok(Client::new())
+        if let Some(secs) = timeout_seconds {
+            builder = builder.timeout(std::time::Duration::from_secs(secs));
+        }
+        builder.build().map_err(|error| error.to_string())
     }
 }
 
@@ -81,8 +81,9 @@ pub(crate) async fn post_json_request(
     url: &LlmApiUrl,
     headers: Vec<(&str, String)>,
     body: Value,
+    timeout_seconds: Option<u64>,
 ) -> Result<Value, String> {
-    let client = url.client()?;
+    let client = url.client(timeout_seconds)?;
     let mut request = client
         .post(url.reqwest_url())
         .header("Content-Type", "application/json");
