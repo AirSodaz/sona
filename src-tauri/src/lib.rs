@@ -61,7 +61,15 @@ async fn start_api_server(
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
     ip_whitelist: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
+    let parsed_whitelist = crate::server::parse_ip_whitelist(&ip_whitelist)?;
+    let normalized_whitelist = parsed_whitelist
+        .iter()
+        .map(|net| net.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+
     let mut sender_lock = controller.shutdown_sender.lock().await;
 
     // Stop existing server if running
@@ -86,7 +94,7 @@ async fn start_api_server(
             max_queue_size,
             max_upload_size_mb,
             job_ttl_minutes,
-            &ip_whitelist,
+            parsed_arc,
             rx,
         )
         .await
@@ -95,7 +103,7 @@ async fn start_api_server(
         }
     });
 
-    Ok(())
+    Ok(normalized_whitelist)
 }
 
 #[tauri::command]
@@ -381,6 +389,15 @@ pub fn run() {
                         .unwrap()
                         .join("models");
 
+                    let parsed_whitelist = match crate::server::parse_ip_whitelist(&ip_whitelist) {
+                        Ok(nets) => nets,
+                        Err(e) => {
+                            log::error!("HTTP API Server failed to start due to invalid IP whitelist: {}", e);
+                            return;
+                        }
+                    };
+                    let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+
                     let (tx, rx) = tokio::sync::oneshot::channel();
                     let controller = app_handle.state::<ApiServerController>();
                     *controller.shutdown_sender.lock().await = Some(tx);
@@ -395,7 +412,7 @@ pub fn run() {
                         max_queue_size,
                         max_upload_size_mb,
                         job_ttl_minutes,
-                        &ip_whitelist,
+                        parsed_arc,
                         rx,
                     )
                     .await

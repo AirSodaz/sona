@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Server, RefreshCw, Copy, Activity, Clock, Zap, HardDrive, List } from 'lucide-react';
 
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
+import { useDialogStore } from '../../stores/dialogStore';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer, SettingsItem } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { invokeTauri } from '../../services/tauri/invoke';
@@ -183,9 +184,22 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
                     jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
                     ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+                }).then((normalizedWhitelist) => {
+                    if (typeof normalizedWhitelist === 'string' && normalizedWhitelist !== config.httpServerIpWhitelist) {
+                        setConfig({ httpServerIpWhitelist: normalizedWhitelist });
+                    }
                 }).catch((e) => {
                     // eslint-disable-next-line no-console
                     console.error(e);
+                    const errMsg = e instanceof Error ? e.message : String(e);
+                    setLastError(errMsg);
+                    setHealth(null);
+                    setJobs({});
+                    setInfo(null);
+                    useDialogStore.getState().alert(errMsg, {
+                        title: t('settings.api_server.start_error', { defaultValue: 'Failed to start API Server' }),
+                        variant: 'error'
+                    });
                 });
             } else {
                 invokeTauri(TauriCommand.apiServer.stop).catch((e) => {
@@ -204,7 +218,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
         config.httpServerMaxQueueSize,
         config.httpServerMaxUploadSizeMB,
         config.httpServerJobTtlMinutes,
-        config.httpServerIpWhitelist
+        config.httpServerIpWhitelist,
+        setConfig,
+        t,
     ]);
 
     return (

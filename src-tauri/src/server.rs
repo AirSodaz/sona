@@ -464,48 +464,72 @@ pub async fn handle_info(
     }))
 }
 
-fn check_ip_allowed(ip: IpAddr, whitelist_str: &str) -> bool {
+pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, String> {
     let rules = whitelist_str
         .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty());
 
-    let mut has_rules = false;
+    let mut nets = Vec::new();
+
     for rule in rules {
-        has_rules = true;
         if rule == "localhost" {
-            if ip.is_loopback() {
-                return true;
-            }
+            nets.push("127.0.0.0/8".parse().unwrap());
+            nets.push("::1/128".parse().unwrap());
         } else if let Ok(net) = rule.parse::<IpNet>() {
-            if net.contains(&ip) {
-                return true;
-            }
-        } else if rule.contains('*') {
-            let prefix = rule.split('*').next().unwrap_or("");
-            if ip.to_string().starts_with(prefix) {
-                return true;
-            }
+            nets.push(net);
         } else if let Ok(exact_ip) = rule.parse::<IpAddr>() {
-            if ip == exact_ip {
-                return true;
+            nets.push(IpNet::new(exact_ip, if exact_ip.is_ipv4() { 32 } else { 128 }).unwrap());
+        } else if rule.contains('*') {
+            if rule == "*" {
+                nets.push("0.0.0.0/0".parse().unwrap());
+                nets.push("::/0".parse().unwrap());
+            } else if rule.ends_with(".*") {
+                let prefix = rule.trim_end_matches(".*");
+                let parts: Vec<&str> = prefix.split('.').collect();
+                if parts.len() == 1 {
+                    let ip_str = format!("{}.0.0.0", parts[0]);
+                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                        nets.push(IpNet::new(ip, 8).unwrap());
+                        continue;
+                    }
+                } else if parts.len() == 2 {
+                    let ip_str = format!("{}.{}.0.0", parts[0], parts[1]);
+                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                        nets.push(IpNet::new(ip, 16).unwrap());
+                        continue;
+                    }
+                } else if parts.len() == 3 {
+                    let ip_str = format!("{}.{}.{}.0", parts[0], parts[1], parts[2]);
+                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
+                        nets.push(IpNet::new(ip, 24).unwrap());
+                        continue;
+                    }
+                }
+                return Err(format!("Invalid IP wildcard format: {}", rule));
+            } else {
+                return Err(format!("Invalid IP wildcard format: {}", rule));
             }
+        } else {
+            return Err(format!("Invalid IP rule format: {}", rule));
         }
     }
 
-    if !has_rules {
-        return ip.is_loopback();
+    if nets.is_empty() {
+        nets.push("127.0.0.0/8".parse().unwrap());
+        nets.push("::1/128".parse().unwrap());
     }
-    false
+
+    Ok(nets)
 }
 
 async fn ip_whitelist_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(whitelist): State<String>,
+    State(whitelist): State<Arc<Vec<IpNet>>>,
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if check_ip_allowed(addr.ip(), &whitelist) {
+    if whitelist.iter().any(|net| net.contains(&addr.ip())) {
         Ok(next.run(req).await)
     } else {
         Err(StatusCode::FORBIDDEN)
@@ -523,7 +547,7 @@ pub async fn run_server(
     max_queue_size: usize,
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
-    ip_whitelist: &str,
+    ip_whitelist: Arc<Vec<IpNet>>,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
@@ -581,7 +605,7 @@ pub async fn run_server(
         .route("/v1/transcriptions/{job_id}", get(handle_job_status))
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
-            ip_whitelist.to_string(),
+            ip_whitelist,
             ip_whitelist_middleware,
         ))
         .layer(axum::extract::DefaultBodyLimit::max(

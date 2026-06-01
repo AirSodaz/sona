@@ -272,6 +272,15 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let models_dir = resolve_models_dir(args.models_dir)?;
     let temp_dir = std::env::temp_dir().join("sona_api");
     let (_tx, rx) = tokio::sync::oneshot::channel();
+    let parsed_whitelist = match crate::server::parse_ip_whitelist(&args.ip_whitelist) {
+        Ok(nets) => nets,
+        Err(e) => {
+            log::error!("Failed to parse IP whitelist: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+
     crate::server::run_server(
         &args.host,
         args.port,
@@ -282,7 +291,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         100, // max_queue_size
         50,  // max_upload_size_mb
         60,  // job_ttl_minutes
-        &args.ip_whitelist,
+        parsed_arc,
         rx,
     )
     .await
