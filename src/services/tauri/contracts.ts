@@ -343,6 +343,10 @@ export type TauriCommandContractMap = {
     args: { level: AppLogLevel };
     result: void;
   };
+  [TauriCommand.app.checkMediaFormats]: {
+    args: { paths: string[] };
+    result: boolean[];
+  };
   [TauriCommand.audio.setSystemAudioMute]: {
     args: { mute: boolean };
     result: void;

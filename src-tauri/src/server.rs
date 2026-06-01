@@ -287,7 +287,6 @@ pub async fn handle_transcribe(
     {
         let name = field.name().unwrap_or("").to_string();
         if name == "file" {
-            let original_name = field.file_name().unwrap_or("").to_string();
             let file_path = state.temp_dir.join(format!("{}.tmp", job_id));
             let mut file = tokio::fs::File::create(&file_path)
                 .await
@@ -300,23 +299,14 @@ pub async fn handle_transcribe(
             }
             temp_file_path = Some(file_path);
 
-            const ALLOWED_EXTENSIONS: &[&str] = &[
-                "wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus", "mp4", "mkv", "avi",
-                "mov", "webm", "ts",
-            ];
-            let ext = std::path::Path::new(&original_name)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            if !ext.is_empty() && !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
-                if let Some(ref path) = temp_file_path {
+            if let Some(ref path) = temp_file_path {
+                if !crate::media_detector::is_valid_media_file(path).await {
                     let _ = tokio::fs::remove_file(path).await;
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        "Unsupported file type or corrupted file".to_string(),
+                    ));
                 }
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    format!("Unsupported file type: .{}", ext),
-                ));
             }
         } else if name == "model_id" {
             model_id = Some(field.text().await.unwrap_or_default());

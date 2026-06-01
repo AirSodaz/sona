@@ -31,6 +31,7 @@ mod task_ledger;
 mod text_alignment;
 mod tray;
 mod webdav;
+pub mod media_detector;
 
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex as AsyncMutex;
@@ -124,6 +125,16 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
+}
+
+#[tauri::command]
+async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    let mut results = Vec::with_capacity(paths.len());
+    for path in paths {
+        let is_valid = crate::media_detector::is_valid_media_file(&path).await;
+        results.push(is_valid);
+    }
+    Ok(results)
 }
 
 #[tauri::command]
@@ -557,7 +568,8 @@ pub fn run() {
             speaker_correction::reset_speaker_group_to_anonymous,
             speaker_correction::confirm_speaker_group_review,
             start_api_server,
-            stop_api_server
+            stop_api_server,
+            check_media_formats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

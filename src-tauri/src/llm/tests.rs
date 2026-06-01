@@ -86,6 +86,7 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::sherpa::TranscriptS
 
 fn sample_llm_config(base_url: &str) -> LlmConfig {
     LlmConfig {
+        timeout_seconds: None,
         provider: "open_ai".to_string(),
         strategy: LlmProviderStrategy::OpenAiCompatible,
         base_url: base_url.to_string(),
@@ -717,6 +718,7 @@ async fn try_stream_text_skips_google_translate_providers() {
     ] {
         let request = LlmGenerateRequest {
             config: LlmConfig {
+                timeout_seconds: None,
                 provider: strategy_key(strategy),
                 strategy,
                 base_url: "https://example.com".to_string(),

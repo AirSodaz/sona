@@ -12,7 +12,15 @@ import { open } from '@tauri-apps/plugin-dialog';
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
     convertFileSrc: vi.fn((path) => `asset://${path}`),
-    invoke: vi.fn(),
+}));
+
+vi.mock('../../services/tauri/invoke', () => ({
+    invokeTauri: vi.fn((cmd, args: any) => {
+        if (cmd === 'check_media_formats') {
+            return Promise.resolve(args?.paths?.map(() => true) || []);
+        }
+        return Promise.resolve();
+    }),
 }));
 
 vi.mock('@tauri-apps/api/path', () => ({

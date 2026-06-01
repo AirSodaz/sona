@@ -14,6 +14,7 @@ import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../servi
 import { openDialog } from '../services/tauri/platform/dialog';
 import type { Event } from '../services/tauri/platform/events';
 import { getCurrentWindow } from '../services/tauri/platform/windows';
+import { invokeTauri } from '../services/tauri/invoke';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -145,7 +146,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         addFiles(files);
     }, [addFiles, batchAsrConfigured, config, showError]);
 
-    const handleTauriDrop = useCallback((payload: unknown): void => {
+    const handleTauriDrop = useCallback(async (payload: unknown): Promise<void> => {
         let files: string[] = [];
 
         if (Array.isArray(payload)) {
@@ -155,31 +156,40 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         }
 
         if (files.length > 0) {
-            const validFiles: string[] = [];
-            const invalidFiles: string[] = [];
+            try {
+                const validResults: boolean[] = await invokeTauri('check_media_formats', { paths: files });
 
-            files.forEach((filePath) => {
-                const ext = filePath.split('.').pop()?.toLowerCase();
-                const isSupported = SUPPORTED_MEDIA_EXTENSIONS.some((extension) => extension.replace('.', '') === ext);
+                const validFiles: string[] = [];
+                const invalidFiles: string[] = [];
 
-                if (isSupported) {
-                    validFiles.push(filePath);
-                } else {
-                    invalidFiles.push(filePath);
+                files.forEach((filePath, index) => {
+                    if (validResults[index]) {
+                        validFiles.push(filePath);
+                    } else {
+                        invalidFiles.push(filePath);
+                    }
+                });
+
+                if (invalidFiles.length > 0) {
+                    void showError({
+                        code: 'batch.unsupported_format',
+                        messageKey: 'errors.batch.unsupported_format',
+                        messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
+                        showCause: false,
+                    });
                 }
-            });
 
-            if (invalidFiles.length > 0) {
+                if (validFiles.length > 0) {
+                    queueFiles(validFiles);
+                }
+            } catch (err) {
+                logger.error('Failed to validate dropped files', err);
                 void showError({
                     code: 'batch.unsupported_format',
                     messageKey: 'errors.batch.unsupported_format',
                     messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
-                    showCause: false,
+                    cause: err,
                 });
-            }
-
-            if (validFiles.length > 0) {
-                queueFiles(validFiles);
             }
         } else {
             logger.warn('File drop event received but payload is empty or invalid.');
@@ -192,10 +202,16 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         try {
             const selected = await openDialog({
                 multiple: true,
-                filters: [{
-                    name: 'Audio',
-                    extensions: SUPPORTED_MEDIA_EXTENSIONS.map(ext => ext.replace('.', ''))
-                }]
+                filters: [
+                    {
+                        name: 'Audio',
+                        extensions: SUPPORTED_MEDIA_EXTENSIONS.map(ext => ext.replace('.', ''))
+                    },
+                    {
+                        name: 'All Files',
+                        extensions: ['*']
+                    }
+                ]
             });
 
             if (!selected) {
@@ -204,7 +220,31 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
             const files = Array.isArray(selected) ? selected : [selected];
             if (files.length > 0) {
-                queueFiles(files);
+                const validResults: boolean[] = await invokeTauri('check_media_formats', { paths: files });
+
+                const validFiles: string[] = [];
+                const invalidFiles: string[] = [];
+
+                files.forEach((filePath, index) => {
+                    if (validResults[index]) {
+                        validFiles.push(filePath);
+                    } else {
+                        invalidFiles.push(filePath);
+                    }
+                });
+
+                if (invalidFiles.length > 0) {
+                    void showError({
+                        code: 'batch.unsupported_format',
+                        messageKey: 'errors.batch.unsupported_format',
+                        messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
+                        showCause: false,
+                    });
+                }
+
+                if (validFiles.length > 0) {
+                    queueFiles(validFiles);
+                }
             }
         } catch (err) {
             await showError({
