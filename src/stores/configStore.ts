@@ -130,6 +130,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   httpServerMaxQueueSize: 100,
   httpServerMaxUploadSizeMB: 50,
   httpServerJobTtlMinutes: 60,
+  httpServerIpWhitelist: 'localhost',
 
   // Vocabulary
   textReplacementSets: [],
@@ -222,6 +223,7 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerMaxQueueSize',
   'httpServerMaxUploadSizeMB',
   'httpServerJobTtlMinutes',
+  'httpServerIpWhitelist',
 ];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {

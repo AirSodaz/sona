@@ -813,6 +813,7 @@ export type TauriCommandContractMap = {
       maxQueueSize: number;
       maxUploadSizeMb: number;
       jobTtlMinutes: number;
+      ipWhitelist: string;
     };
     result: void;
   };

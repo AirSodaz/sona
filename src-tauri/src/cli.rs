@@ -64,6 +64,8 @@ struct ServeArgs {
         help = "Override the models directory used to resolve installed models"
     )]
     models_dir: Option<PathBuf>,
+    #[arg(long, default_value = "localhost")]
+    ip_whitelist: String,
 }
 
 #[derive(Debug, Args)]
@@ -280,6 +282,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         100,  // max_queue_size
         50,   // max_upload_size_mb
         60,   // job_ttl_minutes
+        &args.ip_whitelist,
         rx,
     )
     .await

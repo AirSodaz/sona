@@ -182,6 +182,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     maxQueueSize: config.httpServerMaxQueueSize ?? 100,
                     maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
                     jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+                    ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
                 }).catch((e) => {
                     // eslint-disable-next-line no-console
                     console.error(e);
@@ -202,7 +203,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
         config.httpServerMaxConcurrent,
         config.httpServerMaxQueueSize,
         config.httpServerMaxUploadSizeMB,
-        config.httpServerJobTtlMinutes
+        config.httpServerJobTtlMinutes,
+        config.httpServerIpWhitelist
     ]);
 
     return (
@@ -255,6 +257,20 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         min={1}
                         max={65535}
                         style={{ width: '200px' }}
+                    />
+                </SettingsItem>
+
+                {/* IP Whitelist */}
+                <SettingsItem
+                    title={t('settings.api_server.ip_whitelist_label', { defaultValue: 'IP Whitelist' })}
+                    hint={t('settings.api_server.ip_whitelist_hint', { defaultValue: "Comma-separated list of allowed IPs, CIDRs, or wildcards (e.g. '192.168.1.*'). Use 'localhost' to only allow local access." })}
+                >
+                    <input
+                        type="text"
+                        className="input-text"
+                        value={config.httpServerIpWhitelist ?? 'localhost'}
+                        onChange={(e) => setConfig({ httpServerIpWhitelist: e.target.value })}
+                        style={{ width: '400px' }}
                     />
                 </SettingsItem>
 

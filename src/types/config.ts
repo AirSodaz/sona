@@ -312,6 +312,8 @@ export interface ApiServerConfig {
   httpServerMaxUploadSizeMB?: number;
   /** Time-to-Live for completed/failed jobs in minutes. Default: 60. */
   httpServerJobTtlMinutes?: number;
+  /** IP Whitelist for the API server (comma-separated, default: 'localhost'). */
+  httpServerIpWhitelist?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,7 @@ async fn start_api_server(
     max_queue_size: usize,
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
+    ip_whitelist: String,
 ) -> Result<(), String> {
     let mut sender_lock = controller.shutdown_sender.lock().await;
 
@@ -84,6 +85,7 @@ async fn start_api_server(
             max_queue_size,
             max_upload_size_mb,
             job_ttl_minutes,
+            &ip_whitelist,
             rx,
         )
         .await
@@ -302,6 +304,7 @@ pub fn run() {
                 let mut max_queue_size = 100;
                 let mut max_upload_size_mb = 50;
                 let mut job_ttl_minutes = 60;
+                let mut ip_whitelist = "localhost".to_string();
 
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -344,6 +347,12 @@ pub fn run() {
                             {
                                 job_ttl_minutes = ttl;
                             }
+                            if let Some(ip_list) = config
+                                .get("httpServerIpWhitelist")
+                                .and_then(|v| v.as_str())
+                            {
+                                ip_whitelist = ip_list.to_string();
+                            }
                         }
                     }
                 }
@@ -374,6 +383,7 @@ pub fn run() {
                         max_queue_size,
                         max_upload_size_mb,
                         job_ttl_minutes,
+                        &ip_whitelist,
                         rx,
                     )
                     .await

@@ -1,9 +1,13 @@
 use axum::{
     Json, Router,
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, State, ConnectInfo, Request},
     http::StatusCode,
     routing::{get, post},
+    middleware::Next,
+    response::Response,
 };
+use std::net::{IpAddr, SocketAddr};
+use ipnet::IpNet;
 use futures_util::stream::StreamExt;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -152,7 +156,22 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
         }
     }
 
-    let _ = request.body(payload_str).send().await;
+    match request.body(payload_str).send().await {
+        Ok(response) => {
+            if !response.status().is_success() {
+                log::warn!(
+                    "[Server] webhook delivery failed: job_id={} url={} status={}",
+                    job.job_id, webhook_url, response.status()
+                );
+            }
+        }
+        Err(error) => {
+            log::warn!(
+                "[Server] webhook delivery error: job_id={} url={} error={}",
+                job.job_id, webhook_url, error
+            );
+        }
+    }
 }
 
 async fn start_worker_loop(
@@ -169,7 +188,14 @@ async fn start_worker_loop(
         let semaphore = semaphore.clone();
 
         tokio::spawn(async move {
-            let _permit = semaphore.acquire().await.unwrap();
+            let _permit = match semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
+                    manager.update_job(&job.job_id, JobStatus::Failed("Internal: worker pool closed".to_string())).await;
+                    return;
+                }
+            };
             manager.update_job(&job.job_id, JobStatus::Processing).await;
 
             let options = TranscribeCliOptions {
@@ -246,6 +272,7 @@ pub async fn handle_transcribe(
     {
         let name = field.name().unwrap_or("").to_string();
         if name == "file" {
+            let original_name = field.file_name().unwrap_or("").to_string();
             let file_path = state.temp_dir.join(format!("{}.tmp", job_id));
             let mut file = tokio::fs::File::create(&file_path)
                 .await
@@ -257,6 +284,22 @@ pub async fn handle_transcribe(
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
             temp_file_path = Some(file_path);
+            
+            const ALLOWED_EXTENSIONS: &[&str] = &[
+                "wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus",
+                "mp4", "mkv", "avi", "mov", "webm", "ts",
+            ];
+            let ext = std::path::Path::new(&original_name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !ext.is_empty() && !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
+                if let Some(ref path) = temp_file_path {
+                    let _ = tokio::fs::remove_file(path).await;
+                }
+                return Err((StatusCode::BAD_REQUEST, format!("Unsupported file type: .{}", ext)));
+            }
         } else if name == "model_id" {
             model_id = Some(field.text().await.unwrap_or_default());
         } else if name == "language" {
@@ -413,6 +456,53 @@ pub async fn handle_info(
     }))
 }
 
+fn check_ip_allowed(ip: IpAddr, whitelist_str: &str) -> bool {
+    let rules = whitelist_str.split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
+    
+    let mut has_rules = false;
+    for rule in rules {
+        has_rules = true;
+        if rule == "localhost" {
+            if ip.is_loopback() {
+                return true;
+            }
+        } else if let Ok(net) = rule.parse::<IpNet>() {
+            if net.contains(&ip) {
+                return true;
+            }
+        } else if rule.contains('*') {
+            let prefix = rule.split('*').next().unwrap_or("");
+            if ip.to_string().starts_with(prefix) {
+                return true;
+            }
+        } else if let Ok(exact_ip) = rule.parse::<IpAddr>() {
+            if ip == exact_ip {
+                return true;
+            }
+        }
+    }
+    
+    if !has_rules {
+        return ip.is_loopback();
+    }
+    false
+}
+
+async fn ip_whitelist_middleware(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(whitelist): State<String>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if check_ip_allowed(addr.ip(), &whitelist) {
+        Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server(
     host: &str,
@@ -424,6 +514,7 @@ pub async fn run_server(
     max_queue_size: usize,
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
+    ip_whitelist: &str,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
@@ -472,14 +563,19 @@ pub async fn run_server(
 
     // Create public routes
     let router = Router::new()
-        .route("/health", get(handle_health))
-        .route("/info", get(handle_info));
+        .route("/health", get(handle_health));
 
     // Create private/transcriptions routes
     let mut api_router = Router::new()
+        .route("/info", get(handle_info))
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
+        .route("/v1/transcriptions/:job_id", get(handle_job_status))
+        .with_state(state.clone())
+        .layer(axum::middleware::from_fn_with_state(
+            ip_whitelist.to_string(),
+            ip_whitelist_middleware,
+        ))
         .layer(axum::extract::DefaultBodyLimit::max(
             max_upload_size_mb * 1024 * 1024,
         ));
@@ -497,7 +593,7 @@ pub async fn run_server(
         .map_err(|e| e.to_string())?;
 
     log::info!("Starting HTTP API server on {}", addr);
-    axum::serve(listener, router)
+    axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
             log::info!("HTTP API server shutting down gracefully");

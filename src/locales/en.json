@@ -1080,6 +1080,8 @@
             "host_hint": "Bind address for the server. '127.0.0.1' restricts access to localhost, while '0.0.0.0' allows remote access.",
             "port_label": "Port",
             "port_hint": "TCP port for the API server. Must be between 1 and 65535 (default: 14200).",
+            "ip_whitelist_label": "IP Whitelist",
+            "ip_whitelist_hint": "Comma-separated list of allowed IPs, CIDRs, or wildcards (e.g. '192.168.1.*'). Use 'localhost' to only allow local access.",
             "api_key_label": "API Key",
             "api_key_hint": "Optional Bearer token for authenticating HTTP requests.",
             "api_key_placeholder": "Optional bearer token",
