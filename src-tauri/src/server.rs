@@ -144,7 +144,9 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
 
     let payload_str = serde_json::to_string(&payload).unwrap_or_default();
 
-    let client = reqwest::Client::new();
+    static WEBHOOK_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let client = WEBHOOK_CLIENT.get_or_init(|| reqwest::Client::new());
+
     let mut request = client
         .post(webhook_url)
         .header("Content-Type", "application/json");
