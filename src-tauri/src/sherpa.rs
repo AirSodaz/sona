@@ -8,7 +8,7 @@ mod groq;
 mod metrics;
 mod mistral;
 mod model_config;
-mod online;
+pub mod online;
 mod online_traits;
 mod postprocess;
 mod runtime;
@@ -28,12 +28,15 @@ pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
+pub(crate) use model_config::{Recognizer, RecognizerInner, build_model_config, load_vad};
 pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 pub use postprocess::TranscriptPostprocessor;
 pub use state::SherpaState;
 pub(crate) use state::{ModelConfigKey, OfflineState};
-pub(crate) use transcript::{ensure_transcript_segment_timing, normalize_recognizer_text, finalize_transcript_text, synthesize_durations};
-pub(crate) use model_config::{build_model_config, load_vad, Recognizer, RecognizerInner};
+pub(crate) use transcript::{
+    ensure_transcript_segment_timing, finalize_transcript_text, normalize_recognizer_text,
+    synthesize_durations,
+};
 pub use types::{
     AsrEngine, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,

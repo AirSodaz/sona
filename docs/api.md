@@ -35,11 +35,36 @@ If no API Key is set in Settings, the server permits unauthenticated requests.
 
 ---
 
-## API Endpoints
+### 1. Server Info & Capabilities
 
-### 1. Submit Transcription Job
+Retrieve server configuration, resource limits, and available online ASR providers.
 
-Submit a local audio or video file for offline, high-performance speech-to-text processing. Jobs are queued and executed sequentially by the background transcription worker.
+- **URL**: `/v1/info`
+- **Method**: `GET`
+
+#### Response (`200 OK`)
+
+```json
+{
+  "maxConcurrent": 2,
+  "maxQueueSize": 100,
+  "maxStreaming": 5,
+  "onlineAsrProviders": [
+    {
+      "id": "volcengine-doubao",
+      "configured": true,
+      "supportsBatch": true,
+      "supportsStreaming": true
+    }
+  ]
+}
+```
+
+---
+
+### 2. Submit Transcription Job
+
+Submit a local audio or video file for high-performance speech-to-text processing. Jobs are queued and executed sequentially by the background transcription worker.
 
 - **URL**: `/v1/transcriptions`
 - **Method**: `POST`
@@ -50,7 +75,7 @@ Submit a local audio or video file for offline, high-performance speech-to-text 
 | Field Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `file` | Binary | **Yes** | The audio or video file to be transcribed. |
-| `model_id` | String | **Yes** | The identifier of the pre-downloaded local ASR model (e.g., `sensevoice`, `whisper_turbo`). |
+| `model_id` | String | **Yes** | The identifier of a local ASR model (e.g., `sensevoice`) OR a configured Cloud ASR provider (e.g., `volcengine-doubao`). |
 | `language` | String | No | Target language code (e.g., `zh`, `en`, `ja`, `ko`, `yue`). Defaults to `"auto"`. |
 | `hotwords` | String | No | Custom vocabulary/keywords to enhance recognition, separated by newlines. |
 | `webhook_url` | String | No | HTTP URL to receive a POST notification once the transcription is finished or fails. |
@@ -77,7 +102,7 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
 
 ---
 
-### 2. Query Job Status
+### 3. Query Job Status
 
 Query the current lifecycle state and transcription results of a submitted job.
 

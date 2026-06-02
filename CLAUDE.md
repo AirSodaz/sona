@@ -1,10 +1,11 @@
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project overview
 
-Sona is a privacy-first desktop transcript editor built with Tauri v2, React 19, TypeScript, Zustand, and a Rust backend powered by sherpa-onnx. The main product flow is offline transcription; cloud LLM is optional and only used for transcript polish/translation.
+Sona is a privacy-first desktop transcript editor built with Tauri v2, React 19, TypeScript, Zustand, and a Rust backend. The main product flow uses offline transcription via sherpa-onnx, but also supports optional Cloud ASR engines (Volcengine, Groq, Mistral) via the API and UI. Cloud LLMs are optional and used for transcript polish/translation.
 
 Key product modes:
 - Live recording with real-time transcription
@@ -16,25 +17,25 @@ Key product modes:
 ## Common commands
 
 ### Frontend and desktop app
-- `pnpm run dev` â€” start the Vite dev server on port 1420
-- `pnpm run tauri dev` â€” run the full desktop app in Tauri dev mode
-- `pnpm run build` â€” TypeScript check + production frontend build
-- `pnpm run tauri build` â€” build the production desktop bundle
-- `pnpm run preview` â€” preview the production frontend build
+- `pnpm run dev` â€?start the Vite dev server on port 1420
+- `pnpm run tauri dev` â€?run the full desktop app in Tauri dev mode
+- `pnpm run build` â€?TypeScript check + production frontend build
+- `pnpm run tauri build` â€?build the production desktop bundle
+- `pnpm run preview` â€?preview the production frontend build
 
 ### Tests
-- `pnpm test` â€” run the Vitest suite
-- `pnpm exec vitest src/path/to/file.test.tsx` â€” run one Vitest file
-- `pnpm exec vitest -t "test name"` â€” run Vitest tests matching a name
-- `pnpm exec playwright test` â€” run Playwright end-to-end tests
-- `pnpm exec playwright test tests/e2e/example.spec.ts` â€” run one Playwright file
-- `pnpm exec playwright test -g "test title"` â€” run one Playwright test by title
-- `cargo test --manifest-path src-tauri/Cargo.toml` â€” run Rust tests
-- `cargo test --manifest-path src-tauri/Cargo.toml test_name` â€” run a specific Rust test
+- `pnpm test` â€?run the Vitest suite
+- `pnpm exec vitest src/path/to/file.test.tsx` â€?run one Vitest file
+- `pnpm exec vitest -t "test name"` â€?run Vitest tests matching a name
+- `pnpm exec playwright test` â€?run Playwright end-to-end tests
+- `pnpm exec playwright test tests/e2e/example.spec.ts` â€?run one Playwright file
+- `pnpm exec playwright test -g "test title"` â€?run one Playwright test by title
+- `cargo test --manifest-path src-tauri/Cargo.toml` â€?run Rust tests
+- `cargo test --manifest-path src-tauri/Cargo.toml test_name` â€?run a specific Rust test
 
 ### CLI and packaging helpers
-- `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` â€” run the offline CLI from source
-- `pnpm run verify:cli-bundle` â€” verify the packaged app bundle artifacts
+- `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` â€?run the offline CLI from source
+- `pnpm run verify:cli-bundle` â€?verify the packaged app bundle artifacts
 
 ### Notes
 - The root `package.json` pins pnpm via `packageManager`; run `corepack enable` before installing dependencies on a fresh machine.
@@ -131,9 +132,9 @@ Key product modes:
 
 ## Directory cues
 
-- `src/components/settings/` â€” settings tab implementations
-- `src/services/` â€” frontend orchestration for transcription, LLM, history, export, and models
-- `src/stores/` â€” Zustand stores; start here when behavior spans multiple screens
-- `src-tauri/src/` â€” Tauri command handlers, audio capture, LLM proxy, Sherpa integration, pipeline code
-- `docs/user-guide.md` â€” end-user workflows and setup details
-- `docs/cli.md` â€” CLI usage and configuration
+- `src/components/settings/` â€?settings tab implementations
+- `src/services/` â€?frontend orchestration for transcription, LLM, history, export, and models
+- `src/stores/` â€?Zustand stores; start here when behavior spans multiple screens
+- `src-tauri/src/` â€?Tauri command handlers, audio capture, LLM proxy, Sherpa integration, pipeline code
+- `docs/user-guide.md` â€?end-user workflows and setup details
+- `docs/cli.md` â€?CLI usage and configuration

@@ -160,6 +160,18 @@ async fn handle_online_streaming_socket(
     };
 
     let provider = crate::asr_providers::find_online_asr_provider(&model_id).unwrap();
+    if !provider.streaming.supported.unwrap_or(true) {
+        let _ = socket
+            .send(Message::Text(
+                serde_json::to_string(&ServerMessage::Error {
+                    message: format!("Provider {} does not support streaming", model_id),
+                })
+                .unwrap()
+                .into(),
+            ))
+            .await;
+        return;
+    }
     let provider_id = provider.id.clone();
 
     let config = {
@@ -247,18 +259,36 @@ async fn handle_online_streaming_socket(
         .await;
 
     let event_name = format!("recognizer-output-{}", session_id);
-    let (tx, mut rx) = mpsc::channel::<crate::sherpa::TranscriptUpdate>(32);
+    let (tx, mut rx) = mpsc::unbounded_channel::<crate::sherpa::TranscriptUpdate>();
 
     let handler_id = app_handle.listen(event_name, move |event| {
         if let Ok(update) = serde_json::from_str::<crate::sherpa::TranscriptUpdate>(event.payload())
         {
-            let _ = tx.blocking_send(update);
+            let _ = tx.send(update);
         }
     });
 
+    struct CleanupGuard<F: FnMut()> {
+        f: F,
+    }
+    impl<F: FnMut()> Drop for CleanupGuard<F> {
+        fn drop(&mut self) {
+            (self.f)();
+        }
+    }
+    let _cleanup_guard = CleanupGuard {
+        f: {
+            let app_handle = app_handle.clone();
+            move || {
+                app_handle.unlisten(handler_id);
+            }
+        }
+    };
+
+    let mut stopping = false;
     loop {
         tokio::select! {
-            msg = socket.recv() => {
+            msg = socket.recv(), if !stopping => {
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
@@ -273,9 +303,7 @@ async fn handle_online_streaming_socket(
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
                             let _ = crate::sherpa::online::flush_streaming_recognizer_impl(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
-                            let _ = crate::sherpa::online::stop_streaming_recognizer_impl(sherpa_state.clone(), session_id.clone()).await;
-                            let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Stopped).unwrap().into())).await;
-                            break;
+                            stopping = true;
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => break,
@@ -287,14 +315,18 @@ async fn handle_online_streaming_socket(
                     let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment }).unwrap().into())).await;
                 }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+            _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if stopping => {
+                let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Stopped).unwrap().into())).await;
+                break;
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_secs(60)), if !stopping => {
                 let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Error { message: "Idle timeout".to_string() }).unwrap().into())).await;
                 break;
             }
         }
     }
 
-    app_handle.unlisten(handler_id);
+    let _ = crate::sherpa::online::stop_streaming_recognizer_impl(sherpa_state.clone(), session_id.clone()).await;
 }
 
 async fn handle_local_streaming_socket(

@@ -35,11 +35,36 @@ Authorization: Bearer your_secure_key
 
 ---
 
-## API 路由参考
+### 1. 获取服务器信息与可用能力
 
-### 1. 提交转录任务
+查询当前 API 服务器的配置、资源限制以及配置好的云端 ASR 引擎。
 
-提交本地音频或视频文件进行离线、高性能的语音识别。转录工作流会被推入队列并由后台进程排队执行。
+- **URL**: `/v1/info`
+- **Method**: `GET`
+
+#### 返回数据 (`200 OK`)
+
+```json
+{
+  "maxConcurrent": 2,
+  "maxQueueSize": 100,
+  "maxStreaming": 5,
+  "onlineAsrProviders": [
+    {
+      "id": "volcengine-doubao",
+      "configured": true,
+      "supportsBatch": true,
+      "supportsStreaming": true
+    }
+  ]
+}
+```
+
+---
+
+### 2. 提交转录任务
+
+提交本地音频或视频文件进行高性能的语音识别。转录工作流会被推入队列并由后台进程排队执行。
 
 - **URL**: `/v1/transcriptions`
 - **Method**: `POST`
@@ -50,7 +75,7 @@ Authorization: Bearer your_secure_key
 | 参数名称 | 类型 | 是否必填 | 参数说明 |
 | :--- | :--- | :--- | :--- |
 | `file` | 二进制 | **是** | 要转录的音频或视频文件。 |
-| `model_id` | 字符串 | **是** | 本地已安装的 ASR 识别模型 ID（例如：`sensevoice`、`whisper_turbo`）。 |
+| `model_id` | 字符串 | **是** | 本地已安装的 ASR 模型 ID（例如 `sensevoice`） 或已配置的云端 ASR 引擎 ID（例如 `volcengine-doubao`）。 |
 | `language` | 字符串 | 否 | 目标识别语言（例如：`zh`、`en`、`ja`、`ko`、`yue`），默认为 `"auto"` 自动检测。 |
 | `hotwords` | 字符串 | 否 | 自定义热词词汇表，用于提高特定术语识别率。每行一个热词。 |
 | `webhook_url` | 字符串 | 否 | 当转录任务成功结束或失败时，用于接收结果 POST 推送的 URL。 |
@@ -77,7 +102,7 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
 
 ---
 
-### 2. 查询任务状态
+### 3. 查询任务状态
 
 查询转录任务的当前生命周期状态以及转录文本结果。
 

@@ -66,14 +66,14 @@ impl LlmApiUrl {
     }
 
     pub(crate) fn client(&self, timeout_seconds: Option<u64>) -> Result<Client, String> {
-        use std::sync::{Mutex, OnceLock};
         use std::collections::HashMap;
+        use std::sync::{Mutex, OnceLock};
 
         static CLIENTS: OnceLock<Mutex<HashMap<(bool, Option<u64>), Client>>> = OnceLock::new();
         let map = CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
-        
+
         let key = (self.https_only, timeout_seconds);
-        
+
         {
             let lock = map.lock().unwrap();
             if let Some(client) = lock.get(&key) {

@@ -285,6 +285,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
 
     crate::server::run_server(
+        None,
         &args.host,
         args.port,
         &args.api_key,
@@ -296,6 +297,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         60,  // job_ttl_minutes
         args.max_streaming,
         parsed_arc,
+        std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
         rx,
     )
     .await

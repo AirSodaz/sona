@@ -53,27 +53,35 @@ impl Default for ApiServerController {
 
 fn load_online_asr_config(
     app: &tauri::AppHandle,
-) -> std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>> {
+) -> std::collections::HashMap<String, serde_json::Value> {
     let mut online_asr_config = std::collections::HashMap::new();
     if let Ok(data_dir) = app.path().app_data_dir() {
         let config_path = data_dir.join("settings.json");
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(config) = json
-                    .get("asr")
-                    .and_then(|v| v.get("providers"))
-                    .and_then(|v| v.get("online"))
-                {
-                    if let Some(map) = config.as_object() {
-                        for (k, v) in map {
-                            online_asr_config.insert(k.clone(), v.clone());
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(json) => {
+                    if let Some(config) = json
+                        .get("asr")
+                        .and_then(|v| v.get("providers"))
+                        .and_then(|v| v.get("online"))
+                    {
+                        if let Some(map) = config.as_object() {
+                            for (k, v) in map {
+                                online_asr_config.insert(k.clone(), v.clone());
+                            }
                         }
                     }
+                }
+                Err(e) => log::error!("Failed to parse settings.json: {}", e),
+            },
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!("Failed to read settings.json: {}", e);
                 }
             }
         }
     }
-    std::sync::Arc::new(tokio::sync::RwLock::new(online_asr_config))
+    online_asr_config
 }
 
 #[tauri::command]
@@ -114,7 +122,7 @@ async fn start_api_server(
     let models_dir = app_local_data_dir.join("models");
 
     let new_config = load_online_asr_config(&app);
-    *controller.online_asr_config.write().await = new_config.read().await.clone();
+    *controller.online_asr_config.write().await = new_config;
     let online_asr_config = controller.online_asr_config.clone();
 
     tauri::async_runtime::spawn(async move {
@@ -346,18 +354,18 @@ pub fn run() {
             let controller = app_handle_for_listener.state::<ApiServerController>();
 
             let initial_config = load_online_asr_config(&app_handle_for_listener);
-            let mut write_guard = tauri::async_runtime::block_on(controller.online_asr_config.write());
-            let read_guard = tauri::async_runtime::block_on(initial_config.read());
-            *write_guard = read_guard.clone();
-            drop(write_guard);
+            let config_for_init = controller.online_asr_config.clone();
+            tauri::async_runtime::spawn(async move {
+                *config_for_init.write().await = initial_config;
+            });
 
             let config_for_listener = controller.online_asr_config.clone();
             let listener_app_handle = app_handle_for_listener.clone();
             app.listen_any("asr-config-updated", move |_event| {
-                let new_config_arc = load_online_asr_config(&listener_app_handle);
                 let config_for_listener = config_for_listener.clone();
+                let app_handle = listener_app_handle.clone();
                 tauri::async_runtime::spawn(async move {
-                    let new_config_map = new_config_arc.read().await.clone();
+                    let new_config_map = load_online_asr_config(&app_handle);
                     *config_for_listener.write().await = new_config_map;
                 });
             });
