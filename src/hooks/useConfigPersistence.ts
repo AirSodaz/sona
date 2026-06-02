@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useConfigStore } from '../stores/configStore';
 import { settingsStore, STORE_KEY_CONFIG } from '../services/storageService';
 import { logger } from '../utils/logger';
+import { emit } from '../services/tauri/platform/events';
 
 export function useConfigPersistence(isLoaded: boolean) {
     const config = useConfigStore((state) => state.config);
@@ -13,6 +14,7 @@ export function useConfigPersistence(isLoaded: boolean) {
             try {
                 await settingsStore.set(STORE_KEY_CONFIG, config);
                 await settingsStore.save();
+                await emit('asr-config-updated');
             } catch (e) {
                 logger.error('Failed to save config to store:', e);
             }

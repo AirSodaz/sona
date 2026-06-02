@@ -43,6 +43,9 @@ pub struct TranscriptionJob {
     pub hotwords: Option<String>,
     pub webhook_url: Option<String>,
     pub webhook_secret: Option<String>,
+    pub engine: String,
+    pub online_provider_id: Option<String>,
+    pub online_provider_config: Option<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -189,6 +192,7 @@ async fn start_worker_loop(
     manager: JobManager,
     models_dir: PathBuf,
     max_concurrent: usize,
+    app: Option<tauri::AppHandle>,
 ) {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
@@ -196,8 +200,10 @@ async fn start_worker_loop(
         let manager = manager.clone();
         let models_dir = models_dir.clone();
         let semaphore = semaphore.clone();
+        let app_for_spawn = app.clone();
 
         tokio::spawn(async move {
+            let app = app_for_spawn;
             let _permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
@@ -213,35 +219,88 @@ async fn start_worker_loop(
             };
             manager.update_job(&job.job_id, JobStatus::Processing).await;
 
-            let options = TranscribeCliOptions {
-                input: job.file_path.clone(),
-                output: None,
-                format: None,
-                language: if job.language == "auto" {
-                    None
-                } else {
-                    Some(job.language.clone())
-                },
-                model_id: Some(job.model_id.clone()),
-                models_dir: Some(models_dir.clone()),
-                vad_model_id: None,
-                punctuation_model_id: None,
-                threads: None,
-                enable_itn: None,
-                hotwords: job.hotwords.clone(),
-                vad_buffer: None,
-                save_wav: None,
-                quiet: true,
-            };
-
-            let final_status = match resolve_transcribe_options(options, None) {
-                Ok(resolved) => {
-                    match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
-                        Ok(segments) => JobStatus::Completed(segments),
-                        Err(e) => JobStatus::Failed(e),
+            let final_status = if job.engine == "Online" {
+                if let Some(provider_id) = job.online_provider_id.clone() {
+                    let request = crate::sherpa::AsrTranscriptionRequest {
+                        engine: crate::sherpa::AsrEngine::Online,
+                        mode: crate::sherpa::AsrMode::Offline,
+                        model_id: Some(job.model_id.clone()),
+                        model_path: "".to_string(),
+                        num_threads: 1,
+                        enable_itn: false,
+                        language: if job.language == "auto" {
+                            "".to_string()
+                        } else {
+                            job.language.clone()
+                        },
+                        punctuation_model: None,
+                        vad_model: None,
+                        vad_buffer: 0.0,
+                        batch_segmentation_mode: crate::sherpa::BatchSegmentationMode::Vad,
+                        model_type: "".to_string(),
+                        file_config: None,
+                        hotwords: job.hotwords.clone(),
+                        normalization_options: Default::default(),
+                        postprocess_options: Default::default(),
+                        online_provider: Some(crate::sherpa::OnlineAsrProviderRequest {
+                            provider_id: provider_id,
+                            profile_id: job.model_id.clone(),
+                            config: job.online_provider_config.clone().unwrap_or_default(),
+                        }),
+                        gpu_acceleration: None,
+                    };
+                    if let Some(app_handle) = app.as_ref() {
+                        use tauri::Manager;
+                        let inner_app_clone = app_handle.clone();
+                        let sherpa_state = app_handle.state::<crate::sherpa::SherpaState>();
+                        match crate::sherpa::online::process_batch_file_impl(
+                            inner_app_clone,
+                            sherpa_state.inner(),
+                            job.file_path.to_string_lossy().to_string(),
+                            request,
+                        )
+                        .await
+                        {
+                            Ok(segments) => JobStatus::Completed(segments),
+                            Err(e) => JobStatus::Failed(e.to_string()),
+                        }
+                    } else {
+                        JobStatus::Failed("AppHandle missing".to_string())
                     }
+                } else {
+                    JobStatus::Failed("Missing online provider ID".to_string())
                 }
-                Err(e) => JobStatus::Failed(e),
+            } else {
+                let options = TranscribeCliOptions {
+                    input: job.file_path.clone(),
+                    output: None,
+                    format: None,
+                    language: if job.language == "auto" {
+                        None
+                    } else {
+                        Some(job.language.clone())
+                    },
+                    model_id: Some(job.model_id.clone()),
+                    models_dir: Some(models_dir.clone()),
+                    vad_model_id: None,
+                    punctuation_model_id: None,
+                    threads: None,
+                    enable_itn: None,
+                    hotwords: job.hotwords.clone(),
+                    vad_buffer: None,
+                    save_wav: None,
+                    quiet: true,
+                };
+
+                match resolve_transcribe_options(options, None) {
+                    Ok(resolved) => {
+                        match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
+                            Ok(segments) => JobStatus::Completed(segments),
+                            Err(e) => JobStatus::Failed(e),
+                        }
+                    }
+                    Err(e) => JobStatus::Failed(e),
+                }
             };
 
             manager.update_job(&job.job_id, final_status.clone()).await;
@@ -268,8 +327,12 @@ pub struct ServerState {
     pub start_time: std::time::Instant,
     pub api_key: String,
     pub streaming_semaphore: Arc<tokio::sync::Semaphore>,
-    pub recognizer_pool: Arc<tokio::sync::Mutex<HashMap<crate::sherpa::ModelConfigKey, Arc<crate::sherpa::Recognizer>>>>,
+    pub recognizer_pool: Arc<
+        tokio::sync::Mutex<HashMap<crate::sherpa::ModelConfigKey, Arc<crate::sherpa::Recognizer>>>,
+    >,
     pub ip_whitelist: Arc<Vec<IpNet>>,
+    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
+    pub app: Option<tauri::AppHandle>,
 }
 
 pub async fn handle_transcribe(
@@ -328,6 +391,17 @@ pub async fn handle_transcribe(
     let file_path = temp_file_path.ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
     let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
 
+    let mut engine = "LocalSherpa".to_string();
+    let mut online_provider_id = None;
+    let mut online_provider_config = None;
+
+    if let Some(provider) = crate::asr_providers::find_online_asr_provider(&m_id) {
+        engine = "Online".to_string();
+        online_provider_id = Some(provider.id.clone());
+        let configs = state.online_asr_config.read().await;
+        online_provider_config = configs.get(&provider.id).cloned();
+    }
+
     let job = TranscriptionJob {
         job_id: job_id.clone(),
         file_path,
@@ -336,6 +410,9 @@ pub async fn handle_transcribe(
         hotwords,
         webhook_url,
         webhook_secret,
+        engine,
+        online_provider_id,
+        online_provider_config,
     };
     state
         .job_manager
@@ -413,6 +490,15 @@ pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthRespo
     })
 }
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAsrProviderInfo {
+    pub id: String,
+    pub configured: bool,
+    pub supports_batch: bool,
+    pub supports_streaming: bool,
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
@@ -421,6 +507,7 @@ pub struct InfoResponse {
     pub models: Vec<String>,
     pub vad_installed: bool,
     pub punctuation_installed: bool,
+    pub online_asr_providers: Vec<OnlineAsrProviderInfo>,
 }
 
 pub async fn handle_info(
@@ -459,12 +546,34 @@ pub async fn handle_info(
         .iter()
         .any(|m| m.id == crate::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed);
 
+    let online_providers = crate::asr_providers::online_asr_providers();
+    let configs = state.online_asr_config.read().await;
+    let mut online_asr_providers = Vec::new();
+
+    for provider in online_providers {
+        let mut configured = false;
+        if let Some(config_value) = configs.get(&provider.id) {
+            if let Some(api_key) = config_value.get("apiKey").and_then(|v| v.as_str()) {
+                if !api_key.is_empty() {
+                    configured = true;
+                }
+            }
+        }
+        online_asr_providers.push(OnlineAsrProviderInfo {
+            id: provider.id.clone(),
+            configured,
+            supports_batch: provider.batch.local_file_mode.supported,
+            supports_streaming: provider.streaming.supported.unwrap_or(false),
+        });
+    }
+
     Ok(Json(InfoResponse {
         platform: std::env::consts::OS.to_string(),
         gpu_available,
         models: installed_models,
         vad_installed,
         punctuation_installed,
+        online_asr_providers,
     }))
 }
 
@@ -542,6 +651,7 @@ async fn ip_whitelist_middleware(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server(
+    app: Option<tauri::AppHandle>,
     host: &str,
     port: u16,
     api_key: &str,
@@ -553,6 +663,7 @@ pub async fn run_server(
     job_ttl_minutes: u64,
     max_streaming: usize,
     ip_whitelist: Arc<Vec<IpNet>>,
+    online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
     // Resource Cleanup: clean temp_dir on startup
@@ -561,14 +672,26 @@ pub async fn run_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let actual_queue_size = if max_queue_size == 0 { 100_000 } else { max_queue_size };
+    let actual_queue_size = if max_queue_size == 0 {
+        100_000
+    } else {
+        max_queue_size
+    };
     let (tx, rx) = mpsc::channel(actual_queue_size);
     let job_manager = JobManager::new(tx);
     let manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
+    let app_clone = app.clone();
 
     tokio::spawn(async move {
-        start_worker_loop(rx, manager_clone, models_dir_clone, max_concurrent).await;
+        start_worker_loop(
+            rx,
+            manager_clone,
+            models_dir_clone,
+            max_concurrent,
+            app_clone,
+        )
+        .await;
     });
 
     let manager_ttl_clone = job_manager.clone();
@@ -599,6 +722,8 @@ pub async fn run_server(
         streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
         recognizer_pool: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         ip_whitelist: ip_whitelist.clone(),
+        online_asr_config,
+        app,
     };
 
     let cors = CorsLayer::new()
@@ -639,7 +764,11 @@ pub async fn run_server(
         .with_state(state.clone());
 
     // Merge and apply CORS & state
-    let router = router.merge(ws_router).merge(api_router).layer(cors).with_state(state);
+    let router = router
+        .merge(ws_router)
+        .merge(api_router)
+        .layer(cors)
+        .with_state(state);
     let addr = format!("{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
@@ -687,8 +816,12 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
             ip_whitelist: std::sync::Arc::new(vec![]),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            app: None,
         };
 
         let app = Router::new()
@@ -740,8 +873,12 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
             ip_whitelist: std::sync::Arc::new(vec![]),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            app: None,
         };
 
         let app = Router::new()
@@ -802,8 +939,12 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
             ip_whitelist: std::sync::Arc::new(vec![]),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            app: None,
         };
 
         let app = Router::new()

@@ -1,4 +1,4 @@
-import { emitTo, listen } from '@tauri-apps/api/event';
+import { emitTo, listen, emit } from '@tauri-apps/api/event';
 
 export type {
   Event,
@@ -8,4 +8,4 @@ export type {
   UnlistenFn,
 } from '@tauri-apps/api/event';
 
-export { emitTo, listen };
+export { emitTo, listen, emit };

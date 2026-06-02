@@ -15,38 +15,65 @@ mod hardware;
 mod history_repository;
 mod llm;
 mod llm_providers;
+pub mod media_detector;
 pub mod pipeline;
 pub mod preset_models;
 mod project_repository;
 mod recovery;
 mod runtime_status;
 pub mod server;
-pub mod streaming;
 pub mod sherpa;
 pub mod speaker;
 mod speaker_correction;
 mod speaker_review;
 mod storage;
+pub mod streaming;
 pub mod system;
 mod task_ledger;
 mod text_alignment;
 mod tray;
 mod webdav;
-pub mod media_detector;
 
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Listener, Manager};
 use tokio::sync::Mutex as AsyncMutex;
 
 pub struct ApiServerController {
     shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub online_asr_config: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>>,
 }
 
 impl Default for ApiServerController {
     fn default() -> Self {
         Self {
             shutdown_sender: std::sync::Arc::new(AsyncMutex::new(None)),
+            online_asr_config: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
         }
     }
+}
+
+fn load_online_asr_config(
+    app: &tauri::AppHandle,
+) -> std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>> {
+    let mut online_asr_config = std::collections::HashMap::new();
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        let config_path = data_dir.join("settings.json");
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(config) = json
+                    .get("asr")
+                    .and_then(|v| v.get("providers"))
+                    .and_then(|v| v.get("online"))
+                {
+                    if let Some(map) = config.as_object() {
+                        for (k, v) in map {
+                            online_asr_config.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::sync::Arc::new(tokio::sync::RwLock::new(online_asr_config))
 }
 
 #[tauri::command]
@@ -82,11 +109,17 @@ async fn start_api_server(
     let (tx, rx) = tokio::sync::oneshot::channel();
     *sender_lock = Some(tx);
 
-    let temp_dir = app.path().app_local_data_dir().unwrap().join("api_temp");
-    let models_dir = app.path().app_local_data_dir().unwrap().join("models");
+    let app_local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let temp_dir = app_local_data_dir.join("api_temp");
+    let models_dir = app_local_data_dir.join("models");
+
+    let new_config = load_online_asr_config(&app);
+    *controller.online_asr_config.write().await = new_config.read().await.clone();
+    let online_asr_config = controller.online_asr_config.clone();
 
     tauri::async_runtime::spawn(async move {
         if let Err(e) = crate::server::run_server(
+            Some(app.clone()),
             &host,
             port,
             &api_key,
@@ -98,6 +131,7 @@ async fn start_api_server(
             job_ttl_minutes,
             max_streaming,
             parsed_arc,
+            online_asr_config,
             rx,
         )
         .await
@@ -308,16 +342,39 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            let app_handle_for_listener = app.handle().clone();
+            let controller = app_handle_for_listener.state::<ApiServerController>();
+
+            let initial_config = load_online_asr_config(&app_handle_for_listener);
+            let mut write_guard = tauri::async_runtime::block_on(controller.online_asr_config.write());
+            let read_guard = tauri::async_runtime::block_on(initial_config.read());
+            *write_guard = read_guard.clone();
+            drop(write_guard);
+
+            let config_for_listener = controller.online_asr_config.clone();
+            let listener_app_handle = app_handle_for_listener.clone();
+            app.listen_any("asr-config-updated", move |_event| {
+                let new_config_arc = load_online_asr_config(&listener_app_handle);
+                let config_for_listener = config_for_listener.clone();
+                tauri::async_runtime::spawn(async move {
+                    let new_config_map = new_config_arc.read().await.clone();
+                    *config_for_listener.write().await = new_config_map;
+                });
+            });
+
             tray::setup_tray(app)?;
 
             // Start HTTP API Server if enabled
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let config_path = app_handle
-                    .path()
-                    .app_data_dir()
-                    .unwrap()
-                    .join("settings.json");
+                let app_data_dir = match app_handle.path().app_data_dir() {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        log::error!("Failed to get app_data_dir: {}", e);
+                        return;
+                    }
+                };
+                let config_path = app_data_dir.join("settings.json");
                 let mut http_server_enabled = false;
                 let mut host = "127.0.0.1".to_string();
                 let mut port = 14200;
@@ -388,21 +445,23 @@ pub fn run() {
                 }
 
                 if http_server_enabled {
-                    let temp_dir = app_handle
-                        .path()
-                        .app_local_data_dir()
-                        .unwrap()
-                        .join("api_temp");
-                    let models_dir = app_handle
-                        .path()
-                        .app_local_data_dir()
-                        .unwrap()
-                        .join("models");
+                    let app_local_data_dir = match app_handle.path().app_local_data_dir() {
+                        Ok(dir) => dir,
+                        Err(e) => {
+                            log::error!("Failed to get app_local_data_dir: {}", e);
+                            return;
+                        }
+                    };
+                    let temp_dir = app_local_data_dir.join("api_temp");
+                    let models_dir = app_local_data_dir.join("models");
 
                     let parsed_whitelist = match crate::server::parse_ip_whitelist(&ip_whitelist) {
                         Ok(nets) => nets,
                         Err(e) => {
-                            log::error!("HTTP API Server failed to start due to invalid IP whitelist: {}", e);
+                            log::error!(
+                                "HTTP API Server failed to start due to invalid IP whitelist: {}",
+                                e
+                            );
                             return;
                         }
                     };
@@ -412,7 +471,10 @@ pub fn run() {
                     let controller = app_handle.state::<ApiServerController>();
                     *controller.shutdown_sender.lock().await = Some(tx);
 
+                    let online_asr_config = controller.online_asr_config.clone();
+
                     if let Err(e) = crate::server::run_server(
+                        Some(app_handle.clone()),
                         &host,
                         port,
                         &api_key,
@@ -424,6 +486,7 @@ pub fn run() {
                         job_ttl_minutes,
                         max_streaming,
                         parsed_arc,
+                        online_asr_config,
                         rx,
                     )
                     .await
