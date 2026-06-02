@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
-#[path = "../src/task_ledger/mod.rs"]
+#[path = "../src/core/task_ledger/mod.rs"]
 mod task_ledger;
 
-#[path = "../src/storage.rs"]
-mod storage;
+pub mod repositories {
+    #[path = "../../src/repositories/storage.rs"]
+    pub mod storage;
+}
 
 use serde_json::{Value, json};
 use std::fs;

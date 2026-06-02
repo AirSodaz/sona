@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[path = "../src/project_repository.rs"]
+#[path = "../src/repositories/project.rs"]
 mod project_repository;
 
 use project_repository::{

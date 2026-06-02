@@ -1,4 +1,3 @@
-use crate::llm::llm_usage;
 use chrono::{Duration, Local, NaiveDate, SecondsFormat, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -138,7 +137,7 @@ struct ContentStats {
 #[serde(rename_all = "camelCase")]
 struct DashboardSnapshot {
     content: ContentStats,
-    llm_usage: llm_usage::LlmUsageDashboardStats,
+    llm_usage: crate::integrations::llm::llm_usage::LlmUsageDashboardStats,
     generated_at: String,
 }
 
@@ -160,7 +159,7 @@ pub async fn get_dashboard_snapshot<R: Runtime>(
 fn build_dashboard_snapshot(app_dir: &Path, deep: bool) -> Result<Value, String> {
     let history_items = read_history_items(app_dir)?;
     let project_count = read_project_count(app_dir)?;
-    let llm_usage = llm_usage::read_dashboard_stats(app_dir);
+    let llm_usage = crate::integrations::llm::llm_usage::read_dashboard_stats(app_dir);
     let mut overview = create_overview(&history_items, project_count, deep);
     let speakers = if deep {
         let transcript_analytics = aggregate_transcript_analytics(app_dir, &history_items);
@@ -723,7 +722,7 @@ mod tests {
         )
         .expect("write usage");
 
-        let stats = llm_usage::read_dashboard_stats(temp_dir.path());
+        let stats = crate::integrations::llm::llm_usage::read_dashboard_stats(temp_dir.path());
 
         assert_eq!(
             stats.started_at.as_deref(),

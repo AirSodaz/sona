@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
-#[path = "../src/asr_providers.rs"]
-mod asr_providers;
-#[path = "../src/automation_repository.rs"]
+pub mod integrations {
+    #[path = "../../src/integrations/asr_providers.rs"]
+    pub mod asr_providers;
+}
+#[path = "../src/repositories/automation.rs"]
 mod automation_repository;
 
 use automation_repository::{

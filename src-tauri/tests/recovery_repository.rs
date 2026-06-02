@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
-#[path = "../src/recovery/mod.rs"]
+#[path = "../src/core/recovery/mod.rs"]
 mod recovery;
 
-#[path = "../src/storage.rs"]
-mod storage;
+pub mod repositories {
+    #[path = "../../src/repositories/storage.rs"]
+    pub mod storage;
+}
 
 use recovery::repository::RecoveryRepository;
 use serde_json::{Value, json};

@@ -1,8 +1,6 @@
-use crate::asr::{
-    BatchTranscriptionRequest, transcribe_batch_with_progress,
-};
-use crate::export::{ExportFormat, export_segments};
-use crate::preset_models::{PresetModel, find_preset_model, preset_models};
+use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
+use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
+use crate::repositories::export::{ExportFormat, export_segments};
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
 use std::ffi::OsString;
@@ -273,7 +271,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let models_dir = resolve_models_dir(args.models_dir)?;
     let temp_dir = std::env::temp_dir().join("sona_api");
     let (_tx, rx) = tokio::sync::oneshot::channel();
-    let parsed_whitelist = match crate::server::parse_ip_whitelist(&args.ip_whitelist) {
+    let parsed_whitelist = match crate::app::server::parse_ip_whitelist(&args.ip_whitelist) {
         Ok(nets) => nets,
         Err(e) => {
             log::error!("Failed to parse IP whitelist: {}", e);
@@ -282,7 +280,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
     };
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
 
-    crate::server::run_server(
+    crate::app::server::run_server(
         None,
         &args.host,
         args.port,
@@ -466,15 +464,17 @@ pub fn resolve_transcribe_options(
             punctuation_model,
             vad_model,
             vad_buffer,
-            batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
+            batch_segmentation_mode: crate::integrations::asr::BatchSegmentationMode::Vad,
             model_type: model.model_type.clone(),
             file_config: model.file_config.clone(),
             hotwords: cli.hotwords,
             speaker_processing: None,
-            normalization_options: crate::asr::TranscriptNormalizationOptions::default(),
-            postprocessor: crate::asr::TranscriptPostprocessor::compile(
-                crate::asr::TranscriptPostprocessOptions::default()
-            ).map_err(|e| e.to_string())?,
+            normalization_options:
+                crate::integrations::asr::TranscriptNormalizationOptions::default(),
+            postprocessor: crate::integrations::asr::TranscriptPostprocessor::compile(
+                crate::integrations::asr::TranscriptPostprocessOptions::default(),
+            )
+            .map_err(|e| e.to_string())?,
             gpu_acceleration: None,
         },
     })

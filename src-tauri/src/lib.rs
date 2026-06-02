@@ -1,38 +1,11 @@
-mod app_settings;
-mod archive;
-pub mod asr;
-mod asr_providers;
-mod audio;
-mod automation_repository;
-mod automation_runtime;
-mod aux_window_state;
+pub mod app;
+pub mod commands;
+pub mod core;
+pub mod integrations;
+pub mod repositories;
+
 pub mod cli;
-mod config_core;
 mod dashboard;
-mod diagnostics_core;
-mod downloads;
-pub mod export;
-mod hardware;
-mod history_repository;
-mod llm;
-mod llm_providers;
-pub mod media_detector;
-pub mod pipeline;
-pub mod preset_models;
-mod project_repository;
-mod recovery;
-mod runtime_status;
-pub mod server;
-pub mod speaker;
-mod speaker_correction;
-mod speaker_review;
-mod storage;
-pub mod streaming;
-pub mod system;
-mod task_ledger;
-mod text_alignment;
-mod tray;
-mod webdav;
 
 use tauri::{Emitter, Listener, Manager};
 use tokio::sync::Mutex as AsyncMutex;
@@ -102,7 +75,7 @@ async fn start_api_server(
     max_streaming: usize,
     ip_whitelist: String,
 ) -> Result<String, String> {
-    let parsed_whitelist = crate::server::parse_ip_whitelist(&ip_whitelist)?;
+    let parsed_whitelist = crate::app::server::parse_ip_whitelist(&ip_whitelist)?;
     let normalized_whitelist = parsed_whitelist
         .iter()
         .map(|net| net.to_string())
@@ -129,7 +102,7 @@ async fn start_api_server(
     let online_asr_config = controller.online_asr_config.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = crate::server::run_server(
+        if let Err(e) = crate::app::server::run_server(
             Some(app.clone()),
             &host,
             port,
@@ -187,7 +160,7 @@ fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
 async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
     let mut results = Vec::with_capacity(paths.len());
     for path in paths {
-        let is_valid = crate::media_detector::is_valid_media_file(&path).await;
+        let is_valid = crate::integrations::media_detector::is_valid_media_file(&path).await;
         results.push(is_valid);
     }
     Ok(results)
@@ -196,8 +169,8 @@ async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
 #[tauri::command]
 fn resolve_model_catalog_selected_ids<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    paths: preset_models::ModelSelectionPaths,
-) -> Result<preset_models::ModelCatalogSelectedIds, String> {
+    paths: crate::core::preset_models::ModelSelectionPaths,
+) -> Result<crate::core::preset_models::ModelCatalogSelectedIds, String> {
     let models_dir = app
         .path()
         .app_local_data_dir()
@@ -211,10 +184,8 @@ fn resolve_model_catalog_selected_ids<R: tauri::Runtime>(
         )
     })?;
 
-    let snapshot = preset_models::build_model_catalog_snapshot(&models_dir);
-    Ok(preset_models::resolve_model_catalog_selected_ids(
-        &snapshot, &paths,
-    ))
+    let snapshot = crate::core::preset_models::build_model_catalog_snapshot(&models_dir);
+    Ok(crate::core::preset_models::resolve_model_catalog_selected_ids(&snapshot, &paths))
 }
 
 #[cfg(target_os = "windows")]
@@ -317,7 +288,7 @@ async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
 /// and registers invoke handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app_settings = app_settings::AppSettings::new();
+    let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 
     tauri::Builder::default()
@@ -373,7 +344,7 @@ pub fn run() {
                 });
             });
 
-            tray::setup_tray(app)?;
+            crate::app::tray::setup_tray(app)?;
 
             // Start HTTP API Server if enabled
             let app_handle = app.handle().clone();
@@ -466,7 +437,9 @@ pub fn run() {
                     let temp_dir = app_local_data_dir.join("api_temp");
                     let models_dir = app_local_data_dir.join("models");
 
-                    let parsed_whitelist = match crate::server::parse_ip_whitelist(&ip_whitelist) {
+                    let parsed_whitelist = match crate::app::server::parse_ip_whitelist(
+                        &ip_whitelist,
+                    ) {
                         Ok(nets) => nets,
                         Err(e) => {
                             log::error!(
@@ -484,7 +457,7 @@ pub fn run() {
 
                     let online_asr_config = controller.online_asr_config.clone();
 
-                    if let Err(e) = crate::server::run_server(
+                    if let Err(e) = crate::app::server::run_server(
                         Some(app_handle.clone()),
                         &host,
                         port,
@@ -512,19 +485,22 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
-                let state = app.state::<app_settings::AppSettings>();
+                let state = app.state::<crate::app::settings::AppSettings>();
                 // Default to true if lock fails (safe fallback)
                 let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
 
-                match app_settings::resolve_main_window_close_action(window.label(), minimize) {
-                    app_settings::MainWindowCloseAction::Ignore => {}
-                    app_settings::MainWindowCloseAction::HideToTray => {
+                match crate::app::settings::resolve_main_window_close_action(
+                    window.label(),
+                    minimize,
+                ) {
+                    crate::app::settings::MainWindowCloseAction::Ignore => {}
+                    crate::app::settings::MainWindowCloseAction::HideToTray => {
                         let _ = window.hide();
                         api.prevent_close();
                     }
-                    app_settings::MainWindowCloseAction::RequestQuit => {
+                    crate::app::settings::MainWindowCloseAction::RequestQuit => {
                         api.prevent_close();
-                        let _ = window.emit(tray::TRAY_REQUEST_QUIT_EVENT, ());
+                        let _ = window.emit(crate::app::tray::TRAY_REQUEST_QUIT_EVENT, ());
                     }
                 }
             }
@@ -538,15 +514,15 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .manage(downloads::DownloadState::new())
+        .manage(crate::repositories::downloads::DownloadState::new())
         .manage(ApiServerController::default())
         .manage(app_settings)
-        .manage(aux_window_state::AuxWindowStateStore::default())
-        .manage(automation_runtime::AutomationRuntimeState::default())
-        .manage(history_repository::HistoryRepositoryState::default())
-        .manage(history_repository::PreparedBackupImportState::default())
-        .manage(audio::AudioState::new())
-        .manage(asr::AsrState::new())
+        .manage(crate::app::window_state::AuxWindowStateStore::default())
+        .manage(crate::core::automation::AutomationRuntimeState::default())
+        .manage(crate::repositories::history::HistoryRepositoryState::default())
+        .manage(crate::repositories::history::PreparedBackupImportState::default())
+        .manage(crate::integrations::audio::AudioState::new())
+        .manage(crate::integrations::asr::AsrState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -557,118 +533,118 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             greet,
-            archive::extract_tar_bz2,
-            archive::create_tar_bz2,
-            dashboard::get_dashboard_snapshot,
-            project_repository::project_list,
-            project_repository::project_save_all,
-            project_repository::project_create,
-            project_repository::project_update,
-            project_repository::project_delete,
-            project_repository::project_reorder,
-            project_repository::project_get_active_id,
-            project_repository::project_set_active_id,
-            automation_repository::automation_load_repository_state,
-            automation_repository::automation_persist_rules,
-            automation_repository::automation_persist_processed_entries,
-            automation_repository::automation_persist_repository_state,
-            automation_repository::automation_validate_rule_activation,
-            history_repository::commands::history_list_items,
-            history_repository::commands::history_query_workspace,
-            history_repository::commands::history_create_live_draft,
-            history_repository::commands::history_complete_live_draft,
-            history_repository::commands::history_save_recording,
-            history_repository::commands::history_save_imported_file,
-            history_repository::commands::history_delete_items,
-            history_repository::commands::history_load_transcript,
-            history_repository::commands::history_update_transcript,
-            history_repository::commands::history_create_transcript_snapshot,
-            history_repository::commands::history_list_transcript_snapshots,
-            history_repository::commands::history_load_transcript_snapshot,
-            history_repository::commands::history_build_transcript_diff,
-            history_repository::commands::history_restore_transcript_diff_rows,
-            history_repository::commands::history_update_item_meta,
-            history_repository::commands::history_update_project_assignments,
-            history_repository::commands::history_reassign_project,
-            history_repository::commands::history_load_summary,
-            history_repository::commands::history_save_summary,
-            history_repository::commands::history_delete_summary,
-            history_repository::commands::history_resolve_audio_path,
-            history_repository::commands::history_open_folder,
-            history_repository::commands::export_backup_archive,
-            history_repository::commands::prepare_backup_import,
-            history_repository::commands::apply_prepared_history_import,
-            history_repository::commands::dispose_prepared_backup_import,
-            downloads::download_file,
-            webdav::webdav_test_connection,
-            webdav::webdav_list_backups,
-            webdav::webdav_upload_backup,
-            webdav::webdav_download_backup,
-            downloads::cancel_download,
-            preset_models::get_model_catalog_snapshot,
+            crate::repositories::archive::extract_tar_bz2,
+            crate::repositories::archive::create_tar_bz2,
+            crate::dashboard::get_dashboard_snapshot,
+            crate::repositories::project::project_list,
+            crate::repositories::project::project_save_all,
+            crate::repositories::project::project_create,
+            crate::repositories::project::project_update,
+            crate::repositories::project::project_delete,
+            crate::repositories::project::project_reorder,
+            crate::repositories::project::project_get_active_id,
+            crate::repositories::project::project_set_active_id,
+            crate::repositories::automation::automation_load_repository_state,
+            crate::repositories::automation::automation_persist_rules,
+            crate::repositories::automation::automation_persist_processed_entries,
+            crate::repositories::automation::automation_persist_repository_state,
+            crate::repositories::automation::automation_validate_rule_activation,
+            crate::repositories::history::commands::history_list_items,
+            crate::repositories::history::commands::history_query_workspace,
+            crate::repositories::history::commands::history_create_live_draft,
+            crate::repositories::history::commands::history_complete_live_draft,
+            crate::repositories::history::commands::history_save_recording,
+            crate::repositories::history::commands::history_save_imported_file,
+            crate::repositories::history::commands::history_delete_items,
+            crate::repositories::history::commands::history_load_transcript,
+            crate::repositories::history::commands::history_update_transcript,
+            crate::repositories::history::commands::history_create_transcript_snapshot,
+            crate::repositories::history::commands::history_list_transcript_snapshots,
+            crate::repositories::history::commands::history_load_transcript_snapshot,
+            crate::repositories::history::commands::history_build_transcript_diff,
+            crate::repositories::history::commands::history_restore_transcript_diff_rows,
+            crate::repositories::history::commands::history_update_item_meta,
+            crate::repositories::history::commands::history_update_project_assignments,
+            crate::repositories::history::commands::history_reassign_project,
+            crate::repositories::history::commands::history_load_summary,
+            crate::repositories::history::commands::history_save_summary,
+            crate::repositories::history::commands::history_delete_summary,
+            crate::repositories::history::commands::history_resolve_audio_path,
+            crate::repositories::history::commands::history_open_folder,
+            crate::repositories::history::commands::export_backup_archive,
+            crate::repositories::history::commands::prepare_backup_import,
+            crate::repositories::history::commands::apply_prepared_history_import,
+            crate::repositories::history::commands::dispose_prepared_backup_import,
+            crate::repositories::downloads::download_file,
+            crate::integrations::webdav::webdav_test_connection,
+            crate::integrations::webdav::webdav_list_backups,
+            crate::integrations::webdav::webdav_upload_backup,
+            crate::integrations::webdav::webdav_download_backup,
+            crate::repositories::downloads::cancel_download,
+            crate::core::preset_models::get_model_catalog_snapshot,
             resolve_model_catalog_selected_ids,
-            diagnostics_core::get_diagnostics_core_snapshot,
-            hardware::check_gpu_availability,
+            crate::core::diagnostics::get_diagnostics_core_snapshot,
+            crate::app::hardware::check_gpu_availability,
             force_exit,
-            downloads::has_active_downloads,
-            tray::update_tray_menu,
-            app_settings::set_minimize_to_tray,
-            app_settings::set_log_level,
-            aux_window_state::set_aux_window_state,
-            aux_window_state::get_aux_window_state,
-            aux_window_state::clear_aux_window_state,
+            crate::repositories::downloads::has_active_downloads,
+            crate::app::tray::update_tray_menu,
+            crate::app::settings::set_minimize_to_tray,
+            crate::app::settings::set_log_level,
+            crate::app::window_state::set_aux_window_state,
+            crate::app::window_state::get_aux_window_state,
+            crate::app::window_state::clear_aux_window_state,
             set_system_audio_mute,
-            runtime_status::open_log_folder,
-            runtime_status::get_runtime_environment_status,
-            runtime_status::get_path_statuses,
-            task_ledger::commands::task_ledger_load_snapshot,
-            task_ledger::commands::task_ledger_upsert_task,
-            task_ledger::commands::task_ledger_patch_task,
-            task_ledger::commands::task_ledger_remove_task,
-            task_ledger::commands::task_ledger_clear_resolved,
-            recovery::commands::recovery_load_snapshot,
-            recovery::commands::recovery_save_snapshot,
-            recovery::commands::recovery_persist_queue_snapshot,
-            automation_runtime::replace_automation_runtime_rules,
-            automation_runtime::scan_automation_runtime_rule,
-            automation_runtime::collect_automation_runtime_rule_paths,
-            config_core::migrate_app_config,
-            config_core::resolve_effective_config,
-            system::inject_text,
-            system::get_mouse_position,
-            system::get_text_cursor_position,
-            audio::get_system_audio_devices,
-            audio::start_system_audio_capture,
-            audio::stop_system_audio_capture,
-            audio::set_system_audio_capture_paused,
-            audio::set_microphone_boost,
-            audio::get_microphone_devices,
-            audio::start_microphone_capture,
-            audio::stop_microphone_capture,
-            audio::set_microphone_capture_paused,
-            llm::generate_llm_text,
-            llm::list_llm_models,
-            llm::llm_usage::llm_usage_ensure_storage,
-            llm::llm_usage::llm_usage_read_raw,
-            llm::llm_usage::llm_usage_replace_raw,
-            llm::polish_transcript_segments,
-            llm::run_transcript_llm_job,
-            llm::summarize_transcript,
-            llm::translate_transcript_segments,
-            asr::init_recognizer,
-            asr::start_recognizer,
-            asr::stop_recognizer,
-            asr::flush_recognizer,
-            asr::feed_audio_chunk,
-            asr::process_batch_file,
-            asr::get_asr_runtime_metrics,
-            export::export_transcript_file,
-            speaker::annotate_speaker_segments_from_file,
-            speaker::import_speaker_profile_sample,
-            speaker_review::build_speaker_review_snapshot,
-            speaker_correction::apply_speaker_profile_to_group,
-            speaker_correction::reset_speaker_group_to_anonymous,
-            speaker_correction::confirm_speaker_group_review,
+            crate::app::runtime_status::open_log_folder,
+            crate::app::runtime_status::get_runtime_environment_status,
+            crate::app::runtime_status::get_path_statuses,
+            crate::core::task_ledger::commands::task_ledger_load_snapshot,
+            crate::core::task_ledger::commands::task_ledger_upsert_task,
+            crate::core::task_ledger::commands::task_ledger_patch_task,
+            crate::core::task_ledger::commands::task_ledger_remove_task,
+            crate::core::task_ledger::commands::task_ledger_clear_resolved,
+            crate::core::recovery::commands::recovery_load_snapshot,
+            crate::core::recovery::commands::recovery_save_snapshot,
+            crate::core::recovery::commands::recovery_persist_queue_snapshot,
+            crate::core::automation::replace_automation_runtime_rules,
+            crate::core::automation::scan_automation_runtime_rule,
+            crate::core::automation::collect_automation_runtime_rule_paths,
+            crate::core::config::migrate_app_config,
+            crate::core::config::resolve_effective_config,
+            crate::app::system::inject_text,
+            crate::app::system::get_mouse_position,
+            crate::app::system::get_text_cursor_position,
+            crate::integrations::audio::get_system_audio_devices,
+            crate::integrations::audio::start_system_audio_capture,
+            crate::integrations::audio::stop_system_audio_capture,
+            crate::integrations::audio::set_system_audio_capture_paused,
+            crate::integrations::audio::set_microphone_boost,
+            crate::integrations::audio::get_microphone_devices,
+            crate::integrations::audio::start_microphone_capture,
+            crate::integrations::audio::stop_microphone_capture,
+            crate::integrations::audio::set_microphone_capture_paused,
+            crate::integrations::llm::generate_llm_text,
+            crate::integrations::llm::list_llm_models,
+            crate::integrations::llm::llm_usage::llm_usage_ensure_storage,
+            crate::integrations::llm::llm_usage::llm_usage_read_raw,
+            crate::integrations::llm::llm_usage::llm_usage_replace_raw,
+            crate::integrations::llm::polish_transcript_segments,
+            crate::integrations::llm::run_transcript_llm_job,
+            crate::integrations::llm::summarize_transcript,
+            crate::integrations::llm::translate_transcript_segments,
+            crate::integrations::asr::init_recognizer,
+            crate::integrations::asr::start_recognizer,
+            crate::integrations::asr::stop_recognizer,
+            crate::integrations::asr::flush_recognizer,
+            crate::integrations::asr::feed_audio_chunk,
+            crate::integrations::asr::process_batch_file,
+            crate::integrations::asr::get_asr_runtime_metrics,
+            crate::repositories::export::export_transcript_file,
+            crate::integrations::speaker::annotate_speaker_segments_from_file,
+            crate::integrations::speaker::import_speaker_profile_sample,
+            crate::core::speaker_review::build_speaker_review_snapshot,
+            crate::core::speaker_correction::apply_speaker_profile_to_group,
+            crate::core::speaker_correction::reset_speaker_group_to_anonymous,
+            crate::core::speaker_correction::confirm_speaker_group_review,
             start_api_server,
             stop_api_server,
             check_media_formats
