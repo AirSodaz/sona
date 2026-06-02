@@ -3,13 +3,17 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { SettingsApiServerTab } from '../SettingsApiServerTab';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => {
-      return (options?.defaultValue as string) || key;
-    },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, options?: Record<string, unknown>) => {
+        return (options?.defaultValue as string) || key;
+      },
+    }),
+  };
+});
 
 vi.mock('../../tauri/invoke', () => ({
   invokeTauri: vi.fn().mockResolvedValue('OK'),

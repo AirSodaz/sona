@@ -345,14 +345,14 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         {/* Max Queue Size */}
                         <SettingsItem
                         title={t('settings.api_server.max_queue_size_label', { defaultValue: 'Max Queue Size' })}
-                        hint={t('settings.api_server.max_queue_size_hint', { defaultValue: 'Maximum number of tasks allowed in the queue (default: 100).' })}
+                        hint={t('settings.api_server.max_queue_size_hint', { defaultValue: 'Maximum number of tasks allowed in the queue (0 = unlimited, default: 100).' })}
                         >
                         <input
                         type="number"
                         className="input-text"
                         value={config.httpServerMaxQueueSize ?? 100}
-                        onChange={(e) => setConfig({ httpServerMaxQueueSize: parseInt(e.target.value, 10) || 100 })}
-                        min={1}
+                        onChange={(e) => setConfig({ httpServerMaxQueueSize: parseInt(e.target.value, 10) || 0 })}
+                        min={0}
                         max={1000}
                         style={{ width: '200px' }}
                         />
@@ -361,14 +361,14 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         {/* Max Upload Size */}
                         <SettingsItem
                             title={t('settings.api_server.max_upload_size_label', { defaultValue: 'Max Upload Size (MB)' })}
-                            hint={t('settings.api_server.max_upload_size_hint', { defaultValue: 'Maximum file size allowed for API uploads (default: 50MB).' })}
+                            hint={t('settings.api_server.max_upload_size_hint', { defaultValue: 'Maximum file size allowed for API uploads (0 = unlimited, default: 50MB).' })}
                         >
                             <input
                                 type="number"
                                 className="input-text"
                                 value={config.httpServerMaxUploadSizeMB ?? 50}
-                                onChange={(e) => setConfig({ httpServerMaxUploadSizeMB: parseInt(e.target.value, 10) || 50 })}
-                                min={1}
+                                onChange={(e) => setConfig({ httpServerMaxUploadSizeMB: parseInt(e.target.value, 10) || 0 })}
+                                min={0}
                                 max={10000}
                                 style={{ width: '200px' }}
                             />
@@ -377,14 +377,14 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         {/* Job TTL */}
                         <SettingsItem
                             title={t('settings.api_server.job_ttl_label', { defaultValue: 'Job TTL (Minutes)' })}
-                            hint={t('settings.api_server.job_ttl_hint', { defaultValue: 'Time to keep completed or failed jobs before auto-cleanup (default: 60).' })}
+                            hint={t('settings.api_server.job_ttl_hint', { defaultValue: 'Time to keep completed or failed jobs before auto-cleanup (0 = unlimited, default: 60).' })}
                         >
                             <input
                                 type="number"
                                 className="input-text"
                                 value={config.httpServerJobTtlMinutes ?? 60}
-                                onChange={(e) => setConfig({ httpServerJobTtlMinutes: parseInt(e.target.value, 10) || 60 })}
-                                min={1}
+                                onChange={(e) => setConfig({ httpServerJobTtlMinutes: parseInt(e.target.value, 10) || 0 })}
+                                min={0}
                                 max={10080}
                                 style={{ width: '200px' }}
                             />

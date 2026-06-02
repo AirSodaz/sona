@@ -561,7 +561,8 @@ pub async fn run_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let (tx, rx) = mpsc::channel(max_queue_size);
+    let actual_queue_size = if max_queue_size == 0 { 100_000 } else { max_queue_size };
+    let (tx, rx) = mpsc::channel(actual_queue_size);
     let job_manager = JobManager::new(tx);
     let manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
@@ -576,14 +577,16 @@ pub async fn run_server(
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
             interval.tick().await;
-            let mut jobs = manager_ttl_clone.jobs.write().await;
-            jobs.retain(|_, entry| {
-                if let Some(completed_at) = entry.completed_at {
-                    completed_at.elapsed() <= ttl_duration
-                } else {
-                    true
-                }
-            });
+            if job_ttl_minutes > 0 {
+                let mut jobs = manager_ttl_clone.jobs.write().await;
+                jobs.retain(|_, entry| {
+                    if let Some(completed_at) = entry.completed_at {
+                        completed_at.elapsed() <= ttl_duration
+                    } else {
+                        true
+                    }
+                });
+            }
         }
     });
 
@@ -616,10 +619,15 @@ pub async fn run_server(
         .layer(axum::middleware::from_fn_with_state(
             ip_whitelist,
             ip_whitelist_middleware,
-        ))
-        .layer(axum::extract::DefaultBodyLimit::max(
+        ));
+
+    if max_upload_size_mb == 0 {
+        api_router = api_router.layer(axum::extract::DefaultBodyLimit::disable());
+    } else {
+        api_router = api_router.layer(axum::extract::DefaultBodyLimit::max(
             max_upload_size_mb * 1024 * 1024,
         ));
+    }
 
     #[allow(deprecated)]
     if !api_key.is_empty() {
