@@ -476,6 +476,7 @@ pub fn map_status_error(status: u16, api_code: Option<&str>, api_message: Option
 
 pub struct VolcengineAdapter;
 
+#[async_trait]
 impl AsrProviderAdapter for VolcengineAdapter {
     fn provider_id(&self) -> &'static str {
         crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
@@ -483,14 +484,15 @@ impl AsrProviderAdapter for VolcengineAdapter {
 
     fn create_batch_processor(
         &self,
-        _config: &Value,
+        _request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
         Ok(Some(std::sync::Arc::new(VolcengineBatchProcessor)))
     }
 
-    fn create_streaming_session(
+    async fn create_streaming_session(
         &self,
-        _config: &Value,
+        _state: &AsrState,
+        _instance_id: &str,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
         if request.mode != AsrMode::Streaming {
@@ -515,7 +517,9 @@ impl AsrBatchProcessor for VolcengineBatchProcessor {
         app: AppHandle,
         state: &AsrState,
         file_path: String,
+        _save_to_path: Option<String>,
         request: AsrTranscriptionRequest,
+        _speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
         process_batch_file_impl(app, state, file_path, request).await
     }

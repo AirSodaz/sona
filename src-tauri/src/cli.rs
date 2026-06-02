@@ -1,7 +1,5 @@
 use crate::asr::{
-    AsrEngineAdapter, AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest,
-    LocalSherpaAdapter, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
-    transcribe_batch_with_progress,
+    BatchTranscriptionRequest, transcribe_batch_with_progress,
 };
 use crate::export::{ExportFormat, export_segments};
 use crate::preset_models::{PresetModel, find_preset_model, preset_models};
@@ -458,27 +456,27 @@ pub fn resolve_transcribe_options(
         export_format,
         output_target,
         quiet: cli.quiet,
-        request: LocalSherpaAdapter.batch_request(
-            cli.input.to_string_lossy().to_string(),
-            cli.save_wav.map(|path| path.to_string_lossy().to_string()),
-            AsrTranscriptionRequest::local_sherpa(
-                AsrMode::Offline,
-                model_path,
-                threads,
-                enable_itn,
-                language,
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                model.model_type.clone(),
-                model.file_config.clone(),
-                cli.hotwords,
-                TranscriptNormalizationOptions::default(),
-                TranscriptPostprocessOptions::default(),
-                None,
-            ),
-            None,
-        )?,
+        request: BatchTranscriptionRequest {
+            file_path: cli.input.to_string_lossy().to_string(),
+            save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
+            model_path,
+            num_threads: threads,
+            enable_itn,
+            language,
+            punctuation_model,
+            vad_model,
+            vad_buffer,
+            batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
+            model_type: model.model_type.clone(),
+            file_config: model.file_config.clone(),
+            hotwords: cli.hotwords,
+            speaker_processing: None,
+            normalization_options: crate::asr::TranscriptNormalizationOptions::default(),
+            postprocessor: crate::asr::TranscriptPostprocessor::compile(
+                crate::asr::TranscriptPostprocessOptions::default()
+            ).map_err(|e| e.to_string())?,
+            gpu_acceleration: None,
+        },
     })
 }
 

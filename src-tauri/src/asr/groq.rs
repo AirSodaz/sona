@@ -29,6 +29,7 @@ pub struct GroqWhisperConfigFields {
 
 pub struct GroqWhisperAdapter;
 
+#[async_trait]
 impl AsrProviderAdapter for GroqWhisperAdapter {
     fn provider_id(&self) -> &'static str {
         crate::asr_providers::GROQ_WHISPER_PROVIDER_ID
@@ -36,14 +37,15 @@ impl AsrProviderAdapter for GroqWhisperAdapter {
 
     fn create_batch_processor(
         &self,
-        _config: &Value,
+        _request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
         Ok(Some(std::sync::Arc::new(GroqWhisperBatchProcessor)))
     }
 
-    fn create_streaming_session(
+    async fn create_streaming_session(
         &self,
-        _config: &Value,
+        _state: &AsrState,
+        _instance_id: &str,
         _request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
         Ok(None)
@@ -59,7 +61,9 @@ impl AsrBatchProcessor for GroqWhisperBatchProcessor {
         app: AppHandle,
         state: &AsrState,
         file_path: String,
+        _save_to_path: Option<String>,
         request: AsrTranscriptionRequest,
+        _speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
         process_batch_file_impl(app, state, file_path, request)
             .await

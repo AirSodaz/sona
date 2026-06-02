@@ -201,7 +201,7 @@ async fn handle_online_streaming_socket(
 
     let sherpa_state = app_handle.state::<crate::asr::AsrState>();
 
-    if let Err(e) = crate::asr::online::init_streaming_recognizer_impl(
+    if let Err(e) = crate::asr::init_recognizer(
         sherpa_state.clone(),
         session_id.clone(),
         request,
@@ -220,7 +220,7 @@ async fn handle_online_streaming_socket(
         return;
     }
 
-    if let Err(e) = crate::asr::online::start_streaming_recognizer_impl(
+    if let Err(e) = crate::asr::start_recognizer(
         app_handle.clone(),
         sherpa_state.clone(),
         session_id.clone(),
@@ -282,8 +282,8 @@ async fn handle_online_streaming_socket(
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
-                        if let Err(e) = crate::asr::online::feed_audio_samples_impl(
-                            app_handle.clone(),
+                        if let Err(e) = crate::asr::feed_audio_samples(
+                            &app_handle,
                             sherpa_state.inner(),
                             &session_id,
                             &samples,
@@ -293,7 +293,7 @@ async fn handle_online_streaming_socket(
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            let _ = crate::asr::online::flush_streaming_recognizer_impl(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
+                            let _ = crate::asr::flush_recognizer(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
                             stopping = true;
                         }
                     }
@@ -317,7 +317,7 @@ async fn handle_online_streaming_socket(
         }
     }
 
-    let _ = crate::asr::online::stop_streaming_recognizer_impl(
+    let _ = crate::asr::stop_recognizer(
         sherpa_state.clone(),
         session_id.clone(),
     )

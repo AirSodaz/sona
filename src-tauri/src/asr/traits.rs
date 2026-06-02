@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use serde_json::Value;
 use tauri::AppHandle;
 
 use crate::asr::TranscriptSegment;
@@ -45,21 +44,25 @@ pub trait AsrBatchProcessor: Send + Sync {
         app: AppHandle,
         state: &AsrState,
         file_path: String,
+        save_to_path: Option<String>,
         request: AsrTranscriptionRequest,
+        speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError>;
 }
 
+#[async_trait]
 pub trait AsrProviderAdapter: Send + Sync {
     fn provider_id(&self) -> &'static str;
 
     fn create_batch_processor(
         &self,
-        config: &Value,
+        request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError>;
 
-    fn create_streaming_session(
+    async fn create_streaming_session(
         &self,
-        config: &Value,
+        state: &AsrState,
+        instance_id: &str,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError>;
 }

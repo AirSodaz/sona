@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, State};
 
 mod adapter;
@@ -7,7 +9,6 @@ mod groq;
 mod metrics;
 mod mistral;
 mod model_config;
-pub mod online;
 mod postprocess;
 pub mod sherpa_onnx;
 pub mod state;
@@ -22,7 +23,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
-pub use adapter::{AsrEngineAdapter, LocalSherpaAdapter};
+pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
@@ -44,85 +45,37 @@ pub use types::{
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
-#[derive(Default)]
-struct LegacyLocalSherpaTransportRequest {
-    model_path: Option<String>,
-    num_threads: Option<i32>,
-    enable_itn: Option<bool>,
-    language: Option<String>,
-    punctuation_model: Option<String>,
-    vad_model: Option<String>,
-    vad_buffer: Option<f32>,
-    model_type: Option<String>,
-    file_config: Option<ModelFileConfig>,
-    hotwords: Option<String>,
-    normalization_options: Option<TranscriptNormalizationOptions>,
-    postprocess_options: Option<TranscriptPostprocessOptions>,
-    gpu_acceleration: Option<String>,
+fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>> {
+    static ADAPTERS: OnceLock<HashMap<&'static str, Arc<dyn AsrProviderAdapter>>> = OnceLock::new();
+    ADAPTERS.get_or_init(|| {
+        let mut map: HashMap<&'static str, Arc<dyn AsrProviderAdapter>> = HashMap::new();
+        let local = LocalSherpaAdapter;
+        map.insert(local.provider_id(), Arc::new(local));
+        let volcengine = volcengine::VolcengineAdapter;
+        map.insert(volcengine.provider_id(), Arc::new(volcengine));
+        let groq = groq::GroqWhisperAdapter;
+        map.insert(groq.provider_id(), Arc::new(groq));
+        let mistral = mistral::MistralVoxtralAdapter;
+        map.insert(mistral.provider_id(), Arc::new(mistral));
+        map
+    })
 }
 
-impl LegacyLocalSherpaTransportRequest {
-    fn into_asr_request(
-        self,
-        mode: AsrMode,
-        command_name: &str,
-    ) -> Result<AsrTranscriptionRequest, String> {
-        let mut missing = Vec::new();
-        if self.model_path.is_none() {
-            missing.push("modelPath");
-        }
-        if self.num_threads.is_none() {
-            missing.push("numThreads");
-        }
-        if self.enable_itn.is_none() {
-            missing.push("enableItn");
-        }
-        if self.language.is_none() {
-            missing.push("language");
-        }
-        if self.vad_buffer.is_none() {
-            missing.push("vadBuffer");
-        }
-        if self.model_type.is_none() {
-            missing.push("modelType");
-        }
-
-        if !missing.is_empty() {
-            return Err(format!(
-                "Missing asrRequest for {command_name}; legacy flat ASR fields are incomplete: {}",
-                missing.join(", ")
-            ));
-        }
-
-        Ok(AsrTranscriptionRequest::local_sherpa(
-            mode,
-            self.model_path.expect("checked modelPath"),
-            self.num_threads.expect("checked numThreads"),
-            self.enable_itn.expect("checked enableItn"),
-            self.language.expect("checked language"),
-            self.punctuation_model,
-            self.vad_model,
-            self.vad_buffer.expect("checked vadBuffer"),
-            self.model_type.expect("checked modelType"),
-            self.file_config,
-            self.hotwords,
-            self.normalization_options.unwrap_or_default(),
-            self.postprocess_options.unwrap_or_default(),
-            self.gpu_acceleration.clone(),
-        ))
+fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
+    match &request.engine_config {
+        AsrEngineConfig::LocalSherpa { .. } => Ok("local_sherpa"),
+        AsrEngineConfig::Online { provider } => Ok(provider.provider_id.as_str()),
     }
 }
 
-fn resolve_transport_asr_request(
-    asr_request: Option<AsrTranscriptionRequest>,
-    legacy_request: LegacyLocalSherpaTransportRequest,
-    mode: AsrMode,
-    command_name: &str,
-) -> Result<AsrTranscriptionRequest, String> {
-    match asr_request {
-        Some(request) => Ok(request),
-        None => legacy_request.into_asr_request(mode, command_name),
-    }
+fn ensure_adapter(request: &AsrTranscriptionRequest) -> Result<Arc<dyn AsrProviderAdapter>, SherpaError> {
+    let provider_id = get_provider_id(request)?;
+    asr_adapters()
+        .get(provider_id)
+        .cloned()
+        .ok_or_else(|| SherpaError::UnsupportedOnlineProvider {
+            provider_id: provider_id.to_string(),
+        })
 }
 
 /// Feed f32 audio samples from the hardware capture worker to the correct
@@ -146,103 +99,23 @@ pub async fn feed_audio_samples(
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn init_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
-    model_path: Option<String>,
-    num_threads: Option<i32>,
-    enable_itn: Option<bool>,
-    language: Option<String>,
-    punctuation_model: Option<String>,
-    vad_model: Option<String>,
-    vad_buffer: Option<f32>,
-    model_type: Option<String>,
-    file_config: Option<ModelFileConfig>,
-    hotwords: Option<String>,
-    normalization_options: Option<TranscriptNormalizationOptions>,
-    postprocess_options: Option<TranscriptPostprocessOptions>,
-    gpu_acceleration: Option<String>,
-    asr_request: Option<AsrTranscriptionRequest>,
+    asr_request: AsrTranscriptionRequest,
 ) -> Result<(), SherpaError> {
-    let request = resolve_transport_asr_request(
-        asr_request,
-        LegacyLocalSherpaTransportRequest {
-            model_path,
-            num_threads,
-            enable_itn,
-            language,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
-            model_type,
-            file_config,
-            hotwords,
-            normalization_options,
-            postprocess_options,
-            gpu_acceleration,
-        },
-        AsrMode::Streaming,
-        "init_recognizer",
-    )
-    .map_err(SherpaError::from)?;
-    match request.engine() {
-        AsrEngine::LocalSherpa => {
-            LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)
-                .map_err(SherpaError::from)?;
-            if let crate::asr::types::AsrEngineConfig::LocalSherpa {
-                model_path,
-                num_threads,
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                model_type,
-                file_config,
-                gpu_acceleration,
-                ..
-            } = request.engine_config.clone()
-            {
-                let init_result = sherpa_onnx::init_recognizer_impl(
-                    state.clone(),
-                    instance_id.clone(),
-                    model_path,
-                    num_threads,
-                    request.enable_itn,
-                    request.language,
-                    punctuation_model,
-                    vad_model,
-                    vad_buffer,
-                    model_type,
-                    file_config,
-                    request.hotwords.clone(),
-                    Some(request.normalization_options),
-                    Some(request.postprocess_options),
-                    gpu_acceleration,
-                )
-                .await
-                .map_err(SherpaError::from);
-                if init_result.is_ok() {
-                    state
-                        .set_instance_engine(&instance_id, AsrEngine::LocalSherpa)
-                        .await;
-                }
-                init_result
-            } else {
-                Err(SherpaError::Generic("Engine config mismatch".to_string()))
-            }
-        }
-        AsrEngine::Online => {
-            let init_result =
-                online::init_streaming_recognizer_impl(state.clone(), instance_id.clone(), request)
-                    .await;
-            if init_result.is_ok() {
-                state
-                    .set_instance_engine(&instance_id, AsrEngine::Online)
-                    .await;
-            }
-            init_result
-        }
+    let adapter = ensure_adapter(&asr_request)?;
+    let session = adapter.create_streaming_session(&state, &instance_id, &asr_request).await?;
+    if let Some(session) = session {
+        let mut active = state.active_sessions.lock().await;
+        active.insert(instance_id.clone(), session);
+        state.set_instance_engine(&instance_id, asr_request.engine()).await;
+        Ok(())
+    } else {
+        Err(SherpaError::StreamingNotSupported {
+            provider_id: get_provider_id(&asr_request)?.to_string(),
+        })
     }
 }
 
@@ -308,62 +181,23 @@ pub async fn feed_audio_chunk(
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn process_batch_file(
     app: AppHandle,
     state: State<'_, AsrState>,
     file_path: String,
     save_to_path: Option<String>,
-    model_path: Option<String>,
-    num_threads: Option<i32>,
-    enable_itn: Option<bool>,
-    language: Option<String>,
-    punctuation_model: Option<String>,
-    vad_model: Option<String>,
-    vad_buffer: Option<f32>,
-    model_type: Option<String>,
-    file_config: Option<ModelFileConfig>,
-    hotwords: Option<String>,
     speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
-    normalization_options: Option<TranscriptNormalizationOptions>,
-    postprocess_options: Option<TranscriptPostprocessOptions>,
-    gpu_acceleration: Option<String>,
-    asr_request: Option<AsrTranscriptionRequest>,
+    asr_request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    let request = resolve_transport_asr_request(
-        asr_request,
-        LegacyLocalSherpaTransportRequest {
-            model_path,
-            num_threads,
-            enable_itn,
-            language,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
-            model_type,
-            file_config,
-            hotwords,
-            normalization_options,
-            postprocess_options,
-            gpu_acceleration,
-        },
-        AsrMode::Offline,
-        "process_batch_file",
-    )
-    .map_err(SherpaError::from)?;
-    match request.engine() {
-        AsrEngine::LocalSherpa => {
-            let adapter = LocalSherpaAdapter;
-            let batch_request = adapter
-                .batch_request(file_path, save_to_path, request, speaker_processing)
-                .map_err(SherpaError::from)?;
-            batch::process_batch_request_impl(app, &state, batch_request)
-                .await
-                .map_err(SherpaError::from)
-        }
-        AsrEngine::Online => online::process_batch_file_impl(app, &state, file_path, request).await,
-    }
+    let adapter = ensure_adapter(&asr_request)?;
+    let processor = adapter.create_batch_processor(&asr_request)?.ok_or_else(|| {
+        SherpaError::Generic(format!(
+            "Batch mode not supported for provider {}",
+            get_provider_id(&asr_request).unwrap_or("unknown")
+        ))
+    })?;
+    processor.process_file(app, &state, file_path, save_to_path, asr_request, speaker_processing).await
 }
 
 #[tauri::command]
@@ -371,117 +205,4 @@ pub async fn get_asr_runtime_metrics(
     state: State<'_, AsrState>,
 ) -> Result<AsrRuntimeMetricsSnapshot, String> {
     Ok(state.metrics_snapshot().await)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::asr::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
-
-    fn local_request(mode: AsrMode, model_path: &str) -> AsrTranscriptionRequest {
-        AsrTranscriptionRequest::local_sherpa(
-            mode,
-            model_path.to_string(),
-            4,
-            true,
-            "auto".to_string(),
-            None,
-            None,
-            5.0,
-            "sensevoice".to_string(),
-            None,
-            None,
-            TranscriptNormalizationOptions::default(),
-            TranscriptPostprocessOptions::default(),
-            None,
-        )
-    }
-
-    #[test]
-    fn transport_asr_request_prefers_canonical_asr_request() {
-        let request = resolve_transport_asr_request(
-            Some(local_request(AsrMode::Streaming, "C:/models/canonical")),
-            LegacyLocalSherpaTransportRequest::default(),
-            AsrMode::Streaming,
-            "init_recognizer",
-        )
-        .expect("canonical asrRequest should be sufficient");
-
-        assert_eq!(
-            if let crate::asr::types::AsrEngineConfig::LocalSherpa { model_path, .. } = &request.engine_config {
-                model_path.as_str()
-            } else {
-                ""
-            },
-            "C:/models/canonical"
-        );
-        assert_eq!(request.mode, AsrMode::Streaming);
-    }
-
-    #[test]
-    fn transport_asr_request_adapts_complete_legacy_flat_fields() {
-        let request = resolve_transport_asr_request(
-            None,
-            LegacyLocalSherpaTransportRequest {
-                model_path: Some("C:/models/legacy".to_string()),
-                num_threads: Some(2),
-                enable_itn: Some(false),
-                language: Some("zh".to_string()),
-                punctuation_model: Some("C:/models/punct".to_string()),
-                vad_model: None,
-                vad_buffer: Some(3.0),
-                model_type: Some("sensevoice".to_string()),
-                file_config: None,
-                hotwords: Some("Sona".to_string()),
-                normalization_options: Some(TranscriptNormalizationOptions {
-                    enable_timeline: true,
-                }),
-                postprocess_options: None,
-                gpu_acceleration: None,
-            },
-            AsrMode::Offline,
-            "process_batch_file",
-        )
-        .expect("complete legacy fields should be adapted");
-
-        assert_eq!(request.engine(), AsrEngine::LocalSherpa);
-        assert_eq!(request.mode, AsrMode::Offline);
-        
-        if let crate::asr::types::AsrEngineConfig::LocalSherpa {
-            model_path,
-            num_threads,
-            punctuation_model,
-            ..
-        } = &request.engine_config {
-            assert_eq!(model_path, "C:/models/legacy");
-            assert_eq!(*num_threads, 2);
-            assert_eq!(punctuation_model.as_deref(), Some("C:/models/punct"));
-        } else {
-            panic!("Expected LocalSherpa engine config");
-        }
-        
-        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
-
-        assert!(!request.enable_itn);
-        assert_eq!(request.language, "zh");
-        assert!(request.normalization_options.enable_timeline);
-    }
-
-    #[test]
-    fn transport_asr_request_rejects_incomplete_legacy_flat_fields() {
-        let error = resolve_transport_asr_request(
-            None,
-            LegacyLocalSherpaTransportRequest {
-                model_path: Some("C:/models/legacy".to_string()),
-                ..LegacyLocalSherpaTransportRequest::default()
-            },
-            AsrMode::Streaming,
-            "init_recognizer",
-        )
-        .expect_err("missing canonical and incomplete legacy request should fail");
-
-        assert!(error.contains("Missing asrRequest for init_recognizer"));
-        assert!(error.contains("numThreads"));
-        assert!(error.contains("modelType"));
-    }
 }

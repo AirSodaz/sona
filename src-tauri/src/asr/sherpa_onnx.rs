@@ -24,7 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
-use tauri::{AppHandle, State};
+use tauri::AppHandle;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
 
@@ -307,8 +307,8 @@ impl crate::asr::traits::AsrStreamingSession for LocalSherpaSession {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn init_recognizer_impl(
-    state: State<'_, AsrState>,
-    instance_id: String,
+    state: &AsrState,
+    instance_id: &str,
     model_path: String,
     num_threads: i32,
     enable_itn: bool,
@@ -322,7 +322,7 @@ pub async fn init_recognizer_impl(
     normalization_options: Option<TranscriptNormalizationOptions>,
     postprocess_options: Option<TranscriptPostprocessOptions>,
     gpu_acceleration: Option<String>,
-) -> Result<(), String> {
+) -> Result<Arc<LocalSherpaSession>, String> {
     info!(
         "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?}",
         punctuation_model, vad_model, hotwords, gpu_acceleration
@@ -372,7 +372,7 @@ pub async fn init_recognizer_impl(
     let rss_after_mb = capture_process_memory_mb();
     let model_load_metric = AsrModelLoadMetric {
         occurred_at_ms: current_time_millis(),
-        instance_id: instance_id.clone(),
+        instance_id: instance_id.to_string(),
         model_path: model_path.clone(),
         model_type: model_type.clone(),
         recognizer_kind: recognizer.kind_label().to_string(),
@@ -405,10 +405,8 @@ pub async fn init_recognizer_impl(
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance: tokio::sync::Mutex::new(session_instance),
     });
-    let mut active = state.active_sessions.lock().await;
-    active.insert(instance_id.clone(), session);
 
-    Ok(())
+    Ok(session)
 }
 
 async fn start_recognizer_impl_inner(

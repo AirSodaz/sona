@@ -244,10 +244,12 @@ async fn start_worker_loop(
                         use tauri::Manager;
                         let inner_app_clone = app_handle.clone();
                         let sherpa_state = app_handle.state::<crate::asr::AsrState>();
-                        match crate::asr::online::process_batch_file_impl(
+                        match crate::asr::process_batch_file(
                             inner_app_clone,
-                            sherpa_state.inner(),
+                            sherpa_state,
                             job.file_path.to_string_lossy().to_string(),
+                            None,
+                            None,
                             request,
                         )
                         .await
