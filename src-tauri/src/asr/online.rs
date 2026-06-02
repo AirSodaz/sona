@@ -27,11 +27,11 @@ fn online_adapters() -> &'static HashMap<&'static str, std::sync::Arc<dyn AsrPro
 }
 
 fn provider_id_from_request(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
-    request
-        .online_provider
-        .as_ref()
-        .map(|provider| provider.provider_id.as_str())
-        .ok_or(SherpaError::OnlineProviderConfigMissing)
+    if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        Ok(provider.provider_id.as_str())
+    } else {
+        Err(SherpaError::OnlineProviderConfigMissing)
+    }
 }
 
 fn ensure_provider(request: &AsrTranscriptionRequest) -> Result<&'static str, SherpaError> {
@@ -52,7 +52,11 @@ pub async fn init_streaming_recognizer_impl(
 ) -> Result<(), SherpaError> {
     let provider_id = ensure_provider(&request)?;
     let adapter = online_adapters().get(provider_id).unwrap();
-    let config_val = &request.online_provider.as_ref().unwrap().config;
+    let config_val = if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        &provider.config
+    } else {
+        return Err(SherpaError::OnlineProviderConfigMissing);
+    };
 
     match adapter.create_streaming_session(config_val, &request)? {
         Some(session) => {
@@ -153,7 +157,11 @@ pub async fn process_batch_file_impl(
 ) -> Result<Vec<super::TranscriptSegment>, SherpaError> {
     let provider_id = ensure_provider(&request)?;
     let adapter = online_adapters().get(provider_id).unwrap();
-    let config_val = &request.online_provider.as_ref().unwrap().config;
+    let config_val = if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        &provider.config
+    } else {
+        return Err(SherpaError::OnlineProviderConfigMissing);
+    };
 
     let processor = adapter.create_batch_processor(config_val)?.ok_or_else(|| {
         SherpaError::Generic(format!(

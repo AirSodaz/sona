@@ -52,13 +52,16 @@ function applyRuntimeOptions(
   modelPathOverride: string | undefined,
   enableItn: boolean,
 ): AsrTranscriptionRequest {
-  const modelPath = request.engine === 'local-sherpa' && modelPathOverride
-    ? modelPathOverride
-    : request.modelPath;
+  if (request.engine === 'local-sherpa') {
+    return {
+      ...request,
+      modelPath: modelPathOverride ? modelPathOverride : request.modelPath,
+      enableItn,
+    };
+  }
 
   return {
     ...request,
-    modelPath,
     enableItn,
   };
 }

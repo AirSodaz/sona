@@ -31,12 +31,16 @@ export function resolveVoiceTypingAsr(config: AppConfig): AsrTranscriptionReques
 }
 
 export function buildVoiceTypingAsrSignature(asr: AsrTranscriptionRequest): string {
+  if (asr.engine === 'local-sherpa') {
+    return JSON.stringify({
+      engine: asr.engine,
+      mode: asr.mode,
+      modelPath: asr.modelPath,
+    });
+  }
   return JSON.stringify({
     engine: asr.engine,
     mode: asr.mode,
-    modelPath: asr.modelPath,
-    providerId: asr.providerId,
-    profileId: asr.profileId,
     onlineProvider: asr.onlineProvider,
   });
 }

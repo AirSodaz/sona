@@ -1,7 +1,6 @@
 import type {
   AppConfig,
   AsrConfig,
-  AsrEngine,
   AsrMode,
   AsrModelSelection,
   AsrProviderConfig,
@@ -43,30 +42,37 @@ export {
   isVolcengineFlashBatchMode,
 };
 
-export type AsrTranscriptionRequest = {
-  engine: AsrEngine;
+export type AsrTranscriptionRequestBase = {
   mode: AsrMode;
+  language: string;
+  enableItn: boolean;
+  normalizationOptions: {
+    enableTimeline: boolean;
+  };
+  postprocessOptions: TranscriptPostprocessOptions;
+  hotwords: string | null;
+};
+
+export type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'local-sherpa';
   modelId: string | null;
   modelPath: string;
-  providerId?: string | null;
-  profileId?: string | null;
   numThreads: number;
-  enableItn: boolean;
-  language: string;
   punctuationModel: string | null;
   vadModel: string | null;
   vadBuffer: number;
   batchSegmentationMode?: 'vad' | 'whole';
   modelType: string;
   fileConfig?: ModelFileConfig;
-  hotwords: string | null;
-  normalizationOptions: {
-    enableTimeline: boolean;
-  };
-  postprocessOptions: TranscriptPostprocessOptions;
-  onlineProvider?: OnlineAsrProviderRequest;
   gpuAcceleration?: string;
 };
+
+export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'online';
+  onlineProvider: OnlineAsrProviderRequest;
+};
+
+export type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
 
 export type TranscriptPostprocessOptions = {
   textReplacementSets: TextReplacementRuleSet[];
@@ -138,36 +144,39 @@ export class AsrConfigService {
       ? config.punctuationModelPath
       : null;
 
-    const request: AsrTranscriptionRequest = {
-      engine: selection.engine,
+    const baseRequest: AsrTranscriptionRequestBase = {
       mode: selection.mode,
-      modelId: selection.modelId ?? modelInfo?.id ?? null,
-      modelPath: selection.modelPath,
-      providerId: selection.providerId ?? null,
-      profileId: selection.profileId ?? null,
-      numThreads: 4,
-      enableItn: config.enableITN ?? false,
       language: overrides.language || config.language || 'auto',
-      punctuationModel,
-      vadModel,
-      vadBuffer: config.vadBufferSize || 5,
-      ...(slot === 'batch' && selection.engine === 'local-sherpa'
-        ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' }
-        : {}),
-      modelType: modelInfo?.type || 'sensevoice',
-      fileConfig: modelInfo?.fileConfig,
-      hotwords: this.buildHotwords(config),
+      enableItn: config.enableITN ?? false,
       normalizationOptions: {
         enableTimeline: config.enableTimeline ?? false,
       },
       postprocessOptions: this.buildPostprocessOptions(config),
-      ...(selection.engine === 'online'
-        ? { onlineProvider: this.buildOnlineProviderRequest(normalizedAsr.providers!, selection) }
-        : {}),
-      gpuAcceleration: config.gpuAcceleration ?? 'cpu',
+      hotwords: this.buildHotwords(config),
     };
 
-    return request;
+    if (selection.engine === 'online') {
+      return {
+        ...baseRequest,
+        engine: 'online',
+        onlineProvider: this.buildOnlineProviderRequest(normalizedAsr.providers!, selection) as OnlineAsrProviderRequest,
+      };
+    }
+
+    return {
+      ...baseRequest,
+      engine: 'local-sherpa',
+      modelId: selection.modelId ?? modelInfo?.id ?? null,
+      modelPath: selection.modelPath,
+      numThreads: 4,
+      punctuationModel,
+      vadModel,
+      vadBuffer: config.vadBufferSize || 5,
+      ...(slot === 'batch' ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' } : {}),
+      modelType: modelInfo?.type || 'sensevoice',
+      fileConfig: modelInfo?.fileConfig,
+      gpuAcceleration: config.gpuAcceleration ?? 'cpu',
+    };
   }
 
   isAsrRequestConfigured = (request: AsrTranscriptionRequest): boolean => {

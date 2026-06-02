@@ -222,32 +222,23 @@ async fn start_worker_loop(
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
                     let request = crate::asr::AsrTranscriptionRequest {
-                        engine: crate::asr::AsrEngine::Online,
+                        engine_config: crate::asr::AsrEngineConfig::Online {
+                            provider: crate::asr::OnlineAsrProviderRequest {
+                                provider_id: provider_id,
+                                profile_id: job.model_id.clone(),
+                                config: job.online_provider_config.clone().unwrap_or_default(),
+                            },
+                        },
                         mode: crate::asr::AsrMode::Offline,
-                        model_id: Some(job.model_id.clone()),
-                        model_path: "".to_string(),
-                        num_threads: 1,
                         enable_itn: false,
                         language: if job.language == "auto" {
                             "".to_string()
                         } else {
                             job.language.clone()
                         },
-                        punctuation_model: None,
-                        vad_model: None,
-                        vad_buffer: 0.0,
-                        batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
-                        model_type: "".to_string(),
-                        file_config: None,
                         hotwords: job.hotwords.clone(),
                         normalization_options: Default::default(),
                         postprocess_options: Default::default(),
-                        online_provider: Some(crate::asr::OnlineAsrProviderRequest {
-                            provider_id: provider_id,
-                            profile_id: job.model_id.clone(),
-                            config: job.online_provider_config.clone().unwrap_or_default(),
-                        }),
-                        gpu_acceleration: None,
                     };
                     if let Some(app_handle) = app.as_ref() {
                         use tauri::Manager;

@@ -41,12 +41,7 @@ function arePostprocessOptionsEqual(
     return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function areServiceConfigsEqual(
-    left: ServiceConfig,
-    right: ServiceConfig,
-): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
-}
+
 
 export interface TranscriptionServicePorts {
     getEffectiveConfigSnapshot: () => AppConfig;
@@ -166,19 +161,19 @@ export class TranscriptionService {
         const nextRequest = this._buildStreamingServiceConfig();
 
         const mismatches: string[] = [];
-        if (nextRequest.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${nextRequest.modelPath} vs ${this.runningConfig.modelPath}`);
         if (nextRequest.engine !== this.runningConfig.engine) mismatches.push(`engine: ${nextRequest.engine} vs ${this.runningConfig.engine}`);
         if (this.enableITN !== this.runningConfig.enableItn) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableItn}`);
         if (this.language !== this.runningConfig.language) mismatches.push(`language: ${this.language} vs ${this.runningConfig.language}`);
-        if (nextRequest.vadModel !== this.runningConfig.vadModel) mismatches.push(`vadModel: ${nextRequest.vadModel} vs ${this.runningConfig.vadModel}`);
-        if (nextRequest.punctuationModel !== this.runningConfig.punctuationModel) mismatches.push(`punctuationModel: ${nextRequest.punctuationModel} vs ${this.runningConfig.punctuationModel}`);
-        if (nextRequest.hotwords !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${nextRequest.hotwords} vs ${this.runningConfig.hotwords}`);
-        if (nextRequest.modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${nextRequest.modelType} vs ${this.runningConfig.modelType}`);
-        if (nextRequest.providerId !== this.runningConfig.providerId) mismatches.push(`providerId: ${nextRequest.providerId} vs ${this.runningConfig.providerId}`);
-        if (nextRequest.profileId !== this.runningConfig.profileId) mismatches.push(`profileId: ${nextRequest.profileId} vs ${this.runningConfig.profileId}`);
         if (nextRequest.normalizationOptions.enableTimeline !== this.runningConfig.normalizationOptions.enableTimeline) mismatches.push(`enableTimeline: ${nextRequest.normalizationOptions.enableTimeline} vs ${this.runningConfig.normalizationOptions.enableTimeline}`);
         if (!arePostprocessOptionsEqual(nextRequest.postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
-        if (!areServiceConfigsEqual(nextRequest, { ...this.runningConfig, postprocessOptions: nextRequest.postprocessOptions })) {
+        
+        if (nextRequest.engine === 'local-sherpa' && this.runningConfig.engine === 'local-sherpa') {
+            if (nextRequest.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${nextRequest.modelPath} vs ${this.runningConfig.modelPath}`);
+            if (nextRequest.vadModel !== this.runningConfig.vadModel) mismatches.push(`vadModel: ${nextRequest.vadModel} vs ${this.runningConfig.vadModel}`);
+            if (nextRequest.punctuationModel !== this.runningConfig.punctuationModel) mismatches.push(`punctuationModel: ${nextRequest.punctuationModel} vs ${this.runningConfig.punctuationModel}`);
+            if (nextRequest.hotwords !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${nextRequest.hotwords} vs ${this.runningConfig.hotwords}`);
+            if (nextRequest.modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${nextRequest.modelType} vs ${this.runningConfig.modelType}`);
+        } else if (nextRequest.engine === 'online' && this.runningConfig.engine === 'online') {
             if (JSON.stringify(nextRequest.onlineProvider) !== JSON.stringify(this.runningConfig.onlineProvider)) {
                 mismatches.push('online ASR provider config changed');
             }

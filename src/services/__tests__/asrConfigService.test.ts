@@ -164,7 +164,7 @@ describe('asrConfigService', () => {
         dropFinalDotSegments: true,
       },
     });
-    expect(request.fileConfig).toEqual({
+    expect((request as any).fileConfig).toEqual({
       encoder: 'encoder.onnx',
       decoder: 'decoder.onnx',
       joiner: 'joiner.onnx',
@@ -186,7 +186,7 @@ describe('asrConfigService', () => {
       vadBuffer: 8,
       batchSegmentationMode: 'vad',
     });
-    expect(request.fileConfig).toEqual({
+    expect((request as any).fileConfig).toEqual({
       model: 'model.onnx',
       tokens: 'tokens.txt',
     });
@@ -272,10 +272,6 @@ describe('asrConfigService', () => {
     expect(live).toMatchObject({
       engine: 'online',
       mode: 'streaming',
-      modelId: null,
-      modelPath: '',
-      providerId: 'volcengine-doubao',
-      profileId: 'volcengine-doubao-default',
       onlineProvider: {
         providerId: 'volcengine-doubao',
         profileId: 'volcengine-doubao-default',
@@ -289,7 +285,6 @@ describe('asrConfigService', () => {
     expect(batch).toMatchObject({
       engine: 'online',
       mode: 'offline',
-      modelPath: '',
       onlineProvider: {
         providerId: 'volcengine-doubao',
         config: {
@@ -340,7 +335,7 @@ describe('asrConfigService', () => {
 
     const request = resolveAsrTranscriptionRequest(config, 'batch');
 
-    expect(request.onlineProvider).toMatchObject({
+    expect((request as any).onlineProvider).toMatchObject({
       providerId: 'volcengine-doubao',
       config: {
         batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,

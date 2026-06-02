@@ -28,32 +28,42 @@ pub enum BatchSegmentationMode {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AsrTranscriptionRequest {
-    pub engine: AsrEngine,
     pub mode: AsrMode,
-    #[serde(default)]
-    pub model_id: Option<String>,
-    pub model_path: String,
-    pub num_threads: i32,
-    pub enable_itn: bool,
     pub language: String,
-    #[serde(default)]
-    pub punctuation_model: Option<String>,
-    #[serde(default)]
-    pub vad_model: Option<String>,
-    pub vad_buffer: f32,
-    #[serde(default)]
-    pub batch_segmentation_mode: BatchSegmentationMode,
-    pub model_type: String,
-    #[serde(default)]
-    pub file_config: Option<ModelFileConfig>,
-    #[serde(default)]
-    pub hotwords: Option<String>,
+    pub enable_itn: bool,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
-    #[serde(default)]
-    pub online_provider: Option<OnlineAsrProviderRequest>,
-    #[serde(default)]
-    pub gpu_acceleration: Option<String>,
+    pub hotwords: Option<String>,
+
+    #[serde(flatten)]
+    pub engine_config: AsrEngineConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "engine", rename_all = "kebab-case")]
+pub enum AsrEngineConfig {
+    LocalSherpa {
+        #[serde(default)]
+        model_id: Option<String>,
+        model_path: String,
+        num_threads: i32,
+        #[serde(default)]
+        punctuation_model: Option<String>,
+        #[serde(default)]
+        vad_model: Option<String>,
+        vad_buffer: f32,
+        #[serde(default)]
+        batch_segmentation_mode: BatchSegmentationMode,
+        model_type: String,
+        #[serde(default)]
+        file_config: Option<ModelFileConfig>,
+        #[serde(default)]
+        gpu_acceleration: Option<String>,
+    },
+    Online {
+        #[serde(rename = "onlineProvider")]
+        provider: OnlineAsrProviderRequest,
+    }
 }
 
 impl AsrTranscriptionRequest {
@@ -75,24 +85,31 @@ impl AsrTranscriptionRequest {
         gpu_acceleration: Option<String>,
     ) -> Self {
         Self {
-            engine: AsrEngine::LocalSherpa,
             mode,
-            model_id: None,
-            model_path,
-            num_threads,
-            enable_itn,
             language,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
-            batch_segmentation_mode: BatchSegmentationMode::Vad,
-            model_type,
-            file_config,
-            hotwords,
+            enable_itn,
             normalization_options,
             postprocess_options,
-            online_provider: None,
-            gpu_acceleration,
+            hotwords,
+            engine_config: AsrEngineConfig::LocalSherpa {
+                model_id: None,
+                model_path,
+                num_threads,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                batch_segmentation_mode: BatchSegmentationMode::Vad,
+                model_type,
+                file_config,
+                gpu_acceleration,
+            },
+        }
+    }
+
+    pub fn engine(&self) -> AsrEngine {
+        match &self.engine_config {
+            AsrEngineConfig::LocalSherpa { .. } => AsrEngine::LocalSherpa,
+            AsrEngineConfig::Online { .. } => AsrEngine::Online,
         }
     }
 }

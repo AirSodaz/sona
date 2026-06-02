@@ -37,7 +37,7 @@ pub(crate) use transcript::{
     synthesize_durations,
 };
 pub use types::{
-    AsrEngine, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
+    AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptSegment, TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet,
     TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
@@ -187,35 +187,50 @@ pub async fn init_recognizer(
         "init_recognizer",
     )
     .map_err(SherpaError::from)?;
-    match request.engine {
+    match request.engine() {
         AsrEngine::LocalSherpa => {
             LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)
                 .map_err(SherpaError::from)?;
-            let init_result = sherpa_onnx::init_recognizer_impl(
-                state.clone(),
-                instance_id.clone(),
-                request.model_path,
-                request.num_threads,
-                request.enable_itn,
-                request.language,
-                request.punctuation_model,
-                request.vad_model,
-                request.vad_buffer,
-                request.model_type,
-                request.file_config,
-                request.hotwords,
-                Some(request.normalization_options),
-                Some(request.postprocess_options),
-                request.gpu_acceleration.clone(),
-            )
-            .await
-            .map_err(SherpaError::from);
-            if init_result.is_ok() {
-                state
-                    .set_instance_engine(&instance_id, AsrEngine::LocalSherpa)
-                    .await;
+            if let crate::asr::types::AsrEngineConfig::LocalSherpa {
+                model_path,
+                num_threads,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                model_type,
+                file_config,
+                gpu_acceleration,
+                ..
+            } = request.engine_config.clone()
+            {
+                let init_result = sherpa_onnx::init_recognizer_impl(
+                    state.clone(),
+                    instance_id.clone(),
+                    model_path,
+                    num_threads,
+                    request.enable_itn,
+                    request.language,
+                    punctuation_model,
+                    vad_model,
+                    vad_buffer,
+                    model_type,
+                    file_config,
+                    request.hotwords.clone(),
+                    Some(request.normalization_options),
+                    Some(request.postprocess_options),
+                    gpu_acceleration,
+                )
+                .await
+                .map_err(SherpaError::from);
+                if init_result.is_ok() {
+                    state
+                        .set_instance_engine(&instance_id, AsrEngine::LocalSherpa)
+                        .await;
+                }
+                init_result
+            } else {
+                Err(SherpaError::Generic("Engine config mismatch".to_string()))
             }
-            init_result
         }
         AsrEngine::Online => {
             let init_result =
@@ -337,7 +352,7 @@ pub async fn process_batch_file(
         "process_batch_file",
     )
     .map_err(SherpaError::from)?;
-    match request.engine {
+    match request.engine() {
         AsrEngine::LocalSherpa => {
             let adapter = LocalSherpaAdapter;
             let batch_request = adapter
@@ -392,7 +407,14 @@ mod tests {
         )
         .expect("canonical asrRequest should be sufficient");
 
-        assert_eq!(request.model_path, "C:/models/canonical");
+        assert_eq!(
+            if let crate::asr::types::AsrEngineConfig::LocalSherpa { model_path, .. } = &request.engine_config {
+                model_path.as_str()
+            } else {
+                ""
+            },
+            "C:/models/canonical"
+        );
         assert_eq!(request.mode, AsrMode::Streaming);
     }
 
@@ -422,17 +444,26 @@ mod tests {
         )
         .expect("complete legacy fields should be adapted");
 
-        assert_eq!(request.engine, AsrEngine::LocalSherpa);
+        assert_eq!(request.engine(), AsrEngine::LocalSherpa);
         assert_eq!(request.mode, AsrMode::Offline);
-        assert_eq!(request.model_path, "C:/models/legacy");
-        assert_eq!(request.num_threads, 2);
+        
+        if let crate::asr::types::AsrEngineConfig::LocalSherpa {
+            model_path,
+            num_threads,
+            punctuation_model,
+            hotwords,
+            ..
+        } = &request.engine_config {
+            assert_eq!(model_path, "C:/models/legacy");
+            assert_eq!(*num_threads, 2);
+            assert_eq!(punctuation_model.as_deref(), Some("C:/models/punct"));
+            assert_eq!(hotwords.as_deref(), Some("Sona"));
+        } else {
+            panic!("Expected LocalSherpa engine config");
+        }
+        
         assert!(!request.enable_itn);
         assert_eq!(request.language, "zh");
-        assert_eq!(
-            request.punctuation_model.as_deref(),
-            Some("C:/models/punct")
-        );
-        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
         assert!(request.normalization_options.enable_timeline);
     }
 

@@ -17,7 +17,7 @@ pub struct LocalSherpaAdapter;
 
 impl LocalSherpaAdapter {
     pub fn ensure_mode(request: &AsrTranscriptionRequest, expected: AsrMode) -> Result<(), String> {
-        if request.engine != AsrEngine::LocalSherpa {
+        if request.engine() != AsrEngine::LocalSherpa {
             return Err("Unsupported ASR engine for local Sherpa adapter".to_string());
         }
         if request.mode != expected {
@@ -43,25 +43,42 @@ impl AsrEngineAdapter for LocalSherpaAdapter {
         speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     ) -> Result<BatchTranscriptionRequest, String> {
         Self::ensure_mode(&request, AsrMode::Offline)?;
-        Ok(BatchTranscriptionRequest {
-            file_path,
-            save_to_path,
-            model_path: request.model_path,
-            num_threads: request.num_threads,
-            enable_itn: request.enable_itn,
-            language: request.language,
-            punctuation_model: request.punctuation_model,
-            vad_model: request.vad_model,
-            vad_buffer: request.vad_buffer,
-            batch_segmentation_mode: request.batch_segmentation_mode,
-            model_type: request.model_type,
-            file_config: request.file_config,
-            hotwords: request.hotwords,
-            speaker_processing,
-            normalization_options: request.normalization_options,
-            postprocessor: TranscriptPostprocessor::compile(request.postprocess_options)?,
-            gpu_acceleration: request.gpu_acceleration.clone(),
-        })
+        
+        let config = match request.engine_config {
+            crate::asr::types::AsrEngineConfig::LocalSherpa {
+                model_path,
+                num_threads,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                batch_segmentation_mode,
+                model_type,
+                file_config,
+                gpu_acceleration,
+                ..
+            } => BatchTranscriptionRequest {
+                file_path,
+                save_to_path,
+                model_path,
+                num_threads,
+                enable_itn: request.enable_itn,
+                language: request.language,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                batch_segmentation_mode,
+                model_type,
+                file_config,
+                hotwords: request.hotwords,
+                speaker_processing,
+                normalization_options: request.normalization_options,
+                postprocessor: TranscriptPostprocessor::compile(request.postprocess_options)?,
+                gpu_acceleration,
+            },
+            _ => return Err("Expected LocalSherpa engine config".to_string()),
+        };
+        
+        Ok(config)
     }
 }
 

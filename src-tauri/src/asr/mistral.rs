@@ -71,10 +71,11 @@ fn config_from_request(
     request: &AsrTranscriptionRequest,
     _mode: MistralMode,
 ) -> Result<MistralVoxtralConfigFields, String> {
-    let provider_request = request
-        .online_provider
-        .as_ref()
-        .ok_or_else(|| "Online ASR provider request is missing for Mistral Voxtral.".to_string())?;
+    let provider_request = if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        provider
+    } else {
+        return Err("Online ASR provider request is missing for Mistral Voxtral.".to_string());
+    };
 
     // Type safety & Deserialization: safely fallback to defaults from manifest if missing or wrong type
     let get_string = |key: &str, default_val: &str| -> String {

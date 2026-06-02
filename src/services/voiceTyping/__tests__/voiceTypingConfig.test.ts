@@ -29,9 +29,7 @@ describe('voiceTypingConfig', () => {
       engine: 'local-sherpa',
       mode: 'streaming',
       modelPath: '/models/live',
-      providerId: null,
-      profileId: null,
-      onlineProvider: undefined,
+
     }));
   });
 

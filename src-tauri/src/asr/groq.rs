@@ -71,10 +71,11 @@ fn config_from_request(
     request: &AsrTranscriptionRequest,
     _mode: GroqMode,
 ) -> Result<GroqWhisperConfigFields, String> {
-    let provider_request = request
-        .online_provider
-        .as_ref()
-        .ok_or_else(|| "Online ASR provider request is missing for Groq Whisper.".to_string())?;
+    let provider_request = if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        provider
+    } else {
+        return Err("Online ASR provider request is missing for Groq Whisper.".to_string());
+    };
 
     let get_string = |key: &str, default_val: &str| -> String {
         provider_request

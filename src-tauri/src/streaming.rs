@@ -180,32 +180,23 @@ async fn handle_online_streaming_socket(
     };
 
     let request = crate::asr::AsrTranscriptionRequest {
-        engine: crate::asr::AsrEngine::Online,
+        engine_config: crate::asr::AsrEngineConfig::Online {
+            provider: crate::asr::OnlineAsrProviderRequest {
+                provider_id,
+                profile_id: model_id.clone(),
+                config,
+            },
+        },
         mode: crate::asr::AsrMode::Streaming,
-        model_id: Some(model_id.clone()),
-        model_path: "".to_string(),
-        num_threads: 1,
         enable_itn: false,
         language: if language == "auto" {
             "".to_string()
         } else {
             language
         },
-        punctuation_model: None,
-        vad_model: None,
-        vad_buffer: 0.0,
-        batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
-        model_type: "".to_string(),
-        file_config: None,
         hotwords,
         normalization_options: Default::default(),
         postprocess_options: Default::default(),
-        online_provider: Some(crate::asr::OnlineAsrProviderRequest {
-            provider_id,
-            profile_id: model_id.clone(),
-            config,
-        }),
-        gpu_acceleration: None,
     };
 
     let sherpa_state = app_handle.state::<crate::asr::AsrState>();

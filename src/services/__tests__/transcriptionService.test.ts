@@ -471,7 +471,6 @@ describe('TranscriptionService voice typing diagnostics', () => {
             asrRequest: expect.objectContaining({
                 engine: 'online',
                 mode: 'streaming',
-                modelPath: '',
                 onlineProvider: expect.objectContaining({
                     providerId: 'volcengine-doubao',
                     profileId: 'volcengine-doubao-default',
@@ -557,7 +556,6 @@ describe('TranscriptionService voice typing diagnostics', () => {
             asrRequest: expect.objectContaining({
                 engine: 'online',
                 mode: 'offline',
-                modelPath: '',
                 onlineProvider: expect.objectContaining({
                     providerId: 'volcengine-doubao',
                     config: expect.objectContaining({

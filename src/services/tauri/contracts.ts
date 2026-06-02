@@ -106,16 +106,21 @@ type TranscriptPostprocessOptions = {
   dropFinalDotSegments?: boolean;
 };
 
-type AsrTranscriptionRequest = {
-  engine: 'local-sherpa' | 'online';
+type AsrTranscriptionRequestBase = {
   mode: 'streaming' | 'offline' | 'batch';
+  language: string;
+  enableItn: boolean;
+  normalizationOptions: {
+    enableTimeline: boolean;
+  };
+  postprocessOptions: TranscriptPostprocessOptions;
+};
+
+type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'local-sherpa';
   modelId?: string | null;
   modelPath: string;
-  providerId?: string | null;
-  profileId?: string | null;
   numThreads: number;
-  enableItn: boolean;
-  language: string;
   punctuationModel: string | null;
   vadModel: string | null;
   vadBuffer: number;
@@ -123,16 +128,18 @@ type AsrTranscriptionRequest = {
   modelType: string;
   fileConfig?: ModelFileConfig;
   hotwords: string | null;
-  normalizationOptions: {
-    enableTimeline: boolean;
-  };
-  postprocessOptions: TranscriptPostprocessOptions;
-  onlineProvider?: {
+};
+
+type OnlineAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'online';
+  onlineProvider: {
     providerId: string;
     profileId: string;
     config: unknown;
   };
 };
+
+type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
 
 type WorkspaceQueryScope =
   | { kind: 'all' }

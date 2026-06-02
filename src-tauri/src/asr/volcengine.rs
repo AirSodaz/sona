@@ -180,7 +180,9 @@ fn config_from_request(
     request: &AsrTranscriptionRequest,
     mode: VolcengineMode,
 ) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
-    let Some(provider) = request.online_provider.as_ref() else {
+    let provider = if let crate::asr::types::AsrEngineConfig::Online { provider } = &request.engine_config {
+        provider
+    } else {
         return Err(SherpaError::VolcengineProviderConfigMissing);
     };
     if provider.provider_id != crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID {
@@ -919,28 +921,18 @@ mod tests {
     #[test]
     fn volcengine_flash_batch_request_body_uses_local_audio_data_and_existing_options() {
         let request = AsrTranscriptionRequest {
-            engine: AsrEngine::Online,
             mode: AsrMode::Offline,
-            model_id: None,
-            model_path: String::new(),
-            num_threads: 4,
-            enable_itn: true,
             language: "auto".to_string(),
-            punctuation_model: None,
-            vad_model: None,
-            vad_buffer: 5.0,
-            batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
-            model_type: "sensevoice".to_string(),
-            file_config: None,
-            hotwords: None,
+            enable_itn: true,
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
-            gpu_acceleration: None,
-            online_provider: Some(OnlineAsrProviderRequest {
-                provider_id: crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
-                profile_id: "volcengine-doubao-default".to_string(),
-                config: serde_json::to_value(config("volc-test-key")).expect("config json"),
-            }),
+            engine_config: crate::asr::types::AsrEngineConfig::Online {
+                provider: crate::asr::types::OnlineAsrProviderRequest {
+                    provider_id: crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
+                    profile_id: "volcengine-doubao-default".to_string(),
+                    config: serde_json::to_value(config("volc-test-key")).expect("config json"),
+                }
+            },
         };
 
         let body = build_flash_batch_request_body(
