@@ -154,10 +154,16 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .mime_str("audio/wav")
         .map_err(|e| format!("Failed to create multipart file: {}", e))?;
 
-    let form = multipart::Form::new()
+    let mut form = multipart::Form::new()
         .part("file", part)
         .text("model", config.model.clone())
         .text("response_format", "verbose_json");
+
+    if let Some(hotwords) = request.hotwords.as_deref().filter(|s| !s.trim().is_empty()) {
+        // Many Whisper-compatible APIs use the prompt field for context biasing
+        let prompt = hotwords.replace('\n', ", ");
+        form = form.text("prompt", prompt);
+    }
 
     let client = reqwest::Client::new();
     let response = client
