@@ -1,5 +1,6 @@
 mod app_settings;
 mod archive;
+pub mod asr;
 mod asr_providers;
 mod audio;
 mod automation_repository;
@@ -22,7 +23,6 @@ mod project_repository;
 mod recovery;
 mod runtime_status;
 pub mod server;
-pub mod sherpa;
 pub mod speaker;
 mod speaker_correction;
 mod speaker_review;
@@ -39,14 +39,17 @@ use tokio::sync::Mutex as AsyncMutex;
 
 pub struct ApiServerController {
     shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
-    pub online_asr_config: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>>,
+    pub online_asr_config:
+        std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>>,
 }
 
 impl Default for ApiServerController {
     fn default() -> Self {
         Self {
             shutdown_sender: std::sync::Arc::new(AsyncMutex::new(None)),
-            online_asr_config: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            online_asr_config: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
         }
     }
 }
@@ -543,7 +546,7 @@ pub fn run() {
         .manage(history_repository::HistoryRepositoryState::default())
         .manage(history_repository::PreparedBackupImportState::default())
         .manage(audio::AudioState::new())
-        .manage(sherpa::SherpaState::new())
+        .manage(asr::AsrState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -652,13 +655,13 @@ pub fn run() {
             llm::run_transcript_llm_job,
             llm::summarize_transcript,
             llm::translate_transcript_segments,
-            sherpa::init_recognizer,
-            sherpa::start_recognizer,
-            sherpa::stop_recognizer,
-            sherpa::flush_recognizer,
-            sherpa::feed_audio_chunk,
-            sherpa::process_batch_file,
-            sherpa::get_asr_runtime_metrics,
+            asr::init_recognizer,
+            asr::start_recognizer,
+            asr::stop_recognizer,
+            asr::flush_recognizer,
+            asr::feed_audio_chunk,
+            asr::process_batch_file,
+            asr::get_asr_runtime_metrics,
             export::export_transcript_file,
             speaker::annotate_speaker_segments_from_file,
             speaker::import_speaker_profile_sample,

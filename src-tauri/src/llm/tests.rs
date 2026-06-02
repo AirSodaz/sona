@@ -67,8 +67,8 @@ fn sample_summary_template(id: &str, name: &str, instructions: &str) -> SummaryT
     }
 }
 
-fn sample_transcript_segment(id: &str, text: &str) -> crate::sherpa::TranscriptSegment {
-    crate::sherpa::TranscriptSegment {
+fn sample_transcript_segment(id: &str, text: &str) -> crate::asr::TranscriptSegment {
+    crate::asr::TranscriptSegment {
         id: id.to_string(),
         text: text.to_string(),
         start: 0.0,

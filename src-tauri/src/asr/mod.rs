@@ -1,4 +1,3 @@
-use log::trace;
 use tauri::{AppHandle, State};
 
 mod adapter;
@@ -9,10 +8,10 @@ mod metrics;
 mod mistral;
 mod model_config;
 pub mod online;
-mod online_traits;
 mod postprocess;
-mod runtime;
-mod state;
+pub mod sherpa_onnx;
+pub mod state;
+pub mod traits;
 mod transcript;
 mod types;
 mod volcengine;
@@ -29,10 +28,10 @@ pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
 pub(crate) use model_config::{Recognizer, RecognizerInner, build_model_config, load_vad};
-pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 pub use postprocess::TranscriptPostprocessor;
-pub use state::SherpaState;
-pub(crate) use state::{ModelConfigKey, OfflineState};
+pub use state::AsrState;
+pub(crate) use state::ModelConfigKey;
+pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 pub(crate) use transcript::{
     ensure_transcript_segment_timing, finalize_transcript_text, normalize_recognizer_text,
     synthesize_durations,
@@ -44,15 +43,6 @@ pub use types::{
     TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
     TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
-
-async fn route_engine(state: &SherpaState, instance_id: &str) -> Result<AsrEngine, SherpaError> {
-    state.instance_engine(instance_id).await.ok_or_else(|| {
-        SherpaError::Generic(format!(
-            "ASR engine not configured for instance: {}",
-            instance_id
-        ))
-    })
-}
 
 #[derive(Default)]
 struct LegacyLocalSherpaTransportRequest {
@@ -140,23 +130,26 @@ fn resolve_transport_asr_request(
 /// expected cloud recognizer cannot silently fall through to local Sherpa when
 /// the cloud session is missing or failed.
 pub async fn feed_audio_samples<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    state: &SherpaState,
+    _app: &AppHandle<R>,
+    state: &AsrState,
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
-    match route_engine(state, instance_id).await? {
-        AsrEngine::Online => online::feed_audio_samples_impl(state, instance_id, samples).await,
-        AsrEngine::LocalSherpa => runtime::feed_audio_samples(app, state, instance_id, samples)
-            .await
-            .map_err(SherpaError::from),
-    }
+    let session = {
+        let sessions = state.active_sessions.lock().await;
+        sessions.get(instance_id).cloned().ok_or_else(|| {
+            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
+        })?
+    };
+    session
+        .feed_audio_samples(state, instance_id, samples)
+        .await
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn init_recognizer(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
     model_path: Option<String>,
     num_threads: Option<i32>,
@@ -198,7 +191,7 @@ pub async fn init_recognizer(
         AsrEngine::LocalSherpa => {
             LocalSherpaAdapter::ensure_mode(&request, AsrMode::Streaming)
                 .map_err(SherpaError::from)?;
-            let init_result = runtime::init_recognizer_impl(
+            let init_result = sherpa_onnx::init_recognizer_impl(
                 state.clone(),
                 instance_id.clone(),
                 request.model_path,
@@ -241,69 +234,70 @@ pub async fn init_recognizer(
 #[tauri::command]
 pub async fn start_recognizer(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match route_engine(&state, &instance_id).await? {
-        AsrEngine::Online => online::start_streaming_recognizer_impl(app, state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::start_recognizer_impl(state, instance_id)
-            .await
-            .map_err(SherpaError::from),
-    }
+    let session = {
+        let sessions = state.active_sessions.lock().await;
+        sessions.get(&instance_id).cloned().ok_or_else(|| {
+            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
+        })?
+    };
+    session.start(app, &state, &instance_id).await
 }
 
 #[tauri::command]
 pub async fn stop_recognizer(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match route_engine(&state, &instance_id).await? {
-        AsrEngine::Online => online::stop_streaming_recognizer_impl(state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::stop_recognizer_impl(state, instance_id)
-            .await
-            .map_err(SherpaError::from),
-    }
+    let session = {
+        let sessions = state.active_sessions.lock().await;
+        sessions.get(&instance_id).cloned().ok_or_else(|| {
+            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
+        })?
+    };
+    session.stop(&state, &instance_id).await
 }
 
 #[tauri::command]
 pub async fn flush_recognizer(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    match route_engine(&state, &instance_id).await? {
-        AsrEngine::Online => online::flush_streaming_recognizer_impl(app, state, instance_id).await,
-        AsrEngine::LocalSherpa => runtime::flush_recognizer_impl(app, state, instance_id)
-            .await
-            .map_err(SherpaError::from),
-    }
+    let session = {
+        let sessions = state.active_sessions.lock().await;
+        sessions.get(&instance_id).cloned().ok_or_else(|| {
+            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
+        })?
+    };
+    session.flush(app, &state, &instance_id).await
 }
 
 #[tauri::command]
 pub async fn feed_audio_chunk(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
-    trace!(
-        "feed_audio_chunk called with id: {}, samples bytes: {}",
-        instance_id,
-        samples.len()
-    );
-    match route_engine(&state, &instance_id).await? {
-        AsrEngine::Online => online::feed_audio_chunk_impl(app, state, instance_id, samples).await,
-        AsrEngine::LocalSherpa => runtime::feed_audio_chunk_impl(app, state, instance_id, samples)
-            .await
-            .map_err(SherpaError::from),
-    }
+    let session = {
+        let sessions = state.active_sessions.lock().await;
+        sessions.get(&instance_id).cloned().ok_or_else(|| {
+            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
+        })?
+    };
+    session
+        .feed_audio_chunk(app, &state, &instance_id, samples)
+        .await
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn process_batch_file(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     file_path: String,
     save_to_path: Option<String>,
     model_path: Option<String>,
@@ -349,19 +343,17 @@ pub async fn process_batch_file(
             let batch_request = adapter
                 .batch_request(file_path, save_to_path, request, speaker_processing)
                 .map_err(SherpaError::from)?;
-            batch::process_batch_request_impl(app, state.inner(), batch_request)
+            batch::process_batch_request_impl(app, &state, batch_request)
                 .await
                 .map_err(SherpaError::from)
         }
-        AsrEngine::Online => {
-            online::process_batch_file_impl(app, state.inner(), file_path, request).await
-        }
+        AsrEngine::Online => online::process_batch_file_impl(app, &state, file_path, request).await,
     }
 }
 
 #[tauri::command]
 pub async fn get_asr_runtime_metrics(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
 ) -> Result<AsrRuntimeMetricsSnapshot, String> {
     Ok(state.metrics_snapshot().await)
 }
@@ -369,26 +361,7 @@ pub async fn get_asr_runtime_metrics(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sherpa::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
-
-    #[tokio::test]
-    async fn route_engine_uses_selected_online_engine_even_without_active_session() {
-        let state = SherpaState::new();
-        state.set_instance_engine("record", AsrEngine::Online).await;
-
-        assert_eq!(
-            route_engine(&state, "record").await.unwrap(),
-            AsrEngine::Online
-        );
-        assert!(!state.has_online_session("record").await);
-    }
-
-    #[tokio::test]
-    async fn route_engine_returns_error_for_unconfigured_instances() {
-        let state = SherpaState::new();
-
-        assert!(route_engine(&state, "record").await.is_err());
-    }
+    use crate::asr::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
 
     fn local_request(mode: AsrMode, model_path: &str) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest::local_sherpa(

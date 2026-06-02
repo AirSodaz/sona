@@ -416,7 +416,7 @@ impl HistoryRepository {
     pub(super) fn load_transcript(
         &self,
         file_name: &str,
-    ) -> Result<Option<Vec<crate::sherpa::TranscriptSegment>>, String> {
+    ) -> Result<Option<Vec<crate::asr::TranscriptSegment>>, String> {
         let transcript_path = self.transcript_path(file_name)?;
         if !transcript_path.exists() {
             return Ok(None);
@@ -1197,8 +1197,8 @@ mod tests {
             .unwrap()
             .unwrap();
         let timing = transcript[0].timing.as_ref().unwrap();
-        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
-        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.level, crate::asr::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::asr::TranscriptTimingSource::Model);
         assert_eq!(timing.units[0].text, "\u{4f60}");
         assert_eq!(timing.units[0].start, 0.0);
         assert_eq!(timing.units[1].text, "\u{597d}");
@@ -1228,8 +1228,8 @@ mod tests {
 
         let transcript = repository.load_transcript("legacy.json").unwrap().unwrap();
         let timing = transcript[0].timing.as_ref().unwrap();
-        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
-        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.level, crate::asr::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::asr::TranscriptTimingSource::Model);
         assert_eq!(timing.units[0].text, "\u{4f60}");
         assert_eq!(timing.units[0].start, 0.0);
         assert_eq!(timing.units[1].text, "\u{597d}");
@@ -1323,8 +1323,8 @@ mod tests {
             .unwrap()
             .unwrap();
         let timing = record.segments[0].timing.as_ref().unwrap();
-        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
-        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.level, crate::asr::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::asr::TranscriptTimingSource::Model);
         assert_eq!(timing.units[0].text, "\u{4f60}");
         assert_eq!(timing.units[1].end, 1.0);
     }

@@ -1,8 +1,8 @@
 use super::error::SherpaError;
 use super::groq;
 use super::mistral;
-use super::online_traits::OnlineAsrProviderAdapter;
-use super::state::SherpaState;
+use super::state::AsrState;
+use super::traits::AsrProviderAdapter;
 use super::types::AsrTranscriptionRequest;
 use super::volcengine;
 use std::collections::HashMap;
@@ -10,17 +10,18 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use tauri::{AppHandle, State};
 
-fn online_adapters() -> &'static HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> {
-    static ONLINE_ADAPTERS: OnceLock<HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>>> =
-        OnceLock::new();
+fn online_adapters() -> &'static HashMap<&'static str, std::sync::Arc<dyn AsrProviderAdapter>> {
+    static ONLINE_ADAPTERS: OnceLock<
+        HashMap<&'static str, std::sync::Arc<dyn AsrProviderAdapter>>,
+    > = OnceLock::new();
     ONLINE_ADAPTERS.get_or_init(|| {
-        let mut map: HashMap<&'static str, Box<dyn OnlineAsrProviderAdapter>> = HashMap::new();
+        let mut map: HashMap<&'static str, std::sync::Arc<dyn AsrProviderAdapter>> = HashMap::new();
         let volcengine = volcengine::VolcengineAdapter;
-        map.insert(volcengine.provider_id(), Box::new(volcengine));
+        map.insert(volcengine.provider_id(), std::sync::Arc::new(volcengine));
         let groq = groq::GroqWhisperAdapter;
-        map.insert(groq.provider_id(), Box::new(groq));
+        map.insert(groq.provider_id(), std::sync::Arc::new(groq));
         let mistral = mistral::MistralVoxtralAdapter;
-        map.insert(mistral.provider_id(), Box::new(mistral));
+        map.insert(mistral.provider_id(), std::sync::Arc::new(mistral));
         map
     })
 }
@@ -45,7 +46,7 @@ fn ensure_provider(request: &AsrTranscriptionRequest) -> Result<&'static str, Sh
 }
 
 pub async fn init_streaming_recognizer_impl(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
     request: AsrTranscriptionRequest,
 ) -> Result<(), SherpaError> {
@@ -55,7 +56,7 @@ pub async fn init_streaming_recognizer_impl(
 
     match adapter.create_streaming_session(config_val, &request)? {
         Some(session) => {
-            let mut sessions = state.online_sessions.lock().await;
+            let mut sessions = state.active_sessions.lock().await;
             sessions.insert(instance_id, Arc::from(session));
             Ok(())
         }
@@ -67,25 +68,25 @@ pub async fn init_streaming_recognizer_impl(
 
 pub async fn start_streaming_recognizer_impl(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
     let session = {
-        let sessions = state.online_sessions.lock().await;
+        let sessions = state.active_sessions.lock().await;
         sessions
             .get(&instance_id)
             .cloned()
             .ok_or(SherpaError::OnlineSessionNotInitialized)?
     };
-    session.start(app.clone(), &instance_id).await
+    session.start(app.clone(), &state, &instance_id).await
 }
 
 pub async fn stop_streaming_recognizer_impl(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
     let session = {
-        let sessions = state.online_sessions.lock().await;
+        let sessions = state.active_sessions.lock().await;
         sessions
             .get(&instance_id)
             .cloned()
@@ -96,11 +97,11 @@ pub async fn stop_streaming_recognizer_impl(
 
 pub async fn flush_streaming_recognizer_impl(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
     let session = {
-        let sessions = state.online_sessions.lock().await;
+        let sessions = state.active_sessions.lock().await;
         sessions
             .get(&instance_id)
             .cloned()
@@ -111,12 +112,12 @@ pub async fn flush_streaming_recognizer_impl(
 
 pub async fn feed_audio_chunk_impl(
     app: AppHandle,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
     let session = {
-        let sessions = state.online_sessions.lock().await;
+        let sessions = state.active_sessions.lock().await;
         sessions
             .get(&instance_id)
             .cloned()
@@ -128,12 +129,12 @@ pub async fn feed_audio_chunk_impl(
 }
 
 pub async fn feed_audio_samples_impl(
-    state: &SherpaState,
+    state: &AsrState,
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
     let session = {
-        let sessions = state.online_sessions.lock().await;
+        let sessions = state.active_sessions.lock().await;
         sessions
             .get(instance_id)
             .cloned()
@@ -146,7 +147,7 @@ pub async fn feed_audio_samples_impl(
 
 pub async fn process_batch_file_impl(
     app: AppHandle,
-    state: &SherpaState,
+    state: &AsrState,
     file_path: String,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<super::TranscriptSegment>, SherpaError> {

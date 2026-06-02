@@ -1,4 +1,4 @@
-use crate::sherpa::TranscriptSegment;
+use crate::asr::TranscriptSegment;
 use crate::speaker::SpeakerTag;
 use std::fs;
 use std::path::Path;

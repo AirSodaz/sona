@@ -589,7 +589,7 @@ pub fn start_system_audio_capture<R: Runtime>(
     app: AppHandle<R>,
     window: Window<R>,
     state: tauri::State<'_, AudioState>,
-    _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
+    _sherpa_state: tauri::State<'_, crate::asr::AsrState>,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
@@ -926,13 +926,13 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
         return;
     }
 
-    let sherpa_state = app.state::<crate::sherpa::SherpaState>();
+    let sherpa_state = app.state::<crate::asr::AsrState>();
     for instance_id in instance_ids {
         if instance_id.starts_with("test_") {
             continue;
         }
         if let Err(e) =
-            crate::sherpa::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
+            crate::asr::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
         {
             eprintln!(
                 "[Audio] Failed to feed system audio to Sherpa instance {}: {}",
@@ -960,7 +960,7 @@ pub fn start_microphone_capture<R: Runtime>(
     app: AppHandle<R>,
     window: Window<R>,
     state: tauri::State<'_, AudioState>,
-    _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
+    _sherpa_state: tauri::State<'_, crate::asr::AsrState>,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
@@ -990,13 +990,13 @@ async fn feed_mic_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f3
         return;
     }
 
-    let sherpa_state = app.state::<crate::sherpa::SherpaState>();
+    let sherpa_state = app.state::<crate::asr::AsrState>();
     for instance_id in instance_ids {
         if instance_id.starts_with("test_") {
             continue;
         }
         if let Err(e) =
-            crate::sherpa::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
+            crate::asr::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
         {
             eprintln!(
                 "[Audio] Failed to feed mic audio to Sherpa instance {}: {}",

@@ -1,4 +1,4 @@
-use crate::sherpa::TranscriptSegment;
+use crate::asr::TranscriptSegment;
 use crate::speaker::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -494,7 +494,7 @@ fn compare_f64(left: f64, right: f64) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sherpa::TranscriptSegment;
+    use crate::asr::TranscriptSegment;
     use crate::speaker::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 
     fn segment(

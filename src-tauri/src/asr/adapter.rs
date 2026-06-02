@@ -68,7 +68,7 @@ impl AsrEngineAdapter for LocalSherpaAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sherpa::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
+    use crate::asr::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
 
     fn request(mode: AsrMode) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest::local_sherpa(

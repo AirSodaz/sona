@@ -386,7 +386,7 @@ pub struct TranscriptLlmJobRequest {
     pub task_type: LlmTaskType,
     pub job_history_id: Option<String>,
     pub config: LlmConfig,
-    pub segments: Vec<crate::sherpa::TranscriptSegment>,
+    pub segments: Vec<crate::asr::TranscriptSegment>,
     pub target_language: Option<String>,
     pub target_language_name: Option<String>,
     pub context: Option<String>,
@@ -420,7 +420,7 @@ pub struct TranscriptLlmJobResult {
     pub task_type: LlmTaskType,
     pub job_history_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub segments: Option<Vec<crate::sherpa::TranscriptSegment>>,
+    pub segments: Option<Vec<crate::asr::TranscriptSegment>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<HistorySummaryPayload>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -38,7 +38,7 @@ pub enum ServerMessage {
         session_id: String,
     },
     Segment {
-        segment: crate::sherpa::TranscriptSegment,
+        segment: crate::asr::TranscriptSegment,
     },
     Stopped,
     Error {
@@ -179,9 +179,9 @@ async fn handle_online_streaming_socket(
         configs.get(&provider_id).cloned().unwrap_or_default()
     };
 
-    let request = crate::sherpa::AsrTranscriptionRequest {
-        engine: crate::sherpa::AsrEngine::Online,
-        mode: crate::sherpa::AsrMode::Streaming,
+    let request = crate::asr::AsrTranscriptionRequest {
+        engine: crate::asr::AsrEngine::Online,
+        mode: crate::asr::AsrMode::Streaming,
         model_id: Some(model_id.clone()),
         model_path: "".to_string(),
         num_threads: 1,
@@ -194,13 +194,13 @@ async fn handle_online_streaming_socket(
         punctuation_model: None,
         vad_model: None,
         vad_buffer: 0.0,
-        batch_segmentation_mode: crate::sherpa::BatchSegmentationMode::Vad,
+        batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
         model_type: "".to_string(),
         file_config: None,
         hotwords,
         normalization_options: Default::default(),
         postprocess_options: Default::default(),
-        online_provider: Some(crate::sherpa::OnlineAsrProviderRequest {
+        online_provider: Some(crate::asr::OnlineAsrProviderRequest {
             provider_id,
             profile_id: model_id.clone(),
             config,
@@ -208,9 +208,9 @@ async fn handle_online_streaming_socket(
         gpu_acceleration: None,
     };
 
-    let sherpa_state = app_handle.state::<crate::sherpa::SherpaState>();
+    let sherpa_state = app_handle.state::<crate::asr::AsrState>();
 
-    if let Err(e) = crate::sherpa::online::init_streaming_recognizer_impl(
+    if let Err(e) = crate::asr::online::init_streaming_recognizer_impl(
         sherpa_state.clone(),
         session_id.clone(),
         request,
@@ -229,7 +229,7 @@ async fn handle_online_streaming_socket(
         return;
     }
 
-    if let Err(e) = crate::sherpa::online::start_streaming_recognizer_impl(
+    if let Err(e) = crate::asr::online::start_streaming_recognizer_impl(
         app_handle.clone(),
         sherpa_state.clone(),
         session_id.clone(),
@@ -259,11 +259,10 @@ async fn handle_online_streaming_socket(
         .await;
 
     let event_name = format!("recognizer-output-{}", session_id);
-    let (tx, mut rx) = mpsc::unbounded_channel::<crate::sherpa::TranscriptUpdate>();
+    let (tx, mut rx) = mpsc::unbounded_channel::<crate::asr::TranscriptUpdate>();
 
     let handler_id = app_handle.listen(event_name, move |event| {
-        if let Ok(update) = serde_json::from_str::<crate::sherpa::TranscriptUpdate>(event.payload())
-        {
+        if let Ok(update) = serde_json::from_str::<crate::asr::TranscriptUpdate>(event.payload()) {
             let _ = tx.send(update);
         }
     });
@@ -282,7 +281,7 @@ async fn handle_online_streaming_socket(
             move || {
                 app_handle.unlisten(handler_id);
             }
-        }
+        },
     };
 
     let mut stopping = false;
@@ -292,7 +291,7 @@ async fn handle_online_streaming_socket(
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
-                        if let Err(e) = crate::sherpa::online::feed_audio_samples_impl(
+                        if let Err(e) = crate::asr::online::feed_audio_samples_impl(
                             sherpa_state.inner(),
                             &session_id,
                             &samples,
@@ -302,7 +301,7 @@ async fn handle_online_streaming_socket(
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            let _ = crate::sherpa::online::flush_streaming_recognizer_impl(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
+                            let _ = crate::asr::online::flush_streaming_recognizer_impl(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
                             stopping = true;
                         }
                     }
@@ -326,7 +325,11 @@ async fn handle_online_streaming_socket(
         }
     }
 
-    let _ = crate::sherpa::online::stop_streaming_recognizer_impl(sherpa_state.clone(), session_id.clone()).await;
+    let _ = crate::asr::online::stop_streaming_recognizer_impl(
+        sherpa_state.clone(),
+        session_id.clone(),
+    )
+    .await;
 }
 
 async fn handle_local_streaming_socket(
@@ -353,7 +356,7 @@ async fn handle_local_streaming_socket(
         }
     };
 
-    let vad = match crate::sherpa::load_vad(Some(vad_model_id)) {
+    let vad = match crate::asr::load_vad(Some(vad_model_id)) {
         Some(v) => v,
         None => {
             let _ = socket
@@ -380,7 +383,7 @@ async fn handle_local_streaming_socket(
         .await;
 
     // Phase 2: Audio streaming
-    let mut offline_state = crate::sherpa::OfflineState::default();
+    let mut offline_state = crate::asr::sherpa_onnx::OfflineState::default();
     let mut total_samples = 0;
     let mut current_segment_id: Option<String> = None;
     let mut last_inference_time = std::time::Instant::now();
@@ -489,10 +492,10 @@ async fn load_recognizer(
     model_id: &str,
     language: &str,
     hotwords: Option<String>,
-) -> Result<Arc<crate::sherpa::Recognizer>, String> {
+) -> Result<Arc<crate::asr::Recognizer>, String> {
     let preset = crate::preset_models::find_preset_model(model_id).ok_or("Model not found")?;
     let model_path = preset.resolve_install_path(&state.models_dir);
-    let config = crate::sherpa::build_model_config(
+    let config = crate::asr::build_model_config(
         &model_path,
         &preset.model_type,
         &preset.file_config,
@@ -501,7 +504,7 @@ async fn load_recognizer(
         hotwords.clone(),
     )?;
 
-    let key = crate::sherpa::ModelConfigKey {
+    let key = crate::asr::ModelConfigKey {
         model_path: model_path.to_string_lossy().to_string(),
         model_type: preset.model_type.clone(),
         num_threads: 2,
@@ -515,8 +518,8 @@ async fn load_recognizer(
         return Ok(r.clone());
     }
 
-    let recognizer = Arc::new(crate::sherpa::Recognizer::new(config, 2, None)?);
-    if !matches!(recognizer.inner, crate::sherpa::RecognizerInner::Offline(_)) {
+    let recognizer = Arc::new(crate::asr::Recognizer::new(config, 2, None)?);
+    if !matches!(recognizer.inner, crate::asr::RecognizerInner::Offline(_)) {
         return Err("Only offline models are supported for streaming API".to_string());
     }
 
@@ -526,15 +529,15 @@ async fn load_recognizer(
 
 fn run_offline_inference_standalone(
     speech_buffer: &[Vec<f32>],
-    recognizer: &crate::sherpa::Recognizer,
+    recognizer: &crate::asr::Recognizer,
     segment_id: &str,
     global_start: f64,
     is_final: bool,
-) -> Option<crate::sherpa::TranscriptSegment> {
+) -> Option<crate::asr::TranscriptSegment> {
     if speech_buffer.is_empty() {
         return None;
     }
-    let crate::sherpa::RecognizerInner::Offline(r) = &recognizer.inner else {
+    let crate::asr::RecognizerInner::Offline(r) = &recognizer.inner else {
         return None;
     };
 
@@ -548,13 +551,13 @@ fn run_offline_inference_standalone(
     r.0.decode(&stream);
 
     if let Some(result) = stream.get_result() {
-        let cleaned_text = crate::sherpa::normalize_recognizer_text(&result.text);
+        let cleaned_text = crate::asr::normalize_recognizer_text(&result.text);
         if cleaned_text.is_empty() {
             return None;
         }
 
         let text = if is_final {
-            crate::sherpa::finalize_transcript_text(&cleaned_text, None)
+            crate::asr::finalize_transcript_text(&cleaned_text, None)
         } else {
             cleaned_text
         };
@@ -569,9 +572,9 @@ fn run_offline_inference_standalone(
             .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
         let durations = timestamps_abs
             .as_ref()
-            .and_then(|ts| crate::sherpa::synthesize_durations(ts, global_end as f32));
+            .and_then(|ts| crate::asr::synthesize_durations(ts, global_end as f32));
 
-        Some(crate::sherpa::TranscriptSegment {
+        Some(crate::asr::TranscriptSegment {
             id: segment_id.to_string(),
             text,
             start: global_start,

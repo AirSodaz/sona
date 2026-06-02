@@ -1,7 +1,7 @@
-use crate::pipeline;
-use crate::sherpa::{
+use crate::asr::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
+use crate::pipeline;
 use crate::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -1756,14 +1756,14 @@ mod tests {
         let mut segment = sample_segment(0.0, 2.0, "Hello there");
         segment.timing = Some(TranscriptTiming {
             level: TranscriptTimingLevel::Token,
-            source: crate::sherpa::TranscriptTimingSource::Model,
+            source: crate::asr::TranscriptTimingSource::Model,
             units: vec![
-                crate::sherpa::TranscriptTimingUnit {
+                crate::asr::TranscriptTimingUnit {
                     text: "Hello".to_string(),
                     start: 0.0,
                     end: 1.0,
                 },
-                crate::sherpa::TranscriptTimingUnit {
+                crate::asr::TranscriptTimingUnit {
                     text: " there".to_string(),
                     start: 1.0,
                     end: 2.0,

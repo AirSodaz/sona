@@ -23,14 +23,14 @@ use tower_http::{
 
 type HmacSha256 = Hmac<Sha256>;
 
+use crate::asr::transcribe_batch_with_progress;
 use crate::cli::{TranscribeCliOptions, resolve_transcribe_options};
-use crate::sherpa::transcribe_batch_with_progress;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum JobStatus {
     Pending,
     Processing,
-    Completed(Vec<crate::sherpa::TranscriptSegment>),
+    Completed(Vec<crate::asr::TranscriptSegment>),
     Failed(String),
 }
 
@@ -221,9 +221,9 @@ async fn start_worker_loop(
 
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
-                    let request = crate::sherpa::AsrTranscriptionRequest {
-                        engine: crate::sherpa::AsrEngine::Online,
-                        mode: crate::sherpa::AsrMode::Offline,
+                    let request = crate::asr::AsrTranscriptionRequest {
+                        engine: crate::asr::AsrEngine::Online,
+                        mode: crate::asr::AsrMode::Offline,
                         model_id: Some(job.model_id.clone()),
                         model_path: "".to_string(),
                         num_threads: 1,
@@ -236,13 +236,13 @@ async fn start_worker_loop(
                         punctuation_model: None,
                         vad_model: None,
                         vad_buffer: 0.0,
-                        batch_segmentation_mode: crate::sherpa::BatchSegmentationMode::Vad,
+                        batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
                         model_type: "".to_string(),
                         file_config: None,
                         hotwords: job.hotwords.clone(),
                         normalization_options: Default::default(),
                         postprocess_options: Default::default(),
-                        online_provider: Some(crate::sherpa::OnlineAsrProviderRequest {
+                        online_provider: Some(crate::asr::OnlineAsrProviderRequest {
                             provider_id: provider_id,
                             profile_id: job.model_id.clone(),
                             config: job.online_provider_config.clone().unwrap_or_default(),
@@ -252,8 +252,8 @@ async fn start_worker_loop(
                     if let Some(app_handle) = app.as_ref() {
                         use tauri::Manager;
                         let inner_app_clone = app_handle.clone();
-                        let sherpa_state = app_handle.state::<crate::sherpa::SherpaState>();
-                        match crate::sherpa::online::process_batch_file_impl(
+                        let sherpa_state = app_handle.state::<crate::asr::AsrState>();
+                        match crate::asr::online::process_batch_file_impl(
                             inner_app_clone,
                             sherpa_state.inner(),
                             job.file_path.to_string_lossy().to_string(),
@@ -327,9 +327,8 @@ pub struct ServerState {
     pub start_time: std::time::Instant,
     pub api_key: String,
     pub streaming_semaphore: Arc<tokio::sync::Semaphore>,
-    pub recognizer_pool: Arc<
-        tokio::sync::Mutex<HashMap<crate::sherpa::ModelConfigKey, Arc<crate::sherpa::Recognizer>>>,
-    >,
+    pub recognizer_pool:
+        Arc<tokio::sync::Mutex<HashMap<crate::asr::ModelConfigKey, Arc<crate::asr::Recognizer>>>>,
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
     pub app: Option<tauri::AppHandle>,

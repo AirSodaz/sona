@@ -1,9 +1,9 @@
+use crate::asr::{AsrRuntimeMetricsSnapshot, AsrState};
 use crate::preset_models::{
     ModelCatalogModel, ModelRules as PresetModelRules, ModelSelectionPaths,
     build_model_catalog_snapshot, resolve_model_catalog_selected_ids,
 };
 use crate::runtime_status;
-use crate::sherpa::{AsrRuntimeMetricsSnapshot, SherpaState};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -139,7 +139,7 @@ pub struct DiagnosticsCoreSnapshot {
 #[tauri::command]
 pub async fn get_diagnostics_core_snapshot<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     let input = enrich_diagnostics_core_input(&app, state.inner(), input).await?;
@@ -148,7 +148,7 @@ pub async fn get_diagnostics_core_snapshot<R: Runtime>(
 
 async fn enrich_diagnostics_core_input<R: Runtime>(
     app: &AppHandle<R>,
-    state: &SherpaState,
+    state: &AsrState,
     mut input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreInput, String> {
     let models_dir = app
@@ -289,7 +289,7 @@ fn default_microphone_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sherpa::{AsrInferenceMetric, AsrModelLoadMetric};
+    use crate::asr::{AsrInferenceMetric, AsrModelLoadMetric};
 
     fn base_input() -> DiagnosticsCoreInput {
         DiagnosticsCoreInput {

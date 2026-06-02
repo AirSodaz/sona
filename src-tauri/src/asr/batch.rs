@@ -8,7 +8,7 @@ use super::model_config::{
     Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
     SafeStream, build_model_config, load_punctuation,
 };
-use super::state::SherpaState;
+use super::state::AsrState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
 use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptSegment};
 use log::debug;
@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter};
 
 pub async fn process_batch_request_impl<R: tauri::Runtime>(
     app: AppHandle<R>,
-    state: &SherpaState,
+    state: &AsrState,
     request: BatchTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let progress_file_path = request.file_path.clone();

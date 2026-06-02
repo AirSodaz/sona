@@ -3,13 +3,11 @@ use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
-use super::online_traits::{
-    OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,
-};
-use super::state::SherpaState;
+use super::state::AsrState;
+use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
-use crate::sherpa::postprocess::TranscriptPostprocessor;
-use crate::sherpa::transcript::apply_timeline_normalization;
+use crate::asr::postprocess::TranscriptPostprocessor;
+use crate::asr::transcript::apply_timeline_normalization;
 use async_trait::async_trait;
 use reqwest::multipart;
 use serde_json::Value;
@@ -18,48 +16,48 @@ use tauri::AppHandle;
 use tauri::Emitter;
 
 #[derive(Debug)]
-pub enum MistralMode {
+pub enum GroqMode {
     Batch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MistralVoxtralConfigFields {
+pub struct GroqWhisperConfigFields {
     pub api_key: String,
     pub batch_endpoint: String,
     pub model: String,
 }
 
-pub struct MistralVoxtralAdapter;
+pub struct GroqWhisperAdapter;
 
-impl OnlineAsrProviderAdapter for MistralVoxtralAdapter {
+impl AsrProviderAdapter for GroqWhisperAdapter {
     fn provider_id(&self) -> &'static str {
-        crate::asr_providers::MISTRAL_VOXTRAL_PROVIDER_ID
+        crate::asr_providers::GROQ_WHISPER_PROVIDER_ID
     }
 
     fn create_batch_processor(
         &self,
         _config: &Value,
-    ) -> Result<Option<Box<dyn OnlineBatchProcessor>>, SherpaError> {
-        Ok(Some(Box::new(MistralVoxtralBatchProcessor)))
+    ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
+        Ok(Some(std::sync::Arc::new(GroqWhisperBatchProcessor)))
     }
 
     fn create_streaming_session(
         &self,
         _config: &Value,
         _request: &AsrTranscriptionRequest,
-    ) -> Result<Option<Box<dyn OnlineStreamingSession>>, SherpaError> {
+    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
         Ok(None)
     }
 }
 
-pub struct MistralVoxtralBatchProcessor;
+pub struct GroqWhisperBatchProcessor;
 
 #[async_trait]
-impl OnlineBatchProcessor for MistralVoxtralBatchProcessor {
+impl AsrBatchProcessor for GroqWhisperBatchProcessor {
     async fn process_file(
         &self,
         app: AppHandle,
-        state: &SherpaState,
+        state: &AsrState,
         file_path: String,
         request: AsrTranscriptionRequest,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
@@ -71,14 +69,13 @@ impl OnlineBatchProcessor for MistralVoxtralBatchProcessor {
 
 fn config_from_request(
     request: &AsrTranscriptionRequest,
-    _mode: MistralMode,
-) -> Result<MistralVoxtralConfigFields, String> {
+    _mode: GroqMode,
+) -> Result<GroqWhisperConfigFields, String> {
     let provider_request = request
         .online_provider
         .as_ref()
-        .ok_or_else(|| "Online ASR provider request is missing for Mistral Voxtral.".to_string())?;
+        .ok_or_else(|| "Online ASR provider request is missing for Groq Whisper.".to_string())?;
 
-    // Type safety & Deserialization: safely fallback to defaults from manifest if missing or wrong type
     let get_string = |key: &str, default_val: &str| -> String {
         provider_request
             .config
@@ -90,12 +87,12 @@ fn config_from_request(
     };
 
     let manifest = crate::asr_providers::find_online_asr_provider(
-        crate::asr_providers::MISTRAL_VOXTRAL_PROVIDER_ID,
+        crate::asr_providers::GROQ_WHISPER_PROVIDER_ID,
     )
-    .ok_or_else(|| "Mistral Voxtral provider not found in manifest".to_string())?;
+    .ok_or_else(|| "Groq Whisper provider not found in manifest".to_string())?;
     let defaults = manifest.defaults.as_object().unwrap();
 
-    let fields = MistralVoxtralConfigFields {
+    let fields = GroqWhisperConfigFields {
         api_key: get_string(
             "apiKey",
             defaults.get("apiKey").and_then(Value::as_str).unwrap_or(""),
@@ -114,10 +111,10 @@ fn config_from_request(
     };
 
     if fields.api_key.is_empty() {
-        return Err("Mistral API Key is not configured.".to_string());
+        return Err("Groq API Key is not configured.".to_string());
     }
     if fields.batch_endpoint.is_empty() || fields.model.is_empty() {
-        return Err("Mistral batch endpoint or model is not configured.".to_string());
+        return Err("Groq batch endpoint or model is not configured.".to_string());
     }
 
     Ok(fields)
@@ -125,15 +122,15 @@ fn config_from_request(
 
 pub async fn process_batch_file_impl<R: tauri::Runtime>(
     app: AppHandle<R>,
-    state: &SherpaState,
+    state: &AsrState,
     file_path: String,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
     if request.mode != AsrMode::Offline {
-        return Err("Mistral Voxtral API can only be used in offline/batch mode.".to_string());
+        return Err("Groq Whisper API can only be used in offline/batch mode.".to_string());
     }
 
-    let config = config_from_request(&request, MistralMode::Batch)?;
+    let config = config_from_request(&request, GroqMode::Batch)?;
     let started = Instant::now();
 
     let bytes = tokio::fs::read(&file_path)
@@ -163,13 +160,13 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         .multipart(form)
         .send()
         .await
-        .map_err(|error| format!("Mistral Voxtral network request failed: {error}"))?;
+        .map_err(|error| format!("Groq Whisper network request failed: {error}"))?;
 
     let status = response.status();
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
         return Err(format!(
-            "Mistral Voxtral API returned error status {}: {}",
+            "Groq Whisper API returned error status {}: {}",
             status, text
         ));
     }
@@ -177,9 +174,9 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     let response_value = response
         .json::<Value>()
         .await
-        .map_err(|error| format!("Mistral Voxtral response parsing failed: {error}"))?;
+        .map_err(|error| format!("Groq Whisper response parsing failed: {error}"))?;
 
-    let mut segments = segments_from_mistral_response(&response_value)?;
+    let mut segments = segments_from_groq_response(&response_value)?;
 
     segments = apply_timeline_normalization(segments, request.normalization_options);
     segments =
@@ -189,7 +186,7 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         occurred_at_ms: current_time_millis(),
         source: "batch".to_string(),
         instance_id: None,
-        stage: "mistral_batch_complete".to_string(),
+        stage: "groq_batch_complete".to_string(),
         is_final: true,
         audio_duration_ms: response_value
             .get("duration")
@@ -209,19 +206,19 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     log_inference_metric(&metric);
 
     let _ = app.emit(
-        crate::sherpa::BATCH_PROGRESS_EVENT,
+        crate::asr::BATCH_PROGRESS_EVENT,
         &(file_path.as_str(), 100.0_f32),
     );
 
     Ok(segments)
 }
 
-fn segments_from_mistral_response(response: &Value) -> Result<Vec<TranscriptSegment>, String> {
+fn segments_from_groq_response(response: &Value) -> Result<Vec<TranscriptSegment>, String> {
     let mut segments = Vec::new();
     let segments_array = response
         .get("segments")
         .and_then(Value::as_array)
-        .ok_or_else(|| "Mistral Voxtral response is missing 'segments' array.".to_string())?;
+        .ok_or_else(|| "Groq Whisper response is missing 'segments' array.".to_string())?;
 
     for segment in segments_array {
         let text = segment

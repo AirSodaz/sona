@@ -1,4 +1,4 @@
-use crate::sherpa::TranscriptSegment;
+use crate::asr::TranscriptSegment;
 use crate::speaker::{SpeakerAttribution, SpeakerProfile, SpeakerTag};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

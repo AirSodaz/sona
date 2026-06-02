@@ -18,7 +18,7 @@ use super::{
     TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
     TranscriptSnapshotRecord,
 };
-use crate::sherpa::TranscriptSegment;
+use crate::asr::TranscriptSegment;
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
@@ -563,8 +563,8 @@ pub async fn dispose_prepared_backup_import(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::asr::TranscriptSegment;
     use crate::history_repository::test_support::sample_history_item;
-    use crate::sherpa::TranscriptSegment;
     use serde_json::json;
     use tempfile::tempdir;
 

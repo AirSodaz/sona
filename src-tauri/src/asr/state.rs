@@ -1,0 +1,76 @@
+use super::metrics::{
+    AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+    new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
+    set_model_load_metric, snapshot_metrics,
+};
+use super::model_config::Recognizer;
+use super::traits::AsrStreamingSession;
+use super::types::AsrEngine;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ModelConfigKey {
+    pub model_path: String,
+    pub model_type: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub hotwords: Option<String>,
+}
+
+pub struct AsrState {
+    pub active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
+    pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
+    pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
+    pub(crate) metrics: AsrMetricsStore,
+}
+
+impl Default for AsrState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AsrState {
+    pub fn new() -> Self {
+        Self {
+            active_sessions: Mutex::new(HashMap::new()),
+            instance_engines: Mutex::new(HashMap::new()),
+            recognizer_pool: Mutex::new(HashMap::new()),
+            metrics: new_metrics_store(),
+        }
+    }
+
+    pub async fn has_online_session(&self, instance_id: &str) -> bool {
+        self.active_sessions.lock().await.contains_key(instance_id)
+    }
+
+    pub async fn set_instance_engine(&self, instance_id: &str, engine: AsrEngine) {
+        self.instance_engines
+            .lock()
+            .await
+            .insert(instance_id.to_string(), engine);
+    }
+
+    pub async fn instance_engine(&self, instance_id: &str) -> Option<AsrEngine> {
+        self.instance_engines.lock().await.get(instance_id).copied()
+    }
+
+    pub async fn record_model_load_metric(&self, metric: AsrModelLoadMetric) {
+        set_model_load_metric(&self.metrics, metric);
+    }
+
+    pub async fn record_live_inference_metric(&self, metric: AsrInferenceMetric) {
+        set_live_inference_metric(&self.metrics, metric);
+    }
+
+    pub async fn record_batch_inference_metric(&self, metric: AsrInferenceMetric) {
+        set_batch_inference_metric(&self.metrics, metric);
+    }
+
+    pub async fn metrics_snapshot(&self) -> AsrRuntimeMetricsSnapshot {
+        snapshot_metrics(&self.metrics)
+    }
+}

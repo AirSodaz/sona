@@ -3,10 +3,8 @@ use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
-use super::online_traits::{
-    OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession,
-};
-use super::state::SherpaState;
+use super::state::AsrState;
+use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
@@ -14,7 +12,7 @@ use super::types::{
     AsrMode, AsrTranscriptionRequest, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
     TranscriptTimingSource, TranscriptTimingUnit,
 };
-use crate::sherpa::postprocess::TranscriptPostprocessor;
+use crate::asr::postprocess::TranscriptPostprocessor;
 use async_trait::async_trait;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
@@ -476,7 +474,7 @@ pub fn map_status_error(status: u16, api_code: Option<&str>, api_message: Option
 
 pub struct VolcengineAdapter;
 
-impl OnlineAsrProviderAdapter for VolcengineAdapter {
+impl AsrProviderAdapter for VolcengineAdapter {
     fn provider_id(&self) -> &'static str {
         crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
     }
@@ -484,20 +482,20 @@ impl OnlineAsrProviderAdapter for VolcengineAdapter {
     fn create_batch_processor(
         &self,
         _config: &Value,
-    ) -> Result<Option<Box<dyn OnlineBatchProcessor>>, SherpaError> {
-        Ok(Some(Box::new(VolcengineBatchProcessor)))
+    ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
+        Ok(Some(std::sync::Arc::new(VolcengineBatchProcessor)))
     }
 
     fn create_streaming_session(
         &self,
         _config: &Value,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<Box<dyn OnlineStreamingSession>>, SherpaError> {
+    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
         if request.mode != AsrMode::Streaming {
             return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
         }
         config_from_request(request, VolcengineMode::Streaming)?;
-        Ok(Some(Box::new(VolcengineStreamingSession {
+        Ok(Some(std::sync::Arc::new(VolcengineStreamingSession {
             request: request.clone(),
             writer: Arc::new(Mutex::new(None)),
             flushing: Arc::new(AtomicBool::new(false)),
@@ -509,11 +507,11 @@ impl OnlineAsrProviderAdapter for VolcengineAdapter {
 pub struct VolcengineBatchProcessor;
 
 #[async_trait]
-impl OnlineBatchProcessor for VolcengineBatchProcessor {
+impl AsrBatchProcessor for VolcengineBatchProcessor {
     async fn process_file(
         &self,
         app: AppHandle,
-        state: &SherpaState,
+        state: &AsrState,
         file_path: String,
         request: AsrTranscriptionRequest,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
@@ -522,19 +520,24 @@ impl OnlineBatchProcessor for VolcengineBatchProcessor {
 }
 
 #[async_trait]
-impl OnlineStreamingSession for VolcengineStreamingSession {
-    async fn start(&self, app: AppHandle, instance_id: &str) -> Result<(), SherpaError> {
+impl AsrStreamingSession for VolcengineStreamingSession {
+    async fn start(
+        &self,
+        app: AppHandle,
+        _state: &AsrState,
+        instance_id: &str,
+    ) -> Result<(), SherpaError> {
         start_streaming_recognizer_impl(app, self, instance_id).await
     }
 
-    async fn stop(&self, _state: &SherpaState, _instance_id: &str) -> Result<(), SherpaError> {
+    async fn stop(&self, _state: &AsrState, _instance_id: &str) -> Result<(), SherpaError> {
         stop_streaming_recognizer_impl(self).await
     }
 
     async fn flush(
         &self,
         _app: AppHandle,
-        _state: &SherpaState,
+        _state: &AsrState,
         _instance_id: &str,
     ) -> Result<(), SherpaError> {
         flush_streaming_recognizer_impl(self).await
@@ -543,7 +546,7 @@ impl OnlineStreamingSession for VolcengineStreamingSession {
     async fn feed_audio_chunk(
         &self,
         _app: AppHandle,
-        _state: &SherpaState,
+        _state: &AsrState,
         _instance_id: &str,
         samples: Vec<u8>,
     ) -> Result<(), SherpaError> {
@@ -552,7 +555,7 @@ impl OnlineStreamingSession for VolcengineStreamingSession {
 
     async fn feed_audio_samples(
         &self,
-        _state: &SherpaState,
+        _state: &AsrState,
         _instance_id: &str,
         samples: &[f32],
     ) -> Result<(), SherpaError> {
@@ -777,7 +780,7 @@ async fn stop_streaming_recognizer_impl(
 
 pub async fn process_batch_file_impl(
     app: AppHandle,
-    state: &SherpaState,
+    state: &AsrState,
     file_path: String,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
@@ -926,7 +929,7 @@ mod tests {
             punctuation_model: None,
             vad_model: None,
             vad_buffer: 5.0,
-            batch_segmentation_mode: crate::sherpa::BatchSegmentationMode::Vad,
+            batch_segmentation_mode: crate::asr::BatchSegmentationMode::Vad,
             model_type: "sensevoice".to_string(),
             file_config: None,
             hotwords: None,

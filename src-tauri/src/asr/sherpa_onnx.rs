@@ -8,10 +8,6 @@ use super::model_config::{
     ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeStream, SafeVad,
     build_model_config, load_punctuation, load_vad,
 };
-use super::state::{
-    ModelConfigKey, OfflineState, SherpaInstance, SherpaState, buffered_sample_count,
-    diagnostics_instance_label, start_instance_runtime, stop_instance_runtime,
-};
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
     log_text_transform_diagnostics, normalize_recognizer_text, preview_text_for_log,
@@ -20,6 +16,8 @@ use super::transcript::{
 use super::types::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
 };
+use crate::asr::ModelConfigKey;
+use crate::asr::state::AsrState;
 use log::{debug, info, trace};
 use sherpa_onnx::OfflineRecognizer;
 use std::path::Path;
@@ -240,9 +238,74 @@ fn run_offline_inference<R: tauri::Runtime>(
     }
 }
 
+use crate::asr::error::SherpaError;
+use async_trait::async_trait;
+
+pub struct LocalSherpaSession {
+    pub instance: tokio::sync::Mutex<SherpaInstance>,
+}
+
+#[async_trait]
+impl crate::asr::traits::AsrStreamingSession for LocalSherpaSession {
+    async fn start(
+        &self,
+        _app: AppHandle,
+        _state: &AsrState,
+        instance_id: &str,
+    ) -> Result<(), SherpaError> {
+        let mut instance = self.instance.lock().await;
+        start_recognizer_impl_inner(instance_id, &mut instance)
+            .await
+            .map_err(|e| SherpaError::Generic(e))
+    }
+
+    async fn stop(&self, _state: &AsrState, instance_id: &str) -> Result<(), SherpaError> {
+        let mut instance = self.instance.lock().await;
+        stop_recognizer_impl_inner(instance_id, &mut instance)
+            .await
+            .map_err(|e| SherpaError::Generic(e))
+    }
+
+    async fn flush(
+        &self,
+        app: AppHandle,
+        state: &AsrState,
+        instance_id: &str,
+    ) -> Result<(), SherpaError> {
+        let mut instance = self.instance.lock().await;
+        flush_recognizer_impl_inner(app, state, instance_id, &mut instance)
+            .await
+            .map_err(|e| SherpaError::Generic(e))
+    }
+
+    async fn feed_audio_chunk(
+        &self,
+        app: AppHandle,
+        state: &AsrState,
+        instance_id: &str,
+        samples: Vec<u8>,
+    ) -> Result<(), SherpaError> {
+        let mut instance = self.instance.lock().await;
+        feed_audio_chunk_impl_inner(app, state, instance_id, &mut instance, samples)
+            .await
+            .map_err(|e| SherpaError::Generic(e))
+    }
+
+    async fn feed_audio_samples(
+        &self,
+        _state: &AsrState,
+        _instance_id: &str,
+        _samples: &[f32],
+    ) -> Result<(), SherpaError> {
+        Err(SherpaError::Generic(
+            "feed_audio_samples is not supported via Session without AppHandle".to_string(),
+        ))
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn init_recognizer_impl(
-    state: State<'_, SherpaState>,
+    state: State<'_, AsrState>,
     instance_id: String,
     model_path: String,
     num_threads: i32,
@@ -327,34 +390,29 @@ pub async fn init_recognizer_impl(
     let punctuation = load_punctuation(punctuation_model);
     let vad = load_vad(vad_model.clone());
 
-    let mut instances = state.instances.lock().await;
-    let instance = instances
-        .entry(instance_id)
-        .or_insert_with(SherpaInstance::default);
-
-    // Instance-local attachments can differ even when the core recognizer is
-    // shared, so VAD/punctuation/runtime settings are refreshed here.
-    instance.recognizer = Some(recognizer);
-    instance.vad = vad;
-    instance.punctuation = punctuation.map(Arc::new);
-    instance.vad_model = vad_model.clone();
-    instance.vad_buffer = vad_buffer;
-    instance.normalization_options = normalization_options.unwrap_or_default();
-    instance.postprocessor =
+    let mut session_instance = SherpaInstance::default();
+    session_instance.recognizer = Some(recognizer);
+    session_instance.vad = vad;
+    session_instance.punctuation = punctuation.map(Arc::new);
+    session_instance.vad_model = vad_model.clone();
+    session_instance.vad_buffer = vad_buffer;
+    session_instance.normalization_options = normalization_options.unwrap_or_default();
+    session_instance.postprocessor =
         TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?;
+
+    let session = std::sync::Arc::new(LocalSherpaSession {
+        instance: tokio::sync::Mutex::new(session_instance),
+    });
+    let mut active = state.active_sessions.lock().await;
+    active.insert(instance_id.clone(), session);
 
     Ok(())
 }
 
-pub async fn start_recognizer_impl(
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn start_recognizer_impl_inner(
+    instance_id: &str,
+    instance: &mut SherpaInstance,
 ) -> Result<(), String> {
-    let mut instances = state.instances.lock().await;
-    let instance = instances
-        .get_mut(&instance_id)
-        .ok_or("Instance not found")?;
-
     let Some(recognizer) = instance.recognizer.as_ref() else {
         return Err("Recognizer not initialized".to_string());
     };
@@ -390,12 +448,11 @@ pub async fn start_recognizer_impl(
     Ok(())
 }
 
-pub async fn stop_recognizer_impl(
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn stop_recognizer_impl_inner(
+    instance_id: &str,
+    instance: &mut SherpaInstance,
 ) -> Result<(), String> {
-    let mut instances = state.instances.lock().await;
-    if let Some(instance) = instances.get_mut(&instance_id) {
+    {
         if let Some(label) = diagnostics_instance_label(&instance_id) {
             info!(
                 "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
@@ -415,16 +472,13 @@ pub async fn stop_recognizer_impl(
     Ok(())
 }
 
-pub async fn flush_recognizer_impl<R: tauri::Runtime>(
+async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
     app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
+    state: &AsrState,
+    instance_id: &str,
+    instance: &mut SherpaInstance,
 ) -> Result<(), String> {
     info!("Flushing recognizer for instance id: {}", instance_id);
-    let mut instances = state.instances.lock().await;
-    let instance = instances
-        .get_mut(&instance_id)
-        .ok_or("Instance not found")?;
 
     if let Some(label) = diagnostics_instance_label(&instance_id) {
         info!(
@@ -453,7 +507,7 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                 let recognizer_copy = recognizer.clone();
                 let punct_copy = instance.punctuation.clone();
                 let seg_id_copy = seg_id.clone();
-                let instance_id_copy = instance_id.clone();
+                let instance_id_copy = instance_id.to_string();
                 let first_segment_emitted = diagnostics_instance_label(&instance_id)
                     .is_some()
                     .then(|| instance.record_diagnostics.first_segment_emitted.clone());
@@ -603,14 +657,15 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
     Ok(())
 }
 
-pub async fn feed_audio_samples<R: tauri::Runtime>(
+async fn feed_audio_samples_inner<R: tauri::Runtime>(
     app: &AppHandle<R>,
-    state: &SherpaState,
+    state: &AsrState,
     instance_id: &str,
+    instance: &mut SherpaInstance,
     samples: &[f32],
 ) -> Result<(), String> {
-    let mut instances = state.instances.lock().await;
-    let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
+    // instances removed
+    // instances lookup removed
 
     if !instance.is_running {
         if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -1066,10 +1121,11 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     }
 }
 
-pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
+async fn feed_audio_chunk_impl_inner(
+    app: AppHandle,
+    state: &AsrState,
+    instance_id: &str,
+    instance: &mut SherpaInstance,
     samples: Vec<u8>,
 ) -> Result<(), String> {
     trace!(
@@ -1082,5 +1138,123 @@ pub async fn feed_audio_chunk_impl<R: tauri::Runtime>(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples(&app, &state, &instance_id, &float_samples).await
+    feed_audio_samples_inner(&app, &state, &instance_id, instance, &float_samples).await
+}
+
+pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
+    match instance_id {
+        "record" => Some("record"),
+        "caption" => Some("caption"),
+        "voice-typing" => Some("voice-typing"),
+        _ => None,
+    }
+}
+
+pub fn log_segment_emit_diagnostics(
+    instance_id: &str,
+    first_segment_emitted: Option<&Arc<AtomicBool>>,
+    segment: &TranscriptSegment,
+    stage: &str,
+) {
+    // These logs are intentionally scoped to the long-lived live instances we
+    // debug most often (`record`, `caption`, `voice-typing`), not to every
+    // possible recognizer consumer.
+    let Some(label) = diagnostics_instance_label(instance_id) else {
+        return;
+    };
+
+    let text_len = segment.text.chars().count();
+    if let Some(first_segment_emitted) = first_segment_emitted {
+        if first_segment_emitted
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            info!(
+                "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
+                stage, segment.id, segment.is_final, text_len
+            );
+        }
+    }
+
+    info!(
+        "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
+        stage, segment.id, segment.is_final, text_len
+    );
+}
+
+pub fn buffered_sample_count(chunks: &[Vec<f32>]) -> usize {
+    chunks.iter().map(|chunk| chunk.len()).sum()
+}
+
+pub fn start_instance_runtime(instance: &mut SherpaInstance, stream: Option<SafeStream>) {
+    // Online recognizers get a fresh stream per run; offline recognizers leave
+    // this as `None` and rebuild utterances from buffered audio chunks.
+    instance.stream = stream;
+    reset_instance_runtime_state(instance);
+    instance.is_running = true;
+}
+
+pub fn stop_instance_runtime(instance: &mut SherpaInstance) {
+    // Stopping a run clears volatile state only; the instance still keeps its
+    // recognizer and optional VAD/punctuation attachments for the next start.
+    instance.stream = None;
+    reset_instance_runtime_state(instance);
+    instance.is_running = false;
+}
+
+fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
+    // Reset only per-run counters and buffers. The shared recognizer/VAD/model
+    // attachments stay on the instance so later starts can reuse them.
+    instance.total_samples = 0;
+    instance.segment_start_time = 0.0;
+    instance.offline_state = OfflineState::default();
+    instance.current_segment_id = None;
+    instance.last_partial_metric_sample = 0;
+    instance.record_diagnostics = RecordDiagnosticsState::default();
+}
+
+#[derive(Default)]
+pub struct SherpaInstance {
+    pub recognizer: Option<Arc<Recognizer>>,
+    pub stream: Option<SafeStream>,
+    pub vad: Option<SafeVad>,
+    pub punctuation: Option<Arc<Punctuation>>,
+    pub total_samples: usize,
+    pub segment_start_time: f64,
+    pub offline_state: OfflineState,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub current_segment_id: Option<String>,
+    pub last_partial_metric_sample: usize,
+    pub is_running: bool,
+    pub record_diagnostics: RecordDiagnosticsState,
+    pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocessor: TranscriptPostprocessor,
+}
+
+pub struct OfflineState {
+    pub speech_buffer: Vec<Vec<f32>>,
+    pub ring_buffer: std::collections::VecDeque<Vec<f32>>,
+    pub is_speaking: bool,
+    pub last_inference_time: std::time::Instant,
+    pub utterance_start_sample: usize,
+}
+
+#[derive(Default)]
+pub struct RecordDiagnosticsState {
+    pub first_sample_logged: bool,
+    pub skipped_while_stopped_logged: bool,
+    pub first_segment_emitted: Arc<AtomicBool>,
+}
+
+impl Default for OfflineState {
+    fn default() -> Self {
+        Self {
+            speech_buffer: Vec::new(),
+            ring_buffer: std::collections::VecDeque::new(),
+            is_speaking: false,
+            utterance_start_sample: 0,
+            last_inference_time: std::time::Instant::now(),
+        }
+    }
 }

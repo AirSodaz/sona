@@ -272,7 +272,7 @@ impl Recognizer {
             model_type
         );
         // This builds the heavy recognizer object for one concrete model
-        // configuration. Pooling/reuse happens one level up in `SherpaState`.
+        // configuration. Pooling/reuse happens one level up in `AsrState`.
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,

@@ -1,6 +1,6 @@
 use super::model_config::Punctuation;
 use super::recognizer_output_event;
-use super::state::{diagnostics_instance_label, log_segment_emit_diagnostics};
+use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
 use super::types::{
     TranscriptNormalizationOptions, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
     TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
