@@ -133,6 +133,7 @@ pub async fn feed_audio_chunk_impl(
 }
 
 pub async fn feed_audio_samples_impl(
+    app: AppHandle,
     state: &AsrState,
     instance_id: &str,
     samples: &[f32],
@@ -145,7 +146,7 @@ pub async fn feed_audio_samples_impl(
             .ok_or(SherpaError::OnlineSessionNotInitialized)?
     };
     session
-        .feed_audio_samples(state, instance_id, samples)
+        .feed_audio_samples(app.clone(), state, instance_id, samples)
         .await
 }
 

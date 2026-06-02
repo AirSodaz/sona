@@ -557,11 +557,12 @@ impl AsrStreamingSession for VolcengineStreamingSession {
 
     async fn feed_audio_samples(
         &self,
+        app: AppHandle,
         _state: &AsrState,
         _instance_id: &str,
         samples: &[f32],
     ) -> Result<(), SherpaError> {
-        feed_audio_samples_impl(self, samples).await
+        feed_audio_samples_impl(app, self, samples).await
     }
 }
 
@@ -717,6 +718,7 @@ async fn feed_audio_chunk_impl(
 /// Feed f32 audio samples from the hardware capture worker to a Volcengine
 /// streaming session. Converts f32 → i16 PCM bytes and sends via WebSocket.
 async fn feed_audio_samples_impl(
+    _app: AppHandle,
     session: &VolcengineStreamingSession,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
@@ -873,7 +875,7 @@ pub async fn process_batch_file_impl(
 #[cfg(test)]
 mod tests {
     use super::super::types::{
-        AsrEngine, OnlineAsrProviderRequest, TranscriptNormalizationOptions,
+        TranscriptNormalizationOptions,
         TranscriptPostprocessOptions,
     };
     use super::*;
@@ -926,6 +928,7 @@ mod tests {
             enable_itn: true,
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
+            hotwords: None,
             engine_config: crate::asr::types::AsrEngineConfig::Online {
                 provider: crate::asr::types::OnlineAsrProviderRequest {
                     provider_id: crate::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),

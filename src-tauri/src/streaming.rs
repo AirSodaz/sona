@@ -283,6 +283,7 @@ async fn handle_online_streaming_socket(
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
                         if let Err(e) = crate::asr::online::feed_audio_samples_impl(
+                            app_handle.clone(),
                             sherpa_state.inner(),
                             &session_id,
                             &samples,

@@ -40,8 +40,9 @@ pub struct AsrTranscriptionRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(tag = "engine", rename_all = "kebab-case")]
+#[serde(tag = "engine")]
 pub enum AsrEngineConfig {
+    #[serde(rename = "local-sherpa", rename_all = "camelCase")]
     LocalSherpa {
         #[serde(default)]
         model_id: Option<String>,
@@ -60,6 +61,7 @@ pub enum AsrEngineConfig {
         #[serde(default)]
         gpu_acceleration: Option<String>,
     },
+    #[serde(rename = "online", rename_all = "camelCase")]
     Online {
         #[serde(rename = "onlineProvider")]
         provider: OnlineAsrProviderRequest,

@@ -129,8 +129,8 @@ fn resolve_transport_asr_request(
 /// ASR backend. Routes by the engine selected during `init_recognizer` so an
 /// expected cloud recognizer cannot silently fall through to local Sherpa when
 /// the cloud session is missing or failed.
-pub async fn feed_audio_samples<R: tauri::Runtime>(
-    _app: &AppHandle<R>,
+pub async fn feed_audio_samples(
+    _app: &AppHandle,
     state: &AsrState,
     instance_id: &str,
     samples: &[f32],
@@ -142,7 +142,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
         })?
     };
     session
-        .feed_audio_samples(state, instance_id, samples)
+        .feed_audio_samples(_app.clone(), state, instance_id, samples)
         .await
 }
 
@@ -451,17 +451,17 @@ mod tests {
             model_path,
             num_threads,
             punctuation_model,
-            hotwords,
             ..
         } = &request.engine_config {
             assert_eq!(model_path, "C:/models/legacy");
             assert_eq!(*num_threads, 2);
             assert_eq!(punctuation_model.as_deref(), Some("C:/models/punct"));
-            assert_eq!(hotwords.as_deref(), Some("Sona"));
         } else {
             panic!("Expected LocalSherpa engine config");
         }
         
+        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
+
         assert!(!request.enable_itn);
         assert_eq!(request.language, "zh");
         assert!(request.normalization_options.enable_timeline);

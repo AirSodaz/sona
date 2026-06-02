@@ -463,8 +463,8 @@ fn update_capture_pause_state(
     Ok(())
 }
 
-fn spawn_capture_worker_task<R: Runtime + 'static>(
-    app: AppHandle<R>,
+fn spawn_capture_worker_task(
+    app: AppHandle,
     kind: CaptureKind,
     mut task_consumer: impl Consumer<Item = f32> + Send + 'static,
     mut data_rx: tokio::sync::mpsc::Receiver<()>,
@@ -557,8 +557,8 @@ fn spawn_capture_worker_task<R: Runtime + 'static>(
     });
 }
 
-async fn drain_capture_worker_chunk<R: Runtime>(
-    app: &AppHandle<R>,
+async fn drain_capture_worker_chunk(
+    app: &AppHandle,
     kind: CaptureKind,
     task_consumer: &mut impl Consumer<Item = f32>,
     pull_buffer: &mut [f32],
@@ -585,9 +585,9 @@ async fn drain_capture_worker_chunk<R: Runtime>(
 }
 
 #[tauri::command(async)]
-pub fn start_system_audio_capture<R: Runtime>(
-    app: AppHandle<R>,
-    window: Window<R>,
+pub fn start_system_audio_capture(
+    app: AppHandle,
+    window: Window,
     state: tauri::State<'_, AudioState>,
     _sherpa_state: tauri::State<'_, crate::asr::AsrState>,
     device_name: Option<String>,
@@ -605,9 +605,9 @@ pub fn start_system_audio_capture<R: Runtime>(
     )
 }
 
-fn start_shared_capture<R: Runtime + 'static>(
-    app: AppHandle<R>,
-    window: Window<R>,
+fn start_shared_capture(
+    app: AppHandle,
+    window: Window,
     state: &tauri::State<'_, AudioState>,
     kind: CaptureKind,
     device_name: Option<String>,
@@ -912,7 +912,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
     });
 }
 
-async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f32]) {
+async fn feed_system_audio_to_instances(app: &AppHandle, chunk: &[f32]) {
     let instance_ids: Vec<String> = {
         let audio_state = app.state::<AudioState>();
         let guard = match audio_state.system_capture.lock() {
@@ -956,9 +956,9 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 #[tauri::command(async)]
-pub fn start_microphone_capture<R: Runtime>(
-    app: AppHandle<R>,
-    window: Window<R>,
+pub fn start_microphone_capture(
+    app: AppHandle,
+    window: Window,
     state: tauri::State<'_, AudioState>,
     _sherpa_state: tauri::State<'_, crate::asr::AsrState>,
     device_name: Option<String>,
@@ -976,7 +976,7 @@ pub fn start_microphone_capture<R: Runtime>(
     )
 }
 
-async fn feed_mic_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f32]) {
+async fn feed_mic_audio_to_instances(app: &AppHandle, chunk: &[f32]) {
     let instance_ids: Vec<String> = {
         let audio_state = app.state::<AudioState>();
         let guard = match audio_state.mic_capture.lock() {
@@ -1006,8 +1006,8 @@ async fn feed_mic_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f3
     }
 }
 
-async fn feed_capture_audio_to_instances<R: Runtime>(
-    app: &AppHandle<R>,
+async fn feed_capture_audio_to_instances(
+    app: &AppHandle,
     kind: CaptureKind,
     chunk: &[f32],
 ) {

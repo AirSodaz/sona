@@ -293,13 +293,15 @@ impl crate::asr::traits::AsrStreamingSession for LocalSherpaSession {
 
     async fn feed_audio_samples(
         &self,
-        _state: &AsrState,
-        _instance_id: &str,
-        _samples: &[f32],
+        app: AppHandle,
+        state: &AsrState,
+        instance_id: &str,
+        samples: &[f32],
     ) -> Result<(), SherpaError> {
-        Err(SherpaError::Generic(
-            "feed_audio_samples is not supported via Session without AppHandle".to_string(),
-        ))
+        let mut instance = self.instance.lock().await;
+        feed_audio_samples_inner(&app, state, instance_id, &mut instance, samples)
+            .await
+            .map_err(|e| SherpaError::Generic(e))
     }
 }
 

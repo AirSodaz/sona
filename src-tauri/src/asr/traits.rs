@@ -31,6 +31,7 @@ pub trait AsrStreamingSession: Send + Sync {
     ) -> Result<(), SherpaError>;
     async fn feed_audio_samples(
         &self,
+        app: AppHandle,
         state: &AsrState,
         instance_id: &str,
         samples: &[f32],
