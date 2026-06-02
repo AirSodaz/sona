@@ -183,6 +183,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     maxQueueSize: config.httpServerMaxQueueSize ?? 100,
                     maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
                     jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+                    maxStreaming: 2,
                     ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
                 }).then((normalizedWhitelist) => {
                     if (typeof normalizedWhitelist === 'string' && normalizedWhitelist !== config.httpServerIpWhitelist) {

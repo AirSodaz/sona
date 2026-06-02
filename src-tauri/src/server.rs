@@ -266,6 +266,10 @@ pub struct ServerState {
     pub temp_dir: PathBuf,
     pub models_dir: PathBuf,
     pub start_time: std::time::Instant,
+    pub api_key: String,
+    pub streaming_semaphore: Arc<tokio::sync::Semaphore>,
+    pub recognizer_pool: Arc<tokio::sync::Mutex<HashMap<crate::sherpa::ModelConfigKey, Arc<crate::sherpa::Recognizer>>>>,
+    pub ip_whitelist: Arc<Vec<IpNet>>,
 }
 
 pub async fn handle_transcribe(
@@ -547,6 +551,7 @@ pub async fn run_server(
     max_queue_size: usize,
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
+    max_streaming: usize,
     ip_whitelist: Arc<Vec<IpNet>>,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
@@ -587,6 +592,10 @@ pub async fn run_server(
         temp_dir,
         models_dir,
         start_time: std::time::Instant::now(),
+        api_key: api_key.to_string(),
+        streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
+        recognizer_pool: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        ip_whitelist: ip_whitelist.clone(),
     };
 
     let cors = CorsLayer::new()
@@ -617,8 +626,12 @@ pub async fn run_server(
         api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(api_key));
     }
 
+    let ws_router = Router::new()
+        .route("/v1/streaming", get(crate::streaming::handle_streaming))
+        .with_state(state.clone());
+
     // Merge and apply CORS & state
-    let router = router.merge(api_router).layer(cors).with_state(state);
+    let router = router.merge(ws_router).merge(api_router).layer(cors).with_state(state);
     let addr = format!("{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
@@ -664,6 +677,10 @@ mod tests {
             temp_dir,
             models_dir,
             start_time: std::time::Instant::now(),
+            api_key: "".to_string(),
+            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            ip_whitelist: std::sync::Arc::new(vec![]),
         };
 
         let app = Router::new()
@@ -713,6 +730,10 @@ mod tests {
             temp_dir,
             models_dir,
             start_time: std::time::Instant::now(),
+            api_key: "".to_string(),
+            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            ip_whitelist: std::sync::Arc::new(vec![]),
         };
 
         let app = Router::new()
@@ -771,6 +792,10 @@ mod tests {
             temp_dir,
             models_dir,
             start_time: std::time::Instant::now(),
+            api_key: "".to_string(),
+            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            ip_whitelist: std::sync::Arc::new(vec![]),
         };
 
         let app = Router::new()

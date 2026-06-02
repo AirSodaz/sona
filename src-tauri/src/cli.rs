@@ -66,6 +66,9 @@ struct ServeArgs {
     models_dir: Option<PathBuf>,
     #[arg(long, default_value = "localhost")]
     ip_whitelist: String,
+    /// Maximum concurrent streaming WebSocket connections.
+    #[arg(long, default_value = "2")]
+    max_streaming: usize,
 }
 
 #[derive(Debug, Args)]
@@ -291,6 +294,7 @@ async fn run_serve(args: ServeArgs) -> Result<(), String> {
         100, // max_queue_size
         50,  // max_upload_size_mb
         60,  // job_ttl_minutes
+        args.max_streaming,
         parsed_arc,
         rx,
     )

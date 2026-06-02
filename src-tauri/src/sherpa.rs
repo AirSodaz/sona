@@ -31,7 +31,9 @@ pub use model_config::ModelFileConfig;
 pub use online_traits::{OnlineAsrProviderAdapter, OnlineBatchProcessor, OnlineStreamingSession};
 pub use postprocess::TranscriptPostprocessor;
 pub use state::SherpaState;
-pub(crate) use transcript::ensure_transcript_segment_timing;
+pub(crate) use state::{ModelConfigKey, OfflineState};
+pub(crate) use transcript::{ensure_transcript_segment_timing, normalize_recognizer_text, finalize_transcript_text, synthesize_durations};
+pub(crate) use model_config::{build_model_config, load_vad, Recognizer, RecognizerInner};
 pub use types::{
     AsrEngine, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,

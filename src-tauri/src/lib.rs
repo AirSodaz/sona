@@ -21,6 +21,7 @@ mod project_repository;
 mod recovery;
 mod runtime_status;
 pub mod server;
+pub mod streaming;
 pub mod sherpa;
 pub mod speaker;
 mod speaker_correction;
@@ -60,6 +61,7 @@ async fn start_api_server(
     max_queue_size: usize,
     max_upload_size_mb: usize,
     job_ttl_minutes: u64,
+    max_streaming: usize,
     ip_whitelist: String,
 ) -> Result<String, String> {
     let parsed_whitelist = crate::server::parse_ip_whitelist(&ip_whitelist)?;
@@ -94,6 +96,7 @@ async fn start_api_server(
             max_queue_size,
             max_upload_size_mb,
             job_ttl_minutes,
+            max_streaming,
             parsed_arc,
             rx,
         )
@@ -323,6 +326,7 @@ pub fn run() {
                 let mut max_queue_size = 100;
                 let mut max_upload_size_mb = 50;
                 let mut job_ttl_minutes = 60;
+                let mut max_streaming = 2;
                 let mut ip_whitelist = "localhost".to_string();
 
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
@@ -368,6 +372,12 @@ pub fn run() {
                             {
                                 job_ttl_minutes = ttl;
                             }
+                            if let Some(ms) = config
+                                .get("httpServerMaxStreaming")
+                                .and_then(|v| v.as_u64())
+                            {
+                                max_streaming = ms as usize;
+                            }
                             if let Some(ip_list) =
                                 config.get("httpServerIpWhitelist").and_then(|v| v.as_str())
                             {
@@ -412,6 +422,7 @@ pub fn run() {
                         max_queue_size,
                         max_upload_size_mb,
                         job_ttl_minutes,
+                        max_streaming,
                         parsed_arc,
                         rx,
                     )
