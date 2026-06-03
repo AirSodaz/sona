@@ -1,6 +1,5 @@
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use specta::Type;
-use std::fmt;
 
 /// A macro to implement backward-compatible deserialization for an enum
 /// that is internally represented as `Builtin(BuiltinEnum)` and `Custom(String)`.
