@@ -19,6 +19,16 @@ pub fn run() {
     let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 
+    #[cfg(debug_assertions)]
+    {
+        tauri_specta::Builder::<tauri::Wry>::new()
+            .typ::<crate::core::domain::LlmProvider>()
+            .typ::<crate::core::domain::PolishPresetId>()
+            .typ::<crate::core::domain::SummaryTemplateId>()
+            .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+            .expect("Failed to export typescript bindings");
+    }
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()

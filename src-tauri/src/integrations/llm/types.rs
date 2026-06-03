@@ -37,25 +37,26 @@ pub enum LlmProviderStrategy {
 }
 
 impl LlmProviderStrategy {
-    pub(crate) fn from_provider_id(provider: &str) -> Self {
+    pub(crate) fn from_provider(provider: &LlmProvider) -> Self {
+        use crate::core::domain::{BuiltinLlmProvider, LlmProvider};
         match provider {
-            "open_ai" | "openai_compatible" | "open_ai_compatible" => Self::OpenAiCompatible,
-            "open_ai_responses" => Self::OpenAiResponses,
-            "azure_openai" => Self::AzureOpenAi,
-            "anthropic" => Self::Anthropic,
-            "gemini" => Self::Gemini,
-            "ollama" => Self::Ollama,
-            "moonshot_ai" => Self::MoonshotAi,
-            "moonshot_cn" => Self::MoonshotCn,
-            "xiaomi" => Self::Xiaomi,
-            "deep_seek" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global"
-            | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai"
-            | "chatglm" => Self::OpenAiCompatible,
-            "perplexity" => Self::Perplexity,
-            "volcengine" => Self::OpenAiCompatibleCustomPath,
-            "google_translate" => Self::GoogleTranslate,
-            "google_translate_free" => Self::GoogleTranslateFree,
-            _ => Self::OpenAiCompatible,
+            LlmProvider::Custom(_) => Self::OpenAiCompatible,
+            LlmProvider::Builtin(b) => match b {
+                BuiltinLlmProvider::OpenAi => Self::OpenAi,
+                BuiltinLlmProvider::OpenAiResponses => Self::OpenAiResponses,
+                BuiltinLlmProvider::AzureOpenai => Self::AzureOpenAi,
+                BuiltinLlmProvider::Anthropic => Self::Anthropic,
+                BuiltinLlmProvider::Gemini => Self::Gemini,
+                BuiltinLlmProvider::Ollama => Self::Ollama,
+                BuiltinLlmProvider::MoonshotAi => Self::MoonshotAi,
+                BuiltinLlmProvider::MoonshotCn => Self::MoonshotCn,
+                BuiltinLlmProvider::Xiaomi => Self::Xiaomi,
+                BuiltinLlmProvider::Perplexity => Self::Perplexity,
+                BuiltinLlmProvider::Volcengine => Self::OpenAiCompatibleCustomPath,
+                BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
+                BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
+                _ => Self::OpenAiCompatible,
+            }
         }
     }
 }
@@ -99,7 +100,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
     }
 }
 
-pub type LlmProvider = String;
+pub use crate::core::domain::LlmProvider;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -187,7 +188,7 @@ impl<'de> Deserialize<'de> for LlmConfig {
         Ok(Self {
             strategy: raw
                 .strategy
-                .unwrap_or_else(|| LlmProviderStrategy::from_provider_id(&raw.provider)),
+                .unwrap_or_else(|| LlmProviderStrategy::from_provider(&raw.provider)),
             provider: raw.provider,
             base_url: raw.base_url,
             api_key: raw.api_key,

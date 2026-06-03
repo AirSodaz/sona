@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
+use crate::core::domain::{BuiltinLlmProvider, BuiltinPolishPresetId, BuiltinSummaryTemplateId, LlmProvider, PolishPresetId, SummaryTemplateId};
+
 const CURRENT_CONFIG_VERSION: i64 = 7;
 const DEFAULT_POLISH_PRESET_ID: &str = "general";
 const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
@@ -116,13 +118,12 @@ fn resolve_effective_config_inner(global_config: Value, project: Option<&Value>)
     );
     config.insert(
         "polishPresetId".to_string(),
-        Value::String(
+        json!(
             defaults
                 .and_then(|value| value.get("polishPresetId"))
-                .and_then(non_empty_str)
-                .or_else(|| config.get("polishPresetId").and_then(non_empty_str))
-                .unwrap_or(DEFAULT_POLISH_PRESET_ID)
-                .to_string(),
+                .and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok())
+                .or_else(|| config.get("polishPresetId").and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok()))
+                .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
         ),
     );
 
@@ -247,14 +248,22 @@ fn normalize_current_config(existing: Value) -> Value {
 
     set(&mut config, "llmSettings", llm_settings);
     set(&mut config, "summaryEnabled", summary_enabled);
-    set(&mut config, "summaryTemplateId", json!(summary_template_id));
+    let summary_template_val = json!(
+        serde_json::from_value::<SummaryTemplateId>(json!(summary_template_id))
+            .unwrap_or(SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General))
+    );
+    set(&mut config, "summaryTemplateId", summary_template_val);
     set(
         &mut config,
         "summaryCustomTemplates",
         summary_custom_templates,
     );
     set(&mut config, "polishKeywords", json!(""));
-    set(&mut config, "polishPresetId", json!(polish_preset_id));
+    let polish_preset_val = json!(
+        serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
+            .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
+    );
+    set(&mut config, "polishPresetId", polish_preset_val);
     set(&mut config, "polishCustomPresets", polish_custom_presets);
     set(&mut config, "polishKeywordSets", polish_keyword_sets);
     set(&mut config, "logLevel", json!(log_level));
@@ -537,7 +546,11 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(&parsed, "translationLanguage", "zh")),
         ),
         ("polishKeywords", json!("")),
-        ("polishPresetId", json!(polish_preset_id)),
+        (
+            "polishPresetId",
+            json!(serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
+                .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General)))
+        ),
         ("polishCustomPresets", polish_custom_presets),
         (
             "polishKeywordSets",
@@ -733,13 +746,13 @@ fn default_config() -> Value {
         ("batchVadEnabled", json!(true)),
         ("vadBufferSize", json!(5)),
         ("maxConcurrent", json!(2)),
-        ("llmSettings", create_llm_settings(DEFAULT_LLM_PROVIDER)),
+        ("llmSettings", create_llm_settings()),
         ("summaryEnabled", json!(true)),
-        ("summaryTemplateId", json!(DEFAULT_SUMMARY_TEMPLATE_ID)),
+        ("summaryTemplateId", json!(SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General))),
         ("summaryCustomTemplates", json!([])),
         ("translationLanguage", json!("zh")),
         ("polishKeywords", json!("")),
-        ("polishPresetId", json!(DEFAULT_POLISH_PRESET_ID)),
+        ("polishPresetId", json!(PolishPresetId::Builtin(BuiltinPolishPresetId::General))),
         ("polishCustomPresets", json!([])),
         ("autoPolish", json!(false)),
         ("autoPolishFrequency", json!(5)),
@@ -1634,11 +1647,12 @@ fn sanitize_provider_setting(
     Value::Object(merged)
 }
 
-fn create_llm_settings(active_provider: &str) -> Value {
+fn create_llm_settings() -> Value {
+    let active_provider = LlmProvider::Builtin(BuiltinLlmProvider::GoogleTranslateFree);
     let mut providers = Map::new();
     providers.insert(
-        active_provider.to_string(),
-        sanitize_provider_setting(active_provider, None, None),
+        "google_translate_free".to_string(), // Keep internal map key as string for backwards-compat if needed, or serialize active_provider. Let's serialize it.
+        sanitize_provider_setting("google_translate_free", None, None),
     );
     json!({
         "activeProvider": active_provider,

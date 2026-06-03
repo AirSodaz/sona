@@ -70,6 +70,9 @@ sha2 = "0.11.0"
 hex = "0.4.3"
 ipnet = "2.10"
 infer = "0.16"
+tauri-specta = { version = "2.0.0-rc.25", features = ["javascript", "typescript"] }
+specta = "2.0.0-rc.25"
+specta-typescript = "0.0.12"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

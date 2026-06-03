@@ -78,7 +78,7 @@ impl UsageRecorder {
             &self.app,
             crate::integrations::llm::llm_usage::UsageRecord {
                 occurred_at: occurred_at.clone(),
-                provider: self.config.provider.clone(),
+                provider: self.config.provider.as_str(),
                 category: self.category,
                 usage: response.usage.clone(),
             },
@@ -511,7 +511,7 @@ pub(crate) async fn list_llm_models_command(
 ) -> Result<Vec<LlmModelSummary>, String> {
     let strategy = request
         .strategy
-        .unwrap_or_else(|| LlmProviderStrategy::from_provider_id(&request.provider));
+        .unwrap_or_else(|| LlmProviderStrategy::from_provider(&request.provider));
     if !strategy_supports_model_listing(strategy) {
         return Ok(vec![]);
     }

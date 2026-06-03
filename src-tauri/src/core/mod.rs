@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod config;
 pub mod diagnostics;
+pub mod domain;
 pub mod pipeline;
 pub mod preset_models;
 pub mod recovery;

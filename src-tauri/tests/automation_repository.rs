@@ -4,6 +4,9 @@ pub mod integrations {
     #[path = "../../src/integrations/asr_providers.rs"]
     pub mod asr_providers;
 }
+pub mod core {
+    pub use tauri_appsona_lib::core::*;
+}
 #[path = "../src/repositories/automation.rs"]
 mod automation_repository;
 

@@ -87,7 +87,7 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::integrations::asr::
 fn sample_llm_config(base_url: &str) -> LlmConfig {
     LlmConfig {
         timeout_seconds: None,
-        provider: "open_ai".to_string(),
+        provider: crate::core::domain::LlmProvider::Builtin(crate::core::domain::BuiltinLlmProvider::OpenAi),
         strategy: LlmProviderStrategy::OpenAiCompatible,
         base_url: base_url.to_string(),
         api_key: "test-key".to_string(),
@@ -145,7 +145,7 @@ fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
 #[tokio::test]
 async fn list_llm_models_rejects_remote_http_before_requesting_models() {
     let error = list_llm_models_command(LlmModelsRequest {
-        provider: "open_ai".to_string(),
+        provider: crate::core::domain::LlmProvider::Builtin(crate::core::domain::BuiltinLlmProvider::OpenAi),
         strategy: Some(LlmProviderStrategy::OpenAiCompatible),
         base_url: "http://api.example.com/v1".to_string(),
         api_key: "test-key".to_string(),
@@ -350,7 +350,7 @@ fn llm_config_accepts_custom_provider_with_strategy() {
     }))
     .expect("custom provider config should deserialize");
 
-    assert_eq!(config.provider, "custom-private-gateway");
+    assert_eq!(config.provider, LlmProvider::Custom("custom-private-gateway".to_string()));
     assert_eq!(config.strategy, LlmProviderStrategy::OpenAiResponses);
 }
 
@@ -382,7 +382,7 @@ fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
     }))
     .expect("legacy provider-only config should deserialize");
 
-    assert_eq!(config.provider, "gemini");
+    assert_eq!(config.provider, LlmProvider::Builtin(crate::core::domain::BuiltinLlmProvider::Gemini));
     assert_eq!(config.strategy, LlmProviderStrategy::Gemini);
 }
 
@@ -719,7 +719,7 @@ async fn try_stream_text_skips_google_translate_providers() {
         let request = LlmGenerateRequest {
             config: LlmConfig {
                 timeout_seconds: None,
-                provider: strategy_key(strategy),
+                provider: LlmProvider::Custom(strategy_key(strategy)),
                 strategy,
                 base_url: "https://example.com".to_string(),
                 api_key: "test-key".to_string(),

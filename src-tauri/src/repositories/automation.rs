@@ -130,11 +130,6 @@ pub struct AutomationRuleValidationResult {
     pub message: Option<String>,
 }
 
-struct ProviderDefinition {
-    default_api_host: String,
-    requires_api_key: bool,
-}
-
 fn default_export_mode() -> String {
     "original".to_string()
 }
@@ -404,18 +399,18 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         return false;
     }
 
+    use crate::core::domain::{LlmProvider, BuiltinLlmProvider};
+
     let provider = model_entry
         .get("provider")
-        .and_then(Value::as_str)
-        .map(normalize_provider)
-        .unwrap_or("google_translate_free");
-    let provider_definition = match provider_definition(provider, settings.get("customProviders")) {
-        Some(definition) => definition,
-        None => return false,
+        .and_then(|v| serde_json::from_value::<LlmProvider>(v.clone()).ok())
+        .unwrap_or_else(|| LlmProvider::Builtin(BuiltinLlmProvider::GoogleTranslateFree));
+
+    let provider_setting = match &provider {
+        LlmProvider::Builtin(b) => settings.get("providers").and_then(|p| p.get(serde_json::to_string(b).unwrap().trim_matches('"'))),
+        LlmProvider::Custom(c) => settings.get("providers").and_then(|p| p.get(c)),
     };
-    let provider_setting = settings
-        .get("providers")
-        .and_then(|providers| providers.get(provider));
+
     let api_host = provider_setting
         .and_then(|setting| string_field(setting, "apiHost"))
         .map(str::trim)
@@ -424,8 +419,28 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         .and_then(|setting| string_field(setting, "apiKey"))
         .map(str::trim)
         .unwrap_or("");
-    let has_api_host = !api_host.is_empty() || !provider_definition.default_api_host.is_empty();
-    let has_api_key = !provider_definition.requires_api_key || !api_key.is_empty();
+
+    let (default_api_host, requires_api_key) = match &provider {
+        LlmProvider::Builtin(b) => (b.default_api_host().to_string(), b.requires_api_key()),
+        LlmProvider::Custom(c) => {
+            let strategy = settings.get("customProviders")
+                .and_then(|customs| customs.get(c))
+                .and_then(|custom| custom.get("strategy"))
+                .and_then(Value::as_str);
+            if let Some(s) = strategy {
+                if matches!(s, "openai_compatible" | "openai_responses" | "anthropic" | "gemini") {
+                    (String::new(), true)
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    };
+
+    let has_api_host = !api_host.is_empty() || !default_api_host.is_empty();
+    let has_api_key = !requires_api_key || !api_key.is_empty();
 
     has_api_host && has_api_key
 }
@@ -519,157 +534,6 @@ fn is_batch_asr_configured(global_config: &Value) -> bool {
 
 fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
-}
-
-fn normalize_provider(provider: &str) -> &str {
-    match provider {
-        "azure_open_ai" => "azure_openai",
-        "deepseek" => "deep_seek",
-        "moonshot" => "kimi",
-        "openai" => "open_ai",
-        "openai_compatible" | "open_ai_compatible" => "custom-openai-compatible",
-        "siliconflow" => "silicon_flow",
-        value => value,
-    }
-}
-
-fn custom_provider_strategy<'a>(
-    provider: &str,
-    custom_providers: Option<&'a Value>,
-) -> Option<&'a str> {
-    custom_providers?
-        .get(provider)?
-        .get("strategy")
-        .and_then(Value::as_str)
-}
-
-fn provider_definition(
-    provider: &str,
-    custom_providers: Option<&Value>,
-) -> Option<ProviderDefinition> {
-    if provider.starts_with("custom-") {
-        let strategy = custom_provider_strategy(provider, custom_providers)?;
-        if !matches!(
-            strategy,
-            "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
-        ) {
-            return None;
-        }
-        return Some(ProviderDefinition {
-            default_api_host: String::new(),
-            requires_api_key: true,
-        });
-    }
-
-    let definition = match provider {
-        "google_translate_free" => ProviderDefinition {
-            default_api_host: "https://translate.googleapis.com/translate_a/single".to_string(),
-            requires_api_key: false,
-        },
-        "google_translate" => ProviderDefinition {
-            default_api_host: "https://translation.googleapis.com/language/translate/v2"
-                .to_string(),
-            requires_api_key: true,
-        },
-        "open_ai" => ProviderDefinition {
-            default_api_host: "https://api.openai.com".to_string(),
-            requires_api_key: true,
-        },
-        "open_ai_responses" => ProviderDefinition {
-            default_api_host: "https://api.openai.com".to_string(),
-            requires_api_key: true,
-        },
-        "azure_openai" => ProviderDefinition {
-            default_api_host: String::new(),
-            requires_api_key: true,
-        },
-        "anthropic" => ProviderDefinition {
-            default_api_host: "https://api.anthropic.com".to_string(),
-            requires_api_key: true,
-        },
-        "gemini" => ProviderDefinition {
-            default_api_host: "https://generativelanguage.googleapis.com".to_string(),
-            requires_api_key: true,
-        },
-        "ollama" => ProviderDefinition {
-            default_api_host: "http://127.0.0.1:11434".to_string(),
-            requires_api_key: false,
-        },
-        "deep_seek" => ProviderDefinition {
-            default_api_host: "https://api.deepseek.com".to_string(),
-            requires_api_key: true,
-        },
-        "moonshot_ai" => ProviderDefinition {
-            default_api_host: "https://api.moonshot.ai".to_string(),
-            requires_api_key: true,
-        },
-        "moonshot_cn" => ProviderDefinition {
-            default_api_host: "https://api.moonshot.cn".to_string(),
-            requires_api_key: true,
-        },
-        "xiaomi" => ProviderDefinition {
-            default_api_host: "https://api.xiaomimimo.com".to_string(),
-            requires_api_key: true,
-        },
-        "kimi" => ProviderDefinition {
-            default_api_host: "https://api.moonshot.cn".to_string(),
-            requires_api_key: true,
-        },
-        "silicon_flow" => ProviderDefinition {
-            default_api_host: "https://api.siliconflow.cn".to_string(),
-            requires_api_key: true,
-        },
-        "qwen" => ProviderDefinition {
-            default_api_host: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
-            requires_api_key: true,
-        },
-        "qwen_portal" => ProviderDefinition {
-            default_api_host: "https://portal.qwen.ai/v1".to_string(),
-            requires_api_key: true,
-        },
-        "minimax_global" => ProviderDefinition {
-            default_api_host: "https://api.minimaxi.chat/v1".to_string(),
-            requires_api_key: true,
-        },
-        "minimax_cn" => ProviderDefinition {
-            default_api_host: "https://api.minimax.chat/v1".to_string(),
-            requires_api_key: true,
-        },
-        "openrouter" => ProviderDefinition {
-            default_api_host: "https://openrouter.ai/api/v1".to_string(),
-            requires_api_key: true,
-        },
-        "lm_studio" => ProviderDefinition {
-            default_api_host: "http://localhost:1234/v1".to_string(),
-            requires_api_key: false,
-        },
-        "groq" => ProviderDefinition {
-            default_api_host: "https://api.groq.com/openai".to_string(),
-            requires_api_key: true,
-        },
-        "x_ai" => ProviderDefinition {
-            default_api_host: "https://api.x.ai".to_string(),
-            requires_api_key: true,
-        },
-        "mistral_ai" => ProviderDefinition {
-            default_api_host: "https://api.mistral.ai/v1".to_string(),
-            requires_api_key: true,
-        },
-        "perplexity" => ProviderDefinition {
-            default_api_host: "https://api.perplexity.ai".to_string(),
-            requires_api_key: true,
-        },
-        "volcengine" => ProviderDefinition {
-            default_api_host: "https://ark.cn-beijing.volces.com".to_string(),
-            requires_api_key: true,
-        },
-        "chatglm" => ProviderDefinition {
-            default_api_host: "https://open.bigmodel.cn/api/paas/v4/".to_string(),
-            requires_api_key: true,
-        },
-        _ => return None,
-    };
-    Some(definition)
 }
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
