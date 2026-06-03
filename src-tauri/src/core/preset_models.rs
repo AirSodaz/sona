@@ -305,6 +305,28 @@ pub fn resolve_model_catalog_selected_ids(
     }
 }
 
+#[tauri::command(rename = "resolve_model_catalog_selected_ids")]
+pub fn resolve_model_catalog_selected_ids_command<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    paths: ModelSelectionPaths,
+) -> Result<ModelCatalogSelectedIds, String> {
+    let models_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("models");
+
+    std::fs::create_dir_all(&models_dir).map_err(|error| {
+        format!(
+            "Failed to create models directory {}: {error}",
+            models_dir.display()
+        )
+    })?;
+
+    let snapshot = build_model_catalog_snapshot(&models_dir);
+    Ok(resolve_model_catalog_selected_ids(&snapshot, &paths))
+}
+
 fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSection> {
     MODEL_CATALOG_SECTION_TYPES
         .iter()

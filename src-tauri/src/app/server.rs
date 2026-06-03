@@ -20,8 +20,272 @@ use tower_http::{
     cors::{Any, CorsLayer},
     validate_request::ValidateRequestHeaderLayer,
 };
-
 type HmacSha256 = Hmac<Sha256>;
+
+use tokio::sync::Mutex as AsyncMutex;
+use tauri::Manager;
+
+pub struct ApiServerController {
+    pub shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub online_asr_config:
+        std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>>,
+}
+
+impl Default for ApiServerController {
+    fn default() -> Self {
+        Self {
+            shutdown_sender: std::sync::Arc::new(AsyncMutex::new(None)),
+            online_asr_config: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+        }
+    }
+}
+
+pub fn load_online_asr_config(
+    app: &tauri::AppHandle,
+) -> std::collections::HashMap<String, serde_json::Value> {
+    let mut online_asr_config = std::collections::HashMap::new();
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        let config_path = data_dir.join("settings.json");
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(json) => {
+                    if let Some(config) = json
+                        .get("asr")
+                        .and_then(|v| v.get("providers"))
+                        .and_then(|v| v.get("online"))
+                    {
+                        if let Some(map) = config.as_object() {
+                            for (k, v) in map {
+                                online_asr_config.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                }
+                Err(e) => log::error!("Failed to parse settings.json: {}", e),
+            },
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!("Failed to read settings.json: {}", e);
+                }
+            }
+        }
+    }
+    online_asr_config
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn start_api_server(
+    app: tauri::AppHandle,
+    controller: tauri::State<'_, ApiServerController>,
+    host: String,
+    port: u16,
+    api_key: String,
+    max_concurrent: usize,
+    max_queue_size: usize,
+    max_upload_size_mb: usize,
+    job_ttl_minutes: u64,
+    max_streaming: usize,
+    ip_whitelist: String,
+) -> Result<String, String> {
+    let parsed_whitelist = parse_ip_whitelist(&ip_whitelist)?;
+    let normalized_whitelist = parsed_whitelist
+        .iter()
+        .map(|net| net.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+
+    let mut sender_lock = controller.shutdown_sender.lock().await;
+
+    // Stop existing server if running
+    if let Some(sender) = sender_lock.take() {
+        let _ = sender.send(());
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    *sender_lock = Some(tx);
+
+    let app_local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let temp_dir = app_local_data_dir.join("api_temp");
+    let models_dir = app_local_data_dir.join("models");
+
+    let new_config = load_online_asr_config(&app);
+    *controller.online_asr_config.write().await = new_config;
+    let online_asr_config = controller.online_asr_config.clone();
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = run_server(
+            Some(app.clone()),
+            &host,
+            port,
+            &api_key,
+            temp_dir,
+            models_dir,
+            max_concurrent,
+            max_queue_size,
+            max_upload_size_mb,
+            job_ttl_minutes,
+            max_streaming,
+            parsed_arc,
+            online_asr_config,
+            rx,
+        )
+        .await
+        {
+            log::error!("HTTP API Server failed: {}", e);
+        }
+    });
+
+    Ok(normalized_whitelist)
+}
+
+#[tauri::command]
+pub async fn stop_api_server(controller: tauri::State<'_, ApiServerController>) -> Result<(), String> {
+    let mut sender_lock = controller.shutdown_sender.lock().await;
+    if let Some(sender) = sender_lock.take() {
+        let _ = sender.send(());
+        log::info!("Sent shutdown signal to API server.");
+    }
+    Ok(())
+}
+
+pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
+    let app_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let app_data_dir = match app_handle.path().app_data_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                log::error!("Failed to get app_data_dir: {}", e);
+                return;
+            }
+        };
+        let config_path = app_data_dir.join("settings.json");
+        let mut http_server_enabled = false;
+        let mut host = "127.0.0.1".to_string();
+        let mut port = 14200;
+        let mut api_key = "".to_string();
+        let mut max_concurrent = 2;
+        let mut max_queue_size = 100;
+        let mut max_upload_size_mb = 50;
+        let mut job_ttl_minutes = 60;
+        let mut max_streaming = 2;
+        let mut ip_whitelist = "localhost".to_string();
+
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(config) = json.get("sona-config") {
+                    if let Some(enabled) =
+                        config.get("httpServerEnabled").and_then(|v| v.as_bool())
+                    {
+                        http_server_enabled = enabled;
+                    }
+                    if let Some(h) = config.get("httpServerHost").and_then(|v| v.as_str()) {
+                        host = h.to_string();
+                    }
+                    if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
+                        port = p as u16;
+                    }
+                    if let Some(key) =
+                        config.get("httpServerApiKey").and_then(|v| v.as_str())
+                    {
+                        api_key = key.to_string();
+                    }
+                    if let Some(mc) = config
+                        .get("httpServerMaxConcurrent")
+                        .and_then(|v| v.as_u64())
+                    {
+                        max_concurrent = mc as usize;
+                    }
+                    if let Some(mq) = config
+                        .get("httpServerMaxQueueSize")
+                        .and_then(|v| v.as_u64())
+                    {
+                        max_queue_size = mq as usize;
+                    }
+                    if let Some(ms) = config
+                        .get("httpServerMaxUploadSizeMB")
+                        .and_then(|v| v.as_u64())
+                    {
+                        max_upload_size_mb = ms as usize;
+                    }
+                    if let Some(ttl) = config
+                        .get("httpServerJobTtlMinutes")
+                        .and_then(|v| v.as_u64())
+                    {
+                        job_ttl_minutes = ttl;
+                    }
+                    if let Some(ms) = config
+                        .get("httpServerMaxStreaming")
+                        .and_then(|v| v.as_u64())
+                    {
+                        max_streaming = ms as usize;
+                    }
+                    if let Some(ip_list) =
+                        config.get("httpServerIpWhitelist").and_then(|v| v.as_str())
+                    {
+                        ip_whitelist = ip_list.to_string();
+                    }
+                }
+            }
+        }
+
+        if http_server_enabled {
+            let app_local_data_dir = match app_handle.path().app_local_data_dir() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    log::error!("Failed to get app_local_data_dir: {}", e);
+                    return;
+                }
+            };
+            let temp_dir = app_local_data_dir.join("api_temp");
+            let models_dir = app_local_data_dir.join("models");
+
+            let parsed_whitelist = match parse_ip_whitelist(
+                &ip_whitelist,
+            ) {
+                Ok(nets) => nets,
+                Err(e) => {
+                    log::error!(
+                        "HTTP API Server failed to start due to invalid IP whitelist: {}",
+                        e
+                    );
+                    return;
+                }
+            };
+            let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let controller = app_handle.state::<ApiServerController>();
+            *controller.shutdown_sender.lock().await = Some(tx);
+
+            let online_asr_config = controller.online_asr_config.clone();
+
+            if let Err(e) = run_server(
+                Some(app_handle.clone()),
+                &host,
+                port,
+                &api_key,
+                temp_dir,
+                models_dir,
+                max_concurrent,
+                max_queue_size,
+                max_upload_size_mb,
+                job_ttl_minutes,
+                max_streaming,
+                parsed_arc,
+                online_asr_config,
+                rx,
+            )
+            .await
+            {
+                log::error!("HTTP API Server failed: {}", e);
+            }
+        }
+    });
+}
 
 use crate::cli::{TranscribeCliOptions, resolve_transcribe_options};
 use crate::integrations::asr::transcribe_batch_with_progress;

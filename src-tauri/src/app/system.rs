@@ -727,6 +727,16 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     Ok(None)
 }
 
+#[tauri::command]
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+pub fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+    app.exit(0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
