@@ -1,33 +1,55 @@
-export type BuiltInLlmProvider =
-  | 'open_ai'
-  | 'open_ai_responses'
-  | 'azure_openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'deep_seek'
-  | 'moonshot_ai'
-  | 'moonshot_cn'
-  | 'xiaomi'
-  | 'kimi'
-  | 'silicon_flow'
-  | 'qwen'
-  | 'qwen_portal'
-  | 'minimax_global'
-  | 'minimax_cn'
-  | 'openrouter'
-  | 'lm_studio'
-  | 'groq'
-  | 'x_ai'
-  | 'mistral_ai'
-  | 'perplexity'
-  | 'volcengine'
-  | 'chatglm'
-  | 'google_translate'
-  | 'google_translate_free';
+import type {
+  LlmProvider as GeneratedLlmProvider,
+  BuiltinLlmProvider as GeneratedBuiltinLlmProvider,
+  SummaryTemplateId as GeneratedSummaryTemplateId,
+  PolishPresetId as GeneratedPolishPresetId
+} from '../bindings';
 
+export type BuiltInLlmProvider = GeneratedBuiltinLlmProvider;
 export type CustomLlmProviderId = `custom-${string}`;
+
+// Frontend strictly uses flat strings for UI state and config map keys
 export type LlmProvider = BuiltInLlmProvider | CustomLlmProviderId;
+
+// The payload shape expected by Tauri IPC
+export type LlmProviderPayload = GeneratedLlmProvider;
+
+export function flattenLlmProvider(provider: LlmProviderPayload | LlmProvider): LlmProvider {
+  if (typeof provider === 'string') return provider;
+  if ('Builtin' in provider && provider.Builtin) return provider.Builtin as LlmProvider;
+  if ('Custom' in provider && provider.Custom) return provider.Custom as CustomLlmProviderId;
+  return String(provider) as LlmProvider;
+}
+
+export function unflattenLlmProvider(provider: LlmProvider): LlmProviderPayload {
+  if (provider.startsWith('custom-')) {
+    return { Custom: provider };
+  }
+  return { Builtin: provider as BuiltInLlmProvider };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function flattenAppConfig(config: any): any {
+  if (!config) return config;
+  const result = { ...config };
+
+  if (result.llmSettings && typeof result.llmSettings === 'object') {
+    result.llmSettings = { ...result.llmSettings };
+    if (result.llmSettings.activeProvider && typeof result.llmSettings.activeProvider === 'object') {
+      result.llmSettings.activeProvider = flattenLlmProvider(result.llmSettings.activeProvider);
+    }
+  }
+
+  if (result.summaryTemplateId && typeof result.summaryTemplateId === 'object') {
+    result.summaryTemplateId = result.summaryTemplateId.Builtin || result.summaryTemplateId.Custom;
+  }
+  if (result.polishPresetId && typeof result.polishPresetId === 'object') {
+    result.polishPresetId = result.polishPresetId.Builtin || result.polishPresetId.Custom;
+  }
+
+  return result;
+}
+
 
 export type LlmProviderStrategy =
   | 'openai_compatible'
@@ -179,6 +201,10 @@ export interface LlmConfig {
 }
 
 export type SummaryTemplateId = string;
+export type SummaryTemplateIdPayload = GeneratedSummaryTemplateId;
+
+export type PolishPresetId = string;
+export type PolishPresetIdPayload = GeneratedPolishPresetId;
 
 export interface SummaryCustomTemplate {
   /** Stable template id. */

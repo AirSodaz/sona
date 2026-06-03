@@ -13,6 +13,7 @@ import type {
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
+import { flattenAppConfig } from '../../types/llm';
 
 export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
 
@@ -69,21 +70,26 @@ export async function migrateAppConfig(
   legacyConfig: unknown,
   defaultRuleSetName: string,
 ): Promise<AppConfigMigrationResult> {
-  return invokeTauri(TauriCommand.app.migrateAppConfig, {
+  const res = await invokeTauri(TauriCommand.app.migrateAppConfig, {
     savedConfig: savedConfig ?? null,
     legacyConfig: legacyConfig ?? null,
     defaultRuleSetName,
   });
+  return {
+    ...res,
+    config: flattenAppConfig(res.config)
+  };
 }
 
 export async function resolveEffectiveConfig(
   globalConfig: AppConfig,
   project: ProjectRecord | null,
 ): Promise<AppConfig> {
-  return invokeTauri(TauriCommand.app.resolveEffectiveConfig, {
+  const res = await invokeTauri(TauriCommand.app.resolveEffectiveConfig, {
     globalConfig,
     project,
   });
+  return flattenAppConfig(res);
 }
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {
