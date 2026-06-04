@@ -1,53 +1,15 @@
+use serde_json::{Map, Value, json};
+use std::collections::HashSet;
+use crate::core::domain::{
+    BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
+};
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
-use std::collections::HashSet;
+use super::types::MigrationResult;
+use super::defaults::*;
 
-use crate::core::domain::{
-    BuiltinLlmProvider, BuiltinPolishPresetId, BuiltinSummaryTemplateId, LlmProvider,
-    PolishPresetId, SummaryTemplateId,
-};
-
-const CURRENT_CONFIG_VERSION: i64 = 7;
-const DEFAULT_POLISH_PRESET_ID: &str = "general";
-const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
-const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
-const LEGACY_OPENAI_COMPATIBLE_PROVIDER: &str = "custom-openai-compatible";
-const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z";
-const BUILTIN_POLISH_PRESET_IDS: [&str; 6] = [
-    "general",
-    "customer_service",
-    "meeting",
-    "interview",
-    "lecture",
-    "podcast",
-];
-const BUILTIN_SUMMARY_TEMPLATE_IDS: [&str; 3] = ["general", "meeting", "lecture"];
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct MigrationResult {
-    pub config: Value,
-    pub migrated: bool,
-}
-
-#[tauri::command(rename_all = "camelCase")]
-pub fn migrate_app_config(
-    saved_config: Option<Value>,
-    legacy_config: Option<Value>,
-    default_rule_set_name: String,
-) -> MigrationResult {
-    migrate_app_config_inner(saved_config, legacy_config, &default_rule_set_name)
-}
-
-#[tauri::command(rename_all = "camelCase")]
-pub fn resolve_effective_config(global_config: Value, project: Option<Value>) -> Value {
-    resolve_effective_config_inner(global_config, project.as_ref())
-}
-
-fn migrate_app_config_inner(
+pub(crate) fn migrate_app_config_inner(
     saved_config: Option<Value>,
     legacy_config: Option<Value>,
     default_rule_set_name: &str,
@@ -81,7 +43,7 @@ fn migrate_app_config_inner(
     }
 }
 
-fn resolve_effective_config_inner(global_config: Value, project: Option<&Value>) -> Value {
+pub(crate) fn resolve_effective_config_inner(global_config: Value, project: Option<&Value>) -> Value {
     let mut config = as_object_clone(&global_config).unwrap_or_default();
     let global_summary_template_id = string_at(&Value::Object(config.clone()), "summaryTemplateId");
     let custom_templates = config.get("summaryCustomTemplates");
@@ -720,76 +682,6 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     config
 }
 
-fn default_config() -> Value {
-    let mut config = Map::new();
-    for (key, value) in [
-        ("configVersion", json!(CURRENT_CONFIG_VERSION)),
-        ("appLanguage", json!("auto")),
-        ("theme", json!("auto")),
-        ("font", json!("system")),
-        ("minimizeToTrayOnExit", json!(true)),
-        ("autoCheckUpdates", json!(true)),
-        ("logLevel", json!("info")),
-        ("liveRecordShortcut", json!("Ctrl + Space")),
-        ("microphoneId", json!("default")),
-        ("systemAudioDeviceId", json!("default")),
-        ("muteDuringRecording", json!(false)),
-        ("asr", default_asr_config()),
-        ("streamingModelPath", json!("")),
-        ("offlineModelPath", json!("")),
-        ("punctuationModelPath", json!("")),
-        ("vadModelPath", json!("")),
-        ("speakerSegmentationModelPath", json!("")),
-        ("speakerEmbeddingModelPath", json!("")),
-        ("lockWindow", json!(false)),
-        ("alwaysOnTop", json!(true)),
-        ("startOnLaunch", json!(false)),
-        ("captionWindowWidth", json!(800)),
-        ("captionFontSize", json!(24)),
-        ("captionFontColor", json!("#ffffff")),
-        ("captionBackgroundOpacity", json!(0.6)),
-        ("language", json!("auto")),
-        ("enableTimeline", json!(false)),
-        ("enableITN", json!(true)),
-        ("batchVadEnabled", json!(true)),
-        ("vadBufferSize", json!(5)),
-        ("maxConcurrent", json!(2)),
-        ("llmSettings", create_llm_settings()),
-        ("summaryEnabled", json!(true)),
-        (
-            "summaryTemplateId",
-            json!(SummaryTemplateId::Builtin(
-                BuiltinSummaryTemplateId::General
-            )),
-        ),
-        ("summaryCustomTemplates", json!([])),
-        ("translationLanguage", json!("zh")),
-        ("polishKeywords", json!("")),
-        (
-            "polishPresetId",
-            json!(PolishPresetId::Builtin(BuiltinPolishPresetId::General)),
-        ),
-        ("polishCustomPresets", json!([])),
-        ("autoPolish", json!(false)),
-        ("autoPolishFrequency", json!(5)),
-        ("voiceTypingEnabled", json!(false)),
-        ("voiceTypingShortcut", json!("Alt+V")),
-        ("voiceTypingMode", json!("hold")),
-        ("textReplacementSets", json!([])),
-        ("hotwordSets", json!([])),
-        ("polishKeywordSets", json!([])),
-        ("speakerProfiles", json!([])),
-        ("hotwords", json!([])),
-        ("httpServerEnabled", json!(false)),
-        ("httpServerPort", json!(14200)),
-        ("httpServerHost", json!("127.0.0.1")),
-        ("httpServerApiKey", json!("")),
-    ] {
-        config.insert(key.to_string(), value);
-    }
-    Value::Object(config)
-}
-
 fn merge_default(source: Value) -> Value {
     let mut base = as_object_clone(&default_config()).unwrap_or_default();
     if let Some(source_object) = source.as_object() {
@@ -798,34 +690,6 @@ fn merge_default(source: Value) -> Value {
         }
     }
     Value::Object(base)
-}
-
-fn default_asr_selection(mode: &str, model_path: String) -> Value {
-    json!({
-        "engine": "local-sherpa",
-        "mode": mode,
-        "modelId": Value::Null,
-        "modelPath": model_path,
-    })
-}
-
-fn default_asr_config() -> Value {
-    let mut online_providers = Map::new();
-    for provider in online_asr_providers() {
-        online_providers.insert(provider.id.clone(), provider.defaults.clone());
-    }
-
-    json!({
-        "selections": {
-            "live": default_asr_selection("streaming", String::new()),
-            "caption": default_asr_selection("streaming", String::new()),
-            "voiceTyping": default_asr_selection("streaming", String::new()),
-            "batch": default_asr_selection("offline", String::new()),
-        },
-        "providers": {
-            "online": online_providers
-        }
-    })
 }
 
 fn is_online_asr_engine(engine: Option<&str>) -> bool {
@@ -1663,23 +1527,6 @@ fn sanitize_provider_setting(
     Value::Object(merged)
 }
 
-fn create_llm_settings() -> Value {
-    let active_provider = LlmProvider::Builtin(BuiltinLlmProvider::GoogleTranslateFree);
-    let mut providers = Map::new();
-    providers.insert(
-        "google_translate_free".to_string(), // Keep internal map key as string for backwards-compat if needed, or serialize active_provider. Let's serialize it.
-        sanitize_provider_setting("google_translate_free", None, None),
-    );
-    json!({
-        "activeProvider": active_provider,
-        "customProviders": {},
-        "providers": providers,
-        "models": {},
-        "modelOrder": [],
-        "selections": {},
-    })
-}
-
 fn normalize_stored_custom_providers(value: Option<&Value>) -> Map<String, Value> {
     let mut custom_providers = Map::new();
     let Some(object) = value.and_then(Value::as_object) else {
@@ -2157,6 +2004,7 @@ fn merge_object_values(first: Value, second: Option<Value>) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::{migrate_app_config, resolve_effective_config};
 
     #[test]
     fn config_core_migrates_legacy_config_to_current_shape() {
