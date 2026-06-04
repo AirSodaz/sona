@@ -576,3 +576,15 @@ fn copy_string_update(updates: &Map<String, Value>, target: &mut Map<String, Val
         target.insert(key.to_string(), Value::String(value.to_string()));
     }
 }
+
+#[async_trait::async_trait]
+impl crate::core::dashboard::ports::ProjectRepository for ProjectRepository {
+    async fn count_projects(
+        &self,
+    ) -> Result<u64, crate::core::dashboard::error::DashboardServiceError> {
+        let projects = self.list(ProjectListOptions::default()).map_err(|e| {
+            crate::core::dashboard::error::DashboardServiceError::ProjectRepository(e)
+        })?;
+        Ok(projects.len() as u64)
+    }
+}

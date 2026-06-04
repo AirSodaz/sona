@@ -25,7 +25,10 @@ pub fn run() {
             .typ::<crate::core::domain::LlmProvider>()
             .typ::<crate::core::domain::PolishPresetId>()
             .typ::<crate::core::domain::SummaryTemplateId>()
-            .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+            .export(
+                specta_typescript::Typescript::default(),
+                "../src/bindings.ts",
+            )
             .expect("Failed to export typescript bindings");
     }
 

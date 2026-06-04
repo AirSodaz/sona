@@ -1,4 +1,4 @@
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use specta::Type;
 
 /// A macro to implement backward-compatible deserialization for an enum
@@ -128,7 +128,11 @@ pub enum BuiltinLlmProvider {
     Perplexity,
     Volcengine,
     Chatglm,
-    #[serde(rename = "custom-openai-compatible", alias = "openai_compatible", alias = "open_ai_compatible")]
+    #[serde(
+        rename = "custom-openai-compatible",
+        alias = "openai_compatible",
+        alias = "open_ai_compatible"
+    )]
     CustomOpenAiCompatible,
 }
 
@@ -180,7 +184,10 @@ pub enum LlmProvider {
 impl LlmProvider {
     pub fn as_str(&self) -> String {
         match self {
-            Self::Builtin(b) => serde_json::to_string(b).unwrap_or_default().trim_matches('"').to_string(),
+            Self::Builtin(b) => serde_json::to_string(b)
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string(),
             Self::Custom(c) => c.clone(),
         }
     }
@@ -219,7 +226,10 @@ mod tests {
             .typ::<LlmProvider>()
             .typ::<PolishPresetId>()
             .typ::<SummaryTemplateId>()
-            .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+            .export(
+                specta_typescript::Typescript::default(),
+                "../src/bindings.ts",
+            )
             .unwrap();
     }
 }

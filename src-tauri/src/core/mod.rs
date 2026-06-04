@@ -1,5 +1,6 @@
 pub mod automation;
 pub mod config;
+pub mod dashboard;
 pub mod diagnostics;
 pub mod domain;
 pub mod pipeline;

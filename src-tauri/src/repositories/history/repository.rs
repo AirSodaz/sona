@@ -26,12 +26,12 @@ use super::{
 };
 
 #[derive(Clone)]
-pub(super) struct HistoryRepository {
+pub struct HistoryRepository {
     app_local_data_dir: PathBuf,
 }
 
 impl HistoryRepository {
-    pub(super) fn new(app_local_data_dir: PathBuf) -> Self {
+    pub fn new(app_local_data_dir: PathBuf) -> Self {
         Self { app_local_data_dir }
     }
 
@@ -55,7 +55,7 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
+    pub fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.read_index_items()
     }
 
@@ -413,7 +413,7 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn load_transcript(
+    pub fn load_transcript(
         &self,
         file_name: &str,
     ) -> Result<Option<Vec<crate::integrations::asr::TranscriptSegment>>, String> {

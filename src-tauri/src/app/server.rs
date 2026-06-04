@@ -22,8 +22,8 @@ use tower_http::{
 };
 type HmacSha256 = Hmac<Sha256>;
 
-use tokio::sync::Mutex as AsyncMutex;
 use tauri::Manager;
+use tokio::sync::Mutex as AsyncMutex;
 
 pub struct ApiServerController {
     pub shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
@@ -143,7 +143,9 @@ pub async fn start_api_server(
 }
 
 #[tauri::command]
-pub async fn stop_api_server(controller: tauri::State<'_, ApiServerController>) -> Result<(), String> {
+pub async fn stop_api_server(
+    controller: tauri::State<'_, ApiServerController>,
+) -> Result<(), String> {
     let mut sender_lock = controller.shutdown_sender.lock().await;
     if let Some(sender) = sender_lock.take() {
         let _ = sender.send(());
@@ -177,8 +179,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         if let Ok(content) = std::fs::read_to_string(&config_path) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(config) = json.get("sona-config") {
-                    if let Some(enabled) =
-                        config.get("httpServerEnabled").and_then(|v| v.as_bool())
+                    if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool())
                     {
                         http_server_enabled = enabled;
                     }
@@ -188,9 +189,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                     if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
                         port = p as u16;
                     }
-                    if let Some(key) =
-                        config.get("httpServerApiKey").and_then(|v| v.as_str())
-                    {
+                    if let Some(key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
                         api_key = key.to_string();
                     }
                     if let Some(mc) = config
@@ -243,9 +242,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let temp_dir = app_local_data_dir.join("api_temp");
             let models_dir = app_local_data_dir.join("models");
 
-            let parsed_whitelist = match parse_ip_whitelist(
-                &ip_whitelist,
-            ) {
+            let parsed_whitelist = match parse_ip_whitelist(&ip_whitelist) {
                 Ok(nets) => nets,
                 Err(e) => {
                     log::error!(

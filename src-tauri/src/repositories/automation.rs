@@ -399,7 +399,7 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         return false;
     }
 
-    use crate::core::domain::{LlmProvider, BuiltinLlmProvider};
+    use crate::core::domain::{BuiltinLlmProvider, LlmProvider};
 
     let provider = model_entry
         .get("provider")
@@ -407,7 +407,9 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         .unwrap_or_else(|| LlmProvider::Builtin(BuiltinLlmProvider::GoogleTranslateFree));
 
     let provider_setting = match &provider {
-        LlmProvider::Builtin(b) => settings.get("providers").and_then(|p| p.get(serde_json::to_string(b).unwrap().trim_matches('"'))),
+        LlmProvider::Builtin(b) => settings
+            .get("providers")
+            .and_then(|p| p.get(serde_json::to_string(b).unwrap().trim_matches('"'))),
         LlmProvider::Custom(c) => settings.get("providers").and_then(|p| p.get(c)),
     };
 
@@ -423,12 +425,16 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
     let (default_api_host, requires_api_key) = match &provider {
         LlmProvider::Builtin(b) => (b.default_api_host().to_string(), b.requires_api_key()),
         LlmProvider::Custom(c) => {
-            let strategy = settings.get("customProviders")
+            let strategy = settings
+                .get("customProviders")
                 .and_then(|customs| customs.get(c))
                 .and_then(|custom| custom.get("strategy"))
                 .and_then(Value::as_str);
             if let Some(s) = strategy {
-                if matches!(s, "openai_compatible" | "openai_responses" | "anthropic" | "gemini") {
+                if matches!(
+                    s,
+                    "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
+                ) {
                     (String::new(), true)
                 } else {
                     return false;

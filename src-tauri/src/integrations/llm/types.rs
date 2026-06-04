@@ -56,7 +56,7 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
                 _ => Self::OpenAiCompatible,
-            }
+            },
         }
     }
 }

@@ -1,8 +1,32 @@
-use tauri::{Manager, Listener};
+use std::sync::Arc;
+use tauri::{Listener, Manager};
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
     let controller = app_handle_for_listener.state::<crate::app::server::ApiServerController>();
+
+    let app_local_data_dir = app_handle_for_listener
+        .path()
+        .app_local_data_dir()
+        .expect("Failed to get app_local_data_dir");
+
+    let history_repo = Arc::new(crate::repositories::history::HistoryRepository::new(
+        app_local_data_dir.clone(),
+    ));
+    let project_repo = Arc::new(crate::repositories::project::ProjectRepository::new(
+        app_local_data_dir.clone(),
+    ));
+    let analytics_repo = Arc::new(
+        crate::repositories::analytics::AnalyticsRepositoryImpl::new(app_local_data_dir.clone()),
+    );
+
+    let dashboard_service = Arc::new(crate::dashboard::AppDashboardService::new(
+        history_repo,
+        project_repo,
+        analytics_repo,
+    ));
+
+    app.manage(dashboard_service);
 
     let initial_config = crate::app::server::load_online_asr_config(&app_handle_for_listener);
     let config_for_init = controller.online_asr_config.clone();

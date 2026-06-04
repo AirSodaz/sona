@@ -3,6 +3,9 @@ fn main() {
         .typ::<tauri_appsona_lib::core::domain::LlmProvider>()
         .typ::<tauri_appsona_lib::core::domain::PolishPresetId>()
         .typ::<tauri_appsona_lib::core::domain::SummaryTemplateId>()
-        .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/bindings.ts",
+        )
         .unwrap();
 }

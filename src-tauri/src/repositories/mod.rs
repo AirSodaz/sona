@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod archive;
 pub mod automation;
 pub mod downloads;

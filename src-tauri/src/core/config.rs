@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
-use crate::core::domain::{BuiltinLlmProvider, BuiltinPolishPresetId, BuiltinSummaryTemplateId, LlmProvider, PolishPresetId, SummaryTemplateId};
+use crate::core::domain::{
+    BuiltinLlmProvider, BuiltinPolishPresetId, BuiltinSummaryTemplateId, LlmProvider,
+    PolishPresetId, SummaryTemplateId,
+};
 
 const CURRENT_CONFIG_VERSION: i64 = 7;
 const DEFAULT_POLISH_PRESET_ID: &str = "general";
@@ -122,7 +125,9 @@ fn resolve_effective_config_inner(global_config: Value, project: Option<&Value>)
             defaults
                 .and_then(|value| value.get("polishPresetId"))
                 .and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok())
-                .or_else(|| config.get("polishPresetId").and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok()))
+                .or_else(|| config
+                    .get("polishPresetId")
+                    .and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok()))
                 .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
         ),
     );
@@ -249,8 +254,9 @@ fn normalize_current_config(existing: Value) -> Value {
     set(&mut config, "llmSettings", llm_settings);
     set(&mut config, "summaryEnabled", summary_enabled);
     let summary_template_val = json!(
-        serde_json::from_value::<SummaryTemplateId>(json!(summary_template_id))
-            .unwrap_or(SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General))
+        serde_json::from_value::<SummaryTemplateId>(json!(summary_template_id)).unwrap_or(
+            SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General)
+        )
     );
     set(&mut config, "summaryTemplateId", summary_template_val);
     set(
@@ -548,8 +554,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ("polishKeywords", json!("")),
         (
             "polishPresetId",
-            json!(serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
-                .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General)))
+            json!(
+                serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
+                    .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
+            ),
         ),
         ("polishCustomPresets", polish_custom_presets),
         (
@@ -748,11 +756,19 @@ fn default_config() -> Value {
         ("maxConcurrent", json!(2)),
         ("llmSettings", create_llm_settings()),
         ("summaryEnabled", json!(true)),
-        ("summaryTemplateId", json!(SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General))),
+        (
+            "summaryTemplateId",
+            json!(SummaryTemplateId::Builtin(
+                BuiltinSummaryTemplateId::General
+            )),
+        ),
         ("summaryCustomTemplates", json!([])),
         ("translationLanguage", json!("zh")),
         ("polishKeywords", json!("")),
-        ("polishPresetId", json!(PolishPresetId::Builtin(BuiltinPolishPresetId::General))),
+        (
+            "polishPresetId",
+            json!(PolishPresetId::Builtin(BuiltinPolishPresetId::General)),
+        ),
         ("polishCustomPresets", json!([])),
         ("autoPolish", json!(false)),
         ("autoPolishFrequency", json!(5)),

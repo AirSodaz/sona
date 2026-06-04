@@ -45,7 +45,7 @@ pub(crate) struct LlmUsageStatsFile {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DashboardUsageBucket {
+pub struct DashboardUsageBucket {
     pub(crate) call_count: u64,
     pub(crate) call_count_display: String,
     pub(crate) calls_with_usage: u64,
@@ -62,7 +62,7 @@ pub(crate) struct DashboardUsageBucket {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UsageBreakdown {
+pub struct UsageBreakdown {
     pub(crate) key: String,
     pub(crate) label: String,
     pub(crate) stats: DashboardUsageBucket,
@@ -72,7 +72,7 @@ pub(crate) struct UsageBreakdown {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UsageTrendPoint {
+pub struct UsageTrendPoint {
     pub(crate) date: String,
     pub(crate) date_label: String,
     #[serde(flatten)]
@@ -81,7 +81,7 @@ pub(crate) struct UsageTrendPoint {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct LlmUsageDashboardStats {
+pub struct LlmUsageDashboardStats {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
