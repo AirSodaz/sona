@@ -1,0 +1,544 @@
+use clap::Args;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use crate::core::preset_models::PresetModel;
+use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
+use crate::repositories::export::{ExportFormat, export_segments};
+use crate::cli::models::{resolve_models_dir};
+use crate::core::preset_models::find_preset_model;
+
+pub const DEFAULT_THREADS: i32 = 4;
+pub const DEFAULT_LANGUAGE: &str = "auto";
+pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
+
+#[derive(Debug, Args)]
+#[command(
+    about = "Transcribe a local audio or video file with offline models",
+    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --vad-model-id silero-vad --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+)]
+pub struct TranscribeArgs {
+    /// Input audio or video file to transcribe.
+    #[arg(help = "Local audio or video file path")]
+    input: PathBuf,
+    /// Path to a TOML config file.
+    #[arg(long, help = "Load default options from a TOML config file")]
+    config: Option<PathBuf>,
+    /// Output file path. If omitted, JSON is written to stdout.
+    #[arg(long, help = "Write output to a file instead of stdout")]
+    output: Option<PathBuf>,
+    /// Explicit export format.
+    #[arg(
+        long,
+        value_name = "FORMAT",
+        help = "Override export format, for example json, srt, txt, vtt"
+    )]
+    format: Option<String>,
+    /// Override the transcription language.
+    #[arg(
+        long,
+        value_name = "LANG",
+        help = "Override language detection, for example auto, zh, en, ja"
+    )]
+    language: Option<String>,
+    /// Offline preset model id.
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "Offline preset model id to use for transcription"
+    )]
+    model_id: Option<String>,
+    /// Models directory containing installed presets.
+    #[arg(
+        long,
+        help = "Override the models directory used to resolve installed models"
+    )]
+    models_dir: Option<PathBuf>,
+    /// VAD preset model id.
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "VAD companion model id, usually silero-vad"
+    )]
+    vad_model_id: Option<String>,
+    /// Punctuation preset model id.
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "Punctuation companion model id when required by the main model"
+    )]
+    punctuation_model_id: Option<String>,
+    /// Number of recognizer threads.
+    #[arg(long, value_name = "N", help = "Recognizer thread count")]
+    threads: Option<i32>,
+    /// Enables ITN.
+    #[arg(
+        long,
+        conflicts_with = "disable_itn",
+        help = "Enable inverse text normalization"
+    )]
+    enable_itn: bool,
+    /// Custom hotwords for ASR (currently supported by Transducer and Qwen3 models).
+    #[arg(long, help = "Custom hotwords, comma separated")]
+    hotwords: Option<String>,
+    /// Disables ITN.
+    #[arg(
+        long,
+        conflicts_with = "enable_itn",
+        help = "Disable inverse text normalization"
+    )]
+    disable_itn: bool,
+    /// VAD buffer size in seconds.
+    #[arg(
+        long = "vad-buffer",
+        value_name = "SECONDS",
+        help = "Voice activity buffer size in seconds"
+    )]
+    vad_buffer: Option<f32>,
+    /// Optional path to save the resampled WAV file.
+    #[arg(long, help = "Save the intermediate resampled WAV file to this path")]
+    save_wav: Option<PathBuf>,
+    /// Suppresses progress logs.
+    #[arg(long, help = "Hide transcription progress output")]
+    quiet: bool,
+}
+
+/// CLI options after clap parsing but before config/default resolution.
+#[derive(Debug, Clone)]
+pub struct TranscribeCliOptions {
+    pub input: PathBuf,
+    pub output: Option<PathBuf>,
+    pub format: Option<String>,
+    pub language: Option<String>,
+    pub model_id: Option<String>,
+    pub models_dir: Option<PathBuf>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+    pub threads: Option<i32>,
+    pub enable_itn: Option<bool>,
+    pub hotwords: Option<String>,
+    pub vad_buffer: Option<f32>,
+    pub save_wav: Option<PathBuf>,
+    pub quiet: bool,
+}
+
+/// Output target resolved from CLI arguments and config.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OutputTarget {
+    Stdout,
+    File(PathBuf),
+}
+
+/// Fully resolved transcription settings ready for batch execution.
+#[derive(Debug, Clone)]
+pub struct ResolvedTranscribeOptions {
+    pub export_format: ExportFormat,
+    pub output_target: OutputTarget,
+    pub quiet: bool,
+    pub request: BatchTranscriptionRequest,
+}
+
+
+/// Resolves CLI arguments, config-file values, and defaults into a concrete request.
+pub fn resolve_transcribe_options(
+    cli: TranscribeCliOptions,
+    config: Option<CliConfigFile>,
+) -> Result<ResolvedTranscribeOptions, String> {
+    let config = config.unwrap_or_default();
+    let output_target = resolve_output_target(cli.output.clone());
+    let export_format = resolve_export_format(
+        cli.format.as_deref().or(config.format.as_deref()),
+        match &output_target {
+            OutputTarget::Stdout => None,
+            OutputTarget::File(path) => Some(path.as_path()),
+        },
+    )?;
+
+    let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
+    let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
+        "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
+    })?;
+    let model = resolve_offline_model(&model_id)?;
+    let rules = model.resolved_rules();
+
+    let vad_model_id = cli.vad_model_id.or(config.vad_model_id);
+    let punctuation_model_id = cli.punctuation_model_id.or(config.punctuation_model_id);
+
+    let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
+    let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
+    if threads <= 0 {
+        return Err("threads must be greater than 0".to_string());
+    }
+
+    let vad_buffer = cli
+        .vad_buffer
+        .or(config.vad_buffer_size)
+        .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
+    if vad_buffer <= 0.0 {
+        return Err("vad_buffer must be greater than 0".to_string());
+    }
+
+    let language = cli
+        .language
+        .or(config.language)
+        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
+    let model_path = require_installed_model(model, &models_dir)?;
+    let vad_model = if rules.requires_vad {
+        let companion_id = vad_model_id.ok_or_else(|| {
+            format!(
+                "Model '{model_id}' requires a VAD model. Pass --vad-model-id or set vad_model_id in --config."
+            )
+        })?;
+        Some(require_installed_companion(&companion_id, &models_dir)?)
+    } else {
+        optional_installed_companion(vad_model_id.as_deref(), &models_dir)?
+    };
+    let punctuation_model = if rules.requires_punctuation {
+        let companion_id = punctuation_model_id.ok_or_else(|| {
+            format!(
+                "Model '{model_id}' requires a punctuation model. Pass --punctuation-model-id or set punctuation_model_id in --config."
+            )
+        })?;
+        Some(require_installed_companion(&companion_id, &models_dir)?)
+    } else {
+        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir)?
+    };
+
+    Ok(ResolvedTranscribeOptions {
+        export_format,
+        output_target,
+        quiet: cli.quiet,
+        request: BatchTranscriptionRequest {
+            file_path: cli.input.to_string_lossy().to_string(),
+            save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
+            model_path,
+            num_threads: threads,
+            enable_itn,
+            language,
+            punctuation_model,
+            vad_model,
+            vad_buffer,
+            batch_segmentation_mode: crate::integrations::asr::BatchSegmentationMode::Vad,
+            model_type: model.model_type.clone(),
+            file_config: model.file_config.clone(),
+            hotwords: cli.hotwords,
+            speaker_processing: None,
+            normalization_options:
+                crate::integrations::asr::TranscriptNormalizationOptions::default(),
+            postprocessor: crate::integrations::asr::TranscriptPostprocessor::compile(
+                crate::integrations::asr::TranscriptPostprocessOptions::default(),
+            )
+            .map_err(|e| e.to_string())?,
+            gpu_acceleration: None,
+        },
+    })
+}
+
+pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
+    let config = match args.config.as_deref() {
+        Some(path) => Some(load_config_file(path)?),
+        None => None,
+    };
+
+    let enable_itn = if args.enable_itn {
+        Some(true)
+    } else if args.disable_itn {
+        Some(false)
+    } else {
+        None
+    };
+
+    let resolved = resolve_transcribe_options(
+        TranscribeCliOptions {
+            input: args.input,
+            output: args.output,
+            format: args.format,
+            language: args.language,
+            model_id: args.model_id,
+            models_dir: args.models_dir,
+            vad_model_id: args.vad_model_id,
+            punctuation_model_id: args.punctuation_model_id,
+            threads: args.threads,
+            enable_itn,
+            hotwords: args.hotwords,
+            vad_buffer: args.vad_buffer,
+            save_wav: args.save_wav,
+            quiet: args.quiet,
+        },
+        config,
+    )?;
+
+    let quiet = resolved.quiet;
+    let export_format = resolved.export_format;
+    let output_target = resolved.output_target.clone();
+    let request = resolved.request.clone();
+
+    let mut last_reported_progress = -1_i32;
+    let segments = transcribe_batch_with_progress(&request, |progress| {
+        if quiet {
+            return;
+        }
+
+        let rounded = progress.round() as i32;
+        if rounded != last_reported_progress {
+            eprintln!("Progress: {rounded}%");
+            last_reported_progress = rounded;
+        }
+    })
+    .await?;
+    let content = export_segments(&segments, export_format)?;
+    write_output(&output_target, &content)
+}
+
+/// Writes CLI output to the selected destination.
+pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> {
+    match target {
+        OutputTarget::Stdout => {
+            if content.ends_with('\n') {
+                print!("{content}");
+            } else {
+                println!("{content}");
+            }
+            std::io::stdout()
+                .flush()
+                .map_err(|error| format!("Failed to flush stdout: {error}"))?;
+            Ok(())
+        }
+        OutputTarget::File(path) => fs::write(path, content)
+            .map_err(|error| format!("Failed to write output file {}: {error}", path.display())),
+    }
+}
+
+fn resolve_export_format(
+    format: Option<&str>,
+    output: Option<&Path>,
+) -> Result<ExportFormat, String> {
+    if let Some(value) = format {
+        return ExportFormat::parse(value);
+    }
+
+    match output {
+        Some(path) => ExportFormat::from_output_path(path),
+        None => Ok(ExportFormat::Json),
+    }
+}
+
+fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
+    match output {
+        Some(path) => OutputTarget::File(path),
+        None => OutputTarget::Stdout,
+    }
+}
+
+fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
+    let model =
+        find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
+    if !model.supports_mode("offline") {
+        return Err(format!(
+            "Model '{model_id}' does not support offline transcription."
+        ));
+    }
+    Ok(model)
+}
+
+fn require_installed_model(model: &PresetModel, models_dir: &Path) -> Result<String, String> {
+    let path = model.resolve_install_path(models_dir);
+    if !path.exists() {
+        return Err(format!(
+            "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+            model.id,
+            path.display()
+        ));
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn require_installed_companion(model_id: &str, models_dir: &Path) -> Result<String, String> {
+    let model = find_preset_model(model_id)
+        .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
+    let path = model.resolve_install_path(models_dir);
+    if !path.exists() {
+        return Err(format!(
+            "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+            path.display()
+        ));
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn optional_installed_companion(
+    model_id: Option<&str>,
+    models_dir: &Path,
+) -> Result<Option<String>, String> {
+    model_id
+        .map(|id| require_installed_companion(id, models_dir))
+        .transpose()
+}
+
+/// File-backed CLI configuration loaded from TOML.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct CliConfigFile {
+    pub models_dir: Option<PathBuf>,
+    pub model_id: Option<String>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+    pub language: Option<String>,
+    pub threads: Option<i32>,
+    pub enable_itn: Option<bool>,
+    pub vad_buffer_size: Option<f32>,
+    pub format: Option<String>,
+}
+
+/// Loads a TOML configuration file for the CLI.
+pub fn load_config_file(path: &Path) -> Result<CliConfigFile, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
+    toml::from_str(&contents)
+        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repositories::export::ExportFormat;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn temp_cli_options() -> TranscribeCliOptions {
+        TranscribeCliOptions {
+            input: PathBuf::from("sample.wav"),
+            output: None,
+            format: None,
+            language: None,
+            model_id: None,
+            models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: None,
+            hotwords: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: false,
+        }
+    }
+
+    #[test]
+    fn config_file_is_loaded_from_toml() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("sona-cli.toml");
+        fs::write(
+            &path,
+            "model_id = \"silero-vad\"\nthreads = 3\nenable_itn = true\n",
+        )
+        .unwrap();
+
+        let config = load_config_file(&path).unwrap();
+        assert_eq!(config.model_id.as_deref(), Some("silero-vad"));
+        assert_eq!(config.threads, Some(3));
+        assert_eq!(config.enable_itn, Some(true));
+    }
+
+    #[test]
+    fn explicit_cli_values_override_config_file_values() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir.clone());
+        cli.vad_model_id = Some("silero-vad".to_string());
+        cli.threads = Some(8);
+        cli.enable_itn = Some(true);
+
+        let resolved = resolve_transcribe_options(
+            cli,
+            Some(CliConfigFile {
+                threads: Some(2),
+                enable_itn: Some(false),
+                model_id: Some("ignored".to_string()),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(resolved.request.num_threads, 8);
+        assert!(resolved.request.enable_itn);
+        assert_eq!(
+            resolved.request.model_path,
+            models_dir
+                .join("sherpa-onnx-whisper-turbo")
+                .to_string_lossy()
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn infers_export_format_from_output_path() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.output = Some(PathBuf::from("out.srt"));
+        cli.model_id = Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        assert_eq!(resolved.export_format, ExportFormat::Srt);
+    }
+
+    #[test]
+    fn format_flag_overrides_output_extension() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.output = Some(PathBuf::from("out.txt"));
+        cli.format = Some("json".to_string());
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        assert_eq!(resolved.export_format, ExportFormat::Json);
+    }
+
+    #[test]
+    fn missing_required_companion_model_fails_fast() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+
+        let error = resolve_transcribe_options(cli, None).unwrap_err();
+        assert!(error.contains("requires a VAD model"));
+    }
+
+    #[test]
+    fn writes_output_to_file() {
+        let dir = tempdir().unwrap();
+        let output_path = dir.path().join("result.json");
+        write_output(&OutputTarget::File(output_path.clone()), "{\"ok\":true}").unwrap();
+        assert_eq!(fs::read_to_string(output_path).unwrap(), "{\"ok\":true}");
+    }
+
+    #[test]
+    fn defaults_to_stdout_json_output() {
+        let target = resolve_output_target(None);
+        assert_eq!(target, OutputTarget::Stdout);
+        assert_eq!(
+            resolve_export_format(None, None).unwrap(),
+            ExportFormat::Json
+        );
+    }
+}

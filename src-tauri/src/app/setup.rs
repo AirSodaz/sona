@@ -20,7 +20,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         crate::repositories::analytics::AnalyticsRepositoryImpl::new(app_local_data_dir.clone()),
     );
 
-    let dashboard_service = Arc::new(crate::dashboard::AppDashboardService::new(
+    let dashboard_service = Arc::new(crate::app::dashboard::AppDashboardService::new(
         history_repo,
         project_repo,
         analytics_repo,

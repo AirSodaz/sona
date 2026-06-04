@@ -4,11 +4,12 @@
 use std::process::ExitCode;
 
 #[cfg(target_os = "windows")]
-fn fix_console() {
+fn fix_console(show_new_console: bool) {
     unsafe {
         #[link(name = "kernel32")]
         unsafe extern "system" {
             fn AllocConsole() -> i32;
+            fn AttachConsole(dwProcessId: u32) -> i32;
             fn GetConsoleWindow() -> *mut std::ffi::c_void;
         }
         #[link(name = "user32")]
@@ -16,12 +17,21 @@ fn fix_console() {
             fn ShowWindow(hwnd: *mut std::ffi::c_void, cmd: i32) -> i32;
         }
 
+        const ATTACH_PARENT_PROCESS: u32 = 0xFFFFFFFF;
+
+        // Try to attach to parent console first (for CLI usage in terminal)
+        if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
+            return;
+        }
+
         // Allocate a console to natively initialize stdout/stderr handles in the C runtime
         if AllocConsole() != 0 {
-            let hwnd = GetConsoleWindow();
-            if !hwnd.is_null() {
-                // Instantly hide the console window
-                ShowWindow(hwnd, 0);
+            if !show_new_console {
+                let hwnd = GetConsoleWindow();
+                if !hwnd.is_null() {
+                    // Instantly hide the console window (for GUI usage from Explorer)
+                    ShowWindow(hwnd, 0);
+                }
             }
         }
     }
@@ -33,7 +43,7 @@ async fn main() -> ExitCode {
 
     if tauri_appsona_lib::cli::should_run_cli(args.get(1..).unwrap_or(&[])) {
         #[cfg(target_os = "windows")]
-        fix_console();
+        fix_console(true);
 
         return match tauri_appsona_lib::cli::run_cli_from_args(args).await {
             Ok(()) => ExitCode::SUCCESS,
@@ -45,7 +55,7 @@ async fn main() -> ExitCode {
     }
 
     #[cfg(target_os = "windows")]
-    fix_console();
+    fix_console(false);
 
     tauri_appsona_lib::run();
     ExitCode::SUCCESS

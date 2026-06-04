@@ -3,7 +3,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::app::system::greet,
         crate::repositories::archive::extract_tar_bz2,
         crate::repositories::archive::create_tar_bz2,
-        crate::dashboard::get_dashboard_snapshot,
+        crate::app::dashboard::get_dashboard_snapshot,
         crate::repositories::project::project_list,
         crate::repositories::project::project_save_all,
         crate::repositories::project::project_create,

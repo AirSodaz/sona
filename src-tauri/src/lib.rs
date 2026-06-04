@@ -5,8 +5,6 @@ pub mod integrations;
 pub mod repositories;
 
 pub mod cli;
-mod dashboard;
-pub mod setup;
 
 use tauri::{Emitter, Manager};
 
@@ -64,7 +62,7 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(crate::setup::init)
+        .setup(crate::app::setup::init)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();

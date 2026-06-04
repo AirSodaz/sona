@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-#[path = "../src/repositories/project.rs"]
-mod project_repository;
+use tauri_appsona_lib::repositories::project as project_repository;
 
 use project_repository::{
     ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRepository,
