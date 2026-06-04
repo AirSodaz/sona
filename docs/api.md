@@ -18,7 +18,7 @@ Navigate to **Settings -> API Server** (or **API 服务** in Chinese) and config
 ### 2. Headless CLI Mode
 You can also launch Sona in pure headless CLI server mode from the terminal:
 ```bash
-sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2
 ```
 
 ---
@@ -37,7 +37,7 @@ If no API Key is set in Settings, the server permits unauthenticated requests.
 
 ### 1. Server Info & Capabilities
 
-Retrieve server configuration, resource limits, and available online ASR providers.
+Retrieve server platform information, hardware status, installed models, and available online ASR providers.
 
 - **URL**: `/v1/info`
 - **Method**: `GET`
@@ -46,9 +46,11 @@ Retrieve server configuration, resource limits, and available online ASR provide
 
 ```json
 {
-  "maxConcurrent": 2,
-  "maxQueueSize": 100,
-  "maxStreaming": 5,
+  "platform": "win32",
+  "gpuAvailable": true,
+  "models": ["sensevoice", "sherpa-onnx-whisper-turbo"],
+  "vadInstalled": true,
+  "punctuationInstalled": true,
   "onlineAsrProviders": [
     {
       "id": "volcengine-doubao",
@@ -62,7 +64,48 @@ Retrieve server configuration, resource limits, and available online ASR provide
 
 ---
 
-### 2. Submit Transcription Job
+### 2. Server Health & Stats
+
+Retrieve server uptime, active/pending job counts, and temporary storage usage.
+
+- **URL**: `/health`
+- **Method**: `GET`
+
+#### Response (`200 OK`)
+
+```json
+{
+  "status": "ok",
+  "uptime": 3600,
+  "activeJobs": 1,
+  "pendingJobs": 0,
+  "cacheSpaceBytes": 10485760
+}
+```
+
+---
+
+### 3. List All Jobs
+
+Query the current status of all transcription jobs in the manager.
+
+- **URL**: `/v1/transcriptions/jobs`
+- **Method**: `GET`
+
+#### Response (`200 OK`)
+
+Returns a map of `job_id` to their current `JobStatus`.
+
+```json
+{
+  "c86e0c65-2746-4e56-9141-866d51bbca43": "Pending",
+  "a1b2c3d4-e5f6-4g7h-8i9j-k0l1m2n3o4p5": "Processing"
+}
+```
+
+---
+
+### 4. Submit Transcription Job
 
 Submit a local audio or video file for high-performance speech-to-text processing. Jobs are queued and executed sequentially by the background transcription worker.
 
@@ -102,7 +145,7 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
 
 ---
 
-### 3. Query Job Status
+### 5. Query Job Status
 
 Query the current lifecycle state and transcription results of a submitted job.
 

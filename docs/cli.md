@@ -29,7 +29,7 @@ The CLI is available through the packaged app binary, but it is not registered o
 ### Transcribe a file
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
+sona transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```
@@ -39,20 +39,20 @@ Without `--output`, `sona` writes JSON to `stdout`.
 ### List models
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list
+sona models list
 ```
 
 Common filters:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --mode offline --type whisper
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --language zh --installed
+sona models list --mode offline --type whisper
+sona models list --language zh --installed
 ```
 
 ### Download a model
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
+sona models download sherpa-onnx-whisper-turbo
 ```
 
 If the preset requires companion models, the CLI downloads them automatically:
@@ -63,7 +63,7 @@ If the preset requires companion models, the CLI downloads them automatically:
 You can also override the models directory explicitly:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download silero-vad --models-dir ./models
+sona models download silero-vad --models-dir ./models
 ```
 
 ## Config File
@@ -137,6 +137,20 @@ sona transcribe <input>
   --quiet
 ```
 
+### `serve`
+
+```text
+sona serve
+  --host <ip>
+  --port <port>
+  --api-key <key>
+  --models-dir <path>
+  --ip-whitelist <rules>
+  --max-streaming <n>
+```
+
+For more details on API usage, see [api.md](api.md).
+
 ### `models list`
 
 ```text
@@ -171,44 +185,3 @@ sona models --help
 sona models list --help
 sona models download --help
 ```
-
-## Manual Verification
-
-### Verify model listing
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --type whisper --language zh
-```
-
-Expected result:
-
-- JSON is printed to `stdout`
-- Only models matching the filters are included
-
-### Verify model download
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
-```
-
-Expected result:
-
-- Download progress is printed to `stderr`
-- The main model is installed into the models directory
-- Required VAD and punctuation companions are installed automatically
-
-### Verify transcription
-
-With locally installed desktop models, verify the CLI manually. This works for both source builds and packaged installs as long as `models_dir` points at the desktop model directory:
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
-  --config ./sona-cli.toml \
-  --output ./sample.srt
-```
-
-Expected result:
-
-- Progress is printed to `stderr`
-- The target export file is created
-- The selected preset model and companion model ids resolve under `models_dir`

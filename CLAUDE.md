@@ -17,25 +17,25 @@ Key product modes:
 ## Common commands
 
 ### Frontend and desktop app
-- `pnpm run dev` â€?start the Vite dev server on port 1420
-- `pnpm run tauri dev` â€?run the full desktop app in Tauri dev mode
-- `pnpm run build` â€?TypeScript check + production frontend build
-- `pnpm run tauri build` â€?build the production desktop bundle
-- `pnpm run preview` â€?preview the production frontend build
+- `pnpm run dev` ï¿½?start the Vite dev server on port 1420
+- `pnpm run tauri dev` ï¿½?run the full desktop app in Tauri dev mode
+- `pnpm run build` ï¿½?TypeScript check + production frontend build
+- `pnpm run tauri build` ï¿½?build the production desktop bundle
+- `pnpm run preview` ï¿½?preview the production frontend build
 
 ### Tests
-- `pnpm test` â€?run the Vitest suite
-- `pnpm exec vitest src/path/to/file.test.tsx` â€?run one Vitest file
-- `pnpm exec vitest -t "test name"` â€?run Vitest tests matching a name
-- `pnpm exec playwright test` â€?run Playwright end-to-end tests
-- `pnpm exec playwright test tests/e2e/example.spec.ts` â€?run one Playwright file
-- `pnpm exec playwright test -g "test title"` â€?run one Playwright test by title
-- `cargo test --manifest-path src-tauri/Cargo.toml` â€?run Rust tests
-- `cargo test --manifest-path src-tauri/Cargo.toml test_name` â€?run a specific Rust test
+- `pnpm test` ï¿½?run the Vitest suite
+- `pnpm exec vitest src/path/to/file.test.tsx` ï¿½?run one Vitest file
+- `pnpm exec vitest -t "test name"` ï¿½?run Vitest tests matching a name
+- `pnpm exec playwright test` ï¿½?run Playwright end-to-end tests
+- `pnpm exec playwright test tests/e2e/example.spec.ts` ï¿½?run one Playwright file
+- `pnpm exec playwright test -g "test title"` ï¿½?run one Playwright test by title
+- `cargo test --manifest-path src-tauri/Cargo.toml` ï¿½?run Rust tests
+- `cargo test --manifest-path src-tauri/Cargo.toml test_name` ï¿½?run a specific Rust test
 
 ### CLI and packaging helpers
-- `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` â€?run the offline CLI from source
-- `pnpm run verify:cli-bundle` â€?verify the packaged app bundle artifacts
+- `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` ï¿½?run the offline CLI from source
+- `pnpm run verify:cli-bundle` ï¿½?verify the packaged app bundle artifacts
 
 ### Notes
 - The root `package.json` pins pnpm via `packageManager`; run `corepack enable` before installing dependencies on a fresh machine.
@@ -58,18 +58,18 @@ Key product modes:
 ### Live transcription flow
 1. The frontend records audio through hooks in `src/hooks/useAudioRecorder.ts`.
 2. `src/services/transcriptionService.ts` manages recognizer lifecycle and frontend/backend synchronization.
-3. Rust commands in `src-tauri/src/lib.rs` dispatch into `src-tauri/src/sherpa.rs` and `src-tauri/src/audio.rs`.
+3. Rust commands in `src-tauri/src/commands/` dispatch into `src-tauri/src/integrations/asr/` and `src-tauri/src/integrations/audio.rs`.
 4. The Rust backend emits recognizer output events back to the frontend, where transcript segments are upserted into the store.
 
 ### Batch transcription flow
 - Batch jobs are coordinated from `src/stores/batchQueueStore.ts`.
-- Rust batch processing lives primarily in `src-tauri/src/sherpa.rs` and `src-tauri/src/pipeline.rs`.
+- Rust batch processing lives primarily in `src-tauri/src/integrations/asr/batch.rs` and `src-tauri/src/core/pipeline.rs`.
 - ffmpeg is used to decode/resample input before offline inference.
 - Completed batch items are written into history and can become the active transcript context.
 
 ### LLM assistant flow
 - `src/services/polishService.ts` and `src/services/translationService.ts` chunk transcript segments, build prompts, call the backend, parse strict JSON responses, and progressively update transcript/history content.
-- `src-tauri/src/llm.rs` is the provider adapter/proxy for OpenAI-compatible APIs, Anthropic, Gemini, and Ollama.
+- `src-tauri/src/integrations/llm/` is the provider adapter/proxy for OpenAI-compatible APIs, Anthropic, Gemini, and Ollama.
 - If the user navigates away during LLM processing, services may update the backing history transcript directly rather than only mutating the active in-memory state.
 
 ### Persistence and setup
@@ -132,9 +132,12 @@ Key product modes:
 
 ## Directory cues
 
-- `src/components/settings/` â€?settings tab implementations
-- `src/services/` â€?frontend orchestration for transcription, LLM, history, export, and models
-- `src/stores/` â€?Zustand stores; start here when behavior spans multiple screens
-- `src-tauri/src/` â€?Tauri command handlers, audio capture, LLM proxy, Sherpa integration, pipeline code
-- `docs/user-guide.md` â€?end-user workflows and setup details
-- `docs/cli.md` â€?CLI usage and configuration
+- `src/components/settings/` ?settings tab implementations
+- `src/services/` ?frontend orchestration for transcription, LLM, history, export, and models
+- `src/stores/` ?Zustand stores; start here when behavior spans multiple screens
+- `src-tauri/src/cli/` ?CLI subcommands (transcribe, serve, models)
+- `src-tauri/src/core/` ?Business logic (pipeline, automation, diagnostics, config)
+- `src-tauri/src/integrations/` ?ASR, LLM, and WebDAV providers
+- `src-tauri/src/commands/` ?Tauri command entry points
+- `docs/user-guide.md` ?end-user workflows and setup details
+- `docs/cli.md` ?CLI usage and configuration

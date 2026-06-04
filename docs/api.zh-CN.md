@@ -18,7 +18,7 @@ API 服务可以通过以下两种方式启动：
 ### 2. 命令行无头模式
 您还可以直接通过命令行无头运行 Sona：
 ```bash
-sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2
 ```
 
 ---
@@ -35,20 +35,22 @@ Authorization: Bearer your_secure_key
 
 ---
 
-### 1. 获取服务器信息与可用能力
+### 1. 获取服务器信息与可用能力 (Server Info)
 
-查询当前 API 服务器的配置、资源限制以及配置好的云端 ASR 引擎。
+获取服务器平台信息、硬件状态、已安装模型以及可用的在线 ASR 提供商。
 
 - **URL**: `/v1/info`
 - **Method**: `GET`
 
-#### 返回数据 (`200 OK`)
+#### 响应 (`200 OK`)
 
 ```json
 {
-  "maxConcurrent": 2,
-  "maxQueueSize": 100,
-  "maxStreaming": 5,
+  "platform": "win32",
+  "gpuAvailable": true,
+  "models": ["sensevoice", "sherpa-onnx-whisper-turbo"],
+  "vadInstalled": true,
+  "punctuationInstalled": true,
   "onlineAsrProviders": [
     {
       "id": "volcengine-doubao",
@@ -62,7 +64,48 @@ Authorization: Bearer your_secure_key
 
 ---
 
-### 2. 提交转录任务
+### 2. 服务健康与统计 (Server Health)
+
+获取服务器运行时间、活跃/排队任务数以及临时存储占用情况。
+
+- **URL**: `/health`
+- **Method**: `GET`
+
+#### 响应 (`200 OK`)
+
+```json
+{
+  "status": "ok",
+  "uptime": 3600,
+  "activeJobs": 1,
+  "pendingJobs": 0,
+  "cacheSpaceBytes": 10485760
+}
+```
+
+---
+
+### 3. 列出所有任务 (List All Jobs)
+
+查询任务管理器中所有转录任务的当前状态。
+
+- **URL**: `/v1/transcriptions/jobs`
+- **Method**: `GET`
+
+#### 响应 (`200 OK`)
+
+返回 `job_id` 到其当前 `JobStatus` 的映射。
+
+```json
+{
+  "c86e0c65-2746-4e56-9141-866d51bbca43": "Pending",
+  "a1b2c3d4-e5f6-4g7h-8i9j-k0l1m2n3o4p5": "Processing"
+}
+```
+
+---
+
+### 4. 提交转录任务 (Submit Transcription Job)
 
 提交本地音频或视频文件进行高性能的语音识别。转录工作流会被推入队列并由后台进程排队执行。
 
@@ -102,7 +145,7 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
 
 ---
 
-### 3. 查询任务状态
+### 5. 查询任务状态 (Query Job Status)
 
 查询转录任务的当前生命周期状态以及转录文本结果。
 

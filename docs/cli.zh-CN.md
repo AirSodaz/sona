@@ -1,74 +1,75 @@
 # Sona CLI
 
-`sona` 现在通过桌面主程序直接提供离线批量转写命令。安装包里的 CLI 子命令由主程序二进制承载，源码构建场景也可以通过 Cargo 运行同一套命令。
+`sona` 现在通过桌面主程序直接提供离线批量转写命令。安装包里的 CLI 子命令由主程序二进制承载，但默认不会帮您写入系统 `PATH`。
 
-当前 CLI 已覆盖两类核心工作流：
+当前 CLI 涵盖三个核心工作流：
 
-- 转写单个本地音频或视频文件
-- 列出可用预置模型并下载模型
-- 以 `json`、`txt`、`srt` 或 `vtt` 导出结果
-- 与桌面版共享同一份预置模型元数据
+- 单个本地音频或视频文件的离线转写
+- 预置模型列表查看与模型下载
+- 启动无头 HTTP API 服务以进行远程集成
+- 导出到 `json`、`txt`、`srt`、`vtt`
+- 复用与桌面应用相同的预置模型元数据
 
 ## 当前范围
 
-- 已通过桌面主程序随安装器和应用包一起提供
-- 源码运行方式已支持：`cargo run -- ...`
-- 暂不包含：系统 `PATH` 注册、实时录音、LLM 润色、LLM 翻译
+- 包含在桌面安装包和应用包中，通过主可执行程序提供
+- 支持从源码通过 `cargo run -- ...` 运行
+- 尚未包含：Shell `PATH` 注册、实时录音、LLM 润色、LLM 翻译
 
-## 安装包内的位置
+## 安装位置
 
-CLI 通过已安装的应用主程序提供，但默认不会注册进 `PATH`。
+CLI 通过打包后的应用程序二进制文件提供，但未在 `PATH` 中注册。
 
 - Windows：在安装目录运行 `Sona.exe transcribe ...`
 - macOS：运行 `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
-- Linux 安装包：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
+- Linux：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
 - AppImage：运行挂载后的 AppImage 可执行文件并附带 CLI 子命令
 
-## 常见命令
+## 常用命令
 
-### 转写文件
+### 转录文件
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
+sona transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```
 
-如果不传 `--output`，`sona` 会把 `json` 输出到 `stdout`。
+如果不指定 `--output`，`sona` 会将 JSON 写入 `stdout`。
 
 ### 列出模型
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list
+sona models list
 ```
 
-常见筛选：
+常用过滤器：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --mode offline --type whisper
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --language zh --installed
+sona models list --mode offline --type whisper
+sona models list --language zh --installed
 ```
 
 ### 下载模型
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
+sona models download sherpa-onnx-whisper-turbo
 ```
 
-如果模型要求伴随模型，CLI 会自动一起下载：
+如果预置模型需要伴生模型，CLI 会自动下载：
 
-- 需要 VAD 时会自动下载 `silero-vad`
-- 需要标点模型时会自动下载默认标点模型
+- 需要 VAD 的模型会自动下载 `silero-vad`
+- 需要标点的模型会自动下载默认标点模型
 
-也可以显式指定模型目录：
+您也可以显式覆盖模型目录：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download silero-vad --models-dir ./models
+sona models download silero-vad --models-dir ./models
 ```
 
 ## 配置文件
 
-通过 `--config` 显式传入 TOML 配置文件。
+使用 `--config` 显式传递配置文件。
 
 最小示例：
 
@@ -83,7 +84,7 @@ vad_buffer_size = 5.0
 format = "srt"
 ```
 
-支持的配置项：
+支持的键：
 
 - `models_dir`
 - `model_id`
@@ -96,25 +97,25 @@ format = "srt"
 - `vad_buffer_size`
 - `format`
 
-命令行参数优先级高于配置文件。
+命令行标志会覆盖配置文件中的值。
 
-## 必需的伴随模型
+## 必需的伴生模型
 
-某些离线模型依赖伴随资产：
+某些离线模型需要伴生资产：
 
-- 如果所选离线模型要求 VAD，必须提供可用的 `vad_model_id`
-- 如果所选离线模型要求标点，必须提供可用的 `punctuation_model_id`
+- 如果选择的离线模型需要 VAD，必须提供有效的 `vad_model_id`
+- 如果选择的离线模型需要标点，必须提供有效的 `punctuation_model_id`
 
 对于 `models download`：
 
-- CLI 会自动把所需的 VAD / 标点模型一并下载
+- CLI 会自动下载必需的 VAD 和标点伴生模型
 
 对于 `transcribe`：
 
-- 仍然需要通过 `--vad-model-id`、`--punctuation-model-id` 或配置文件显式指定 companion model id
-- 缺失时会直接失败并给出错误提示
+- 您仍需传递 `--vad-model-id`、`--punctuation-model-id` 或在配置文件中定义它们
+- 缺失必需的伴生 ID 会导致错误并快速失败
 
-## 常用参数
+## 常用标志
 
 ### `transcribe`
 
@@ -137,6 +138,20 @@ sona transcribe <input>
   --quiet
 ```
 
+### `serve`
+
+```text
+sona serve
+  --host <ip>
+  --port <port>
+  --api-key <key>
+  --models-dir <path>
+  --ip-whitelist <rules>
+  --max-streaming <n>
+```
+
+有关 API 使用的更多详细信息，请参阅 [api.zh-CN.md](api.zh-CN.md)。
+
 ### `models list`
 
 ```text
@@ -148,11 +163,11 @@ sona models list
   --installed
 ```
 
-说明：
+注意：
 
-- `--type` 例如 `whisper`、`vad`、`punctuation`
-- `--language` 会按语言 token 匹配，例如 `zh`、`en`、`ja`、`yue`
-- 当前默认输出为 JSON
+- `--type` 可以是 `whisper`、`vad` 或 `punctuation` 等值
+- `--language` 匹配语言令牌，如 `zh`、`en`、`ja` 或 `yue`
+- 当前默认输出格式为 JSON
 
 ### `models download`
 
@@ -162,56 +177,12 @@ sona models download <model_id>
   --quiet
 ```
 
-## help 示例
+## 帮助命令
 
 ```bash
 sona --help
-sona -h
-sona --version
-sona -V
 sona transcribe --help
 sona models --help
 sona models list --help
 sona models download --help
 ```
-
-## 手工验收
-
-### 验证模型列表
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models list --type whisper --language zh
-```
-
-预期结果：
-
-- `stdout` 输出 JSON
-- 只包含匹配筛选条件的模型
-
-### 验证模型下载
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
-```
-
-预期结果：
-
-- 下载进度输出到 `stderr`
-- 主模型被安装到 models 目录
-- 所需的 VAD / 标点模型会自动一起安装
-
-### 验证转写
-
-在本机已经安装桌面版模型的前提下，可以这样验证。只要 `models_dir` 指向桌面版模型目录，这个流程既适用于源码构建，也适用于安装包中的主程序 CLI：
-
-```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
-  --config ./sona-cli.toml \
-  --output ./sample.srt
-```
-
-预期结果：
-
-- 进度输出到 `stderr`
-- 指定的导出文件被创建
-- 所选预置模型与伴随模型 id 能在 `models_dir` 下正确解析
