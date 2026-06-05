@@ -1,7 +1,7 @@
 use serde_json::Value;
 use serde_json::to_value;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
@@ -20,11 +20,6 @@ use crate::repositories::history::{
 };
 use crate::integrations::asr::TranscriptSegment;
 
-fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())
-}
 
 async fn run_history_task<R, T, F>(
     app: AppHandle<R>,
@@ -36,7 +31,7 @@ where
     T: Send + 'static,
     F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let lock = state.lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
@@ -56,7 +51,7 @@ where
     T: Send + 'static,
     F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let lock = state.lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
@@ -471,7 +466,7 @@ pub async fn history_open_folder<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
 ) -> Result<(), String> {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     {
         let _guard = state.lock.lock().map_err(|error| error.to_string())?;
         HistoryRepository::new(app_local_data_dir.clone()).ensure_ready()?;
@@ -492,7 +487,7 @@ pub async fn export_backup_archive<R: Runtime>(
     history_state: State<'_, HistoryRepositoryState>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let lock = history_state.lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
@@ -529,7 +524,7 @@ pub async fn apply_prepared_history_import<R: Runtime>(
         return Err(format!("Prepared backup import not found: {import_id}"));
     };
 
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let lock = history_state.lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;

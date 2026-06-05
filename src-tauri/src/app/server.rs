@@ -46,7 +46,7 @@ pub fn load_online_asr_config(
     app: &tauri::AppHandle,
 ) -> std::collections::HashMap<String, serde_json::Value> {
     let mut online_asr_config = std::collections::HashMap::new();
-    if let Ok(data_dir) = app.path().app_data_dir() {
+    if let Ok(data_dir) = crate::app::paths::resolve_app_data_dir(app) {
         let config_path = data_dir.join("settings.json");
         match std::fs::read_to_string(&config_path) {
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
@@ -107,7 +107,7 @@ pub async fn start_api_server(
     let (tx, rx) = tokio::sync::oneshot::channel();
     *sender_lock = Some(tx);
 
-    let app_local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let temp_dir = app_local_data_dir.join("api_temp");
     let models_dir = app_local_data_dir.join("models");
 
@@ -155,7 +155,7 @@ pub async fn stop_api_server(
 pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let app_data_dir = match app_handle.path().app_data_dir() {
+        let app_data_dir = match crate::app::paths::resolve_app_data_dir(&app_handle) {
             Ok(dir) => dir,
             Err(e) => {
                 log::error!("Failed to get app_data_dir: {}", e);
@@ -230,7 +230,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         }
 
         if http_server_enabled {
-            let app_local_data_dir = match app_handle.path().app_local_data_dir() {
+            let app_local_data_dir = match crate::app::paths::resolve_app_local_data_dir(&app_handle) {
                 Ok(dir) => dir,
                 Err(e) => {
                     log::error!("Failed to get app_local_data_dir: {}", e);

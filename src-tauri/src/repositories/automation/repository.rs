@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 
 use super::types::*;
@@ -480,19 +480,13 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())
-}
-
 pub async fn run_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
     F: FnOnce(AutomationRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         task(AutomationRepository::new(app_local_data_dir))
     })

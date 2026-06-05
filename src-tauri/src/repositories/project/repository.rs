@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 
 use super::types::{
@@ -227,7 +227,7 @@ where
     T: Send + 'static,
     F: FnOnce(ProjectRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = PROJECT_REPOSITORY_LOCK
             .lock()
@@ -238,11 +238,6 @@ where
     .map_err(|error| error.to_string())?
 }
 
-pub(crate) fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())
-}
 
 pub(crate) fn normalize_project_value(input: &Value, options: &ProjectListOptions) -> ProjectRecord {
     let now = current_time_millis().unwrap_or(0);

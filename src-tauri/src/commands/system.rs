@@ -1,17 +1,10 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use crate::core::task_ledger::repository::TaskLedgerRepository;
 use crate::core::task_ledger::types::{TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot};
-
-fn resolve_task_ledger_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())
-}
 
 async fn run_task_ledger_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
 where
@@ -19,7 +12,7 @@ where
     T: Send + 'static,
     F: FnOnce(TaskLedgerRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_task_ledger_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         task(TaskLedgerRepository::new(app_local_data_dir))
     })
@@ -39,19 +32,13 @@ fn emit_task_ledger_snapshot<R: Runtime>(
 use crate::core::recovery::repository::RecoveryRepository;
 use crate::core::recovery::types::RecoverySnapshot;
 
-fn resolve_recovery_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|error| error.to_string())
-}
-
 async fn run_recovery_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
     F: FnOnce(RecoveryRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = resolve_recovery_app_local_data_dir(&app)?;
+    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || task(RecoveryRepository::new(app_local_data_dir)))
         .await
         .map_err(|error| error.to_string())?
