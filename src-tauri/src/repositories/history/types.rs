@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use crate::integrations::asr::TranscriptSegment;
 
 #[derive(Clone, Debug)]
-pub(super) struct PreparedBackupImportSnapshot {
-    pub(super) archive_path: String,
-    pub(super) extraction_dir: PathBuf,
+pub(crate) struct PreparedBackupImportSnapshot {
+    pub(crate) archive_path: String,
+    pub(crate) extraction_dir: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq)]
@@ -296,9 +296,9 @@ pub struct PreparedBackupImport {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct HistoryBackupSnapshot {
-    pub(super) items: Vec<HistoryItemRecord>,
-    pub(super) transcript_files: Vec<(String, Value)>,
-    pub(super) summary_files: Vec<(String, Value)>,
-    pub(super) snapshot_files: Vec<(String, Value)>,
+pub(crate) struct HistoryBackupSnapshot {
+    pub(crate) items: Vec<HistoryItemRecord>,
+    pub(crate) transcript_files: Vec<(String, Value)>,
+    pub(crate) summary_files: Vec<(String, Value)>,
+    pub(crate) snapshot_files: Vec<(String, Value)>,
 }

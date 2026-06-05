@@ -1,5 +1,5 @@
-mod commands;
-mod jobs;
+pub(crate) mod commands;
+pub(crate) mod jobs;
 #[path = "llm_usage.rs"]
 pub(crate) mod llm_usage;
 mod network;
@@ -29,49 +29,3 @@ pub(crate) use providers::*;
 pub(crate) use streaming::*;
 pub(crate) use tasks::*;
 pub use types::*;
-
-#[tauri::command]
-pub async fn generate_llm_text(
-    app: tauri::AppHandle,
-    request: LlmGenerateRequest,
-) -> Result<String, String> {
-    commands::generate_llm_text_command(app, request).await
-}
-
-#[tauri::command]
-pub async fn polish_transcript_segments(
-    app: tauri::AppHandle,
-    request: PolishSegmentsRequest,
-) -> Result<Vec<PolishedSegment>, String> {
-    commands::polish_transcript_segments_command(app, request).await
-}
-
-#[tauri::command]
-pub async fn translate_transcript_segments(
-    app: tauri::AppHandle,
-    request: TranslateSegmentsRequest,
-) -> Result<Vec<TranslatedSegment>, String> {
-    commands::translate_transcript_segments_command(app, request).await
-}
-
-#[tauri::command]
-pub async fn summarize_transcript(
-    app: tauri::AppHandle,
-    request: SummarizeTranscriptRequest,
-) -> Result<TranscriptSummaryResult, String> {
-    commands::summarize_transcript_command(app, request).await
-}
-
-#[tauri::command]
-pub async fn run_transcript_llm_job(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, crate::repositories::history::HistoryRepositoryState>,
-    request: TranscriptLlmJobRequest,
-) -> Result<TranscriptLlmJobResult, String> {
-    jobs::run_transcript_llm_job_command(app, state, request).await
-}
-
-#[tauri::command]
-pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
-    commands::list_llm_models_command(request).await
-}

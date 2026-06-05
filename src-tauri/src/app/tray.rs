@@ -5,7 +5,6 @@ pub(crate) const TRAY_TOGGLE_CAPTION_EVENT: &str = "toggle-caption";
 pub(crate) const TRAY_CHECK_UPDATES_EVENT: &str = "check-updates";
 pub(crate) const TRAY_REQUEST_QUIT_EVENT: &str = "request-quit";
 
-#[tauri::command]
 pub(crate) async fn update_tray_menu<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     show_text: String,

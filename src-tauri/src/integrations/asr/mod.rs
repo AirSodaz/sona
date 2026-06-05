@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use tauri::{AppHandle, State};
+use tauri::AppHandle;
 
 mod adapter;
 mod batch;
@@ -61,14 +61,14 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
     })
 }
 
-fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
+pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
     match &request.engine_config {
         AsrEngineConfig::LocalSherpa { .. } => Ok("local_sherpa"),
         AsrEngineConfig::Online { provider } => Ok(provider.provider_id.as_str()),
     }
 }
 
-fn ensure_adapter(
+pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn AsrProviderAdapter>, SherpaError> {
     let provider_id = get_provider_id(request)?;
@@ -85,7 +85,7 @@ fn ensure_adapter(
 /// expected cloud recognizer cannot silently fall through to local Sherpa when
 /// the cloud session is missing or failed.
 pub async fn feed_audio_samples(
-    _app: &AppHandle,
+    app: &AppHandle,
     state: &AsrState,
     instance_id: &str,
     samples: &[f32],
@@ -96,130 +96,8 @@ pub async fn feed_audio_samples(
             SherpaError::Generic(format!("ASR instance {} not found", instance_id))
         })?
     };
+    let emitter = std::sync::Arc::new(app.clone()) as std::sync::Arc<dyn crate::core::event::EventEmitter>;
     session
-        .feed_audio_samples(_app.clone(), state, instance_id, samples)
+        .feed_audio_samples(emitter, state, instance_id, samples)
         .await
-}
-
-#[tauri::command]
-pub async fn init_recognizer(
-    state: State<'_, AsrState>,
-    instance_id: String,
-    asr_request: AsrTranscriptionRequest,
-) -> Result<(), SherpaError> {
-    let adapter = ensure_adapter(&asr_request)?;
-    let session = adapter
-        .create_streaming_session(&state, &instance_id, &asr_request)
-        .await?;
-    if let Some(session) = session {
-        let mut active = state.active_sessions.lock().await;
-        active.insert(instance_id.clone(), session);
-        state
-            .set_instance_engine(&instance_id, asr_request.engine())
-            .await;
-        Ok(())
-    } else {
-        Err(SherpaError::StreamingNotSupported {
-            provider_id: get_provider_id(&asr_request)?.to_string(),
-        })
-    }
-}
-
-#[tauri::command]
-pub async fn start_recognizer(
-    app: AppHandle,
-    state: State<'_, AsrState>,
-    instance_id: String,
-) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
-    session.start(app, &state, &instance_id).await
-}
-
-#[tauri::command]
-pub async fn stop_recognizer(
-    state: State<'_, AsrState>,
-    instance_id: String,
-) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
-    session.stop(&state, &instance_id).await
-}
-
-#[tauri::command]
-pub async fn flush_recognizer(
-    app: AppHandle,
-    state: State<'_, AsrState>,
-    instance_id: String,
-) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
-    session.flush(app, &state, &instance_id).await
-}
-
-#[tauri::command]
-pub async fn feed_audio_chunk(
-    app: AppHandle,
-    state: State<'_, AsrState>,
-    instance_id: String,
-    samples: Vec<u8>,
-) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
-    session
-        .feed_audio_chunk(app, &state, &instance_id, samples)
-        .await
-}
-
-#[tauri::command]
-pub async fn process_batch_file(
-    app: AppHandle,
-    state: State<'_, AsrState>,
-    file_path: String,
-    save_to_path: Option<String>,
-    speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
-    asr_request: AsrTranscriptionRequest,
-) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    let adapter = ensure_adapter(&asr_request)?;
-    let processor = adapter
-        .create_batch_processor(&asr_request)?
-        .ok_or_else(|| {
-            SherpaError::Generic(format!(
-                "Batch mode not supported for provider {}",
-                get_provider_id(&asr_request).unwrap_or("unknown")
-            ))
-        })?;
-    processor
-        .process_file(
-            app,
-            &state,
-            file_path,
-            save_to_path,
-            asr_request,
-            speaker_processing,
-        )
-        .await
-}
-
-#[tauri::command]
-pub async fn get_asr_runtime_metrics(
-    state: State<'_, AsrState>,
-) -> Result<AsrRuntimeMetricsSnapshot, String> {
-    Ok(state.metrics_snapshot().await)
 }

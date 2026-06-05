@@ -57,7 +57,6 @@ pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
     false
 }
 
-#[tauri::command]
 pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
     let mut results = Vec::with_capacity(paths.len());
     for path in paths {

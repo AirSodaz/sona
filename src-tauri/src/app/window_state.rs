@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub(crate) struct AuxWindowStateStore {
+pub struct AuxWindowStateStore {
     states: std::sync::Mutex<HashMap<String, serde_json::Value>>,
 }
 
@@ -12,7 +12,6 @@ impl Default for AuxWindowStateStore {
     }
 }
 
-#[tauri::command]
 pub(crate) fn set_aux_window_state(
     state: tauri::State<'_, AuxWindowStateStore>,
     label: String,
@@ -23,7 +22,6 @@ pub(crate) fn set_aux_window_state(
     Ok(())
 }
 
-#[tauri::command]
 pub(crate) fn get_aux_window_state(
     state: tauri::State<'_, AuxWindowStateStore>,
     label: String,
@@ -32,7 +30,6 @@ pub(crate) fn get_aux_window_state(
     Ok(states.get(&label).cloned())
 }
 
-#[tauri::command]
 pub(crate) fn clear_aux_window_state(
     state: tauri::State<'_, AuxWindowStateStore>,
     label: String,

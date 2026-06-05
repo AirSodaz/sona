@@ -136,7 +136,6 @@ pub struct DiagnosticsCoreSnapshot {
     pub punctuation_required: bool,
 }
 
-#[tauri::command]
 pub async fn get_diagnostics_core_snapshot<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AsrState>,

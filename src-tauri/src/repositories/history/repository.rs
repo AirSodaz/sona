@@ -35,15 +35,15 @@ impl HistoryRepository {
         Self { app_local_data_dir }
     }
 
-    pub(super) fn history_dir(&self) -> PathBuf {
+    pub(crate) fn history_dir(&self) -> PathBuf {
         self.app_local_data_dir.join(HISTORY_DIR_NAME)
     }
 
-    pub(super) fn history_index_path(&self) -> PathBuf {
+    pub(crate) fn history_index_path(&self) -> PathBuf {
         self.history_dir().join(HISTORY_INDEX_FILE_NAME)
     }
 
-    pub(super) fn ensure_ready(&self) -> Result<(), String> {
+    pub(crate) fn ensure_ready(&self) -> Result<(), String> {
         let history_dir = self.history_dir();
         fs::create_dir_all(&history_dir).map_err(|error| error.to_string())?;
 
@@ -59,7 +59,7 @@ impl HistoryRepository {
         self.read_index_items()
     }
 
-    pub(super) fn list_items_with_reconciled_live_drafts(
+    pub(crate) fn list_items_with_reconciled_live_drafts(
         &self,
     ) -> Result<Vec<HistoryItemRecord>, String> {
         let mut items = self.read_index_items()?;
@@ -155,7 +155,7 @@ impl HistoryRepository {
         Ok(true)
     }
 
-    pub(super) fn query_workspace(
+    pub(crate) fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
     ) -> Result<HistoryWorkspaceQueryResult, String> {
@@ -165,7 +165,7 @@ impl HistoryRepository {
         ))
     }
 
-    pub(super) fn insert_item_at_front(
+    pub(crate) fn insert_item_at_front(
         &self,
         item: HistoryItemRecord,
     ) -> Result<HistoryItemRecord, String> {
@@ -176,30 +176,30 @@ impl HistoryRepository {
         Ok(item)
     }
 
-    pub(super) fn write_index(&self, items: &[HistoryItemRecord]) -> Result<(), String> {
+    pub(crate) fn write_index(&self, items: &[HistoryItemRecord]) -> Result<(), String> {
         write_json_pretty_atomic(&self.history_index_path(), items)
     }
 
-    pub(super) fn transcript_path(&self, file_name: &str) -> Result<PathBuf, String> {
+    pub(crate) fn transcript_path(&self, file_name: &str) -> Result<PathBuf, String> {
         Ok(self
             .history_dir()
             .join(ensure_safe_file_name(file_name, "History transcript path")?))
     }
 
-    pub(super) fn audio_path(&self, file_name: &str) -> Result<PathBuf, String> {
+    pub(crate) fn audio_path(&self, file_name: &str) -> Result<PathBuf, String> {
         Ok(self
             .history_dir()
             .join(ensure_safe_file_name(file_name, "History audio path")?))
     }
 
-    pub(super) fn summary_path(&self, history_id: &str) -> Result<PathBuf, String> {
+    pub(crate) fn summary_path(&self, history_id: &str) -> Result<PathBuf, String> {
         let safe_history_id = ensure_safe_file_name(history_id, "History summary id")?;
         Ok(self
             .history_dir()
             .join(format!("{safe_history_id}{SUMMARY_FILE_SUFFIX}")))
     }
 
-    pub(super) fn transcript_versions_dir(&self, history_id: &str) -> Result<PathBuf, String> {
+    pub(crate) fn transcript_versions_dir(&self, history_id: &str) -> Result<PathBuf, String> {
         let safe_history_id = ensure_safe_file_name(history_id, "History version id")?;
         Ok(self
             .history_dir()
@@ -207,7 +207,7 @@ impl HistoryRepository {
             .join(safe_history_id))
     }
 
-    pub(super) fn transcript_snapshot_index_path(
+    pub(crate) fn transcript_snapshot_index_path(
         &self,
         history_id: &str,
     ) -> Result<PathBuf, String> {
@@ -216,7 +216,7 @@ impl HistoryRepository {
             .join(HISTORY_INDEX_FILE_NAME))
     }
 
-    pub(super) fn transcript_snapshot_path(
+    pub(crate) fn transcript_snapshot_path(
         &self,
         history_id: &str,
         snapshot_id: &str,
@@ -227,7 +227,7 @@ impl HistoryRepository {
             .join(format!("{safe_snapshot_id}.json")))
     }
 
-    pub(super) fn create_live_draft(
+    pub(crate) fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, String> {
@@ -248,7 +248,7 @@ impl HistoryRepository {
         })
     }
 
-    pub(super) fn complete_live_draft(
+    pub(crate) fn complete_live_draft(
         &self,
         history_id: &str,
         segments: Value,
@@ -274,7 +274,7 @@ impl HistoryRepository {
         Ok(updated)
     }
 
-    pub(super) fn save_recording(
+    pub(crate) fn save_recording(
         &self,
         request: HistorySaveRecordingRequest,
     ) -> Result<HistoryItemRecord, String> {
@@ -333,7 +333,7 @@ impl HistoryRepository {
         self.insert_item_at_front(item)
     }
 
-    pub(super) fn save_imported_file(
+    pub(crate) fn save_imported_file(
         &self,
         request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, String> {
@@ -372,7 +372,7 @@ impl HistoryRepository {
         self.insert_item_at_front(item)
     }
 
-    pub(super) fn delete_items(&self, ids: &[String]) -> Result<(), String> {
+    pub(crate) fn delete_items(&self, ids: &[String]) -> Result<(), String> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -426,7 +426,7 @@ impl HistoryRepository {
         Ok(Some(normalize_history_transcript_segments(value)?.segments))
     }
 
-    pub(super) fn create_transcript_snapshot(
+    pub(crate) fn create_transcript_snapshot(
         &self,
         history_id: &str,
         reason: TranscriptSnapshotReason,
@@ -484,7 +484,7 @@ impl HistoryRepository {
         Ok(metadata)
     }
 
-    pub(super) fn list_transcript_snapshots(
+    pub(crate) fn list_transcript_snapshots(
         &self,
         history_id: &str,
     ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
@@ -504,7 +504,7 @@ impl HistoryRepository {
         Ok(entries)
     }
 
-    pub(super) fn load_transcript_snapshot(
+    pub(crate) fn load_transcript_snapshot(
         &self,
         history_id: &str,
         snapshot_id: &str,
@@ -524,7 +524,7 @@ impl HistoryRepository {
         Ok(Some(record))
     }
 
-    pub(super) fn update_transcript(
+    pub(crate) fn update_transcript(
         &self,
         history_id: &str,
         segments: Value,
@@ -546,7 +546,7 @@ impl HistoryRepository {
         Ok(updated)
     }
 
-    pub(super) fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), String> {
+    pub(crate) fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), String> {
         let updates = updates
             .as_object()
             .ok_or_else(|| "History item updates must be an object.".to_string())?;
@@ -560,7 +560,7 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn update_project_assignments(
+    pub(crate) fn update_project_assignments(
         &self,
         ids: &[String],
         project_id: Option<String>,
@@ -583,7 +583,7 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn reassign_project(
+    pub(crate) fn reassign_project(
         &self,
         current_project_id: String,
         next_project_id: Option<String>,
@@ -598,7 +598,7 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn load_summary(&self, history_id: &str) -> Result<Option<Value>, String> {
+    pub(crate) fn load_summary(&self, history_id: &str) -> Result<Option<Value>, String> {
         let summary_path = self.summary_path(history_id)?;
         if !summary_path.exists() {
             return Ok(None);
@@ -611,7 +611,7 @@ impl HistoryRepository {
         )?))
     }
 
-    pub(super) fn save_summary(
+    pub(crate) fn save_summary(
         &self,
         history_id: &str,
         summary_payload: Value,
@@ -621,12 +621,12 @@ impl HistoryRepository {
         write_json_pretty_atomic(&self.summary_path(history_id)?, &summary_payload)
     }
 
-    pub(super) fn delete_summary(&self, history_id: &str) -> Result<(), String> {
+    pub(crate) fn delete_summary(&self, history_id: &str) -> Result<(), String> {
         let summary_path = self.summary_path(history_id)?;
         remove_path_if_exists(&summary_path)
     }
 
-    pub(super) fn resolve_audio_path(&self, file_name: &str) -> Result<Option<String>, String> {
+    pub(crate) fn resolve_audio_path(&self, file_name: &str) -> Result<Option<String>, String> {
         let Some(audio_path) = optional_history_child_path(&self.history_dir(), file_name) else {
             return Ok(None);
         };
@@ -641,7 +641,7 @@ impl HistoryRepository {
         }
     }
 
-    pub(super) fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
+    pub(crate) fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
         let items = self
             .list_items()?
             .into_iter()
@@ -726,7 +726,7 @@ impl HistoryRepository {
     }
 }
 
-pub(super) fn normalize_history_item_value(value: &Value) -> HistoryItemRecord {
+pub(crate) fn normalize_history_item_value(value: &Value) -> HistoryItemRecord {
     let object = value.as_object();
 
     HistoryItemRecord {

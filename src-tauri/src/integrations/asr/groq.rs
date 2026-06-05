@@ -12,8 +12,6 @@ use async_trait::async_trait;
 use reqwest::multipart;
 use serde_json::Value;
 use std::time::Instant;
-use tauri::AppHandle;
-use tauri::Emitter;
 
 #[derive(Debug)]
 pub enum GroqMode {
@@ -58,14 +56,14 @@ pub struct GroqWhisperBatchProcessor;
 impl AsrBatchProcessor for GroqWhisperBatchProcessor {
     async fn process_file(
         &self,
-        app: AppHandle,
+        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
         file_path: String,
         _save_to_path: Option<String>,
         request: AsrTranscriptionRequest,
         _speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
-        process_batch_file_impl(app, state, file_path, request)
+        process_batch_file_impl(emitter, state, file_path, request)
             .await
             .map_err(SherpaError::Generic)
     }
@@ -128,8 +126,8 @@ fn config_from_request(
     Ok(fields)
 }
 
-pub async fn process_batch_file_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn process_batch_file_impl(
+    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
     file_path: String,
     request: AsrTranscriptionRequest,
@@ -219,9 +217,9 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     set_batch_inference_metric(&state.metrics, metric.clone());
     log_inference_metric(&metric);
 
-    let _ = app.emit(
+    let _ = emitter.emit(
         crate::integrations::asr::BATCH_PROGRESS_EVENT,
-        &(file_path.as_str(), 100.0_f32),
+        serde_json::json!([file_path.as_str(), 100.0_f32]),
     );
 
     Ok(segments)

@@ -75,7 +75,6 @@ pub fn load_online_asr_config(
     online_asr_config
 }
 
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn start_api_server(
     app: tauri::AppHandle,
@@ -142,7 +141,6 @@ pub async fn start_api_server(
     Ok(normalized_whitelist)
 }
 
-#[tauri::command]
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
 ) -> Result<(), String> {
@@ -505,7 +503,7 @@ async fn start_worker_loop(
                         use tauri::Manager;
                         let inner_app_clone = app_handle.clone();
                         let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
-                        match crate::integrations::asr::process_batch_file(
+                        match crate::commands::asr::process_batch_file(
                             inner_app_clone,
                             sherpa_state,
                             job.file_path.to_string_lossy().to_string(),

@@ -95,7 +95,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .manage(crate::repositories::downloads::DownloadState::new())
+        .manage(crate::commands::downloads::DownloadState::new())
         .manage(crate::app::server::ApiServerController::default())
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())

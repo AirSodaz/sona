@@ -107,7 +107,6 @@ pub struct SpeakerReviewSnapshot {
     pub filter_options: Vec<SpeakerReviewFilterOption>,
 }
 
-#[tauri::command]
 pub fn build_speaker_review_snapshot(
     segments: Vec<TranscriptSegment>,
     active_filter: SpeakerReviewFilter,

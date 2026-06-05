@@ -14,10 +14,9 @@ use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptS
 use log::debug;
 use std::path::Path;
 use std::time::Instant;
-use tauri::{AppHandle, Emitter};
 
-pub async fn process_batch_request_impl<R: tauri::Runtime>(
-    app: AppHandle<R>,
+pub async fn process_batch_request_impl(
+    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
     request: BatchTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
@@ -26,9 +25,9 @@ pub async fn process_batch_request_impl<R: tauri::Runtime>(
     transcribe_batch_with_progress_and_metrics(
         &request,
         |progress| {
-            let _ = app.emit(
+            let _ = emitter.emit(
                 BATCH_PROGRESS_EVENT,
-                &(progress_file_path.as_str(), progress),
+                serde_json::json!([progress_file_path.as_str(), progress]),
             );
         },
         Some(state.metrics.clone()),

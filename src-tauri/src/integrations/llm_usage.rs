@@ -108,7 +108,6 @@ pub(crate) struct UsageRecord {
     pub(crate) usage: Option<TokenUsage>,
 }
 
-#[tauri::command]
 pub async fn llm_usage_ensure_storage<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     let app_dir = app
         .path()
@@ -120,7 +119,6 @@ pub async fn llm_usage_ensure_storage<R: Runtime>(app: tauri::AppHandle<R>) -> R
         .map_err(|error| error.to_string())?
 }
 
-#[tauri::command]
 pub async fn llm_usage_read_raw<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
     let app_dir = app
         .path()
@@ -132,7 +130,6 @@ pub async fn llm_usage_read_raw<R: Runtime>(app: tauri::AppHandle<R>) -> Result<
         .map_err(|error| error.to_string())?
 }
 
-#[tauri::command]
 pub async fn llm_usage_replace_raw<R: Runtime>(
     app: tauri::AppHandle<R>,
     content: String,

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Emitter, Runtime, State};
+use tauri::{AppHandle, Emitter, Runtime};
 use walkdir::WalkDir;
 
 const AUTOMATION_RUNTIME_CANDIDATE_EVENT: &str = "automation-runtime-candidate";
@@ -80,7 +80,7 @@ struct AutomationRuleRuntime {
     _watcher: RecommendedWatcher,
 }
 
-trait AutomationRuntimeEventSink: Send + Sync {
+pub trait AutomationRuntimeEventSink: Send + Sync {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String>;
 }
 
@@ -158,7 +158,7 @@ impl AutomationRuntimeState {
     }
 }
 
-fn create_event_sink<R: Runtime>(app: AppHandle<R>) -> Arc<dyn AutomationRuntimeEventSink> {
+pub fn create_event_sink<R: Runtime>(app: AppHandle<R>) -> Arc<dyn AutomationRuntimeEventSink> {
     Arc::new(TauriAutomationRuntimeEventSink { app })
 }
 
@@ -294,7 +294,7 @@ fn snapshot_candidate_for_rule(
     snapshot_from_metadata(file_path, metadata).map_err(|_| AutomationRuntimePathIssue::NotFile)
 }
 
-fn collect_rule_path_result(
+pub fn collect_rule_path_result(
     rule: &AutomationRuntimeRuleConfig,
     file_path: &str,
 ) -> AutomationRuntimePathCollectionResult {
@@ -477,7 +477,7 @@ fn schedule_candidate(
     pending.insert(pending_key, handle);
 }
 
-async fn scan_rule_runtime(
+pub async fn scan_rule_runtime(
     state: AutomationRuntimeState,
     event_sink: Arc<dyn AutomationRuntimeEventSink>,
     rule: AutomationRuntimeRuleConfig,
@@ -543,7 +543,7 @@ fn create_rule_watcher(
     Ok(watcher)
 }
 
-async fn start_rule_runtime<R: Runtime>(
+pub async fn start_rule_runtime<R: Runtime>(
     app: AppHandle<R>,
     state: AutomationRuntimeState,
     rule: AutomationRuntimeRuleConfig,
@@ -560,7 +560,7 @@ async fn start_rule_runtime<R: Runtime>(
     Ok(())
 }
 
-async fn replace_rule_runtimes_with<StartFn, StartFuture>(
+pub async fn replace_rule_runtimes_with<StartFn, StartFuture>(
     state: AutomationRuntimeState,
     rules: Vec<AutomationRuntimeRuleConfig>,
     mut start_rule: StartFn,
@@ -592,44 +592,6 @@ where
     results
 }
 
-#[tauri::command]
-pub async fn replace_automation_runtime_rules<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, AutomationRuntimeState>,
-    rules: Vec<AutomationRuntimeRuleConfig>,
-) -> Result<Vec<AutomationRuntimeReplaceResult>, String> {
-    let runtime_state = state.inner().clone();
-    Ok(
-        replace_rule_runtimes_with(runtime_state.clone(), rules, move |rule| {
-            start_rule_runtime(app.clone(), runtime_state.clone(), rule)
-        })
-        .await,
-    )
-}
-
-#[tauri::command]
-pub async fn scan_automation_runtime_rule<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, AutomationRuntimeState>,
-    rule: AutomationRuntimeRuleConfig,
-) -> Result<(), String> {
-    scan_rule_runtime(state.inner().clone(), create_event_sink(app), rule).await
-}
-
-#[tauri::command]
-pub async fn collect_automation_runtime_rule_paths(
-    rule: AutomationRuntimeRuleConfig,
-    file_paths: Vec<String>,
-) -> Result<Vec<AutomationRuntimePathCollectionResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(file_paths
-            .into_iter()
-            .map(|file_path| collect_rule_path_result(&rule, &file_path))
-            .collect())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
 
 #[cfg(test)]
 mod tests {

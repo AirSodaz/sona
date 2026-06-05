@@ -17,7 +17,6 @@ pub struct DashboardSnapshotRequest {
     pub deep: bool,
 }
 
-#[tauri::command]
 pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<AppDashboardService>>,
     request: DashboardSnapshotRequest,

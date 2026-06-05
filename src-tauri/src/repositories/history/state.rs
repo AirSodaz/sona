@@ -5,7 +5,7 @@ use super::types::PreparedBackupImportSnapshot;
 
 #[derive(Clone, Default)]
 pub struct HistoryRepositoryState {
-    pub(super) lock: Arc<Mutex<()>>,
+    pub(crate) lock: Arc<Mutex<()>>,
 }
 
 #[derive(Clone, Default)]
@@ -14,7 +14,7 @@ pub struct PreparedBackupImportState {
 }
 
 impl PreparedBackupImportState {
-    pub(super) fn insert(
+    pub(crate) fn insert(
         &self,
         import_id: String,
         snapshot: PreparedBackupImportSnapshot,
@@ -24,7 +24,7 @@ impl PreparedBackupImportState {
         Ok(())
     }
 
-    pub(super) fn get(
+    pub(crate) fn get(
         &self,
         import_id: &str,
     ) -> Result<Option<PreparedBackupImportSnapshot>, String> {
@@ -32,7 +32,7 @@ impl PreparedBackupImportState {
         Ok(guard.get(import_id).cloned())
     }
 
-    pub(super) fn remove(
+    pub(crate) fn remove(
         &self,
         import_id: &str,
     ) -> Result<Option<PreparedBackupImportSnapshot>, String> {

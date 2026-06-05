@@ -1,7 +1,7 @@
 const EXTRACT_PROGRESS_EVENT: &str = "extract-progress";
 
 #[tauri::command]
-pub(crate) async fn extract_tar_bz2<R: tauri::Runtime>(
+pub async fn extract_tar_bz2<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     archive_path: String,
     target_dir: String,
@@ -38,7 +38,7 @@ pub(crate) async fn extract_tar_bz2<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub(crate) async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<(), String> {
+pub async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<(), String> {
     use std::fs::{self, File};
     use std::io::BufWriter;
     use std::path::{Path, PathBuf};
@@ -55,8 +55,8 @@ pub(crate) async fn create_tar_bz2(source_dir: String, archive_path: String) -> 
 
             if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
                 builder
-                    .append_dir(relative, &path)
-                    .map_err(|e| e.to_string())?;
+                     .append_dir(relative, &path)
+                     .map_err(|e| e.to_string())?;
                 append_directory_contents(builder, root, &path)?;
                 continue;
             }

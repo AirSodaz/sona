@@ -230,7 +230,6 @@ pub struct ModelCatalogSelectedIds {
 }
 
 /// Returns a settings-page-ready catalog snapshot for the app-local models dir.
-#[tauri::command]
 pub fn get_model_catalog_snapshot<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<ModelCatalogSnapshot, String> {
@@ -305,7 +304,6 @@ pub fn resolve_model_catalog_selected_ids(
     }
 }
 
-#[tauri::command(rename = "resolve_model_catalog_selected_ids")]
 pub fn resolve_model_catalog_selected_ids_command<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     paths: ModelSelectionPaths,

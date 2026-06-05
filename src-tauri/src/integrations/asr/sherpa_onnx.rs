@@ -24,7 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
-use tauri::AppHandle;
+// No AppHandle needed
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
 
@@ -62,9 +62,9 @@ fn build_live_metric(
     }
 }
 
-fn run_offline_inference<R: tauri::Runtime>(
+fn run_offline_inference(
     speech_buffer: &[Vec<f32>],
-    app: &AppHandle<R>,
+    emitter: &dyn crate::core::event::EventEmitter,
     r: &OfflineRecognizer,
     punctuation: Option<&Punctuation>,
     segment_id: &str,
@@ -215,7 +215,7 @@ fn run_offline_inference<R: tauri::Runtime>(
             let update = postprocessor
                 .process_update(build_transcript_update(segment, normalization_options));
             emit_transcript_update(
-                app,
+                emitter,
                 instance_id,
                 &update,
                 stage,
@@ -249,7 +249,7 @@ pub struct LocalSherpaSession {
 impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSession {
     async fn start(
         &self,
-        _app: AppHandle,
+        _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         _state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError> {
@@ -268,38 +268,38 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
 
     async fn flush(
         &self,
-        app: AppHandle,
+        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        flush_recognizer_impl_inner(app, state, instance_id, &mut instance)
+        flush_recognizer_impl_inner(emitter, state, instance_id, &mut instance)
             .await
             .map_err(|e| SherpaError::Generic(e))
     }
 
     async fn feed_audio_chunk(
         &self,
-        app: AppHandle,
+        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: Vec<u8>,
     ) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        feed_audio_chunk_impl_inner(app, state, instance_id, &mut instance, samples)
+        feed_audio_chunk_impl_inner(emitter, state, instance_id, &mut instance, samples)
             .await
             .map_err(|e| SherpaError::Generic(e))
     }
 
     async fn feed_audio_samples(
         &self,
-        app: AppHandle,
+        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: &[f32],
     ) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        feed_audio_samples_inner(&app, state, instance_id, &mut instance, samples)
+        feed_audio_samples_inner(emitter, state, instance_id, &mut instance, samples)
             .await
             .map_err(|e| SherpaError::Generic(e))
     }
@@ -472,8 +472,8 @@ async fn stop_recognizer_impl_inner(
     Ok(())
 }
 
-async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
-    app: AppHandle<R>,
+async fn flush_recognizer_impl_inner(
+    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -503,7 +503,7 @@ async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
                 let global_start = instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
                 let offline_copy = instance.offline_state.speech_buffer.clone();
-                let app_copy = app.clone();
+                let emitter_copy = emitter.clone();
                 let recognizer_copy = recognizer.clone();
                 let punct_copy = instance.punctuation.clone();
                 let seg_id_copy = seg_id.clone();
@@ -531,7 +531,7 @@ async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
                     if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                         run_offline_inference(
                             &offline_copy,
-                            &app_copy,
+                            emitter_copy.as_ref(),
                             &safe_r.0,
                             punct_copy.as_deref(),
                             &seg_id_copy,
@@ -623,7 +623,7 @@ async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
                             instance.normalization_options,
                         ));
                     emit_transcript_update(
-                        &app,
+                        emitter.as_ref(),
                         &instance_id,
                         &update,
                         "flush_online",
@@ -657,8 +657,8 @@ async fn flush_recognizer_impl_inner<R: tauri::Runtime>(
     Ok(())
 }
 
-async fn feed_audio_samples_inner<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+async fn feed_audio_samples_inner(
+    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -788,7 +788,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                         instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
                     let offline_copy = instance.offline_state.speech_buffer.clone();
-                    let app_copy = app.clone();
+                    let emitter_copy = emitter.clone();
                     let punct_copy = instance.punctuation.clone();
                     let seg_id_copy = seg_id.clone();
                     let instance_id_copy = instance_id.to_string();
@@ -823,7 +823,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                         if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                             run_offline_inference(
                                 &offline_copy,
-                                &app_copy,
+                                emitter_copy.as_ref(),
                                 &safe_r.0,
                                 punct_copy.as_deref(),
                                 &seg_id_copy,
@@ -864,7 +864,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                         instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
                     let offline_copy = instance.offline_state.speech_buffer.clone();
-                    let app_copy = app.clone();
+                    let emitter_copy = emitter.clone();
                     let punct_copy = instance.punctuation.clone();
                     let seg_id_copy = seg_id.clone();
                     let instance_id_copy = instance_id.to_string();
@@ -891,7 +891,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                         if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                             run_offline_inference(
                                 &offline_copy,
-                                &app_copy,
+                                emitter_copy.as_ref(),
                                 &safe_r.0,
                                 punct_copy.as_deref(),
                                 &seg_id_copy,
@@ -1000,7 +1000,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                             instance.normalization_options,
                         ));
                     emit_transcript_update(
-                        app,
+                        emitter.as_ref(),
                         instance_id,
                         &update,
                         "online_partial",
@@ -1088,7 +1088,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
                                     instance.normalization_options,
                                 ));
                         emit_transcript_update(
-                            app,
+                            emitter.as_ref(),
                             instance_id,
                             &update,
                             "online_final",
@@ -1122,7 +1122,7 @@ async fn feed_audio_samples_inner<R: tauri::Runtime>(
 }
 
 async fn feed_audio_chunk_impl_inner(
-    app: AppHandle,
+    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -1138,7 +1138,7 @@ async fn feed_audio_chunk_impl_inner(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples_inner(&app, &state, &instance_id, instance, &float_samples).await
+    feed_audio_samples_inner(emitter, &state, &instance_id, instance, &float_samples).await
 }
 
 pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {

@@ -1,13 +1,12 @@
-mod backup;
-pub(crate) mod commands;
+pub(crate) mod backup;
 pub(crate) mod fs_utils;
 mod item_factory;
 pub(crate) mod repository;
 mod state;
 pub use repository::HistoryRepository;
 #[cfg(test)]
-mod test_support;
-mod transcript_diff;
+pub(crate) mod test_support;
+pub(crate) mod transcript_diff;
 mod transcript_payload;
 mod types;
 mod workspace_query;
@@ -25,24 +24,24 @@ pub use types::{
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
-pub(super) const HISTORY_DIR_NAME: &str = "history";
-pub(super) const HISTORY_INDEX_FILE_NAME: &str = "index.json";
-pub(super) const SUMMARY_FILE_SUFFIX: &str = ".summary.json";
-pub(super) const HISTORY_VERSIONS_DIR_NAME: &str = "versions";
-pub(super) const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
+pub(crate) const HISTORY_DIR_NAME: &str = "history";
+pub(crate) const HISTORY_INDEX_FILE_NAME: &str = "index.json";
+pub(crate) const SUMMARY_FILE_SUFFIX: &str = ".summary.json";
+pub(crate) const HISTORY_VERSIONS_DIR_NAME: &str = "versions";
+pub(crate) const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
 
-pub(super) const CONFIG_DIR_NAME: &str = "config";
-pub(super) const CONFIG_FILE_NAME: &str = "sona-config.json";
-pub(super) const PROJECTS_DIR_NAME: &str = "projects";
-pub(super) const PROJECTS_INDEX_FILE_NAME: &str = "index.json";
-pub(super) const AUTOMATION_DIR_NAME: &str = "automation";
-pub(super) const AUTOMATION_RULES_FILE_NAME: &str = "rules.json";
-pub(super) const AUTOMATION_PROCESSED_FILE_NAME: &str = "processed.json";
-pub(super) const ANALYTICS_DIR_NAME: &str = "analytics";
-pub(super) const ANALYTICS_USAGE_FILE_NAME: &str = "llm-usage.json";
+pub(crate) const CONFIG_DIR_NAME: &str = "config";
+pub(crate) const CONFIG_FILE_NAME: &str = "sona-config.json";
+pub(crate) const PROJECTS_DIR_NAME: &str = "projects";
+pub(crate) const PROJECTS_INDEX_FILE_NAME: &str = "index.json";
+pub(crate) const AUTOMATION_DIR_NAME: &str = "automation";
+pub(crate) const AUTOMATION_RULES_FILE_NAME: &str = "rules.json";
+pub(crate) const AUTOMATION_PROCESSED_FILE_NAME: &str = "processed.json";
+pub(crate) const ANALYTICS_DIR_NAME: &str = "analytics";
+pub(crate) const ANALYTICS_USAGE_FILE_NAME: &str = "llm-usage.json";
 
-pub(super) const BACKUP_SCHEMA_VERSION: u64 = 1;
-pub(super) const BACKUP_HISTORY_MODE: &str = "light";
+pub(crate) const BACKUP_SCHEMA_VERSION: u64 = 1;
+pub(crate) const BACKUP_HISTORY_MODE: &str = "light";
 
 #[async_trait::async_trait]
 impl crate::core::dashboard::ports::HistoryRepository for HistoryRepository {

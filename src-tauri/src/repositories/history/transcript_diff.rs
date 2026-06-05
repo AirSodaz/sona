@@ -276,7 +276,7 @@ fn changed_row_count(rows: &[TranscriptDiffRow]) -> usize {
         .count()
 }
 
-pub(super) fn build_transcript_diff(
+pub(crate) fn build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> TranscriptDiffResult {
@@ -292,7 +292,7 @@ pub(super) fn build_transcript_diff(
     }
 }
 
-pub(super) fn restore_transcript_diff_rows(
+pub(crate) fn restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Vec<TranscriptSegment> {

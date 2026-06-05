@@ -7,7 +7,6 @@
 ///
 /// Returns `Ok(true)` if a compatible GPU is found, `Ok(false)` if not, or an `Err` containing
 /// an error message if the check fails in an unexpected way.
-#[tauri::command]
 pub async fn check_gpu_availability() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {

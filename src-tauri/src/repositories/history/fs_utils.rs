@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-pub(super) use crate::repositories::storage::write_binary_atomic;
+pub(crate) use crate::repositories::storage::write_binary_atomic;
 pub(crate) use crate::repositories::storage::write_json_pretty_atomic;
 
-pub(super) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
+pub(crate) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty()
         || trimmed.contains("..")
@@ -22,7 +22,7 @@ pub(super) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, 
     Ok(trimmed.to_string())
 }
 
-pub(super) fn optional_history_child_path(root: &Path, file_name: &str) -> Option<PathBuf> {
+pub(crate) fn optional_history_child_path(root: &Path, file_name: &str) -> Option<PathBuf> {
     let trimmed = file_name.trim();
     if trimmed.is_empty()
         || trimmed.contains("..")
@@ -34,7 +34,7 @@ pub(super) fn optional_history_child_path(root: &Path, file_name: &str) -> Optio
     Some(root.join(trimmed))
 }
 
-pub(super) fn ensure_json_array_value(value: Value, label: &str) -> Result<Value, String> {
+pub(crate) fn ensure_json_array_value(value: Value, label: &str) -> Result<Value, String> {
     if value.is_array() {
         Ok(value)
     } else {
@@ -42,7 +42,7 @@ pub(super) fn ensure_json_array_value(value: Value, label: &str) -> Result<Value
     }
 }
 
-pub(super) fn ensure_json_object_value(value: Value, label: &str) -> Result<Value, String> {
+pub(crate) fn ensure_json_object_value(value: Value, label: &str) -> Result<Value, String> {
     if value.is_object() {
         Ok(value)
     } else {
@@ -50,12 +50,12 @@ pub(super) fn ensure_json_object_value(value: Value, label: &str) -> Result<Valu
     }
 }
 
-pub(super) fn read_json_value(path: &Path) -> Result<Value, String> {
+pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&content).map_err(|error| error.to_string())
 }
 
-pub(super) fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+pub(crate) fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     match fs::metadata(path) {
         Ok(metadata) if metadata.is_dir() => {
             fs::remove_dir_all(path).map_err(|error| error.to_string())
@@ -66,7 +66,7 @@ pub(super) fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     }
 }
 
-pub(super) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
+pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
     if !source.is_dir() {
         return Err(format!(
             "Source directory does not exist: {}",
@@ -100,13 +100,13 @@ pub(super) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(
     Ok(())
 }
 
-pub(super) fn create_temp_directory(prefix: &str) -> Result<PathBuf, String> {
+pub(crate) fn create_temp_directory(prefix: &str) -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("sona-{prefix}-{}", Uuid::new_v4()));
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     Ok(dir)
 }
 
-pub(super) fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> Result<(), String> {
+pub(crate) fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> Result<(), String> {
     fn append_directory_contents(
         builder: &mut tar::Builder<BzEncoder<BufWriter<File>>>,
         root: &Path,
@@ -157,7 +157,7 @@ pub(super) fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> 
     Ok(())
 }
 
-pub(super) fn extract_tar_bz2_archive(
+pub(crate) fn extract_tar_bz2_archive(
     archive_path: &Path,
     target_dir: &Path,
 ) -> Result<(), String> {

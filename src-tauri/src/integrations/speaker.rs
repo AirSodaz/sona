@@ -148,7 +148,6 @@ struct SpeakerProfileIndexSummary {
     usable_sample_embeddings: usize,
 }
 
-#[tauri::command]
 pub async fn annotate_speaker_segments_from_file(
     file_path: String,
     segments: Vec<TranscriptSegment>,
@@ -163,7 +162,6 @@ pub async fn annotate_speaker_segments_from_file(
     annotate_segments_with_speakers(&samples, &segments, speaker_processing.as_ref())
 }
 
-#[tauri::command]
 pub async fn import_speaker_profile_sample<R: Runtime>(
     app: AppHandle<R>,
     profile_id: String,

@@ -202,7 +202,7 @@ async fn handle_online_streaming_socket(
     let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
 
     if let Err(e) =
-        crate::integrations::asr::init_recognizer(sherpa_state.clone(), session_id.clone(), request)
+        crate::commands::asr::init_recognizer(sherpa_state.clone(), session_id.clone(), request)
             .await
     {
         let _ = socket
@@ -217,7 +217,7 @@ async fn handle_online_streaming_socket(
         return;
     }
 
-    if let Err(e) = crate::integrations::asr::start_recognizer(
+    if let Err(e) = crate::commands::asr::start_recognizer(
         app_handle.clone(),
         sherpa_state.clone(),
         session_id.clone(),
@@ -292,7 +292,7 @@ async fn handle_online_streaming_socket(
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            let _ = crate::integrations::asr::flush_recognizer(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
+                            let _ = crate::commands::asr::flush_recognizer(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
                             stopping = true;
                         }
                     }
@@ -317,7 +317,7 @@ async fn handle_online_streaming_socket(
     }
 
     let _ =
-        crate::integrations::asr::stop_recognizer(sherpa_state.clone(), session_id.clone()).await;
+        crate::commands::asr::stop_recognizer(sherpa_state.clone(), session_id.clone()).await;
 }
 
 async fn handle_local_streaming_socket(

@@ -9,7 +9,7 @@ use crate::core::text_alignment::{align_text_units_to_tokens, is_cjk_char};
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use tauri::{AppHandle, Emitter};
+
 
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;
 const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
@@ -633,8 +633,8 @@ pub(crate) fn build_transcript_update(
     }
 }
 
-pub(crate) fn emit_transcript_update<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+pub(crate) fn emit_transcript_update(
+    emitter: &dyn crate::core::event::EventEmitter,
     instance_id: &str,
     update: &TranscriptUpdate,
     stage: &str,
@@ -644,7 +644,7 @@ pub(crate) fn emit_transcript_update<R: tauri::Runtime>(
     for segment in &update.upsert_segments {
         log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
     }
-    let _ = app.emit(&event_name, update);
+    let _ = emitter.emit(&event_name, serde_json::to_value(update).unwrap());
 }
 
 pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {

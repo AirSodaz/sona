@@ -4,12 +4,12 @@ use tokio::sync::{Mutex, Notify};
 
 const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress";
 
-pub(crate) struct DownloadState {
-    pub(crate) downloads: Mutex<HashMap<String, Arc<Notify>>>,
+pub struct DownloadState {
+    pub downloads: Mutex<HashMap<String, Arc<Notify>>>,
 }
 
 impl DownloadState {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             downloads: Mutex::new(HashMap::new()),
         }
@@ -17,7 +17,7 @@ impl DownloadState {
 }
 
 #[tauri::command]
-pub(crate) async fn cancel_download(
+pub async fn cancel_download(
     state: tauri::State<'_, DownloadState>,
     id: String,
 ) -> Result<(), String> {
@@ -29,47 +29,15 @@ pub(crate) async fn cancel_download(
 }
 
 #[tauri::command]
-pub(crate) async fn has_active_downloads(
+pub async fn has_active_downloads(
     state: tauri::State<'_, DownloadState>,
 ) -> Result<bool, String> {
     let downloads = state.downloads.lock().await;
     Ok(!downloads.is_empty())
 }
 
-#[allow(dead_code)]
-pub(crate) async fn process_download<S, W, F>(
-    mut stream: S,
-    mut writer: W,
-    total_size: u64,
-    mut on_progress: F,
-) -> Result<(), String>
-where
-    S: futures_util::Stream<Item = Result<bytes::Bytes, String>> + Unpin,
-    W: tokio::io::AsyncWrite + Unpin,
-    F: FnMut(u64, u64),
-{
-    use futures_util::StreamExt;
-    use std::time::Instant;
-    use tokio::io::AsyncWriteExt;
-
-    let mut downloaded: u64 = 0;
-    let mut last_emit = Instant::now();
-
-    while let Some(item) = stream.next().await {
-        let chunk = item?;
-        writer.write_all(&chunk).await.map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
-
-        if total_size > 0 && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100) {
-            on_progress(downloaded, total_size);
-            last_emit = Instant::now();
-        }
-    }
-    Ok(())
-}
-
 #[tauri::command]
-pub(crate) async fn download_file<R: tauri::Runtime>(
+pub async fn download_file<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     state: tauri::State<'_, DownloadState>,
     url: String,

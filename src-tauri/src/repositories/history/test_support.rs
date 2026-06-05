@@ -12,7 +12,7 @@ use super::{
     HISTORY_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
 };
 
-pub(super) fn sample_history_item(id: &str, status: HistoryItemStatus) -> HistoryItemRecord {
+pub(crate) fn sample_history_item(id: &str, status: HistoryItemStatus) -> HistoryItemRecord {
     HistoryItemRecord {
         id: id.to_string(),
         timestamp: 1,
@@ -34,7 +34,7 @@ pub(super) fn sample_history_item(id: &str, status: HistoryItemStatus) -> Histor
     }
 }
 
-pub(super) fn create_valid_backup_archive(archive_path: &Path) -> PathBuf {
+pub(crate) fn create_valid_backup_archive(archive_path: &Path) -> PathBuf {
     let staging_dir = tempdir().unwrap();
     let history_dir = staging_dir.path().join(HISTORY_DIR_NAME);
     let config_dir = staging_dir.path().join(CONFIG_DIR_NAME);

@@ -221,7 +221,6 @@ fn build_unicode_key_input_specs(text: &str) -> Vec<UnicodeKeyInputSpec> {
     specs
 }
 
-#[tauri::command]
 pub fn inject_text(
     text: String,
     shortcut_modifiers: Option<Vec<ShortcutModifier>>,
@@ -292,7 +291,6 @@ fn inject_text_with_enigo(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
 pub fn get_mouse_position() -> Result<(i32, i32), String> {
     let enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
     enigo.location().map_err(|e| e.to_string())
@@ -567,7 +565,6 @@ fn build_unicode_input(scan_code: u16, is_key_up: bool) -> INPUT {
 }
 
 #[cfg(target_os = "windows")]
-#[tauri::command]
 pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     use std::mem::size_of;
     use windows::Win32::Foundation::POINT;
@@ -722,17 +719,14 @@ unsafe fn safearray_to_f64_vec(
 }
 
 #[cfg(not(target_os = "windows"))]
-#[tauri::command]
 pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     Ok(None)
 }
 
-#[tauri::command]
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[tauri::command]
 pub fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
 }

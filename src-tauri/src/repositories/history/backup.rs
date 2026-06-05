@@ -22,7 +22,7 @@ use super::{
     PreparedBackupImport, SUMMARY_FILE_SUFFIX,
 };
 
-pub(super) fn build_backup_manifest(
+pub(crate) fn build_backup_manifest(
     app_version: String,
     project_count: usize,
     history_item_count: usize,
@@ -334,7 +334,7 @@ fn js_truthy(value: Option<&Value>) -> bool {
     }
 }
 
-pub(super) fn export_backup_archive_inner(
+pub(crate) fn export_backup_archive_inner(
     app_local_data_dir: &Path,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
@@ -419,7 +419,7 @@ pub(super) fn export_backup_archive_inner(
     }
 }
 
-pub(super) fn prepare_backup_import_inner(
+pub(crate) fn prepare_backup_import_inner(
     archive_path: &Path,
 ) -> Result<(PreparedBackupImport, PreparedBackupImportSnapshot), String> {
     let extraction_dir = create_temp_directory("backup-import")?;
@@ -584,7 +584,7 @@ pub(super) fn prepare_backup_import_inner(
     result
 }
 
-pub(super) fn apply_prepared_history_import_inner(
+pub(crate) fn apply_prepared_history_import_inner(
     app_local_data_dir: &Path,
     import_id: &str,
     extraction_dir: &Path,

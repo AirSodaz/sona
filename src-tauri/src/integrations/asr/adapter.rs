@@ -6,7 +6,6 @@ use super::types::{
     AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
 };
 use async_trait::async_trait;
-use tauri::AppHandle;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalSherpaAdapter;
@@ -94,7 +93,7 @@ pub struct LocalSherpaBatchProcessor;
 impl AsrBatchProcessor for LocalSherpaBatchProcessor {
     async fn process_file(
         &self,
-        app: AppHandle,
+        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
         file_path: String,
         save_to_path: Option<String>,
@@ -141,7 +140,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
             }
         };
 
-        super::batch::process_batch_request_impl(app, state, config)
+        super::batch::process_batch_request_impl(emitter, state, config)
             .await
             .map_err(SherpaError::from)
     }

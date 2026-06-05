@@ -232,21 +232,18 @@ pub fn confirm_speaker_group_review_impl(
     })
 }
 
-#[tauri::command]
 pub async fn apply_speaker_profile_to_group(
     request: ApplySpeakerProfileToGroupRequest,
 ) -> Result<SpeakerCorrectionResponse, String> {
     apply_speaker_profile_to_group_impl(request)
 }
 
-#[tauri::command]
 pub async fn reset_speaker_group_to_anonymous(
     request: SpeakerGroupRequest,
 ) -> Result<SpeakerCorrectionResponse, String> {
     reset_speaker_group_to_anonymous_impl(request)
 }
 
-#[tauri::command]
 pub async fn confirm_speaker_group_review(
     request: SpeakerGroupRequest,
 ) -> Result<SpeakerCorrectionResponse, String> {

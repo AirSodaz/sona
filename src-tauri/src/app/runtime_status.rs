@@ -4,15 +4,15 @@ use tauri::Manager;
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RuntimeEnvironmentStatus {
-    pub(crate) ffmpeg_path: String,
-    pub(crate) ffmpeg_exists: bool,
-    pub(crate) log_dir_path: String,
+pub struct RuntimeEnvironmentStatus {
+    pub ffmpeg_path: String,
+    pub ffmpeg_exists: bool,
+    pub log_dir_path: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum RuntimePathKind {
+pub enum RuntimePathKind {
     File,
     Directory,
     Missing,
@@ -21,10 +21,10 @@ pub(crate) enum RuntimePathKind {
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RuntimePathStatus {
-    pub(crate) path: String,
-    pub(crate) kind: RuntimePathKind,
-    pub(crate) error: Option<String>,
+pub struct RuntimePathStatus {
+    pub path: String,
+    pub kind: RuntimePathKind,
+    pub error: Option<String>,
 }
 
 pub(crate) fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
@@ -57,7 +57,6 @@ pub(crate) fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
     }
 }
 
-#[tauri::command]
 pub(crate) async fn open_log_folder<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<(), String> {
@@ -93,14 +92,12 @@ pub(crate) fn resolve_runtime_environment_status<R: tauri::Runtime>(
     })
 }
 
-#[tauri::command]
 pub(crate) async fn get_runtime_environment_status<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     resolve_runtime_environment_status(&app)
 }
 
-#[tauri::command]
 pub(crate) async fn get_path_statuses(
     paths: Vec<String>,
 ) -> Result<Vec<RuntimePathStatus>, String> {

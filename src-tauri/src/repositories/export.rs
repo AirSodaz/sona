@@ -100,22 +100,7 @@ pub fn export_segments_with_mode(
     }
 }
 
-#[tauri::command]
-pub async fn export_transcript_file(
-    segments: Vec<TranscriptSegment>,
-    format: ExportFormat,
-    mode: ExportMode,
-    output_path: String,
-) -> Result<ExportTranscriptFileResult, String> {
-    export_transcript_file_inner(ExportTranscriptFileRequest {
-        segments,
-        format,
-        mode,
-        output_path,
-    })
-}
-
-fn export_transcript_file_inner(
+pub(crate) fn export_transcript_file_inner(
     request: ExportTranscriptFileRequest,
 ) -> Result<ExportTranscriptFileResult, String> {
     let content = export_segments_with_mode(&request.segments, request.format, request.mode)?;

@@ -55,7 +55,7 @@ impl RuntimeLogLevel {
     }
 }
 
-pub(crate) struct AppSettings {
+pub struct AppSettings {
     pub(crate) minimize_to_tray: Mutex<bool>,
     log_level: RuntimeLogLevel,
 }
@@ -89,14 +89,12 @@ pub(crate) enum MainWindowCloseAction {
     RequestQuit,
 }
 
-#[tauri::command]
 pub(crate) fn set_minimize_to_tray(state: tauri::State<'_, AppSettings>, enabled: bool) {
     if let Ok(mut minimize) = state.minimize_to_tray.lock() {
         *minimize = enabled;
     }
 }
 
-#[tauri::command]
 pub(crate) fn set_log_level(
     state: tauri::State<'_, AppSettings>,
     level: String,

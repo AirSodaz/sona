@@ -3,14 +3,14 @@ use serde_json::to_value;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use super::backup::{
+use crate::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
-use super::fs_utils::remove_path_if_exists;
-use super::repository::HistoryRepository;
-use super::state::{HistoryRepositoryState, PreparedBackupImportState};
-use super::{
-    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
+use crate::repositories::history::fs_utils::remove_path_if_exists;
+use crate::repositories::history::HistoryRepository;
+use crate::repositories::history::{
+    HistoryRepositoryState, PreparedBackupImportState, BackupManifest,
+    ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
     HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
@@ -361,7 +361,7 @@ pub fn history_build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptDiffResult, String> {
-    Ok(super::transcript_diff::build_transcript_diff(
+    Ok(crate::repositories::history::transcript_diff::build_transcript_diff(
         snapshot_segments,
         current_segments,
     ))
@@ -372,7 +372,7 @@ pub fn history_restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    Ok(super::transcript_diff::restore_transcript_diff_rows(
+    Ok(crate::repositories::history::transcript_diff::restore_transcript_diff_rows(
         rows,
         selected_row_ids,
     ))

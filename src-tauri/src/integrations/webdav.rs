@@ -349,7 +349,6 @@ fn resolve_warning_message(collection_missing: bool) -> WebDavConnectionResult {
     }
 }
 
-#[tauri::command]
 pub async fn webdav_test_connection(
     config: WebDavConfigPayload,
 ) -> Result<WebDavConnectionResult, String> {
@@ -362,7 +361,6 @@ pub async fn webdav_test_connection(
     Ok(resolve_warning_message(probe == CollectionProbe::Missing))
 }
 
-#[tauri::command]
 pub async fn webdav_list_backups(
     config: WebDavConfigPayload,
 ) -> Result<Vec<RemoteBackupEntry>, String> {
@@ -390,7 +388,6 @@ pub async fn webdav_list_backups(
     }
 }
 
-#[tauri::command]
 pub async fn webdav_upload_backup(
     config: WebDavConfigPayload,
     local_archive_path: String,
@@ -431,7 +428,6 @@ pub async fn webdav_upload_backup(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn webdav_download_backup(
     config: WebDavConfigPayload,
     href: String,

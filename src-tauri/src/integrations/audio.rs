@@ -341,7 +341,6 @@ pub struct AudioDevice {
     name: String,
 }
 
-#[tauri::command(async)]
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.output_devices().map_err(|e| e.to_string())?;
@@ -584,7 +583,6 @@ async fn drain_capture_worker_chunk(
     true
 }
 
-#[tauri::command(async)]
 pub fn start_system_audio_capture(
     app: AppHandle,
     window: Window,
@@ -943,7 +941,6 @@ async fn feed_system_audio_to_instances(app: &AppHandle, chunk: &[f32]) {
     }
 }
 
-#[tauri::command(async)]
 pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.input_devices().map_err(|e| e.to_string())?;
@@ -956,7 +953,6 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     Ok(result)
 }
 
-#[tauri::command(async)]
 pub fn start_microphone_capture(
     app: AppHandle,
     window: Window,
@@ -1082,7 +1078,6 @@ fn process_capture_audio<R: Runtime>(
     }
 }
 
-#[tauri::command]
 pub async fn stop_microphone_capture(
     state: tauri::State<'_, AudioState>,
     instance_id: String,
@@ -1090,7 +1085,6 @@ pub async fn stop_microphone_capture(
     stop_shared_capture(&state, CaptureKind::Microphone, instance_id).await
 }
 
-#[tauri::command]
 pub async fn stop_system_audio_capture(
     state: tauri::State<'_, AudioState>,
     instance_id: String,
@@ -1173,7 +1167,6 @@ async fn stop_shared_capture(
     Ok(saved_path)
 }
 
-#[tauri::command]
 pub fn set_system_audio_capture_paused(
     state: tauri::State<'_, AudioState>,
     instance_id: String,
@@ -1190,7 +1183,6 @@ pub fn set_system_audio_capture_paused(
     )
 }
 
-#[tauri::command]
 pub fn set_microphone_capture_paused(
     state: tauri::State<'_, AudioState>,
     instance_id: String,
@@ -1207,7 +1199,6 @@ pub fn set_microphone_capture_paused(
     )
 }
 
-#[tauri::command]
 pub fn set_microphone_boost(state: tauri::State<'_, AudioState>, boost: f32) -> Result<(), String> {
     let mut mic_boost = state.mic_boost.lock().map_err(|e| e.to_string())?;
     *mic_boost = boost;
@@ -1294,7 +1285,6 @@ fn set_mute_linux(mute: bool) -> Result<(), String> {
     Err("Failed to set mute state on Linux".to_string())
 }
 
-#[tauri::command]
 pub async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     return set_mute_windows(mute);
