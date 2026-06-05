@@ -2,9 +2,65 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ExportFormat } from '../utils/exportFormats';
 import { Dropdown } from './Dropdown';
-import { FolderIcon } from './Icons';
+import { FolderIcon, CopyIcon, CheckIcon } from './Icons';
 import { Modal } from './Modal';
 import { useExportActions } from '../hooks/useExportActions';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { logger } from '../utils/logger';
+import type { TranscriptSegment } from '../types/transcript';
+
+function decodeHtmlEntities(html: string): string {
+    return html
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
+
+function htmlToPlainText(html: string): string {
+    if (!html) return '';
+    let text = html.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/(p|div)>/gi, '\n');
+    text = text.replace(/<\/?[^>]+(>|$)/g, '');
+    return decodeHtmlEntities(text).trim();
+}
+
+function formatSegmentsToPlainText(
+    segments: TranscriptSegment[],
+    mode: 'original' | 'translation' | 'bilingual'
+): string {
+    return segments
+        .filter((seg) => seg.isFinal)
+        .map((seg) => {
+            const speakerLabel = seg.speaker?.label?.trim();
+            const originalText = htmlToPlainText(seg.text || '');
+            const translationText = htmlToPlainText(seg.translation || '');
+
+            let text: string;
+            if (mode === 'translation') {
+                text = translationText;
+            } else if (mode === 'bilingual') {
+                if (originalText && translationText) {
+                    text = `${originalText}\n${translationText}`;
+                } else {
+                    text = originalText || translationText;
+                }
+            } else {
+                text = originalText;
+            }
+
+            if (!text) return '';
+
+            if (speakerLabel) {
+                return `${speakerLabel}: ${text}`;
+            }
+            return text;
+        })
+        .filter((text) => text.length > 0)
+        .join('\n\n');
+}
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -31,6 +87,36 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
         handleExport
     } = useExportActions({ isOpen, onSuccess: onClose });
 
+    const segments = useTranscriptSessionStore((state) => state.segments);
+
+    const [copied, setCopied] = React.useState(false);
+    const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
+
+    const handleCopy = async () => {
+        try {
+            const plainText = formatSegmentsToPlainText(segments, exportMode);
+            await navigator.clipboard.writeText(plainText);
+
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+            setCopied(true);
+            timeoutRef.current = setTimeout(() => {
+                setCopied(false);
+            }, 2000);
+        } catch (error) {
+            logger.error('Failed to copy transcript to clipboard:', error);
+        }
+    };
+
     if (!isOpen) return null;
 
     const exportOptions = [
@@ -48,14 +134,34 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
             title={t('export.modal_title')}
             size="md"
             footer={
-                <>
-                    <button className="btn btn-secondary" onClick={onClose} disabled={isExporting}>
-                        {t('common.cancel')}
-                    </button>
-                    <button className="btn btn-primary" onClick={handleExport} disabled={isExporting}>
-                        {isExporting ? t('export.exporting') : t('export.button')}
-                    </button>
-                </>
+                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: 'auto' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleCopy}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            <CopyIcon width={16} height={16} />
+                            {t('export.copy_to_clipboard')}
+                        </button>
+                        {copied && (
+                            <CheckIcon
+                                data-testid="copy-success-check"
+                                width={16}
+                                height={16}
+                                style={{ color: 'var(--color-success)', animation: 'fade-in 0.2s ease-in-out' }}
+                            />
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn btn-secondary" onClick={onClose} disabled={isExporting}>
+                            {t('common.cancel')}
+                        </button>
+                        <button className="btn btn-primary" onClick={handleExport} disabled={isExporting}>
+                            {isExporting ? t('export.exporting') : t('export.button')}
+                        </button>
+                    </div>
+                </div>
             }
         >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>

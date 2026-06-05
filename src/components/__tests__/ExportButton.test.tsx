@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ExportButton } from '../ExportButton';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -35,7 +35,19 @@ vi.mock('../../utils/fileExport', () => ({
     saveTranscript: vi.fn().mockResolvedValue(true),
 }));
 
+const mockAlert = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../stores/dialogStore', () => ({
+    useDialogStore: (selector: any) => selector({
+        alert: mockAlert,
+        showError: vi.fn(),
+        confirm: vi.fn(),
+        prompt: vi.fn(),
+    }),
+}));
+
 describe('ExportButton', () => {
+    let mockWriteText: any;
+
     const openExportModal = async () => {
         render(<ExportButton />);
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
@@ -48,7 +60,17 @@ describe('ExportButton', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockAlert.mockClear();
         localStorage.clear();
+
+        mockWriteText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', {
+            value: {
+                writeText: mockWriteText,
+            },
+            writable: true,
+            configurable: true,
+        });
 
         // Reset stores
         useTranscriptStore.setState({
@@ -137,5 +159,35 @@ describe('ExportButton', () => {
 
         const bilingualRadio = screen.getByLabelText('export.mode_bilingual');
         expect(bilingualRadio.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('renders the "Copy to Clipboard" button in the Export Modal and calls navigator.clipboard.writeText when clicked', async () => {
+        await openExportModal();
+
+        const copyBtn = screen.getByRole('button', { name: 'export.copy_to_clipboard' });
+        expect(copyBtn).toBeDefined();
+        expect(screen.queryByTestId('copy-success-check')).toBeNull();
+
+        vi.useFakeTimers();
+        try {
+            fireEvent.click(copyBtn);
+
+            // Wait/flush microtasks and advance fake timers slightly to let async handleCopy run
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(0);
+            });
+
+            expect(mockWriteText).toHaveBeenCalledWith('Hello\n\nWorld');
+            expect(screen.getByTestId('copy-success-check')).toBeDefined();
+
+            // Advance by 2000ms to trigger the timeout callback
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(2000);
+            });
+
+            expect(screen.queryByTestId('copy-success-check')).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
