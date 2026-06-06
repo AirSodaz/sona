@@ -51,7 +51,8 @@ cargo run --manifest-path src-tauri/Cargo.toml -- \
 
 - 单文件离线转写
 - 预置模型列表查看与模型下载
-- 导出到 `json`、`txt`、`srt`、`vtt`
+- 通过 `sona serve` 启动无头 HTTP API 服务；详情请查看 [docs/api.zh-CN.md](docs/api.zh-CN.md)
+- 导出到 `json`、`txt`、`srt`、`vtt` 或 `md`
 - 通过桌面主程序提供，但不会注册到 `PATH`
 
 完整 CLI 说明和最小 TOML 示例请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。

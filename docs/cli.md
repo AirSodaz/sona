@@ -2,11 +2,12 @@
 
 `sona` supports offline batch transcription commands directly from the main desktop executable. Packaged installs expose CLI subcommands through the app binary, and source builds can run the same commands with Cargo.
 
-The current CLI covers two core workflows:
+The current CLI covers three core workflows:
 
 - Transcribe one local audio or video file
 - List available preset models and download models
-- Export the result as `json`, `txt`, `srt`, or `vtt`
+- Start a headless HTTP API server for remote integration
+- Export the result as `json`, `txt`, `srt`, `vtt`, or `md`
 - Reuse the same preset model metadata as the desktop app
 
 ## Current Scope
@@ -89,7 +90,6 @@ Supported keys:
 - `model_id`
 - `vad_model_id`
 - `punctuation_model_id`
-- `itn_model_ids`
 - `language`
 - `threads`
 - `enable_itn`
@@ -122,13 +122,12 @@ For `transcribe`:
 sona transcribe <input>
   --config <path>
   --output <path>
-  --format <json|txt|srt|vtt>
+  --format <json|txt|srt|vtt|md>
   --language <code>
   --model-id <id>
   --models-dir <path>
   --vad-model-id <id>
   --punctuation-model-id <id>
-  --itn-model-id <id>    # repeatable
   --threads <n>
   --enable-itn
   --disable-itn
@@ -180,8 +179,10 @@ sona models download <model_id>
 
 ```bash
 sona --help
+sona help
 sona transcribe --help
 sona models --help
 sona models list --help
 sona models download --help
+sona serve --help
 ```

@@ -1,12 +1,12 @@
+use crate::cli::models::resolve_models_dir;
+use crate::core::preset_models::PresetModel;
+use crate::core::preset_models::find_preset_model;
+use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
+use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use crate::core::preset_models::PresetModel;
-use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
-use crate::repositories::export::{ExportFormat, export_segments};
-use crate::cli::models::{resolve_models_dir};
-use crate::core::preset_models::find_preset_model;
 
 pub const DEFAULT_THREADS: i32 = 4;
 pub const DEFAULT_LANGUAGE: &str = "auto";
@@ -31,7 +31,7 @@ pub struct TranscribeArgs {
     #[arg(
         long,
         value_name = "FORMAT",
-        help = "Override export format, for example json, srt, txt, vtt"
+        help = "Override export format, for example json, srt, txt, vtt, md"
     )]
     format: Option<String>,
     /// Override the transcription language.
@@ -137,7 +137,6 @@ pub struct ResolvedTranscribeOptions {
     pub quiet: bool,
     pub request: BatchTranscriptionRequest,
 }
-
 
 /// Resolves CLI arguments, config-file values, and defaults into a concrete request.
 pub fn resolve_transcribe_options(

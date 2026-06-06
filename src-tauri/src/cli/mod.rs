@@ -6,13 +6,13 @@ pub use self::models::*;
 pub use self::serve::*;
 pub use self::transcribe::*;
 
-
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use std::ffi::OsString;
-const CLI_COMMANDS: [&str; 8] = [
+const CLI_COMMANDS: [&str; 9] = [
     "transcribe",
     "models",
     "serve",
+    "help",
     "--help",
     "-h",
     "--version",
@@ -25,10 +25,19 @@ const CLI_COMMANDS: [&str; 8] = [
 #[command(
     name = "sona",
     version,
+    disable_version_flag = true,
     about = "Offline batch transcription for Sona",
     after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona models list --type whisper --language zh\n  sona models download sherpa-onnx-whisper-turbo"
 )]
 struct Cli {
+    #[arg(
+        short = 'v',
+        short_alias = 'V',
+        long = "version",
+        action = ArgAction::Version,
+        help = "Print version"
+    )]
+    version: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -63,4 +72,3 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> Resu
         Commands::Serve(args) => serve::run_serve(args).await,
     }
 }
-

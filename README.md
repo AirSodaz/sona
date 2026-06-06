@@ -50,7 +50,8 @@ Current CLI scope is intentionally narrow:
 
 - Single-file offline transcription
 - Preset model listing and model downloads
-- Export to `json`, `txt`, `srt`, or `vtt`
+- Headless HTTP API server startup through `sona serve`; see [docs/api.md](docs/api.md)
+- Export to `json`, `txt`, `srt`, `vtt`, or `md`
 - Exposed through the main desktop executable, but not registered on `PATH`
 
 For the full CLI guide and a minimal TOML example, read [docs/cli.md](docs/cli.md).

@@ -7,7 +7,7 @@
 - 单个本地音频或视频文件的离线转写
 - 预置模型列表查看与模型下载
 - 启动无头 HTTP API 服务以进行远程集成
-- 导出到 `json`、`txt`、`srt`、`vtt`
+- 导出到 `json`、`txt`、`srt`、`vtt` 或 `md`
 - 复用与桌面应用相同的预置模型元数据
 
 ## 当前范围
@@ -90,7 +90,6 @@ format = "srt"
 - `model_id`
 - `vad_model_id`
 - `punctuation_model_id`
-- `itn_model_ids`
 - `language`
 - `threads`
 - `enable_itn`
@@ -123,13 +122,12 @@ format = "srt"
 sona transcribe <input>
   --config <path>
   --output <path>
-  --format <json|txt|srt|vtt>
+  --format <json|txt|srt|vtt|md>
   --language <code>
   --model-id <id>
   --models-dir <path>
   --vad-model-id <id>
   --punctuation-model-id <id>
-  --itn-model-id <id>    # 可重复
   --threads <n>
   --enable-itn
   --disable-itn
@@ -181,8 +179,10 @@ sona models download <model_id>
 
 ```bash
 sona --help
+sona help
 sona transcribe --help
 sona models --help
 sona models list --help
 sona models download --help
+sona serve --help
 ```
