@@ -21,6 +21,16 @@ fn help_is_printed_to_stdout() {
 }
 
 #[test]
+fn help_shows_distinct_version_and_verbose_flags() {
+    let output = cli_command().arg("--help").output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("-V, --version"));
+    assert!(stdout.contains("-v, --verbose"));
+}
+
+#[test]
 fn version_is_printed_to_stdout() {
     let output = cli_command().arg("--version").output().unwrap();
     assert!(output.status.success());
@@ -48,6 +58,20 @@ fn short_version_is_printed_to_stdout() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let expected = format!("sona {}", env!("CARGO_PKG_VERSION"));
     assert!(stdout.contains(&expected));
+}
+
+#[test]
+fn short_verbose_does_not_print_version() {
+    let output = cli_command()
+        .args(["-v", "models", "list"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let expected_version = format!("sona {}", env!("CARGO_PKG_VERSION"));
+    assert!(!stdout.contains(&expected_version));
+    assert!(stdout.contains("sherpa-onnx-whisper-turbo"));
 }
 
 #[test]

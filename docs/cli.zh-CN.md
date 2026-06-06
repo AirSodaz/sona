@@ -116,6 +116,25 @@ format = "srt"
 
 ## 常用标志
 
+### 全局
+
+```text
+sona
+  -V, --version
+  -v, --verbose
+```
+
+使用 `-V` 或 `--version` 打印 Sona 版本号。使用 `-v` 或 `--verbose` 放在子命令前启用详细诊断日志：
+
+```bash
+sona --version
+sona -V
+sona -v models list
+sona --verbose transcribe ./sample.mp4 --config ./sona-cli.toml
+```
+
+详细诊断日志会写入 `stderr`。命令结果仍写入 `stdout`，包括 `models list` 的 JSON 输出，以及 `transcribe` 未指定 `--output` 时的输出，因此仍可安全管道传给其他工具。
+
 ### `transcribe`
 
 ```text
@@ -180,6 +199,8 @@ sona models download <model_id>
 ```bash
 sona --help
 sona help
+sona --version
+sona -V
 sona transcribe --help
 sona models --help
 sona models list --help

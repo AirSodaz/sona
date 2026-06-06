@@ -116,6 +116,25 @@ For `transcribe`:
 
 ## Common Flags
 
+### Global
+
+```text
+sona
+  -V, --version
+  -v, --verbose
+```
+
+Use `-V` or `--version` to print the Sona version. Use `-v` or `--verbose` before a subcommand to enable detailed diagnostic logs:
+
+```bash
+sona --version
+sona -V
+sona -v models list
+sona --verbose transcribe ./sample.mp4 --config ./sona-cli.toml
+```
+
+Verbose diagnostics are written to `stderr`. Command output, including JSON output from `models list` and `transcribe` without `--output`, remains on `stdout` so it can still be piped to other tools.
+
 ### `transcribe`
 
 ```text
@@ -180,6 +199,8 @@ sona models download <model_id>
 ```bash
 sona --help
 sona help
+sona --version
+sona -V
 sona transcribe --help
 sona models --help
 sona models list --help
