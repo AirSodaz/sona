@@ -88,7 +88,7 @@ impl crate::core::dashboard::ports::HistoryRepository for HistoryRepository {
                     });
                 crate::core::dashboard::models::ParsedTranscriptSegment {
                     text: s.text,
-                    duration_seconds: (s.end - s.start).max(0.0) as f64,
+                    duration_seconds: (s.end - s.start).max(0.0),
                     speaker,
                 }
             })

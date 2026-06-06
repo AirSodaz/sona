@@ -1,6 +1,6 @@
+use crate::cli::models::resolve_models_dir;
 use clap::Args;
 use std::path::PathBuf;
-use crate::cli::models::resolve_models_dir;
 
 #[derive(Debug, Args)]
 pub struct ServeArgs {

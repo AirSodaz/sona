@@ -8,9 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 
-use super::types::{
-    ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord,
-};
+use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
 
 pub(crate) const PROJECTS_DIR_NAME: &str = "projects";
 pub(crate) const PROJECTS_INDEX_FILE_NAME: &str = "index.json";
@@ -91,7 +89,7 @@ impl ProjectRepository {
                 ("updatedAt", Value::Number(now.into())),
                 (
                     "defaults",
-                      serde_json::to_value(input.defaults).map_err(|error| error.to_string())?,
+                    serde_json::to_value(input.defaults).map_err(|error| error.to_string())?,
                 ),
             ]),
             &ProjectListOptions::default(),
@@ -238,8 +236,10 @@ where
     .map_err(|error| error.to_string())?
 }
 
-
-pub(crate) fn normalize_project_value(input: &Value, options: &ProjectListOptions) -> ProjectRecord {
+pub(crate) fn normalize_project_value(
+    input: &Value,
+    options: &ProjectListOptions,
+) -> ProjectRecord {
     let now = current_time_millis().unwrap_or(0);
     let source = input.as_object();
     let defaults = source
@@ -338,7 +338,10 @@ pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     serde_json::from_str(&content).map_err(|error| error.to_string())
 }
 
-pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<(), String> {
+pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
+    path: &Path,
+    value: &T,
+) -> Result<(), String> {
     let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
     write_binary_atomic(path, &serialized)
 }
@@ -409,7 +412,11 @@ pub(crate) fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value 
     )
 }
 
-pub(crate) fn copy_string_update(updates: &Map<String, Value>, target: &mut Map<String, Value>, key: &str) {
+pub(crate) fn copy_string_update(
+    updates: &Map<String, Value>,
+    target: &mut Map<String, Value>,
+    key: &str,
+) {
     if let Some(value) = updates.get(key).and_then(Value::as_str) {
         target.insert(key.to_string(), Value::String(value.to_string()));
     }

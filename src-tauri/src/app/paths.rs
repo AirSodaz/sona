@@ -10,7 +10,5 @@ pub fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<Path
 
 /// Resolves the app data directory.
 pub fn resolve_app_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())
+    app.path().app_data_dir().map_err(|error| error.to_string())
 }

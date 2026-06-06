@@ -577,10 +577,10 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
         // Prefer UI Automation for modern editors first, then fall back to
         // GUI-thread caret data for older Win32 apps that do not expose UIA.
         // 1. Try UI Automation (Modern apps: Chrome, Edge, VS Code, etc.)
-        if let Ok(pos) = get_uia_caret_position() {
-            if let Some(p) = pos {
-                return Ok(Some(p));
-            }
+        if let Ok(pos) = get_uia_caret_position()
+            && let Some(p) = pos
+        {
+            return Ok(Some(p));
         }
 
         // 2. Fallback to Win32 GUI Thread Info (Legacy apps: Notepad, etc.)
@@ -594,8 +594,10 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
             return Ok(None);
         }
 
-        let mut info = GUITHREADINFO::default();
-        info.cbSize = size_of::<GUITHREADINFO>() as u32;
+        let mut info = GUITHREADINFO {
+            cbSize: size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
 
         if GetGUIThreadInfo(thread_id, &mut info).is_err() {
             return Ok(None);
@@ -648,19 +650,19 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
         // TextPattern2 exposes the caret directly when the focused element supports
         // it; this is the most reliable path for modern text controls.
         // Try TextPattern2 (Windows 8.1+)
-        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPattern2Id) {
-            if let Ok(text_pattern2) = pattern.cast::<IUIAutomationTextPattern2>() {
-                let mut is_active = Default::default();
-                if let Ok(range) = text_pattern2.GetCaretRange(&mut is_active) {
-                    if let Ok(rects) = range.GetBoundingRectangles() {
-                        let rect_data = safearray_to_f64_vec(rects)?;
-                        if rect_data.len() >= 4 {
-                            // rects is an array of [left, top, width, height]
-                            let x = rect_data[0] as i32;
-                            let y = (rect_data[1] + rect_data[3]) as i32;
-                            return Ok(Some((x, y)));
-                        }
-                    }
+        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPattern2Id)
+            && let Ok(text_pattern2) = pattern.cast::<IUIAutomationTextPattern2>()
+        {
+            let mut is_active = Default::default();
+            if let Ok(range) = text_pattern2.GetCaretRange(&mut is_active)
+                && let Ok(rects) = range.GetBoundingRectangles()
+            {
+                let rect_data = safearray_to_f64_vec(rects)?;
+                if rect_data.len() >= 4 {
+                    // rects is an array of [left, top, width, height]
+                    let x = rect_data[0] as i32;
+                    let y = (rect_data[1] + rect_data[3]) as i32;
+                    return Ok(Some((x, y)));
                 }
             }
         }
@@ -668,20 +670,18 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
         // Some apps expose only TextPattern selection rectangles, so fall back to
         // the first selected range when caret-specific APIs are unavailable.
         // Fallback to TextPattern selection
-        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId) {
-            if let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>() {
-                if let Ok(selection) = text_pattern.GetSelection() {
-                    if selection.Length()? > 0 {
-                        let range = selection.GetElement(0)?;
-                        if let Ok(rects) = range.GetBoundingRectangles() {
-                            let rect_data = safearray_to_f64_vec(rects)?;
-                            if rect_data.len() >= 4 {
-                                let x = rect_data[0] as i32;
-                                let y = (rect_data[1] + rect_data[3]) as i32;
-                                return Ok(Some((x, y)));
-                            }
-                        }
-                    }
+        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId)
+            && let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>()
+            && let Ok(selection) = text_pattern.GetSelection()
+            && selection.Length()? > 0
+        {
+            let range = selection.GetElement(0)?;
+            if let Ok(rects) = range.GetBoundingRectangles() {
+                let rect_data = safearray_to_f64_vec(rects)?;
+                if rect_data.len() >= 4 {
+                    let x = rect_data[0] as i32;
+                    let y = (rect_data[1] + rect_data[3]) as i32;
+                    return Ok(Some((x, y)));
                 }
             }
         }

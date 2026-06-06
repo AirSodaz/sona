@@ -1,7 +1,7 @@
-pub mod error;
-pub mod types;
 pub mod defaults;
+pub mod error;
 pub mod migration;
+pub mod types;
 
 pub use error::ConfigError;
 pub use types::*;

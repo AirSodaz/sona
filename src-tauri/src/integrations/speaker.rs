@@ -1265,12 +1265,12 @@ fn build_split_groups(
 
     for unit in aligned_units {
         let assignment = token_speakers.get(unit.token_index)?.clone()?;
-        if let Some(current) = groups.last_mut() {
-            if speaker_assignments_equal(&current.assignment, &assignment) {
-                current.text.push_str(&unit.text);
-                current.token_end_exclusive = current.token_end_exclusive.max(unit.token_index + 1);
-                continue;
-            }
+        if let Some(current) = groups.last_mut()
+            && speaker_assignments_equal(&current.assignment, &assignment)
+        {
+            current.text.push_str(&unit.text);
+            current.token_end_exclusive = current.token_end_exclusive.max(unit.token_index + 1);
+            continue;
         }
 
         groups.push(SplitGroup {

@@ -283,28 +283,28 @@ fn replace_structural_tags(html: &str) -> String {
     let bytes = html.as_bytes();
 
     while index < bytes.len() {
-        if bytes[index] == b'<' {
-            if let Some(close_offset) = html[index..].find('>') {
-                let end = index + close_offset + 1;
-                let tag = &html[index + 1..end - 1];
-                let tag_name = tag
-                    .trim()
-                    .trim_start_matches('/')
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .trim_end_matches('/')
-                    .to_ascii_lowercase();
+        if bytes[index] == b'<'
+            && let Some(close_offset) = html[index..].find('>')
+        {
+            let end = index + close_offset + 1;
+            let tag = &html[index + 1..end - 1];
+            let tag_name = tag
+                .trim()
+                .trim_start_matches('/')
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches('/')
+                .to_ascii_lowercase();
 
-                match tag_name.as_str() {
-                    "br" => output.push('\n'),
-                    "div" | "p" if tag.trim_start().starts_with('/') => output.push('\n'),
-                    "div" | "p" => {}
-                    _ => output.push_str(&html[index..end]),
-                }
-                index = end;
-                continue;
+            match tag_name.as_str() {
+                "br" => output.push('\n'),
+                "div" | "p" if tag.trim_start().starts_with('/') => output.push('\n'),
+                "div" | "p" => {}
+                _ => output.push_str(&html[index..end]),
             }
+            index = end;
+            continue;
         }
 
         if let Some(ch) = html[index..].chars().next() {
@@ -340,25 +340,25 @@ fn strip_html_tags_except_formatting(text: &str) -> String {
     let bytes = text.as_bytes();
 
     while index < bytes.len() {
-        if bytes[index] == b'<' {
-            if let Some(close_offset) = text[index..].find('>') {
-                let end = index + close_offset + 1;
-                let tag_body = text[index + 1..end - 1].trim();
-                let normalized = tag_body.trim_start_matches('/');
-                let tag_name = normalized
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .trim_end_matches('/')
-                    .to_ascii_lowercase();
+        if bytes[index] == b'<'
+            && let Some(close_offset) = text[index..].find('>')
+        {
+            let end = index + close_offset + 1;
+            let tag_body = text[index + 1..end - 1].trim();
+            let normalized = tag_body.trim_start_matches('/');
+            let tag_name = normalized
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches('/')
+                .to_ascii_lowercase();
 
-                if matches!(tag_name.as_str(), "b" | "i" | "u") {
-                    output.push_str(&text[index..end]);
-                }
-
-                index = end;
-                continue;
+            if matches!(tag_name.as_str(), "b" | "i" | "u") {
+                output.push_str(&text[index..end]);
             }
+
+            index = end;
+            continue;
         }
 
         if let Some(ch) = text[index..].chars().next() {

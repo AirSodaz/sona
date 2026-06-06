@@ -288,10 +288,10 @@ pub(crate) fn build_openai_chat_payload(config: &LlmConfig, input: &str, stream:
 
     payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
 
-    if config.reasoning_enabled.unwrap_or(false) {
-        if let Some(ref level) = config.reasoning_level {
-            payload["reasoning_effort"] = json!(level);
-        }
+    if config.reasoning_enabled.unwrap_or(false)
+        && let Some(ref level) = config.reasoning_level
+    {
+        payload["reasoning_effort"] = json!(level);
     }
 
     payload
@@ -469,13 +469,12 @@ where
                         {
                             input_tokens = tokens;
                         }
-                    } else if t == "message_delta" {
-                        if let Some(tokens) = event
+                    } else if t == "message_delta"
+                        && let Some(tokens) = event
                             .pointer("/usage/output_tokens")
                             .and_then(Value::as_u64)
-                        {
-                            output_tokens = tokens;
-                        }
+                    {
+                        output_tokens = tokens;
                     }
                 }
                 if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
@@ -495,13 +494,12 @@ where
                     {
                         input_tokens = tokens;
                     }
-                } else if t == "message_delta" {
-                    if let Some(tokens) = event
+                } else if t == "message_delta"
+                    && let Some(tokens) = event
                         .pointer("/usage/output_tokens")
                         .and_then(Value::as_u64)
-                    {
-                        output_tokens = tokens;
-                    }
+                {
+                    output_tokens = tokens;
                 }
             }
             if let Some(delta) = event.pointer("/delta/text").and_then(Value::as_str) {
@@ -601,18 +599,18 @@ where
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
-                if let Some(usage) = event.get("usageMetadata") {
-                    if let (Some(prompt), Some(candidates), Some(total)) = (
+                if let Some(usage) = event.get("usageMetadata")
+                    && let (Some(prompt), Some(candidates), Some(total)) = (
                         usage.get("promptTokenCount").and_then(Value::as_u64),
                         usage.get("candidatesTokenCount").and_then(Value::as_u64),
                         usage.get("totalTokenCount").and_then(Value::as_u64),
-                    ) {
-                        last_usage = Some(TokenUsage {
-                            prompt_tokens: prompt as u32,
-                            completion_tokens: candidates as u32,
-                            total_tokens: total as u32,
-                        });
-                    }
+                    )
+                {
+                    last_usage = Some(TokenUsage {
+                        prompt_tokens: prompt as u32,
+                        completion_tokens: candidates as u32,
+                        total_tokens: total as u32,
+                    });
                 }
                 if let Some(text) = event
                     .pointer("/candidates/0/content/parts/0/text")
@@ -626,18 +624,18 @@ where
 
     for data in sse.flush() {
         if let Ok(event) = serde_json::from_str::<Value>(&data) {
-            if let Some(usage) = event.get("usageMetadata") {
-                if let (Some(prompt), Some(candidates), Some(total)) = (
+            if let Some(usage) = event.get("usageMetadata")
+                && let (Some(prompt), Some(candidates), Some(total)) = (
                     usage.get("promptTokenCount").and_then(Value::as_u64),
                     usage.get("candidatesTokenCount").and_then(Value::as_u64),
                     usage.get("totalTokenCount").and_then(Value::as_u64),
-                ) {
-                    last_usage = Some(TokenUsage {
-                        prompt_tokens: prompt as u32,
-                        completion_tokens: candidates as u32,
-                        total_tokens: total as u32,
-                    });
-                }
+                )
+            {
+                last_usage = Some(TokenUsage {
+                    prompt_tokens: prompt as u32,
+                    completion_tokens: candidates as u32,
+                    total_tokens: total as u32,
+                });
             }
             if let Some(text) = event
                 .pointer("/candidates/0/content/parts/0/text")
@@ -714,13 +712,12 @@ where
             }
 
             let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
-            if let Some(event_type) = event.get("type").and_then(Value::as_str) {
-                if event_type.contains("output_text.delta") || event_type.contains("refusal.delta")
-                {
-                    if let Some(delta) = event.get("delta").and_then(Value::as_str) {
-                        accumulator.push(delta)?;
-                    }
-                }
+            if let Some(event_type) = event.get("type").and_then(Value::as_str)
+                && (event_type.contains("output_text.delta")
+                    || event_type.contains("refusal.delta"))
+                && let Some(delta) = event.get("delta").and_then(Value::as_str)
+            {
+                accumulator.push(delta)?;
             }
         }
     }
@@ -731,12 +728,11 @@ where
         }
 
         let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
-        if let Some(event_type) = event.get("type").and_then(Value::as_str) {
-            if event_type.contains("output_text.delta") || event_type.contains("refusal.delta") {
-                if let Some(delta) = event.get("delta").and_then(Value::as_str) {
-                    accumulator.push(delta)?;
-                }
-            }
+        if let Some(event_type) = event.get("type").and_then(Value::as_str)
+            && (event_type.contains("output_text.delta") || event_type.contains("refusal.delta"))
+            && let Some(delta) = event.get("delta").and_then(Value::as_str)
+        {
+            accumulator.push(delta)?;
         }
     }
 

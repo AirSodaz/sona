@@ -8,6 +8,12 @@ pub struct DownloadState {
     pub downloads: Mutex<HashMap<String, Arc<Notify>>>,
 }
 
+impl Default for DownloadState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DownloadState {
     pub fn new() -> Self {
         Self {
@@ -29,9 +35,7 @@ pub async fn cancel_download(
 }
 
 #[tauri::command]
-pub async fn has_active_downloads(
-    state: tauri::State<'_, DownloadState>,
-) -> Result<bool, String> {
+pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {
     let downloads = state.downloads.lock().await;
     Ok(!downloads.is_empty())
 }

@@ -25,13 +25,11 @@ fn fix_console(show_new_console: bool) {
         }
 
         // Allocate a console to natively initialize stdout/stderr handles in the C runtime
-        if AllocConsole() != 0 {
-            if !show_new_console {
-                let hwnd = GetConsoleWindow();
-                if !hwnd.is_null() {
-                    // Instantly hide the console window (for GUI usage from Explorer)
-                    ShowWindow(hwnd, 0);
-                }
+        if AllocConsole() != 0 && !show_new_console {
+            let hwnd = GetConsoleWindow();
+            if !hwnd.is_null() {
+                // Instantly hide the console window (for GUI usage from Explorer)
+                ShowWindow(hwnd, 0);
             }
         }
     }

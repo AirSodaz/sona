@@ -1,5 +1,5 @@
-use tauri::{AppHandle, Window, State};
 use crate::integrations::audio::{AudioDevice, AudioState};
+use tauri::{AppHandle, State, Window};
 
 #[tauri::command(async)]
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {

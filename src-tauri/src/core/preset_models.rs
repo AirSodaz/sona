@@ -436,23 +436,23 @@ fn build_dependency_requests_by_model_id(
 
     for model in models.iter().filter(|model| model.has_recognition_mode()) {
         let mut requests = Vec::new();
-        if model.rules.requires_vad {
-            if let Some(request) = build_dependency_request(
+        if model.rules.requires_vad
+            && let Some(request) = build_dependency_request(
                 &models_by_id,
                 DEFAULT_SILERO_VAD_MODEL_ID,
                 ModelDependencyConfigKey::VadModelPath,
-            ) {
-                requests.push(request);
-            }
+            )
+        {
+            requests.push(request);
         }
-        if model.rules.requires_punctuation {
-            if let Some(request) = build_dependency_request(
+        if model.rules.requires_punctuation
+            && let Some(request) = build_dependency_request(
                 &models_by_id,
                 DEFAULT_PUNCTUATION_MODEL_ID,
                 ModelDependencyConfigKey::PunctuationModelPath,
-            ) {
-                requests.push(request);
-            }
+            )
+        {
+            requests.push(request);
         }
 
         if !requests.is_empty() {
@@ -521,10 +521,10 @@ fn resolve_selected_model_id(
     }
 
     let normalized_path = normalize_catalog_path(model_path);
-    if let Some(model_id) = snapshot.model_id_by_normalized_path.get(&normalized_path) {
-        if options.iter().any(|option| option.id == *model_id) {
-            return Some(model_id.clone());
-        }
+    if let Some(model_id) = snapshot.model_id_by_normalized_path.get(&normalized_path)
+        && options.iter().any(|option| option.id == *model_id)
+    {
+        return Some(model_id.clone());
     }
 
     for option in options {
@@ -532,10 +532,10 @@ fn resolve_selected_model_id(
             .path_match_tokens
             .iter()
             .find(|token| token.id == option.id)
+            && !token.token.is_empty()
+            && normalized_path.contains(&token.token)
         {
-            if !token.token.is_empty() && normalized_path.contains(&token.token) {
-                return Some(option.id.clone());
-            }
+            return Some(option.id.clone());
         }
     }
 

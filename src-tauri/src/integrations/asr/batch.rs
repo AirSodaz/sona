@@ -186,32 +186,32 @@ where
             debug!("FFI: Successfully returned from accept_waveform (Offline segment)");
             r.0.decode(&stream);
 
-            if let Some(res) = stream.get_result() {
-                if !res.text.trim().is_empty() {
-                    let text = format_transcript(&res.text, punctuation);
-                    let timestamps_abs = res
-                        .timestamps
-                        .as_ref()
-                        .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
-                    let durations = timestamps_abs
-                        .as_ref()
-                        .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
+            if let Some(res) = stream.get_result()
+                && !res.text.trim().is_empty()
+            {
+                let text = format_transcript(&res.text, punctuation);
+                let timestamps_abs = res
+                    .timestamps
+                    .as_ref()
+                    .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
+                let durations = timestamps_abs
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
 
-                    results.push(TranscriptSegment {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        text,
-                        start: seg.start_time as f64,
-                        end: (seg.start_time + seg.duration) as f64,
-                        is_final: true,
-                        timing: None,
-                        tokens: Some(res.tokens),
-                        timestamps: timestamps_abs,
-                        durations,
-                        translation: None,
-                        speaker: None,
-                        speaker_attribution: None,
-                    });
-                }
+                results.push(TranscriptSegment {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    text,
+                    start: seg.start_time as f64,
+                    end: (seg.start_time + seg.duration) as f64,
+                    is_final: true,
+                    timing: None,
+                    tokens: Some(res.tokens),
+                    timestamps: timestamps_abs,
+                    durations,
+                    translation: None,
+                    speaker: None,
+                    speaker_attribution: None,
+                });
             }
         }
         let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
@@ -288,33 +288,33 @@ where
         }
         if r.0.is_endpoint(&stream.0) {
             let current_time = current_samples as f64 / 16000.0;
-            if let Some(result) = r.0.get_result(&stream.0) {
-                if !result.text.trim().is_empty() {
-                    let text = format_transcript(&result.text, punctuation);
-                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter()
-                            .map(|t| *t + segment_start as f32)
-                            .collect::<Vec<_>>()
-                    });
-                    let durations = timestamps_abs
-                        .as_ref()
-                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
+            if let Some(result) = r.0.get_result(&stream.0)
+                && !result.text.trim().is_empty()
+            {
+                let text = format_transcript(&result.text, punctuation);
+                let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                    ts.iter()
+                        .map(|t| *t + segment_start as f32)
+                        .collect::<Vec<_>>()
+                });
+                let durations = timestamps_abs
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                    segments.push(TranscriptSegment {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        text,
-                        start: segment_start,
-                        end: current_time,
-                        is_final: true,
-                        timing: None,
-                        tokens: Some(result.tokens),
-                        timestamps: timestamps_abs,
-                        durations,
-                        translation: None,
-                        speaker: None,
-                        speaker_attribution: None,
-                    });
-                }
+                segments.push(TranscriptSegment {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    text,
+                    start: segment_start,
+                    end: current_time,
+                    is_final: true,
+                    timing: None,
+                    tokens: Some(result.tokens),
+                    timestamps: timestamps_abs,
+                    durations,
+                    translation: None,
+                    speaker: None,
+                    speaker_attribution: None,
+                });
             }
             r.0.reset(&stream.0);
             segment_start = current_time;
@@ -330,34 +330,34 @@ where
         r.0.decode(&stream.0);
     }
 
-    if let Some(result) = r.0.get_result(&stream.0) {
-        if !result.text.trim().is_empty() {
-            let text = format_transcript(&result.text, punctuation);
-            let current_time = samples.len() as f64 / 16000.0;
-            let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                ts.iter()
-                    .map(|t| *t + segment_start as f32)
-                    .collect::<Vec<_>>()
-            });
-            let durations = timestamps_abs
-                .as_ref()
-                .and_then(|ts| synthesize_durations(ts, current_time as f32));
+    if let Some(result) = r.0.get_result(&stream.0)
+        && !result.text.trim().is_empty()
+    {
+        let text = format_transcript(&result.text, punctuation);
+        let current_time = samples.len() as f64 / 16000.0;
+        let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+            ts.iter()
+                .map(|t| *t + segment_start as f32)
+                .collect::<Vec<_>>()
+        });
+        let durations = timestamps_abs
+            .as_ref()
+            .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-            segments.push(TranscriptSegment {
-                id: uuid::Uuid::new_v4().to_string(),
-                text,
-                start: segment_start,
-                end: current_time,
-                is_final: true,
-                timing: None,
-                tokens: Some(result.tokens),
-                timestamps: timestamps_abs,
-                durations,
-                translation: None,
-                speaker: None,
-                speaker_attribution: None,
-            });
-        }
+        segments.push(TranscriptSegment {
+            id: uuid::Uuid::new_v4().to_string(),
+            text,
+            start: segment_start,
+            end: current_time,
+            is_final: true,
+            timing: None,
+            tokens: Some(result.tokens),
+            timestamps: timestamps_abs,
+            durations,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        });
     }
     on_progress(100.0);
     Ok(segments)

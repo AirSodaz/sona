@@ -96,7 +96,10 @@ fn read_json_array_or_empty(path: &Path) -> Vec<Value> {
     }
 }
 
-fn write_json_pretty_atomic<T: serde::Serialize + ?Sized>(path: &Path, value: &T) -> Result<(), String> {
+fn write_json_pretty_atomic<T: serde::Serialize + ?Sized>(
+    path: &Path,
+    value: &T,
+) -> Result<(), String> {
     let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
     write_binary_atomic(path, &serialized)
 }
@@ -342,7 +345,9 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
     let provider = model_entry
         .get("provider")
         .and_then(|v| serde_json::from_value::<LlmProvider>(v.clone()).ok())
-        .unwrap_or(LlmProvider::Builtin(BuiltinLlmProvider::GoogleTranslateFree));
+        .unwrap_or(LlmProvider::Builtin(
+            BuiltinLlmProvider::GoogleTranslateFree,
+        ));
 
     let provider_setting = match &provider {
         LlmProvider::Builtin(b) => settings

@@ -168,10 +168,10 @@ impl BuiltinLlmProvider {
     }
 
     pub fn requires_api_key(&self) -> bool {
-        match self {
-            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio
+        )
     }
 }
 

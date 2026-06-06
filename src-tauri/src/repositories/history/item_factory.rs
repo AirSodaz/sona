@@ -131,6 +131,7 @@ fn build_recording_title(timestamp: u64) -> String {
     format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_history_item_record(
     id: String,
     timestamp: u64,

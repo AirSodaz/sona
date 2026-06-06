@@ -592,7 +592,6 @@ where
     results
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{

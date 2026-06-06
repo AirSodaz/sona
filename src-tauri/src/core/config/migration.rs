@@ -1,13 +1,13 @@
-use serde_json::{Map, Value, json};
-use std::collections::HashSet;
+use super::defaults::*;
+use super::types::MigrationResult;
 use crate::core::domain::{
     BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
 };
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
-use super::types::MigrationResult;
-use super::defaults::*;
+use serde_json::{Map, Value, json};
+use std::collections::HashSet;
 
 pub(crate) fn migrate_app_config_inner(
     saved_config: Option<Value>,
@@ -43,7 +43,10 @@ pub(crate) fn migrate_app_config_inner(
     }
 }
 
-pub(crate) fn resolve_effective_config_inner(global_config: Value, project: Option<&Value>) -> Value {
+pub(crate) fn resolve_effective_config_inner(
+    global_config: Value,
+    project: Option<&Value>,
+) -> Value {
     let mut config = as_object_clone(&global_config).unwrap_or_default();
     let global_summary_template_id = string_at(&Value::Object(config.clone()), "summaryTemplateId");
     let custom_templates = config.get("summaryCustomTemplates");
@@ -631,52 +634,48 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         .get("textReplacementSets")
         .and_then(Value::as_array)
         .is_some_and(Vec::is_empty)
+        && let Some(rules) = parsed.get("textReplacements").and_then(Value::as_array)
+        && !rules.is_empty()
     {
-        if let Some(rules) = parsed.get("textReplacements").and_then(Value::as_array) {
-            if !rules.is_empty() {
-                set(
-                    &mut config,
-                    "textReplacementSets",
-                    json!([{
-                        "id": "default-set",
-                        "name": default_rule_set_name,
-                        "enabled": true,
-                        "ignoreCase": false,
-                        "rules": map_legacy_text_replacement_rules(rules),
-                    }]),
-                );
-            }
-        }
+        set(
+            &mut config,
+            "textReplacementSets",
+            json!([{
+                "id": "default-set",
+                "name": default_rule_set_name,
+                "enabled": true,
+                "ignoreCase": false,
+                "rules": map_legacy_text_replacement_rules(rules),
+            }]),
+        );
     }
 
     if config
         .get("hotwordSets")
         .and_then(Value::as_array)
         .is_some_and(Vec::is_empty)
+        && let Some(words) = parsed.get("hotwords").and_then(Value::as_array)
+        && !words.is_empty()
     {
-        if let Some(words) = parsed.get("hotwords").and_then(Value::as_array) {
-            if !words.is_empty() {
-                let rules = words
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, value)| {
-                        value
-                            .as_str()
-                            .map(|text| json!({ "id": format!("hw-{index}"), "text": text }))
-                    })
-                    .collect::<Vec<_>>();
-                set(
-                    &mut config,
-                    "hotwordSets",
-                    json!([{
-                        "id": "default-hotword-set",
-                        "name": default_rule_set_name,
-                        "enabled": true,
-                        "rules": rules,
-                    }]),
-                );
-            }
-        }
+        let rules = words
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| {
+                value
+                    .as_str()
+                    .map(|text| json!({ "id": format!("hw-{index}"), "text": text }))
+            })
+            .collect::<Vec<_>>();
+        set(
+            &mut config,
+            "hotwordSets",
+            json!([{
+                "id": "default-hotword-set",
+                "name": default_rule_set_name,
+                "enabled": true,
+                "rules": rules,
+            }]),
+        );
     }
 
     config
@@ -712,32 +711,29 @@ fn normalize_asr_providers(providers: Option<&Value>) -> Value {
         let mut norm = provider.defaults.as_object().unwrap().clone();
         if let Some(existing_obj) = existing.and_then(Value::as_object) {
             for (k, default_v) in &norm.clone() {
-                if let Some(existing_v) = existing_obj.get(k) {
-                    if std::mem::discriminant(existing_v) == std::mem::discriminant(default_v) {
-                        if let (Some(ext_s), Some(def_s)) =
-                            (existing_v.as_str(), default_v.as_str())
-                        {
-                            let ext_s = ext_s.trim();
-                            if ext_s.is_empty() && !def_s.is_empty() {
+                if let Some(existing_v) = existing_obj.get(k)
+                    && std::mem::discriminant(existing_v) == std::mem::discriminant(default_v)
+                {
+                    if let (Some(ext_s), Some(def_s)) = (existing_v.as_str(), default_v.as_str()) {
+                        let ext_s = ext_s.trim();
+                        if ext_s.is_empty() && !def_s.is_empty() {
+                            continue;
+                        }
+                        if provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID {
+                            if k == "batchEndpoint"
+                                && (ext_s.contains("idle/submit") || ext_s.ends_with("/submit"))
+                            {
                                 continue;
                             }
-                            if provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID {
-                                if k == "batchEndpoint"
-                                    && (ext_s.contains("idle/submit") || ext_s.ends_with("/submit"))
-                                {
-                                    continue;
-                                }
-                                if k == "batchResourceId"
-                                    && (ext_s == "volc.bigasr.auc_idle"
-                                        || ext_s == "volc.seedasr.auc")
-                                {
-                                    continue;
-                                }
+                            if k == "batchResourceId"
+                                && (ext_s == "volc.bigasr.auc_idle" || ext_s == "volc.seedasr.auc")
+                            {
+                                continue;
                             }
-                            norm.insert(k.clone(), Value::String(ext_s.to_string()));
-                        } else {
-                            norm.insert(k.clone(), existing_v.clone());
                         }
+                        norm.insert(k.clone(), Value::String(ext_s.to_string()));
+                    } else {
+                        norm.insert(k.clone(), existing_v.clone());
                     }
                 }
             }
@@ -999,17 +995,16 @@ fn coerce_summary_template_id(
     if template_id.is_some_and(|id| BUILTIN_SUMMARY_TEMPLATE_IDS.contains(&id)) {
         return template_id.unwrap().to_string();
     }
-    if let Some(custom_id) = template_id {
-        if custom_templates
+    if let Some(custom_id) = template_id
+        && custom_templates
             .and_then(Value::as_array)
             .is_some_and(|templates| {
                 templates
                     .iter()
                     .any(|template| template.get("id").and_then(Value::as_str) == Some(custom_id))
             })
-        {
-            return custom_id.to_string();
-        }
+    {
+        return custom_id.to_string();
     }
     DEFAULT_SUMMARY_TEMPLATE_ID.to_string()
 }
@@ -1071,17 +1066,16 @@ fn coerce_polish_preset_id(preset_id: Option<&str>, custom_presets: Option<&Valu
     if preset_id.is_some_and(|id| BUILTIN_POLISH_PRESET_IDS.contains(&id)) {
         return preset_id.unwrap().to_string();
     }
-    if let Some(custom_id) = preset_id {
-        if custom_presets
+    if let Some(custom_id) = preset_id
+        && custom_presets
             .and_then(Value::as_array)
             .is_some_and(|presets| {
                 presets
                     .iter()
                     .any(|preset| preset.get("id").and_then(Value::as_str) == Some(custom_id))
             })
-        {
-            return custom_id.to_string();
-        }
+    {
+        return custom_id.to_string();
     }
     DEFAULT_POLISH_PRESET_ID.to_string()
 }
@@ -1665,10 +1659,10 @@ fn normalize_stored_model_order(value: Option<&Value>, models: &Map<String, Valu
     let mut ordered = Vec::new();
     if let Some(order) = value.and_then(Value::as_array) {
         for entry in order {
-            if let Some(id) = entry.as_str().filter(|id| models.contains_key(*id)) {
-                if seen.insert(id.to_string()) {
-                    ordered.push(json!(id));
-                }
+            if let Some(id) = entry.as_str().filter(|id| models.contains_key(*id))
+                && seen.insert(id.to_string())
+            {
+                ordered.push(json!(id));
             }
         }
     }
@@ -1763,9 +1757,9 @@ fn bootstrap_missing_model_selections(
         "/selections/translationModelId",
         json!(model_id.clone()),
     );
-    if provider != "google_translate" && provider != "google_translate_free" {
-        set_pointer(&mut settings, "/selections/polishModelId", json!(model_id));
-    } else if legacy_model_present {
+    if (provider != "google_translate" && provider != "google_translate_free")
+        || legacy_model_present
+    {
         set_pointer(&mut settings, "/selections/polishModelId", json!(model_id));
     }
     settings

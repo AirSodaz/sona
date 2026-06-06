@@ -55,11 +55,10 @@ pub fn load_online_asr_config(
                         .get("asr")
                         .and_then(|v| v.get("providers"))
                         .and_then(|v| v.get("online"))
+                        && let Some(map) = config.as_object()
                     {
-                        if let Some(map) = config.as_object() {
-                            for (k, v) in map {
-                                online_asr_config.insert(k.clone(), v.clone());
-                            }
+                        for (k, v) in map {
+                            online_asr_config.insert(k.clone(), v.clone());
                         }
                     }
                 }
@@ -174,69 +173,66 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         let mut max_streaming = 2;
         let mut ip_whitelist = "localhost".to_string();
 
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(config) = json.get("sona-config") {
-                    if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool())
-                    {
-                        http_server_enabled = enabled;
-                    }
-                    if let Some(h) = config.get("httpServerHost").and_then(|v| v.as_str()) {
-                        host = h.to_string();
-                    }
-                    if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
-                        port = p as u16;
-                    }
-                    if let Some(key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
-                        api_key = key.to_string();
-                    }
-                    if let Some(mc) = config
-                        .get("httpServerMaxConcurrent")
-                        .and_then(|v| v.as_u64())
-                    {
-                        max_concurrent = mc as usize;
-                    }
-                    if let Some(mq) = config
-                        .get("httpServerMaxQueueSize")
-                        .and_then(|v| v.as_u64())
-                    {
-                        max_queue_size = mq as usize;
-                    }
-                    if let Some(ms) = config
-                        .get("httpServerMaxUploadSizeMB")
-                        .and_then(|v| v.as_u64())
-                    {
-                        max_upload_size_mb = ms as usize;
-                    }
-                    if let Some(ttl) = config
-                        .get("httpServerJobTtlMinutes")
-                        .and_then(|v| v.as_u64())
-                    {
-                        job_ttl_minutes = ttl;
-                    }
-                    if let Some(ms) = config
-                        .get("httpServerMaxStreaming")
-                        .and_then(|v| v.as_u64())
-                    {
-                        max_streaming = ms as usize;
-                    }
-                    if let Some(ip_list) =
-                        config.get("httpServerIpWhitelist").and_then(|v| v.as_str())
-                    {
-                        ip_whitelist = ip_list.to_string();
-                    }
-                }
+        if let Ok(content) = std::fs::read_to_string(&config_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(config) = json.get("sona-config")
+        {
+            if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool()) {
+                http_server_enabled = enabled;
+            }
+            if let Some(h) = config.get("httpServerHost").and_then(|v| v.as_str()) {
+                host = h.to_string();
+            }
+            if let Some(p) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
+                port = p as u16;
+            }
+            if let Some(key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
+                api_key = key.to_string();
+            }
+            if let Some(mc) = config
+                .get("httpServerMaxConcurrent")
+                .and_then(|v| v.as_u64())
+            {
+                max_concurrent = mc as usize;
+            }
+            if let Some(mq) = config
+                .get("httpServerMaxQueueSize")
+                .and_then(|v| v.as_u64())
+            {
+                max_queue_size = mq as usize;
+            }
+            if let Some(ms) = config
+                .get("httpServerMaxUploadSizeMB")
+                .and_then(|v| v.as_u64())
+            {
+                max_upload_size_mb = ms as usize;
+            }
+            if let Some(ttl) = config
+                .get("httpServerJobTtlMinutes")
+                .and_then(|v| v.as_u64())
+            {
+                job_ttl_minutes = ttl;
+            }
+            if let Some(ms) = config
+                .get("httpServerMaxStreaming")
+                .and_then(|v| v.as_u64())
+            {
+                max_streaming = ms as usize;
+            }
+            if let Some(ip_list) = config.get("httpServerIpWhitelist").and_then(|v| v.as_str()) {
+                ip_whitelist = ip_list.to_string();
             }
         }
 
         if http_server_enabled {
-            let app_local_data_dir = match crate::app::paths::resolve_app_local_data_dir(&app_handle) {
-                Ok(dir) => dir,
-                Err(e) => {
-                    log::error!("Failed to get app_local_data_dir: {}", e);
-                    return;
-                }
-            };
+            let app_local_data_dir =
+                match crate::app::paths::resolve_app_local_data_dir(&app_handle) {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        log::error!("Failed to get app_local_data_dir: {}", e);
+                        return;
+                    }
+                };
             let temp_dir = app_local_data_dir.join("api_temp");
             let models_dir = app_local_data_dir.join("models");
 
@@ -407,21 +403,20 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
     let payload_str = serde_json::to_string(&payload).unwrap_or_default();
 
     static WEBHOOK_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    let client = WEBHOOK_CLIENT.get_or_init(|| reqwest::Client::new());
+    let client = WEBHOOK_CLIENT.get_or_init(reqwest::Client::new);
 
     let mut request = client
         .post(webhook_url)
         .header("Content-Type", "application/json");
 
-    if let Some(secret) = &job.webhook_secret {
-        if !secret.is_empty() {
-            if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
-                mac.update(payload_str.as_bytes());
-                let result = mac.finalize().into_bytes();
-                let hex_signature = hex::encode(result);
-                request = request.header("X-Sona-Signature", format!("sha256={}", hex_signature));
-            }
-        }
+    if let Some(secret) = &job.webhook_secret
+        && !secret.is_empty()
+        && let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes())
+    {
+        mac.update(payload_str.as_bytes());
+        let result = mac.finalize().into_bytes();
+        let hex_signature = hex::encode(result);
+        request = request.header("X-Sona-Signature", format!("sha256={}", hex_signature));
     }
 
     match request.body(payload_str).send().await {
@@ -483,7 +478,7 @@ async fn start_worker_loop(
                     let request = crate::integrations::asr::AsrTranscriptionRequest {
                         engine_config: crate::integrations::asr::AsrEngineConfig::Online {
                             provider: crate::integrations::asr::OnlineAsrProviderRequest {
-                                provider_id: provider_id,
+                                provider_id,
                                 profile_id: job.model_id.clone(),
                                 config: job.online_provider_config.clone().unwrap_or_default(),
                             },
@@ -623,14 +618,14 @@ pub async fn handle_transcribe(
             }
             temp_file_path = Some(file_path);
 
-            if let Some(ref path) = temp_file_path {
-                if !crate::integrations::media_detector::is_valid_media_file(path).await {
-                    let _ = tokio::fs::remove_file(path).await;
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        "Unsupported file type or corrupted file".to_string(),
-                    ));
-                }
+            if let Some(ref path) = temp_file_path
+                && !crate::integrations::media_detector::is_valid_media_file(path).await
+            {
+                let _ = tokio::fs::remove_file(path).await;
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Unsupported file type or corrupted file".to_string(),
+                ));
             }
         } else if name == "model_id" {
             model_id = Some(field.text().await.unwrap_or_default());
@@ -808,12 +803,11 @@ pub async fn handle_info(
 
     for provider in online_providers {
         let mut configured = false;
-        if let Some(config_value) = configs.get(&provider.id) {
-            if let Some(api_key) = config_value.get("apiKey").and_then(|v| v.as_str()) {
-                if !api_key.is_empty() {
-                    configured = true;
-                }
-            }
+        if let Some(config_value) = configs.get(&provider.id)
+            && let Some(api_key) = config_value.get("apiKey").and_then(|v| v.as_str())
+            && !api_key.is_empty()
+        {
+            configured = true;
         }
         online_asr_providers.push(OnlineAsrProviderInfo {
             id: provider.id.clone(),

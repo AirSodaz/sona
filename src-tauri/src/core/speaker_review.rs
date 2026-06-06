@@ -213,11 +213,11 @@ fn build_speaker_review_groups(segments: &[TranscriptSegment]) -> Vec<SpeakerRev
                 existing.candidates = review_candidates(&attribution.candidates);
             }
 
-            if existing.speaker.is_none() {
-                if let Some(speaker) = segment.speaker.clone() {
-                    existing.display_label = speaker.label.clone();
-                    existing.speaker = Some(speaker);
-                }
+            if existing.speaker.is_none()
+                && let Some(speaker) = segment.speaker.clone()
+            {
+                existing.display_label = speaker.label.clone();
+                existing.speaker = Some(speaker);
             }
 
             existing.preview_segments.push(segment_preview(segment));

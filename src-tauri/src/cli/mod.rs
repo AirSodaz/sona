@@ -70,7 +70,7 @@ impl log::Log for CliLogger {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Transcribes a single local audio or video file.
-    Transcribe(TranscribeArgs),
+    Transcribe(Box<TranscribeArgs>),
     /// Lists or downloads preset models.
     Models(ModelsArgs),
     /// Starts the HTTP API server in headless mode.
@@ -95,7 +95,7 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> Resu
     }
 
     match cli.command {
-        Commands::Transcribe(args) => transcribe::run_transcribe(args).await,
+        Commands::Transcribe(args) => transcribe::run_transcribe(*args).await,
         Commands::Models(args) => models::run_models(args).await,
         Commands::Serve(args) => serve::run_serve(args).await,
     }

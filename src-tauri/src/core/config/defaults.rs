@@ -1,8 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::core::domain::{
-    BuiltinPolishPresetId, BuiltinSummaryTemplateId,
-    PolishPresetId, SummaryTemplateId,
+    BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
 };
 use crate::integrations::asr_providers::online_asr_providers;
 

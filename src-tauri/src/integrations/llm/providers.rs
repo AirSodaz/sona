@@ -663,34 +663,34 @@ pub(crate) async fn get_openai_models(
             req = req.header("Authorization", format!("Bearer {}", api_key));
         }
 
-        if let Ok(res) = req.send().await {
-            if res.status().is_success() {
-                let text = res.text().await.unwrap_or_default();
+        if let Ok(res) = req.send().await
+            && res.status().is_success()
+        {
+            let text = res.text().await.unwrap_or_default();
 
-                if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
-                    return Ok(response_body
-                        .data
-                        .into_iter()
-                        .map(openai_model_to_summary)
-                        .collect());
-                }
+            if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
+                return Ok(response_body
+                    .data
+                    .into_iter()
+                    .map(openai_model_to_summary)
+                    .collect());
+            }
 
-                if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
-                    return Ok(response_body
-                        .models
-                        .into_iter()
-                        .map(|model| LlmModelSummary {
-                            model: model.name,
-                            input_price: None,
-                            output_price: None,
-                            context_window: None,
-                            max_output_tokens: None,
-                            supports_multimodal: None,
-                            supports_tools: None,
-                            supports_reasoning: None,
-                        })
-                        .collect());
-                }
+            if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
+                return Ok(response_body
+                    .models
+                    .into_iter()
+                    .map(|model| LlmModelSummary {
+                        model: model.name,
+                        input_price: None,
+                        output_price: None,
+                        context_window: None,
+                        max_output_tokens: None,
+                        supports_multimodal: None,
+                        supports_tools: None,
+                        supports_reasoning: None,
+                    })
+                    .collect());
             }
         }
     }
@@ -786,20 +786,20 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
 pub(crate) fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
     let mut parts = Vec::new();
 
-    if let Some(output_text) = response.get("output_text").and_then(Value::as_str) {
-        if !output_text.is_empty() {
-            return Ok(output_text.to_string());
-        }
+    if let Some(output_text) = response.get("output_text").and_then(Value::as_str)
+        && !output_text.is_empty()
+    {
+        return Ok(output_text.to_string());
     }
 
     if let Some(choices) = response.get("choices") {
         extract_text_parts(choices, &mut parts);
     }
 
-    if parts.is_empty() {
-        if let Some(output) = response.get("output") {
-            extract_text_parts(output, &mut parts);
-        }
+    if parts.is_empty()
+        && let Some(output) = response.get("output")
+    {
+        extract_text_parts(output, &mut parts);
     }
 
     if parts.is_empty() {

@@ -1,11 +1,10 @@
-use tauri::{AppHandle, State};
 use crate::integrations::llm::{
-    LlmGenerateRequest, PolishSegmentsRequest, PolishedSegment,
-    TranslateSegmentsRequest, TranslatedSegment, SummarizeTranscriptRequest,
-    TranscriptSummaryResult, TranscriptLlmJobRequest, TranscriptLlmJobResult,
-    LlmModelsRequest, LlmModelSummary,
+    LlmGenerateRequest, LlmModelSummary, LlmModelsRequest, PolishSegmentsRequest, PolishedSegment,
+    SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranscriptLlmJobResult,
+    TranscriptSummaryResult, TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::repositories::history::HistoryRepositoryState;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn generate_llm_text(
@@ -64,9 +63,6 @@ pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn llm_usage_replace_raw(
-    app: AppHandle,
-    content: String,
-) -> Result<(), String> {
+pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
     crate::integrations::llm::llm_usage::llm_usage_replace_raw(app, content).await
 }

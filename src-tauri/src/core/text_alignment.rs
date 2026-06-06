@@ -139,13 +139,12 @@ pub(crate) fn lex_text_units(text: &str) -> Vec<TextUnit> {
         let text = chars[start..index].iter().collect::<String>();
         let normalized = normalize_search_text(&text);
 
-        if normalized.is_empty() {
-            if let Some(previous) = units.last_mut() {
-                if !previous.normalized.is_empty() {
-                    previous.text.push_str(&text);
-                    continue;
-                }
-            }
+        if normalized.is_empty()
+            && let Some(previous) = units.last_mut()
+            && !previous.normalized.is_empty()
+        {
+            previous.text.push_str(&text);
+            continue;
         }
 
         units.push(TextUnit { text, normalized });

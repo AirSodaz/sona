@@ -2,7 +2,9 @@ use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
-use crate::repositories::project::repository::{run_project_task, SETTINGS_FILE_NAME, ACTIVE_PROJECT_SETTINGS_KEY};
+use crate::repositories::project::repository::{
+    ACTIVE_PROJECT_SETTINGS_KEY, SETTINGS_FILE_NAME, run_project_task,
+};
 use crate::repositories::project::{
     ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRecord,
 };

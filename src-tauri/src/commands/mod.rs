@@ -1,13 +1,13 @@
-pub mod project;
-pub mod automation;
-pub mod asr;
-pub mod llm;
-pub mod audio;
-pub mod history;
 pub mod archive;
+pub mod asr;
+pub mod audio;
+pub mod automation;
 pub mod downloads;
-pub mod system;
 pub mod export;
+pub mod history;
+pub mod llm;
+pub mod project;
+pub mod system;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
     tauri::generate_handler![

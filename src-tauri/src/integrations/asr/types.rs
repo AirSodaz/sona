@@ -57,7 +57,7 @@ pub enum AsrEngineConfig {
         batch_segmentation_mode: BatchSegmentationMode,
         model_type: String,
         #[serde(default)]
-        file_config: Option<ModelFileConfig>,
+        file_config: Box<Option<ModelFileConfig>>,
         #[serde(default)]
         gpu_acceleration: Option<String>,
     },
@@ -102,7 +102,7 @@ impl AsrTranscriptionRequest {
                 vad_buffer,
                 batch_segmentation_mode: BatchSegmentationMode::Vad,
                 model_type,
-                file_config,
+                file_config: Box::new(file_config),
                 gpu_acceleration,
             },
         }

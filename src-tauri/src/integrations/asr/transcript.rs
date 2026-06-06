@@ -10,7 +10,6 @@ use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;
 const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
 const ABBREVIATIONS: &[&str] = &[
@@ -489,14 +488,12 @@ where
             state.current_segment_start = segment_end;
             state.current_text.clear();
 
-            if let Some(map) = token_map.as_ref() {
-                if state.last_token_index == state.next_token_slice_start
-                    && state.next_token_slice_start < map.timestamps.len()
-                {
-                    state.current_segment_start =
-                        map.timestamps[state.next_token_slice_start] as f64;
-                    state.current_start = state.current_segment_start;
-                }
+            if let Some(map) = token_map.as_ref()
+                && state.last_token_index == state.next_token_slice_start
+                && state.next_token_slice_start < map.timestamps.len()
+            {
+                state.current_segment_start = map.timestamps[state.next_token_slice_start] as f64;
+                state.current_start = state.current_segment_start;
             }
 
             continue;

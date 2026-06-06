@@ -1,10 +1,12 @@
-use std::sync::Arc;
 use serde_json::Value;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use crate::core::task_ledger::repository::TaskLedgerRepository;
-use crate::core::task_ledger::types::{TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot};
+use crate::core::task_ledger::types::{
+    TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
+};
 
 async fn run_task_ledger_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
 where
@@ -224,9 +226,7 @@ pub async fn get_diagnostics_core_snapshot(
 // Relocated task_ledger commands
 
 #[tauri::command]
-pub async fn task_ledger_load_snapshot(
-    app: AppHandle,
-) -> Result<TaskLedgerSnapshot, String> {
+pub async fn task_ledger_load_snapshot(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
     run_task_ledger_repository_task(app, |repository| repository.load_snapshot()).await
 }
 
@@ -263,17 +263,17 @@ pub async fn task_ledger_remove_task(
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
     let snapshot =
-        run_task_ledger_repository_task(app.clone(), move |repository| repository.remove_task(&id)).await?;
+        run_task_ledger_repository_task(app.clone(), move |repository| repository.remove_task(&id))
+            .await?;
     emit_task_ledger_snapshot(&app, &snapshot)?;
     Ok(snapshot)
 }
 
 #[tauri::command]
-pub async fn task_ledger_clear_resolved(
-    app: AppHandle,
-) -> Result<TaskLedgerSnapshot, String> {
+pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
     let snapshot =
-        run_task_ledger_repository_task(app.clone(), |repository| repository.clear_resolved()).await?;
+        run_task_ledger_repository_task(app.clone(), |repository| repository.clear_resolved())
+            .await?;
     emit_task_ledger_snapshot(&app, &snapshot)?;
     Ok(snapshot)
 }
@@ -281,9 +281,7 @@ pub async fn task_ledger_clear_resolved(
 // Relocated recovery commands
 
 #[tauri::command]
-pub async fn recovery_load_snapshot(
-    app: AppHandle,
-) -> Result<RecoverySnapshot, String> {
+pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, String> {
     run_recovery_repository_task(app, |repository| repository.load_snapshot()).await
 }
 
@@ -317,7 +315,12 @@ pub async fn annotate_speaker_segments_from_file(
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
     speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String> {
-    crate::integrations::speaker::annotate_speaker_segments_from_file(file_path, segments, speaker_processing).await
+    crate::integrations::speaker::annotate_speaker_segments_from_file(
+        file_path,
+        segments,
+        speaker_processing,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -327,7 +330,13 @@ pub async fn import_speaker_profile_sample(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<crate::integrations::speaker::SpeakerProfileSample, String> {
-    crate::integrations::speaker::import_speaker_profile_sample(app, profile_id, source_path, source_name).await
+    crate::integrations::speaker::import_speaker_profile_sample(
+        app,
+        profile_id,
+        source_path,
+        source_name,
+    )
+    .await
 }
 
 #[tauri::command]

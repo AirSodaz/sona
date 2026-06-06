@@ -324,12 +324,12 @@ fn extract_google_translate_free_translation(
 ) -> Result<String, GoogleTranslateFreeAttemptError> {
     let mut translated = String::new();
 
-    if let Some(outer_arr) = body.as_array() {
-        if let Some(inner_arr) = outer_arr.first().and_then(|value| value.as_array()) {
-            for part in inner_arr {
-                if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
-                    translated.push_str(text);
-                }
+    if let Some(outer_arr) = body.as_array()
+        && let Some(inner_arr) = outer_arr.first().and_then(|value| value.as_array())
+    {
+        for part in inner_arr {
+            if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
+                translated.push_str(text);
             }
         }
     }
@@ -597,20 +597,20 @@ pub(crate) fn build_polish_prompt(
     let json_str = serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string());
     let mut prompt = String::new();
 
-    if let Some(value) = context {
-        if !value.trim().is_empty() {
-            prompt.push_str("[User Context]\n");
-            prompt.push_str(value.trim());
-            prompt.push_str("\n\n");
-        }
+    if let Some(value) = context
+        && !value.trim().is_empty()
+    {
+        prompt.push_str("[User Context]\n");
+        prompt.push_str(value.trim());
+        prompt.push_str("\n\n");
     }
 
-    if let Some(value) = keywords {
-        if !value.trim().is_empty() {
-            prompt.push_str("[User Keywords]\n");
-            prompt.push_str(value.trim());
-            prompt.push_str("\n\n");
-        }
+    if let Some(value) = keywords
+        && !value.trim().is_empty()
+    {
+        prompt.push_str("[User Keywords]\n");
+        prompt.push_str(value.trim());
+        prompt.push_str("\n\n");
     }
 
     prompt.push_str("You are a professional editor. The following text segments are from a speech-to-text transcription and may contain errors.\n");

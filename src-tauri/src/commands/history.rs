@@ -3,23 +3,21 @@ use serde_json::to_value;
 use std::path::PathBuf;
 use tauri::{AppHandle, Runtime, State};
 
+use crate::integrations::asr::TranscriptSegment;
+use crate::repositories::history::HistoryRepository;
 use crate::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
 use crate::repositories::history::fs_utils::remove_path_if_exists;
-use crate::repositories::history::HistoryRepository;
 use crate::repositories::history::{
-    HistoryRepositoryState, PreparedBackupImportState, BackupManifest,
-    ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
-    HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
+    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
+    HistoryItemRecord, HistoryItemStatus, HistoryRepositoryState, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
     HistoryWorkspaceSortOrder, LiveRecordingDraftResult, PreparedBackupImport,
-    TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
-use crate::integrations::asr::TranscriptSegment;
-
 
 async fn run_history_task<R, T, F>(
     app: AppHandle<R>,
@@ -231,6 +229,7 @@ pub async fn history_complete_live_draft<R: Runtime>(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn history_save_recording<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
@@ -356,10 +355,12 @@ pub fn history_build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptDiffResult, String> {
-    Ok(crate::repositories::history::transcript_diff::build_transcript_diff(
-        snapshot_segments,
-        current_segments,
-    ))
+    Ok(
+        crate::repositories::history::transcript_diff::build_transcript_diff(
+            snapshot_segments,
+            current_segments,
+        ),
+    )
 }
 
 #[tauri::command]
@@ -367,10 +368,12 @@ pub fn history_restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    Ok(crate::repositories::history::transcript_diff::restore_transcript_diff_rows(
-        rows,
-        selected_row_ids,
-    ))
+    Ok(
+        crate::repositories::history::transcript_diff::restore_transcript_diff_rows(
+            rows,
+            selected_row_ids,
+        ),
+    )
 }
 
 #[tauri::command]

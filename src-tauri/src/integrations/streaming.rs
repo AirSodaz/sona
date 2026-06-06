@@ -38,7 +38,7 @@ pub enum ServerMessage {
         session_id: String,
     },
     Segment {
-        segment: crate::integrations::asr::TranscriptSegment,
+        segment: Box<crate::integrations::asr::TranscriptSegment>,
     },
     Stopped,
     Error {
@@ -302,7 +302,7 @@ async fn handle_online_streaming_socket(
             }
             Some(update) = rx.recv() => {
                 for segment in update.upsert_segments {
-                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment }).unwrap().into())).await;
+                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if stopping => {
@@ -316,8 +316,7 @@ async fn handle_online_streaming_socket(
         }
     }
 
-    let _ =
-        crate::commands::asr::stop_recognizer(sherpa_state.clone(), session_id.clone()).await;
+    let _ = crate::commands::asr::stop_recognizer(sherpa_state.clone(), session_id.clone()).await;
 }
 
 async fn handle_local_streaming_socket(
@@ -418,7 +417,7 @@ async fn handle_local_streaming_socket(
                                     global_start,
                                     false,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
                                 }
                                 last_inference_time = now;
                             }
@@ -434,7 +433,7 @@ async fn handle_local_streaming_socket(
                                     global_start,
                                     true,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
                                 }
                                 offline_state.speech_buffer.clear();
                                 current_segment_id = None;
@@ -456,7 +455,7 @@ async fn handle_local_streaming_socket(
                                     global_start,
                                     true,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
                                 }
                             }
                             let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Stopped).unwrap().into())).await;

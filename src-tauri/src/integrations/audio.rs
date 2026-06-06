@@ -570,12 +570,10 @@ async fn drain_capture_worker_chunk(
     }
 
     let chunk = &pull_buffer[..len];
-    if !recorder_paused {
-        if let Some(w) = writer.as_mut() {
-            let amplitude = i16::MAX as f32;
-            for &sample in chunk {
-                let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
-            }
+    if !recorder_paused && let Some(w) = writer.as_mut() {
+        let amplitude = i16::MAX as f32;
+        for &sample in chunk {
+            let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
         }
     }
 

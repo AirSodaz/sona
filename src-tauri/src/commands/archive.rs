@@ -55,8 +55,8 @@ pub async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<
 
             if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
                 builder
-                     .append_dir(relative, &path)
-                     .map_err(|e| e.to_string())?;
+                    .append_dir(relative, &path)
+                    .map_err(|e| e.to_string())?;
                 append_directory_contents(builder, root, &path)?;
                 continue;
             }

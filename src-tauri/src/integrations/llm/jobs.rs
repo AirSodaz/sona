@@ -6,12 +6,12 @@ use serde_json::to_value;
 use tauri::{AppHandle, Emitter, State};
 
 use super::*;
-use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::history::{HistoryRepositoryState, TranscriptSnapshotReason};
 use crate::commands::history::{
     history_create_llm_transcript_snapshot, history_save_llm_summary,
     history_update_llm_transcript_segments,
 };
+use crate::integrations::asr::TranscriptSegment;
+use crate::repositories::history::{HistoryRepositoryState, TranscriptSnapshotReason};
 
 fn normalized_job_history_id(job_history_id: Option<&str>) -> Option<String> {
     job_history_id

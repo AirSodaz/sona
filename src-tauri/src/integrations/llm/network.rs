@@ -69,7 +69,8 @@ impl LlmApiUrl {
         use std::collections::HashMap;
         use std::sync::{Mutex, OnceLock};
 
-        static CLIENTS: OnceLock<Mutex<HashMap<(bool, Option<u64>), Client>>> = OnceLock::new();
+        type ClientKey = (bool, Option<u64>);
+        static CLIENTS: OnceLock<Mutex<HashMap<ClientKey, Client>>> = OnceLock::new();
         let map = CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
 
         let key = (self.https_only, timeout_seconds);

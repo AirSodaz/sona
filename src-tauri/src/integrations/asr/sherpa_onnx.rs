@@ -62,6 +62,7 @@ fn build_live_metric(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_offline_inference(
     speech_buffer: &[Vec<f32>],
     emitter: &dyn crate::core::event::EventEmitter,
@@ -256,14 +257,14 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
         let mut instance = self.instance.lock().await;
         start_recognizer_impl_inner(instance_id, &mut instance)
             .await
-            .map_err(|e| SherpaError::Generic(e))
+            .map_err(SherpaError::Generic)
     }
 
     async fn stop(&self, _state: &AsrState, instance_id: &str) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
         stop_recognizer_impl_inner(instance_id, &mut instance)
             .await
-            .map_err(|e| SherpaError::Generic(e))
+            .map_err(SherpaError::Generic)
     }
 
     async fn flush(
@@ -275,7 +276,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
         let mut instance = self.instance.lock().await;
         flush_recognizer_impl_inner(emitter, state, instance_id, &mut instance)
             .await
-            .map_err(|e| SherpaError::Generic(e))
+            .map_err(SherpaError::Generic)
     }
 
     async fn feed_audio_chunk(
@@ -288,7 +289,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
         let mut instance = self.instance.lock().await;
         feed_audio_chunk_impl_inner(emitter, state, instance_id, &mut instance, samples)
             .await
-            .map_err(|e| SherpaError::Generic(e))
+            .map_err(SherpaError::Generic)
     }
 
     async fn feed_audio_samples(
@@ -301,7 +302,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
         let mut instance = self.instance.lock().await;
         feed_audio_samples_inner(emitter, state, instance_id, &mut instance, samples)
             .await
-            .map_err(|e| SherpaError::Generic(e))
+            .map_err(SherpaError::Generic)
     }
 }
 
@@ -392,15 +393,16 @@ pub async fn init_recognizer_impl(
     let punctuation = load_punctuation(punctuation_model);
     let vad = load_vad(vad_model.clone());
 
-    let mut session_instance = SherpaInstance::default();
-    session_instance.recognizer = Some(recognizer);
-    session_instance.vad = vad;
-    session_instance.punctuation = punctuation.map(Arc::new);
-    session_instance.vad_model = vad_model.clone();
-    session_instance.vad_buffer = vad_buffer;
-    session_instance.normalization_options = normalization_options.unwrap_or_default();
-    session_instance.postprocessor =
-        TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?;
+    let session_instance = SherpaInstance {
+        recognizer: Some(recognizer),
+        vad,
+        punctuation: punctuation.map(Arc::new),
+        vad_model: vad_model.clone(),
+        vad_buffer,
+        normalization_options: normalization_options.unwrap_or_default(),
+        postprocessor: TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?,
+        ..Default::default()
+    };
 
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance: tokio::sync::Mutex::new(session_instance),
@@ -436,7 +438,7 @@ async fn start_recognizer_impl_inner(
         instance.vad = load_vad(instance.vad_model.clone());
     }
 
-    if let Some(label) = diagnostics_instance_label(&instance_id) {
+    if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] start_recognizer({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
             recognizer_kind,
@@ -453,7 +455,7 @@ async fn stop_recognizer_impl_inner(
     instance: &mut SherpaInstance,
 ) -> Result<(), String> {
     {
-        if let Some(label) = diagnostics_instance_label(&instance_id) {
+        if let Some(label) = diagnostics_instance_label(instance_id) {
             info!(
                 "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
                 instance.is_running,
@@ -480,7 +482,7 @@ async fn flush_recognizer_impl_inner(
 ) -> Result<(), String> {
     info!("Flushing recognizer for instance id: {}", instance_id);
 
-    if let Some(label) = diagnostics_instance_label(&instance_id) {
+    if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] flush_recognizer({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
             instance.is_running,
@@ -492,165 +494,164 @@ async fn flush_recognizer_impl_inner(
         );
     }
 
-    if let Some(recognizer) = instance.recognizer.clone() {
-        if let RecognizerInner::Offline(_) = &recognizer.inner {
-            if !instance.offline_state.speech_buffer.is_empty() {
-                let seg_id = instance
-                    .current_segment_id
-                    .as_ref()
-                    .cloned()
-                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                let global_start = instance.offline_state.utterance_start_sample as f64 / 16000.0;
+    if let Some(recognizer) = instance.recognizer.clone()
+        && let RecognizerInner::Offline(_) = &recognizer.inner
+    {
+        if !instance.offline_state.speech_buffer.is_empty() {
+            let seg_id = instance
+                .current_segment_id
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let global_start = instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
-                let offline_copy = instance.offline_state.speech_buffer.clone();
-                let emitter_copy = emitter.clone();
-                let recognizer_copy = recognizer.clone();
-                let punct_copy = instance.punctuation.clone();
-                let seg_id_copy = seg_id.clone();
-                let instance_id_copy = instance_id.to_string();
-                let first_segment_emitted = diagnostics_instance_label(&instance_id)
-                    .is_some()
-                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
-                let normalization_options = instance.normalization_options;
-                let postprocessor = instance.postprocessor.clone();
-                let metrics_store = state.metrics.clone();
-                let triggered_at = Instant::now();
+            let offline_copy = instance.offline_state.speech_buffer.clone();
+            let emitter_copy = emitter.clone();
+            let recognizer_copy = recognizer.clone();
+            let punct_copy = instance.punctuation.clone();
+            let seg_id_copy = seg_id.clone();
+            let instance_id_copy = instance_id.to_string();
+            let first_segment_emitted = diagnostics_instance_label(instance_id)
+                .is_some()
+                .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+            let normalization_options = instance.normalization_options;
+            let postprocessor = instance.postprocessor.clone();
+            let metrics_store = state.metrics.clone();
+            let triggered_at = Instant::now();
 
-                if let Some(label) = diagnostics_instance_label(&instance_id) {
-                    info!(
-                        "[Sherpa] {label} flush triggering offline inference. segment_id={} buffered_chunks={} buffered_samples={}",
-                        seg_id,
-                        offline_copy.len(),
-                        buffered_sample_count(&offline_copy)
+            if let Some(label) = diagnostics_instance_label(instance_id) {
+                info!(
+                    "[Sherpa] {label} flush triggering offline inference. segment_id={} buffered_chunks={} buffered_samples={}",
+                    seg_id,
+                    offline_copy.len(),
+                    buffered_sample_count(&offline_copy)
+                );
+            }
+
+            // Offline decoding can be CPU-heavy, so the final utterance pass
+            // runs on a blocking worker and then emits one final segment.
+            tauri::async_runtime::spawn_blocking(move || {
+                if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
+                    run_offline_inference(
+                        &offline_copy,
+                        emitter_copy.as_ref(),
+                        &safe_r.0,
+                        punct_copy.as_deref(),
+                        &seg_id_copy,
+                        global_start,
+                        true,
+                        &instance_id_copy,
+                        "flush_offline",
+                        first_segment_emitted,
+                        normalization_options,
+                        postprocessor,
+                        Some(metrics_store),
+                        triggered_at,
                     );
                 }
+            })
+            .await
+            .map_err(|e| e.to_string())?;
 
-                // Offline decoding can be CPU-heavy, so the final utterance pass
-                // runs on a blocking worker and then emits one final segment.
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
-                        run_offline_inference(
-                            &offline_copy,
-                            emitter_copy.as_ref(),
-                            &safe_r.0,
-                            punct_copy.as_deref(),
-                            &seg_id_copy,
-                            global_start,
-                            true,
-                            &instance_id_copy,
-                            "flush_offline",
-                            first_segment_emitted,
-                            normalization_options,
-                            postprocessor,
-                            Some(metrics_store),
-                            triggered_at,
-                        );
-                    }
-                })
-                .await
-                .map_err(|e| e.to_string())?;
-
-                instance.offline_state.speech_buffer.clear();
-                instance.offline_state.is_speaking = false;
-            } else if let Some(label) = diagnostics_instance_label(&instance_id) {
-                info!("[Sherpa] {label} flush found no pending offline speech buffer.");
-            }
-            instance.current_segment_id = None;
-            instance.offline_state = OfflineState::default();
-            if let Some(label) = diagnostics_instance_label(&instance_id) {
-                info!("[Sherpa] flush_recognizer({label}) complete. mode=offline");
-            }
-            return Ok(());
+            instance.offline_state.speech_buffer.clear();
+            instance.offline_state.is_speaking = false;
+        } else if let Some(label) = diagnostics_instance_label(instance_id) {
+            info!("[Sherpa] {label} flush found no pending offline speech buffer.");
         }
+        instance.current_segment_id = None;
+        instance.offline_state = OfflineState::default();
+        if let Some(label) = diagnostics_instance_label(instance_id) {
+            info!("[Sherpa] flush_recognizer({label}) complete. mode=offline");
+        }
+        return Ok(());
     }
 
     if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
+        && let RecognizerInner::Online(r) = &recognizer.inner
     {
-        if let RecognizerInner::Online(r) = &recognizer.inner {
-            let inference_started = Instant::now();
-            let metrics_store = state.metrics.clone();
-            let current_time = instance.total_samples as f64 / 16000.0;
-            let buffered_samples =
-                ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
+        let inference_started = Instant::now();
+        let metrics_store = state.metrics.clone();
+        let current_time = instance.total_samples as f64 / 16000.0;
+        let buffered_samples =
+            ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
-            // Online models need a short tail of silence to finalize the last
-            // partial hypothesis before we reset the stream.
-            let decode_started = Instant::now();
-            let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-            debug!("FFI: Calling accept_waveform (Online, tail_padding)");
-            st.0.accept_waveform(16000, &tail_padding);
-            debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
-            while r.0.is_ready(&st.0) {
-                r.0.decode(&st.0);
-            }
-            let decode_ms = duration_to_ms(decode_started.elapsed());
+        // Online models need a short tail of silence to finalize the last
+        // partial hypothesis before we reset the stream.
+        let decode_started = Instant::now();
+        let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+        debug!("FFI: Calling accept_waveform (Online, tail_padding)");
+        st.0.accept_waveform(16000, &tail_padding);
+        debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
+        while r.0.is_ready(&st.0) {
+            r.0.decode(&st.0);
+        }
+        let decode_ms = duration_to_ms(decode_started.elapsed());
 
-            if let Some(result) = r.0.get_result(&st.0) {
-                if !result.text.trim().is_empty() {
-                    let text = format_transcript(&result.text, instance.punctuation.as_deref());
-                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter()
-                            .map(|t| *t + instance.segment_start_time as f32)
-                            .collect::<Vec<_>>()
-                    });
-                    let durations = timestamps_abs
-                        .as_ref()
-                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
+        if let Some(result) = r.0.get_result(&st.0)
+            && !result.text.trim().is_empty()
+        {
+            let text = format_transcript(&result.text, instance.punctuation.as_deref());
+            let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                ts.iter()
+                    .map(|t| *t + instance.segment_start_time as f32)
+                    .collect::<Vec<_>>()
+            });
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                    let id = instance
-                        .current_segment_id
-                        .take()
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let id = instance
+                .current_segment_id
+                .take()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-                    let segment = TranscriptSegment {
-                        id,
-                        text,
-                        start: instance.segment_start_time,
-                        end: current_time,
-                        is_final: true,
-                        timing: None,
-                        tokens: Some(result.tokens),
-                        timestamps: timestamps_abs,
-                        durations,
-                        translation: None,
-                        speaker: None,
-                        speaker_attribution: None,
-                    };
-                    let update = instance
-                        .postprocessor
-                        .process_update(build_transcript_update(
-                            segment,
-                            instance.normalization_options,
-                        ));
-                    emit_transcript_update(
-                        emitter.as_ref(),
-                        &instance_id,
-                        &update,
-                        "flush_online",
-                        Some(&instance.record_diagnostics.first_segment_emitted),
-                    );
-                }
-            }
-
-            record_live_metric(
-                &metrics_store,
-                build_live_metric(
-                    &instance_id,
-                    "flush_online",
-                    true,
-                    buffered_samples,
-                    decode_ms,
-                    Some(duration_to_ms(inference_started.elapsed())),
-                    None,
-                ),
+            let segment = TranscriptSegment {
+                id,
+                text,
+                start: instance.segment_start_time,
+                end: current_time,
+                is_final: true,
+                timing: None,
+                tokens: Some(result.tokens),
+                timestamps: timestamps_abs,
+                durations,
+                translation: None,
+                speaker: None,
+                speaker_attribution: None,
+            };
+            let update = instance
+                .postprocessor
+                .process_update(build_transcript_update(
+                    segment,
+                    instance.normalization_options,
+                ));
+            emit_transcript_update(
+                emitter.as_ref(),
+                instance_id,
+                &update,
+                "flush_online",
+                Some(&instance.record_diagnostics.first_segment_emitted),
             );
+        }
 
-            instance.current_segment_id = None;
-            r.0.reset(&st.0);
-            instance.segment_start_time = current_time;
-            if let Some(label) = diagnostics_instance_label(&instance_id) {
-                info!("[Sherpa] flush_recognizer({label}) complete. mode=online");
-            }
+        record_live_metric(
+            &metrics_store,
+            build_live_metric(
+                instance_id,
+                "flush_online",
+                true,
+                buffered_samples,
+                decode_ms,
+                Some(duration_to_ms(inference_started.elapsed())),
+                None,
+            ),
+        );
+
+        instance.current_segment_id = None;
+        r.0.reset(&st.0);
+        instance.segment_start_time = current_time;
+        if let Some(label) = diagnostics_instance_label(instance_id) {
+            info!("[Sherpa] flush_recognizer({label}) complete. mode=online");
         }
     }
 
@@ -668,29 +669,29 @@ async fn feed_audio_samples_inner(
     // instances lookup removed
 
     if !instance.is_running {
-        if let Some(label) = diagnostics_instance_label(instance_id) {
-            if !instance.record_diagnostics.skipped_while_stopped_logged {
-                println!(
-                    "[Sherpa] {label} audio chunk skipped because recognizer is not running. samples={} total_samples={}",
-                    samples.len(),
-                    instance.total_samples
-                );
-                instance.record_diagnostics.skipped_while_stopped_logged = true;
-            }
+        if let Some(label) = diagnostics_instance_label(instance_id)
+            && !instance.record_diagnostics.skipped_while_stopped_logged
+        {
+            println!(
+                "[Sherpa] {label} audio chunk skipped because recognizer is not running. samples={} total_samples={}",
+                samples.len(),
+                instance.total_samples
+            );
+            instance.record_diagnostics.skipped_while_stopped_logged = true;
         }
         return Ok(());
     }
 
-    if let Some(label) = diagnostics_instance_label(instance_id) {
-        if !instance.record_diagnostics.first_sample_logged {
-            println!(
-                "[Sherpa] {label} first sample received. samples={} total_samples_before={} current_segment={}",
-                samples.len(),
-                instance.total_samples,
-                instance.current_segment_id.as_deref().unwrap_or("none")
-            );
-            instance.record_diagnostics.first_sample_logged = true;
-        }
+    if let Some(label) = diagnostics_instance_label(instance_id)
+        && !instance.record_diagnostics.first_sample_logged
+    {
+        println!(
+            "[Sherpa] {label} first sample received. samples={} total_samples_before={} current_segment={}",
+            samples.len(),
+            instance.total_samples,
+            instance.current_segment_id.as_deref().unwrap_or("none")
+        );
+        instance.record_diagnostics.first_sample_logged = true;
     }
 
     let recognizer = instance
@@ -714,19 +715,19 @@ async fn feed_audio_samples_inner(
             vad.accept_waveform(samples);
             let currently_speaking = vad.detected();
 
-            if let Some(label) = diagnostics_instance_label(instance_id) {
-                if instance.total_samples % 160000 < 2000 {
-                    // Print once every ~10 seconds
-                    println!(
-                        "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
-                        instance.total_samples,
-                        currently_speaking,
-                        instance
-                            .record_diagnostics
-                            .first_segment_emitted
-                            .load(Ordering::SeqCst)
-                    );
-                }
+            if let Some(label) = diagnostics_instance_label(instance_id)
+                && instance.total_samples % 160000 < 2000
+            {
+                // Print once every ~10 seconds
+                println!(
+                    "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
+                    instance.total_samples,
+                    currently_speaking,
+                    instance
+                        .record_diagnostics
+                        .first_segment_emitted
+                        .load(Ordering::SeqCst)
+                );
             }
 
             if instance.current_segment_id.is_none() {
@@ -1048,53 +1049,52 @@ async fn feed_audio_samples_inner(
                 let final_buffered_samples =
                     ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
-                if let Some(result) = r.0.get_result(&st.0) {
-                    if !result.text.trim().is_empty() {
-                        let text = format_transcript(&result.text, instance.punctuation.as_deref());
+                if let Some(result) = r.0.get_result(&st.0)
+                    && !result.text.trim().is_empty()
+                {
+                    let text = format_transcript(&result.text, instance.punctuation.as_deref());
 
-                        let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                            ts.iter()
-                                .map(|t| *t + instance.segment_start_time as f32)
-                                .collect::<Vec<_>>()
-                        });
-                        let durations = timestamps_abs
-                            .as_ref()
-                            .and_then(|ts| synthesize_durations(ts, current_time as f32));
+                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                        ts.iter()
+                            .map(|t| *t + instance.segment_start_time as f32)
+                            .collect::<Vec<_>>()
+                    });
+                    let durations = timestamps_abs
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                        let id = instance
-                            .current_segment_id
-                            .take()
-                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                    let id = instance
+                        .current_segment_id
+                        .take()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-                        let segment = TranscriptSegment {
-                            id,
-                            text,
-                            start: instance.segment_start_time,
-                            end: current_time,
-                            is_final: true,
-                            timing: None,
-                            tokens: Some(result.tokens),
-                            timestamps: timestamps_abs,
-                            durations,
-                            translation: None,
-                            speaker: None,
-                            speaker_attribution: None,
-                        };
-                        let update =
-                            instance
-                                .postprocessor
-                                .process_update(build_transcript_update(
-                                    segment,
-                                    instance.normalization_options,
-                                ));
-                        emit_transcript_update(
-                            emitter.as_ref(),
-                            instance_id,
-                            &update,
-                            "online_final",
-                            Some(&instance.record_diagnostics.first_segment_emitted),
-                        );
-                    }
+                    let segment = TranscriptSegment {
+                        id,
+                        text,
+                        start: instance.segment_start_time,
+                        end: current_time,
+                        is_final: true,
+                        timing: None,
+                        tokens: Some(result.tokens),
+                        timestamps: timestamps_abs,
+                        durations,
+                        translation: None,
+                        speaker: None,
+                        speaker_attribution: None,
+                    };
+                    let update = instance
+                        .postprocessor
+                        .process_update(build_transcript_update(
+                            segment,
+                            instance.normalization_options,
+                        ));
+                    emit_transcript_update(
+                        emitter.as_ref(),
+                        instance_id,
+                        &update,
+                        "online_final",
+                        Some(&instance.record_diagnostics.first_segment_emitted),
+                    );
                 }
 
                 record_live_metric(
@@ -1138,7 +1138,7 @@ async fn feed_audio_chunk_impl_inner(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples_inner(emitter, &state, &instance_id, instance, &float_samples).await
+    feed_audio_samples_inner(emitter, state, instance_id, instance, &float_samples).await
 }
 
 pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
@@ -1164,16 +1164,15 @@ pub fn log_segment_emit_diagnostics(
     };
 
     let text_len = segment.text.chars().count();
-    if let Some(first_segment_emitted) = first_segment_emitted {
-        if first_segment_emitted
+    if let Some(first_segment_emitted) = first_segment_emitted
+        && first_segment_emitted
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
-        {
-            info!(
-                "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
-                stage, segment.id, segment.is_final, text_len
-            );
-        }
+    {
+        info!(
+            "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
+            stage, segment.id, segment.is_final, text_len
+        );
     }
 
     info!(

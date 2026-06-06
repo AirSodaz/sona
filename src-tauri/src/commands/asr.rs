@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use tauri::{AppHandle, State};
 use crate::core::event::EventEmitter;
 use crate::integrations::asr::{
-    AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment,
-    AsrRuntimeMetricsSnapshot, ensure_adapter, get_provider_id,
+    AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment,
+    ensure_adapter, get_provider_id,
 };
+use std::sync::Arc;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn init_recognizer(

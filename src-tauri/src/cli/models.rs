@@ -1,9 +1,9 @@
-use clap::{Args, Subcommand};
-use std::path::{Path, PathBuf};
-use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
-use futures_util::StreamExt;
-use tokio::io::AsyncWriteExt;
 use crate::cli::transcribe::{OutputTarget, write_output};
+use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
+use clap::{Args, Subcommand};
+use futures_util::StreamExt;
+use std::path::{Path, PathBuf};
+use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CliModelSummary {
@@ -457,4 +457,3 @@ fn default_models_dir_candidates() -> Vec<PathBuf> {
         Vec::new()
     }
 }
-
