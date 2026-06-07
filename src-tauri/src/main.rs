@@ -5,31 +5,49 @@ use std::process::ExitCode;
 
 #[cfg(target_os = "windows")]
 fn fix_console(show_new_console: bool) {
+    use std::fs::OpenOptions;
+    use std::os::windows::io::AsRawHandle;
+
     unsafe {
         #[link(name = "kernel32")]
         unsafe extern "system" {
             fn AllocConsole() -> i32;
             fn AttachConsole(dwProcessId: u32) -> i32;
-            fn GetConsoleWindow() -> *mut std::ffi::c_void;
-        }
-        #[link(name = "user32")]
-        unsafe extern "system" {
-            fn ShowWindow(hwnd: *mut std::ffi::c_void, cmd: i32) -> i32;
+            fn SetStdHandle(nStdHandle: u32, hHandle: *mut std::ffi::c_void) -> i32;
         }
 
         const ATTACH_PARENT_PROCESS: u32 = 0xFFFFFFFF;
+        const STD_INPUT_HANDLE: u32 = 0xFFFFFFF6;
+        const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5;
+        const STD_ERROR_HANDLE: u32 = 0xFFFFFFF4;
+
+        let mut has_console = false;
 
         // Try to attach to parent console first (for CLI usage in terminal)
         if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
-            return;
+            has_console = true;
+        } else if show_new_console {
+            // Allocate a console to natively initialize stdout/stderr handles in the C runtime
+            // only if we explicitly want to show a console (CLI mode launched without parent console)
+            if AllocConsole() != 0 {
+                has_console = true;
+            }
         }
 
-        // Allocate a console to natively initialize stdout/stderr handles in the C runtime
-        if AllocConsole() != 0 && !show_new_console {
-            let hwnd = GetConsoleWindow();
-            if !hwnd.is_null() {
-                // Instantly hide the console window (for GUI usage from Explorer)
-                ShowWindow(hwnd, 0);
+        if has_console {
+            // Redirect stdout and stderr
+            if let Ok(conout) = OpenOptions::new().write(true).open("CONOUT$") {
+                let handle = conout.as_raw_handle() as *mut std::ffi::c_void;
+                SetStdHandle(STD_OUTPUT_HANDLE, handle);
+                SetStdHandle(STD_ERROR_HANDLE, handle);
+                std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
+            }
+
+            // Redirect stdin
+            if let Ok(conin) = OpenOptions::new().read(true).open("CONIN$") {
+                let handle = conin.as_raw_handle() as *mut std::ffi::c_void;
+                SetStdHandle(STD_INPUT_HANDLE, handle);
+                std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
             }
         }
     }
