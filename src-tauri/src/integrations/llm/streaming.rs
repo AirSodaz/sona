@@ -533,15 +533,14 @@ where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
     let mut last_usage: Option<TokenUsage> = None;
-    let cleaned_base = clean_gemini_base_url(&config.base_url);
     let is_gemini_2_5 = config.model.contains("gemini-2.5");
-
-    let url_str = format!(
-        "{}/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
-        cleaned_base, config.model, config.api_key
-    );
-    let url = LlmApiUrl::parse(&url_str)?;
-    let client = url.client(config.timeout_seconds)?;
+    let request_parts = build_gemini_generate_content_request_parts(
+        &config.base_url,
+        &config.model,
+        &config.api_key,
+        true,
+    )?;
+    let client = request_parts.url.client(config.timeout_seconds)?;
 
     let budget_tokens = match config.reasoning_level.as_deref() {
         Some("low") => 1024,
@@ -577,9 +576,15 @@ where
         }
     });
 
-    let response = client
-        .post(url.reqwest_url())
-        .header("Content-Type", "application/json")
+    let mut request = client
+        .post(request_parts.url.reqwest_url())
+        .header("Content-Type", "application/json");
+
+    for (key, value) in request_parts.headers {
+        request = request.header(key, value);
+    }
+
+    let response = request
         .json(&payload)
         .send()
         .await

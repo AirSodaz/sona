@@ -262,14 +262,13 @@ impl LlmAdapter for GeminiAdapter {
             .join("\n");
 
         if config.reasoning_enabled.unwrap_or(false) {
-            let cleaned_base = clean_gemini_base_url(&config.base_url);
             let is_gemini_2_5 = config.model.contains("gemini-2.5");
-
-            let url_str = format!(
-                "{}/v1beta/models/{}:generateContent?key={}",
-                cleaned_base, config.model, config.api_key
-            );
-            let url = LlmApiUrl::parse(&url_str)?;
+            let request_parts = build_gemini_generate_content_request_parts(
+                &config.base_url,
+                &config.model,
+                &config.api_key,
+                false,
+            )?;
 
             let budget_tokens = match config.reasoning_level.as_deref() {
                 Some("low") => 1024,
@@ -305,7 +304,13 @@ impl LlmAdapter for GeminiAdapter {
                 }
             });
 
-            let response = post_json_request(&url, vec![], payload, config.timeout_seconds).await?;
+            let response = post_json_request(
+                &request_parts.url,
+                request_parts.headers,
+                payload,
+                config.timeout_seconds,
+            )
+            .await?;
 
             let text = response
                 .pointer("/candidates/0/content/parts/0/text")
@@ -545,6 +550,45 @@ pub(crate) fn format_gemini_models_url(base_url: &str) -> String {
     let cleaned_base = clean_gemini_base_url(base_url);
 
     format!("{}/v1beta/models", cleaned_base)
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GeminiGenerateContentRequestParts {
+    pub(crate) url: LlmApiUrl,
+    pub(crate) headers: Vec<(&'static str, String)>,
+}
+
+pub(crate) fn build_gemini_generate_content_request_parts(
+    base_url: &str,
+    model: &str,
+    api_key: &str,
+    stream: bool,
+) -> Result<GeminiGenerateContentRequestParts, String> {
+    let cleaned_base = clean_gemini_base_url(base_url);
+    let model = model.trim().trim_start_matches("models/");
+    if model.is_empty() {
+        return Err("Gemini model cannot be empty".to_string());
+    }
+
+    let action = if stream {
+        "streamGenerateContent"
+    } else {
+        "generateContent"
+    };
+    let mut url = LlmApiUrl::parse(&format!(
+        "{}/v1beta/models/{}:{}",
+        cleaned_base, model, action
+    ))?;
+    if stream {
+        url = url.with_query("alt=sse")?;
+    }
+
+    let mut headers = Vec::new();
+    if !api_key.is_empty() {
+        headers.push(("x-goog-api-key", api_key.to_string()));
+    }
+
+    Ok(GeminiGenerateContentRequestParts { url, headers })
 }
 
 pub(crate) fn build_gemini_models_url(base_url: &LlmApiUrl) -> Result<LlmApiUrl, String> {

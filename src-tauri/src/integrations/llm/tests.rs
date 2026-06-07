@@ -268,6 +268,67 @@ fn gemini_models_url_accepts_common_inputs() {
 }
 
 #[test]
+fn gemini_generate_content_request_keeps_api_key_out_of_url() {
+    let request = build_gemini_generate_content_request_parts(
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+        "gemini-2.5-flash",
+        "secret-gemini-key",
+        false,
+    )
+    .expect("gemini request parts should build");
+
+    assert_eq!(
+        request.url.as_str(),
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    );
+    assert_eq!(
+        request.headers,
+        vec![("x-goog-api-key", "secret-gemini-key".to_string())]
+    );
+    assert!(!request.url.as_str().contains("secret-gemini-key"));
+    assert!(!request.url.as_str().contains("key="));
+}
+
+#[test]
+fn gemini_stream_generate_content_request_keeps_api_key_out_of_url() {
+    let request = build_gemini_generate_content_request_parts(
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "gemini-2.5-pro",
+        "secret-stream-key",
+        true,
+    )
+    .expect("gemini stream request parts should build");
+
+    assert_eq!(
+        request.url.as_str(),
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse"
+    );
+    assert_eq!(
+        request.headers,
+        vec![("x-goog-api-key", "secret-stream-key".to_string())]
+    );
+    assert!(!request.url.as_str().contains("secret-stream-key"));
+    assert!(!request.url.as_str().contains("key="));
+}
+
+#[test]
+fn gemini_generate_content_request_errors_do_not_include_api_key() {
+    let error = build_gemini_generate_content_request_parts(
+        "http://generativelanguage.googleapis.com",
+        "gemini-2.5-flash",
+        "secret-gemini-key",
+        false,
+    )
+    .expect_err("remote http should be rejected before request dispatch");
+
+    assert_eq!(
+        error,
+        "LLM API host must use https:// unless it points to localhost."
+    );
+    assert!(!error.contains("secret-gemini-key"));
+}
+
+#[test]
 fn gemini_model_filter_keeps_generate_content_models() {
     let text_model = GeminiModel {
         name: "models/gemini-2.5-flash".to_string(),
