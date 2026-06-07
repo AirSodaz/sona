@@ -41,7 +41,6 @@ describe('batchQueueHistorySync', () => {
 
     await expect(resolveSavedBatchHistoryMeta({
       historyItem: makeHistoryItem({ icon: 'system:file-audio', projectId: 'project-1' }),
-      fallbackAudioUrl: 'asset:///audio/meeting.wav',
       getAudioUrl,
     })).resolves.toEqual({
       historyId: 'history-1',
@@ -53,15 +52,14 @@ describe('batchQueueHistorySync', () => {
     expect(getAudioUrl).toHaveBeenCalledWith('history-1.wav');
   });
 
-  it('falls back to the existing queue audio URL when history audio is unavailable', async () => {
+  it('does not fall back to the queue source audio URL when history audio is unavailable', async () => {
     const getAudioUrl = vi.fn().mockResolvedValue(null);
 
     await expect(resolveSavedBatchHistoryMeta({
       historyItem: makeHistoryItem(),
-      fallbackAudioUrl: 'asset:///audio/meeting.wav',
       getAudioUrl,
     })).resolves.toEqual(expect.objectContaining({
-      audioUrl: 'asset:///audio/meeting.wav',
+      audioUrl: null,
     }));
   });
 
@@ -70,7 +68,6 @@ describe('batchQueueHistorySync', () => {
 
     await expect(resolveSavedBatchHistoryMeta({
       historyItem: makeHistoryItem({ projectId: null }),
-      fallbackAudioUrl: 'asset:///audio/meeting.wav',
       fallbackProjectId: 'queue-project',
       getAudioUrl,
     })).resolves.toEqual(expect.objectContaining({
@@ -78,15 +75,14 @@ describe('batchQueueHistorySync', () => {
     }));
   });
 
-  it('falls back to the existing queue audio URL when history audio lookup fails', async () => {
+  it('does not fall back to the queue source audio URL when history audio lookup fails', async () => {
     const getAudioUrl = vi.fn().mockRejectedValue(new Error('missing audio'));
 
     await expect(resolveSavedBatchHistoryMeta({
       historyItem: makeHistoryItem(),
-      fallbackAudioUrl: 'asset:///audio/meeting.wav',
       getAudioUrl,
     })).resolves.toEqual(expect.objectContaining({
-      audioUrl: 'asset:///audio/meeting.wav',
+      audioUrl: null,
     }));
   });
 

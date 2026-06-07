@@ -30,8 +30,8 @@ export interface BatchQueueItem {
     segments: TranscriptSegment[];
     /** Error message if status is 'error'. */
     errorMessage?: string;
-    /** Asset URL for audio playback. */
-    audioUrl?: string;
+    /** Managed asset URL for audio playback, or null until a history copy is available. */
+    audioUrl?: string | null;
     /** ID of the saved history item for this queue item. */
     historyId?: string;
     /** Project context captured when this queue item was created. */

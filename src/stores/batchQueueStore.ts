@@ -35,7 +35,6 @@ import {
     applySavedBatchHistoryToQueue,
     resolveSavedBatchHistoryMeta,
 } from '../services/batch/batchQueueHistorySync';
-import { convertFileSrc } from '../services/tauri/platform/assets';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -169,7 +168,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 status: 'pending',
                 progress: 0,
                 segments: [],
-                audioUrl: convertFileSrc(filePath),
+                audioUrl: null,
                 projectId: activeProjectId,
                 origin: options?.origin || 'manual',
                 automationRuleId: options?.automationRuleId,
@@ -256,7 +255,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             applySavedHistory: async (id, item, historyItem) => {
                 const savedMeta = await resolveSavedBatchHistoryMeta({
                     historyItem,
-                    fallbackAudioUrl: item.audioUrl,
                     fallbackProjectId: item.projectId,
                     getAudioUrl: (audioPath) => historyService.getAudioUrl(audioPath),
                 });

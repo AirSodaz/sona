@@ -11,14 +11,12 @@ export interface SavedBatchHistoryMeta {
 
 interface ResolveSavedBatchHistoryMetaInput {
   historyItem: HistoryItem;
-  fallbackAudioUrl?: string | null;
   fallbackProjectId?: string | null;
   getAudioUrl: (audioPath: string) => Promise<string | null | undefined>;
 }
 
 export async function resolveSavedBatchHistoryMeta({
   historyItem,
-  fallbackAudioUrl,
   fallbackProjectId,
   getAudioUrl,
 }: ResolveSavedBatchHistoryMetaInput): Promise<SavedBatchHistoryMeta> {
@@ -37,7 +35,7 @@ export async function resolveSavedBatchHistoryMeta({
     title: historyItem.title,
     icon: historyItem.icon || null,
     projectId: historyItem.projectId ?? fallbackProjectId ?? null,
-    audioUrl: historyAudioUrl || fallbackAudioUrl || null,
+    audioUrl: historyAudioUrl || null,
   };
 }
 

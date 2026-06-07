@@ -1394,6 +1394,37 @@ mod tests {
     }
 
     #[test]
+    fn resolve_audio_path_rejects_paths_outside_history_dir() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        fs::write(repository.audio_path("safe.wav").unwrap(), b"audio").unwrap();
+
+        assert!(
+            repository
+                .resolve_audio_path("safe.wav")
+                .unwrap()
+                .unwrap()
+                .ends_with("safe.wav")
+        );
+        assert_eq!(
+            repository.resolve_audio_path("../outside.wav").unwrap(),
+            None
+        );
+        assert_eq!(
+            repository.resolve_audio_path("nested/outside.wav").unwrap(),
+            None
+        );
+        assert_eq!(
+            repository
+                .resolve_audio_path("C:\\Users\\asoda\\secret.wav")
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
     fn history_delete_items_removes_snapshot_versions() {
         let root = tempdir().unwrap();
         let repository = HistoryRepository::new(root.path().to_path_buf());

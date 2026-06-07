@@ -180,7 +180,7 @@ describe('recoveryService', () => {
         );
     });
 
-    it('adapts recovered queue items back into batch queue items for resume', () => {
+    it('adapts recovered queue items back into batch queue items without exposing source files as assets', () => {
         const segment = {
             id: 'segment-1',
             text: 'Hello',
@@ -214,7 +214,7 @@ describe('recoveryService', () => {
             recoveryId: 'recovery-automation-1',
             status: 'pending',
             progress: 0,
-            audioUrl: 'asset://C:\\watch\\meeting.wav',
+            audioUrl: null,
             origin: 'automation',
             lastKnownStage: 'queued',
             automationRuleId: 'rule-1',

@@ -31,7 +31,7 @@ import {
     historyUpdateProjectAssignments,
     historyUpdateTranscript,
 } from './tauri/history';
-import { convertFileSrc } from './tauri/platform/assets';
+import { convertManagedAudioFileSrc } from './tauri/platform/assets';
 
 export interface LiveRecordingDraftHandle {
     item: HistoryItem;
@@ -94,7 +94,7 @@ export interface HistoryServicePorts {
     historyUpdateItemMeta: typeof historyUpdateItemMeta;
     historyUpdateProjectAssignments: typeof historyUpdateProjectAssignments;
     historyUpdateTranscript: typeof historyUpdateTranscript;
-    convertFileSrc: typeof convertFileSrc;
+    convertManagedAudioFileSrc: typeof convertManagedAudioFileSrc;
 }
 
 export class HistoryService {
@@ -357,7 +357,7 @@ export class HistoryService {
     async getAudioUrl(filename: string): Promise<string | null> {
         try {
             const fullPath = await this.getAudioAbsolutePath(filename);
-            return fullPath ? this.ports.convertFileSrc(fullPath) : null;
+            return fullPath ? this.ports.convertManagedAudioFileSrc(fullPath) : null;
         } catch (error) {
             logger.error('Failed to get audio URL:', error);
             return null;
@@ -399,5 +399,5 @@ export const historyService = createHistoryService({
     historyUpdateItemMeta,
     historyUpdateProjectAssignments,
     historyUpdateTranscript,
-    convertFileSrc,
+    convertManagedAudioFileSrc,
 });

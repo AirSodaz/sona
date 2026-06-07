@@ -34,7 +34,7 @@ import type {
     RecordSessionPhase,
 } from './audioRecorder/types';
 import type { LiveRecordingDraftHandle } from '../services/historyService';
-import { convertFileSrc } from '../services/tauri/platform/assets';
+import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
 import { remove, writeFile } from '../services/tauri/platform/fs';
 
 export type {
@@ -177,7 +177,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         ),
         writeFile: (filePath, contents) => writeFile(filePath, contents),
         removeFile: (filePath) => remove(filePath),
-        fileSrcFromPath: convertFileSrc,
+        fileSrcFromPath: convertManagedAudioFileSrc,
     }), []);
 
     const handleWebRecordingStop = useCallback(async (blob: Blob, mimeType: string) => {

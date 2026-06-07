@@ -1,3 +1,5 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 
-export { convertFileSrc };
+export function convertManagedAudioFileSrc(filePath: string): string {
+  return convertFileSrc(filePath);
+}

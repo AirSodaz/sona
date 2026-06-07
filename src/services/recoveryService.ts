@@ -6,7 +6,6 @@ import {
     recoveryPersistQueueSnapshot,
     recoverySaveSnapshot,
 } from './tauri/recovery';
-import { convertFileSrc } from './tauri/platform/assets';
 
 const RECOVERY_VERSION = 1;
 const RECOVERY_WRITE_DEBOUNCE_MS = 120;
@@ -107,7 +106,7 @@ export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
         status: 'pending',
         progress: 0,
         segments: Array.isArray(item.segments) ? item.segments : [],
-        audioUrl: convertFileSrc(item.filePath),
+        audioUrl: null,
         historyId: item.historyId,
         historyTitle: item.historyTitle,
         projectId: item.projectId,

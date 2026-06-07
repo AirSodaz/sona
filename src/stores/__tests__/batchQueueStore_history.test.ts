@@ -315,7 +315,7 @@ describe('batchQueueStore History Integration', () => {
         }));
     });
 
-    it('keeps the queue item audio URL when saved history audio cannot be resolved', async () => {
+    it('does not fall back to an external asset URL when saved history audio cannot be resolved', async () => {
         const file = '/path/to/fallback.wav';
         const mockSegments = [
             { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },
@@ -349,7 +349,7 @@ describe('batchQueueStore History Integration', () => {
         expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
             sourceHistoryId: 'history-fallback',
             title: 'Batch fallback.wav',
-            audioUrl: 'asset:///path/to/fallback.wav',
+            audioUrl: null,
         }));
     });
 

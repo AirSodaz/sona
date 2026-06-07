@@ -90,7 +90,7 @@ describe('batchQueueStore', () => {
         taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(false);
     });
 
-    it('should automatically set active item and sync to transcript store when adding files', () => {
+    it('does not expose external batch files through the asset protocol when adding files', () => {
         const files = ['/path/to/test.wav'];
 
         // Action
@@ -103,7 +103,8 @@ describe('batchQueueStore', () => {
 
         // Assert Transcript Store State
         const transcriptState = useTranscriptStore.getState();
-        expect(transcriptState.audioUrl).toBe('asset:///path/to/test.wav');
+        expect(queueState.queueItems[0].audioUrl).toBeNull();
+        expect(transcriptState.audioUrl).toBeNull();
         expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
             id: 'batch-test-uuid-123',
             kind: 'batchImport',
