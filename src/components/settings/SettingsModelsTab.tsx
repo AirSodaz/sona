@@ -70,7 +70,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
     const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
-    const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'cpu';
+    const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'auto';
 
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
@@ -545,8 +545,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         <Dropdown
                             id="settings-gpu-acceleration"
                             value={gpuAcceleration}
-                            onChange={(value) => updateConfig({ gpuAcceleration: value as 'cpu' | 'cuda' | 'coreml' | 'directml' })}
+                            onChange={(value) => updateConfig({ gpuAcceleration: value as 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml' })}
                             options={[
+                                { value: 'auto', label: t('settings.gpu_acceleration_auto', { defaultValue: 'Auto' }) },
                                 { value: 'cpu', label: t('settings.value_off', { defaultValue: 'Off' }) },
                                 { value: 'cuda', label: 'CUDA' },
                                 { value: 'coreml', label: 'CoreML' },

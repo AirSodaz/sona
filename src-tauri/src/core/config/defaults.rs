@@ -56,6 +56,7 @@ pub fn default_config() -> Value {
         ("batchVadEnabled", json!(true)),
         ("vadBufferSize", json!(5)),
         ("maxConcurrent", json!(2)),
+        ("gpuAcceleration", json!("auto")),
         ("llmSettings", create_llm_settings()),
         ("summaryEnabled", json!(true)),
         (

@@ -934,6 +934,7 @@
         "max_concurrent_label": "Max Concurrent Transcriptions",
         "max_concurrent_hint": "Number of files to transcribe concurrently.",
         "gpu_acceleration_label": "GPU Acceleration",
+        "gpu_acceleration_auto": "Auto",
         "gpu_acceleration_hint": "Hardware acceleration for local models. Note: CoreML is for Apple Silicon.",
         "model_not_installed": "Please download the model first from Model Settings.",
         "transcription_settings": "Transcription Settings",

@@ -152,8 +152,8 @@ export interface TranscriptionConfig {
   vadBufferSize?: number;
   /** Max concurrent transcription tasks. Default: 2. */
   maxConcurrent?: number;
-  /** GPU Acceleration for sherpa-onnx (local models). Default: 'cpu' */
-  gpuAcceleration?: 'cpu' | 'cuda' | 'coreml' | 'directml';
+  /** GPU Acceleration for sherpa-onnx (local models). Default: 'auto' */
+  gpuAcceleration?: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
 }
 
 // ---------------------------------------------------------------------------

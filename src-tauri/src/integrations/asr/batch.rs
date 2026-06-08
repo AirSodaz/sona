@@ -73,11 +73,9 @@ where
         &request.language,
         request.hotwords.clone(),
     )?;
-    let recognizer = Recognizer::new(
-        config_type,
-        request.num_threads,
-        request.gpu_acceleration.clone(),
-    )?;
+    let resolved_gpu =
+        crate::app::hardware::resolve_gpu_acceleration(request.gpu_acceleration.as_deref()).await;
+    let recognizer = Recognizer::new(config_type, request.num_threads, resolved_gpu.clone())?;
     let model_load_ms = duration_to_ms(model_load_started.elapsed());
     let rss_after_mb = capture_process_memory_mb();
 

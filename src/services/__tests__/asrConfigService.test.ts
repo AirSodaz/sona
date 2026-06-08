@@ -148,6 +148,7 @@ describe('asrConfigService', () => {
       punctuationModel: null,
       vadBuffer: 8,
       hotwords: 'Sona',
+      gpuAcceleration: 'auto',
       normalizationOptions: {
         enableTimeline: true,
       },
@@ -185,10 +186,21 @@ describe('asrConfigService', () => {
       punctuationModel: 'C:/models/punct',
       vadBuffer: 8,
       batchSegmentationMode: 'vad',
+      gpuAcceleration: 'auto',
     });
     expect((request as any).fileConfig).toEqual({
       model: 'model.onnx',
       tokens: 'tokens.txt',
+    });
+  });
+
+  it('resolves a local sherpa request with custom gpuAcceleration configuration', () => {
+    const request = resolveAsrTranscriptionRequest(buildAsrConfig({
+      gpuAcceleration: 'cuda',
+    }), 'live');
+
+    expect(request).toMatchObject({
+      gpuAcceleration: 'cuda',
     });
   });
 

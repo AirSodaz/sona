@@ -103,6 +103,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   batchVadEnabled: true,
   vadBufferSize: 5,
   maxConcurrent: 2,
+  gpuAcceleration: 'auto',
 
   // LLM Assistant
   llmSettings: createLlmSettings(),
@@ -194,7 +195,7 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
   'language', 'enableTimeline', 'enableITN',
-  'batchVadEnabled', 'vadBufferSize', 'maxConcurrent',
+  'batchVadEnabled', 'vadBufferSize', 'maxConcurrent', 'gpuAcceleration',
 ];
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [

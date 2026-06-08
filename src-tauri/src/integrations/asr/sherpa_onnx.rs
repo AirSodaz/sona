@@ -324,9 +324,12 @@ pub async fn init_recognizer_impl(
     postprocess_options: Option<TranscriptPostprocessOptions>,
     gpu_acceleration: Option<String>,
 ) -> Result<Arc<LocalSherpaSession>, String> {
+    let resolved_gpu =
+        crate::app::hardware::resolve_gpu_acceleration(gpu_acceleration.as_deref()).await;
+
     info!(
-        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?}",
-        punctuation_model, vad_model, hotwords, gpu_acceleration
+        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} resolved_gpu={:?}",
+        punctuation_model, vad_model, hotwords, gpu_acceleration, resolved_gpu
     );
 
     let config_key = ModelConfigKey {
@@ -363,7 +366,7 @@ pub async fn init_recognizer_impl(
             let r = Arc::new(Recognizer::new(
                 config_type,
                 num_threads,
-                gpu_acceleration.clone(),
+                resolved_gpu.clone(),
             )?);
             pool.insert(config_key, r.clone());
             r

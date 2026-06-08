@@ -175,7 +175,7 @@ export class AsrConfigService {
       ...(slot === 'batch' ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' } : {}),
       modelType: modelInfo?.type || 'sensevoice',
       fileConfig: modelInfo?.fileConfig,
-      gpuAcceleration: config.gpuAcceleration ?? 'cpu',
+      gpuAcceleration: config.gpuAcceleration ?? 'auto',
     };
   }
 

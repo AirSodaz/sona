@@ -30,6 +30,46 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
     }
 }
 
+pub async fn resolve_gpu_acceleration(gpu_acceleration: Option<&str>) -> Option<String> {
+    let gpu = gpu_acceleration?;
+    if gpu != "auto" {
+        return Some(gpu.to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if std::env::consts::ARCH == "aarch64" {
+            log::info!("[hardware] Auto-resolved GPU acceleration: coreml");
+            Some("coreml".to_string())
+        } else {
+            log::info!("[hardware] Auto-resolved GPU acceleration: cpu");
+            Some("cpu".to_string())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if check_gpu_availability().await.unwrap_or(false) {
+            log::info!("[hardware] Auto-resolved GPU acceleration: cuda");
+            Some("cuda".to_string())
+        } else {
+            log::info!("[hardware] Auto-resolved GPU acceleration: directml");
+            Some("directml".to_string())
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        if check_gpu_availability().await.unwrap_or(false) {
+            log::info!("[hardware] Auto-resolved GPU acceleration: cuda");
+            Some("cuda".to_string())
+        } else {
+            log::info!("[hardware] Auto-resolved GPU acceleration: cpu");
+            Some("cpu".to_string())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -39,5 +79,17 @@ mod tests {
         let result = check_gpu_availability().await;
         // Verify it returns Ok result (Ok(true) or Ok(false))
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_gpu_acceleration() {
+        let result = resolve_gpu_acceleration(Some("cuda")).await;
+        assert_eq!(result, Some("cuda".to_string()));
+
+        let result = resolve_gpu_acceleration(Some("cpu")).await;
+        assert_eq!(result, Some("cpu".to_string()));
+
+        let result = resolve_gpu_acceleration(Some("auto")).await;
+        assert!(result.is_some());
     }
 }
