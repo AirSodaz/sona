@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_THREADS: i32 = 4;
 pub const DEFAULT_LANGUAGE: &str = "auto";
 pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
+pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
+const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
 
 #[derive(Debug, Args)]
 #[command(
@@ -81,6 +83,13 @@ pub struct TranscribeArgs {
     /// Custom hotwords for ASR (currently supported by Transducer and Qwen3 models).
     #[arg(long, help = "Custom hotwords, comma separated")]
     hotwords: Option<String>,
+    /// Recognizer GPU acceleration provider.
+    #[arg(
+        long,
+        value_name = "PROVIDER",
+        help = "Recognizer GPU acceleration provider: auto, cpu, cuda, coreml, or directml"
+    )]
+    gpu_acceleration: Option<String>,
     /// Disables ITN.
     #[arg(
         long,
@@ -117,6 +126,7 @@ pub struct TranscribeCliOptions {
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
     pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
     pub vad_buffer: Option<f32>,
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
@@ -152,6 +162,8 @@ pub fn resolve_transcribe_options(
             OutputTarget::File(path) => Some(path.as_path()),
         },
     )?;
+    let gpu_acceleration =
+        resolve_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
     let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
@@ -228,7 +240,7 @@ pub fn resolve_transcribe_options(
                 crate::integrations::asr::TranscriptPostprocessOptions::default(),
             )
             .map_err(|e| e.to_string())?,
-            gpu_acceleration: None,
+            gpu_acceleration,
         },
     })
 }
@@ -260,6 +272,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
             threads: args.threads,
             enable_itn,
             hotwords: args.hotwords,
+            gpu_acceleration: args.gpu_acceleration,
             vad_buffer: args.vad_buffer,
             save_wav: args.save_wav,
             quiet: args.quiet,
@@ -329,6 +342,20 @@ fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     }
 }
 
+fn resolve_gpu_acceleration(value: Option<String>) -> Result<Option<String>, String> {
+    let value = value.unwrap_or_else(|| DEFAULT_GPU_ACCELERATION.to_string());
+    let normalized = value.trim().to_ascii_lowercase();
+
+    if GPU_ACCELERATION_VALUES.contains(&normalized.as_str()) {
+        Ok(Some(normalized))
+    } else {
+        Err(format!(
+            "gpu_acceleration must be one of {}.",
+            GPU_ACCELERATION_VALUES.join(", ")
+        ))
+    }
+}
+
 fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
     let model =
         find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
@@ -386,6 +413,7 @@ pub struct CliConfigFile {
     pub enable_itn: Option<bool>,
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
+    pub gpu_acceleration: Option<String>,
 }
 
 /// Loads a TOML configuration file for the CLI.
@@ -416,6 +444,7 @@ mod tests {
             threads: None,
             enable_itn: None,
             hotwords: None,
+            gpu_acceleration: None,
             vad_buffer: None,
             save_wav: None,
             quiet: false,
@@ -472,6 +501,81 @@ mod tests {
                 .to_string_lossy()
                 .to_string()
         );
+    }
+
+    #[test]
+    fn defaults_gpu_acceleration_to_auto() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+
+        assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("auto"));
+    }
+
+    #[test]
+    fn config_file_gpu_acceleration_is_used() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        let config_path = dir.path().join("sona-cli.toml");
+        fs::write(&config_path, "gpu_acceleration = \"cpu\"\n").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved =
+            resolve_transcribe_options(cli, Some(load_config_file(&config_path).unwrap())).unwrap();
+
+        assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("cpu"));
+    }
+
+    #[test]
+    fn explicit_cli_gpu_acceleration_overrides_config_file() {
+        let dir = tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+        cli.gpu_acceleration = Some("cuda".to_string());
+
+        let resolved = resolve_transcribe_options(
+            cli,
+            Some(CliConfigFile {
+                gpu_acceleration: Some("cpu".to_string()),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("cuda"));
+    }
+
+    #[test]
+    fn invalid_gpu_acceleration_fails_before_model_resolution() {
+        let mut cli = temp_cli_options();
+        cli.model_id = Some("not-a-real-model".to_string());
+        cli.gpu_acceleration = Some("vulkan".to_string());
+
+        let error = resolve_transcribe_options(cli, None).unwrap_err();
+
+        assert!(error.contains("gpu_acceleration"));
+        assert!(error.contains("auto, cpu, cuda, coreml, directml"));
+        assert!(!error.contains("Unknown model id"));
     }
 
     #[test]

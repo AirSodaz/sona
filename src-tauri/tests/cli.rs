@@ -85,6 +85,7 @@ fn transcribe_help_mentions_key_examples() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--model-id"));
     assert!(stdout.contains("--vad-model-id"));
+    assert!(stdout.contains("--gpu-acceleration"));
     assert!(stdout.contains("sample.srt"));
     assert!(stdout.contains("Offline preset model id to use for transcription"));
 }
@@ -251,6 +252,27 @@ fn unknown_model_id_returns_failure() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn invalid_gpu_acceleration_returns_failure_before_model_resolution() {
+    let output = cli_command()
+        .args([
+            "transcribe",
+            "sample.wav",
+            "--gpu-acceleration",
+            "vulkan",
+            "--model-id",
+            "not-a-real-model",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("gpu_acceleration"));
+    assert!(stderr.contains("auto, cpu, cuda, coreml, directml"));
+    assert!(!stderr.contains("Unknown model id"));
 }
 
 #[test]

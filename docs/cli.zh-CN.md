@@ -81,6 +81,7 @@ language = "auto"
 threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
+gpu_acceleration = "auto"
 format = "srt"
 ```
 
@@ -94,9 +95,13 @@ format = "srt"
 - `threads`
 - `enable_itn`
 - `vad_buffer_size`
+- `gpu_acceleration`
 - `format`
 
 命令行标志会覆盖配置文件中的值。
+
+`gpu_acceleration` 默认是 `auto`，支持 `auto`、`cpu`、`cuda`、`coreml` 或 `directml`。
+如果要显式关闭 GPU 加速，请使用 `cpu`。
 
 ## 必需的伴生模型
 
@@ -150,9 +155,17 @@ sona transcribe <input>
   --threads <n>
   --enable-itn
   --disable-itn
+  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
   --vad-buffer <seconds>
   --save-wav <path>
   --quiet
+```
+
+示例：
+
+```bash
+sona transcribe ./sample.wav --config ./sona-cli.toml --gpu-acceleration auto
+sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad --gpu-acceleration cuda
 ```
 
 ### `serve`

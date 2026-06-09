@@ -534,6 +534,7 @@ async fn start_worker_loop(
                     threads: None,
                     enable_itn: None,
                     hotwords: job.hotwords.clone(),
+                    gpu_acceleration: None,
                     vad_buffer: None,
                     save_wav: None,
                     quiet: true,

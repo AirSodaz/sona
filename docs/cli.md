@@ -81,6 +81,7 @@ language = "auto"
 threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
+gpu_acceleration = "auto"
 format = "srt"
 ```
 
@@ -94,9 +95,13 @@ Supported keys:
 - `threads`
 - `enable_itn`
 - `vad_buffer_size`
+- `gpu_acceleration`
 - `format`
 
 Command-line flags override config file values.
+
+`gpu_acceleration` defaults to `auto` and accepts `auto`, `cpu`, `cuda`, `coreml`, or `directml`.
+Use `cpu` to disable GPU acceleration explicitly.
 
 ## Required Companion Models
 
@@ -150,9 +155,17 @@ sona transcribe <input>
   --threads <n>
   --enable-itn
   --disable-itn
+  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
   --vad-buffer <seconds>
   --save-wav <path>
   --quiet
+```
+
+Examples:
+
+```bash
+sona transcribe ./sample.wav --config ./sona-cli.toml --gpu-acceleration auto
+sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad --gpu-acceleration cuda
 ```
 
 ### `serve`
