@@ -1,9 +1,9 @@
 {
   "name": "sona",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
-  "packageManager": "pnpm@11.0.3",
+  "packageManager": "pnpm@11.5.2+sha512.71c631e382066efc25625d5cf029075de07b61b37f6e27350fbd84b1bda5864c8c1967adc280776b45c30a715c0359a3be08fef42d5bb09e2b99029979692916",
   "scripts": {
     "dev": "vite",
     "prepare": "husky",
@@ -48,8 +48,8 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.3",
-    "@commitlint/config-conventional": "^20.5.3",
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@tauri-apps/cli": "^2.11.2",
@@ -66,12 +66,13 @@
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "yaml": "^2.9.0"
   },
   "lint-staged": {
     "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "pnpm run lint:staged --"
