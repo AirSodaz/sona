@@ -12,7 +12,7 @@ pub const DEFAULT_THREADS: i32 = 4;
 pub const DEFAULT_LANGUAGE: &str = "auto";
 pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
 pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
-const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
+pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
 
 #[derive(Debug, Args)]
 #[command(
@@ -163,7 +163,7 @@ pub fn resolve_transcribe_options(
         },
     )?;
     let gpu_acceleration =
-        resolve_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
+        resolve_cli_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
     let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
@@ -342,7 +342,7 @@ fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     }
 }
 
-fn resolve_gpu_acceleration(value: Option<String>) -> Result<Option<String>, String> {
+pub fn resolve_cli_gpu_acceleration(value: Option<String>) -> Result<Option<String>, String> {
     let value = value.unwrap_or_else(|| DEFAULT_GPU_ACCELERATION.to_string());
     let normalized = value.trim().to_ascii_lowercase();
 

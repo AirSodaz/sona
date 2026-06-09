@@ -18,8 +18,10 @@ API 服务可以通过以下两种方式启动：
 ### 2. 命令行无头模式
 您还可以直接通过命令行无头运行 Sona：
 ```bash
-sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2 --gpu-acceleration auto
 ```
+
+GPU 硬件加速通过 GUI 模型设置或 `sona serve --gpu-acceleration` 作为服务级默认值配置。批量和流式 API 请求不支持按请求覆盖 GPU 配置。
 
 ---
 

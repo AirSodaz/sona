@@ -18,8 +18,10 @@ Navigate to **Settings -> API Server** (or **API 服务** in Chinese) and config
 ### 2. Headless CLI Mode
 You can also launch Sona in pure headless CLI server mode from the terminal:
 ```bash
-sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2 --gpu-acceleration auto
 ```
+
+GPU acceleration is configured as a server-level default through GUI model settings or `sona serve --gpu-acceleration`. Batch and streaming API requests do not accept a per-request GPU override.
 
 ---
 

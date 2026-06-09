@@ -181,10 +181,11 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     apiKey: config.httpServerApiKey ?? '',
                     maxConcurrent: config.httpServerMaxConcurrent ?? 2,
                     maxQueueSize: config.httpServerMaxQueueSize ?? 100,
-                    maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 1000,
+                    maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
                     jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
                     maxStreaming: 2,
                     ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+                    gpuAcceleration: config.gpuAcceleration ?? 'auto',
                 }).then((normalizedWhitelist) => {
                     if (typeof normalizedWhitelist === 'string' && normalizedWhitelist !== config.httpServerIpWhitelist) {
                         setConfig({ httpServerIpWhitelist: normalizedWhitelist });
@@ -220,6 +221,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
         config.httpServerMaxUploadSizeMB,
         config.httpServerJobTtlMinutes,
         config.httpServerIpWhitelist,
+        config.gpuAcceleration,
         setConfig,
         t,
     ]);

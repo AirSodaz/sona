@@ -5,6 +5,7 @@ use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio;
 
@@ -343,7 +344,10 @@ async fn handle_local_streaming_socket(
         }
     };
 
-    let vad = match crate::integrations::asr::load_vad(Some(vad_model_id)) {
+    let vad_model_path = resolve_vad_model_path(&state.models_dir, &vad_model_id);
+    let vad = match crate::integrations::asr::load_vad(Some(
+        vad_model_path.to_string_lossy().to_string(),
+    )) {
         Some(v) => v,
         None => {
             let _ = socket
@@ -506,7 +510,15 @@ async fn load_recognizer(
         return Ok(r.clone());
     }
 
-    let recognizer = Arc::new(crate::integrations::asr::Recognizer::new(config, 2, None)?);
+    let resolved_gpu = crate::app::hardware::resolve_gpu_acceleration(
+        state.transcription_defaults.gpu_acceleration.as_deref(),
+    )
+    .await;
+    let recognizer = Arc::new(crate::integrations::asr::Recognizer::new(
+        config,
+        2,
+        resolved_gpu,
+    )?);
     if !matches!(
         recognizer.inner,
         crate::integrations::asr::RecognizerInner::Offline(_)
@@ -516,6 +528,12 @@ async fn load_recognizer(
 
     pool.insert(key, recognizer.clone());
     Ok(recognizer)
+}
+
+pub(crate) fn resolve_vad_model_path(models_dir: &Path, vad_model_id_or_path: &str) -> PathBuf {
+    crate::core::preset_models::find_preset_model(vad_model_id_or_path)
+        .map(|model| model.resolve_install_path(models_dir))
+        .unwrap_or_else(|| PathBuf::from(vad_model_id_or_path))
 }
 
 fn run_offline_inference_standalone(
@@ -581,5 +599,28 @@ fn run_offline_inference_standalone(
         })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_default_vad_id_to_installed_model_path() {
+        let models_dir = Path::new("C:/models");
+
+        let path = resolve_vad_model_path(models_dir, "silero-vad");
+
+        assert_eq!(path, PathBuf::from("C:/models").join("silero_vad.onnx"));
+    }
+
+    #[test]
+    fn preserves_explicit_vad_path() {
+        let models_dir = Path::new("C:/models");
+
+        let path = resolve_vad_model_path(models_dir, "D:/custom/vad.onnx");
+
+        assert_eq!(path, PathBuf::from("D:/custom/vad.onnx"));
     }
 }

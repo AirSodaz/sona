@@ -12,7 +12,7 @@ use ipnet::IpNet;
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{RwLock, mpsc};
@@ -24,6 +24,45 @@ type HmacSha256 = Hmac<Sha256>;
 
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
+
+pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiServerTranscriptionDefaults {
+    pub gpu_acceleration: Option<String>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+}
+
+impl Default for ApiServerTranscriptionDefaults {
+    fn default() -> Self {
+        Self {
+            gpu_acceleration: Some(crate::cli::DEFAULT_GPU_ACCELERATION.to_string()),
+            vad_model_id: Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            punctuation_model_id: Some(
+                crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
+            ),
+        }
+    }
+}
+
+pub struct ApiServerRuntimeConfig {
+    pub app: Option<tauri::AppHandle>,
+    pub host: String,
+    pub port: u16,
+    pub api_key: String,
+    pub temp_dir: PathBuf,
+    pub models_dir: PathBuf,
+    pub max_concurrent: usize,
+    pub max_queue_size: usize,
+    pub max_upload_size_mb: usize,
+    pub job_ttl_minutes: u64,
+    pub max_streaming: usize,
+    pub ip_whitelist: Arc<Vec<IpNet>>,
+    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
+    pub transcription_defaults: ApiServerTranscriptionDefaults,
+    pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+}
 
 pub struct ApiServerController {
     pub shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
@@ -87,6 +126,7 @@ pub async fn start_api_server(
     job_ttl_minutes: u64,
     max_streaming: usize,
     ip_whitelist: String,
+    gpu_acceleration: String,
 ) -> Result<String, String> {
     let parsed_whitelist = parse_ip_whitelist(&ip_whitelist)?;
     let normalized_whitelist = parsed_whitelist
@@ -95,6 +135,10 @@ pub async fn start_api_server(
         .collect::<Vec<_>>()
         .join(",");
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+    let transcription_defaults = ApiServerTranscriptionDefaults {
+        gpu_acceleration: crate::cli::resolve_cli_gpu_acceleration(Some(gpu_acceleration))?,
+        ..Default::default()
+    };
 
     let mut sender_lock = controller.shutdown_sender.lock().await;
 
@@ -115,11 +159,11 @@ pub async fn start_api_server(
     let online_asr_config = controller.online_asr_config.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_server(
-            Some(app.clone()),
-            &host,
+        if let Err(e) = run_server(ApiServerRuntimeConfig {
+            app: Some(app.clone()),
+            host,
             port,
-            &api_key,
+            api_key,
             temp_dir,
             models_dir,
             max_concurrent,
@@ -127,10 +171,11 @@ pub async fn start_api_server(
             max_upload_size_mb,
             job_ttl_minutes,
             max_streaming,
-            parsed_arc,
+            ip_whitelist: parsed_arc,
             online_asr_config,
-            rx,
-        )
+            transcription_defaults,
+            shutdown_rx: rx,
+        })
         .await
         {
             log::error!("HTTP API Server failed: {}", e);
@@ -172,6 +217,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         let mut job_ttl_minutes = 60;
         let mut max_streaming = 2;
         let mut ip_whitelist = "localhost".to_string();
+        let mut gpu_acceleration = crate::cli::DEFAULT_GPU_ACCELERATION.to_string();
 
         if let Ok(content) = std::fs::read_to_string(&config_path)
             && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
@@ -222,6 +268,9 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             if let Some(ip_list) = config.get("httpServerIpWhitelist").and_then(|v| v.as_str()) {
                 ip_whitelist = ip_list.to_string();
             }
+            if let Some(gpu) = config.get("gpuAcceleration").and_then(|v| v.as_str()) {
+                gpu_acceleration = gpu.to_string();
+            }
         }
 
         if http_server_enabled {
@@ -247,6 +296,20 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 }
             };
             let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+            let transcription_defaults =
+                match crate::cli::resolve_cli_gpu_acceleration(Some(gpu_acceleration)) {
+                    Ok(gpu_acceleration) => ApiServerTranscriptionDefaults {
+                        gpu_acceleration,
+                        ..Default::default()
+                    },
+                    Err(e) => {
+                        log::error!(
+                            "HTTP API Server failed to start due to invalid GPU acceleration: {}",
+                            e
+                        );
+                        return;
+                    }
+                };
 
             let (tx, rx) = tokio::sync::oneshot::channel();
             let controller = app_handle.state::<ApiServerController>();
@@ -254,11 +317,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
 
             let online_asr_config = controller.online_asr_config.clone();
 
-            if let Err(e) = run_server(
-                Some(app_handle.clone()),
-                &host,
+            if let Err(e) = run_server(ApiServerRuntimeConfig {
+                app: Some(app_handle.clone()),
+                host,
                 port,
-                &api_key,
+                api_key,
                 temp_dir,
                 models_dir,
                 max_concurrent,
@@ -266,10 +329,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 max_upload_size_mb,
                 job_ttl_minutes,
                 max_streaming,
-                parsed_arc,
+                ip_whitelist: parsed_arc,
                 online_asr_config,
-                rx,
-            )
+                transcription_defaults,
+                shutdown_rx: rx,
+            })
             .await
             {
                 log::error!("HTTP API Server failed: {}", e);
@@ -447,6 +511,7 @@ async fn start_worker_loop(
     models_dir: PathBuf,
     max_concurrent: usize,
     app: Option<tauri::AppHandle>,
+    transcription_defaults: ApiServerTranscriptionDefaults,
 ) {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
@@ -455,6 +520,7 @@ async fn start_worker_loop(
         let models_dir = models_dir.clone();
         let semaphore = semaphore.clone();
         let app_for_spawn = app.clone();
+        let defaults = transcription_defaults.clone();
 
         tokio::spawn(async move {
             let app = app_for_spawn;
@@ -512,33 +578,13 @@ async fn start_worker_loop(
                             Err(e) => JobStatus::Failed(e.to_string()),
                         }
                     } else {
-                        JobStatus::Failed("AppHandle missing".to_string())
+                        JobStatus::Failed(CLI_ONLINE_ASR_BATCH_UNAVAILABLE.to_string())
                     }
                 } else {
                     JobStatus::Failed("Missing online provider ID".to_string())
                 }
             } else {
-                let options = TranscribeCliOptions {
-                    input: job.file_path.clone(),
-                    output: None,
-                    format: None,
-                    language: if job.language == "auto" {
-                        None
-                    } else {
-                        Some(job.language.clone())
-                    },
-                    model_id: Some(job.model_id.clone()),
-                    models_dir: Some(models_dir.clone()),
-                    vad_model_id: None,
-                    punctuation_model_id: None,
-                    threads: None,
-                    enable_itn: None,
-                    hotwords: job.hotwords.clone(),
-                    gpu_acceleration: None,
-                    vad_buffer: None,
-                    save_wav: None,
-                    quiet: true,
-                };
+                let options = build_local_transcribe_options(&job, &models_dir, &defaults);
 
                 match resolve_transcribe_options(options, None) {
                     Ok(resolved) => {
@@ -567,6 +613,68 @@ async fn start_worker_loop(
     }
 }
 
+pub(crate) fn build_local_transcribe_options(
+    job: &TranscriptionJob,
+    models_dir: &StdPath,
+    defaults: &ApiServerTranscriptionDefaults,
+) -> TranscribeCliOptions {
+    let (vad_model_id, punctuation_model_id) =
+        companion_defaults_for_model(&job.model_id, defaults);
+    TranscribeCliOptions {
+        input: job.file_path.clone(),
+        output: None,
+        format: None,
+        language: if job.language == "auto" {
+            None
+        } else {
+            Some(job.language.clone())
+        },
+        model_id: Some(job.model_id.clone()),
+        models_dir: Some(models_dir.to_path_buf()),
+        vad_model_id,
+        punctuation_model_id,
+        threads: None,
+        enable_itn: None,
+        hotwords: job.hotwords.clone(),
+        gpu_acceleration: defaults.gpu_acceleration.clone(),
+        vad_buffer: None,
+        save_wav: None,
+        quiet: true,
+    }
+}
+
+fn companion_defaults_for_model(
+    model_id: &str,
+    defaults: &ApiServerTranscriptionDefaults,
+) -> (Option<String>, Option<String>) {
+    let rules =
+        crate::core::preset_models::find_preset_model(model_id).map(|model| model.resolved_rules());
+
+    let vad_model_id = match defaults.vad_model_id.as_deref() {
+        Some(id)
+            if rules.map(|rules| rules.requires_vad).unwrap_or(true)
+                || id != crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
+        {
+            Some(id.to_string())
+        }
+        _ => None,
+    };
+
+    let punctuation_model_id = match defaults.punctuation_model_id.as_deref() {
+        Some(id)
+            if rules
+                .map(|rules| rules.requires_punctuation)
+                .unwrap_or(true)
+                || id != crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
+        {
+            Some(id.to_string())
+        }
+        _ => None,
+    };
+
+    (vad_model_id, punctuation_model_id)
+}
+
 #[derive(Clone)]
 pub struct ServerState {
     pub job_manager: JobManager,
@@ -585,6 +693,7 @@ pub struct ServerState {
     >,
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
+    pub transcription_defaults: ApiServerTranscriptionDefaults,
     pub app: Option<tauri::AppHandle>,
 }
 
@@ -900,23 +1009,25 @@ async fn ip_whitelist_middleware(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn run_server(
-    app: Option<tauri::AppHandle>,
-    host: &str,
-    port: u16,
-    api_key: &str,
-    temp_dir: PathBuf,
-    models_dir: PathBuf,
-    max_concurrent: usize,
-    max_queue_size: usize,
-    max_upload_size_mb: usize,
-    job_ttl_minutes: u64,
-    max_streaming: usize,
-    ip_whitelist: Arc<Vec<IpNet>>,
-    online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
-    shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-) -> Result<(), String> {
+pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
+    let ApiServerRuntimeConfig {
+        app,
+        host,
+        port,
+        api_key,
+        temp_dir,
+        models_dir,
+        max_concurrent,
+        max_queue_size,
+        max_upload_size_mb,
+        job_ttl_minutes,
+        max_streaming,
+        ip_whitelist,
+        online_asr_config,
+        transcription_defaults,
+        shutdown_rx,
+    } = config;
+
     // Resource Cleanup: clean temp_dir on startup
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
     tokio::fs::create_dir_all(&temp_dir)
@@ -933,6 +1044,7 @@ pub async fn run_server(
     let manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
     let app_clone = app.clone();
+    let worker_defaults = transcription_defaults.clone();
 
     tokio::spawn(async move {
         start_worker_loop(
@@ -941,6 +1053,7 @@ pub async fn run_server(
             models_dir_clone,
             max_concurrent,
             app_clone,
+            worker_defaults,
         )
         .await;
     });
@@ -969,11 +1082,12 @@ pub async fn run_server(
         temp_dir,
         models_dir,
         start_time: std::time::Instant::now(),
-        api_key: api_key.to_string(),
+        api_key: api_key.clone(),
         streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
         recognizer_pool: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         ip_whitelist: ip_whitelist.clone(),
         online_asr_config,
+        transcription_defaults,
         app,
     };
 
@@ -1007,7 +1121,7 @@ pub async fn run_server(
 
     #[allow(deprecated)]
     if !api_key.is_empty() {
-        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(api_key));
+        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(&api_key));
     }
 
     let ws_router = Router::new()
@@ -1075,6 +1189,7 @@ mod tests {
             )),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
             app: None,
         };
 
@@ -1132,6 +1247,7 @@ mod tests {
             )),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
             app: None,
         };
 
@@ -1198,6 +1314,7 @@ mod tests {
             )),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
             app: None,
         };
 
@@ -1225,5 +1342,84 @@ mod tests {
 
         assert!(body.is_object());
         assert_eq!(body["test-job-id"], "Pending");
+    }
+
+    #[test]
+    fn local_transcribe_options_use_server_defaults() {
+        let models_dir = PathBuf::from("C:/models");
+        let job = TranscriptionJob {
+            job_id: "job-1".to_string(),
+            file_path: PathBuf::from("sample.wav"),
+            model_id: "sherpa-onnx-whisper-turbo".to_string(),
+            language: "auto".to_string(),
+            hotwords: Some("Sona".to_string()),
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "LocalSherpa".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        let defaults = ApiServerTranscriptionDefaults {
+            gpu_acceleration: Some("cuda".to_string()),
+            vad_model_id: Some("silero-vad".to_string()),
+            punctuation_model_id: Some("punct-model".to_string()),
+        };
+
+        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+
+        assert_eq!(options.gpu_acceleration.as_deref(), Some("cuda"));
+        assert_eq!(options.vad_model_id.as_deref(), Some("silero-vad"));
+        assert_eq!(options.punctuation_model_id.as_deref(), Some("punct-model"));
+        assert_eq!(options.models_dir.as_deref(), Some(models_dir.as_path()));
+        assert!(options.language.is_none());
+        assert_eq!(options.hotwords.as_deref(), Some("Sona"));
+    }
+
+    #[test]
+    fn local_transcribe_options_skip_builtin_punctuation_default_when_model_does_not_require_it() {
+        let models_dir = PathBuf::from("C:/models");
+        let job = TranscriptionJob {
+            job_id: "job-1".to_string(),
+            file_path: PathBuf::from("sample.wav"),
+            model_id: "sherpa-onnx-whisper-turbo".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "LocalSherpa".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        let defaults = ApiServerTranscriptionDefaults::default();
+
+        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+
+        assert_eq!(options.vad_model_id.as_deref(), Some("silero-vad"));
+        assert!(options.punctuation_model_id.is_none());
+    }
+
+    #[test]
+    fn local_transcribe_options_apply_builtin_punctuation_default_when_model_requires_it() {
+        let models_dir = PathBuf::from("C:/models");
+        let job = TranscriptionJob {
+            job_id: "job-1".to_string(),
+            file_path: PathBuf::from("sample.wav"),
+            model_id: "sherpa-onnx-funasr-nano-int8-2025-12-30".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "LocalSherpa".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        let defaults = ApiServerTranscriptionDefaults::default();
+
+        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+
+        assert_eq!(
+            options.punctuation_model_id.as_deref(),
+            Some(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
+        );
     }
 }

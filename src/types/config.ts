@@ -316,6 +316,8 @@ export interface ApiServerConfig {
   httpServerJobTtlMinutes?: number;
   /** IP Whitelist for the API server (comma-separated, default: 'localhost'). */
   httpServerIpWhitelist?: string;
+  /** Server-level GPU acceleration default for local API transcription. Default: 'auto'. */
+  gpuAcceleration?: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
 }
 
 // ---------------------------------------------------------------------------

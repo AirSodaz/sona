@@ -85,7 +85,7 @@ gpu_acceleration = "auto"
 format = "srt"
 ```
 
-Supported keys:
+Supported `transcribe` keys:
 
 - `models_dir`
 - `model_id`
@@ -98,10 +98,27 @@ Supported keys:
 - `gpu_acceleration`
 - `format`
 
+Supported `serve` keys:
+
+- `models_dir`
+- `host`
+- `port`
+- `api_key`
+- `ip_whitelist`
+- `max_streaming`
+- `max_concurrent`
+- `max_queue_size`
+- `max_upload_size_mb`
+- `job_ttl_minutes`
+- `gpu_acceleration`
+- `vad_model_id`
+- `punctuation_model_id`
+
 Command-line flags override config file values.
 
 `gpu_acceleration` defaults to `auto` and accepts `auto`, `cpu`, `cuda`, `coreml`, or `directml`.
 Use `cpu` to disable GPU acceleration explicitly.
+For `serve`, this is a server-level default for local batch and streaming jobs. HTTP API requests do not accept a per-request GPU override.
 
 ## Required Companion Models
 
@@ -172,12 +189,20 @@ sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id
 
 ```text
 sona serve
+  --config <path>
   --host <ip>
   --port <port>
   --api-key <key>
   --models-dir <path>
   --ip-whitelist <rules>
   --max-streaming <n>
+  --max-concurrent <n>
+  --max-queue-size <n>
+  --max-upload-size-mb <n>
+  --job-ttl-minutes <n>
+  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
+  --vad-model-id <id>
+  --punctuation-model-id <id>
 ```
 
 For more details on API usage, see [api.md](api.md).

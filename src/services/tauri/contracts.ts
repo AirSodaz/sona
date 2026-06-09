@@ -826,8 +826,9 @@ export type TauriCommandContractMap = {
       jobTtlMinutes: number;
       maxStreaming: number;
       ipWhitelist: string;
+      gpuAcceleration: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
     };
-    result: void;
+    result: string;
   };
   [TauriCommand.apiServer.stop]: {
     args: undefined;

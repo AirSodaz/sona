@@ -384,6 +384,7 @@ pub async fn start_api_server(
     job_ttl_minutes: u64,
     max_streaming: usize,
     ip_whitelist: String,
+    gpu_acceleration: String,
 ) -> Result<String, String> {
     crate::app::server::start_api_server(
         app,
@@ -397,6 +398,7 @@ pub async fn start_api_server(
         job_ttl_minutes,
         max_streaming,
         ip_whitelist,
+        gpu_acceleration,
     )
     .await
 }

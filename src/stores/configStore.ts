@@ -226,6 +226,7 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerMaxUploadSizeMB',
   'httpServerJobTtlMinutes',
   'httpServerIpWhitelist',
+  'gpuAcceleration',
 ];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {

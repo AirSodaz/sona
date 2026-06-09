@@ -2,6 +2,8 @@ import { expect, vi, beforeEach, describe, it } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { SettingsApiServerTab } from '../SettingsApiServerTab';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
+import { invokeTauri } from '../../../services/tauri/invoke';
+import { TauriCommand } from '../../../services/tauri/commands';
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-i18next')>();
@@ -15,7 +17,7 @@ vi.mock('react-i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('../../tauri/invoke', () => ({
+vi.mock('../../../services/tauri/invoke', () => ({
   invokeTauri: vi.fn().mockResolvedValue('OK'),
 }));
 
@@ -198,5 +200,37 @@ describe('SettingsApiServerTab', () => {
         expect(screen.getByText('1h 0m 0s')).toBeDefined();
         expect(screen.getByText('Processing')).toBeDefined();
     });
+  });
+
+  it('starts the API server with GPU acceleration, the 50MB upload default, and normalized whitelist sync', async () => {
+    vi.useFakeTimers();
+    vi.mocked(invokeTauri).mockResolvedValueOnce('127.0.0.0/8,::1/128');
+    currentConfig = buildTestConfig({
+      httpServerEnabled: true,
+      httpServerHost: '127.0.0.1',
+      httpServerPort: 14200,
+      httpServerApiKey: 'original-key',
+      gpuAcceleration: 'cuda',
+      httpServerMaxUploadSizeMB: undefined,
+      httpServerIpWhitelist: 'localhost',
+    });
+    global.fetch = vi.fn().mockResolvedValue({ ok: false }) as any;
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(invokeTauri).toHaveBeenCalledWith(TauriCommand.apiServer.start, expect.objectContaining({
+      gpuAcceleration: 'cuda',
+      maxUploadSizeMb: 50,
+    }));
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerIpWhitelist: '127.0.0.0/8,::1/128' });
+    vi.useRealTimers();
   });
 });

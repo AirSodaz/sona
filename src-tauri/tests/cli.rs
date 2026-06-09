@@ -91,6 +91,35 @@ fn transcribe_help_mentions_key_examples() {
 }
 
 #[test]
+fn serve_help_mentions_runtime_defaults() {
+    let output = cli_command().args(["serve", "--help"]).output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--gpu-acceleration"));
+    assert!(stdout.contains("--vad-model-id"));
+    assert!(stdout.contains("--punctuation-model-id"));
+    assert!(stdout.contains("--max-concurrent"));
+    assert!(stdout.contains("--max-queue-size"));
+    assert!(stdout.contains("--max-upload-size-mb"));
+    assert!(stdout.contains("--job-ttl-minutes"));
+}
+
+#[test]
+fn serve_invalid_gpu_acceleration_returns_failure() {
+    let output = cli_command()
+        .args(["serve", "--gpu-acceleration", "vulkan"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("gpu_acceleration"));
+    assert!(stderr.contains("auto, cpu, cuda, coreml, directml"));
+}
+
+#[test]
 fn models_help_mentions_list_and_download() {
     let output = cli_command().args(["models", "--help"]).output().unwrap();
     assert!(output.status.success());

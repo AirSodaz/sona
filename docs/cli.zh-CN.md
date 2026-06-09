@@ -85,7 +85,7 @@ gpu_acceleration = "auto"
 format = "srt"
 ```
 
-支持的键：
+支持的 `transcribe` 键：
 
 - `models_dir`
 - `model_id`
@@ -98,10 +98,27 @@ format = "srt"
 - `gpu_acceleration`
 - `format`
 
+支持的 `serve` 键：
+
+- `models_dir`
+- `host`
+- `port`
+- `api_key`
+- `ip_whitelist`
+- `max_streaming`
+- `max_concurrent`
+- `max_queue_size`
+- `max_upload_size_mb`
+- `job_ttl_minutes`
+- `gpu_acceleration`
+- `vad_model_id`
+- `punctuation_model_id`
+
 命令行标志会覆盖配置文件中的值。
 
 `gpu_acceleration` 默认是 `auto`，支持 `auto`、`cpu`、`cuda`、`coreml` 或 `directml`。
 如果要显式关闭 GPU 加速，请使用 `cpu`。
+对于 `serve`，这是本地批量和流式任务的服务级默认值。HTTP API 请求不支持按请求覆盖 GPU 配置。
 
 ## 必需的伴生模型
 
@@ -172,12 +189,20 @@ sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id
 
 ```text
 sona serve
+  --config <path>
   --host <ip>
   --port <port>
   --api-key <key>
   --models-dir <path>
   --ip-whitelist <rules>
   --max-streaming <n>
+  --max-concurrent <n>
+  --max-queue-size <n>
+  --max-upload-size-mb <n>
+  --job-ttl-minutes <n>
+  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
+  --vad-model-id <id>
+  --punctuation-model-id <id>
 ```
 
 有关 API 使用的更多详细信息，请参阅 [api.zh-CN.md](api.zh-CN.md)。
