@@ -29,7 +29,7 @@ __pycache__/
 *.sln
 *.sw?
 .claude/
-.agent/
+.agents/
 
 # Playwright
 playwright-report/

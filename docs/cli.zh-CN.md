@@ -1,33 +1,20 @@
 # Sona CLI
 
-`sona` 现在通过桌面主程序直接提供离线批量转写命令。安装包里的 CLI 子命令由主程序二进制承载，但默认不会帮您写入系统 `PATH`。
+`sona` 通过桌面主程序提供离线转写命令。安装包不会把 `sona` 写入 shell `PATH`，因此需要直接运行已安装的应用二进制文件并附带 CLI 子命令。从源码构建时，也可以用 Cargo 运行同一组命令。
 
-当前 CLI 涵盖三个核心工作流：
+CLI 范围刻意保持精简：单文件离线转写、预置模型列表/下载、无头 HTTP API 服务启动。它不包含实时录音、LLM 润色或 LLM 翻译。
 
-- 单个本地音频或视频文件的离线转写
-- 预置模型列表查看与模型下载
-- 启动无头 HTTP API 服务以进行远程集成
-- 导出到 `json`、`txt`、`srt`、`vtt` 或 `md`
-- 复用与桌面应用相同的预置模型元数据
-
-## 当前范围
-
-- 包含在桌面安装包和应用包中，通过主可执行程序提供
-- 支持从源码通过 `cargo run -- ...` 运行
-- 尚未包含：Shell `PATH` 注册、实时录音、LLM 润色、LLM 翻译
-
-## 安装位置
-
-CLI 通过打包后的应用程序二进制文件提供，但未在 `PATH` 中注册。
+## 运行方式
 
 - Windows：在安装目录运行 `Sona.exe transcribe ...`
 - macOS：运行 `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
-- Linux：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
+- Linux 安装包：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
 - AppImage：运行挂载后的 AppImage 可执行文件并附带 CLI 子命令
+- 源码：`cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml`
 
 ## 常用命令
 
-### 转录文件
+### 转写文件
 
 ```bash
 sona transcribe ./sample.mp4 \
@@ -35,43 +22,31 @@ sona transcribe ./sample.mp4 \
   --output ./sample.srt
 ```
 
-如果不指定 `--output`，`sona` 会将 JSON 写入 `stdout`。
+不指定 `--output` 时，转写结果会以 JSON 写入 `stdout`。指定 `--output` 时，格式会从文件扩展名推断，除非同时传入 `--format`。
 
-### 列出模型
-
-```bash
-sona models list
-```
-
-常用过滤器：
+### 列出或下载模型
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
-```
-
-### 下载模型
-
-```bash
 sona models download sherpa-onnx-whisper-turbo
 ```
 
-如果预置模型需要伴生模型，CLI 会自动下载：
+当所选预置模型需要伴生模型时，`models download` 会自动下载所需模型，例如 `silero-vad` 或默认标点模型。
 
-- 需要 VAD 的模型会自动下载 `silero-vad`
-- 需要标点的模型会自动下载默认标点模型
-
-您也可以显式覆盖模型目录：
+### 启动 API 服务
 
 ```bash
-sona models download silero-vad --models-dir ./models
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 ```
+
+HTTP API 端点和请求示例见 [api.zh-CN.md](api.zh-CN.md)。
 
 ## 配置文件
 
-使用 `--config` 显式传递配置文件。
+通过 `--config` 传入 TOML 文件。命令行参数会覆盖配置文件中的值。
 
-最小示例：
+最小 `transcribe` 示例：
 
 ```toml
 models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
@@ -85,58 +60,40 @@ gpu_acceleration = "auto"
 format = "srt"
 ```
 
-支持的 `transcribe` 键：
+### `transcribe` 配置键
 
-- `models_dir`
-- `model_id`
-- `vad_model_id`
-- `punctuation_model_id`
-- `language`
-- `threads`
-- `enable_itn`
-- `vad_buffer_size`
-- `gpu_acceleration`
-- `format`
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `models_dir` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | CLI 找不到桌面模型目录时请显式传入。 |
+| `model_id` | 必选，除非传入 `--model-id` | 离线预置模型 ID | 无 | 用 `sona models list --mode offline` 查看可用 ID。 |
+| `vad_model_id` | 条件必选 | 预置模型 ID | 无 | 所选模型需要 VAD 时必选。 |
+| `punctuation_model_id` | 条件必选 | 预置模型 ID | 无 | 所选模型需要标点时必选。 |
+| `language` | 可选 | `auto` 或模型语言代码，如 `zh`、`en`、`ja` | `auto` | 覆盖自动语言检测。 |
+| `threads` | 可选 | 大于 `0` 的整数 | `4` | 识别线程数。 |
+| `enable_itn` | 可选 | `true` 或 `false` | `false` | 启用逆文本归一化。 |
+| `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
+| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可显式关闭 GPU 加速。 |
+| `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
 
-支持的 `serve` 键：
+### `serve` 配置键
 
-- `models_dir`
-- `host`
-- `port`
-- `api_key`
-- `ip_whitelist`
-- `max_streaming`
-- `max_concurrent`
-- `max_queue_size`
-- `max_upload_size_mb`
-- `job_ttl_minutes`
-- `gpu_acceleration`
-- `vad_model_id`
-- `punctuation_model_id`
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `host` | 可选 | 监听地址 | `0.0.0.0` | 本机访问可用 `127.0.0.1`。 |
+| `port` | 可选 | TCP 端口 `0` 到 `65535` | `14200` | API 服务端口。 |
+| `api_key` | 可选 | 字符串 | 空 | 为空时请求不需要 Bearer 认证。 |
+| `models_dir` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 用于解析已安装模型。 |
+| `ip_whitelist` | 可选 | 逗号分隔规则 | `localhost` | 支持 `localhost`、精确 IP、CIDR、`*`，以及 `192.168.*` 这类 IPv4 通配。 |
+| `max_streaming` | 可选 | 非负整数 | `2` | 最大并发流式 WebSocket 连接数。 |
+| `max_concurrent` | 可选 | 非负整数 | `2` | 最大并发批量任务数。 |
+| `max_queue_size` | 可选 | 非负整数 | `100` | `0` 表示队列基本不限。 |
+| `max_upload_size_mb` | 可选 | 非负整数 | `50` | `0` 表示关闭上传大小限制。 |
+| `job_ttl_minutes` | 可选 | 非负整数 | `60` | `0` 表示关闭完成/失败任务清理。 |
+| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 本地批量和流式任务的服务级默认值。 |
+| `vad_model_id` | 可选 | 预置模型 ID | `silero-vad` | API 服务任务的默认 VAD 伴生模型。 |
+| `punctuation_model_id` | 可选 | 预置模型 ID | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | API 服务任务的默认标点伴生模型。 |
 
-命令行标志会覆盖配置文件中的值。
-
-`gpu_acceleration` 默认是 `auto`，支持 `auto`、`cpu`、`cuda`、`coreml` 或 `directml`。
-如果要显式关闭 GPU 加速，请使用 `cpu`。
-对于 `serve`，这是本地批量和流式任务的服务级默认值。HTTP API 请求不支持按请求覆盖 GPU 配置。
-
-## 必需的伴生模型
-
-某些离线模型需要伴生资产：
-
-- 如果选择的离线模型需要 VAD，必须提供有效的 `vad_model_id`
-- 如果选择的离线模型需要标点，必须提供有效的 `punctuation_model_id`
-
-对于 `models download`：
-
-- CLI 会自动下载必需的 VAD 和标点伴生模型
-
-对于 `transcribe`：
-
-- 您仍需传递 `--vad-model-id`、`--punctuation-model-id` 或在配置文件中定义它们
-- 缺失必需的伴生 ID 会导致错误并快速失败
-
-## 常用标志
+## 参数
 
 ### 全局
 
@@ -144,104 +101,81 @@ format = "srt"
 sona
   -V, --version
   -v, --verbose
+  -h, --help
+  help
 ```
 
-使用 `-V` 或 `--version` 打印 Sona 版本号。使用 `-v` 或 `--verbose` 放在子命令前启用详细诊断日志：
+使用 `-V` 或 `--version` 打印 Sona 版本号。使用 `-v` 或 `--verbose` 放在子命令前启用详细诊断日志。使用 `-h`、`--help` 或 `help` 打印命令帮助：
 
 ```bash
 sona --version
 sona -V
 sona -v models list
 sona --verbose transcribe ./sample.mp4 --config ./sona-cli.toml
+sona transcribe --help
 ```
 
 详细诊断日志会写入 `stderr`。命令结果仍写入 `stdout`，包括 `models list` 的 JSON 输出，以及 `transcribe` 未指定 `--output` 时的输出，因此仍可安全管道传给其他工具。
 
 ### `transcribe`
 
-```text
-sona transcribe <input>
-  --config <path>
-  --output <path>
-  --format <json|txt|srt|vtt|md>
-  --language <code>
-  --model-id <id>
-  --models-dir <path>
-  --vad-model-id <id>
-  --punctuation-model-id <id>
-  --threads <n>
-  --enable-itn
-  --disable-itn
-  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
-  --vad-buffer <seconds>
-  --save-wav <path>
-  --quiet
-```
-
-示例：
-
-```bash
-sona transcribe ./sample.wav --config ./sona-cli.toml --gpu-acceleration auto
-sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad --gpu-acceleration cuda
-```
-
-### `serve`
-
-```text
-sona serve
-  --config <path>
-  --host <ip>
-  --port <port>
-  --api-key <key>
-  --models-dir <path>
-  --ip-whitelist <rules>
-  --max-streaming <n>
-  --max-concurrent <n>
-  --max-queue-size <n>
-  --max-upload-size-mb <n>
-  --job-ttl-minutes <n>
-  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
-  --vad-model-id <id>
-  --punctuation-model-id <id>
-```
-
-有关 API 使用的更多详细信息，请参阅 [api.zh-CN.md](api.zh-CN.md)。
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `<input>` | 必选 | 本地音频或视频文件路径 | 无 | 要转写的文件。 |
+| `--config <path>` | 可选 | TOML 文件路径 | 无 | 从配置文件加载默认值。 |
+| `--output <path>` | 可选 | 文件系统路径 | `stdout` | 输出文件路径。 |
+| `--format <format>` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 时为 `json`，否则从 `--output` 推断 | 覆盖配置和输出扩展名推断。 |
+| `--language <code>` | 可选 | `auto` 或模型语言代码 | `auto` | 覆盖配置。 |
+| `--model-id <id>` | 必选，除非配置了 `model_id` | 离线预置模型 ID | 无 | 主转写模型。 |
+| `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 覆盖配置。 |
+| `--vad-model-id <id>` | 条件必选 | 预置模型 ID | 无 | 所选模型需要 VAD 时必选。 |
+| `--punctuation-model-id <id>` | 条件必选 | 预置模型 ID | 无 | 所选模型需要标点时必选。 |
+| `--threads <n>` | 可选 | 大于 `0` 的整数 | `4` | 覆盖配置。 |
+| `--enable-itn` | 可选 | 标志 | `false` | 与 `--disable-itn` 互斥。 |
+| `--disable-itn` | 可选 | 标志 | `false` | 覆盖 `enable_itn = true`；与 `--enable-itn` 互斥。 |
+| `--hotwords <words>` | 可选 | 逗号分隔词组 | 无 | 仅 CLI 参数；当前支持 Transducer 和 Qwen3 模型。 |
+| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。 |
+| `--vad-buffer <seconds>` | 可选 | 大于 `0` 的数字 | `5.0` | `vad_buffer_size` 的 CLI 参数名。 |
+| `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。 |
+| `--quiet` | 可选 | 标志 | 关闭 | 仅 CLI 参数；隐藏转写进度。 |
 
 ### `models list`
 
-```text
-sona models list
-  --models-dir <path>
-  --mode <streaming|offline>
-  --type <type>
-  --language <code>
-  --installed
-```
-
-注意：
-
-- `--type` 可以是 `whisper`、`vad` 或 `punctuation` 等值
-- `--language` 匹配语言令牌，如 `zh`、`en`、`ja` 或 `yue`
-- 当前默认输出格式为 JSON
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 用于检测已安装预置模型。 |
+| `--mode <mode>` | 可选 | `streaming`、`offline` | 所有模式 | 按支持模式过滤。 |
+| `--type <type>` | 可选 | 预置模型类型，如 `whisper`、`vad`、`punctuation` | 所有类型 | 按模型类型过滤。 |
+| `--language <code>` | 可选 | 语言令牌，如 `zh`、`en`、`ja`、`yue` | 所有语言 | 按支持语言令牌过滤。 |
+| `--installed` | 可选 | 标志 | 关闭 | 只显示 `models_dir` 中已存在的模型。 |
+| 输出 | 总是 | JSON | JSON | 写入 `stdout`。 |
 
 ### `models download`
 
-```text
-sona models download <model_id>
-  --models-dir <path>
-  --quiet
-```
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `<model_id>` | 必选 | 已知预置模型 ID | 无 | 要下载的主模型。 |
+| `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 目标模型目录。 |
+| `--quiet` | 可选 | 标志 | 关闭 | 隐藏单个下载进度。 |
+| 伴生模型下载 | 自动 | 所需 VAD 和标点预置模型 | 自动 | 下载主模型时会同时下载必需伴生模型。 |
 
-## 帮助命令
+### `serve`
 
-```bash
-sona --help
-sona help
-sona --version
-sona -V
-sona transcribe --help
-sona models --help
-sona models list --help
-sona models download --help
-sona serve --help
-```
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `--config <path>` | 可选 | TOML 文件路径 | 无 | 从配置文件加载默认值。 |
+| `--host <ip>` | 可选 | 监听地址 | `0.0.0.0` | 覆盖配置。 |
+| `--port <port>` | 可选 | TCP 端口 `0` 到 `65535` | `14200` | 覆盖配置。 |
+| `--api-key <key>` | 可选 | 字符串 | 空 | 为空时不启用 Bearer 认证。 |
+| `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 覆盖配置。 |
+| `--ip-whitelist <rules>` | 可选 | 逗号分隔规则 | `localhost` | 支持 `localhost`、精确 IP、CIDR、`*`，以及 `192.168.*` 这类 IPv4 通配。 |
+| `--max-streaming <n>` | 可选 | 非负整数 | `2` | 最大并发流式连接数。 |
+| `--max-concurrent <n>` | 可选 | 非负整数 | `2` | 最大并发批量任务数。 |
+| `--max-queue-size <n>` | 可选 | 非负整数 | `100` | `0` 表示队列基本不限。 |
+| `--max-upload-size-mb <n>` | 可选 | 非负整数 | `50` | `0` 表示关闭上传大小限制。 |
+| `--job-ttl-minutes <n>` | 可选 | 非负整数 | `60` | `0` 表示关闭完成/失败任务清理。 |
+| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | HTTP API 请求不支持按请求覆盖 GPU 配置。 |
+| `--vad-model-id <id>` | 可选 | 预置模型 ID | `silero-vad` | API 服务任务的默认 VAD 伴生模型。 |
+| `--punctuation-model-id <id>` | 可选 | 预置模型 ID | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | API 服务任务的默认标点伴生模型。 |
+
+运行 `sona <command> --help` 可查看 clap 生成的完整帮助文本。

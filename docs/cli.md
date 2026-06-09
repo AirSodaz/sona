@@ -1,29 +1,16 @@
 # Sona CLI
 
-`sona` supports offline batch transcription commands directly from the main desktop executable. Packaged installs expose CLI subcommands through the app binary, and source builds can run the same commands with Cargo.
+`sona` exposes offline transcription commands through the main desktop executable. Packaged installs do not add `sona` to your shell `PATH`, so run the installed app binary with CLI subcommands. Source builds can run the same commands with Cargo.
 
-The current CLI covers three core workflows:
+The CLI is intentionally narrow: single-file offline transcription, preset model listing/download, and headless HTTP API server startup. It does not include live recording, LLM polish, or LLM translation.
 
-- Transcribe one local audio or video file
-- List available preset models and download models
-- Start a headless HTTP API server for remote integration
-- Export the result as `json`, `txt`, `srt`, `vtt`, or `md`
-- Reuse the same preset model metadata as the desktop app
+## Run It
 
-## Current Scope
-
-- Included in desktop installers and app bundles through the main executable
-- Supported from source with `cargo run -- ...`
-- Not included yet: shell `PATH` registration, live recording, LLM polish, LLM translate
-
-## Installed Locations
-
-The CLI is available through the packaged app binary, but it is not registered on `PATH`.
-
-- Windows: run `Sona.exe transcribe ...` from the same installation directory
+- Windows: run `Sona.exe transcribe ...` from the installation directory
 - macOS: run `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
 - Linux packages: run the packaged `Sona` binary with CLI subcommands from the install location
 - AppImage: run the mounted AppImage executable with CLI subcommands
+- Source: `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml`
 
 ## Common Commands
 
@@ -35,43 +22,31 @@ sona transcribe ./sample.mp4 \
   --output ./sample.srt
 ```
 
-Without `--output`, `sona` writes JSON to `stdout`.
+Without `--output`, transcription writes JSON to `stdout`. With `--output`, the format is inferred from the file extension unless `--format` is provided.
 
-### List models
-
-```bash
-sona models list
-```
-
-Common filters:
+### List or download models
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
-```
-
-### Download a model
-
-```bash
 sona models download sherpa-onnx-whisper-turbo
 ```
 
-If the preset requires companion models, the CLI downloads them automatically:
+`models download` automatically downloads required companion models, such as `silero-vad` or the default punctuation model, when the selected preset needs them.
 
-- `silero-vad` for presets that require VAD
-- The default punctuation preset for presets that require punctuation
-
-You can also override the models directory explicitly:
+### Start the API server
 
 ```bash
-sona models download silero-vad --models-dir ./models
+sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 ```
+
+For HTTP API endpoints and request examples, see [api.md](api.md).
 
 ## Config File
 
-Pass a config file explicitly with `--config`.
+Pass a TOML file with `--config`. Command-line flags override config file values.
 
-Minimal example:
+Minimal `transcribe` example:
 
 ```toml
 models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
@@ -85,58 +60,40 @@ gpu_acceleration = "auto"
 format = "srt"
 ```
 
-Supported `transcribe` keys:
+### `transcribe` config keys
 
-- `models_dir`
-- `model_id`
-- `vad_model_id`
-- `punctuation_model_id`
-- `language`
-- `threads`
-- `enable_itn`
-- `vad_buffer_size`
-- `gpu_acceleration`
-- `format`
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `models_dir` | Optional | Filesystem path | Desktop app models directory, when inferable | Pass explicitly if the CLI cannot find desktop models. |
+| `model_id` | Required unless `--model-id` is passed | Offline preset model id | None | Use `sona models list --mode offline` to find ids. |
+| `vad_model_id` | Conditional | Preset model id | None | Required when the selected model requires VAD. |
+| `punctuation_model_id` | Conditional | Preset model id | None | Required when the selected model requires punctuation. |
+| `language` | Optional | `auto` or a model language code, such as `zh`, `en`, `ja` | `auto` | Overrides automatic language detection. |
+| `threads` | Optional | Integer greater than `0` | `4` | Recognizer thread count. |
+| `enable_itn` | Optional | `true` or `false` | `false` | Enables inverse text normalization. |
+| `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
+| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Use `cpu` to disable GPU acceleration. |
+| `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout, otherwise inferred from `--output` | Overrides output extension inference. |
 
-Supported `serve` keys:
+### `serve` config keys
 
-- `models_dir`
-- `host`
-- `port`
-- `api_key`
-- `ip_whitelist`
-- `max_streaming`
-- `max_concurrent`
-- `max_queue_size`
-- `max_upload_size_mb`
-- `job_ttl_minutes`
-- `gpu_acceleration`
-- `vad_model_id`
-- `punctuation_model_id`
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `host` | Optional | Bind address | `0.0.0.0` | Use `127.0.0.1` for local-only access. |
+| `port` | Optional | TCP port `0` to `65535` | `14200` | API server port. |
+| `api_key` | Optional | String | Empty | Empty means requests are not protected by Bearer auth. |
+| `models_dir` | Optional | Filesystem path | Desktop app models directory, when inferable | Used to resolve installed models. |
+| `ip_whitelist` | Optional | Comma-separated rules | `localhost` | Supports `localhost`, exact IPs, CIDR, `*`, and IPv4 wildcards like `192.168.*`. |
+| `max_streaming` | Optional | Non-negative integer | `2` | Maximum concurrent streaming WebSocket connections. |
+| `max_concurrent` | Optional | Non-negative integer | `2` | Maximum concurrent batch jobs. |
+| `max_queue_size` | Optional | Non-negative integer | `100` | `0` means the queue is effectively unlimited. |
+| `max_upload_size_mb` | Optional | Non-negative integer | `50` | `0` disables the upload size limit. |
+| `job_ttl_minutes` | Optional | Non-negative integer | `60` | `0` disables completed/failed job cleanup. |
+| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Server-level default for local batch and streaming jobs. |
+| `vad_model_id` | Optional | Preset model id | `silero-vad` | Default companion model for API server jobs. |
+| `punctuation_model_id` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | Default punctuation companion for API server jobs. |
 
-Command-line flags override config file values.
-
-`gpu_acceleration` defaults to `auto` and accepts `auto`, `cpu`, `cuda`, `coreml`, or `directml`.
-Use `cpu` to disable GPU acceleration explicitly.
-For `serve`, this is a server-level default for local batch and streaming jobs. HTTP API requests do not accept a per-request GPU override.
-
-## Required Companion Models
-
-Some offline models require companion assets:
-
-- If the selected offline model requires VAD, you must provide a valid `vad_model_id`
-- If the selected offline model requires punctuation, you must provide a valid `punctuation_model_id`
-
-For `models download`:
-
-- The CLI automatically downloads required VAD and punctuation companions
-
-For `transcribe`:
-
-- You still need to pass `--vad-model-id`, `--punctuation-model-id`, or define them in the config file
-- Missing required companion ids fail fast with an error
-
-## Common Flags
+## Parameters
 
 ### Global
 
@@ -144,104 +101,81 @@ For `transcribe`:
 sona
   -V, --version
   -v, --verbose
+  -h, --help
+  help
 ```
 
-Use `-V` or `--version` to print the Sona version. Use `-v` or `--verbose` before a subcommand to enable detailed diagnostic logs:
+Use `-V` or `--version` to print the Sona version. Use `-v` or `--verbose` before a subcommand to enable detailed diagnostic logs. Use `-h`, `--help`, or `help` to print command help:
 
 ```bash
 sona --version
 sona -V
 sona -v models list
 sona --verbose transcribe ./sample.mp4 --config ./sona-cli.toml
+sona transcribe --help
 ```
 
 Verbose diagnostics are written to `stderr`. Command output, including JSON output from `models list` and `transcribe` without `--output`, remains on `stdout` so it can still be piped to other tools.
 
 ### `transcribe`
 
-```text
-sona transcribe <input>
-  --config <path>
-  --output <path>
-  --format <json|txt|srt|vtt|md>
-  --language <code>
-  --model-id <id>
-  --models-dir <path>
-  --vad-model-id <id>
-  --punctuation-model-id <id>
-  --threads <n>
-  --enable-itn
-  --disable-itn
-  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
-  --vad-buffer <seconds>
-  --save-wav <path>
-  --quiet
-```
-
-Examples:
-
-```bash
-sona transcribe ./sample.wav --config ./sona-cli.toml --gpu-acceleration auto
-sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad --gpu-acceleration cuda
-```
-
-### `serve`
-
-```text
-sona serve
-  --config <path>
-  --host <ip>
-  --port <port>
-  --api-key <key>
-  --models-dir <path>
-  --ip-whitelist <rules>
-  --max-streaming <n>
-  --max-concurrent <n>
-  --max-queue-size <n>
-  --max-upload-size-mb <n>
-  --job-ttl-minutes <n>
-  --gpu-acceleration <auto|cpu|cuda|coreml|directml>
-  --vad-model-id <id>
-  --punctuation-model-id <id>
-```
-
-For more details on API usage, see [api.md](api.md).
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `<input>` | Required | Local audio or video file path | None | File to transcribe. |
+| `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
+| `--output <path>` | Optional | Filesystem path | `stdout` | Output file path. |
+| `--format <format>` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout, otherwise inferred from `--output` | Overrides config and output extension inference. |
+| `--language <code>` | Optional | `auto` or a model language code | `auto` | Overrides config. |
+| `--model-id <id>` | Required unless `model_id` is configured | Offline preset model id | None | Main transcription model. |
+| `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Overrides config. |
+| `--vad-model-id <id>` | Conditional | Preset model id | None | Required if the selected model requires VAD. |
+| `--punctuation-model-id <id>` | Conditional | Preset model id | None | Required if the selected model requires punctuation. |
+| `--threads <n>` | Optional | Integer greater than `0` | `4` | Overrides config. |
+| `--enable-itn` | Optional | Flag | `false` | Conflicts with `--disable-itn`. |
+| `--disable-itn` | Optional | Flag | `false` | Overrides `enable_itn = true`; conflicts with `--enable-itn`. |
+| `--hotwords <words>` | Optional | Comma-separated words | None | CLI-only; currently supported by Transducer and Qwen3 models. |
+| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. |
+| `--vad-buffer <seconds>` | Optional | Number greater than `0` | `5.0` | CLI name for `vad_buffer_size`. |
+| `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. |
+| `--quiet` | Optional | Flag | Off | CLI-only; hides transcription progress. |
 
 ### `models list`
 
-```text
-sona models list
-  --models-dir <path>
-  --mode <streaming|offline>
-  --type <type>
-  --language <code>
-  --installed
-```
-
-Notes:
-
-- `--type` can be values like `whisper`, `vad`, or `punctuation`
-- `--language` matches language tokens like `zh`, `en`, `ja`, or `yue`
-- The current default output format is JSON
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Used to detect installed presets. |
+| `--mode <mode>` | Optional | `streaming`, `offline` | All modes | Filters by supported mode. |
+| `--type <type>` | Optional | Preset model type, such as `whisper`, `vad`, `punctuation` | All types | Filters by model type. |
+| `--language <code>` | Optional | Language token, such as `zh`, `en`, `ja`, `yue` | All languages | Filters by supported language token. |
+| `--installed` | Optional | Flag | Off | Shows only models present in `models_dir`. |
+| Output | Always | JSON | JSON | Printed to `stdout`. |
 
 ### `models download`
 
-```text
-sona models download <model_id>
-  --models-dir <path>
-  --quiet
-```
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `<model_id>` | Required | Known preset model id | None | Main model to download. |
+| `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Target models directory. |
+| `--quiet` | Optional | Flag | Off | Hides per-download progress. |
+| Companion downloads | Automatic | Required VAD and punctuation presets | Automatic | Downloading a main model also downloads required companions. |
 
-## Help Commands
+### `serve`
 
-```bash
-sona --help
-sona help
-sona --version
-sona -V
-sona transcribe --help
-sona models --help
-sona models list --help
-sona models download --help
-sona serve --help
-```
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
+| `--host <ip>` | Optional | Bind address | `0.0.0.0` | Overrides config. |
+| `--port <port>` | Optional | TCP port `0` to `65535` | `14200` | Overrides config. |
+| `--api-key <key>` | Optional | String | Empty | Empty means no Bearer auth. |
+| `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Overrides config. |
+| `--ip-whitelist <rules>` | Optional | Comma-separated rules | `localhost` | Supports `localhost`, exact IPs, CIDR, `*`, and IPv4 wildcards like `192.168.*`. |
+| `--max-streaming <n>` | Optional | Non-negative integer | `2` | Maximum concurrent streaming connections. |
+| `--max-concurrent <n>` | Optional | Non-negative integer | `2` | Maximum concurrent batch jobs. |
+| `--max-queue-size <n>` | Optional | Non-negative integer | `100` | `0` means the queue is effectively unlimited. |
+| `--max-upload-size-mb <n>` | Optional | Non-negative integer | `50` | `0` disables the upload size limit. |
+| `--job-ttl-minutes <n>` | Optional | Non-negative integer | `60` | `0` disables completed/failed job cleanup. |
+| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | HTTP API requests do not accept a per-request GPU override. |
+| `--vad-model-id <id>` | Optional | Preset model id | `silero-vad` | Default VAD companion for API server jobs. |
+| `--punctuation-model-id <id>` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | Default punctuation companion for API server jobs. |
+
+Run `sona <command> --help` for the full clap-generated help text.
