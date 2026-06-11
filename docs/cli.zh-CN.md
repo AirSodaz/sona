@@ -2,7 +2,7 @@
 
 `sona` 通过桌面主程序提供离线转写命令。安装包不会把 `sona` 写入 shell `PATH`，因此需要直接运行已安装的应用二进制文件并附带 CLI 子命令。从源码构建时，也可以用 Cargo 运行同一组命令。
 
-CLI 范围刻意保持精简：单文件离线转写、预置模型列表/下载/删除、无头 HTTP API 服务启动。它不包含实时录音、LLM 润色或 LLM 翻译。
+CLI 范围刻意保持精简：单文件和目录离线转写、预置模型列表/下载/删除、无头 HTTP API 服务启动。它不包含实时录音、LLM 润色或 LLM 翻译。
 
 ## 运行方式
 
@@ -23,6 +23,20 @@ sona transcribe ./sample.mp4 \
 ```
 
 不指定 `--output` 时，转写结果会以 JSON 写入 `stdout`。指定 `--output` 时，格式会从文件扩展名推断，除非同时传入 `--format`。
+
+### 转写目录
+
+```bash
+sona transcribe \
+  --input-dir ./media \
+  --output-dir ./transcripts \
+  --format srt \
+  --recursive \
+  --jobs 1 \
+  --config ./sona-cli.toml
+```
+
+目录模式会为每个受支持媒体文件在 `--output-dir` 中写出一个转写文件。默认只扫描目录直属文件；加入 `--recursive` 后会包含子目录，并保留相对输出路径。转写正文写入文件，`stdout` 会输出 JSON 成功/失败汇总。
 
 ### 列出、下载或删除模型
 
@@ -75,7 +89,7 @@ format = "srt"
 | `enable_itn` | 可选 | `true` 或 `false` | `false` | 启用逆文本归一化。 |
 | `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
 | `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可显式关闭 GPU 加速。 |
-| `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
+| `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
 
 ### `serve` 配置键
 
@@ -123,10 +137,14 @@ sona transcribe --help
 
 | 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `<input>` | 必选 | 本地音频或视频文件路径 | 无 | 要转写的文件。 |
+| `<input>` | 必选，除非传入 `--input-dir` | 本地音频或视频文件路径 | 无 | 要转写的单个文件。 |
+| `--input-dir <dir>` | 目录模式必选 | 目录路径 | 无 | 转写目录中的受支持媒体文件。 |
 | `--config <path>` | 可选 | TOML 文件路径 | 无 | 从配置文件加载默认值。 |
 | `--output <path>` | 可选 | 文件系统路径 | `stdout` | 输出文件路径。 |
-| `--format <format>` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 时为 `json`，否则从 `--output` 推断 | 覆盖配置和输出扩展名推断。 |
+| `--output-dir <dir>` | 与 `--input-dir` 同用时必选 | 目录路径 | 无 | 为每个输入文件写出一个转写文件。 |
+| `--recursive` | 可选 | 标志 | 关闭 | 扫描子目录并保留相对输出路径。 |
+| `--jobs <n>` | 可选 | 大于 `0` 的整数 | `1` | 目录模式下最大并发文件任务数。 |
+| `--format <format>` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖配置和输出扩展名推断。 |
 | `--language <code>` | 可选 | `auto` 或模型语言代码 | `auto` | 覆盖配置。 |
 | `--model-id <id>` | 必选，除非配置了 `model_id` | 离线预置模型 ID | 无 | 主转写模型。 |
 | `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 覆盖配置。 |
@@ -138,7 +156,7 @@ sona transcribe --help
 | `--hotwords <words>` | 可选 | 逗号分隔词组 | 无 | 仅 CLI 参数；当前支持 Transducer 和 Qwen3 模型。 |
 | `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。 |
 | `--vad-buffer <seconds>` | 可选 | 大于 `0` 的数字 | `5.0` | `vad_buffer_size` 的 CLI 参数名。 |
-| `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。 |
+| `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。与 `--input-dir` 不兼容。 |
 | `--quiet` | 可选 | 标志 | 关闭 | 仅 CLI 参数；隐藏转写进度。 |
 
 ### `models list`

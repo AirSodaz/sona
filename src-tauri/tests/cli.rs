@@ -93,6 +93,95 @@ fn transcribe_help_mentions_key_examples() {
 }
 
 #[test]
+fn transcribe_help_mentions_batch_directory_options() {
+    let output = cli_command()
+        .args(["transcribe", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--input-dir"));
+    assert!(stdout.contains("--output-dir"));
+    assert!(stdout.contains("--recursive"));
+    assert!(stdout.contains("--jobs"));
+}
+
+#[test]
+fn transcribe_input_dir_requires_output_dir_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("sample.wav"), "").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg("--input-dir")
+        .arg(dir.path())
+        .arg("--model-id")
+        .arg("not-a-real-model")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--output-dir"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn transcribe_input_dir_rejects_zero_jobs_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    let input_dir = dir.path().join("input");
+    let output_dir = dir.path().join("output");
+    fs::create_dir_all(&input_dir).unwrap();
+    fs::write(input_dir.join("sample.wav"), "").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg("--input-dir")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--jobs")
+        .arg("0")
+        .arg("--model-id")
+        .arg("not-a-real-model")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--jobs"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn transcribe_input_dir_rejects_duplicate_output_names_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    let input_dir = dir.path().join("input");
+    let output_dir = dir.path().join("output");
+    fs::create_dir_all(&input_dir).unwrap();
+    fs::write(input_dir.join("demo.wav"), "").unwrap();
+    fs::write(input_dir.join("demo.mp4"), "").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg("--input-dir")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--model-id")
+        .arg("not-a-real-model")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("would overwrite"));
+    assert!(stderr.contains("demo.json"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
 fn serve_help_mentions_runtime_defaults() {
     let output = cli_command().args(["serve", "--help"]).output().unwrap();
     assert!(output.status.success());

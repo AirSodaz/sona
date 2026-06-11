@@ -4,6 +4,8 @@ use crate::core::preset_models::find_preset_model;
 use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
+use futures_util::stream::{self, StreamExt};
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -13,22 +15,66 @@ pub const DEFAULT_LANGUAGE: &str = "auto";
 pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
 pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
 pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
+pub const DEFAULT_BATCH_JOBS: usize = 1;
+const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
+    "wav", "mp3", "m4a", "aiff", "flac", "ogg", "wma", "aac", "opus", "amr", "mp4", "webm", "mov",
+    "mkv", "avi", "wmv", "flv", "3gp",
+];
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Transcribe a local audio or video file with offline models",
-    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --vad-model-id silero-vad --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+    about = "Transcribe local audio or video files with offline models",
+    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe --input-dir ./media --output-dir ./transcripts --format srt --recursive\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --vad-model-id silero-vad --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 )]
 pub struct TranscribeArgs {
-    /// Input audio or video file to transcribe.
-    #[arg(help = "Local audio or video file path")]
-    input: PathBuf,
+    /// Input audio or video file to transcribe when not using --input-dir.
+    #[arg(
+        help = "Local audio or video file path",
+        required_unless_present = "input_dir",
+        conflicts_with = "input_dir"
+    )]
+    input: Option<PathBuf>,
+    /// Directory containing media files to transcribe.
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Transcribe supported media files from this directory"
+    )]
+    input_dir: Option<PathBuf>,
     /// Path to a TOML config file.
     #[arg(long, help = "Load default options from a TOML config file")]
     config: Option<PathBuf>,
     /// Output file path. If omitted, JSON is written to stdout.
-    #[arg(long, help = "Write output to a file instead of stdout")]
+    #[arg(
+        long,
+        conflicts_with = "output_dir",
+        help = "Write output to a file instead of stdout"
+    )]
     output: Option<PathBuf>,
+    /// Output directory for batch directory transcription.
+    #[arg(
+        long,
+        value_name = "DIR",
+        requires = "input_dir",
+        conflicts_with = "output",
+        help = "Write one transcript per input file into this directory"
+    )]
+    output_dir: Option<PathBuf>,
+    /// Recursively scan the input directory.
+    #[arg(
+        long,
+        requires = "input_dir",
+        help = "Scan input directory recursively"
+    )]
+    recursive: bool,
+    /// Maximum number of files to transcribe at once in directory mode.
+    #[arg(
+        long,
+        value_name = "N",
+        requires = "input_dir",
+        help = "Maximum concurrent batch file jobs, default 1"
+    )]
+    jobs: Option<usize>,
     /// Explicit export format.
     #[arg(
         long,
@@ -148,6 +194,38 @@ pub struct ResolvedTranscribeOptions {
     pub request: BatchTranscriptionRequest,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BatchOutputPlan {
+    input_path: PathBuf,
+    output_path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct BatchTranscribePlan {
+    input_path: PathBuf,
+    output_path: PathBuf,
+    resolved: ResolvedTranscribeOptions,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchTranscribeSummary {
+    processed: usize,
+    succeeded: usize,
+    failed: usize,
+    results: Vec<BatchTranscribeFileSummary>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchTranscribeFileSummary {
+    input_path: String,
+    output_path: String,
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
 /// Resolves CLI arguments, config-file values, and defaults into a concrete request.
 pub fn resolve_transcribe_options(
     cli: TranscribeCliOptions,
@@ -251,6 +329,17 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
         None => None,
     };
 
+    if args.input_dir.is_some() {
+        return run_batch_transcribe(args, config).await;
+    }
+
+    run_single_transcribe(args, config).await
+}
+
+async fn run_single_transcribe(
+    args: TranscribeArgs,
+    config: Option<CliConfigFile>,
+) -> Result<(), String> {
     let enable_itn = if args.enable_itn {
         Some(true)
     } else if args.disable_itn {
@@ -261,7 +350,9 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
 
     let resolved = resolve_transcribe_options(
         TranscribeCliOptions {
-            input: args.input,
+            input: args
+                .input
+                .ok_or_else(|| "Missing input file path.".to_string())?,
             output: args.output,
             format: args.format,
             language: args.language,
@@ -302,6 +393,181 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
     write_output(&output_target, &content)
 }
 
+async fn run_batch_transcribe(
+    args: TranscribeArgs,
+    config: Option<CliConfigFile>,
+) -> Result<(), String> {
+    if args.save_wav.is_some() {
+        return Err("Batch directory transcription does not support --save-wav.".to_string());
+    }
+
+    let input_dir = args
+        .input_dir
+        .clone()
+        .ok_or_else(|| "Missing --input-dir for batch directory transcription.".to_string())?;
+    let output_dir = args.output_dir.clone().ok_or_else(|| {
+        "Batch directory transcription requires --output-dir so each file has a destination."
+            .to_string()
+    })?;
+    let jobs = resolve_batch_jobs(args.jobs)?;
+    let config = config.unwrap_or_default();
+    let export_format =
+        resolve_export_format(args.format.as_deref().or(config.format.as_deref()), None)?;
+    let inputs = collect_batch_input_files(&input_dir, args.recursive)?;
+
+    if inputs.is_empty() {
+        return Err(format!(
+            "No supported media files found in {}.",
+            input_dir.display()
+        ));
+    }
+
+    let output_plans = plan_batch_output_files(
+        &inputs,
+        &input_dir,
+        &output_dir,
+        export_format,
+        args.recursive,
+    )?;
+    let mut plans = Vec::with_capacity(output_plans.len());
+    let format = Some(export_format_name(export_format).to_string());
+    let enable_itn = if args.enable_itn {
+        Some(true)
+    } else if args.disable_itn {
+        Some(false)
+    } else {
+        None
+    };
+
+    for output_plan in output_plans {
+        let resolved = resolve_transcribe_options(
+            TranscribeCliOptions {
+                input: output_plan.input_path.clone(),
+                output: Some(output_plan.output_path.clone()),
+                format: format.clone(),
+                language: args.language.clone(),
+                model_id: args.model_id.clone(),
+                models_dir: args.models_dir.clone(),
+                vad_model_id: args.vad_model_id.clone(),
+                punctuation_model_id: args.punctuation_model_id.clone(),
+                threads: args.threads,
+                enable_itn,
+                hotwords: args.hotwords.clone(),
+                gpu_acceleration: args.gpu_acceleration.clone(),
+                vad_buffer: args.vad_buffer,
+                save_wav: None,
+                quiet: args.quiet,
+            },
+            Some(config.clone()),
+        )?;
+        plans.push(BatchTranscribePlan {
+            input_path: output_plan.input_path,
+            output_path: output_plan.output_path,
+            resolved,
+        });
+    }
+
+    run_batch_transcribe_plans(plans, jobs).await
+}
+
+async fn run_batch_transcribe_plans(
+    plans: Vec<BatchTranscribePlan>,
+    jobs: usize,
+) -> Result<(), String> {
+    let total = plans.len();
+    let mut results = if jobs == 1 {
+        let mut results = Vec::with_capacity(total);
+        for (index, plan) in plans.into_iter().enumerate() {
+            results.push((index, run_batch_transcribe_plan(plan, index, total).await));
+        }
+        results
+    } else {
+        stream::iter(
+            plans
+                .into_iter()
+                .enumerate()
+                .map(|(index, plan)| async move {
+                    (index, run_batch_transcribe_plan(plan, index, total).await)
+                }),
+        )
+        .buffer_unordered(jobs)
+        .collect::<Vec<_>>()
+        .await
+    };
+
+    results.sort_by_key(|(index, _)| *index);
+    let file_results = results
+        .into_iter()
+        .map(|(_, result)| result)
+        .collect::<Vec<_>>();
+    let failed = file_results
+        .iter()
+        .filter(|result| result.error.is_some())
+        .count();
+    let summary = BatchTranscribeSummary {
+        processed: total,
+        succeeded: total.saturating_sub(failed),
+        failed,
+        results: file_results,
+    };
+    let content = serde_json::to_string_pretty(&summary)
+        .map_err(|error| format!("Failed to serialize batch summary: {error}"))?;
+    write_output(&OutputTarget::Stdout, &content)?;
+
+    if failed > 0 {
+        Err(format!("{failed} of {total} batch files failed."))
+    } else {
+        Ok(())
+    }
+}
+
+async fn run_batch_transcribe_plan(
+    plan: BatchTranscribePlan,
+    index: usize,
+    total: usize,
+) -> BatchTranscribeFileSummary {
+    let input_label = plan.input_path.display().to_string();
+    let output_label = plan.output_path.display().to_string();
+    let result = async {
+        ensure_output_parent(&plan.output_path)?;
+        let quiet = plan.resolved.quiet;
+        let export_format = plan.resolved.export_format;
+        let output_target = plan.resolved.output_target.clone();
+        let request = plan.resolved.request.clone();
+        let mut last_reported_progress = -1_i32;
+        let segments = transcribe_batch_with_progress(&request, |progress| {
+            if quiet {
+                return;
+            }
+
+            let rounded = progress.round() as i32;
+            if rounded != last_reported_progress {
+                eprintln!("[{}/{}] {}: {}%", index + 1, total, input_label, rounded);
+                last_reported_progress = rounded;
+            }
+        })
+        .await?;
+        let content = export_segments(&segments, export_format)?;
+        write_output(&output_target, &content)
+    }
+    .await;
+
+    match result {
+        Ok(()) => BatchTranscribeFileSummary {
+            input_path: input_label,
+            output_path: output_label,
+            status: "success".to_string(),
+            error: None,
+        },
+        Err(error) => BatchTranscribeFileSummary {
+            input_path: input_label,
+            output_path: output_label,
+            status: "error".to_string(),
+            error: Some(error),
+        },
+    }
+}
+
 /// Writes CLI output to the selected destination.
 pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> {
     match target {
@@ -319,6 +585,20 @@ pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> 
         OutputTarget::File(path) => fs::write(path, content)
             .map_err(|error| format!("Failed to write output file {}: {error}", path.display())),
     }
+}
+
+fn ensure_output_parent(path: &Path) -> Result<(), String> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Failed to create output directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn resolve_export_format(
@@ -339,6 +619,122 @@ fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     match output {
         Some(path) => OutputTarget::File(path),
         None => OutputTarget::Stdout,
+    }
+}
+
+fn export_format_name(format: ExportFormat) -> &'static str {
+    match format {
+        ExportFormat::Json => "json",
+        ExportFormat::Txt => "txt",
+        ExportFormat::Srt => "srt",
+        ExportFormat::Vtt => "vtt",
+        ExportFormat::Md => "md",
+    }
+}
+
+fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, String> {
+    if !input_dir.is_dir() {
+        return Err(format!(
+            "--input-dir must be an existing directory: {}",
+            input_dir.display()
+        ));
+    }
+
+    let walker = walkdir::WalkDir::new(input_dir)
+        .min_depth(1)
+        .max_depth(if recursive { usize::MAX } else { 1 });
+    let mut files = Vec::new();
+
+    for entry in walker {
+        let entry =
+            entry.map_err(|error| format!("Failed to read {}: {error}", input_dir.display()))?;
+        if entry.file_type().is_file() && is_supported_batch_media_path(entry.path()) {
+            files.push(entry.path().to_path_buf());
+        }
+    }
+
+    files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    Ok(files)
+}
+
+fn is_supported_batch_media_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            let normalized = extension.trim_start_matches('.').to_ascii_lowercase();
+            SUPPORTED_BATCH_MEDIA_EXTENSIONS.contains(&normalized.as_str())
+        })
+        .unwrap_or(false)
+}
+
+fn plan_batch_output_files(
+    inputs: &[PathBuf],
+    input_dir: &Path,
+    output_dir: &Path,
+    format: ExportFormat,
+    preserve_relative_paths: bool,
+) -> Result<Vec<BatchOutputPlan>, String> {
+    let extension = export_format_name(format);
+    let mut seen_outputs = HashSet::new();
+    let mut plans = Vec::with_capacity(inputs.len());
+
+    for input_path in inputs {
+        let relative_output =
+            batch_relative_output_path(input_path, input_dir, extension, preserve_relative_paths)?;
+        let output_path = output_dir.join(relative_output);
+        let output_key = output_path.to_string_lossy().to_ascii_lowercase();
+        if !seen_outputs.insert(output_key) {
+            return Err(format!(
+                "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
+                output_path.display()
+            ));
+        }
+
+        plans.push(BatchOutputPlan {
+            input_path: input_path.clone(),
+            output_path,
+        });
+    }
+
+    Ok(plans)
+}
+
+fn batch_relative_output_path(
+    input_path: &Path,
+    input_dir: &Path,
+    extension: &str,
+    preserve_relative_paths: bool,
+) -> Result<PathBuf, String> {
+    if preserve_relative_paths {
+        let relative = input_path.strip_prefix(input_dir).map_err(|_| {
+            format!(
+                "Input file {} is not inside --input-dir {}.",
+                input_path.display(),
+                input_dir.display()
+            )
+        })?;
+        let mut output = relative.to_path_buf();
+        output.set_extension(extension);
+        return Ok(output);
+    }
+
+    let stem = input_path.file_stem().ok_or_else(|| {
+        format!(
+            "Unable to derive output file name from {}.",
+            input_path.display()
+        )
+    })?;
+    let mut output = PathBuf::from(stem);
+    output.set_extension(extension);
+    Ok(output)
+}
+
+fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
+    let jobs = value.unwrap_or(DEFAULT_BATCH_JOBS);
+    if jobs == 0 {
+        Err("--jobs must be greater than 0.".to_string())
+    } else {
+        Ok(jobs)
     }
 }
 
@@ -611,6 +1007,109 @@ mod tests {
 
         let resolved = resolve_transcribe_options(cli, None).unwrap();
         assert_eq!(resolved.export_format, ExportFormat::Json);
+    }
+
+    #[test]
+    fn batch_input_collection_defaults_to_top_level_supported_media_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("meeting.wav"), "").unwrap();
+        fs::write(dir.path().join("clip.MP4"), "").unwrap();
+        fs::write(dir.path().join("notes.txt"), "").unwrap();
+        fs::create_dir_all(dir.path().join("nested")).unwrap();
+        fs::write(dir.path().join("nested").join("hidden.wav"), "").unwrap();
+
+        let inputs = collect_batch_input_files(dir.path(), false).unwrap();
+        let names = inputs
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["clip.MP4", "meeting.wav"]);
+    }
+
+    #[test]
+    fn batch_input_collection_can_recurse_supported_media_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("meeting.wav"), "").unwrap();
+        fs::create_dir_all(dir.path().join("nested")).unwrap();
+        fs::write(dir.path().join("nested").join("call.mp3"), "").unwrap();
+
+        let inputs = collect_batch_input_files(dir.path(), true).unwrap();
+        let names = inputs
+            .iter()
+            .map(|path| {
+                path.strip_prefix(dir.path())
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["meeting.wav", "nested/call.mp3"]);
+    }
+
+    #[test]
+    fn batch_output_plans_preserve_relative_paths_when_recursive() {
+        let dir = tempdir().unwrap();
+        let input_dir = dir.path().join("input");
+        let output_dir = dir.path().join("output");
+        fs::create_dir_all(input_dir.join("nested")).unwrap();
+        let meeting = input_dir.join("meeting.wav");
+        let call = input_dir.join("nested").join("call.mp3");
+        fs::write(&meeting, "").unwrap();
+        fs::write(&call, "").unwrap();
+
+        let plans = plan_batch_output_files(
+            &[meeting, call],
+            &input_dir,
+            &output_dir,
+            ExportFormat::Srt,
+            true,
+        )
+        .unwrap();
+        let outputs = plans
+            .iter()
+            .map(|plan| {
+                plan.output_path
+                    .strip_prefix(&output_dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(outputs, vec!["meeting.srt", "nested/call.srt"]);
+    }
+
+    #[test]
+    fn batch_output_plans_reject_duplicate_output_paths() {
+        let dir = tempdir().unwrap();
+        let input_dir = dir.path().join("input");
+        let output_dir = dir.path().join("output");
+        fs::create_dir_all(&input_dir).unwrap();
+        let wav = input_dir.join("demo.wav");
+        let mp4 = input_dir.join("demo.mp4");
+        fs::write(&wav, "").unwrap();
+        fs::write(&mp4, "").unwrap();
+
+        let error = plan_batch_output_files(
+            &[wav, mp4],
+            &input_dir,
+            &output_dir,
+            ExportFormat::Json,
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("would overwrite"));
+        assert!(error.contains("demo.json"));
+    }
+
+    #[test]
+    fn batch_jobs_default_to_one_and_must_be_positive() {
+        assert_eq!(resolve_batch_jobs(None).unwrap(), 1);
+        assert_eq!(resolve_batch_jobs(Some(2)).unwrap(), 2);
+        assert!(resolve_batch_jobs(Some(0)).unwrap_err().contains("--jobs"));
     }
 
     #[test]

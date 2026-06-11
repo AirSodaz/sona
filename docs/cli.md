@@ -2,7 +2,7 @@
 
 `sona` exposes offline transcription commands through the main desktop executable. Packaged installs do not add `sona` to your shell `PATH`, so run the installed app binary with CLI subcommands. Source builds can run the same commands with Cargo.
 
-The CLI is intentionally narrow: single-file offline transcription, preset model listing/download/deletion, and headless HTTP API server startup. It does not include live recording, LLM polish, or LLM translation.
+The CLI is intentionally narrow: single-file and directory offline transcription, preset model listing/download/deletion, and headless HTTP API server startup. It does not include live recording, LLM polish, or LLM translation.
 
 ## Run It
 
@@ -23,6 +23,20 @@ sona transcribe ./sample.mp4 \
 ```
 
 Without `--output`, transcription writes JSON to `stdout`. With `--output`, the format is inferred from the file extension unless `--format` is provided.
+
+### Transcribe a directory
+
+```bash
+sona transcribe \
+  --input-dir ./media \
+  --output-dir ./transcripts \
+  --format srt \
+  --recursive \
+  --jobs 1 \
+  --config ./sona-cli.toml
+```
+
+Directory mode writes one transcript per supported media file into `--output-dir`. By default it scans only direct children; add `--recursive` to include subdirectories. Transcript content goes to files, while a JSON success/failure summary is written to `stdout`.
 
 ### List, download, or delete models
 
@@ -75,7 +89,7 @@ format = "srt"
 | `enable_itn` | Optional | `true` or `false` | `false` | Enables inverse text normalization. |
 | `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
 | `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Use `cpu` to disable GPU acceleration. |
-| `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout, otherwise inferred from `--output` | Overrides output extension inference. |
+| `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides output extension inference. |
 
 ### `serve` config keys
 
@@ -123,10 +137,14 @@ Verbose diagnostics are written to `stderr`. Command output, including JSON outp
 
 | Parameter / config key | Required | Range | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `<input>` | Required | Local audio or video file path | None | File to transcribe. |
+| `<input>` | Required unless `--input-dir` is passed | Local audio or video file path | None | Single file to transcribe. |
+| `--input-dir <dir>` | Required for directory mode | Directory path | None | Transcribes supported media files in the directory. |
 | `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
 | `--output <path>` | Optional | Filesystem path | `stdout` | Output file path. |
-| `--format <format>` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout, otherwise inferred from `--output` | Overrides config and output extension inference. |
+| `--output-dir <dir>` | Required with `--input-dir` | Directory path | None | Writes one transcript per input file. |
+| `--recursive` | Optional | Flag | Off | Scans subdirectories and preserves relative output paths. |
+| `--jobs <n>` | Optional | Integer greater than `0` | `1` | Maximum concurrent file jobs in directory mode. |
+| `--format <format>` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides config and output extension inference. |
 | `--language <code>` | Optional | `auto` or a model language code | `auto` | Overrides config. |
 | `--model-id <id>` | Required unless `model_id` is configured | Offline preset model id | None | Main transcription model. |
 | `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Overrides config. |
@@ -138,7 +156,7 @@ Verbose diagnostics are written to `stderr`. Command output, including JSON outp
 | `--hotwords <words>` | Optional | Comma-separated words | None | CLI-only; currently supported by Transducer and Qwen3 models. |
 | `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. |
 | `--vad-buffer <seconds>` | Optional | Number greater than `0` | `5.0` | CLI name for `vad_buffer_size`. |
-| `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. |
+| `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. Not supported with `--input-dir`. |
 | `--quiet` | Optional | Flag | Off | CLI-only; hides transcription progress. |
 
 ### `models list`
