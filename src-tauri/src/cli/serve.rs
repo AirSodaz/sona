@@ -21,11 +21,11 @@ pub struct ServeArgs {
     /// Path to a TOML config file.
     #[arg(long, help = "Load default options from a TOML config file")]
     config: Option<PathBuf>,
-    #[arg(long)]
+    #[arg(long, help = "TCP port for the HTTP API server")]
     port: Option<u16>,
-    #[arg(long)]
+    #[arg(long, help = "Bind address for the HTTP API server")]
     host: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Bearer API key required by HTTP requests")]
     api_key: Option<String>,
     /// Models directory containing installed presets.
     #[arg(
@@ -33,7 +33,10 @@ pub struct ServeArgs {
         help = "Override the models directory used to resolve installed models"
     )]
     models_dir: Option<PathBuf>,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Allowed client IP rules: localhost, exact IP, CIDR, *, or IPv4 wildcards"
+    )]
     ip_whitelist: Option<String>,
     /// Maximum concurrent streaming WebSocket connections.
     #[arg(long)]
@@ -75,10 +78,7 @@ pub async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let (_tx, rx) = tokio::sync::oneshot::channel();
     let parsed_whitelist = match crate::app::server::parse_ip_whitelist(&resolved.ip_whitelist) {
         Ok(nets) => nets,
-        Err(e) => {
-            eprintln!("Failed to parse IP whitelist: {e}");
-            std::process::exit(1);
-        }
+        Err(e) => return Err(format!("Failed to parse IP whitelist: {e}")),
     };
     let parsed_arc = Arc::new(parsed_whitelist);
 

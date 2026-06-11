@@ -73,6 +73,7 @@ threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
 gpu_acceleration = "auto"
+hotwords = "Sona,offline ASR"
 format = "srt"
 ```
 
@@ -87,6 +88,7 @@ format = "srt"
 | `language` | 可選 | `auto` 或模型語言代碼，如 `zh`、`en`、`ja` | `auto` | 覆寫自動語言偵測。 |
 | `threads` | 可選 | 大於 `0` 的整數 | `4` | 辨識執行緒數。 |
 | `enable_itn` | 可選 | `true` 或 `false` | `false` | 啟用逆文字歸一化。 |
+| `hotwords` | 可選 | 逗號分隔片語 | 無 | 自訂 ASR 熱詞；目前支援 Transducer 和 Qwen3 模型。 |
 | `vad_buffer_size` | 可選 | 大於 `0` 的數字 | `5.0` | VAD 緩衝秒數。 |
 | `gpu_acceleration` | 可選 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可明確關閉 GPU 加速。 |
 | `format` | 可選 | `json`、`txt`、`srt`、`vtt`、`md` | 寫入 stdout 或目錄模式時為 `json`，否則從 `--output` 推斷 | 覆寫輸出副檔名推斷。 |
@@ -133,6 +135,8 @@ sona transcribe --help
 
 詳細診斷日誌會寫入 `stderr`。指令結果仍寫入 `stdout`，包括 `models list` 的 JSON 輸出，以及 `transcribe` 未指定 `--output` 時的輸出，因此仍可安全透過管線傳給其他工具。
 
+進階包裝腳本和測試可以設定 `SONA_FORCE_CLI=1`，即使可執行檔啟動時沒有識別到 CLI 子指令，也強制進入 CLI 模式。
+
 ### `transcribe`
 
 | 參數 / 設定鍵 | 必要性 | 取值範圍 | 預設值 | 說明 |
@@ -153,7 +157,7 @@ sona transcribe --help
 | `--threads <n>` | 可選 | 大於 `0` 的整數 | `4` | 覆寫設定。 |
 | `--enable-itn` | 可選 | 旗標 | `false` | 與 `--disable-itn` 互斥。 |
 | `--disable-itn` | 可選 | 旗標 | `false` | 覆寫 `enable_itn = true`；與 `--enable-itn` 互斥。 |
-| `--hotwords <words>` | 可選 | 逗號分隔片語 | 無 | 僅 CLI 參數；目前支援 Transducer 和 Qwen3 模型。 |
+| `--hotwords <words>` | 可選 | 逗號分隔片語 | 無 | 覆寫 `hotwords`；目前支援 Transducer 和 Qwen3 模型。 |
 | `--gpu-acceleration <provider>` | 可選 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆寫設定。 |
 | `--vad-buffer <seconds>` | 可選 | 大於 `0` 的數字 | `5.0` | `vad_buffer_size` 的 CLI 參數名。 |
 | `--save-wav <path>` | 可選 | 檔案系統路徑 | 無 | 僅 CLI 參數；儲存中間重取樣 WAV。與 `--input-dir` 不相容。 |

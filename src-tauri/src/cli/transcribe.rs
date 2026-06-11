@@ -243,6 +243,7 @@ pub fn resolve_transcribe_options(
     let gpu_acceleration =
         resolve_cli_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
+    ensure_input_file_exists(&cli.input)?;
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
     let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
         "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
@@ -310,7 +311,7 @@ pub fn resolve_transcribe_options(
             batch_segmentation_mode: crate::integrations::asr::BatchSegmentationMode::Vad,
             model_type: model.model_type.clone(),
             file_config: model.file_config.clone(),
-            hotwords: cli.hotwords,
+            hotwords: cli.hotwords.or(config.hotwords),
             speaker_processing: None,
             normalization_options:
                 crate::integrations::asr::TranscriptNormalizationOptions::default(),
@@ -340,13 +341,7 @@ async fn run_single_transcribe(
     args: TranscribeArgs,
     config: Option<CliConfigFile>,
 ) -> Result<(), String> {
-    let enable_itn = if args.enable_itn {
-        Some(true)
-    } else if args.disable_itn {
-        Some(false)
-    } else {
-        None
-    };
+    let enable_itn = resolve_enable_itn(&args);
 
     let resolved = resolve_transcribe_options(
         TranscribeCliOptions {
@@ -431,35 +426,37 @@ async fn run_batch_transcribe(
     )?;
     let mut plans = Vec::with_capacity(output_plans.len());
     let format = Some(export_format_name(export_format).to_string());
-    let enable_itn = if args.enable_itn {
-        Some(true)
-    } else if args.disable_itn {
-        Some(false)
-    } else {
-        None
-    };
+    let enable_itn = resolve_enable_itn(&args);
+    let first_plan = output_plans
+        .first()
+        .ok_or_else(|| "No supported media files found for batch transcription.".to_string())?;
+    let resolved_template = resolve_transcribe_options(
+        TranscribeCliOptions {
+            input: first_plan.input_path.clone(),
+            output: Some(first_plan.output_path.clone()),
+            format,
+            language: args.language,
+            model_id: args.model_id,
+            models_dir: args.models_dir,
+            vad_model_id: args.vad_model_id,
+            punctuation_model_id: args.punctuation_model_id,
+            threads: args.threads,
+            enable_itn,
+            hotwords: args.hotwords,
+            gpu_acceleration: args.gpu_acceleration,
+            vad_buffer: args.vad_buffer,
+            save_wav: None,
+            quiet: args.quiet,
+        },
+        Some(config),
+    )?;
 
     for output_plan in output_plans {
-        let resolved = resolve_transcribe_options(
-            TranscribeCliOptions {
-                input: output_plan.input_path.clone(),
-                output: Some(output_plan.output_path.clone()),
-                format: format.clone(),
-                language: args.language.clone(),
-                model_id: args.model_id.clone(),
-                models_dir: args.models_dir.clone(),
-                vad_model_id: args.vad_model_id.clone(),
-                punctuation_model_id: args.punctuation_model_id.clone(),
-                threads: args.threads,
-                enable_itn,
-                hotwords: args.hotwords.clone(),
-                gpu_acceleration: args.gpu_acceleration.clone(),
-                vad_buffer: args.vad_buffer,
-                save_wav: None,
-                quiet: args.quiet,
-            },
-            Some(config.clone()),
-        )?;
+        let resolved = retarget_resolved_transcribe_options(
+            &resolved_template,
+            output_plan.input_path.clone(),
+            output_plan.output_path.clone(),
+        );
         plans.push(BatchTranscribePlan {
             input_path: output_plan.input_path,
             output_path: output_plan.output_path,
@@ -468,6 +465,27 @@ async fn run_batch_transcribe(
     }
 
     run_batch_transcribe_plans(plans, jobs).await
+}
+
+fn resolve_enable_itn(args: &TranscribeArgs) -> Option<bool> {
+    if args.enable_itn {
+        Some(true)
+    } else if args.disable_itn {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn retarget_resolved_transcribe_options(
+    resolved: &ResolvedTranscribeOptions,
+    input_path: PathBuf,
+    output_path: PathBuf,
+) -> ResolvedTranscribeOptions {
+    let mut retargeted = resolved.clone();
+    retargeted.output_target = OutputTarget::File(output_path);
+    retargeted.request.file_path = input_path.to_string_lossy().to_string();
+    retargeted
 }
 
 async fn run_batch_transcribe_plans(
@@ -619,6 +637,17 @@ fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     match output {
         Some(path) => OutputTarget::File(path),
         None => OutputTarget::Stdout,
+    }
+}
+
+fn ensure_input_file_exists(input: &Path) -> Result<(), String> {
+    if input.is_file() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Input file must be an existing file: {}",
+            input.display()
+        ))
     }
 }
 
@@ -807,6 +836,7 @@ pub struct CliConfigFile {
     pub language: Option<String>,
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
+    pub hotwords: Option<String>,
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
@@ -847,13 +877,23 @@ mod tests {
         }
     }
 
+    fn installed_whisper_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("sample.wav");
+        let models_dir = dir.path().join("models");
+        fs::write(&input_path, "").unwrap();
+        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        (dir, input_path, models_dir)
+    }
+
     #[test]
     fn config_file_is_loaded_from_toml() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("sona-cli.toml");
         fs::write(
             &path,
-            "model_id = \"silero-vad\"\nthreads = 3\nenable_itn = true\n",
+            "model_id = \"silero-vad\"\nthreads = 3\nenable_itn = true\nhotwords = \"Sona,ASR\"\n",
         )
         .unwrap();
 
@@ -861,27 +901,28 @@ mod tests {
         assert_eq!(config.model_id.as_deref(), Some("silero-vad"));
         assert_eq!(config.threads, Some(3));
         assert_eq!(config.enable_itn, Some(true));
+        assert_eq!(config.hotwords.as_deref(), Some("Sona,ASR"));
     }
 
     #[test]
     fn explicit_cli_values_override_config_file_values() {
-        let dir = tempdir().unwrap();
-        let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir.clone());
         cli.vad_model_id = Some("silero-vad".to_string());
         cli.threads = Some(8);
         cli.enable_itn = Some(true);
+        cli.hotwords = Some("cli-term".to_string());
 
         let resolved = resolve_transcribe_options(
             cli,
             Some(CliConfigFile {
                 threads: Some(2),
                 enable_itn: Some(false),
+                hotwords: Some("config-term".to_string()),
                 model_id: Some("ignored".to_string()),
                 ..Default::default()
             }),
@@ -890,6 +931,7 @@ mod tests {
 
         assert_eq!(resolved.request.num_threads, 8);
         assert!(resolved.request.enable_itn);
+        assert_eq!(resolved.request.hotwords.as_deref(), Some("cli-term"));
         assert_eq!(
             resolved.request.model_path,
             models_dir
@@ -901,12 +943,10 @@ mod tests {
 
     #[test]
     fn defaults_gpu_acceleration_to_auto() {
-        let dir = tempdir().unwrap();
-        let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
@@ -918,14 +958,12 @@ mod tests {
 
     #[test]
     fn config_file_gpu_acceleration_is_used() {
-        let dir = tempdir().unwrap();
-        let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        let (dir, input_path, models_dir) = installed_whisper_fixture();
         let config_path = dir.path().join("sona-cli.toml");
         fs::write(&config_path, "gpu_acceleration = \"cpu\"\n").unwrap();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
@@ -937,13 +975,33 @@ mod tests {
     }
 
     #[test]
-    fn explicit_cli_gpu_acceleration_overrides_config_file() {
-        let dir = tempdir().unwrap();
-        let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+    fn config_file_hotwords_are_used_when_cli_omits_hotwords() {
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved = resolve_transcribe_options(
+            cli,
+            Some(CliConfigFile {
+                hotwords: Some("config-hotword".to_string()),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(resolved.request.hotwords.as_deref(), Some("config-hotword"));
+    }
+
+    #[test]
+    fn explicit_cli_gpu_acceleration_overrides_config_file() {
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
+
+        let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
@@ -977,11 +1035,14 @@ mod tests {
     #[test]
     fn infers_export_format_from_output_path() {
         let dir = tempdir().unwrap();
+        let input_path = dir.path().join("sample.wav");
         let models_dir = dir.path().join("models");
+        fs::write(&input_path, "").unwrap();
         fs::create_dir_all(models_dir.join("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25")).unwrap();
         fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.output = Some(PathBuf::from("out.srt"));
         cli.model_id = Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string());
         cli.models_dir = Some(models_dir);
@@ -993,12 +1054,10 @@ mod tests {
 
     #[test]
     fn format_flag_overrides_output_extension() {
-        let dir = tempdir().unwrap();
-        let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.output = Some(PathBuf::from("out.txt"));
         cli.format = Some("json".to_string());
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
@@ -1113,12 +1172,44 @@ mod tests {
     }
 
     #[test]
+    fn retarget_resolved_transcribe_options_updates_input_and_output() {
+        let (_dir, first_input, models_dir) = installed_whisper_fixture();
+        let second_input = first_input.with_file_name("second.wav");
+        fs::write(&second_input, "").unwrap();
+        let first_output = first_input.with_extension("json");
+        let second_output = second_input.with_extension("srt");
+
+        let mut cli = temp_cli_options();
+        cli.input = first_input.clone();
+        cli.output = Some(first_output.clone());
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+        cli.vad_model_id = Some("silero-vad".to_string());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let retargeted = retarget_resolved_transcribe_options(
+            &resolved,
+            second_input.clone(),
+            second_output.clone(),
+        );
+
+        assert_eq!(resolved.request.file_path, first_input.to_string_lossy());
+        assert_eq!(resolved.output_target, OutputTarget::File(first_output));
+        assert_eq!(retargeted.request.file_path, second_input.to_string_lossy());
+        assert_eq!(retargeted.output_target, OutputTarget::File(second_output));
+        assert_eq!(retargeted.request.model_path, resolved.request.model_path);
+    }
+
+    #[test]
     fn missing_required_companion_model_fails_fast() {
         let dir = tempdir().unwrap();
+        let input_path = dir.path().join("sample.wav");
         let models_dir = dir.path().join("models");
+        fs::write(&input_path, "").unwrap();
         fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
 
         let mut cli = temp_cli_options();
+        cli.input = input_path;
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
 

@@ -73,6 +73,7 @@ threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
 gpu_acceleration = "auto"
+hotwords = "Sona,offline ASR"
 format = "srt"
 ```
 
@@ -87,6 +88,7 @@ format = "srt"
 | `language` | Optional | `auto` または `zh`、`en`、`ja` などのモデル言語コード | `auto` | 自動言語検出を上書きします。 |
 | `threads` | Optional | `0` より大きい整数 | `4` | 認識処理のスレッド数。 |
 | `enable_itn` | Optional | `true` または `false` | `false` | 逆テキスト正規化を有効にします。 |
+| `hotwords` | Optional | カンマ区切り語句 | None | ASR 用のカスタムホットワード。現在は Transducer と Qwen3 モデルで対応しています。 |
 | `vad_buffer_size` | Optional | `0` より大きい数値 | `5.0` | VAD バッファサイズを秒単位で指定します。 |
 | `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | GPU アクセラレーションを無効化する場合は `cpu` を指定します。 |
 | `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `stdout` またはディレクトリモードでは `json`、それ以外は `--output` から推定 | 出力拡張子からの推定を上書きします。 |
@@ -133,6 +135,8 @@ sona transcribe --help
 
 詳細診断は `stderr` に出力されます。`models list` の JSON や、`--output` なしの `transcribe` 結果などのコマンド出力は `stdout` に残るため、他のツールへ安全にパイプできます。
 
+高度なラッパーやテストでは `SONA_FORCE_CLI=1` を設定すると、実行ファイルが認識済みの CLI サブコマンドなしで起動された場合でも CLI モードを強制できます。
+
 ### `transcribe`
 
 | Parameter / config key | Required | Range | Default | Notes |
@@ -153,7 +157,7 @@ sona transcribe --help
 | `--threads <n>` | Optional | `0` より大きい整数 | `4` | 設定を上書きします。 |
 | `--enable-itn` | Optional | フラグ | `false` | `--disable-itn` と同時には使えません。 |
 | `--disable-itn` | Optional | フラグ | `false` | `enable_itn = true` を上書きします。`--enable-itn` と同時には使えません。 |
-| `--hotwords <words>` | Optional | カンマ区切り語句 | None | CLI 専用。現在は Transducer と Qwen3 モデルで対応しています。 |
+| `--hotwords <words>` | Optional | カンマ区切り語句 | None | `hotwords` を上書きします。現在は Transducer と Qwen3 モデルで対応しています。 |
 | `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | 設定を上書きします。 |
 | `--vad-buffer <seconds>` | Optional | `0` より大きい数値 | `5.0` | `vad_buffer_size` の CLI 引数名です。 |
 | `--save-wav <path>` | Optional | ファイルシステムパス | None | CLI 専用。中間のリサンプリング WAV を保存します。`--input-dir` とは併用できません。 |

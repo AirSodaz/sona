@@ -73,6 +73,7 @@ threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
 gpu_acceleration = "auto"
+hotwords = "Sona,offline ASR"
 format = "srt"
 ```
 
@@ -87,6 +88,7 @@ format = "srt"
 | `language` | 可选 | `auto` 或模型语言代码，如 `zh`、`en`、`ja` | `auto` | 覆盖自动语言检测。 |
 | `threads` | 可选 | 大于 `0` 的整数 | `4` | 识别线程数。 |
 | `enable_itn` | 可选 | `true` 或 `false` | `false` | 启用逆文本归一化。 |
+| `hotwords` | 可选 | 逗号分隔词组 | 无 | 自定义 ASR 热词；当前支持 Transducer 和 Qwen3 模型。 |
 | `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
 | `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可显式关闭 GPU 加速。 |
 | `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
@@ -133,6 +135,8 @@ sona transcribe --help
 
 详细诊断日志会写入 `stderr`。命令结果仍写入 `stdout`，包括 `models list` 的 JSON 输出，以及 `transcribe` 未指定 `--output` 时的输出，因此仍可安全管道传给其他工具。
 
+高级包装脚本和测试可以设置 `SONA_FORCE_CLI=1`，即使可执行文件启动时没有识别到 CLI 子命令，也强制进入 CLI 模式。
+
 ### `transcribe`
 
 | 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
@@ -153,7 +157,7 @@ sona transcribe --help
 | `--threads <n>` | 可选 | 大于 `0` 的整数 | `4` | 覆盖配置。 |
 | `--enable-itn` | 可选 | 标志 | `false` | 与 `--disable-itn` 互斥。 |
 | `--disable-itn` | 可选 | 标志 | `false` | 覆盖 `enable_itn = true`；与 `--enable-itn` 互斥。 |
-| `--hotwords <words>` | 可选 | 逗号分隔词组 | 无 | 仅 CLI 参数；当前支持 Transducer 和 Qwen3 模型。 |
+| `--hotwords <words>` | 可选 | 逗号分隔词组 | 无 | 覆盖 `hotwords`；当前支持 Transducer 和 Qwen3 模型。 |
 | `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。 |
 | `--vad-buffer <seconds>` | 可选 | 大于 `0` 的数字 | `5.0` | `vad_buffer_size` 的 CLI 参数名。 |
 | `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。与 `--input-dir` 不兼容。 |

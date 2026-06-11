@@ -188,6 +188,10 @@ fn serve_help_mentions_runtime_defaults() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--config"));
+    assert!(stdout.contains("Bind address for the HTTP API server"));
+    assert!(stdout.contains("TCP port for the HTTP API server"));
+    assert!(stdout.contains("Bearer API key required by HTTP requests"));
+    assert!(stdout.contains("Allowed client IP rules"));
     assert!(stdout.contains("--gpu-acceleration"));
     assert!(stdout.contains("--vad-model-id"));
     assert!(stdout.contains("--punctuation-model-id"));
@@ -208,6 +212,19 @@ fn serve_invalid_gpu_acceleration_returns_failure() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("gpu_acceleration"));
     assert!(stderr.contains("auto, cpu, cuda, coreml, directml"));
+}
+
+#[test]
+fn serve_invalid_ip_whitelist_returns_failure() {
+    let output = cli_command()
+        .args(["serve", "--ip-whitelist", "not-an-ip-rule"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Failed to parse IP whitelist"));
+    assert!(stderr.contains("not-an-ip-rule"));
 }
 
 #[test]
@@ -372,10 +389,14 @@ fn missing_config_file_returns_failure() {
 
 #[test]
 fn unknown_model_id_returns_failure() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    fs::write(&input_path, "").unwrap();
+
     let output = cli_command()
+        .arg("transcribe")
+        .arg(&input_path)
         .args([
-            "transcribe",
-            "sample.wav",
             "--models-dir",
             "C:\\models",
             "--model-id",
@@ -387,6 +408,25 @@ fn unknown_model_id_returns_failure() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn missing_single_file_input_returns_failure_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    let missing_input = dir.path().join("missing.wav");
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg(&missing_input)
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Input file must be an existing file"));
+    assert!(stderr.contains(&missing_input.display().to_string()));
+    assert!(!stderr.contains("Unknown model id"));
 }
 
 #[test]
@@ -579,12 +619,14 @@ fn repeated_download_of_installed_model_also_installs_required_vad() {
 #[test]
 fn missing_required_vad_model_returns_failure() {
     let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    fs::write(&input_path, "").unwrap();
     let models_dir = dir.path().join("models");
     fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
 
     let output = cli_command()
         .arg("transcribe")
-        .arg("sample.wav")
+        .arg(&input_path)
         .arg("--models-dir")
         .arg(&models_dir)
         .arg("--model-id")

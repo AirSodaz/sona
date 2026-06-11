@@ -69,7 +69,7 @@ impl log::Log for CliLogger {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Transcribes a single local audio or video file.
+    /// Transcribes local audio or video files.
     Transcribe(Box<TranscribeArgs>),
     /// Lists, downloads, or deletes preset models.
     Models(ModelsArgs),

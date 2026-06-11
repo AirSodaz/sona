@@ -73,6 +73,7 @@ threads = 4
 enable_itn = false
 vad_buffer_size = 5.0
 gpu_acceleration = "auto"
+hotwords = "Sona,offline ASR"
 format = "srt"
 ```
 
@@ -87,6 +88,7 @@ format = "srt"
 | `language` | Optional | `auto` or a model language code, such as `zh`, `en`, `ja` | `auto` | Overrides automatic language detection. |
 | `threads` | Optional | Integer greater than `0` | `4` | Recognizer thread count. |
 | `enable_itn` | Optional | `true` or `false` | `false` | Enables inverse text normalization. |
+| `hotwords` | Optional | Comma-separated words | None | Custom ASR hotwords; currently supported by Transducer and Qwen3 models. |
 | `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
 | `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Use `cpu` to disable GPU acceleration. |
 | `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides output extension inference. |
@@ -133,6 +135,8 @@ sona transcribe --help
 
 Verbose diagnostics are written to `stderr`. Command output, including JSON output from `models list` and `transcribe` without `--output`, remains on `stdout` so it can still be piped to other tools.
 
+Advanced wrappers and tests can set `SONA_FORCE_CLI=1` to force CLI mode even when the executable is launched without a recognized CLI subcommand.
+
 ### `transcribe`
 
 | Parameter / config key | Required | Range | Default | Notes |
@@ -153,7 +157,7 @@ Verbose diagnostics are written to `stderr`. Command output, including JSON outp
 | `--threads <n>` | Optional | Integer greater than `0` | `4` | Overrides config. |
 | `--enable-itn` | Optional | Flag | `false` | Conflicts with `--disable-itn`. |
 | `--disable-itn` | Optional | Flag | `false` | Overrides `enable_itn = true`; conflicts with `--enable-itn`. |
-| `--hotwords <words>` | Optional | Comma-separated words | None | CLI-only; currently supported by Transducer and Qwen3 models. |
+| `--hotwords <words>` | Optional | Comma-separated words | None | Overrides `hotwords`; currently supported by Transducer and Qwen3 models. |
 | `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. |
 | `--vad-buffer <seconds>` | Optional | Number greater than `0` | `5.0` | CLI name for `vad_buffer_size`. |
 | `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. Not supported with `--input-dir`. |
