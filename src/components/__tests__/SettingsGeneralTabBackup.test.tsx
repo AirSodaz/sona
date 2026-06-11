@@ -263,6 +263,33 @@ describe('SettingsGeneralTab backup entry', () => {
     expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
   });
 
+  it('shows every supported interface language and saves new language choices', () => {
+    render(<SettingsGeneralTab />);
+
+    const languageSelect = document.querySelector('#settings-language') as HTMLSelectElement | null;
+    expect(languageSelect).not.toBeNull();
+    expect(Array.from(languageSelect?.options ?? []).map((option) => option.value)).toEqual([
+      'auto',
+      'en',
+      'zh',
+      'zh-TW',
+      'ja',
+    ]);
+    expect(Array.from(languageSelect?.options ?? []).map((option) => option.textContent)).toEqual([
+      'Automatic',
+      'English',
+      '简体中文',
+      '繁體中文',
+      '日本語',
+    ]);
+
+    fireEvent.change(languageSelect as HTMLSelectElement, { target: { value: 'zh-TW' } });
+    expect(testContext.updateConfigMock).toHaveBeenLastCalledWith({ appLanguage: 'zh-TW' });
+
+    fireEvent.change(languageSelect as HTMLSelectElement, { target: { value: 'ja' } });
+    expect(testContext.updateConfigMock).toHaveBeenLastCalledWith({ appLanguage: 'ja' });
+  });
+
   it('disables local backup and WebDAV transfer actions while live recording is active', async () => {
     testContext.transcriptState.isRecording = true;
 

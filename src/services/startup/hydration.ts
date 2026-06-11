@@ -1,4 +1,5 @@
 import i18n from '../../i18n';
+import { resolveAppLanguagePreference } from '../../constants/appLanguages';
 import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -56,12 +57,7 @@ function applyHydratedConfig(config: AppConfig): void {
     useTranscriptRuntimeStore.getState().setIsCaptionMode(true);
   }
 
-  if (config.appLanguage && config.appLanguage !== 'auto') {
-    void i18n.changeLanguage(config.appLanguage);
-    return;
-  }
-
-  void i18n.changeLanguage(navigator.language);
+  void i18n.changeLanguage(resolveAppLanguagePreference(config.appLanguage, navigator.language));
 }
 
 async function hydrateOnboardingState(

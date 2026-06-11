@@ -51,7 +51,8 @@
             "polish_model_missing": "请先在 设置 > LLM 服务 中为润色指定模型。",
             "translation_model_missing": "请先在 设置 > LLM 服务 中为翻译指定模型。",
             "summary_model_missing": "请先在 设置 > LLM 服务 中为摘要指定模型。",
-            "offline_model_missing": "请先在设置中配置本地模型。"
+            "offline_model_missing": "请先在设置中配置本地模型。",
+            "local_model_missing": "请先在设置中配置本地模型。"
         },
         "batch": {
             "unsupported_format": "不支持的文件格式。请使用：{{formats}}",
@@ -480,7 +481,9 @@
             "success_title": "{{ruleName}} 已完成",
             "success_body": "已完成 {{count}} 个文件。最近：{{fileName}}",
             "stage_detail": "最近阶段：{{stage}}",
-            "file_unknown": "最近文件不可用"
+            "file_unknown": "最近文件不可用",
+            "failure_body_other": "{{count}} 个文件失败。最新：{{fileName}}",
+            "success_body_other": "{{count}} 个文件已完成。最新：{{fileName}}"
         },
         "scan_now": "立即扫描",
         "retry_failed": "重试失败项",
@@ -742,7 +745,9 @@
             "ffmpeg_missing": "未找到随应用打包的 FFmpeg sidecar。批量导入和媒体解码可能失败，建议重装应用并查看日志。",
             "log_dir_title": "日志目录",
             "log_dir_ready": "可以解析运行时日志目录，便于排障。",
-            "log_dir_missing": "Sona 当前无法解析运行时日志目录。"
+            "log_dir_missing": "Sona 当前无法解析运行时日志目录。",
+            "local_model_missing": "还没有选择批量导入模型。",
+            "local_model_title": "批量导入模型"
         },
         "vocabulary": "词汇表",
         "vocabulary_description": "管理自定义词汇、热词、润色关键词规则集、文本润色上下文预设和摘要模板。",
@@ -1197,7 +1202,13 @@
             "reasoning_level_low": "低",
             "reasoning_level_medium": "中",
             "reasoning_level_high": "高"
-        }
+        },
+        "language_zh_tw": "繁體中文",
+        "language_ja": "日本語",
+        "local_model_hint": "用于处理音频/视频文件。",
+        "local_model_label": "批量导入模型",
+        "local_model_management": "本地模型管理",
+        "select_local_model": "选择本地模型..."
     },
     "shortcuts": {
         "title": "快捷键",
@@ -1412,7 +1423,10 @@
             "modified": "已修改",
             "added": "新增",
             "removed": "已删除"
-        }
+        },
+        "restore_selected_confirm_other": "恢复 {{count}} 个选中的更改，并先将当前转录保存为快照？",
+        "segment_count_other": "{{count}} 个片段",
+        "selected_count_other": "已选中 {{count}} 个更改"
     },
     "recovery": {
         "badge": "恢复中心",
@@ -1420,7 +1434,8 @@
         "description": "查看上一次会话中断的批量导入与自动化处理，并用一个明确动作决定继续还是丢弃。",
         "banner": {
             "title": "发现可恢复的中断任务",
-            "body": "恢复中心里有 {{count}} 个待处理文件。批处理：{{batchCount}} · 自动化：{{automationCount}}"
+            "body": "恢复中心里有 {{count}} 个待处理文件。批处理：{{batchCount}} · 自动化：{{automationCount}}",
+            "body_other": "{{count}} 个文件正在恢复中心等待。批量：{{batchCount}} · 自动化：{{automationCount}}"
         },
         "actions": {
             "open_center": "打开恢复中心",
@@ -1443,7 +1458,9 @@
             "batch_description": "来自批量导入的中断文件。",
             "automation_description": "来自文件夹自动化规则的中断文件。",
             "pending_count": "{{count}} 个文件",
-            "draft_count": "{{count}} 份草稿"
+            "draft_count": "{{count}} 份草稿",
+            "draft_count_other": "{{count}} 个草稿",
+            "pending_count_other": "{{count}} 个文件"
         },
         "section": {
             "batch_description": "每个文件都会从原始媒体重新开始处理，但可以继续写入同一个已保存的历史草稿。",

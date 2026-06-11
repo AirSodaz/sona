@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { resolveAppLanguagePreference } from '../constants/appLanguages';
 import { useConfigStore } from '../stores/configStore';
 
 export type SettingsTab =
@@ -88,11 +89,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     // Sync language change
     useEffect(() => {
-        if (config.appLanguage === 'auto') {
-            i18n.changeLanguage(navigator.language);
-        } else {
-            i18n.changeLanguage(config.appLanguage);
-        }
+        i18n.changeLanguage(resolveAppLanguagePreference(config.appLanguage, navigator.language));
     }, [config.appLanguage, i18n]);
 
     const updateConfig = (updates: Partial<typeof config>) => {

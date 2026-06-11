@@ -51,7 +51,8 @@
             "polish_model_missing": "Please assign a model for polishing in Settings > LLM Service first.",
             "translation_model_missing": "Please assign a model for translation in Settings > LLM Service first.",
             "summary_model_missing": "Please assign a model for summaries in Settings > LLM Service first.",
-            "local_model_missing": "Please configure a local model in Settings first."
+            "local_model_missing": "Please configure a local model in Settings first.",
+            "offline_model_missing": "Please configure a local model in Settings first."
         },
         "batch": {
             "unsupported_format": "Unsupported file format. Please use: {{formats}}",
@@ -744,7 +745,9 @@
             "ffmpeg_missing": "The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.",
             "log_dir_title": "Log Directory",
             "log_dir_ready": "Runtime logs can be resolved for troubleshooting.",
-            "log_dir_missing": "Sona could not resolve the runtime log directory."
+            "log_dir_missing": "Sona could not resolve the runtime log directory.",
+            "offline_model_missing": "No Batch Import Model is selected yet.",
+            "offline_model_title": "Batch Import Model"
         },
         "vocabulary": "Vocabulary",
         "vocabulary_description": "Manage custom vocabulary, hotwords, polish keyword sets, text polish context presets, and summary templates.",
@@ -870,7 +873,8 @@
             "volcengine_batch_mode_standard": "Standard (Async Polling)",
             "volcengine_batch_mode_flash": "Flash (Sync Direct)",
             "volcengine_batch_mode_offpeak": "Off-peak (Discount Async)",
-            "volcengine_batch_mode_url_only_unavailable": "Requires a public audio URL; local batch import does not support it yet."
+            "volcengine_batch_mode_url_only_unavailable": "Requires a public audio URL; local batch import does not support it yet.",
+            "cloud_upload_hint": "Audio will be sent to the cloud for recognition."
         },
         "model_settings_description": "Manage local transcription models and processing behavior.",
         "local_path": "Local Setup",
@@ -1198,7 +1202,13 @@
             "reasoning_level_low": "Low",
             "reasoning_level_medium": "Medium",
             "reasoning_level_high": "High"
-        }
+        },
+        "language_zh_tw": "繁體中文",
+        "language_ja": "日本語",
+        "offline_model_hint": "Used for processing audio/video files.",
+        "offline_model_label": "Batch Import Model",
+        "offline_model_management": "Local Model Management",
+        "select_offline_model": "Select local model..."
     },
     "shortcuts": {
         "title": "Shortcuts",

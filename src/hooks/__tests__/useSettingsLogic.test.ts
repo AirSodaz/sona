@@ -1,9 +1,10 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSettingsLogic, type SettingsTabInput } from '../useSettingsLogic';
 import { buildLlmConfigPatch, createLlmSettings, updateProviderSetting } from '../../services/llm/state';
 
 const mockSetConfig = vi.fn();
+const mockChangeLanguage = vi.hoisted(() => vi.fn());
 
 function createMockConfig() {
     const baseConfig: any = {
@@ -37,7 +38,7 @@ vi.mock('../../stores/configStore', () => ({
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
         t: (key: string) => key,
-        i18n: { changeLanguage: vi.fn() },
+        i18n: { changeLanguage: mockChangeLanguage },
     }),
 }));
 
@@ -45,6 +46,10 @@ describe('useSettingsLogic', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockConfig = createMockConfig();
+        Object.defineProperty(window.navigator, 'language', {
+            value: 'en-US',
+            configurable: true,
+        });
     });
 
     it('passes direct config updates through to the store', () => {
@@ -78,6 +83,42 @@ describe('useSettingsLogic', () => {
         const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'context'));
 
         expect(result.current.activeTab).toBe('vocabulary');
+    });
+
+    it('changes i18n to explicit Traditional Chinese and Japanese preferences', async () => {
+        mockConfig = {
+            ...createMockConfig(),
+            appLanguage: 'zh-TW',
+        };
+        renderHook(() => useSettingsLogic(false, vi.fn()));
+
+        await waitFor(() => {
+            expect(mockChangeLanguage).toHaveBeenLastCalledWith('zh-TW');
+        });
+
+        mockChangeLanguage.mockClear();
+        mockConfig = {
+            ...createMockConfig(),
+            appLanguage: 'ja',
+        };
+        renderHook(() => useSettingsLogic(false, vi.fn()));
+
+        await waitFor(() => {
+            expect(mockChangeLanguage).toHaveBeenLastCalledWith('ja');
+        });
+    });
+
+    it('resolves automatic language detection to a supported app locale', async () => {
+        Object.defineProperty(window.navigator, 'language', {
+            value: 'zh-HK',
+            configurable: true,
+        });
+
+        renderHook(() => useSettingsLogic(false, vi.fn()));
+
+        await waitFor(() => {
+            expect(mockChangeLanguage).toHaveBeenLastCalledWith('zh-TW');
+        });
     });
 
     it('derives the opened initial tab before the sync effect commits state', () => {

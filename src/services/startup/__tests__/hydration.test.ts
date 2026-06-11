@@ -180,7 +180,7 @@ describe('hydrateAppStartupState', () => {
       polishCustomPresets: [{ id: 'project-preset', name: 'Migrated Preset', context: 'Context' }],
     });
     expect(mockSetCaptionMode).toHaveBeenCalledWith(true);
-    expect(mockI18nChangeLanguage).toHaveBeenCalledWith('zh-CN');
+    expect(mockI18nChangeLanguage).toHaveBeenCalledWith('zh');
     expect(projectState.loadProjects).toHaveBeenCalledTimes(1);
     expect(mockProjectSaveAll).toHaveBeenCalledWith([createProjectRecord({}, { polishPresetId: 'meeting' })]);
     expect(mockProjectSetState).toHaveBeenCalledWith({
@@ -221,5 +221,60 @@ describe('hydrateAppStartupState', () => {
     expect(localStorage.getItem('sona-config')).not.toBeNull();
     expect(localStorage.getItem('sona-onboarding')).not.toBeNull();
     expect(localStorage.getItem('sona-first-run-completed')).not.toBeNull();
+  });
+
+  it('hydrates supported Traditional Chinese and Japanese app languages', async () => {
+    mockProjectMigration.mockReturnValue({
+      migrated: false,
+      projects: [],
+      customPresets: [],
+    });
+    mockMigrateConfig.mockResolvedValueOnce({
+      config: {
+        ...DEFAULT_CONFIG,
+        appLanguage: 'zh-TW',
+      },
+      migrated: false,
+    });
+
+    await hydrateAppStartupState();
+
+    expect(mockI18nChangeLanguage).toHaveBeenLastCalledWith('zh-TW');
+
+    mockI18nChangeLanguage.mockClear();
+    mockMigrateConfig.mockResolvedValueOnce({
+      config: {
+        ...DEFAULT_CONFIG,
+        appLanguage: 'ja',
+      },
+      migrated: false,
+    });
+
+    await hydrateAppStartupState();
+
+    expect(mockI18nChangeLanguage).toHaveBeenLastCalledWith('ja');
+  });
+
+  it('resolves automatic startup language detection before changing i18n language', async () => {
+    Object.defineProperty(window.navigator, 'language', {
+      value: 'zh-HK',
+      configurable: true,
+    });
+    mockProjectMigration.mockReturnValue({
+      migrated: false,
+      projects: [],
+      customPresets: [],
+    });
+    mockMigrateConfig.mockResolvedValueOnce({
+      config: {
+        ...DEFAULT_CONFIG,
+        appLanguage: 'auto',
+      },
+      migrated: false,
+    });
+
+    await hydrateAppStartupState();
+
+    expect(mockI18nChangeLanguage).toHaveBeenLastCalledWith('zh-TW');
   });
 });

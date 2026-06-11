@@ -4,8 +4,9 @@ import { Languages, Stethoscope } from 'lucide-react';
 import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
+import { APP_LANGUAGE_OPTIONS } from '../../constants/appLanguages';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
-import type { AppLogLevel, UIConfig } from '../../types/config';
+import type { AppLanguagePreference, AppLogLevel, UIConfig } from '../../types/config';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { APP_LOG_LEVELS, normalizeLogLevel } from '../../utils/logLevel';
 import { loadBackupSettingsSection } from './settingsGeneralDeferredLoaders';
@@ -78,12 +79,11 @@ export function SettingsGeneralTab({
                         <Dropdown
                             id="settings-language"
                             value={appLanguage}
-                            onChange={(value) => updateConfig({ appLanguage: value as 'auto' | 'en' | 'zh' })}
-                            options={[
-                                { value: 'auto', label: t('common.auto') },
-                                { value: 'en', label: t('settings.language_en') },
-                                { value: 'zh', label: t('settings.language_zh') }
-                            ]}
+                            onChange={(value) => updateConfig({ appLanguage: value as AppLanguagePreference })}
+                            options={APP_LANGUAGE_OPTIONS.map((option) => ({
+                                value: option.value,
+                                label: t(option.labelKey, { defaultValue: option.defaultLabel }),
+                            }))}
                         />
                     </div>
                 </SettingsItem>

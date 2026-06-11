@@ -16,10 +16,16 @@ import type { SpeakerProfile } from './speaker';
 /** Supported minimum log levels, from most verbose to least verbose. */
 export type AppLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
+/** Saved UI language preference. */
+export type AppLanguagePreference = 'auto' | 'en' | 'zh' | 'zh-TW' | 'ja';
+
+/** Resolved UI language loaded by i18next. */
+export type ResolvedAppLanguage = Exclude<AppLanguagePreference, 'auto'>;
+
 /** Application-level UI preferences. */
 export interface UIConfig {
   /** Application UI language preference. */
-  appLanguage: 'auto' | 'en' | 'zh';
+  appLanguage: AppLanguagePreference;
   /** Application theme preference. */
   theme?: 'auto' | 'light' | 'dark';
   /** Font preference. */
