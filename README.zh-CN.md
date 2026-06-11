@@ -1,6 +1,6 @@
 # Sona
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md)
 
 **Sona** 是一款功能强大的离线转录（字幕）编辑器，由 [Tauri](https://tauri.app)、[React](https://react.dev) 和 [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 构建。它使用高性能的 Rust 后端，直接在您的本地机器上提供快速、准确且私密的语音转文本能力。
 
@@ -49,8 +49,8 @@ cargo run --manifest-path src-tauri/Cargo.toml -- \
 
 当前 CLI 范围刻意保持精简：
 
-- 单文件离线转写
-- 预置模型列表查看与模型下载
+- 单文件和目录离线转写
+- 预置模型列表查看、模型下载与模型删除
 - 通过 `sona serve` 启动无头 HTTP API 服务；详情请查看 [docs/api.zh-CN.md](docs/api.zh-CN.md)
 - 导出到 `json`、`txt`、`srt`、`vtt` 或 `md`
 - 通过桌面主程序提供，但不会注册到 `PATH`

@@ -1,6 +1,6 @@
 # Sona
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md)
 
 **Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), and [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine using a high-performance Rust backend.
 
@@ -48,8 +48,8 @@ cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --conf
 
 Current CLI scope is intentionally narrow:
 
-- Single-file offline transcription
-- Preset model listing and model downloads
+- Single-file and directory offline transcription
+- Preset model listing, downloads, and deletion
 - Headless HTTP API server startup through `sona serve`; see [docs/api.md](docs/api.md)
 - Export to `json`, `txt`, `srt`, `vtt`, or `md`
 - Exposed through the main desktop executable, but not registered on `PATH`
