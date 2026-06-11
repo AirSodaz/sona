@@ -2,7 +2,7 @@
 
 `sona` exposes offline transcription commands through the main desktop executable. Packaged installs do not add `sona` to your shell `PATH`, so run the installed app binary with CLI subcommands. Source builds can run the same commands with Cargo.
 
-The CLI is intentionally narrow: single-file offline transcription, preset model listing/download, and headless HTTP API server startup. It does not include live recording, LLM polish, or LLM translation.
+The CLI is intentionally narrow: single-file offline transcription, preset model listing/download/deletion, and headless HTTP API server startup. It does not include live recording, LLM polish, or LLM translation.
 
 ## Run It
 
@@ -24,15 +24,17 @@ sona transcribe ./sample.mp4 \
 
 Without `--output`, transcription writes JSON to `stdout`. With `--output`, the format is inferred from the file extension unless `--format` is provided.
 
-### List or download models
+### List, download, or delete models
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
 sona models download sherpa-onnx-whisper-turbo
+sona models delete sherpa-onnx-whisper-turbo
 ```
 
 `models download` automatically downloads required companion models, such as `silero-vad` or the default punctuation model, when the selected preset needs them.
+`models delete` removes only the specified model. It does not delete companion models automatically.
 
 ### Start the API server
 
@@ -158,6 +160,16 @@ Verbose diagnostics are written to `stderr`. Command output, including JSON outp
 | `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Target models directory. |
 | `--quiet` | Optional | Flag | Off | Hides per-download progress. |
 | Companion downloads | Automatic | Required VAD and punctuation presets | Automatic | Downloading a main model also downloads required companions. |
+
+### `models delete`
+
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `<model_id>` | Required | Known preset model id | None | Model to delete. |
+| `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Target models directory. |
+| `--yes` | Optional | Flag | Off | Skips the interactive confirmation prompt. |
+| Missing install path | No | Known but not installed preset | Successful no-op | Prints a notice to `stderr` and exits with status 0. |
+| Companion deletion | No | Required VAD and punctuation presets | Not deleted | Delete companion models explicitly if you no longer need them. |
 
 ### `serve`
 

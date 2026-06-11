@@ -2,7 +2,7 @@
 
 `sona` 通过桌面主程序提供离线转写命令。安装包不会把 `sona` 写入 shell `PATH`，因此需要直接运行已安装的应用二进制文件并附带 CLI 子命令。从源码构建时，也可以用 Cargo 运行同一组命令。
 
-CLI 范围刻意保持精简：单文件离线转写、预置模型列表/下载、无头 HTTP API 服务启动。它不包含实时录音、LLM 润色或 LLM 翻译。
+CLI 范围刻意保持精简：单文件离线转写、预置模型列表/下载/删除、无头 HTTP API 服务启动。它不包含实时录音、LLM 润色或 LLM 翻译。
 
 ## 运行方式
 
@@ -24,15 +24,17 @@ sona transcribe ./sample.mp4 \
 
 不指定 `--output` 时，转写结果会以 JSON 写入 `stdout`。指定 `--output` 时，格式会从文件扩展名推断，除非同时传入 `--format`。
 
-### 列出或下载模型
+### 列出、下载或删除模型
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
 sona models download sherpa-onnx-whisper-turbo
+sona models delete sherpa-onnx-whisper-turbo
 ```
 
 当所选预置模型需要伴生模型时，`models download` 会自动下载所需模型，例如 `silero-vad` 或默认标点模型。
+`models delete` 只会删除指定模型，不会自动删除伴生模型。
 
 ### 启动 API 服务
 
@@ -158,6 +160,16 @@ sona transcribe --help
 | `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 目标模型目录。 |
 | `--quiet` | 可选 | 标志 | 关闭 | 隐藏单个下载进度。 |
 | 伴生模型下载 | 自动 | 所需 VAD 和标点预置模型 | 自动 | 下载主模型时会同时下载必需伴生模型。 |
+
+### `models delete`
+
+| 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `<model_id>` | 必选 | 已知预置模型 ID | 无 | 要删除的模型。 |
+| `--models-dir <path>` | 可选 | 文件系统路径 | 可推断时使用桌面应用模型目录 | 目标模型目录。 |
+| `--yes` | 可选 | 标志 | 关闭 | 跳过交互确认提示。 |
+| 安装路径缺失 | 否 | 已知但未安装的预置模型 | 成功 no-op | 向 `stderr` 输出提示并以状态码 0 退出。 |
+| 伴生模型删除 | 否 | 所需 VAD 和标点预置模型 | 不删除 | 如果不再需要伴生模型，请显式删除对应模型。 |
 
 ### `serve`
 

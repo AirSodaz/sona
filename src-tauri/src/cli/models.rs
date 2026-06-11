@@ -2,6 +2,7 @@ use crate::cli::transcribe::{OutputTarget, write_output};
 use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
@@ -50,6 +51,11 @@ pub enum ModelCommands {
         after_help = "Examples:\n  sona models download sherpa-onnx-whisper-turbo\n  sona models download silero-vad --models-dir ./models"
     )]
     Download(ModelDownloadArgs),
+    /// Deletes an installed preset model from the models directory.
+    #[command(
+        after_help = "Examples:\n  sona models delete sherpa-onnx-whisper-turbo\n  sona models delete silero-vad --models-dir ./models --yes"
+    )]
+    Delete(ModelDeleteArgs),
 }
 
 #[derive(Debug, Args)]
@@ -107,6 +113,23 @@ pub struct ModelDownloadArgs {
     quiet: bool,
 }
 
+#[derive(Debug, Args)]
+#[command(
+    about = "Delete an installed preset model",
+    after_help = "Companion models are not deleted automatically. Pass --yes to skip the confirmation prompt."
+)]
+pub struct ModelDeleteArgs {
+    /// Preset model id to delete.
+    #[arg(help = "Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad")]
+    model_id: String,
+    /// Models directory containing installed presets.
+    #[arg(long, help = "Override the models directory")]
+    models_dir: Option<PathBuf>,
+    /// Skips the interactive confirmation prompt.
+    #[arg(long, help = "Delete without prompting for confirmation")]
+    yes: bool,
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct ModelListEntry {
     id: String,
@@ -124,6 +147,7 @@ pub async fn run_models(args: ModelsArgs) -> Result<(), String> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
         ModelCommands::Download(args) => run_model_download(args).await,
+        ModelCommands::Delete(args) => run_model_delete(args),
     }
 }
 
@@ -194,6 +218,80 @@ async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn run_model_delete(args: ModelDeleteArgs) -> Result<(), String> {
+    let resolved = resolve_model_download(&args.model_id, args.models_dir)?;
+
+    if !resolved.install_path.exists() {
+        eprintln!(
+            "Model {} is not installed at {}",
+            resolved.model.id,
+            resolved.install_path.display()
+        );
+        return Ok(());
+    }
+
+    if !args.yes && !confirm_model_delete(&resolved.model.id, &resolved.install_path)? {
+        eprintln!("Delete cancelled.");
+        return Ok(());
+    }
+
+    remove_model_install_path(&resolved.install_path)?;
+    eprintln!(
+        "Deleted {} from {}",
+        resolved.model.id,
+        resolved.install_path.display()
+    );
+    Ok(())
+}
+
+fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, String> {
+    eprint!(
+        "Delete model {model_id} at {}? [y/N] ",
+        install_path.display()
+    );
+    io::stderr()
+        .flush()
+        .map_err(|error| format!("Failed to flush confirmation prompt: {error}"))?;
+
+    let mut answer = String::new();
+    io::stdin()
+        .read_line(&mut answer)
+        .map_err(|error| format!("Failed to read confirmation: {error}"))?;
+    Ok(matches!(
+        answer.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
+}
+
+fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
+    let metadata = match std::fs::symlink_metadata(install_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect model path {}: {error}",
+                install_path.display()
+            ));
+        }
+    };
+
+    if metadata.file_type().is_dir() {
+        std::fs::remove_dir_all(install_path).map_err(|error| {
+            format!(
+                "Failed to delete model directory {}: {error}",
+                install_path.display()
+            )
+        })
+    } else {
+        std::fs::remove_file(install_path).map_err(|error| {
+            format!(
+                "Failed to delete model file {}: {error}",
+                install_path.display()
+            )
+        })
+    }
 }
 
 async fn download_one_model(
