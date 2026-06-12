@@ -1,6 +1,6 @@
 # Sona 用户指南
 
-[English](user-guide.md) | [简体中文](user-guide.zh-CN.md) | [繁體中文](user-guide.zh-TW.md) | [日本語](user-guide.ja.md) | [项目 README](../README.zh-CN.md)
+[English](user-guide.md) | [简体中文](user-guide.zh-CN.md) | [项目 README](../README.zh-CN.md)
 
 这份指南面向桌面端用户，帮助您完成 Sona 的安装、首次配置、本地转录、文本整理与导出。
 

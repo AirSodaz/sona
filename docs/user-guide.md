@@ -1,6 +1,6 @@
 # Sona User Guide
 
-[English](user-guide.md) | [简体中文](user-guide.zh-CN.md) | [繁體中文](user-guide.zh-TW.md) | [日本語](user-guide.ja.md) | [Project README](../README.md)
+[English](user-guide.md) | [简体中文](user-guide.zh-CN.md) | [Project README](../README.md)
 
 This guide is for desktop users who want to install Sona, finish the first setup, transcribe audio locally, refine transcripts, and export results.
 
