@@ -83,8 +83,8 @@ format = "srt"
 | --- | --- | --- | --- | --- |
 | `models_dir` | Optional | ファイルシステムパス | 推定できる場合はデスクトップアプリのモデルディレクトリ | CLI がデスクトップアプリのモデルを検出できない場合に明示します。 |
 | `model_id` | `--model-id` を渡さない場合は必須 | オフラインプリセットモデル ID | None | `sona models list --mode offline` で ID を確認します。 |
-| `vad_model_id` | 条件付き | プリセットモデル ID | None | 選択したモデルが VAD を必要とする場合に必須です。 |
-| `punctuation_model_id` | 条件付き | プリセットモデル ID | None | 選択したモデルが句読点モデルを必要とする場合に必須です。 |
+| `vad_model_id` | Optional | プリセットモデル ID | 必要な場合は `silero-vad` | 選択したモデルが VAD を必要とする場合に使用され、既定値を上書きできます。 |
+| `punctuation_model_id` | Optional | プリセットモデル ID | 必要な場合は `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | 選択したモデルが句読点モデルを必要とする場合に使用され、既定値を上書きできます。 |
 | `language` | Optional | `auto` または `zh`、`en`、`ja` などのモデル言語コード | `auto` | 自動言語検出を上書きします。 |
 | `threads` | Optional | `0` より大きい整数 | `4` | 認識処理のスレッド数。 |
 | `enable_itn` | Optional | `true` または `false` | `false` | 逆テキスト正規化を有効にします。 |
@@ -152,8 +152,8 @@ sona transcribe --help
 | `--language <code>` | Optional | `auto` またはモデル言語コード | `auto` | 設定を上書きします。 |
 | `--model-id <id>` | `model_id` が設定されていない場合は必須 | オフラインプリセットモデル ID | None | メインの文字起こしモデル。 |
 | `--models-dir <path>` | Optional | ファイルシステムパス | 推定できる場合はデスクトップアプリのモデルディレクトリ | 設定を上書きします。 |
-| `--vad-model-id <id>` | 条件付き | プリセットモデル ID | None | 選択したモデルが VAD を必要とする場合に必須です。 |
-| `--punctuation-model-id <id>` | 条件付き | プリセットモデル ID | None | 選択したモデルが句読点モデルを必要とする場合に必須です。 |
+| `--vad-model-id <id>` | Optional | プリセットモデル ID | 必要な場合は `silero-vad` | 既定の VAD 関連モデルを上書きします。 |
+| `--punctuation-model-id <id>` | Optional | プリセットモデル ID | 必要な場合は `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | 既定の句読点関連モデルを上書きします。 |
 | `--threads <n>` | Optional | `0` より大きい整数 | `4` | 設定を上書きします。 |
 | `--enable-itn` | Optional | フラグ | `false` | `--disable-itn` と同時には使えません。 |
 | `--disable-itn` | Optional | フラグ | `false` | `enable_itn = true` を上書きします。`--enable-itn` と同時には使えません。 |

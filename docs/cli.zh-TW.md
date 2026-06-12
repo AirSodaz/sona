@@ -83,8 +83,8 @@ format = "srt"
 | --- | --- | --- | --- | --- |
 | `models_dir` | 可選 | 檔案系統路徑 | 可推斷時使用桌面應用模型目錄 | CLI 找不到桌面模型目錄時請明確傳入。 |
 | `model_id` | 必選，除非傳入 `--model-id` | 離線預設模型 ID | 無 | 用 `sona models list --mode offline` 檢視可用 ID。 |
-| `vad_model_id` | 條件必選 | 預設模型 ID | 無 | 所選模型需要 VAD 時必選。 |
-| `punctuation_model_id` | 條件必選 | 預設模型 ID | 無 | 所選模型需要標點時必選。 |
+| `vad_model_id` | 可選 | 預設模型 ID | 需要時為 `silero-vad` | 所選模型需要 VAD 時使用；可覆寫預設伴生模型。 |
+| `punctuation_model_id` | 可選 | 預設模型 ID | 需要時為 `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | 所選模型需要標點時使用；可覆寫預設伴生模型。 |
 | `language` | 可選 | `auto` 或模型語言代碼，如 `zh`、`en`、`ja` | `auto` | 覆寫自動語言偵測。 |
 | `threads` | 可選 | 大於 `0` 的整數 | `4` | 辨識執行緒數。 |
 | `enable_itn` | 可選 | `true` 或 `false` | `false` | 啟用逆文字歸一化。 |
@@ -152,8 +152,8 @@ sona transcribe --help
 | `--language <code>` | 可選 | `auto` 或模型語言代碼 | `auto` | 覆寫設定。 |
 | `--model-id <id>` | 必選，除非設定了 `model_id` | 離線預設模型 ID | 無 | 主轉錄模型。 |
 | `--models-dir <path>` | 可選 | 檔案系統路徑 | 可推斷時使用桌面應用模型目錄 | 覆寫設定。 |
-| `--vad-model-id <id>` | 條件必選 | 預設模型 ID | 無 | 所選模型需要 VAD 時必選。 |
-| `--punctuation-model-id <id>` | 條件必選 | 預設模型 ID | 無 | 所選模型需要標點時必選。 |
+| `--vad-model-id <id>` | 可選 | 預設模型 ID | 需要時為 `silero-vad` | 覆寫預設 VAD 伴生模型。 |
+| `--punctuation-model-id <id>` | 可選 | 預設模型 ID | 需要時為 `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | 覆寫預設標點伴生模型。 |
 | `--threads <n>` | 可選 | 大於 `0` 的整數 | `4` | 覆寫設定。 |
 | `--enable-itn` | 可選 | 旗標 | `false` | 與 `--disable-itn` 互斥。 |
 | `--disable-itn` | 可選 | 旗標 | `false` | 覆寫 `enable_itn = true`；與 `--enable-itn` 互斥。 |

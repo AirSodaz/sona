@@ -31,7 +31,7 @@ static INIT_CLI_LOGGER: Once = Once::new();
     name = "sona",
     version,
     about = "Offline batch transcription for Sona",
-    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona models list --type whisper --language zh\n  sona models download sherpa-onnx-whisper-turbo\n  sona models delete sherpa-onnx-whisper-turbo"
+    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo\n  sona models list --type whisper --language zh\n  sona models download sherpa-onnx-whisper-turbo\n  sona models delete sherpa-onnx-whisper-turbo"
 )]
 struct Cli {
     #[arg(

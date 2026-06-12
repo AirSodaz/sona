@@ -83,8 +83,8 @@ format = "srt"
 | --- | --- | --- | --- | --- |
 | `models_dir` | Optional | Filesystem path | Desktop app models directory, when inferable | Pass explicitly if the CLI cannot find desktop models. |
 | `model_id` | Required unless `--model-id` is passed | Offline preset model id | None | Use `sona models list --mode offline` to find ids. |
-| `vad_model_id` | Conditional | Preset model id | None | Required when the selected model requires VAD. |
-| `punctuation_model_id` | Conditional | Preset model id | None | Required when the selected model requires punctuation. |
+| `vad_model_id` | Optional | Preset model id | `silero-vad` when required | Used when the selected model requires VAD; overrides the default. |
+| `punctuation_model_id` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` when required | Used when the selected model requires punctuation; overrides the default. |
 | `language` | Optional | `auto` or a model language code, such as `zh`, `en`, `ja` | `auto` | Overrides automatic language detection. |
 | `threads` | Optional | Integer greater than `0` | `4` | Recognizer thread count. |
 | `enable_itn` | Optional | `true` or `false` | `false` | Enables inverse text normalization. |
@@ -152,8 +152,8 @@ Advanced wrappers and tests can set `SONA_FORCE_CLI=1` to force CLI mode even wh
 | `--language <code>` | Optional | `auto` or a model language code | `auto` | Overrides config. |
 | `--model-id <id>` | Required unless `model_id` is configured | Offline preset model id | None | Main transcription model. |
 | `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Overrides config. |
-| `--vad-model-id <id>` | Conditional | Preset model id | None | Required if the selected model requires VAD. |
-| `--punctuation-model-id <id>` | Conditional | Preset model id | None | Required if the selected model requires punctuation. |
+| `--vad-model-id <id>` | Optional | Preset model id | `silero-vad` when required | Overrides the default VAD companion. |
+| `--punctuation-model-id <id>` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` when required | Overrides the default punctuation companion. |
 | `--threads <n>` | Optional | Integer greater than `0` | `4` | Overrides config. |
 | `--enable-itn` | Optional | Flag | `false` | Conflicts with `--disable-itn`. |
 | `--disable-itn` | Optional | Flag | `false` | Overrides `enable_itn = true`; conflicts with `--enable-itn`. |

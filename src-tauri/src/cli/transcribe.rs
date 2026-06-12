@@ -1,6 +1,7 @@
 use crate::cli::models::resolve_models_dir;
-use crate::core::preset_models::PresetModel;
-use crate::core::preset_models::find_preset_model;
+use crate::core::preset_models::{
+    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
+};
 use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
@@ -24,7 +25,7 @@ const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe local audio or video files with offline models",
-    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo --vad-model-id silero-vad\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe --input-dir ./media --output-dir ./transcripts --format srt --recursive\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --vad-model-id silero-vad --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+    after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe --input-dir ./media --output-dir ./transcripts --format srt --recursive\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 )]
 pub struct TranscribeArgs {
     /// Input audio or video file to transcribe when not using --input-dir.
@@ -106,14 +107,14 @@ pub struct TranscribeArgs {
     #[arg(
         long,
         value_name = "MODEL_ID",
-        help = "VAD companion model id, usually silero-vad"
+        help = "VAD companion model id, default silero-vad when required"
     )]
     vad_model_id: Option<String>,
     /// Punctuation preset model id.
     #[arg(
         long,
         value_name = "MODEL_ID",
-        help = "Punctuation companion model id when required by the main model"
+        help = "Punctuation companion model id, default CT Transformer when required"
     )]
     punctuation_model_id: Option<String>,
     /// Number of recognizer threads.
@@ -274,21 +275,14 @@ pub fn resolve_transcribe_options(
         .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
     let model_path = require_installed_model(model, &models_dir)?;
     let vad_model = if rules.requires_vad {
-        let companion_id = vad_model_id.ok_or_else(|| {
-            format!(
-                "Model '{model_id}' requires a VAD model. Pass --vad-model-id or set vad_model_id in --config."
-            )
-        })?;
+        let companion_id = vad_model_id.unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
         Some(require_installed_companion(&companion_id, &models_dir)?)
     } else {
         optional_installed_companion(vad_model_id.as_deref(), &models_dir)?
     };
     let punctuation_model = if rules.requires_punctuation {
-        let companion_id = punctuation_model_id.ok_or_else(|| {
-            format!(
-                "Model '{model_id}' requires a punctuation model. Pass --punctuation-model-id or set punctuation_model_id in --config."
-            )
-        })?;
+        let companion_id =
+            punctuation_model_id.unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
         Some(require_installed_companion(&companion_id, &models_dir)?)
     } else {
         optional_installed_companion(punctuation_model_id.as_deref(), &models_dir)?
@@ -887,6 +881,20 @@ mod tests {
         (dir, input_path, models_dir)
     }
 
+    fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("sample.wav");
+        let models_dir = dir.path().join("models");
+        fs::write(&input_path, "").unwrap();
+        fs::create_dir_all(models_dir.join("sherpa-onnx-funasr-nano-int8-2025-12-30")).unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        fs::create_dir_all(
+            models_dir.join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"),
+        )
+        .unwrap();
+        (dir, input_path, models_dir)
+    }
+
     #[test]
     fn config_file_is_loaded_from_toml() {
         let dir = tempdir().unwrap();
@@ -954,6 +962,72 @@ mod tests {
         let resolved = resolve_transcribe_options(cli, None).unwrap();
 
         assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("auto"));
+    }
+
+    #[test]
+    fn defaults_required_vad_model_id_when_omitted() {
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
+
+        let mut cli = temp_cli_options();
+        cli.input = input_path;
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir.clone());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+
+        assert_eq!(
+            resolved.request.vad_model.as_deref(),
+            Some(
+                models_dir
+                    .join("silero_vad.onnx")
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+    }
+
+    #[test]
+    fn defaults_required_punctuation_model_id_when_omitted() {
+        let (_dir, input_path, models_dir) = installed_funasr_fixture();
+
+        let mut cli = temp_cli_options();
+        cli.input = input_path;
+        cli.model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
+        cli.models_dir = Some(models_dir.clone());
+
+        let resolved = resolve_transcribe_options(cli, None).unwrap();
+
+        assert_eq!(
+            resolved.request.punctuation_model.as_deref(),
+            Some(
+                models_dir
+                    .join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8")
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+    }
+
+    #[test]
+    fn explicit_required_companion_config_overrides_default_model_id() {
+        let (_dir, input_path, models_dir) = installed_whisper_fixture();
+
+        let mut cli = temp_cli_options();
+        cli.input = input_path;
+        cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+        cli.models_dir = Some(models_dir);
+
+        let error = resolve_transcribe_options(
+            cli,
+            Some(CliConfigFile {
+                vad_model_id: Some("custom-vad".to_string()),
+                ..Default::default()
+            }),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Unknown companion model id: custom-vad"));
+        assert!(!error.contains("silero-vad"));
     }
 
     #[test]
@@ -1201,7 +1275,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_required_companion_model_fails_fast() {
+    fn missing_default_companion_model_fails_fast() {
         let dir = tempdir().unwrap();
         let input_path = dir.path().join("sample.wav");
         let models_dir = dir.path().join("models");
@@ -1214,7 +1288,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
 
         let error = resolve_transcribe_options(cli, None).unwrap_err();
-        assert!(error.contains("requires a VAD model"));
+        assert!(error.contains("Companion model 'silero-vad' was not found"));
     }
 
     #[test]

@@ -617,7 +617,7 @@ fn repeated_download_of_installed_model_also_installs_required_vad() {
 }
 
 #[test]
-fn missing_required_vad_model_returns_failure() {
+fn missing_default_vad_model_returns_failure() {
     let dir = tempdir().unwrap();
     let input_path = dir.path().join("sample.wav");
     fs::write(&input_path, "").unwrap();
@@ -636,5 +636,5 @@ fn missing_required_vad_model_returns_failure() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("requires a VAD model"));
+    assert!(stderr.contains("Companion model 'silero-vad' was not found"));
 }
