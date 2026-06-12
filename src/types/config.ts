@@ -17,7 +17,7 @@ import type { SpeakerProfile } from './speaker';
 export type AppLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
 /** Saved UI language preference. */
-export type AppLanguagePreference = 'auto' | 'en' | 'zh' | 'zh-TW' | 'ja';
+export type AppLanguagePreference = 'auto' | 'en' | 'zh' | 'zh-TW' | 'ja' | 'ko';
 
 /** Resolved UI language loaded by i18next. */
 export type ResolvedAppLanguage = Exclude<AppLanguagePreference, 'auto'>;

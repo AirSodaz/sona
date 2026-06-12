@@ -11,6 +11,7 @@ export const SUPPORTED_APP_LANGUAGES: readonly ResolvedAppLanguage[] = [
   'zh',
   'zh-TW',
   'ja',
+  'ko',
 ] as const;
 
 export const APP_LANGUAGE_OPTIONS: readonly AppLanguageOption[] = [
@@ -19,6 +20,7 @@ export const APP_LANGUAGE_OPTIONS: readonly AppLanguageOption[] = [
   { value: 'zh', labelKey: 'settings.language_zh', defaultLabel: '简体中文' },
   { value: 'zh-TW', labelKey: 'settings.language_zh_tw', defaultLabel: '繁體中文' },
   { value: 'ja', labelKey: 'settings.language_ja', defaultLabel: '日本語' },
+  { value: 'ko', labelKey: 'settings.language_ko', defaultLabel: '한국어' },
 ] as const;
 
 function normalizeLanguageCode(language: string | null | undefined): string {
@@ -38,6 +40,10 @@ export function resolveDetectedAppLanguage(
 
     if (normalized === 'ja' || normalized.startsWith('ja-')) {
       return 'ja';
+    }
+
+    if (normalized === 'ko' || normalized.startsWith('ko-')) {
+      return 'ko';
     }
 
     if (normalized === 'en' || normalized.startsWith('en-')) {

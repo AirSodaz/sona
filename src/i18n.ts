@@ -11,6 +11,7 @@ import { resolveDetectedAppLanguage, SUPPORTED_APP_LANGUAGES } from './constants
 
 import en from './locales/en.json';
 import ja from './locales/ja.json';
+import ko from './locales/ko.json';
 import zh from './locales/zh.json';
 import zhTW from './locales/zh-TW.json';
 
@@ -20,6 +21,9 @@ const resources = {
     },
     ja: {
         translation: ja
+    },
+    ko: {
+        translation: ko
     },
     zh: {
         translation: zh

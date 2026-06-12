@@ -1205,6 +1205,7 @@
         },
         "language_zh_tw": "繁體中文",
         "language_ja": "日本語",
+        "language_ko": "한국어",
         "offline_model_hint": "オーディオ/ビデオ ファイルの処理に使用されます。",
         "offline_model_label": "Batch Import Model",
         "offline_model_management": "ローカルモデル管理",

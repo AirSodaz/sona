@@ -13,6 +13,7 @@ describe('app language support', () => {
       'zh',
       'zh-TW',
       'ja',
+      'ko',
     ]);
     expect(APP_LANGUAGE_OPTIONS.map((option) => option.defaultLabel)).toEqual([
       'Automatic',
@@ -20,6 +21,7 @@ describe('app language support', () => {
       '简体中文',
       '繁體中文',
       '日本語',
+      '한국어',
     ]);
   });
 
@@ -32,14 +34,18 @@ describe('app language support', () => {
     expect(resolveDetectedAppLanguage('zh-MO')).toBe('zh-TW');
     expect(resolveDetectedAppLanguage('zh-Hant-HK')).toBe('zh-TW');
     expect(resolveDetectedAppLanguage('ja-JP')).toBe('ja');
+    expect(resolveDetectedAppLanguage('ko-KR')).toBe('ko');
+    expect(resolveDetectedAppLanguage('ko_KR')).toBe('ko');
     expect(resolveDetectedAppLanguage('en-US')).toBe('en');
     expect(resolveDetectedAppLanguage('fr-FR')).toBe('en');
   });
 
   it('keeps explicit saved preferences and resolves auto through detection', () => {
     expect(resolveAppLanguagePreference('ja', 'en-US')).toBe('ja');
+    expect(resolveAppLanguagePreference('ko', 'en-US')).toBe('ko');
     expect(resolveAppLanguagePreference('zh-TW', 'en-US')).toBe('zh-TW');
     expect(resolveAppLanguagePreference('auto', 'zh-HK')).toBe('zh-TW');
     expect(resolveAppLanguagePreference('auto', 'ja-JP')).toBe('ja');
+    expect(resolveAppLanguagePreference('auto', 'ko-KR')).toBe('ko');
   });
 });

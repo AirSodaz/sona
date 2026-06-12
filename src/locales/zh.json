@@ -1205,6 +1205,7 @@
         },
         "language_zh_tw": "繁體中文",
         "language_ja": "日本語",
+        "language_ko": "한국어",
         "local_model_hint": "用于处理音频/视频文件。",
         "local_model_label": "批量导入模型",
         "local_model_management": "本地模型管理",
