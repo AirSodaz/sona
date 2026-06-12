@@ -282,14 +282,45 @@ fn models_delete_help_mentions_confirmation() {
 }
 
 #[test]
-fn model_list_outputs_json() {
+fn model_list_outputs_table_by_default() {
     let output = cli_command().args(["models", "list"]).output().unwrap();
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("ID"));
+    assert!(stdout.contains("Type"));
+    assert!(stdout.contains("Language"));
+    assert!(stdout.contains("Installed"));
     assert!(stdout.contains("sherpa-onnx-whisper-turbo"));
     assert!(stdout.contains("silero-vad"));
+    assert!(!stdout.contains("\"installed\""));
+}
+
+#[test]
+fn model_list_outputs_json_with_json_flag() {
+    let output = cli_command()
+        .args(["models", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("\"installed\""));
+    assert!(stdout.contains("\"install_path\""));
+    assert!(stdout.contains("sherpa-onnx-whisper-turbo"));
+}
+
+#[test]
+fn completions_powershell_prints_script() {
+    let output = cli_command()
+        .args(["completions", "powershell"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Register-ArgumentCompleter"));
+    assert!(stdout.contains("sona"));
 }
 
 #[test]
@@ -426,6 +457,125 @@ fn missing_single_file_input_returns_failure_before_model_resolution() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Input file must be an existing file"));
     assert!(stderr.contains(&missing_input.display().to_string()));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn existing_single_output_returns_failure_before_model_resolution_without_force() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    let output_path = dir.path().join("sample.srt");
+    fs::write(&input_path, "").unwrap();
+    fs::write(&output_path, "existing").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg(&input_path)
+        .arg("--output")
+        .arg(&output_path)
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Output file already exists"));
+    assert!(stderr.contains(&output_path.display().to_string()));
+    assert!(stderr.contains("--force"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn existing_single_output_with_force_reaches_model_resolution() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    let output_path = dir.path().join("sample.srt");
+    fs::write(&input_path, "").unwrap();
+    fs::write(&output_path, "existing").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg(&input_path)
+        .arg("--output")
+        .arg(&output_path)
+        .arg("--force")
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown model id"));
+    assert!(!stderr.contains("Output file already exists"));
+}
+
+#[test]
+fn existing_batch_output_returns_failure_before_model_resolution_without_force() {
+    let dir = tempdir().unwrap();
+    let input_dir = dir.path().join("input");
+    let output_dir = dir.path().join("output");
+    fs::create_dir_all(&input_dir).unwrap();
+    fs::create_dir_all(&output_dir).unwrap();
+    fs::write(input_dir.join("sample.wav"), "").unwrap();
+    fs::write(output_dir.join("sample.json"), "existing").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg("--input-dir")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Output file already exists"));
+    assert!(stderr.contains("sample.json"));
+    assert!(stderr.contains("--force"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn multiple_positional_inputs_require_output_dir_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    let first = dir.path().join("first.wav");
+    let second = dir.path().join("second.wav");
+    fs::write(&first, "").unwrap();
+    fs::write(&second, "").unwrap();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg(&first)
+        .arg(&second)
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--output-dir"));
+    assert!(!stderr.contains("Unknown model id"));
+}
+
+#[test]
+fn glob_inputs_require_output_dir_before_model_resolution() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join("first.wav"), "").unwrap();
+    fs::write(dir.path().join("second.wav"), "").unwrap();
+    let pattern = dir.path().join("*.wav").to_string_lossy().to_string();
+
+    let output = cli_command()
+        .arg("transcribe")
+        .arg(pattern)
+        .args(["--model-id", "not-a-real-model"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--output-dir"));
     assert!(!stderr.contains("Unknown model id"));
 }
 

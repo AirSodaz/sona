@@ -21,6 +21,7 @@ const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
     "wav", "mp3", "m4a", "aiff", "flac", "ogg", "wma", "aac", "opus", "amr", "mp4", "webm", "mov",
     "mkv", "avi", "wmv", "flv", "3gp",
 ];
+const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
 
 #[derive(Debug, Args)]
 #[command(
@@ -28,13 +29,14 @@ const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
     after_help = "Examples:\n  sona transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo\n  sona transcribe ./sample.mp4 --config ./sona.toml --output ./sample.srt\n  sona transcribe --input-dir ./media --output-dir ./transcripts --format srt --recursive\n  sona transcribe ./sample.wav --model-id sherpa-onnx-funasr-nano-int8-2025-12-30 --punctuation-model-id sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 )]
 pub struct TranscribeArgs {
-    /// Input audio or video file to transcribe when not using --input-dir.
+    /// Input audio/video files or glob patterns to transcribe when not using --input-dir.
     #[arg(
-        help = "Local audio or video file path",
+        help = "Local audio/video file path or glob pattern",
         required_unless_present = "input_dir",
-        conflicts_with = "input_dir"
+        conflicts_with = "input_dir",
+        num_args = 1..
     )]
-    input: Option<PathBuf>,
+    input: Vec<PathBuf>,
     /// Directory containing media files to transcribe.
     #[arg(
         long,
@@ -56,7 +58,6 @@ pub struct TranscribeArgs {
     #[arg(
         long,
         value_name = "DIR",
-        requires = "input_dir",
         conflicts_with = "output",
         help = "Write one transcript per input file into this directory"
     )]
@@ -72,7 +73,6 @@ pub struct TranscribeArgs {
     #[arg(
         long,
         value_name = "N",
-        requires = "input_dir",
         help = "Maximum concurrent batch file jobs, default 1"
     )]
     jobs: Option<usize>,
@@ -157,6 +157,9 @@ pub struct TranscribeArgs {
     /// Suppresses progress logs.
     #[arg(long, help = "Hide transcription progress output")]
     quiet: bool,
+    /// Allows overwriting existing output files.
+    #[arg(long, help = "Overwrite existing output files")]
+    force: bool,
 }
 
 /// CLI options after clap parsing but before config/default resolution.
@@ -177,6 +180,7 @@ pub struct TranscribeCliOptions {
     pub vad_buffer: Option<f32>,
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
+    pub force: bool,
 }
 
 /// Output target resolved from CLI arguments and config.
@@ -206,6 +210,13 @@ struct BatchTranscribePlan {
     input_path: PathBuf,
     output_path: PathBuf,
     resolved: ResolvedTranscribeOptions,
+}
+
+#[derive(Debug, Clone)]
+struct BatchInputSource {
+    inputs: Vec<PathBuf>,
+    base_dir: PathBuf,
+    preserve_relative_paths: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -245,6 +256,7 @@ pub fn resolve_transcribe_options(
         resolve_cli_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
     ensure_input_file_exists(&cli.input)?;
+    ensure_output_can_be_written(&output_target, cli.force)?;
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
     let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
         "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
@@ -291,7 +303,7 @@ pub fn resolve_transcribe_options(
     Ok(ResolvedTranscribeOptions {
         export_format,
         output_target,
-        quiet: cli.quiet,
+        quiet: cli.quiet || config.quiet.unwrap_or(false),
         request: BatchTranscriptionRequest {
             file_path: cli.input.to_string_lossy().to_string(),
             save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
@@ -324,7 +336,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
         None => None,
     };
 
-    if args.input_dir.is_some() {
+    if args.input_dir.is_some() || should_run_path_batch(&args.input) {
         return run_batch_transcribe(args, config).await;
     }
 
@@ -341,6 +353,8 @@ async fn run_single_transcribe(
         TranscribeCliOptions {
             input: args
                 .input
+                .into_iter()
+                .next()
                 .ok_or_else(|| "Missing input file path.".to_string())?,
             output: args.output,
             format: args.format,
@@ -356,6 +370,7 @@ async fn run_single_transcribe(
             vad_buffer: args.vad_buffer,
             save_wav: args.save_wav,
             quiet: args.quiet,
+            force: args.force,
         },
         config,
     )?;
@@ -390,33 +405,31 @@ async fn run_batch_transcribe(
         return Err("Batch directory transcription does not support --save-wav.".to_string());
     }
 
-    let input_dir = args
-        .input_dir
-        .clone()
-        .ok_or_else(|| "Missing --input-dir for batch directory transcription.".to_string())?;
     let output_dir = args.output_dir.clone().ok_or_else(|| {
-        "Batch directory transcription requires --output-dir so each file has a destination."
-            .to_string()
+        "Batch transcription requires --output-dir so each file has a destination.".to_string()
     })?;
-    let jobs = resolve_batch_jobs(args.jobs)?;
     let config = config.unwrap_or_default();
+    let jobs = resolve_batch_jobs(args.jobs.or(config.jobs))?;
+    let quiet = args.quiet || config.quiet.unwrap_or(false);
+    let input_source = resolve_batch_input_source(&args)?;
     let export_format =
         resolve_export_format(args.format.as_deref().or(config.format.as_deref()), None)?;
-    let inputs = collect_batch_input_files(&input_dir, args.recursive)?;
+    let inputs = input_source.inputs;
 
     if inputs.is_empty() {
         return Err(format!(
             "No supported media files found in {}.",
-            input_dir.display()
+            input_source.base_dir.display()
         ));
     }
 
     let output_plans = plan_batch_output_files(
         &inputs,
-        &input_dir,
+        &input_source.base_dir,
         &output_dir,
         export_format,
-        args.recursive,
+        input_source.preserve_relative_paths,
+        args.force,
     )?;
     let mut plans = Vec::with_capacity(output_plans.len());
     let format = Some(export_format_name(export_format).to_string());
@@ -440,7 +453,8 @@ async fn run_batch_transcribe(
             gpu_acceleration: args.gpu_acceleration,
             vad_buffer: args.vad_buffer,
             save_wav: None,
-            quiet: args.quiet,
+            quiet,
+            force: args.force,
         },
         Some(config),
     )?;
@@ -480,6 +494,82 @@ fn retarget_resolved_transcribe_options(
     retargeted.output_target = OutputTarget::File(output_path);
     retargeted.request.file_path = input_path.to_string_lossy().to_string();
     retargeted
+}
+
+fn should_run_path_batch(inputs: &[PathBuf]) -> bool {
+    inputs.len() > 1
+        || inputs
+            .iter()
+            .any(|input| path_contains_glob_pattern(input.as_path()))
+}
+
+fn resolve_batch_input_source(args: &TranscribeArgs) -> Result<BatchInputSource, String> {
+    if let Some(input_dir) = args.input_dir.as_deref() {
+        return Ok(BatchInputSource {
+            inputs: collect_batch_input_files(input_dir, args.recursive)?,
+            base_dir: input_dir.to_path_buf(),
+            preserve_relative_paths: args.recursive,
+        });
+    }
+
+    let inputs = expand_input_patterns(&args.input)?;
+    let base_dir = common_input_parent(&inputs)?;
+    Ok(BatchInputSource {
+        inputs,
+        base_dir,
+        preserve_relative_paths: false,
+    })
+}
+
+fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut expanded = Vec::new();
+
+    for input in inputs {
+        if path_contains_glob_pattern(input) {
+            let pattern = input.to_string_lossy().to_string();
+            let mut matches = glob::glob(&pattern)
+                .map_err(|error| format!("Invalid glob pattern {}: {error}", input.display()))?
+                .map(|entry| {
+                    entry.map_err(|error| {
+                        format!("Failed to read glob match for {}: {error}", input.display())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            matches.retain(|path| path.is_file());
+            matches.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+            if matches.is_empty() {
+                return Err(format!(
+                    "No input files matched glob pattern: {}",
+                    input.display()
+                ));
+            }
+            expanded.extend(matches);
+        } else {
+            ensure_input_file_exists(input)?;
+            expanded.push(input.clone());
+        }
+    }
+
+    expanded.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    expanded.dedup_by(|left, right| {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    });
+    Ok(expanded)
+}
+
+fn path_contains_glob_pattern(path: &Path) -> bool {
+    path.to_string_lossy()
+        .chars()
+        .any(|character| GLOB_PATTERN_CHARS.contains(&character))
+}
+
+fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, String> {
+    let first_parent = inputs
+        .first()
+        .and_then(|path| path.parent())
+        .ok_or_else(|| "Missing input file path.".to_string())?;
+    Ok(first_parent.to_path_buf())
 }
 
 async fn run_batch_transcribe_plans(
@@ -599,6 +689,17 @@ pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> 
     }
 }
 
+fn ensure_output_can_be_written(target: &OutputTarget, force: bool) -> Result<(), String> {
+    match target {
+        OutputTarget::Stdout => Ok(()),
+        OutputTarget::File(path) if force || !path.exists() => Ok(()),
+        OutputTarget::File(path) => Err(format!(
+            "Output file already exists: {}. Use --force to overwrite.",
+            path.display()
+        )),
+    }
+}
+
 fn ensure_output_parent(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
@@ -696,6 +797,7 @@ fn plan_batch_output_files(
     output_dir: &Path,
     format: ExportFormat,
     preserve_relative_paths: bool,
+    force: bool,
 ) -> Result<Vec<BatchOutputPlan>, String> {
     let extension = export_format_name(format);
     let mut seen_outputs = HashSet::new();
@@ -709,6 +811,12 @@ fn plan_batch_output_files(
         if !seen_outputs.insert(output_key) {
             return Err(format!(
                 "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
+                output_path.display()
+            ));
+        }
+        if !force && output_path.exists() {
+            return Err(format!(
+                "Output file already exists: {}. Use --force to overwrite.",
                 output_path.display()
             ));
         }
@@ -831,6 +939,8 @@ pub struct CliConfigFile {
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
     pub hotwords: Option<String>,
+    pub quiet: Option<bool>,
+    pub jobs: Option<usize>,
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
@@ -868,6 +978,7 @@ mod tests {
             vad_buffer: None,
             save_wav: None,
             quiet: false,
+            force: false,
         }
     }
 
@@ -901,7 +1012,7 @@ mod tests {
         let path = dir.path().join("sona-cli.toml");
         fs::write(
             &path,
-            "model_id = \"silero-vad\"\nthreads = 3\nenable_itn = true\nhotwords = \"Sona,ASR\"\n",
+            "model_id = \"silero-vad\"\nthreads = 3\nenable_itn = true\nhotwords = \"Sona,ASR\"\nquiet = true\njobs = 2\n",
         )
         .unwrap();
 
@@ -910,6 +1021,8 @@ mod tests {
         assert_eq!(config.threads, Some(3));
         assert_eq!(config.enable_itn, Some(true));
         assert_eq!(config.hotwords.as_deref(), Some("Sona,ASR"));
+        assert_eq!(config.quiet, Some(true));
+        assert_eq!(config.jobs, Some(2));
     }
 
     #[test]
@@ -1198,6 +1311,7 @@ mod tests {
             &output_dir,
             ExportFormat::Srt,
             true,
+            false,
         )
         .unwrap();
         let outputs = plans
@@ -1231,11 +1345,88 @@ mod tests {
             &output_dir,
             ExportFormat::Json,
             false,
+            false,
         )
         .unwrap_err();
 
         assert!(error.contains("would overwrite"));
         assert!(error.contains("demo.json"));
+    }
+
+    #[test]
+    fn batch_output_plans_reject_existing_outputs_without_force() {
+        let dir = tempdir().unwrap();
+        let input_dir = dir.path().join("input");
+        let output_dir = dir.path().join("output");
+        fs::create_dir_all(&input_dir).unwrap();
+        fs::create_dir_all(&output_dir).unwrap();
+        let input = input_dir.join("demo.wav");
+        let existing = output_dir.join("demo.json");
+        fs::write(&input, "").unwrap();
+        fs::write(&existing, "old").unwrap();
+
+        let error = plan_batch_output_files(
+            &[input],
+            &input_dir,
+            &output_dir,
+            ExportFormat::Json,
+            false,
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Output file already exists"));
+        assert!(error.contains("demo.json"));
+        assert!(error.contains("--force"));
+    }
+
+    #[test]
+    fn batch_output_plans_allow_existing_outputs_with_force() {
+        let dir = tempdir().unwrap();
+        let input_dir = dir.path().join("input");
+        let output_dir = dir.path().join("output");
+        fs::create_dir_all(&input_dir).unwrap();
+        fs::create_dir_all(&output_dir).unwrap();
+        let input = input_dir.join("demo.wav");
+        let existing = output_dir.join("demo.json");
+        fs::write(&input, "").unwrap();
+        fs::write(&existing, "old").unwrap();
+
+        let plans = plan_batch_output_files(
+            &[input],
+            &input_dir,
+            &output_dir,
+            ExportFormat::Json,
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(plans[0].output_path, existing);
+    }
+
+    #[test]
+    fn glob_input_expansion_errors_when_pattern_matches_nothing() {
+        let dir = tempdir().unwrap();
+        let pattern = dir.path().join("*.wav");
+
+        let error = expand_input_patterns(&[pattern]).unwrap_err();
+
+        assert!(error.contains("No input files matched glob pattern"));
+    }
+
+    #[test]
+    fn glob_input_expansion_sorts_matches() {
+        let dir = tempdir().unwrap();
+        let first = dir.path().join("a.wav");
+        let second = dir.path().join("b.wav");
+        fs::write(&second, "").unwrap();
+        fs::write(&first, "").unwrap();
+        let pattern = dir.path().join("*.wav");
+
+        let inputs = expand_input_patterns(&[pattern]).unwrap();
+
+        assert_eq!(inputs, vec![first, second]);
     }
 
     #[test]

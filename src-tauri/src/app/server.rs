@@ -640,6 +640,7 @@ pub(crate) fn build_local_transcribe_options(
         vad_buffer: None,
         save_wav: None,
         quiet: true,
+        force: true,
     }
 }
 

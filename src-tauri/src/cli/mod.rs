@@ -2,18 +2,24 @@ pub mod models;
 pub mod serve;
 pub mod transcribe;
 
-pub use self::models::*;
-pub use self::serve::*;
-pub use self::transcribe::*;
+pub use self::models::{ModelsArgs, resolve_models_dir};
+pub use self::serve::ServeArgs;
+pub use self::transcribe::{
+    DEFAULT_GPU_ACCELERATION, TranscribeArgs, TranscribeCliOptions, resolve_cli_gpu_acceleration,
+    resolve_transcribe_options,
+};
 
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{Shell, generate};
 use std::ffi::OsString;
 use std::sync::Once;
+use thiserror::Error;
 
-const CLI_COMMANDS: [&str; 10] = [
+const CLI_COMMANDS: [&str; 11] = [
     "transcribe",
     "models",
     "serve",
+    "completions",
     "help",
     "--help",
     "-h",
@@ -46,6 +52,68 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Debug, Clone, ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+    Powershell,
+    Elvish,
+}
+
+impl From<CompletionShell> for Shell {
+    fn from(value: CompletionShell) -> Self {
+        match value {
+            CompletionShell::Bash => Shell::Bash,
+            CompletionShell::Zsh => Shell::Zsh,
+            CompletionShell::Fish => Shell::Fish,
+            CompletionShell::Powershell => Shell::PowerShell,
+            CompletionShell::Elvish => Shell::Elvish,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum CliError {
+    #[error("{0}")]
+    Validation(String),
+    #[error("{0}")]
+    Io(String),
+    #[error("{0}")]
+    Network(String),
+    #[error("{0}")]
+    Model(String),
+    #[error("{0}")]
+    Other(String),
+}
+
+pub type CliResult<T> = Result<T, CliError>;
+
+impl From<String> for CliError {
+    fn from(value: String) -> Self {
+        if value.contains("model") || value.contains("Model") {
+            Self::Model(value)
+        } else if value.contains("download") || value.contains("HTTP") || value.contains("status") {
+            Self::Network(value)
+        } else if value.contains("read")
+            || value.contains("write")
+            || value.contains("file")
+            || value.contains("directory")
+            || value.contains("path")
+        {
+            Self::Io(value)
+        } else if value.contains("must")
+            || value.contains("Missing")
+            || value.contains("Invalid")
+            || value.contains("Unknown")
+        {
+            Self::Validation(value)
+        } else {
+            Self::Other(value)
+        }
+    }
+}
+
 struct CliLogger;
 
 impl log::Log for CliLogger {
@@ -75,6 +143,12 @@ enum Commands {
     Models(ModelsArgs),
     /// Starts the HTTP API server in headless mode.
     Serve(ServeArgs),
+    /// Generates shell completion scripts.
+    Completions {
+        /// Shell to generate completions for.
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
 }
 
 pub fn should_run_cli(args: &[OsString]) -> bool {
@@ -88,16 +162,26 @@ pub fn should_run_cli(args: &[OsString]) -> bool {
         .unwrap_or(false)
 }
 
-pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
+pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> CliResult<()> {
     let cli = Cli::parse_from(args);
     if cli.verbose {
         init_cli_logger();
     }
 
     match cli.command {
-        Commands::Transcribe(args) => transcribe::run_transcribe(*args).await,
-        Commands::Models(args) => models::run_models(args).await,
-        Commands::Serve(args) => serve::run_serve(args).await,
+        Commands::Transcribe(args) => transcribe::run_transcribe(*args).await.map_err(Into::into),
+        Commands::Models(args) => models::run_models(args).await.map_err(Into::into),
+        Commands::Serve(args) => serve::run_serve(args).await.map_err(Into::into),
+        Commands::Completions { shell } => {
+            let mut command = Cli::command();
+            generate(
+                Shell::from(shell),
+                &mut command,
+                "sona",
+                &mut std::io::stdout(),
+            );
+            Ok(())
+        }
     }
 }
 
@@ -143,5 +227,17 @@ mod tests {
 
         assert!(cli.verbose);
         assert!(matches!(cli.command, Commands::Models(_)));
+    }
+
+    #[test]
+    fn cli_error_display_preserves_message() {
+        let error = CliError::from(
+            "Output file already exists: out.srt. Use --force to overwrite.".to_string(),
+        );
+
+        assert_eq!(
+            error.to_string(),
+            "Output file already exists: out.srt. Use --force to overwrite."
+        );
     }
 }

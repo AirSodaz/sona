@@ -2,7 +2,7 @@ use crate::cli::transcribe::{OutputTarget, write_output};
 use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
@@ -94,6 +94,9 @@ pub struct ModelListArgs {
         help = "Only include models already present in the models directory"
     )]
     installed: bool,
+    /// Prints JSON instead of the default table output.
+    #[arg(long, help = "Print machine-readable JSON")]
+    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -152,49 +155,125 @@ pub async fn run_models(args: ModelsArgs) -> Result<(), String> {
 }
 
 fn run_model_list(args: ModelListArgs) -> Result<(), String> {
-    let models = list_models(args.models_dir)?;
-    let language_filter = args.language.as_deref().map(str::to_lowercase);
-    let output = serde_json::to_string_pretty(
-        &models
-            .into_iter()
-            .filter(|model| {
-                args.mode
-                    .as_deref()
-                    .map(|mode| model.modes.iter().any(|item| item == mode))
-                    .unwrap_or(true)
-            })
-            .filter(|model| {
-                args.model_type
-                    .as_deref()
-                    .map(|model_type| model.model_type == model_type)
-                    .unwrap_or(true)
-            })
-            .filter(|model| {
-                language_filter
-                    .as_deref()
-                    .map(|language| {
-                        model
-                            .language
-                            .split(',')
-                            .any(|item| item.trim().eq_ignore_ascii_case(language))
-                    })
-                    .unwrap_or(true)
-            })
-            .filter(|model| !args.installed || model.installed)
-            .map(|model| ModelListEntry {
-                id: model.id,
-                name: model.name,
-                model_type: model.model_type,
-                language: model.language,
-                size: model.size,
-                modes: model.modes,
-                installed: model.installed,
-                install_path: model.install_path.to_string_lossy().to_string(),
-            })
-            .collect::<Vec<_>>(),
-    )
-    .map_err(|error| format!("Failed to serialize model list: {error}"))?;
+    let models = filter_models(list_models(args.models_dir.clone())?, &args);
+    let output = if args.json {
+        serde_json::to_string_pretty(
+            &models
+                .into_iter()
+                .map(ModelListEntry::from)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|error| format!("Failed to serialize model list: {error}"))?
+    } else {
+        render_model_table(&models)
+    };
     write_output(&OutputTarget::Stdout, &output)
+}
+
+fn filter_models(models: Vec<CliModelSummary>, args: &ModelListArgs) -> Vec<CliModelSummary> {
+    let language_filter = args.language.as_deref().map(str::to_lowercase);
+    models
+        .into_iter()
+        .filter(|model| {
+            args.mode
+                .as_deref()
+                .map(|mode| model.modes.iter().any(|item| item == mode))
+                .unwrap_or(true)
+        })
+        .filter(|model| {
+            args.model_type
+                .as_deref()
+                .map(|model_type| model.model_type == model_type)
+                .unwrap_or(true)
+        })
+        .filter(|model| {
+            language_filter
+                .as_deref()
+                .map(|language| {
+                    model
+                        .language
+                        .split(',')
+                        .any(|item| item.trim().eq_ignore_ascii_case(language))
+                })
+                .unwrap_or(true)
+        })
+        .filter(|model| !args.installed || model.installed)
+        .collect()
+}
+
+impl From<CliModelSummary> for ModelListEntry {
+    fn from(model: CliModelSummary) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            model_type: model.model_type,
+            language: model.language,
+            size: model.size,
+            modes: model.modes,
+            installed: model.installed,
+            install_path: model.install_path.to_string_lossy().to_string(),
+        }
+    }
+}
+
+fn render_model_table(models: &[CliModelSummary]) -> String {
+    let rows = models
+        .iter()
+        .map(|model| {
+            [
+                model.id.clone(),
+                model.model_type.clone(),
+                model.language.clone(),
+                model.size.clone(),
+                if model.installed { "yes" } else { "no" }.to_string(),
+                model.modes.join(","),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let headers = ["ID", "Type", "Language", "Size", "Installed", "Modes"];
+    let mut widths = headers.map(str::len);
+
+    for row in &rows {
+        for (index, value) in row.iter().enumerate() {
+            widths[index] = widths[index].max(value.len());
+        }
+    }
+
+    let mut output = String::new();
+    append_table_row(&mut output, &headers, &widths);
+    append_table_separator(&mut output, &widths);
+    for row in rows {
+        let refs = [
+            row[0].as_str(),
+            row[1].as_str(),
+            row[2].as_str(),
+            row[3].as_str(),
+            row[4].as_str(),
+            row[5].as_str(),
+        ];
+        append_table_row(&mut output, &refs, &widths);
+    }
+    output
+}
+
+fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push_str("  ");
+        }
+        output.push_str(&format!("{value:<width$}", width = widths[index]));
+    }
+    output.push('\n');
+}
+
+fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
+    for (index, width) in widths.iter().enumerate() {
+        if index > 0 {
+            output.push_str("  ");
+        }
+        output.push_str(&"-".repeat(*width));
+    }
+    output.push('\n');
 }
 
 async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
@@ -299,15 +378,26 @@ async fn download_one_model(
     resolved: &ResolvedModelDownload,
     quiet: bool,
 ) -> Result<(), String> {
+    let stderr_is_terminal = io::stderr().is_terminal();
+    let mut last_percentage: Option<i32> = None;
     let install_path = download_model(resolved, |downloaded, total| {
         if quiet || total == 0 {
             return;
         }
         let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
-        eprintln!("Downloading {display_model_id}: {percentage}%");
+        if stderr_is_terminal {
+            eprint!("\rDownloading {display_model_id}: {percentage}%");
+            let _ = io::stderr().flush();
+        } else if percentage == 100 || percentage % 10 == 0 && last_percentage != Some(percentage) {
+            eprintln!("Downloading {display_model_id}: {percentage}%");
+        }
+        last_percentage = Some(percentage);
     })
     .await?;
 
+    if !quiet && stderr_is_terminal && last_percentage.is_some() {
+        eprintln!();
+    }
     eprintln!(
         "Installed {} at {}",
         resolved.model.id,
@@ -553,5 +643,47 @@ fn default_models_dir_candidates() -> Vec<PathBuf> {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model_summary(
+        id: &str,
+        model_type: &str,
+        language: &str,
+        installed: bool,
+    ) -> CliModelSummary {
+        CliModelSummary {
+            id: id.to_string(),
+            name: format!("{id} name"),
+            model_type: model_type.to_string(),
+            language: language.to_string(),
+            size: "1 MB".to_string(),
+            modes: vec!["offline".to_string()],
+            installed,
+            install_path: PathBuf::from(format!("C:/models/{id}")),
+        }
+    }
+
+    #[test]
+    fn renders_model_list_as_table_with_headers() {
+        let table = render_model_table(&[
+            model_summary("short", "vad", "all", true),
+            model_summary("longer-model-id", "whisper", "zh,en", false),
+        ]);
+
+        assert!(table.contains("ID"));
+        assert!(table.contains("Type"));
+        assert!(table.contains("Language"));
+        assert!(table.contains("Size"));
+        assert!(table.contains("Installed"));
+        assert!(table.contains("Modes"));
+        assert!(table.contains("longer-model-id"));
+        assert!(table.contains("yes"));
+        assert!(table.contains("no"));
+        assert!(!table.contains("install_path"));
     }
 }

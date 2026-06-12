@@ -22,7 +22,7 @@ sona transcribe ./sample.mp4 \
   --output ./sample.srt
 ```
 
-不指定 `--output` 时，转写结果会以 JSON 写入 `stdout`。指定 `--output` 时，格式会从文件扩展名推断，除非同时传入 `--format`。
+不指定 `--output` 时，转写结果会以 JSON 写入 `stdout`。指定 `--output` 时，格式会从文件扩展名推断，除非同时传入 `--format`。已有输出文件默认受保护；只有明确传入 `--force` 时才会覆盖。
 
 ### 转写目录
 
@@ -38,15 +38,23 @@ sona transcribe \
 
 目录模式会为每个受支持媒体文件在 `--output-dir` 中写出一个转写文件。默认只扫描目录直属文件；加入 `--recursive` 后会包含子目录，并保留相对输出路径。转写正文写入文件，`stdout` 会输出 JSON 成功/失败汇总。
 
+也可以传入多个输入文件或 glob 通配模式。它们会使用与目录模式相同的批量输出规划，并要求传入 `--output-dir`：
+
+```bash
+sona transcribe ./media/*.wav ./media/interview.mp4 --output-dir ./transcripts --format srt
+```
+
 ### 列出、下载或删除模型
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
+sona models list --json
 sona models download sherpa-onnx-whisper-turbo
 sona models delete sherpa-onnx-whisper-turbo
 ```
 
+`models list` 默认输出便于阅读的表格。脚本需要完整机器可读结构时使用 `--json`，其中仍包含 `install_path`。
 当所选预置模型需要伴生模型时，`models download` 会自动下载所需模型，例如 `silero-vad` 或默认标点模型。
 `models delete` 只会删除指定模型，不会自动删除伴生模型。
 
@@ -75,6 +83,8 @@ vad_buffer_size = 5.0
 gpu_acceleration = "auto"
 hotwords = "Sona,offline ASR"
 format = "srt"
+quiet = false
+jobs = 1
 ```
 
 ### `transcribe` 配置键
@@ -89,6 +99,8 @@ format = "srt"
 | `threads` | 可选 | 大于 `0` 的整数 | `4` | 识别线程数。 |
 | `enable_itn` | 可选 | `true` 或 `false` | `false` | 启用逆文本归一化。 |
 | `hotwords` | 可选 | 逗号分隔词组 | 无 | 自定义 ASR 热词；当前支持 Transducer 和 Qwen3 模型。 |
+| `quiet` | 可选 | `true` 或 `false` | `false` | 设为 true 时隐藏转写进度；CLI `--quiet` 也会启用。 |
+| `jobs` | 可选 | 大于 `0` 的整数 | `1` | 目录、多输入或 glob 模式下最大并发文件任务数；CLI `--jobs` 会覆盖。 |
 | `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
 | `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可显式关闭 GPU 加速。 |
 | `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
@@ -137,17 +149,19 @@ sona transcribe --help
 
 高级包装脚本和测试可以设置 `SONA_FORCE_CLI=1`，即使可执行文件启动时没有识别到 CLI 子命令，也强制进入 CLI 模式。
 
+使用 `sona completions <shell>` 生成 shell 补全脚本。支持 `bash`、`zsh`、`fish`、`powershell` 和 `elvish`；脚本会写入 `stdout`。
+
 ### `transcribe`
 
 | 参数 / 配置键 | 必选性 | 取值范围 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `<input>` | 必选，除非传入 `--input-dir` | 本地音频或视频文件路径 | 无 | 要转写的单个文件。 |
+| `<input>...` | 必选，除非传入 `--input-dir` | 本地音频/视频文件路径或 glob 通配模式 | 无 | 单个输入保持单文件模式；多个输入或 glob 模式会进入批量模式并要求 `--output-dir`。 |
 | `--input-dir <dir>` | 目录模式必选 | 目录路径 | 无 | 转写目录中的受支持媒体文件。 |
 | `--config <path>` | 可选 | TOML 文件路径 | 无 | 从配置文件加载默认值。 |
-| `--output <path>` | 可选 | 文件系统路径 | `stdout` | 输出文件路径。 |
-| `--output-dir <dir>` | 与 `--input-dir` 同用时必选 | 目录路径 | 无 | 为每个输入文件写出一个转写文件。 |
+| `--output <path>` | 可选 | 文件系统路径 | `stdout` | 仅用于单文件模式。文件已存在时会报错，除非传入 `--force`。 |
+| `--output-dir <dir>` | 与 `--input-dir`、多个输入或 glob 同用时必选 | 目录路径 | 无 | 为每个输入文件写出一个转写文件。计划输出已存在时会报错，除非传入 `--force`。 |
 | `--recursive` | 可选 | 标志 | 关闭 | 扫描子目录并保留相对输出路径。 |
-| `--jobs <n>` | 可选 | 大于 `0` 的整数 | `1` | 目录模式下最大并发文件任务数。 |
+| `--jobs <n>` | 可选 | 大于 `0` 的整数 | `jobs` 配置或 `1` | 批量模式下最大并发文件任务数。 |
 | `--format <format>` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖配置和输出扩展名推断。 |
 | `--language <code>` | 可选 | `auto` 或模型语言代码 | `auto` | 覆盖配置。 |
 | `--model-id <id>` | 必选，除非配置了 `model_id` | 离线预置模型 ID | 无 | 主转写模型。 |
@@ -161,7 +175,8 @@ sona transcribe --help
 | `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。 |
 | `--vad-buffer <seconds>` | 可选 | 大于 `0` 的数字 | `5.0` | `vad_buffer_size` 的 CLI 参数名。 |
 | `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。与 `--input-dir` 不兼容。 |
-| `--quiet` | 可选 | 标志 | 关闭 | 仅 CLI 参数；隐藏转写进度。 |
+| `--quiet` | 可选 | 标志 | 关闭 | 隐藏转写进度，并覆盖 `quiet = false`。 |
+| `--force` | 可选 | 标志 | 关闭 | 允许覆盖已有输出文件。批量模式中规划出的重复输出仍会失败。 |
 
 ### `models list`
 
@@ -172,7 +187,8 @@ sona transcribe --help
 | `--type <type>` | 可选 | 预置模型类型，如 `whisper`、`vad`、`punctuation` | 所有类型 | 按模型类型过滤。 |
 | `--language <code>` | 可选 | 语言令牌，如 `zh`、`en`、`ja`、`yue` | 所有语言 | 按支持语言令牌过滤。 |
 | `--installed` | 可选 | 标志 | 关闭 | 只显示 `models_dir` 中已存在的模型。 |
-| 输出 | 总是 | JSON | JSON | 写入 `stdout`。 |
+| `--json` | 可选 | 标志 | 关闭 | 输出机器可读 JSON，而不是默认表格。 |
+| 输出 | 总是 | 表格或 JSON | 表格 | 写入 `stdout`。 |
 
 ### `models download`
 

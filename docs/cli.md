@@ -22,7 +22,7 @@ sona transcribe ./sample.mp4 \
   --output ./sample.srt
 ```
 
-Without `--output`, transcription writes JSON to `stdout`. With `--output`, the format is inferred from the file extension unless `--format` is provided.
+Without `--output`, transcription writes JSON to `stdout`. With `--output`, the format is inferred from the file extension unless `--format` is provided. Existing output files are protected by default; pass `--force` only when you intend to overwrite them.
 
 ### Transcribe a directory
 
@@ -38,15 +38,23 @@ sona transcribe \
 
 Directory mode writes one transcript per supported media file into `--output-dir`. By default it scans only direct children; add `--recursive` to include subdirectories. Transcript content goes to files, while a JSON success/failure summary is written to `stdout`.
 
+You can also pass multiple input files or glob patterns. These use the same batch output planning as directory mode and require `--output-dir`:
+
+```bash
+sona transcribe ./media/*.wav ./media/interview.mp4 --output-dir ./transcripts --format srt
+```
+
 ### List, download, or delete models
 
 ```bash
 sona models list --mode offline --type whisper
 sona models list --language zh --installed
+sona models list --json
 sona models download sherpa-onnx-whisper-turbo
 sona models delete sherpa-onnx-whisper-turbo
 ```
 
+`models list` prints a readable table by default. Use `--json` when scripts need the full machine-readable shape, including `install_path`.
 `models download` automatically downloads required companion models, such as `silero-vad` or the default punctuation model, when the selected preset needs them.
 `models delete` removes only the specified model. It does not delete companion models automatically.
 
@@ -75,6 +83,8 @@ vad_buffer_size = 5.0
 gpu_acceleration = "auto"
 hotwords = "Sona,offline ASR"
 format = "srt"
+quiet = false
+jobs = 1
 ```
 
 ### `transcribe` config keys
@@ -89,6 +99,8 @@ format = "srt"
 | `threads` | Optional | Integer greater than `0` | `4` | Recognizer thread count. |
 | `enable_itn` | Optional | `true` or `false` | `false` | Enables inverse text normalization. |
 | `hotwords` | Optional | Comma-separated words | None | Custom ASR hotwords; currently supported by Transducer and Qwen3 models. |
+| `quiet` | Optional | `true` or `false` | `false` | Hides transcription progress when set. CLI `--quiet` also enables this. |
+| `jobs` | Optional | Integer greater than `0` | `1` | Maximum concurrent file jobs for directory, multiple-input, or glob mode. CLI `--jobs` overrides this. |
 | `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
 | `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Use `cpu` to disable GPU acceleration. |
 | `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides output extension inference. |
@@ -137,17 +149,19 @@ Verbose diagnostics are written to `stderr`. Command output, including JSON outp
 
 Advanced wrappers and tests can set `SONA_FORCE_CLI=1` to force CLI mode even when the executable is launched without a recognized CLI subcommand.
 
+Generate shell completion scripts with `sona completions <shell>`. Supported shells are `bash`, `zsh`, `fish`, `powershell`, and `elvish`; the script is printed to `stdout`.
+
 ### `transcribe`
 
 | Parameter / config key | Required | Range | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `<input>` | Required unless `--input-dir` is passed | Local audio or video file path | None | Single file to transcribe. |
+| `<input>...` | Required unless `--input-dir` is passed | Local audio/video file paths or glob patterns | None | One input keeps single-file mode. Multiple inputs or glob patterns use batch mode and require `--output-dir`. |
 | `--input-dir <dir>` | Required for directory mode | Directory path | None | Transcribes supported media files in the directory. |
 | `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
-| `--output <path>` | Optional | Filesystem path | `stdout` | Output file path. |
-| `--output-dir <dir>` | Required with `--input-dir` | Directory path | None | Writes one transcript per input file. |
+| `--output <path>` | Optional | Filesystem path | `stdout` | Output file path for single-file mode only. Errors if the file exists unless `--force` is passed. |
+| `--output-dir <dir>` | Required with `--input-dir`, multiple inputs, or glob patterns | Directory path | None | Writes one transcript per input file. Existing planned outputs error unless `--force` is passed. |
 | `--recursive` | Optional | Flag | Off | Scans subdirectories and preserves relative output paths. |
-| `--jobs <n>` | Optional | Integer greater than `0` | `1` | Maximum concurrent file jobs in directory mode. |
+| `--jobs <n>` | Optional | Integer greater than `0` | `jobs` config or `1` | Maximum concurrent file jobs in batch mode. |
 | `--format <format>` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides config and output extension inference. |
 | `--language <code>` | Optional | `auto` or a model language code | `auto` | Overrides config. |
 | `--model-id <id>` | Required unless `model_id` is configured | Offline preset model id | None | Main transcription model. |
@@ -161,7 +175,8 @@ Advanced wrappers and tests can set `SONA_FORCE_CLI=1` to force CLI mode even wh
 | `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. |
 | `--vad-buffer <seconds>` | Optional | Number greater than `0` | `5.0` | CLI name for `vad_buffer_size`. |
 | `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. Not supported with `--input-dir`. |
-| `--quiet` | Optional | Flag | Off | CLI-only; hides transcription progress. |
+| `--quiet` | Optional | Flag | Off | Hides transcription progress and overrides `quiet = false`. |
+| `--force` | Optional | Flag | Off | Allows overwriting existing output files. Duplicate planned batch outputs still fail. |
 
 ### `models list`
 
@@ -172,7 +187,8 @@ Advanced wrappers and tests can set `SONA_FORCE_CLI=1` to force CLI mode even wh
 | `--type <type>` | Optional | Preset model type, such as `whisper`, `vad`, `punctuation` | All types | Filters by model type. |
 | `--language <code>` | Optional | Language token, such as `zh`, `en`, `ja`, `yue` | All languages | Filters by supported language token. |
 | `--installed` | Optional | Flag | Off | Shows only models present in `models_dir`. |
-| Output | Always | JSON | JSON | Printed to `stdout`. |
+| `--json` | Optional | Flag | Off | Prints machine-readable JSON instead of the default table. |
+| Output | Always | Table or JSON | Table | Printed to `stdout`. |
 
 ### `models download`
 
