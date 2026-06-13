@@ -454,6 +454,23 @@ describe('ModelService', () => {
         });
     });
 
+    describe('single-file model metadata', () => {
+        it('exposes sha256 hashes for non-archive models', () => {
+            const singleFileModels = PRESET_MODELS.filter(model => model.isArchive === false);
+            const silero = PRESET_MODELS.find(model => model.id === 'silero-vad');
+
+            expect(silero).toMatchObject({
+                sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+            });
+            expect(singleFileModels.length).toBeGreaterThan(0);
+            expect(singleFileModels.every(model => (
+                typeof (model as any).sha256 === 'string'
+                && /^[a-f0-9]{64}$/.test((model as any).sha256)
+                && !('sizeBytes' in model)
+            ))).toBe(true);
+        });
+    });
+
     describe('Qwen3 ASR metadata', () => {
         const qwen3ModelId = 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
 

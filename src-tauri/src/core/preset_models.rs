@@ -1,5 +1,7 @@
 use crate::integrations::asr::ModelFileConfig;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tauri::Manager;
@@ -49,6 +51,7 @@ pub struct PresetModel {
     pub modes: Option<Vec<String>>,
     pub language: String,
     pub size: String,
+    pub sha256: Option<String>,
     pub is_recommended: Option<bool>,
     pub is_archive: Option<bool>,
     pub filename: Option<String>,
@@ -103,6 +106,8 @@ pub struct ModelCatalogModel {
     pub modes: Option<Vec<String>>,
     pub language: String,
     pub size: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_recommended: Option<bool>,
     pub is_archive: bool,
@@ -546,6 +551,25 @@ fn normalize_catalog_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }
 
+fn sha256_file_matches(path: &Path, expected_hash: &str) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+
+    loop {
+        let read = match file.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(_) => return false,
+        };
+        hasher.update(&buffer[..read]);
+    }
+
+    hex::encode(hasher.finalize()).eq_ignore_ascii_case(expected_hash)
+}
+
 impl PresetModel {
     /// Resolves the installed model path under the given models directory.
     pub fn resolve_install_path(&self, models_dir: &Path) -> PathBuf {
@@ -561,6 +585,30 @@ impl PresetModel {
             models_dir.join(format!("{}.tar.bz2", self.id))
         } else {
             self.resolve_install_path(models_dir)
+        }
+    }
+
+    /// Returns true when the preset's install path contains a complete installed model.
+    pub fn is_installed_at(&self, models_dir: &Path) -> bool {
+        self.is_install_path_complete(&self.resolve_install_path(models_dir))
+    }
+
+    fn is_install_path_complete(&self, install_path: &Path) -> bool {
+        let Ok(metadata) = install_path.metadata() else {
+            return false;
+        };
+
+        if self.is_archive() {
+            return install_path.exists();
+        }
+
+        if !metadata.is_file() {
+            return false;
+        }
+
+        match self.sha256.as_deref() {
+            Some(expected_hash) => sha256_file_matches(install_path, expected_hash),
+            None => metadata.len() > 0,
         }
     }
 
@@ -642,7 +690,11 @@ mod tests {
             models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
         )
         .unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        fs::write(
+            models_dir.join("silero_vad.onnx"),
+            b"not the expected model",
+        )
+        .unwrap();
 
         let snapshot = build_model_catalog_snapshot(&models_dir);
 
@@ -656,7 +708,7 @@ mod tests {
             .iter()
             .find(|model| model.id == "silero-vad")
             .unwrap();
-        assert!(silero.is_installed);
+        assert!(!silero.is_installed);
         assert!(silero.install_path.ends_with("silero_vad.onnx"));
 
         let asr_section = snapshot
@@ -680,6 +732,60 @@ mod tests {
                 "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
             ]
         );
+    }
+
+    #[test]
+    fn marks_sha256_mismatch_single_file_model_as_not_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(&models_dir).unwrap();
+        fs::write(
+            models_dir.join("silero_vad.onnx"),
+            b"not the expected model",
+        )
+        .unwrap();
+
+        let snapshot = build_model_catalog_snapshot(&models_dir);
+        let silero = snapshot
+            .models
+            .iter()
+            .find(|model| model.id == "silero-vad")
+            .unwrap();
+
+        assert!(!silero.is_installed);
+    }
+
+    #[test]
+    fn marks_sha256_matching_single_file_model_as_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(&models_dir).unwrap();
+        let install_path = models_dir.join("silero_vad.onnx");
+        fs::write(&install_path, b"complete model bytes").unwrap();
+
+        let mut model = find_preset_model("silero-vad").unwrap().clone();
+        model.sha256 =
+            Some("5c862e1c5720f336b458175b127ea9dcee1a975e3433a76af4790c12fcd634a0".to_string());
+
+        assert!(model.is_install_path_complete(&install_path));
+    }
+
+    #[test]
+    fn non_archive_without_sha256_requires_non_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty_path = dir.path().join("empty.onnx");
+        let non_empty_path = dir.path().join("non-empty.onnx");
+        let directory_path = dir.path().join("directory.onnx");
+        fs::write(&empty_path, []).unwrap();
+        fs::write(&non_empty_path, b"model bytes").unwrap();
+        fs::create_dir_all(&directory_path).unwrap();
+
+        let mut model = find_preset_model("silero-vad").unwrap().clone();
+        model.sha256 = None;
+
+        assert!(!model.is_install_path_complete(&empty_path));
+        assert!(model.is_install_path_complete(&non_empty_path));
+        assert!(!model.is_install_path_complete(&directory_path));
     }
 
     #[test]
@@ -880,6 +986,7 @@ impl ModelCatalogModel {
             size: model.size.clone(),
             is_recommended: model.is_recommended,
             is_archive: model.is_archive(),
+            sha256: model.sha256.clone(),
             filename: model.filename.clone(),
             engine: model
                 .engine
@@ -890,7 +997,7 @@ impl ModelCatalogModel {
             version_label: model.version_label.clone(),
             install_path: path_to_catalog_string(&install_path),
             download_path: path_to_catalog_string(&download_path),
-            is_installed: install_path.exists(),
+            is_installed: model.is_installed_at(models_dir),
         }
     }
 

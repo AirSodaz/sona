@@ -60,6 +60,8 @@ export interface ModelInfo {
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
     size: string;
+    /** Expected SHA-256 for non-archive single-file downloads. */
+    sha256?: string;
     /** Whether the model should be highlighted as recommended. */
     isRecommended?: boolean;
     /** Whether the download is an archive that needs extraction. Defaults to true. */

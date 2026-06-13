@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
 
@@ -51,6 +52,9 @@ pub async fn download_file<R: tauri::Runtime>(
     use futures_util::StreamExt;
     use tauri::Emitter;
 
+    let final_path = PathBuf::from(&output_path);
+    let temp_path = temporary_download_path(&final_path, &id);
+
     let notify = Arc::new(Notify::new());
     {
         let mut downloads = state.downloads.lock().await;
@@ -71,7 +75,7 @@ pub async fn download_file<R: tauri::Runtime>(
     }
 
     let total_size = res.content_length().unwrap_or(0);
-    let file = tokio::fs::File::create(&output_path)
+    let file = tokio::fs::File::create(&temp_path)
         .await
         .map_err(|e| e.to_string())?;
     let mut writer = tokio::io::BufWriter::new(file);
@@ -110,10 +114,83 @@ pub async fn download_file<R: tauri::Runtime>(
         downloads.remove(&id);
     }
 
-    if result.is_err() {
+    if result.is_ok() {
         drop(writer);
-        let _ = tokio::fs::remove_file(&output_path).await;
+        publish_download_file(&temp_path, &final_path).await?;
+    } else {
+        drop(writer);
+        cleanup_failed_download(&temp_path).await;
     }
 
     result
+}
+
+fn temporary_download_path(path: &Path, id: &str) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".");
+    s.push(id);
+    s.push(".download");
+    PathBuf::from(s)
+}
+
+async fn cleanup_failed_download(temp_path: &Path) {
+    let _ = tokio::fs::remove_file(temp_path).await;
+}
+
+async fn publish_download_file(temp_path: &Path, final_path: &Path) -> Result<(), String> {
+    if tokio::fs::try_exists(final_path)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        tokio::fs::remove_file(final_path)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    tokio::fs::rename(temp_path, final_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn temporary_download_path_uses_sibling_file() {
+        let path = temporary_download_path(Path::new("C:/models/silero_vad.onnx"), "abc123");
+
+        assert_eq!(path, Path::new("C:/models/silero_vad.onnx.abc123.download"));
+    }
+
+    #[tokio::test]
+    async fn cleanup_failed_download_removes_temp_without_touching_final() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("silero_vad.onnx");
+        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        tokio::fs::write(&final_path, b"old-good").await.unwrap();
+        tokio::fs::write(&temp_path, b"partial").await.unwrap();
+
+        cleanup_failed_download(&temp_path).await;
+
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"old-good");
+        assert!(!temp_path.exists());
+    }
+
+    #[tokio::test]
+    async fn publish_download_file_replaces_final_only_after_temp_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("silero_vad.onnx");
+        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        tokio::fs::write(&final_path, b"old").await.unwrap();
+        tokio::fs::write(&temp_path, b"complete").await.unwrap();
+
+        publish_download_file(&temp_path, &final_path)
+            .await
+            .unwrap();
+
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"complete");
+        assert!(!temp_path.exists());
+    }
 }

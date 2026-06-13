@@ -1127,7 +1127,7 @@ fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String>
 
 fn require_installed_model(model: &PresetModel, models_dir: &Path) -> Result<String, String> {
     let path = model.resolve_install_path(models_dir);
-    if !path.exists() {
+    if !model.is_installed_at(models_dir) {
         return Err(format!(
             "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             model.id,
@@ -1141,7 +1141,7 @@ fn require_installed_companion(model_id: &str, models_dir: &Path) -> Result<Stri
     let model = find_preset_model(model_id)
         .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
     let path = model.resolve_install_path(models_dir);
-    if !path.exists() {
+    if !model.is_installed_at(models_dir) {
         return Err(format!(
             "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             path.display()

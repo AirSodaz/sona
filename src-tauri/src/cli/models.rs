@@ -302,7 +302,7 @@ async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
 fn run_model_delete(args: ModelDeleteArgs) -> Result<(), String> {
     let resolved = resolve_model_download(&args.model_id, args.models_dir)?;
 
-    if !resolved.install_path.exists() {
+    if !resolved.model.is_installed_at(&resolved.models_dir) && !resolved.install_path.exists() {
         eprintln!(
             "Model {} is not installed at {}",
             resolved.model.id,
@@ -420,7 +420,7 @@ pub fn list_models(models_dir: Option<PathBuf>) -> Result<Vec<CliModelSummary>, 
                 language: model.language.clone(),
                 size: model.size.clone(),
                 modes: model.modes.clone().unwrap_or_default(),
-                installed: install_path.exists(),
+                installed: model.is_installed_at(&models_dir),
                 install_path,
             }
         })
@@ -455,7 +455,7 @@ pub async fn download_model<F>(
 where
     F: FnMut(u64, u64),
 {
-    if resolved.install_path.exists() {
+    if resolved.model.is_installed_at(&resolved.models_dir) {
         return Ok(resolved.install_path.clone());
     }
 
@@ -486,12 +486,13 @@ where
     }
 
     let total_size = response.content_length().unwrap_or(0);
-    let file = tokio::fs::File::create(&resolved.download_path)
+    let temp_download_path = temporary_download_path(&resolved.download_path);
+    let file = tokio::fs::File::create(&temp_download_path)
         .await
         .map_err(|error| {
             format!(
                 "Failed to create download file {}: {error}",
-                resolved.download_path.display()
+                temp_download_path.display()
             )
         })?;
     let mut writer = tokio::io::BufWriter::new(file);
@@ -499,14 +500,25 @@ where
         .bytes_stream()
         .map(|item| item.map_err(|error| error.to_string()));
 
-    process_download_stream(&mut stream, &mut writer, total_size, |downloaded, total| {
-        on_progress(downloaded, total);
-    })
-    .await?;
-    writer
-        .flush()
+    if let Err(error) =
+        process_download_stream(&mut stream, &mut writer, total_size, |downloaded, total| {
+            on_progress(downloaded, total);
+        })
         .await
-        .map_err(|error| format!("Failed to flush download file: {error}"))?;
+    {
+        drop(writer);
+        let _ = tokio::fs::remove_file(&temp_download_path).await;
+        return Err(error);
+    }
+
+    if let Err(error) = writer.flush().await {
+        drop(writer);
+        let _ = tokio::fs::remove_file(&temp_download_path).await;
+        return Err(format!("Failed to flush download file: {error}"));
+    }
+
+    drop(writer);
+    publish_download_file(&temp_download_path, &resolved.download_path).await?;
 
     if resolved.model.is_archive() {
         extract_tar_bz2_archive(&resolved.download_path, &resolved.models_dir).await?;
@@ -521,6 +533,36 @@ where
     }
 
     Ok(resolved.install_path.clone())
+}
+
+fn temporary_download_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".download");
+    PathBuf::from(s)
+}
+
+async fn publish_download_file(temp_path: &Path, final_path: &Path) -> Result<(), String> {
+    if tokio::fs::try_exists(final_path)
+        .await
+        .map_err(|error| format!("Failed to check {}: {error}", final_path.display()))?
+    {
+        tokio::fs::remove_file(final_path).await.map_err(|error| {
+            format!(
+                "Failed to remove existing download target {}: {error}",
+                final_path.display()
+            )
+        })?;
+    }
+
+    tokio::fs::rename(temp_path, final_path)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to publish download {} to {}: {error}",
+                temp_path.display(),
+                final_path.display()
+            )
+        })
 }
 
 /// Returns suggested companion model ids for the given preset model.
@@ -685,5 +727,54 @@ mod tests {
         assert!(table.contains("yes"));
         assert!(table.contains("no"));
         assert!(!table.contains("install_path"));
+    }
+
+    #[tokio::test]
+    async fn download_single_file_model_does_not_accept_sha256_mismatch_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        std::fs::create_dir_all(&models_dir).unwrap();
+
+        let install_path = models_dir.join("silero_vad.onnx");
+        std::fs::write(&install_path, b"wrong model bytes").unwrap();
+
+        let mut model = find_preset_model("silero-vad").unwrap().clone();
+        model.url = "http://127.0.0.1:9/silero_vad.onnx".to_string();
+        let resolved = ResolvedModelDownload {
+            model,
+            models_dir,
+            download_path: install_path.clone(),
+            install_path,
+        };
+
+        let result = download_model(&resolved, |_, _| {}).await;
+
+        assert!(
+            result.is_err(),
+            "partial single-file model should trigger a new download instead of returning installed"
+        );
+    }
+
+    #[test]
+    fn temporary_download_path_appends_download_suffix() {
+        let path = temporary_download_path(Path::new("C:/models/silero_vad.onnx"));
+
+        assert_eq!(path, PathBuf::from("C:/models/silero_vad.onnx.download"));
+    }
+
+    #[tokio::test]
+    async fn publish_download_file_replaces_existing_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("silero_vad.onnx");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
+        tokio::fs::write(&final_path, b"old").await.unwrap();
+        tokio::fs::write(&temp_path, b"complete").await.unwrap();
+
+        publish_download_file(&temp_path, &final_path)
+            .await
+            .unwrap();
+
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"complete");
+        assert!(!temp_path.exists());
     }
 }

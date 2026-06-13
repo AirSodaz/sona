@@ -364,6 +364,7 @@
     "type": "speaker-embedding",
     "language": "zh,en",
     "size": "27 MB",
+    "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
     "isArchive": false,
     "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "rules": {
@@ -380,6 +381,7 @@
     "type": "speaker-embedding",
     "language": "zh",
     "size": "68.1 MB",
+    "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -396,6 +398,7 @@
     "type": "speaker-embedding",
     "language": "zh",
     "size": "111 MB",
+    "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "rules": {
@@ -412,6 +415,7 @@
     "type": "speaker-embedding",
     "language": "zh",
     "size": "210 MB",
+    "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -428,6 +432,7 @@
     "type": "vad",
     "language": "zh,en",
     "size": "629KB",
+    "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
     "isArchive": false,
     "filename": "silero_vad.onnx",
     "engine": "sherpa-onnx"

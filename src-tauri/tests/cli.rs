@@ -383,8 +383,7 @@ fn model_list_can_filter_by_type_and_language() {
 fn model_list_can_filter_installed_only() {
     let dir = tempdir().unwrap();
     let models_dir = dir.path().join("models");
-    fs::create_dir_all(&models_dir).unwrap();
-    fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+    fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
 
     let output = cli_command()
         .arg("models")
@@ -397,8 +396,8 @@ fn model_list_can_filter_installed_only() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("silero-vad"));
-    assert!(!stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(!stdout.contains("silero-vad"));
 }
 
 #[test]
