@@ -18,17 +18,34 @@ const SHERPA_ONNX_STATIC_LIBS: &[&str] = &[
 ];
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(sona_sherpa_directml)");
     println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
     if let Ok(lib_dir) = env::var("SHERPA_ONNX_LIB_DIR") {
         println!("cargo:rustc-link-search=native={}", lib_dir);
 
         let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target_os == "windows" && sherpa_lib_dir_has_directml(Path::new(&lib_dir)) {
+            println!("cargo:rustc-cfg=sona_sherpa_directml");
+        }
+
         if target_os == "linux" || target_os == "macos" || target_os == "windows" {
             configure_static_sherpa_linking(&lib_dir, &target_os);
         }
     }
 
     tauri_build::build()
+}
+
+fn sherpa_lib_dir_has_directml(lib_dir: &Path) -> bool {
+    [
+        "onnxruntime_providers_dml.lib",
+        "DirectML.lib",
+        "DirectML.dll",
+        "directml.lib",
+        "directml.dll",
+    ]
+    .iter()
+    .any(|file| lib_dir.join(file).exists())
 }
 
 fn configure_static_sherpa_linking(lib_dir: &str, target_os: &str) {

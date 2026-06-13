@@ -102,7 +102,7 @@ jobs = 1
 | `quiet` | Optional | `true` or `false` | `false` | Hides transcription progress when set. CLI `--quiet` also enables this. |
 | `jobs` | Optional | Integer greater than `0` | `1` | Maximum concurrent file jobs for directory, multiple-input, or glob mode. CLI `--jobs` overrides this. |
 | `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
-| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Use `cpu` to disable GPU acceleration. |
+| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | CLI transcription on Windows tries CUDA first when set to `auto`; when the bundled runtime supports DirectML it tries DirectML next, then CPU. Use `cpu` to disable GPU acceleration. |
 | `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides output extension inference. |
 
 ### `serve` config keys
@@ -172,7 +172,7 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | `--enable-itn` | Optional | Flag | `false` | Conflicts with `--disable-itn`. |
 | `--disable-itn` | Optional | Flag | `false` | Overrides `enable_itn = true`; conflicts with `--enable-itn`. |
 | `--hotwords <words>` | Optional | Comma-separated words | None | Overrides `hotwords`; currently supported by Transducer and Qwen3 models. |
-| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. |
+| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Overrides config. On Windows, `auto` tries CUDA first; when the bundled runtime supports DirectML it tries DirectML next, then CPU. Explicit `directml` stays a manual DirectML request. |
 | `--vad-buffer <seconds>` | Optional | Number greater than `0` | `5.0` | CLI name for `vad_buffer_size`. |
 | `--save-wav <path>` | Optional | Filesystem path | None | CLI-only; saves the intermediate resampled WAV. Not supported with `--input-dir`. |
 | `--quiet` | Optional | Flag | Off | Hides transcription progress and overrides `quiet = false`. |

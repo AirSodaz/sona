@@ -102,7 +102,7 @@ jobs = 1
 | `quiet` | 可选 | `true` 或 `false` | `false` | 设为 true 时隐藏转写进度；CLI `--quiet` 也会启用。 |
 | `jobs` | 可选 | 大于 `0` 的整数 | `1` | 目录、多输入或 glob 模式下最大并发文件任务数；CLI `--jobs` 会覆盖。 |
 | `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
-| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 使用 `cpu` 可显式关闭 GPU 加速。 |
+| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | CLI 转写在 Windows 上设为 `auto` 时会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。使用 `cpu` 可显式关闭 GPU 加速。 |
 | `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
 
 ### `serve` 配置键
@@ -172,7 +172,7 @@ sona transcribe --help
 | `--enable-itn` | 可选 | 标志 | `false` | 与 `--disable-itn` 互斥。 |
 | `--disable-itn` | 可选 | 标志 | `false` | 覆盖 `enable_itn = true`；与 `--enable-itn` 互斥。 |
 | `--hotwords <words>` | 可选 | 逗号分隔词组 | 无 | 覆盖 `hotwords`；当前支持 Transducer 和 Qwen3 模型。 |
-| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。 |
+| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 覆盖配置。Windows 上 `auto` 会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。显式 `directml` 会保持为手动 DirectML 请求。 |
 | `--vad-buffer <seconds>` | 可选 | 大于 `0` 的数字 | `5.0` | `vad_buffer_size` 的 CLI 参数名。 |
 | `--save-wav <path>` | 可选 | 文件系统路径 | 无 | 仅 CLI 参数；保存中间重采样 WAV。与 `--input-dir` 不兼容。 |
 | `--quiet` | 可选 | 标志 | 关闭 | 隐藏转写进度，并覆盖 `quiet = false`。 |

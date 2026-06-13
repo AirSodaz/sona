@@ -8,7 +8,7 @@ use clap::Args;
 use futures_util::stream::{self, StreamExt};
 use std::collections::HashSet;
 use std::fs;
-use std::io::Write;
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 pub const DEFAULT_THREADS: i32 = 4;
@@ -379,20 +379,21 @@ async fn run_single_transcribe(
     let export_format = resolved.export_format;
     let output_target = resolved.output_target.clone();
     let request = resolved.request.clone();
+    let stderr_is_terminal = io::stderr().is_terminal();
 
-    let mut last_reported_progress = -1_i32;
-    let segments = transcribe_batch_with_progress(&request, |progress| {
-        if quiet {
-            return;
-        }
-
-        let rounded = progress.round() as i32;
-        if rounded != last_reported_progress {
-            eprintln!("Progress: {rounded}%");
-            last_reported_progress = rounded;
+    let mut reporter = CliProgressReporter::single(quiet, stderr_is_terminal);
+    let segments = transcribe_with_cli_gpu_fallback(&request, |event| match event {
+        CliTranscribeEvent::Progress(progress) => reporter.write(progress),
+        CliTranscribeEvent::DirectMlRetry { error } => {
+            reporter.finish_write();
+            if !quiet {
+                eprintln!("DirectML transcription failed, retrying with CPU: {error}");
+            }
         }
     })
-    .await?;
+    .await;
+    reporter.finish_write();
+    let segments = segments?;
     let content = export_segments(&segments, export_format)?;
     write_output(&output_target, &content)
 }
@@ -636,19 +637,26 @@ async fn run_batch_transcribe_plan(
         let export_format = plan.resolved.export_format;
         let output_target = plan.resolved.output_target.clone();
         let request = plan.resolved.request.clone();
-        let mut last_reported_progress = -1_i32;
-        let segments = transcribe_batch_with_progress(&request, |progress| {
-            if quiet {
-                return;
-            }
-
-            let rounded = progress.round() as i32;
-            if rounded != last_reported_progress {
-                eprintln!("[{}/{}] {}: {}%", index + 1, total, input_label, rounded);
-                last_reported_progress = rounded;
+        let stderr_is_terminal = io::stderr().is_terminal();
+        let mut reporter = CliProgressReporter::batch(
+            quiet,
+            stderr_is_terminal,
+            index,
+            total,
+            input_label.clone(),
+        );
+        let segments = transcribe_with_cli_gpu_fallback(&request, |event| match event {
+            CliTranscribeEvent::Progress(progress) => reporter.write(progress),
+            CliTranscribeEvent::DirectMlRetry { error } => {
+                reporter.finish_write();
+                if !quiet {
+                    eprintln!("DirectML transcription failed, retrying with CPU: {error}");
+                }
             }
         })
-        .await?;
+        .await;
+        reporter.finish_write();
+        let segments = segments?;
         let content = export_segments(&segments, export_format)?;
         write_output(&output_target, &content)
     }
@@ -667,6 +675,229 @@ async fn run_batch_transcribe_plan(
             status: "error".to_string(),
             error: Some(error),
         },
+    }
+}
+
+async fn transcribe_with_cli_gpu_fallback<F>(
+    request: &BatchTranscriptionRequest,
+    mut on_event: F,
+) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String>
+where
+    F: FnMut(CliTranscribeEvent<'_>),
+{
+    let cuda_available = crate::app::hardware::check_gpu_availability()
+        .await
+        .unwrap_or(false);
+    let plan = CliGpuFallbackPlan::for_current_platform(
+        request.gpu_acceleration.as_deref(),
+        cuda_available,
+        cli_directml_runtime_available(),
+    );
+    let providers = plan.providers();
+    let mut last_error = None;
+
+    for provider in providers {
+        let mut request = request.clone();
+        request.gpu_acceleration = Some(provider.clone());
+        match transcribe_batch_with_progress(&request, |progress| {
+            on_event(CliTranscribeEvent::Progress(progress));
+        })
+        .await
+        {
+            Ok(segments) => return Ok(segments),
+            Err(error) if plan.should_retry_after_failure(&provider) => {
+                on_event(CliTranscribeEvent::DirectMlRetry { error: &error });
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "Transcription failed.".to_string()))
+}
+
+enum CliTranscribeEvent<'a> {
+    Progress(f32),
+    DirectMlRetry { error: &'a str },
+}
+
+struct CliGpuFallbackPlan {
+    providers: Vec<String>,
+    auto_windows_directml_fallback: bool,
+}
+
+impl CliGpuFallbackPlan {
+    fn for_current_platform(
+        gpu_acceleration: Option<&str>,
+        cuda_available: bool,
+        directml_available: bool,
+    ) -> Self {
+        Self::for_platform(
+            gpu_acceleration,
+            cfg!(target_os = "windows"),
+            cuda_available,
+            directml_available,
+        )
+    }
+
+    fn for_platform(
+        gpu_acceleration: Option<&str>,
+        is_windows: bool,
+        cuda_available: bool,
+        directml_available: bool,
+    ) -> Self {
+        let gpu = gpu_acceleration.unwrap_or(DEFAULT_GPU_ACCELERATION);
+        if gpu != "auto" {
+            return Self {
+                providers: vec![gpu.to_string()],
+                auto_windows_directml_fallback: false,
+            };
+        }
+
+        if is_windows {
+            if cuda_available {
+                return Self {
+                    providers: vec!["cuda".to_string()],
+                    auto_windows_directml_fallback: false,
+                };
+            }
+
+            if !directml_available {
+                return Self {
+                    providers: vec!["cpu".to_string()],
+                    auto_windows_directml_fallback: false,
+                };
+            }
+
+            return Self {
+                providers: vec!["directml".to_string(), "cpu".to_string()],
+                auto_windows_directml_fallback: true,
+            };
+        }
+
+        Self {
+            providers: vec!["auto".to_string()],
+            auto_windows_directml_fallback: false,
+        }
+    }
+
+    fn providers(&self) -> Vec<String> {
+        self.providers.clone()
+    }
+
+    fn should_retry_after_failure(&self, provider: &str) -> bool {
+        self.auto_windows_directml_fallback && provider == "directml"
+    }
+}
+
+fn cli_directml_runtime_available() -> bool {
+    cfg!(sona_sherpa_directml)
+}
+
+enum CliProgressLabel {
+    Single,
+    Batch {
+        index: usize,
+        total: usize,
+        input_label: String,
+    },
+}
+
+struct CliProgressReporter {
+    quiet: bool,
+    terminal: bool,
+    last_reported_progress: Option<i32>,
+    wrote_terminal_progress: bool,
+    label: CliProgressLabel,
+}
+
+impl CliProgressReporter {
+    fn single(quiet: bool, terminal: bool) -> Self {
+        Self {
+            quiet,
+            terminal,
+            last_reported_progress: None,
+            wrote_terminal_progress: false,
+            label: CliProgressLabel::Single,
+        }
+    }
+
+    fn batch(quiet: bool, terminal: bool, index: usize, total: usize, input_label: String) -> Self {
+        Self {
+            quiet,
+            terminal,
+            last_reported_progress: None,
+            wrote_terminal_progress: false,
+            label: CliProgressLabel::Batch {
+                index,
+                total,
+                input_label,
+            },
+        }
+    }
+
+    fn render(&mut self, progress: f32) -> Option<String> {
+        if self.quiet {
+            return None;
+        }
+
+        let rounded = progress.round().clamp(0.0, 100.0) as i32;
+        if self.last_reported_progress == Some(rounded) {
+            return None;
+        }
+
+        if !self.terminal {
+            let should_emit = match self.last_reported_progress {
+                None => true,
+                Some(previous) => rounded == 100 || rounded / 10 > previous / 10,
+            };
+            if !should_emit {
+                self.last_reported_progress = Some(rounded);
+                return None;
+            }
+        }
+
+        self.last_reported_progress = Some(rounded);
+        if self.terminal {
+            self.wrote_terminal_progress = true;
+            Some(format!("\r{}", self.format_line(rounded)))
+        } else {
+            Some(format!("{}\n", self.format_line(rounded)))
+        }
+    }
+
+    fn finish(&mut self) -> Option<String> {
+        if self.wrote_terminal_progress {
+            self.wrote_terminal_progress = false;
+            Some("\n".to_string())
+        } else {
+            None
+        }
+    }
+
+    fn write(&mut self, progress: f32) {
+        if let Some(line) = self.render(progress) {
+            eprint!("{line}");
+            let _ = io::stderr().flush();
+        }
+    }
+
+    fn finish_write(&mut self) {
+        if let Some(line) = self.finish() {
+            eprint!("{line}");
+            let _ = io::stderr().flush();
+        }
+    }
+
+    fn format_line(&self, progress: i32) -> String {
+        match &self.label {
+            CliProgressLabel::Single => format!("Progress: {progress}%"),
+            CliProgressLabel::Batch {
+                index,
+                total,
+                input_label,
+            } => format!("[{}/{}] {}: {}%", index + 1, total, input_label, progress),
+        }
     }
 }
 
@@ -1498,5 +1729,73 @@ mod tests {
             resolve_export_format(None, None).unwrap(),
             ExportFormat::Json
         );
+    }
+
+    #[test]
+    fn transcribe_progress_renderer_refreshes_in_terminal() {
+        let mut reporter = CliProgressReporter::single(false, true);
+
+        assert_eq!(reporter.render(12.2), Some("\rProgress: 12%".to_string()));
+        assert_eq!(reporter.render(12.4), None);
+        assert_eq!(reporter.render(13.0), Some("\rProgress: 13%".to_string()));
+        assert_eq!(reporter.finish(), Some("\n".to_string()));
+    }
+
+    #[test]
+    fn transcribe_progress_renderer_samples_non_terminal_output() {
+        let mut reporter = CliProgressReporter::single(false, false);
+
+        assert_eq!(reporter.render(3.0), Some("Progress: 3%\n".to_string()));
+        assert_eq!(reporter.render(4.0), None);
+        assert_eq!(reporter.render(10.0), Some("Progress: 10%\n".to_string()));
+        assert_eq!(reporter.render(10.4), None);
+        assert_eq!(reporter.render(21.0), Some("Progress: 21%\n".to_string()));
+        assert_eq!(reporter.render(22.0), None);
+        assert_eq!(reporter.render(100.0), Some("Progress: 100%\n".to_string()));
+        assert_eq!(reporter.finish(), None);
+    }
+
+    #[test]
+    fn transcribe_progress_renderer_honors_quiet() {
+        let mut reporter = CliProgressReporter::single(true, true);
+
+        assert_eq!(reporter.render(50.0), None);
+        assert_eq!(reporter.finish(), None);
+    }
+
+    #[test]
+    fn batch_progress_renderer_includes_file_position() {
+        let mut reporter = CliProgressReporter::batch(false, true, 1, 3, "demo.wav".to_string());
+
+        assert_eq!(
+            reporter.render(99.6),
+            Some("\r[2/3] demo.wav: 100%".to_string())
+        );
+        assert_eq!(reporter.finish(), Some("\n".to_string()));
+    }
+
+    #[test]
+    fn windows_auto_gpu_plan_prefers_cuda_then_directml_then_cpu() {
+        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, true, false);
+        assert_eq!(plan.providers(), vec!["cuda"]);
+
+        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, false, true);
+        assert_eq!(plan.providers(), vec!["directml", "cpu"]);
+    }
+
+    #[test]
+    fn windows_auto_gpu_plan_skips_unavailable_directml_runtime() {
+        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, false, false);
+
+        assert_eq!(plan.providers(), vec!["cpu"]);
+        assert!(!plan.should_retry_after_failure("cpu"));
+    }
+
+    #[test]
+    fn explicit_directml_gpu_plan_does_not_retry_cpu() {
+        let plan = CliGpuFallbackPlan::for_platform(Some("directml"), true, false, false);
+
+        assert_eq!(plan.providers(), vec!["directml"]);
+        assert!(!plan.should_retry_after_failure("directml"));
     }
 }
