@@ -44,7 +44,7 @@ Sona 现在通过桌面主程序直接提供离线批量转写命令。安装包
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml -- \
-  transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt
+  transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
 ```
 
 当前 CLI 范围刻意保持精简：
@@ -55,7 +55,7 @@ cargo run --manifest-path src-tauri/Cargo.toml -- \
 - 导出到 `json`、`txt`、`srt`、`vtt` 或 `md`
 - 通过桌面主程序提供，但不会注册到 `PATH`
 
-完整 CLI 说明和最小 TOML 示例请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
+完整 CLI 说明和 `sona init-config` TOML 模板工作流请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
 
 ### 从源码构建
 

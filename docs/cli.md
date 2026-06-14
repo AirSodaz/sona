@@ -10,7 +10,7 @@ The CLI is intentionally narrow: single-file and directory offline transcription
 - macOS: run `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
 - Linux packages: run the packaged `Sona` binary with CLI subcommands from the install location
 - AppImage: run the mounted AppImage executable with CLI subcommands
-- Source: `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml`
+- Source: `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 -c ./sona-cli.toml`
 
 ## Common Commands
 
@@ -18,7 +18,7 @@ The CLI is intentionally narrow: single-file and directory offline transcription
 
 ```bash
 sona transcribe ./sample.mp4 \
-  --config ./sona-cli.toml \
+  -c ./sona-cli.toml \
   --output ./sample.srt
 ```
 
@@ -33,7 +33,7 @@ sona transcribe \
   --format srt \
   --recursive \
   --jobs 1 \
-  --config ./sona-cli.toml
+  -c ./sona-cli.toml
 ```
 
 Directory mode writes one transcript per supported media file into `--output-dir`. By default it scans only direct children; add `--recursive` to include subdirectories. Transcript content goes to files, while a JSON success/failure summary is written to `stdout`.
@@ -66,16 +66,26 @@ sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 
 For HTTP API endpoints and request examples, see [api.md](api.md).
 
+### Create a config template
+
+```bash
+sona init-config
+sona init-config ./sona-cli.toml --force
+```
+
+`init-config` writes an English-commented TOML template to `sona-cli.toml` by default. Pass a path to write somewhere else. Existing files are protected unless `--force` is passed. The template is flat and can be reused by both `transcribe` and `serve`; each command reads the keys it supports and ignores unrelated keys.
+
 ## Config File
 
-Pass a TOML file with `--config`. Command-line flags override config file values.
+Pass a TOML file with `-c` or `--config`. Command-line flags override config file values. Use `sona init-config` to create a commented starter template.
 
-Minimal `transcribe` example:
+Minimal generated template excerpt:
 
 ```toml
 models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
 model_id = "sherpa-onnx-whisper-turbo"
 vad_model_id = "silero-vad"
+punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 language = "auto"
 threads = 4
 enable_itn = false
@@ -85,6 +95,16 @@ hotwords = "Sona,offline ASR"
 format = "srt"
 quiet = false
 jobs = 1
+
+host = "127.0.0.1"
+port = 14200
+api_key = ""
+ip_whitelist = "localhost"
+max_streaming = 2
+max_concurrent = 2
+max_queue_size = 100
+max_upload_size_mb = 50
+job_ttl_minutes = 60
 ```
 
 ### `transcribe` config keys
@@ -141,7 +161,7 @@ Use `-V` or `--version` to print the Sona version. Use `-v` or `--verbose` befor
 sona --version
 sona -V
 sona -v models list
-sona --verbose transcribe ./sample.mp4 --config ./sona-cli.toml
+sona --verbose transcribe ./sample.mp4 -c ./sona-cli.toml
 sona transcribe --help
 ```
 
@@ -157,7 +177,7 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | --- | --- | --- | --- | --- |
 | `<input>...` | Required unless `--input-dir` is passed | Local audio/video file paths or glob patterns | None | One input keeps single-file mode. Multiple inputs or glob patterns use batch mode and require `--output-dir`. |
 | `--input-dir <dir>` | Required for directory mode | Directory path | None | Transcribes supported media files in the directory. |
-| `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
+| `-c, --config <path>` | Optional | TOML file path | None | Loads defaults from config. |
 | `--output <path>` | Optional | Filesystem path | `stdout` | Output file path for single-file mode only. Errors if the file exists unless `--force` is passed. |
 | `--output-dir <dir>` | Required with `--input-dir`, multiple inputs, or glob patterns | Directory path | None | Writes one transcript per input file. Existing planned outputs error unless `--force` is passed. |
 | `--recursive` | Optional | Flag | Off | Scans subdirectories and preserves relative output paths. |
@@ -209,11 +229,19 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | Missing install path | No | Known but not installed preset | Successful no-op | Prints a notice to `stderr` and exits with status 0. |
 | Companion deletion | No | Required VAD and punctuation presets | Not deleted | Delete companion models explicitly if you no longer need them. |
 
+### `init-config`
+
+| Parameter / config key | Required | Range | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `[PATH]` | Optional | TOML file path | `sona-cli.toml` in the current directory | Target template path. Parent directories are created when needed. |
+| `--force` | Optional | Flag | Off | Allows overwriting an existing config file. |
+| Output | Always | Status text | `stderr` | The generated TOML is written to the target file, not `stdout`. |
+
 ### `serve`
 
 | Parameter / config key | Required | Range | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `--config <path>` | Optional | TOML file path | None | Loads defaults from config. |
+| `-c, --config <path>` | Optional | TOML file path | None | Loads defaults from config. |
 | `--host <ip>` | Optional | Bind address | `0.0.0.0` | Overrides config. |
 | `--port <port>` | Optional | TCP port `0` to `65535` | `14200` | Overrides config. |
 | `--api-key <key>` | Optional | String | Empty | Empty means no Bearer auth. |

@@ -93,6 +93,18 @@ fn transcribe_help_mentions_key_examples() {
 }
 
 #[test]
+fn transcribe_help_mentions_short_config_alias() {
+    let output = cli_command()
+        .args(["transcribe", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("-c, --config"));
+}
+
+#[test]
 fn transcribe_help_mentions_batch_directory_options() {
     let output = cli_command()
         .args(["transcribe", "--help"])
@@ -199,6 +211,109 @@ fn serve_help_mentions_runtime_defaults() {
     assert!(stdout.contains("--max-queue-size"));
     assert!(stdout.contains("--max-upload-size-mb"));
     assert!(stdout.contains("--job-ttl-minutes"));
+}
+
+#[test]
+fn serve_help_mentions_short_config_alias() {
+    let output = cli_command().args(["serve", "--help"]).output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("-c, --config"));
+}
+
+#[test]
+fn init_config_help_mentions_path_and_force() {
+    let output = cli_command()
+        .args(["init-config", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[PATH]"));
+    assert!(stdout.contains("--force"));
+    assert!(stdout.contains("sona-cli.toml"));
+}
+
+#[test]
+fn init_config_writes_commented_template_to_target_path() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+
+    let output = cli_command()
+        .arg("init-config")
+        .arg(&config_path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let contents = fs::read_to_string(&config_path).unwrap();
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("Created config template"));
+    assert!(contents.contains("# Sona CLI config template"));
+    assert!(contents.contains("model_id = \"sherpa-onnx-whisper-turbo\""));
+    assert!(contents.contains("api_key = \"\""));
+    assert!(contents.contains("max_upload_size_mb = 50"));
+}
+
+#[test]
+fn init_config_writes_default_sona_cli_toml_in_current_dir() {
+    let dir = tempdir().unwrap();
+
+    let output = cli_command()
+        .arg("init-config")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let config_path = dir.path().join("sona-cli.toml");
+    let contents = fs::read_to_string(config_path).unwrap();
+    assert!(contents.contains("# Sona CLI config template"));
+}
+
+#[test]
+fn init_config_rejects_existing_target_without_force() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    fs::write(&config_path, "existing = true\n").unwrap();
+
+    let output = cli_command()
+        .arg("init-config")
+        .arg(&config_path)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert_eq!(
+        fs::read_to_string(&config_path).unwrap(),
+        "existing = true\n"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--force"));
+}
+
+#[test]
+fn init_config_force_overwrites_existing_target() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    fs::write(&config_path, "existing = true\n").unwrap();
+
+    let output = cli_command()
+        .arg("init-config")
+        .arg(&config_path)
+        .arg("--force")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let contents = fs::read_to_string(&config_path).unwrap();
+    assert!(!contents.contains("existing = true"));
+    assert!(contents.contains("# Transcribe defaults"));
+    assert!(contents.contains("# Serve defaults"));
 }
 
 #[test]

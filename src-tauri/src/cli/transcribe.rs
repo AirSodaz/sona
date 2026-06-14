@@ -47,7 +47,11 @@ pub struct TranscribeArgs {
     )]
     input_dir: Option<PathBuf>,
     /// Path to a TOML config file.
-    #[arg(long, help = "Load default options from a TOML config file")]
+    #[arg(
+        short = 'c',
+        long,
+        help = "Load default options from a TOML config file"
+    )]
     config: Option<PathBuf>,
     /// Output file path. If omitted, JSON is written to stdout.
     #[arg(

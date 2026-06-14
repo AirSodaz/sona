@@ -19,7 +19,11 @@ const DEFAULT_MAX_STREAMING: usize = 2;
 #[derive(Debug, Args)]
 pub struct ServeArgs {
     /// Path to a TOML config file.
-    #[arg(long, help = "Load default options from a TOML config file")]
+    #[arg(
+        short = 'c',
+        long,
+        help = "Load default options from a TOML config file"
+    )]
     config: Option<PathBuf>,
     #[arg(long, help = "TCP port for the HTTP API server")]
     port: Option<u16>,

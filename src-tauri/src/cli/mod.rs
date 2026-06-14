@@ -1,7 +1,9 @@
+pub mod init_config;
 pub mod models;
 pub mod serve;
 pub mod transcribe;
 
+pub use self::init_config::InitConfigArgs;
 pub use self::models::{ModelsArgs, resolve_models_dir};
 pub use self::serve::ServeArgs;
 pub use self::transcribe::{
@@ -15,10 +17,11 @@ use std::ffi::OsString;
 use std::sync::Once;
 use thiserror::Error;
 
-const CLI_COMMANDS: [&str; 11] = [
+const CLI_COMMANDS: [&str; 12] = [
     "transcribe",
     "models",
     "serve",
+    "init-config",
     "completions",
     "help",
     "--help",
@@ -143,6 +146,8 @@ enum Commands {
     Models(ModelsArgs),
     /// Starts the HTTP API server in headless mode.
     Serve(ServeArgs),
+    /// Creates a commented TOML config template.
+    InitConfig(InitConfigArgs),
     /// Generates shell completion scripts.
     Completions {
         /// Shell to generate completions for.
@@ -172,6 +177,7 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> CliR
         Commands::Transcribe(args) => transcribe::run_transcribe(*args).await.map_err(Into::into),
         Commands::Models(args) => models::run_models(args).await.map_err(Into::into),
         Commands::Serve(args) => serve::run_serve(args).await.map_err(Into::into),
+        Commands::InitConfig(args) => init_config::run_init_config(args).map_err(Into::into),
         Commands::Completions { shell } => {
             let mut command = Cli::command();
             generate(

@@ -43,7 +43,7 @@ Installed package locations:
 Source builds can still run the CLI directly with Cargo:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt
+cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
 ```
 
 Current CLI scope is intentionally narrow:
@@ -54,7 +54,7 @@ Current CLI scope is intentionally narrow:
 - Export to `json`, `txt`, `srt`, `vtt`, or `md`
 - Exposed through the main desktop executable, but not registered on `PATH`
 
-For the full CLI guide and a minimal TOML example, read [docs/cli.md](docs/cli.md).
+For the full CLI guide and the `sona init-config` TOML template workflow, read [docs/cli.md](docs/cli.md).
 
 ### Build from Source
 
