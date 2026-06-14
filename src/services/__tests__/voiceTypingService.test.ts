@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
+            keepMicrophoneActive: false,
         },
         config: {
             voiceTypingEnabled: false,
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
+            keepMicrophoneActive: false,
         } as Record<string, any>,
         configSubscribe: vi.fn(),
         invoke: vi.fn(),
@@ -199,6 +201,115 @@ describe('voiceTypingService', () => {
         expect(mocks.windowPrepare).toHaveBeenCalledWith([0, 0]);
     });
 
+    it('pre-warms persistent microphone capture when keep microphone active is enabled', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
+        };
+
+        const service = await loadService();
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(getInvokeCalls('start_microphone_capture')).toEqual([[
+            'start_microphone_capture',
+            {
+                deviceName: null,
+                instanceId: 'voice-typing',
+            },
+        ]]);
+    });
+
+    it('skips persistent microphone capture during warm-up by default', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(mocks.mockPrepare).toHaveBeenCalled();
+        expect(mocks.windowPrepare).toHaveBeenCalledWith([0, 0]);
+        expect(getInvokeCalls('start_microphone_capture')).toEqual([]);
+        expect(useVoiceTypingRuntimeStore.getState().warmup).toBe('ready');
+    });
+
+    it('releases on-demand microphone capture after voice typing stops when persistence is disabled', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            keepMicrophoneActive: false,
+        };
+
+        const service = await loadService();
+
+        await service.startListening();
+        vi.clearAllMocks();
+
+        const stopPromise = service.stopListening();
+        await vi.runAllTimersAsync();
+        await stopPromise;
+        await flushMicrotasks(8);
+
+        expect(getInvokeCalls('stop_microphone_capture')).toEqual([[
+            'stop_microphone_capture',
+            { instanceId: 'voice-typing' },
+        ]]);
+    });
+
+    it('stops existing persistent microphone capture when the global persistence option is disabled', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
+        };
+
+        const service = await loadService();
+        service.init();
+        await flushMicrotasks(8);
+        vi.clearAllMocks();
+
+        emitConfigChange({ keepMicrophoneActive: false });
+        await flushMicrotasks(8);
+
+        expect(getInvokeCalls('stop_microphone_capture')).toEqual([[
+            'stop_microphone_capture',
+            { instanceId: 'voice-typing' },
+        ]]);
+    });
+
+    it('keeps an active dictation capture running until stop when persistence is disabled mid-session', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
+        };
+
+        const service = await loadService();
+        service.init();
+        await flushMicrotasks(8);
+        await service.startListening();
+        vi.clearAllMocks();
+
+        emitConfigChange({ keepMicrophoneActive: false });
+        await flushMicrotasks(8);
+
+        expect(getInvokeCalls('stop_microphone_capture')).toEqual([]);
+
+        const stopPromise = service.stopListening();
+        await vi.runAllTimersAsync();
+        await stopPromise;
+
+        expect(getInvokeCalls('stop_microphone_capture')).toEqual([[
+            'stop_microphone_capture',
+            { instanceId: 'voice-typing' },
+        ]]);
+    });
+
     it('updates runtime status to ready after successful shortcut registration and warm-up', async () => {
         mocks.config = {
             ...mocks.defaultConfig,
@@ -320,6 +431,7 @@ describe('voiceTypingService', () => {
         mocks.config = {
             ...mocks.defaultConfig,
             voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
         };
         mocks.invoke.mockImplementation(async (command: string) => {
             if (command === 'get_text_cursor_position') {
@@ -931,6 +1043,11 @@ describe('voiceTypingService', () => {
     });
 
     it('flushes the recognizer before closing the voice typing session', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
+        };
         vi.useFakeTimers();
         const service = await loadService();
 
@@ -1043,6 +1160,7 @@ describe('voiceTypingService', () => {
         mocks.config = {
             ...mocks.defaultConfig,
             voiceTypingEnabled: true,
+            keepMicrophoneActive: true,
         };
 
         const service = await loadService();

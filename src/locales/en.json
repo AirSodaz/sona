@@ -1209,7 +1209,9 @@
         "offline_model_hint": "Used for processing audio/video files.",
         "offline_model_label": "Batch Import Model",
         "offline_model_management": "Local Model Management",
-        "select_offline_model": "Select local model..."
+        "select_offline_model": "Select local model...",
+        "keep_microphone_active": "Keep Microphone Active",
+        "keep_microphone_active_hint": "Turn on to keep the microphone warm for lower voice typing latency. Leave off to release it whenever you are not recording, dictating, or previewing input."
     },
     "shortcuts": {
         "title": "Shortcuts",

@@ -1209,7 +1209,9 @@
         "local_model_hint": "用于处理音频/视频文件。",
         "local_model_label": "批量导入模型",
         "local_model_management": "本地模型管理",
-        "select_local_model": "选择本地模型..."
+        "select_local_model": "选择本地模型...",
+        "keep_microphone_active": "保持麦克风激活",
+        "keep_microphone_active_hint": "开启后会保持麦克风预热以降低语音输入延迟。保持关闭时，不录音、不听写、不预览输入会释放麦克风。"
     },
     "shortcuts": {
         "title": "快捷键",

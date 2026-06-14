@@ -4,7 +4,7 @@ import { Volume2, SlidersHorizontal } from 'lucide-react';
 import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
-import { useAudioConfig, useSetConfig } from '../../stores/configStore';
+import { useAudioConfig, useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
 import {
     listMicrophoneDeviceOptions,
@@ -19,6 +19,7 @@ import {
 } from '../../services/tauri/audio';
 import { TauriEvent } from '../../services/tauri/events';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import { useVoiceTypingRuntimeStatus } from '../../stores/voiceTypingRuntimeStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { logger } from '../../utils/logger';
 import { listen, type UnlistenFn } from '../../services/tauri/platform/events';
@@ -35,6 +36,7 @@ export function SettingsMicrophoneTab({
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const config = useAudioConfig();
+    const voiceTypingConfig = useVoiceTypingConfig();
     const updateConfig = useSetConfig();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
     const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
@@ -45,6 +47,9 @@ export function SettingsMicrophoneTab({
     const microphoneBoost = config.microphoneBoost ?? 1.0;
     const systemAudioDeviceId = config.systemAudioDeviceId || 'default';
     const muteDuringRecording = config.muteDuringRecording || false;
+    const keepMicrophoneActive = config.keepMicrophoneActive ?? false;
+    const voiceTypingEnabled = voiceTypingConfig.voiceTypingEnabled ?? false;
+    const voiceTypingRuntime = useVoiceTypingRuntimeStatus();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const systemCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,6 +69,8 @@ export function SettingsMicrophoneTab({
 
     // We only control the system capture if it's not already running for recording/captioning
     const isActiveSession = isRecording || isCaptionMode;
+    const canReusePersistentVoiceTypingMic =
+        keepMicrophoneActive && voiceTypingEnabled && voiceTypingRuntime.warmup === 'ready';
     const arePreviewDependenciesReady = areMicrophoneDevicesLoaded && areSystemDevicesLoaded;
     const shouldRunActiveEffects = isOpen && isActiveTab;
 
@@ -201,7 +208,7 @@ export function SettingsMicrophoneTab({
         try {
             let captureStarted = false;
 
-            if (!isActiveSession) {
+            if (!isActiveSession && !canReusePersistentVoiceTypingMic) {
                 await startMicrophoneCapture({
                     deviceName: deviceId === 'default' ? null : deviceId,
                     instanceId: 'test_mic',
@@ -238,7 +245,13 @@ export function SettingsMicrophoneTab({
             logger.warn('Native microphone visualizer failed:', err);
             stopMicWaveAnimation();
         }
-    }, [isActiveSession, startMicWaveAnimation, stopMicWaveAnimation, stopPreviewCapture]);
+    }, [
+        canReusePersistentVoiceTypingMic,
+        isActiveSession,
+        startMicWaveAnimation,
+        stopMicWaveAnimation,
+        stopPreviewCapture,
+    ]);
 
     const startSystemPreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
         if (!isCurrentRequest()) {
@@ -352,6 +365,7 @@ export function SettingsMicrophoneTab({
         };
     }, [
         arePreviewDependenciesReady,
+        canReusePersistentVoiceTypingMic,
         isActiveSession,
         isActiveTab,
         microphoneId,
@@ -432,6 +446,17 @@ export function SettingsMicrophoneTab({
                         />
                         <span className="settings-hint" style={{ marginTop: 0 }}>x</span>
                     </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.keep_microphone_active')}
+                    hint={t('settings.keep_microphone_active_hint')}
+                >
+                    <Switch
+                        checked={keepMicrophoneActive}
+                        aria-label={t('settings.keep_microphone_active')}
+                        onChange={(enabled) => updateConfig({ keepMicrophoneActive: enabled })}
+                    />
                 </SettingsItem>
             </SettingsSection>
 

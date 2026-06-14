@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SettingsGeneralTab } from '../settings/SettingsGeneralTab';
 import packageJson from '../../../package.json';
 import type { PreparedBackupImport } from '../../types/backup';
+import { APP_LANGUAGE_OPTIONS } from '../../constants/appLanguages';
 
 const BACKUP_SECTION_LOAD_TIMEOUT_MS = 6000;
 
@@ -268,20 +269,12 @@ describe('SettingsGeneralTab backup entry', () => {
 
     const languageSelect = document.querySelector('#settings-language') as HTMLSelectElement | null;
     expect(languageSelect).not.toBeNull();
-    expect(Array.from(languageSelect?.options ?? []).map((option) => option.value)).toEqual([
-      'auto',
-      'en',
-      'zh',
-      'zh-TW',
-      'ja',
-    ]);
-    expect(Array.from(languageSelect?.options ?? []).map((option) => option.textContent)).toEqual([
-      'Automatic',
-      'English',
-      '简体中文',
-      '繁體中文',
-      '日本語',
-    ]);
+    expect(Array.from(languageSelect?.options ?? []).map((option) => option.value)).toEqual(
+      APP_LANGUAGE_OPTIONS.map((option) => option.value),
+    );
+    expect(Array.from(languageSelect?.options ?? []).map((option) => option.textContent)).toEqual(
+      APP_LANGUAGE_OPTIONS.map((option) => option.defaultLabel),
+    );
 
     fireEvent.change(languageSelect as HTMLSelectElement, { target: { value: 'zh-TW' } });
     expect(testContext.updateConfigMock).toHaveBeenLastCalledWith({ appLanguage: 'zh-TW' });

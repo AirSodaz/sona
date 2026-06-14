@@ -1414,6 +1414,37 @@ mod tests {
     }
 
     #[test]
+    fn shared_capture_state_detaches_preview_without_stopping_persistent_owner() {
+        let mut capture = SharedCaptureState::default();
+        let (stop_tx, _stop_rx) = channel::<()>();
+        let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
+        capture.commit_start(
+            "voice-typing".to_string(),
+            "default mic".to_string(),
+            stop_tx,
+            recorder_tx,
+        );
+        capture.attach_instance("test_mic".to_string());
+
+        let preview_detach = capture.detach_instance("test_mic");
+
+        assert!(!preview_detach.should_stop_hardware);
+        assert_eq!(
+            preview_detach.remaining_instances,
+            vec!["voice-typing".to_string()]
+        );
+        assert!(preview_detach.stop_signal.is_none());
+        assert_eq!(capture.owners(), vec!["voice-typing".to_string()]);
+        assert!(capture.is_running());
+
+        let persistent_detach = capture.detach_instance("voice-typing");
+
+        assert!(persistent_detach.should_stop_hardware);
+        assert!(persistent_detach.stop_signal.is_some());
+        assert!(!capture.is_running());
+    }
+
+    #[test]
     fn shared_capture_state_detach_clears_paused_instance_state() {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();

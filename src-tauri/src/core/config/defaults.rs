@@ -36,6 +36,7 @@ pub fn default_config() -> Value {
         ("microphoneId", json!("default")),
         ("systemAudioDeviceId", json!("default")),
         ("muteDuringRecording", json!(false)),
+        ("keepMicrophoneActive", json!(false)),
         ("asr", default_asr_config()),
         ("streamingModelPath", json!("")),
         ("offlineModelPath", json!("")),

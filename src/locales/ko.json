@@ -1209,7 +1209,9 @@
         "offline_model_hint": "오디오/비디오 파일 처리에 사용됩니다.",
         "offline_model_label": "일괄 가져오기 모델",
         "offline_model_management": "로컬 모델 관리",
-        "select_offline_model": "선택 로컬 모델..."
+        "select_offline_model": "선택 로컬 모델...",
+        "keep_microphone_active": "마이크 항상 활성화",
+        "keep_microphone_active_hint": "켜면 음성 입력 지연을 줄이기 위해 마이크를 미리 준비해 둡니다. 꺼 둔 상태에서는 녹음, 받아쓰기, 입력 미리보기를 하지 않을 때 마이크를 해제합니다."
     },
     "shortcuts": {
         "title": "단축키",

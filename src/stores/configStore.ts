@@ -43,6 +43,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   microphoneBoost: undefined, // will default to 1.0 at usage site
   systemAudioDeviceId: 'default',
   muteDuringRecording: false,
+  keepMicrophoneActive: false,
 
   // Model
   asr: {
@@ -175,7 +176,7 @@ const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [
 ];
 
 const AUDIO_KEYS: (keyof AudioConfig)[] = [
-  'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording',
+  'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording', 'keepMicrophoneActive',
 ];
 
 const MODEL_KEYS: (keyof ModelConfig)[] = [

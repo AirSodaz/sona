@@ -135,6 +135,10 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         return true;
     }
 
+    if config.get("keepMicrophoneActive").is_none() {
+        return true;
+    }
+
     for key in [
         "polishCustomPresets",
         "polishKeywordSets",
@@ -252,6 +256,7 @@ fn normalize_current_config(existing: Value) -> Value {
     let http_server_port = number_or_default(&config, "httpServerPort", 14200);
     let http_server_host = string_or_default(&config, "httpServerHost", "127.0.0.1");
     let http_server_api_key = string_or_default(&config, "httpServerApiKey", "");
+    let keep_microphone_active = bool_at(&config, "keepMicrophoneActive").unwrap_or(false);
 
     set(&mut config, "speakerProfiles", speaker_profiles);
     set(&mut config, "asr", asr_config);
@@ -259,6 +264,11 @@ fn normalize_current_config(existing: Value) -> Value {
     set(&mut config, "httpServerPort", json!(http_server_port));
     set(&mut config, "httpServerHost", json!(http_server_host));
     set(&mut config, "httpServerApiKey", json!(http_server_api_key));
+    set(
+        &mut config,
+        "keepMicrophoneActive",
+        json!(keep_microphone_active),
+    );
     set(&mut config, "__original", original);
     config
 }
@@ -318,6 +328,9 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         || existing.get("httpServerHost") != normalized.get("httpServerHost")
         || existing.get("httpServerApiKey") != normalized.get("httpServerApiKey")
     {
+        return true;
+    }
+    if existing.get("keepMicrophoneActive") != normalized.get("keepMicrophoneActive") {
         return true;
     }
     existing.get("logLevel") != normalized.get("logLevel")
@@ -468,6 +481,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "muteDuringRecording",
             json!(bool_at(&parsed, "muteDuringRecording").unwrap_or(false)),
+        ),
+        (
+            "keepMicrophoneActive",
+            json!(bool_at(&parsed, "keepMicrophoneActive").unwrap_or(false)),
         ),
         (
             "startOnLaunch",
@@ -2061,6 +2078,7 @@ mod tests {
             })
         );
         assert_eq!(result.config["logLevel"], "info");
+        assert_eq!(result.config["keepMicrophoneActive"], false);
         assert_eq!(result.config["microphoneBoost"], 0.0);
         assert_eq!(result.config["captionBackgroundOpacity"], 0.0);
         assert_eq!(result.config["summaryTemplateId"], "general");
@@ -2161,7 +2179,8 @@ mod tests {
             "httpServerEnabled": false,
             "httpServerHost": "127.0.0.1",
             "httpServerPort": 14200,
-            "httpServerApiKey": ""
+            "httpServerApiKey": "",
+            "keepMicrophoneActive": true
         });
 
         let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
@@ -2175,6 +2194,7 @@ mod tests {
         assert_eq!(result.config["summaryTemplateId"], "meeting");
         assert_eq!(result.config["polishPresetId"], "meeting");
         assert_eq!(result.config["logLevel"], "debug");
+        assert_eq!(result.config["keepMicrophoneActive"], true);
     }
 
     #[test]

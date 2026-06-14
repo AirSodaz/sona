@@ -93,6 +93,7 @@ export class VoiceTypingService {
             asr: this.lastConfigSnapshot.asrSignature,
             vadModelPath: this.lastConfigSnapshot.vadModelPath,
             microphoneId: this.lastConfigSnapshot.microphoneId,
+            keepMicrophoneActive: this.lastConfigSnapshot.keepMicrophoneActive,
             language: this.lastConfigSnapshot.language,
             enableITN: this.lastConfigSnapshot.enableItn,
         });
@@ -116,7 +117,8 @@ export class VoiceTypingService {
                     resetWarmup:
                         change.asrChanged ||
                         change.vadModelChanged ||
-                        change.microphoneChanged,
+                        change.microphoneChanged ||
+                        change.keepMicrophoneActiveChanged,
                 });
             }
 
@@ -130,6 +132,14 @@ export class VoiceTypingService {
                 if (!nextSnapshot.enabled) {
                     void this.stopMicrophoneCapture();
                 }
+            }
+
+            if (
+                change.keepMicrophoneActiveChanged &&
+                !nextSnapshot.keepMicrophoneActive &&
+                !this.sessionMachine.isActive()
+            ) {
+                void this.stopMicrophoneCapture();
             }
 
             this.lastConfigSnapshot = nextSnapshot;
@@ -161,7 +171,9 @@ export class VoiceTypingService {
 
             const lastPosition = this.sessionMachine.getLastPosition() ?? [0, 0];
             await this.overlayPresenter.prepare(lastPosition);
-            await this.ensureMicrophoneStarted();
+            if (config.keepMicrophoneActive ?? false) {
+                await this.ensureMicrophoneStarted();
+            }
 
             if (this.ports.getVoiceTypingRuntimeStore().warmup === 'error') {
                 return;
@@ -208,6 +220,9 @@ export class VoiceTypingService {
 
     private async stopListening() {
         await this.sessionMachine.stop();
+        if (!(this.ports.getConfig().keepMicrophoneActive ?? false)) {
+            await this.stopMicrophoneCapture();
+        }
     }
 
     private getVoiceTypingMode() {

@@ -1209,7 +1209,9 @@
         "local_model_hint": "用於處理音訊/視訊檔案。",
         "local_model_label": "批次匯入模型",
         "local_model_management": "本機模型管理",
-        "select_local_model": "選擇本機模型..."
+        "select_local_model": "選擇本機模型...",
+        "keep_microphone_active": "保持麥克風啟用",
+        "keep_microphone_active_hint": "開啟後會保持麥克風預熱以降低語音輸入延遲。保持關閉時，未錄音、未聽寫、未預覽輸入會釋放麥克風。"
     },
     "shortcuts": {
         "title": "快速鍵",

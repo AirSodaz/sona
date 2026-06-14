@@ -64,6 +64,8 @@ export interface AudioConfig {
   systemAudioDeviceId?: string;
   /** Whether to mute system audio during recording. Default: false. */
   muteDuringRecording?: boolean;
+  /** Whether to keep microphone capture warm when voice typing is idle. Default: false. */
+  keepMicrophoneActive?: boolean;
 }
 
 // ---------------------------------------------------------------------------

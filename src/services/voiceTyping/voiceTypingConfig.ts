@@ -10,6 +10,7 @@ export interface VoiceTypingConfigSnapshot {
   asrSignature: string;
   vadModelPath: string;
   microphoneId: string;
+  keepMicrophoneActive: boolean;
   language: string;
   enableItn: boolean;
 }
@@ -19,6 +20,7 @@ export interface VoiceTypingRuntimeChange {
   shortcutChanged: boolean;
   vadModelChanged: boolean;
   microphoneChanged: boolean;
+  keepMicrophoneActiveChanged: boolean;
   asrChanged: boolean;
   languageChanged: boolean;
   enableItnChanged: boolean;
@@ -52,6 +54,7 @@ export function resolveVoiceTypingConfigSnapshot(config: AppConfig): VoiceTyping
     asrSignature: buildVoiceTypingAsrSignature(resolveVoiceTypingAsr(config)),
     vadModelPath: config.vadModelPath || '',
     microphoneId: config.microphoneId || 'default',
+    keepMicrophoneActive: config.keepMicrophoneActive ?? false,
     language: config.language || 'auto',
     enableItn: config.enableITN ?? true,
   };
@@ -65,6 +68,7 @@ export function resolveVoiceTypingRuntimeChange(
   const shortcutChanged = next.shortcut !== previous.shortcut;
   const vadModelChanged = next.vadModelPath !== previous.vadModelPath;
   const microphoneChanged = next.microphoneId !== previous.microphoneId;
+  const keepMicrophoneActiveChanged = next.keepMicrophoneActive !== previous.keepMicrophoneActive;
   const asrChanged = next.asrSignature !== previous.asrSignature;
   const languageChanged = next.language !== previous.language;
   const enableItnChanged = next.enableItn !== previous.enableItn;
@@ -74,6 +78,7 @@ export function resolveVoiceTypingRuntimeChange(
     shortcutChanged,
     vadModelChanged,
     microphoneChanged,
+    keepMicrophoneActiveChanged,
     asrChanged,
     languageChanged,
     enableItnChanged,
@@ -81,13 +86,15 @@ export function resolveVoiceTypingRuntimeChange(
       asrChanged ||
       vadModelChanged ||
       microphoneChanged ||
+      keepMicrophoneActiveChanged ||
       languageChanged ||
       enableItnChanged,
     runtimeDependencyChanged:
       shortcutChanged ||
       asrChanged ||
       vadModelChanged ||
-      microphoneChanged,
+      microphoneChanged ||
+      keepMicrophoneActiveChanged,
   };
 }
 

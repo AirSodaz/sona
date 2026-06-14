@@ -1,7 +1,8 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsMicrophoneTab } from '../settings/SettingsMicrophoneTab';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
+import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 const mockInvoke = vi.fn();
@@ -66,7 +67,17 @@ vi.mock('../Dropdown', () => ({
 }));
 
 vi.mock('../Switch', () => ({
-    Switch: () => <div />,
+    Switch: ({ checked, onChange, label, 'aria-label': ariaLabel }: any) => (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={ariaLabel || label}
+            onClick={() => onChange?.(!checked)}
+        >
+            {label || ariaLabel || 'switch'}
+        </button>
+    ),
 }));
 
 vi.mock('../settings/SettingsLayout', () => ({
@@ -143,8 +154,10 @@ describe('SettingsMicrophoneTab', () => {
                 microphoneId: 'default',
                 systemAudioDeviceId: 'default',
                 microphoneBoost: 1,
+                keepMicrophoneActive: false,
             },
         });
+        useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
         useTranscriptStore.setState({
             isRecording: false,
             isCaptionMode: false,
@@ -236,6 +249,41 @@ describe('SettingsMicrophoneTab', () => {
 
         expect(microphoneStartIndex).toBeGreaterThanOrEqual(0);
         expect(systemStartIndex).toBeGreaterThan(microphoneStartIndex);
+    });
+
+    it('reuses an existing persistent voice typing microphone capture for preview metering', async () => {
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                voiceTypingEnabled: true,
+                keepMicrophoneActive: true,
+            },
+        });
+        useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
+
+        render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+        await waitFor(() => {
+            expect(mockListen).toHaveBeenCalledWith('microphone-audio', expect.any(Function));
+        });
+
+        expect(getInvokeCalls('start_microphone_capture')).toEqual([]);
+    });
+
+    it('renders a global keep-microphone-active switch that updates audio config', async () => {
+        render(<SettingsMicrophoneTab isActiveTab isOpen={false} />);
+
+        const toggle = screen.getByRole('switch', {
+            name: 'settings.keep_microphone_active',
+        });
+
+        expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+        await act(async () => {
+            fireEvent.click(toggle);
+        });
+
+        expect(useConfigStore.getState().config.keepMicrophoneActive).toBe(true);
     });
 
     it('cleans up a delayed microphone preview start after the page unmounts', async () => {

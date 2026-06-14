@@ -339,7 +339,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > General`
   theme, app language, font, tray behavior, update checks, plus `Diagnostics` and `Backup & Restore`
 - `Settings > Input Device`
-  microphone selection, system audio selection, microphone boost, mute during recording
+  microphone selection, system audio selection, microphone boost, `Keep Microphone Active`, mute during recording
 - `Settings > Subtitle Settings`
   live caption startup, click-through lock, always-on-top, font size, width, color, background transparency
 - `Settings > Voice Typing`
@@ -364,6 +364,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Push to Talk (Hold)` is better for short bursts. `Toggle (Press once)` is better for longer dictation sessions.
 - `Voice Typing` depends on the same offline live transcription setup, so you also need a working `Live Record Model`, any required `VAD` model, and an available input device.
 - The same page also shows whether the current blocker is the shortcut, model, VAD, input device, or background warm-up state.
+- `Settings > Input Device > Keep Microphone Active` is off by default. Turn it on if you want lower voice typing latency by leaving the microphone warm while idle; leave it off if you prefer Sona to release the microphone whenever you are not recording, dictating, or previewing input.
 
 ### Diagnostics And Backup
 

@@ -7,6 +7,7 @@ import {
 } from '../voiceTypingConfig';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
 import { resolveAsrTranscriptionRequest } from '../../asrConfigService';
+import type { AppConfig } from '../../../types/config';
 
 describe('voiceTypingConfig', () => {
   it('builds a stable signature from the ASR fields that affect runtime warm-up', () => {
@@ -39,6 +40,7 @@ describe('voiceTypingConfig', () => {
       voiceTypingShortcut: 'Alt+V',
       vadModelPath: '/models/vad',
       microphoneId: 'default',
+      keepMicrophoneActive: true,
       language: 'auto',
       enableITN: true,
     }));
@@ -48,6 +50,7 @@ describe('voiceTypingConfig', () => {
       streamingModelPath: '/models/live-next',
       vadModelPath: '/models/vad-next',
       microphoneId: 'usb',
+      keepMicrophoneActive: false,
       language: 'zh',
       enableITN: false,
     }));
@@ -57,12 +60,32 @@ describe('voiceTypingConfig', () => {
       shortcutChanged: true,
       vadModelChanged: true,
       microphoneChanged: true,
+      keepMicrophoneActiveChanged: true,
       asrChanged: true,
       languageChanged: true,
       enableItnChanged: true,
       configChanged: true,
       runtimeDependencyChanged: true,
     });
+  });
+
+  it('includes the global microphone persistence preference in the runtime snapshot', () => {
+    const snapshot = resolveVoiceTypingConfigSnapshot(buildTestConfig({
+      keepMicrophoneActive: false,
+    }));
+
+    expect(snapshot.keepMicrophoneActive).toBe(false);
+  });
+
+  it('defaults the global microphone persistence preference to false when omitted', () => {
+    const config = buildTestConfig({
+      keepMicrophoneActive: true,
+    }) as AppConfig;
+    delete (config as Partial<AppConfig>).keepMicrophoneActive;
+
+    const snapshot = resolveVoiceTypingConfigSnapshot(config);
+
+    expect(snapshot.keepMicrophoneActive).toBe(false);
   });
 
   it('parses shortcut modifiers in injection order', () => {

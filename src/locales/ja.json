@@ -1209,7 +1209,9 @@
         "offline_model_hint": "オーディオ/ビデオ ファイルの処理に使用されます。",
         "offline_model_label": "Batch Import Model",
         "offline_model_management": "ローカルモデル管理",
-        "select_offline_model": "ローカル モデルを選択..."
+        "select_offline_model": "ローカル モデルを選択...",
+        "keep_microphone_active": "マイクを常時有効にする",
+        "keep_microphone_active_hint": "オンにすると、音声入力の遅延を下げるためにマイクを待機状態にします。オフのままなら、録音、音声入力、入力プレビューをしていない間はマイクを解放します。"
     },
     "shortcuts": {
         "title": "ショートカット",
