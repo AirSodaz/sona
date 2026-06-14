@@ -21,7 +21,7 @@ You can also launch Sona in pure headless CLI server mode from the terminal:
 sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2 --gpu-acceleration auto
 ```
 
-GPU acceleration is configured as a server-level default through GUI model settings or `sona serve --gpu-acceleration`. Batch and streaming API requests do not accept a per-request GPU override.
+GPU acceleration is configured as a server-level default through GUI model settings or `sona serve --gpu-acceleration`. On Windows, `auto` tries CUDA first, then DirectML when the bundled runtime supports it, then CPU. Batch and streaming API requests do not accept a per-request GPU override.
 
 ---
 

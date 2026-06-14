@@ -2,7 +2,9 @@ use crate::cli::models::resolve_models_dir;
 use crate::core::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
-use crate::integrations::asr::{BatchTranscriptionRequest, transcribe_batch_with_progress};
+use crate::integrations::asr::{
+    BatchTranscriptionRequest, transcribe_batch_with_progress_and_fallback_notice,
+};
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
 use futures_util::stream::{self, StreamExt};
@@ -680,118 +682,31 @@ async fn run_batch_transcribe_plan(
 
 async fn transcribe_with_cli_gpu_fallback<F>(
     request: &BatchTranscriptionRequest,
-    mut on_event: F,
+    on_event: F,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String>
 where
     F: FnMut(CliTranscribeEvent<'_>),
 {
-    let cuda_available = crate::app::hardware::check_gpu_availability()
-        .await
-        .unwrap_or(false);
-    let plan = CliGpuFallbackPlan::for_current_platform(
-        request.gpu_acceleration.as_deref(),
-        cuda_available,
-        cli_directml_runtime_available(),
-    );
-    let providers = plan.providers();
-    let mut last_error = None;
-
-    for provider in providers {
-        let mut request = request.clone();
-        request.gpu_acceleration = Some(provider.clone());
-        match transcribe_batch_with_progress(&request, |progress| {
-            on_event(CliTranscribeEvent::Progress(progress));
-        })
-        .await
-        {
-            Ok(segments) => return Ok(segments),
-            Err(error) if plan.should_retry_after_failure(&provider) => {
-                on_event(CliTranscribeEvent::DirectMlRetry { error: &error });
-                last_error = Some(error);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-
-    Err(last_error.unwrap_or_else(|| "Transcription failed.".to_string()))
+    let on_event = std::cell::RefCell::new(on_event);
+    transcribe_batch_with_progress_and_fallback_notice(
+        request,
+        |progress| {
+            let mut on_event = on_event.borrow_mut();
+            (*on_event)(CliTranscribeEvent::Progress(progress));
+        },
+        |notice| {
+            let mut on_event = on_event.borrow_mut();
+            (*on_event)(CliTranscribeEvent::DirectMlRetry {
+                error: &notice.error,
+            });
+        },
+    )
+    .await
 }
 
 enum CliTranscribeEvent<'a> {
     Progress(f32),
     DirectMlRetry { error: &'a str },
-}
-
-struct CliGpuFallbackPlan {
-    providers: Vec<String>,
-    auto_windows_directml_fallback: bool,
-}
-
-impl CliGpuFallbackPlan {
-    fn for_current_platform(
-        gpu_acceleration: Option<&str>,
-        cuda_available: bool,
-        directml_available: bool,
-    ) -> Self {
-        Self::for_platform(
-            gpu_acceleration,
-            cfg!(target_os = "windows"),
-            cuda_available,
-            directml_available,
-        )
-    }
-
-    fn for_platform(
-        gpu_acceleration: Option<&str>,
-        is_windows: bool,
-        cuda_available: bool,
-        directml_available: bool,
-    ) -> Self {
-        let gpu = gpu_acceleration.unwrap_or(DEFAULT_GPU_ACCELERATION);
-        if gpu != "auto" {
-            return Self {
-                providers: vec![gpu.to_string()],
-                auto_windows_directml_fallback: false,
-            };
-        }
-
-        if is_windows {
-            if cuda_available {
-                return Self {
-                    providers: vec!["cuda".to_string()],
-                    auto_windows_directml_fallback: false,
-                };
-            }
-
-            if !directml_available {
-                return Self {
-                    providers: vec!["cpu".to_string()],
-                    auto_windows_directml_fallback: false,
-                };
-            }
-
-            return Self {
-                providers: vec!["directml".to_string(), "cpu".to_string()],
-                auto_windows_directml_fallback: true,
-            };
-        }
-
-        Self {
-            providers: vec!["auto".to_string()],
-            auto_windows_directml_fallback: false,
-        }
-    }
-
-    fn providers(&self) -> Vec<String> {
-        self.providers.clone()
-    }
-
-    fn should_retry_after_failure(&self, provider: &str) -> bool {
-        self.auto_windows_directml_fallback && provider == "directml"
-    }
-}
-
-fn cli_directml_runtime_available() -> bool {
-    cfg!(sona_sherpa_directml)
 }
 
 enum CliProgressLabel {
@@ -1772,30 +1687,5 @@ mod tests {
             Some("\r[2/3] demo.wav: 100%".to_string())
         );
         assert_eq!(reporter.finish(), Some("\n".to_string()));
-    }
-
-    #[test]
-    fn windows_auto_gpu_plan_prefers_cuda_then_directml_then_cpu() {
-        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, true, false);
-        assert_eq!(plan.providers(), vec!["cuda"]);
-
-        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, false, true);
-        assert_eq!(plan.providers(), vec!["directml", "cpu"]);
-    }
-
-    #[test]
-    fn windows_auto_gpu_plan_skips_unavailable_directml_runtime() {
-        let plan = CliGpuFallbackPlan::for_platform(Some("auto"), true, false, false);
-
-        assert_eq!(plan.providers(), vec!["cpu"]);
-        assert!(!plan.should_retry_after_failure("cpu"));
-    }
-
-    #[test]
-    fn explicit_directml_gpu_plan_does_not_retry_cpu() {
-        let plan = CliGpuFallbackPlan::for_platform(Some("directml"), true, false, false);
-
-        assert_eq!(plan.providers(), vec!["directml"]);
-        assert!(!plan.should_retry_after_failure("directml"));
     }
 }

@@ -102,7 +102,7 @@ jobs = 1
 | `quiet` | 可选 | `true` 或 `false` | `false` | 设为 true 时隐藏转写进度；CLI `--quiet` 也会启用。 |
 | `jobs` | 可选 | 大于 `0` 的整数 | `1` | 目录、多输入或 glob 模式下最大并发文件任务数；CLI `--jobs` 会覆盖。 |
 | `vad_buffer_size` | 可选 | 大于 `0` 的数字 | `5.0` | VAD 缓冲秒数。 |
-| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | CLI 转写在 Windows 上设为 `auto` 时会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。使用 `cpu` 可显式关闭 GPU 加速。 |
+| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | Windows 上 `auto` 会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。使用 `cpu` 可显式关闭 GPU 加速。 |
 | `format` | 可选 | `json`、`txt`、`srt`、`vtt`、`md` | 写入 stdout 或目录模式时为 `json`，否则从 `--output` 推断 | 覆盖输出扩展名推断。 |
 
 ### `serve` 配置键
@@ -119,7 +119,7 @@ jobs = 1
 | `max_queue_size` | 可选 | 非负整数 | `100` | `0` 表示队列基本不限。 |
 | `max_upload_size_mb` | 可选 | 非负整数 | `50` | `0` 表示关闭上传大小限制。 |
 | `job_ttl_minutes` | 可选 | 非负整数 | `60` | `0` 表示关闭完成/失败任务清理。 |
-| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 本地批量和流式任务的服务级默认值。 |
+| `gpu_acceleration` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 本地批量和流式任务的服务级默认值；Windows `auto` 按 CUDA、可用时 DirectML、CPU 的顺序解析。 |
 | `vad_model_id` | 可选 | 预置模型 ID | `silero-vad` | API 服务任务的默认 VAD 伴生模型。 |
 | `punctuation_model_id` | 可选 | 预置模型 ID | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | API 服务任务的默认标点伴生模型。 |
 
@@ -224,7 +224,7 @@ sona transcribe --help
 | `--max-queue-size <n>` | 可选 | 非负整数 | `100` | `0` 表示队列基本不限。 |
 | `--max-upload-size-mb <n>` | 可选 | 非负整数 | `50` | `0` 表示关闭上传大小限制。 |
 | `--job-ttl-minutes <n>` | 可选 | 非负整数 | `60` | `0` 表示关闭完成/失败任务清理。 |
-| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | HTTP API 请求不支持按请求覆盖 GPU 配置。 |
+| `--gpu-acceleration <provider>` | 可选 | `auto`、`cpu`、`cuda`、`coreml`、`directml` | `auto` | 服务级默认值；HTTP API 请求不支持按请求覆盖 GPU 配置。Windows `auto` 按 CUDA、可用时 DirectML、CPU 的顺序解析。 |
 | `--vad-model-id <id>` | 可选 | 预置模型 ID | `silero-vad` | API 服务任务的默认 VAD 伴生模型。 |
 | `--punctuation-model-id <id>` | 可选 | 预置模型 ID | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | API 服务任务的默认标点伴生模型。 |
 

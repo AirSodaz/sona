@@ -496,29 +496,38 @@ async fn load_recognizer(
         hotwords.clone(),
     )?;
 
-    let key = crate::integrations::asr::ModelConfigKey {
-        model_path: model_path.to_string_lossy().to_string(),
-        model_type: preset.model_type.clone(),
-        num_threads: 2,
-        enable_itn: false,
-        language: language.to_string(),
-        hotwords,
-    };
-
-    let mut pool = state.recognizer_pool.lock().await;
-    if let Some(r) = pool.get(&key) {
-        return Ok(r.clone());
-    }
-
-    let resolved_gpu = crate::app::hardware::resolve_gpu_acceleration(
+    let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(
         state.transcription_defaults.gpu_acceleration.as_deref(),
     )
     .await;
-    let recognizer = Arc::new(crate::integrations::asr::Recognizer::new(
-        config,
+    let key = crate::integrations::asr::ModelConfigKey::new(
+        model_path.to_string_lossy().to_string(),
+        preset.model_type.clone(),
         2,
-        resolved_gpu,
-    )?);
+        false,
+        language.to_string(),
+        hotwords,
+        None,
+    );
+
+    let mut pool = state.recognizer_pool.lock().await;
+    for provider in gpu_plan.provider_options() {
+        if let Some(r) = pool.get(&key.with_gpu_provider(provider)) {
+            return Ok(r.clone());
+        }
+    }
+
+    let recognizer_result =
+        crate::integrations::asr::create_recognizer_with_gpu_plan(config, 2, gpu_plan)?;
+    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
+        log::warn!(
+            "[streaming] {} recognizer creation failed, retrying with {}: {}",
+            notice.from_provider,
+            notice.to_provider,
+            notice.error
+        );
+    }
+    let recognizer = Arc::new(recognizer_result.recognizer);
     if !matches!(
         recognizer.inner,
         crate::integrations::asr::RecognizerInner::Offline(_)
@@ -526,7 +535,10 @@ async fn load_recognizer(
         return Err("Only offline models are supported for streaming API".to_string());
     }
 
-    pool.insert(key, recognizer.clone());
+    pool.insert(
+        key.with_gpu_provider(recognizer_result.provider.clone()),
+        recognizer.clone(),
+    );
     Ok(recognizer)
 }
 

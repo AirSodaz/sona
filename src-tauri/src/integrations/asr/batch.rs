@@ -5,8 +5,8 @@ use super::metrics::{
     log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
 use super::model_config::{
-    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
-    SafeStream, build_model_config, load_punctuation,
+    Punctuation, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
+    build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
 };
 use super::state::AsrState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
@@ -42,7 +42,25 @@ pub async fn transcribe_batch_with_progress<F>(
 where
     F: FnMut(f32),
 {
-    transcribe_batch_with_progress_and_metrics(request, &mut on_progress, None).await
+    transcribe_batch_with_progress_and_metrics_inner(request, &mut on_progress, None, |_| {}).await
+}
+
+pub(crate) async fn transcribe_batch_with_progress_and_fallback_notice<F, N>(
+    request: &BatchTranscriptionRequest,
+    mut on_progress: F,
+    mut on_fallback: N,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+    N: FnMut(&crate::app::hardware::GpuFallbackNotice),
+{
+    transcribe_batch_with_progress_and_metrics_inner(
+        request,
+        &mut on_progress,
+        None,
+        &mut on_fallback,
+    )
+    .await
 }
 
 pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
@@ -52,6 +70,25 @@ pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
+{
+    transcribe_batch_with_progress_and_metrics_inner(
+        request,
+        &mut on_progress,
+        metrics_store,
+        |_| {},
+    )
+    .await
+}
+
+async fn transcribe_batch_with_progress_and_metrics_inner<F, N>(
+    request: &BatchTranscriptionRequest,
+    mut on_progress: F,
+    metrics_store: Option<AsrMetricsStore>,
+    mut on_fallback: N,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+    N: FnMut(&crate::app::hardware::GpuFallbackNotice),
 {
     let total_started = Instant::now();
     let audio_extract_started = Instant::now();
@@ -73,9 +110,21 @@ where
         &request.language,
         request.hotwords.clone(),
     )?;
-    let resolved_gpu =
-        crate::app::hardware::resolve_gpu_acceleration(request.gpu_acceleration.as_deref()).await;
-    let recognizer = Recognizer::new(config_type, request.num_threads, resolved_gpu.clone())?;
+    let gpu_plan =
+        crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
+            .await;
+    let recognizer_result =
+        create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)?;
+    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
+        log::warn!(
+            "[batch] {} transcription failed, retrying with {}: {}",
+            notice.from_provider,
+            notice.to_provider,
+            notice.error
+        );
+        on_fallback(notice);
+    }
+    let recognizer = recognizer_result.recognizer;
     let model_load_ms = duration_to_ms(model_load_started.elapsed());
     let rss_after_mb = capture_process_memory_mb();
 

@@ -18,6 +18,36 @@ pub struct ModelConfigKey {
     pub enable_itn: bool,
     pub language: String,
     pub hotwords: Option<String>,
+    pub gpu_provider: Option<String>,
+}
+
+impl ModelConfigKey {
+    pub fn new(
+        model_path: String,
+        model_type: String,
+        num_threads: i32,
+        enable_itn: bool,
+        language: String,
+        hotwords: Option<String>,
+        gpu_provider: Option<String>,
+    ) -> Self {
+        Self {
+            model_path,
+            model_type,
+            num_threads,
+            enable_itn,
+            language,
+            hotwords,
+            gpu_provider,
+        }
+    }
+
+    pub fn with_gpu_provider(&self, gpu_provider: Option<String>) -> Self {
+        Self {
+            gpu_provider,
+            ..self.clone()
+        }
+    }
 }
 
 pub struct AsrState {
@@ -72,5 +102,29 @@ impl AsrState {
 
     pub async fn metrics_snapshot(&self) -> AsrRuntimeMetricsSnapshot {
         snapshot_metrics(&self.metrics)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(provider: Option<&str>) -> ModelConfigKey {
+        ModelConfigKey {
+            model_path: "C:/models/demo".to_string(),
+            model_type: "sensevoice".to_string(),
+            num_threads: 4,
+            enable_itn: true,
+            language: "auto".to_string(),
+            hotwords: None,
+            gpu_provider: provider.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn model_config_key_separates_gpu_provider() {
+        assert_ne!(key(Some("cpu")), key(Some("cuda")));
+        assert_ne!(key(Some("cpu")), key(None));
+        assert_eq!(key(Some("cpu")), key(Some("cpu")));
     }
 }

@@ -102,7 +102,7 @@ jobs = 1
 | `quiet` | Optional | `true` or `false` | `false` | Hides transcription progress when set. CLI `--quiet` also enables this. |
 | `jobs` | Optional | Integer greater than `0` | `1` | Maximum concurrent file jobs for directory, multiple-input, or glob mode. CLI `--jobs` overrides this. |
 | `vad_buffer_size` | Optional | Number greater than `0` | `5.0` | VAD buffer size in seconds. |
-| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | CLI transcription on Windows tries CUDA first when set to `auto`; when the bundled runtime supports DirectML it tries DirectML next, then CPU. Use `cpu` to disable GPU acceleration. |
+| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | On Windows, `auto` tries CUDA first; when the bundled runtime supports DirectML it tries DirectML next, then CPU. Use `cpu` to disable GPU acceleration. |
 | `format` | Optional | `json`, `txt`, `srt`, `vtt`, `md` | `json` on stdout or in directory mode, otherwise inferred from `--output` | Overrides output extension inference. |
 
 ### `serve` config keys
@@ -119,7 +119,7 @@ jobs = 1
 | `max_queue_size` | Optional | Non-negative integer | `100` | `0` means the queue is effectively unlimited. |
 | `max_upload_size_mb` | Optional | Non-negative integer | `50` | `0` disables the upload size limit. |
 | `job_ttl_minutes` | Optional | Non-negative integer | `60` | `0` disables completed/failed job cleanup. |
-| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Server-level default for local batch and streaming jobs. |
+| `gpu_acceleration` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Server-level default for local batch and streaming jobs; Windows `auto` follows CUDA, DirectML when available, then CPU. |
 | `vad_model_id` | Optional | Preset model id | `silero-vad` | Default companion model for API server jobs. |
 | `punctuation_model_id` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | Default punctuation companion for API server jobs. |
 
@@ -224,7 +224,7 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | `--max-queue-size <n>` | Optional | Non-negative integer | `100` | `0` means the queue is effectively unlimited. |
 | `--max-upload-size-mb <n>` | Optional | Non-negative integer | `50` | `0` disables the upload size limit. |
 | `--job-ttl-minutes <n>` | Optional | Non-negative integer | `60` | `0` disables completed/failed job cleanup. |
-| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | HTTP API requests do not accept a per-request GPU override. |
+| `--gpu-acceleration <provider>` | Optional | `auto`, `cpu`, `cuda`, `coreml`, `directml` | `auto` | Server-level default; HTTP API requests do not accept a per-request GPU override. Windows `auto` follows CUDA, DirectML when available, then CPU. |
 | `--vad-model-id <id>` | Optional | Preset model id | `silero-vad` | Default VAD companion for API server jobs. |
 | `--punctuation-model-id <id>` | Optional | Preset model id | `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8` | Default punctuation companion for API server jobs. |
 

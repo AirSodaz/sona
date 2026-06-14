@@ -219,6 +219,19 @@ pub struct Recognizer {
     pub inner: RecognizerInner,
 }
 
+pub(crate) struct RecognizerCreateResult {
+    pub(crate) recognizer: Recognizer,
+    pub(crate) provider: Option<String>,
+    pub(crate) fallback_notice: Option<crate::app::hardware::GpuFallbackNotice>,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TestRecognizerCreateResult {
+    provider: Option<String>,
+    fallback_notice: Option<crate::app::hardware::GpuFallbackNotice>,
+}
+
 fn get_base_online_config(
     num_threads: i32,
     tokens: &Path,
@@ -446,6 +459,81 @@ impl Recognizer {
     }
 }
 
+pub(crate) fn create_recognizer_with_gpu_plan(
+    model_type: ModelType,
+    num_threads: i32,
+    plan: crate::app::hardware::GpuAccelerationPlan,
+) -> Result<RecognizerCreateResult, String> {
+    let (recognizer, provider, fallback_notice) =
+        create_recognizer_with_gpu_plan_impl(plan, |provider| {
+            Recognizer::new(
+                model_type.clone(),
+                num_threads,
+                provider.map(str::to_string),
+            )
+        })?;
+
+    Ok(RecognizerCreateResult {
+        recognizer,
+        provider,
+        fallback_notice,
+    })
+}
+
+fn create_recognizer_with_gpu_plan_impl<T, F>(
+    plan: crate::app::hardware::GpuAccelerationPlan,
+    mut create: F,
+) -> Result<
+    (
+        T,
+        Option<String>,
+        Option<crate::app::hardware::GpuFallbackNotice>,
+    ),
+    String,
+>
+where
+    F: FnMut(Option<&str>) -> Result<T, String>,
+{
+    let mut last_error = None;
+
+    for provider in plan.provider_options() {
+        let provider_name = provider.as_deref();
+        match create(provider_name) {
+            Ok(value) => {
+                let fallback_notice = last_error
+                    .take()
+                    .map(crate::app::hardware::GpuFallbackNotice::directml_retry);
+                return Ok((value, provider, fallback_notice));
+            }
+            Err(error)
+                if provider_name
+                    .map(|provider| plan.should_retry_after_failure(provider))
+                    .unwrap_or(false) =>
+            {
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "Recognizer creation failed.".to_string()))
+}
+
+#[cfg(test)]
+fn create_recognizer_with_gpu_plan_for_test<F>(
+    plan: crate::app::hardware::GpuAccelerationPlan,
+    create: F,
+) -> Result<TestRecognizerCreateResult, String>
+where
+    F: FnMut(Option<&str>) -> Result<String, String>,
+{
+    let (_value, provider, fallback_notice) = create_recognizer_with_gpu_plan_impl(plan, create)?;
+    Ok(TestRecognizerCreateResult {
+        provider,
+        fallback_notice,
+    })
+}
+
 unsafe impl Send for Recognizer {}
 unsafe impl Sync for Recognizer {}
 
@@ -648,5 +736,74 @@ mod tests {
             }
             other => panic!("expected OfflineFunASRNano, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn recognizer_factory_retries_auto_directml_failure_on_cpu() {
+        let plan = crate::app::hardware::GpuAccelerationPlan::for_platform(
+            Some("auto"),
+            true,
+            false,
+            true,
+        );
+        let mut attempted = Vec::new();
+        let result = create_recognizer_with_gpu_plan_for_test(plan, |provider| {
+            attempted.push(provider.map(str::to_string));
+            match provider {
+                Some("directml") => Err("directml init failed".to_string()),
+                Some("cpu") => Ok("cpu".to_string()),
+                other => Err(format!("unexpected provider: {other:?}")),
+            }
+        })
+        .expect("cpu retry should succeed");
+
+        assert_eq!(result.provider.as_deref(), Some("cpu"));
+        assert_eq!(
+            result.fallback_notice.unwrap().error,
+            "directml init failed"
+        );
+        assert_eq!(
+            attempted,
+            vec![Some("directml".to_string()), Some("cpu".to_string())]
+        );
+    }
+
+    #[test]
+    fn recognizer_factory_does_not_retry_explicit_directml_failure() {
+        let plan = crate::app::hardware::GpuAccelerationPlan::for_platform(
+            Some("directml"),
+            true,
+            false,
+            true,
+        );
+        let mut attempted = Vec::new();
+        let error = create_recognizer_with_gpu_plan_for_test(plan, |provider| {
+            attempted.push(provider.map(str::to_string));
+            Err("directml init failed".to_string())
+        })
+        .expect_err("explicit directml should fail without cpu retry");
+
+        assert_eq!(error, "directml init failed");
+        assert_eq!(attempted, vec![Some("directml".to_string())]);
+    }
+
+    #[test]
+    fn recognizer_factory_skips_unavailable_directml_runtime() {
+        let plan = crate::app::hardware::GpuAccelerationPlan::for_platform(
+            Some("auto"),
+            true,
+            false,
+            false,
+        );
+        let mut attempted = Vec::new();
+        let result = create_recognizer_with_gpu_plan_for_test(plan, |provider| {
+            attempted.push(provider.map(str::to_string));
+            Ok(provider.unwrap_or("none").to_string())
+        })
+        .expect("cpu provider should be used directly");
+
+        assert_eq!(result.provider.as_deref(), Some("cpu"));
+        assert!(result.fallback_notice.is_none());
+        assert_eq!(attempted, vec![Some("cpu".to_string())]);
     }
 }

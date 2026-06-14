@@ -324,22 +324,23 @@ pub async fn init_recognizer_impl(
     postprocess_options: Option<TranscriptPostprocessOptions>,
     gpu_acceleration: Option<String>,
 ) -> Result<Arc<LocalSherpaSession>, String> {
-    let resolved_gpu =
-        crate::app::hardware::resolve_gpu_acceleration(gpu_acceleration.as_deref()).await;
+    let gpu_plan =
+        crate::app::hardware::resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
 
     info!(
-        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} resolved_gpu={:?}",
-        punctuation_model, vad_model, hotwords, gpu_acceleration, resolved_gpu
+        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} gpu_plan={:?}",
+        punctuation_model, vad_model, hotwords, gpu_acceleration, gpu_plan
     );
 
-    let config_key = ModelConfigKey {
-        model_path: model_path.clone(),
-        model_type: model_type.clone(),
+    let config_key = ModelConfigKey::new(
+        model_path.clone(),
+        model_type.clone(),
         num_threads,
         enable_itn,
-        language: language.clone(),
-        hotwords: hotwords.clone(),
-    };
+        language.clone(),
+        hotwords.clone(),
+        None,
+    );
 
     let load_started = Instant::now();
     let rss_before_mb = capture_process_memory_mb();
@@ -347,7 +348,11 @@ pub async fn init_recognizer_impl(
 
     let recognizer = {
         let mut pool = state.recognizer_pool.lock().await;
-        if let Some(r) = pool.get(&config_key) {
+        if let Some(r) = gpu_plan
+            .provider_options()
+            .into_iter()
+            .find_map(|provider| pool.get(&config_key.with_gpu_provider(provider)).cloned())
+        {
             // Heavy recognizers are reused across logical instances when their
             // model path and runtime knobs match exactly.
             info!("[init_recognizer] Reusing existing recognizer from pool");
@@ -363,12 +368,24 @@ pub async fn init_recognizer_impl(
                 &language,
                 hotwords,
             )?;
-            let r = Arc::new(Recognizer::new(
+            let create_result = crate::integrations::asr::create_recognizer_with_gpu_plan(
                 config_type,
                 num_threads,
-                resolved_gpu.clone(),
-            )?);
-            pool.insert(config_key, r.clone());
+                gpu_plan.clone(),
+            )?;
+            if let Some(notice) = create_result.fallback_notice.as_ref() {
+                log::warn!(
+                    "[init_recognizer] {} recognizer creation failed, retrying with {}: {}",
+                    notice.from_provider,
+                    notice.to_provider,
+                    notice.error
+                );
+            }
+            let r = Arc::new(create_result.recognizer);
+            pool.insert(
+                config_key.with_gpu_provider(create_result.provider),
+                r.clone(),
+            );
             r
         }
     };
