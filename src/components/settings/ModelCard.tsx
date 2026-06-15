@@ -10,6 +10,7 @@ interface ModelCardProps {
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
+    actionsDisabled?: boolean;
 }
 
 interface ModelCardActionsProps {
@@ -21,6 +22,7 @@ interface ModelCardActionsProps {
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
     onCancelDownload: () => void;
+    disabled?: boolean;
 }
 
 const ModelCardActions = React.memo(function ModelCardActions({
@@ -31,7 +33,8 @@ const ModelCardActions = React.memo(function ModelCardActions({
     // deletingId,
     onDelete,
     onDownload,
-    onCancelDownload
+    onCancelDownload,
+    disabled = false
 }: ModelCardActionsProps): React.JSX.Element {
     const { t } = useTranslation();
     // const isDownloading = downloadingId === model.id;
@@ -44,7 +47,7 @@ const ModelCardActions = React.memo(function ModelCardActions({
                 <button
                     className="btn btn-secondary btn-sm"
                     onClick={() => onDelete(model)}
-                    disabled={false} // Allow to delete even if something else is happening
+                    disabled={disabled}
                     aria-label={`${t('common.delete')} ${model.name}`}
                     data-tooltip={t('common.delete')}
                 >
@@ -56,12 +59,12 @@ const ModelCardActions = React.memo(function ModelCardActions({
 
     return (
         <button
-            className="btn btn-secondary btn-sm"
-            onClick={isDownloading ? onCancelDownload : () => onDownload(model)}
-            // disabled={!!downloadingId && !isDownloading} // Allow parallel downloads
-            aria-label={isDownloading ? t('common.cancel') : `${t('common.download')} ${model.name}`}
-            data-tooltip={isDownloading ? t('common.cancel') : t('common.download')}
-        >
+        className="btn btn-secondary btn-sm"
+        onClick={isDownloading ? onCancelDownload : () => onDownload(model)}
+        disabled={disabled && !isDownloading}
+        aria-label={isDownloading ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+        data-tooltip={isDownloading ? t('common.cancel') : t('common.download')}
+    >
             {isDownloading ? <XIcon /> : <DownloadIcon />}
         </button>
     );
@@ -73,7 +76,8 @@ export const ModelCard = React.memo(function ModelCard({
     downloads,
     onDelete,
     onDownload,
-    onCancelDownload
+    onCancelDownload,
+    actionsDisabled = false
 }: ModelCardProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -109,6 +113,7 @@ export const ModelCard = React.memo(function ModelCard({
                                 onDelete={onDelete}
                                 onDownload={onDownload}
                                 onCancelDownload={() => onCancelDownload(baseModel.id)}
+                                disabled={actionsDisabled}
                             />
                         </div>
                     )}
@@ -158,6 +163,7 @@ export const ModelCard = React.memo(function ModelCard({
                                                 onDelete={onDelete}
                                                 onDownload={onDownload}
                                                 onCancelDownload={() => onCancelDownload(model.id)}
+                                                disabled={actionsDisabled}
                                             />
                                         </div>
                                     </div>

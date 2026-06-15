@@ -21,8 +21,17 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../ModelCard', () => ({
-    ModelCard: ({ models }: { models: Array<{ id: string; name: string }> }) => (
-        <div data-testid={`model-card-${models[0].id}`}>{models[0].name}</div>
+    ModelCard: ({
+        models,
+        actionsDisabled,
+    }: {
+        models: Array<{ id: string; name: string }>;
+        actionsDisabled?: boolean;
+    }) => (
+        <div data-testid={`model-card-${models[0].id}`}>
+            {models[0].name}
+            <button type="button" disabled={actionsDisabled}>model-action</button>
+        </div>
     ),
 }));
 
@@ -147,7 +156,7 @@ function buildModelCatalog(installedModels: Set<string>) {
     };
 }
 
-function renderTab(installedModels: Set<string>) {
+function renderTab(installedModels: Set<string>, managerOverrides: Record<string, unknown> = {}) {
     function Harness() {
         const config = useConfigStore((state) => state.config);
         const managerValue = {
@@ -161,6 +170,8 @@ function renderTab(installedModels: Set<string>) {
                 speakerSegmentation: config.speakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
                 speakerEmbedding: config.speakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
             },
+            catalogLoadState: 'ready',
+            catalogLoadError: null,
             handleDelete: vi.fn(),
             handleDownload: vi.fn(),
             handleCancelDownload: vi.fn(),
@@ -176,6 +187,7 @@ function renderTab(installedModels: Set<string>) {
                     maxConcurrent: 2,
                 });
             },
+            ...managerOverrides,
         } as any;
 
         return (
@@ -257,6 +269,47 @@ describe('SettingsModelsTab speaker model selections', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
         expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Off']);
+    });
+
+    it('keeps the page usable while local model catalog status is loading', async () => {
+        setTestConfig({
+            asr: {
+                providers: {
+                    online: {
+                        'volcengine-doubao': {
+                            apiKey: 'test-api-key',
+                            streamingEndpoint: 'test-endpoint',
+                            streamingResourceId: 'test-resource-id',
+                            batchEndpoint: 'test-batch-endpoint',
+                            batchResourceId: 'test-batch-resource',
+                        },
+                    },
+                },
+            },
+            batchVadEnabled: true,
+        } as any);
+
+        renderTab(new Set(), {
+            catalogLoadState: 'loading',
+        });
+
+        expect(screen.getByText('Checking local models...')).toBeDefined();
+        expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(true);
+
+        fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
+        expect((within(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).getByRole('button', { name: 'model-action' }) as HTMLButtonElement).disabled).toBe(true);
+
+        const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
+        expect(apiKeyInput.disabled).toBe(false);
+
+        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+        fireEvent.click(batchVadSwitch);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
+        });
     });
 
     it('clears selected speaker model paths when Off is chosen', async () => {

@@ -36,6 +36,34 @@ class ModelRegistryService {
     return await this.ports.resolveModelCatalogSelectedIds(paths);
   }
 
+  resolveModelCatalogSelectedIdsFromSnapshot(
+    snapshot: ModelCatalogSnapshot,
+    paths: ModelSelectionPaths,
+  ): ModelCatalogSelectedIds {
+    return {
+      streaming: resolveSelectedModelId(
+        snapshot,
+        paths.streamingModelPath,
+        snapshot.selectionOptions.streaming,
+      ),
+      offline: resolveSelectedModelId(
+        snapshot,
+        paths.offlineModelPath,
+        snapshot.selectionOptions.offline,
+      ),
+      speakerSegmentation: resolveSelectedModelId(
+        snapshot,
+        paths.speakerSegmentationModelPath,
+        snapshot.selectionOptions.speakerSegmentation,
+      ),
+      speakerEmbedding: resolveSelectedModelId(
+        snapshot,
+        paths.speakerEmbeddingModelPath,
+        snapshot.selectionOptions.speakerEmbedding,
+      ),
+    };
+  }
+
   async resolveCatalogModel(modelId: string): Promise<ModelCatalogModel | undefined> {
     const cachedModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
     if (cachedModel) {
@@ -88,6 +116,35 @@ class ModelRegistryService {
     }
     return this.ports.defaultModelRules;
   }
+}
+
+function normalizeCatalogPath(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function resolveSelectedModelId(
+  snapshot: ModelCatalogSnapshot,
+  modelPath: string,
+  options: Array<{ id: string }>,
+): string | null {
+  if (!modelPath.trim()) {
+    return null;
+  }
+
+  const normalizedPath = normalizeCatalogPath(modelPath);
+  const exactModelId = snapshot.modelIdByNormalizedPath[normalizedPath];
+  if (exactModelId && options.some((option) => option.id === exactModelId)) {
+    return exactModelId;
+  }
+
+  for (const option of options) {
+    const token = snapshot.pathMatchTokens.find((item) => item.id === option.id);
+    if (token && token.token && normalizedPath.includes(token.token)) {
+      return option.id;
+    }
+  }
+
+  return null;
 }
 
 export function createModelRegistryService(ports: ModelRegistryServicePorts): ModelRegistryService {

@@ -233,6 +233,13 @@ export class ModelService {
         return await this.ports.registryService.resolveModelCatalogSelectedIds(paths);
     }
 
+    resolveModelCatalogSelectedIdsFromSnapshot(
+        snapshot: ModelCatalogSnapshot,
+        paths: ModelSelectionPaths,
+    ): ModelCatalogSelectedIds {
+        return this.ports.registryService.resolveModelCatalogSelectedIdsFromSnapshot(snapshot, paths);
+    }
+
     /**
      * Checks if the user's hardware is compatible with a specific model.
      *

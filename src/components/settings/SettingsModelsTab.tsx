@@ -59,6 +59,8 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         installedModels,
         modelCatalog,
         selectedModelIds,
+        catalogLoadState,
+        catalogLoadError,
         downloads,
         handleDelete,
         handleDownload,
@@ -71,6 +73,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const enableITN = transcriptionConfig.enableITN ?? true;
     const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
     const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'auto';
+    const isCatalogReady = catalogLoadState === 'ready';
+    const isCatalogLoading = catalogLoadState === 'loading';
+    const localModelActionsDisabled = !isCatalogReady;
 
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
@@ -327,6 +332,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             placeholder={t('settings.select_streaming_model')}
                             options={streamingOptions}
                             style={{ flex: 1 }}
+                            disabled={localModelActionsDisabled}
                         />
                     </div>
                 </SettingsItem>
@@ -343,6 +349,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             placeholder={t('settings.select_offline_model')}
                             options={offlineOptions}
                             style={{ flex: 1 }}
+                            disabled={localModelActionsDisabled}
                         />
                     </div>
                 </SettingsItem>
@@ -360,6 +367,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             options={speakerSegmentationOptions}
                             style={{ flex: 1 }}
                             aria-label={t('settings.speaker_segmentation_model_label', { defaultValue: 'Speaker Segmentation Model' })}
+                            disabled={localModelActionsDisabled}
                         />
                     </div>
                 </SettingsItem>
@@ -377,6 +385,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             options={speakerEmbeddingOptions}
                             style={{ flex: 1 }}
                             aria-label={t('settings.speaker_embedding_model_label', { defaultValue: 'Speaker Embedding Model' })}
+                            disabled={localModelActionsDisabled}
                         />
                     </div>
                 </SettingsItem>
@@ -392,6 +401,19 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
                 icon={<RestoreIcon />}
             >
+                {isCatalogLoading && (
+                    <div className="settings-hint" role="status">
+                        {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
+                    </div>
+                )}
+                {catalogLoadState === 'error' && (
+                    <div className="settings-hint" role="status">
+                        {t('settings.models_check_failed', {
+                            error: catalogLoadError ?? '',
+                            defaultValue: 'Could not check local models. Download status may be stale.',
+                        })}
+                    </div>
+                )}
                 <SettingsAccordion
                     title={t('settings.recognition_models')}
                     status={<span className={`status-badge ${getSectionStatus('asr').type}`}>{getSectionStatus('asr').text}</span>}
@@ -402,6 +424,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             key={group.key}
                             models={group.models}
                             {...sectionProps}
+                            actionsDisabled={localModelActionsDisabled}
                         />
                     ))}
                 </SettingsAccordion>
@@ -415,6 +438,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             key={group.key}
                             models={group.models}
                             {...sectionProps}
+                            actionsDisabled={localModelActionsDisabled}
                         />
                     ))}
                 </SettingsAccordion>
@@ -428,6 +452,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             key={group.key}
                             models={group.models}
                             {...sectionProps}
+                            actionsDisabled={localModelActionsDisabled}
                         />
                     ))}
                 </SettingsAccordion>
@@ -441,6 +466,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             key={group.key}
                             models={group.models}
                             {...sectionProps}
+                            actionsDisabled={localModelActionsDisabled}
                         />
                     ))}
                 </SettingsAccordion>
@@ -454,6 +480,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                             key={group.key}
                             models={group.models}
                             {...sectionProps}
+                            actionsDisabled={localModelActionsDisabled}
                         />
                     ))}
                 </SettingsAccordion>
@@ -564,6 +591,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 <button
                     className="btn btn-restore-defaults"
                     onClick={restoreDefaultModelSettings}
+                    disabled={localModelActionsDisabled}
                     aria-label={t('settings.restore_defaults')}
                 >
                     <RestoreIcon />

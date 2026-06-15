@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -19,11 +19,14 @@ import type {
 } from '../services/modelService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
 type DownloadState = {
     progress: number;
     status: string;
     controller: AbortController;
 };
+
+type ModelCatalogLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
     modelsDir: '',
@@ -93,8 +96,12 @@ export function useModelManager(isOpen: boolean) {
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(EMPTY_MODEL_CATALOG_SNAPSHOT);
-    const [selectedModelIds, setSelectedModelIds] = useState<ModelCatalogSelectedIds>(EMPTY_MODEL_CATALOG_SELECTED_IDS);
+    const [catalogLoadState, setCatalogLoadState] = useState<ModelCatalogLoadState>('idle');
+    const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const catalogLoadGenerationRef = useRef(0);
+    const effectiveCatalogLoadState = isOpen ? catalogLoadState : 'idle';
+    const effectiveCatalogLoadError = isOpen ? catalogLoadError : null;
 
     const updateConfig = useCallback((updates: Partial<typeof config>) => {
         setConfig(updates);
@@ -109,10 +116,39 @@ export function useModelManager(isOpen: boolean) {
         ));
     }, []);
 
-    const refreshModelCatalogSnapshot = useCallback(async () => {
-        const snapshot = await modelService.getModelCatalogSnapshot();
-        applyModelCatalogSnapshot(snapshot);
-        return snapshot;
+    const refreshModelCatalogSnapshot = useCallback(async (loadGeneration?: number) => {
+        const isCurrentLoad = () => loadGeneration === undefined || loadGeneration === catalogLoadGenerationRef.current;
+        setCatalogLoadState('loading');
+        setCatalogLoadError(null);
+        markSettingsPerf('settings.models.catalog.load.start');
+        try {
+            const snapshot = await modelService.getModelCatalogSnapshot();
+            if (!isCurrentLoad()) {
+                markSettingsPerf('settings.models.catalog.load.end', {
+                    modelCount: snapshot.models.length,
+                    stale: true,
+                });
+                return snapshot;
+            }
+            applyModelCatalogSnapshot(snapshot);
+            setCatalogLoadState('ready');
+            markSettingsPerf('settings.models.catalog.load.end', {
+                modelCount: snapshot.models.length,
+            });
+            return snapshot;
+        } catch (error) {
+            if (!isCurrentLoad()) {
+                markSettingsPerf('settings.models.catalog.load.fail', {
+                    ...getSettingsPerfErrorDetail(error),
+                    stale: true,
+                });
+                throw error;
+            }
+            setCatalogLoadState('error');
+            setCatalogLoadError(extractErrorMessage(error));
+            markSettingsPerf('settings.models.catalog.load.fail', getSettingsPerfErrorDetail(error));
+            throw error;
+        }
     }, [applyModelCatalogSnapshot]);
 
     const getCatalogModel = useCallback((modelId: string): ModelCatalogModel | undefined => {
@@ -132,45 +168,41 @@ export function useModelManager(isOpen: boolean) {
             return;
         }
 
-        return scheduleAfterFrame(() => {
-            void refreshModelCatalogSnapshot();
-        });
-    }, [isOpen, refreshModelCatalogSnapshot]);
-
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
-
-        let cancelled = false;
-        const cancelScheduledResolve = scheduleAfterFrame(() => {
-            void modelService.resolveModelCatalogSelectedIds({
-                streamingModelPath: config.streamingModelPath || '',
-                offlineModelPath: config.offlineModelPath || '',
-                speakerSegmentationModelPath: config.speakerSegmentationModelPath || '',
-                speakerEmbeddingModelPath: config.speakerEmbeddingModelPath || '',
-            }).then((selectedIds) => {
-                if (!cancelled) {
-                    setSelectedModelIds(selectedIds);
-                }
-            }).catch((error) => {
-                logger.warn('[useModelManager] Failed to resolve selected model ids:', error);
-                if (!cancelled) {
-                    setSelectedModelIds(EMPTY_MODEL_CATALOG_SELECTED_IDS);
-                }
+        const loadGeneration = catalogLoadGenerationRef.current + 1;
+        catalogLoadGenerationRef.current = loadGeneration;
+        const cancelScheduledLoad = scheduleAfterFrame(() => {
+            void refreshModelCatalogSnapshot(loadGeneration).catch((error) => {
+                logger.warn('[useModelManager] Failed to load model catalog snapshot:', error);
             });
         });
 
         return () => {
-            cancelled = true;
-            cancelScheduledResolve();
+            if (catalogLoadGenerationRef.current === loadGeneration) {
+                catalogLoadGenerationRef.current += 1;
+            }
+            cancelScheduledLoad();
         };
+    }, [isOpen, refreshModelCatalogSnapshot]);
+
+    const selectedModelIds = useMemo(() => {
+        if (!isOpen || catalogLoadState !== 'ready') {
+            return EMPTY_MODEL_CATALOG_SELECTED_IDS;
+        }
+
+        return modelService.resolveModelCatalogSelectedIdsFromSnapshot(modelCatalog, {
+            streamingModelPath: config.streamingModelPath || '',
+            offlineModelPath: config.offlineModelPath || '',
+            speakerSegmentationModelPath: config.speakerSegmentationModelPath || '',
+            speakerEmbeddingModelPath: config.speakerEmbeddingModelPath || '',
+        });
     }, [
+        catalogLoadState,
         config.offlineModelPath,
         config.speakerEmbeddingModelPath,
         config.speakerSegmentationModelPath,
         config.streamingModelPath,
         isOpen,
+        modelCatalog,
     ]);
 
     const setModelPath = useCallback((model: ModelInfo, path: string) => {
@@ -369,6 +401,8 @@ export function useModelManager(isOpen: boolean) {
         installedModels,
         modelCatalog,
         selectedModelIds,
+        catalogLoadState: effectiveCatalogLoadState,
+        catalogLoadError: effectiveCatalogLoadError,
 
         handleDownload,
         handleCancelDownload,

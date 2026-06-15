@@ -111,6 +111,7 @@ vi.mock('../../services/modelService', () => ({
             speakerSegmentation: null,
             speakerEmbedding: null,
         }),
+        resolveModelCatalogSelectedIdsFromSnapshot: vi.fn(),
     }
 }));
 
@@ -213,6 +214,26 @@ describe('Settings', () => {
         mockListSystemAudioDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
         mockListLlmModels.mockResolvedValue(['gpt-4o']);
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(createModelCatalogSnapshot() as any);
+        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockImplementation((snapshot, paths) => {
+            const resolve = (path: string, options: Array<{ id: string }>) => {
+                if (!path.trim()) return null;
+                const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+                const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
+                if (exact && options.some((option) => option.id === exact)) return exact;
+                const tokenMatch = options.find((option) => {
+                    const token = snapshot.pathMatchTokens.find((item) => item.id === option.id);
+                    return token?.token && normalizedPath.includes(token.token);
+                });
+                return tokenMatch?.id ?? null;
+            };
+
+            return {
+                streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
+                offline: resolve(paths.offlineModelPath, snapshot.selectionOptions.offline),
+                speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
+                speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
+            };
+        });
         // Reset store state
         useTranscriptStore.setState({
             config: {

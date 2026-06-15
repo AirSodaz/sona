@@ -156,4 +156,62 @@ describe('modelRegistryService', () => {
       speakerEmbeddingModelPath: '',
     });
   });
+
+  it('resolves selected ids from a snapshot without calling the backend port', async () => {
+    const snapshot = {
+      ...makeSnapshot(),
+      selectionOptions: {
+        streaming: [
+          {
+            id: snapshotModel.id,
+            label: snapshotModel.name,
+            installPath: snapshotModel.installPath,
+            isInstalled: true,
+          },
+        ],
+        offline: [
+          {
+            id: snapshotModel.id,
+            label: snapshotModel.name,
+            installPath: snapshotModel.installPath,
+            isInstalled: true,
+          },
+        ],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+      },
+      modelIdByNormalizedPath: {
+        '/snapshot/models/snapshot-model': snapshotModel.id,
+      },
+      pathMatchTokens: [
+        {
+          id: snapshotModel.id,
+          token: 'snapshot-model',
+        },
+      ],
+    };
+    const registry = createModelRegistryService({
+      getModelCatalogSnapshot,
+      resolveModelCatalogSelectedIds,
+      getModelsDir,
+      join,
+      presetModelsMap: PRESET_MODELS_MAP,
+      defaultModelRules: DEFAULT_MODEL_RULES,
+    });
+
+    const result = registry.resolveModelCatalogSelectedIdsFromSnapshot(snapshot, {
+      streamingModelPath: 'C:\\snapshot\\models\\snapshot-model',
+      offlineModelPath: 'D:\\portable\\snapshot-model',
+      speakerSegmentationModelPath: '',
+      speakerEmbeddingModelPath: '',
+    });
+
+    expect(result).toEqual({
+      streaming: snapshotModel.id,
+      offline: snapshotModel.id,
+      speakerSegmentation: null,
+      speakerEmbedding: null,
+    });
+    expect(resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+  });
 });

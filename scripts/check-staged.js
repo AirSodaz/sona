@@ -14,7 +14,7 @@ function getStagedFiles() {
   return output.split('\u0000').filter(Boolean);
 }
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const filesToCheck = args.length > 0 ? args : getStagedFiles();
 
 if (filesToCheck.length === 0) {

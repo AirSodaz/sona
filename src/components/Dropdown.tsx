@@ -19,6 +19,7 @@ interface DropdownProps {
     className?: string;
     style?: React.CSSProperties;
     id?: string;
+    disabled?: boolean;
     'aria-label'?: string;
 }
 
@@ -30,6 +31,7 @@ export function Dropdown({
     className = '',
     style,
     id,
+    disabled = false,
     'aria-label': ariaLabel,
 }: DropdownProps): React.JSX.Element {
     const [isOpen, setIsOpen] = useState(false);
@@ -42,6 +44,14 @@ export function Dropdown({
 
     const showSearch = options.length > 10;
     const selectedOption = options.find((opt) => opt.value === value);
+
+    useEffect(() => {
+        if (disabled) {
+            const frameId = requestAnimationFrame(() => setIsOpen(false));
+            return () => cancelAnimationFrame(frameId);
+        }
+        return undefined;
+    }, [disabled]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -126,6 +136,10 @@ export function Dropdown({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (disabled) {
+            return;
+        }
+
         if (e.key === 'Escape') {
             e.preventDefault();
             setIsOpen(false);
@@ -236,11 +250,15 @@ export function Dropdown({
                 id={id}
                 className={`dropdown-trigger ${isOpen ? 'active' : ''}`}
                 onClick={() => {
+                    if (disabled) {
+                        return;
+                    }
                     if (!isOpen) {
                         setSearchQuery('');
                     }
                     setIsOpen(!isOpen);
                 }}
+                disabled={disabled}
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
                 aria-label={ariaLabel}

@@ -166,6 +166,7 @@ vi.mock('../../services/modelService', () => ({
         getModelRules: vi.fn(),
         getModelCatalogSnapshot: vi.fn(),
         resolveModelCatalogSelectedIds: vi.fn(),
+        resolveModelCatalogSelectedIdsFromSnapshot: vi.fn(),
     }
 }));
 
@@ -179,6 +180,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         vi.mocked(modelService.getModelRules).mockReset();
         vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
         vi.mocked(modelService.resolveModelCatalogSelectedIds).mockReset();
+        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockReset();
 
         setTestConfig({
             streamingModelPath: '/current/live',
@@ -222,6 +224,26 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentation: null,
             speakerEmbedding: null,
         });
+        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockImplementation((snapshot, paths) => {
+            const resolve = (path: string, options: Array<{ id: string }>) => {
+                if (!path.trim()) return null;
+                const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+                const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
+                if (exact && options.some((option) => option.id === exact)) return exact;
+                const tokenMatch = options.find((option) => {
+                    const token = snapshot.pathMatchTokens.find((item) => item.id === option.id);
+                    return token?.token && normalizedPath.includes(token.token);
+                });
+                return tokenMatch?.id ?? null;
+            };
+
+            return {
+                streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
+                offline: resolve(paths.offlineModelPath, snapshot.selectionOptions.offline),
+                speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
+                speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
+            };
+        });
     });
 
     it('does not load the model catalog while inactive for settings tab prewarm', async () => {
@@ -252,13 +274,9 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             expect(result.current.installedModels.has('preset-a')).toBe(true);
         });
         await waitFor(() => {
-            expect(modelService.resolveModelCatalogSelectedIds).toHaveBeenCalledWith({
-                streamingModelPath: '/current/live',
-                offlineModelPath: '/current/offline',
-                speakerSegmentationModelPath: '/current/speaker-segmentation',
-                speakerEmbeddingModelPath: '/current/speaker-embedding',
-            });
+            expect(result.current.catalogLoadState).toBe('ready');
         });
+        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
     });
 
@@ -277,9 +295,66 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         await waitFor(() => {
             expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
-            expect(modelService.resolveModelCatalogSelectedIds).toHaveBeenCalledTimes(1);
+            expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
         });
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    });
+
+    it('does not apply a stale catalog snapshot after the model pane is deactivated', async () => {
+        let resolveSnapshot: (snapshot: typeof modelCatalogSnapshot) => void = () => undefined;
+        vi.mocked(modelService.getModelCatalogSnapshot).mockReturnValue(
+            new Promise((resolve) => {
+                resolveSnapshot = resolve;
+            })
+        );
+
+        const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+            initialProps: { isOpen: false },
+        });
+
+        rerender({ isOpen: true });
+
+        await waitFor(() => {
+            expect(result.current.catalogLoadState).toBe('loading');
+        });
+
+        rerender({ isOpen: false });
+
+        await act(async () => {
+            resolveSnapshot(modelCatalogSnapshot);
+            await Promise.resolve();
+        });
+
+        expect(result.current.catalogLoadState).toBe('idle');
+        expect(result.current.installedModels.has('preset-a')).toBe(false);
+    });
+
+    it('resolves selected model ids from the loaded snapshot without backend fallback', async () => {
+        setTestConfig({
+            streamingModelPath: '/models/preset-a',
+            offlineModelPath: 'D:\\portable\\preset-a',
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+        });
+
+        const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+            initialProps: { isOpen: false },
+        });
+
+        expect(result.current.catalogLoadState).toBe('idle');
+
+        rerender({ isOpen: true });
+
+        await waitFor(() => {
+            expect(result.current.catalogLoadState).toBe('ready');
+            expect(result.current.selectedModelIds).toMatchObject({
+                streaming: 'preset-a',
+                offline: 'preset-a',
+            });
+        });
+
+        expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
     });
 
     it('restores SenseVoice Int8 and Silero VAD when both are installed', async () => {
