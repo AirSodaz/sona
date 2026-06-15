@@ -190,4 +190,38 @@ describe('ExportButton', () => {
             vi.useRealTimers();
         }
     });
+
+    it('keeps encoded angle brackets encoded once when copying', async () => {
+        useTranscriptStore.setState({
+            segments: [
+                { id: '1', start: 0, end: 1, text: '&amp;lt;script&amp;gt;', isFinal: true }
+            ]
+        });
+
+        await openExportModal();
+
+        const copyBtn = screen.getByRole('button', { name: 'export.copy_to_clipboard' });
+        fireEvent.click(copyBtn);
+
+        await waitFor(() => {
+            expect(mockWriteText).toHaveBeenCalledWith('&lt;script&gt;');
+        });
+    });
+
+    it('copies ordinary HTML entities as readable plain text', async () => {
+        useTranscriptStore.setState({
+            segments: [
+                { id: '1', start: 0, end: 1, text: '<div>A&nbsp;&amp;&nbsp;B</div>', isFinal: true }
+            ]
+        });
+
+        await openExportModal();
+
+        const copyBtn = screen.getByRole('button', { name: 'export.copy_to_clipboard' });
+        fireEvent.click(copyBtn);
+
+        await waitFor(() => {
+            expect(mockWriteText).toHaveBeenCalledWith('A & B');
+        });
+    });
 });
