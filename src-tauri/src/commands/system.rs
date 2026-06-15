@@ -200,18 +200,18 @@ pub async fn webdav_download_backup(
 }
 
 #[tauri::command]
-pub fn get_model_catalog_snapshot(
+pub async fn get_model_catalog_snapshot(
     app: AppHandle,
 ) -> Result<crate::core::preset_models::ModelCatalogSnapshot, String> {
-    crate::core::preset_models::get_model_catalog_snapshot(app)
+    crate::core::preset_models::get_model_catalog_snapshot(app).await
 }
 
 #[tauri::command(rename = "resolve_model_catalog_selected_ids")]
-pub fn resolve_model_catalog_selected_ids_command(
+pub async fn resolve_model_catalog_selected_ids_command(
     app: AppHandle,
     paths: crate::core::preset_models::ModelSelectionPaths,
 ) -> Result<crate::core::preset_models::ModelCatalogSelectedIds, String> {
-    crate::core::preset_models::resolve_model_catalog_selected_ids_command(app, paths)
+    crate::core::preset_models::resolve_model_catalog_selected_ids_command(app, paths).await
 }
 
 #[tauri::command]

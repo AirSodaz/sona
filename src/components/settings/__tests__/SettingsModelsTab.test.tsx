@@ -296,9 +296,9 @@ describe('SettingsModelsTab speaker model selections', () => {
         expect(screen.getByText('Checking local models...')).toBeDefined();
         expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(true);
         expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(true);
-
-        fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
-        expect((within(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).getByRole('button', { name: 'model-action' }) as HTMLButtonElement).disabled).toBe(true);
+        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
+        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
 
         const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
         expect(apiKeyInput.disabled).toBe(false);
@@ -310,6 +310,25 @@ describe('SettingsModelsTab speaker model selections', () => {
         await waitFor(() => {
             expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
         });
+    });
+
+    it('mounts local model cards and enables local actions after the catalog is ready', async () => {
+        renderTab(new Set([
+            'sherpa-onnx-pyannote-segmentation-3-0',
+            '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+        ]));
+
+        expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(false);
+        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Speaker Segmentation Models/ })).toBeDefined();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
+        expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
+        expect((within(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).getByRole('button', { name: 'model-action' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     it('clears selected speaker model paths when Off is chosen', async () => {

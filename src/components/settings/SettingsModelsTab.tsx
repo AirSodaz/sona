@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
     ModelCatalogSectionType,
@@ -23,6 +23,7 @@ import { ModelIcon, RestoreIcon, CloudIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 import { DynamicProviderSettings, VolcengineSettingsCard, GroqWhisperSettingsCard, type ProviderSettingsProps } from './OnlineAsrSettingsCards';
+import { markSettingsPerf } from '../../utils/settingsPerf';
 
 const CUSTOM_PROVIDER_COMPONENTS: Record<string, React.ComponentType<ProviderSettingsProps>> = {
     [VOLCENGINE_DOUBAO_PROVIDER_ID]: VolcengineSettingsCard,
@@ -34,6 +35,16 @@ const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
 
 interface SettingsModelsTabProps {
     isActive?: boolean;
+}
+
+function scheduleAfterFrame(callback: () => void): () => void {
+    if (typeof requestAnimationFrame === 'function') {
+        const frameId = requestAnimationFrame(() => callback());
+        return () => cancelAnimationFrame(frameId);
+    }
+
+    const timeoutId = window.setTimeout(callback, 0);
+    return () => window.clearTimeout(timeoutId);
 }
 
 function toDropdownOptions(
@@ -48,13 +59,158 @@ function toDropdownOptions(
         }));
 }
 
-export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive: _isActive = true }: SettingsModelsTabProps): React.JSX.Element {
-    void _isActive;
+interface LocalModelManagementSectionProps {
+    catalogLoadState: ReturnType<typeof useModelManagerContext>['catalogLoadState'];
+    catalogLoadError: ReturnType<typeof useModelManagerContext>['catalogLoadError'];
+    sectionProps: Pick<ReturnType<typeof useModelManagerContext>, 'installedModels' | 'downloads' | 'handleDelete' | 'handleDownload' | 'handleCancelDownload'>;
+    localModelActionsDisabled: boolean;
+    getSectionGroups: (type: ModelCatalogSectionType) => ReturnType<typeof useModelManagerContext>['modelCatalog']['sections'][number]['groups'];
+    getSectionStatus: (type: ModelCatalogSectionType) => { type: string; text: string };
+    t: ReturnType<typeof useTranslation>['t'];
+}
 
+const LocalModelManagementSection = React.memo(function LocalModelManagementSection({
+    catalogLoadState,
+    catalogLoadError,
+    sectionProps,
+    localModelActionsDisabled,
+    getSectionGroups,
+    getSectionStatus,
+    t,
+}: LocalModelManagementSectionProps): React.JSX.Element {
+    const isCatalogLoading = catalogLoadState === 'loading';
+    const isCatalogReady = catalogLoadState === 'ready';
+
+    useEffect(() => {
+        markSettingsPerf('settings.models.local.content.commit');
+        const cancelFrame = scheduleAfterFrame(() => {
+            markSettingsPerf('settings.models.local.content.raf');
+        });
+        return cancelFrame;
+    }, []);
+
+    return (
+        <SettingsSection
+            title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
+            icon={<RestoreIcon />}
+        >
+            {isCatalogLoading && (
+                <div className="settings-hint" role="status">
+                    {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
+                </div>
+            )}
+            {catalogLoadState === 'error' && (
+                <div className="settings-hint" role="status">
+                    {t('settings.models_check_failed', {
+                        error: catalogLoadError ?? '',
+                        defaultValue: 'Could not check local models. Download status may be stale.',
+                    })}
+                </div>
+            )}
+            {isCatalogReady && (
+                <>
+                    <SettingsAccordion
+                        title={t('settings.recognition_models')}
+                        status={<span className={`status-badge ${getSectionStatus('asr').type}`}>{getSectionStatus('asr').text}</span>}
+                        defaultOpen={true}
+                    >
+                        {getSectionGroups('asr').map(group => (
+                            <ModelCard
+                                key={group.key}
+                                models={group.models}
+                                installedModels={sectionProps.installedModels}
+                                downloads={sectionProps.downloads}
+                                onDelete={sectionProps.handleDelete}
+                                onDownload={sectionProps.handleDownload}
+                                onCancelDownload={sectionProps.handleCancelDownload}
+                                actionsDisabled={localModelActionsDisabled}
+                            />
+                        ))}
+                    </SettingsAccordion>
+
+                    <SettingsAccordion
+                        title={t('settings.punctuation_models')}
+                        status={<span className={`status-badge ${getSectionStatus('punctuation').type}`}>{getSectionStatus('punctuation').text}</span>}
+                    >
+                        {getSectionGroups('punctuation').map(group => (
+                            <ModelCard
+                                key={group.key}
+                                models={group.models}
+                                installedModels={sectionProps.installedModels}
+                                downloads={sectionProps.downloads}
+                                onDelete={sectionProps.handleDelete}
+                                onDownload={sectionProps.handleDownload}
+                                onCancelDownload={sectionProps.handleCancelDownload}
+                                actionsDisabled={localModelActionsDisabled}
+                            />
+                        ))}
+                    </SettingsAccordion>
+
+                    <SettingsAccordion
+                        title={t('settings.vad_models')}
+                        status={<span className={`status-badge ${getSectionStatus('vad').type}`}>{getSectionStatus('vad').text}</span>}
+                    >
+                        {getSectionGroups('vad').map(group => (
+                            <ModelCard
+                                key={group.key}
+                                models={group.models}
+                                installedModels={sectionProps.installedModels}
+                                downloads={sectionProps.downloads}
+                                onDelete={sectionProps.handleDelete}
+                                onDownload={sectionProps.handleDownload}
+                                onCancelDownload={sectionProps.handleCancelDownload}
+                                actionsDisabled={localModelActionsDisabled}
+                            />
+                        ))}
+                    </SettingsAccordion>
+
+                    <SettingsAccordion
+                        title={t('settings.speaker_segmentation_models', { defaultValue: 'Speaker Segmentation Models' })}
+                        status={<span className={`status-badge ${getSectionStatus('speaker-segmentation').type}`}>{getSectionStatus('speaker-segmentation').text}</span>}
+                    >
+                        {getSectionGroups('speaker-segmentation').map(group => (
+                            <ModelCard
+                                key={group.key}
+                                models={group.models}
+                                installedModels={sectionProps.installedModels}
+                                downloads={sectionProps.downloads}
+                                onDelete={sectionProps.handleDelete}
+                                onDownload={sectionProps.handleDownload}
+                                onCancelDownload={sectionProps.handleCancelDownload}
+                                actionsDisabled={localModelActionsDisabled}
+                            />
+                        ))}
+                    </SettingsAccordion>
+
+                    <SettingsAccordion
+                        title={t('settings.speaker_embedding_models', { defaultValue: 'Speaker Embedding Models' })}
+                        status={<span className={`status-badge ${getSectionStatus('speaker-embedding').type}`}>{getSectionStatus('speaker-embedding').text}</span>}
+                    >
+                        {getSectionGroups('speaker-embedding').map(group => (
+                            <ModelCard
+                                key={group.key}
+                                models={group.models}
+                                installedModels={sectionProps.installedModels}
+                                downloads={sectionProps.downloads}
+                                onDelete={sectionProps.handleDelete}
+                                onDownload={sectionProps.handleDownload}
+                                onCancelDownload={sectionProps.handleCancelDownload}
+                                actionsDisabled={localModelActionsDisabled}
+                            />
+                        ))}
+                    </SettingsAccordion>
+                </>
+            )}
+        </SettingsSection>
+    );
+});
+
+export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive: _isActive = true }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const modelConfig = useModelConfig();
     const transcriptionConfig = useTranscriptionConfig();
     const updateConfig = useSetConfig();
+    const [showLocalModelContent, setShowLocalModelContent] = useState(false);
     const {
         installedModels,
         modelCatalog,
@@ -74,8 +230,36 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
     const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'auto';
     const isCatalogReady = catalogLoadState === 'ready';
-    const isCatalogLoading = catalogLoadState === 'loading';
     const localModelActionsDisabled = !isCatalogReady;
+
+    useEffect(() => {
+        if (!_isActive) {
+            setShowLocalModelContent(false);
+            return;
+        }
+
+        markSettingsPerf('settings.models.tab.commit');
+        const cancelTabFrame = scheduleAfterFrame(() => {
+            markSettingsPerf('settings.models.tab.raf');
+        });
+
+        return cancelTabFrame;
+    }, [_isActive]);
+
+    useEffect(() => {
+        if (!_isActive) {
+            setShowLocalModelContent(false);
+            return;
+        }
+
+        markSettingsPerf('settings.models.local.defer.start');
+        const cancelDeferredMount = scheduleAfterFrame(() => {
+            setShowLocalModelContent(true);
+            markSettingsPerf('settings.models.local.defer.end');
+        });
+
+        return cancelDeferredMount;
+    }, [_isActive]);
 
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
@@ -200,9 +384,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const sectionProps = {
         installedModels,
         downloads,
-        onDelete: handleDelete,
-        onDownload: handleDownload,
-        onCancelDownload: handleCancelDownload
+        handleDelete,
+        handleDownload,
+        handleCancelDownload
     };
 
     const speakerDisabledOption = useMemo(() => ({
@@ -397,94 +581,36 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 )}
             </SettingsSection>
 
-            <SettingsSection
-                title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
-                icon={<RestoreIcon />}
-            >
-                {isCatalogLoading && (
-                    <div className="settings-hint" role="status">
-                        {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
-                    </div>
-                )}
-                {catalogLoadState === 'error' && (
-                    <div className="settings-hint" role="status">
-                        {t('settings.models_check_failed', {
-                            error: catalogLoadError ?? '',
-                            defaultValue: 'Could not check local models. Download status may be stale.',
-                        })}
-                    </div>
-                )}
-                <SettingsAccordion
-                    title={t('settings.recognition_models')}
-                    status={<span className={`status-badge ${getSectionStatus('asr').type}`}>{getSectionStatus('asr').text}</span>}
-                    defaultOpen={true}
+            {showLocalModelContent ? (
+                <LocalModelManagementSection
+                    catalogLoadState={catalogLoadState}
+                    catalogLoadError={catalogLoadError}
+                    sectionProps={sectionProps}
+                    localModelActionsDisabled={localModelActionsDisabled}
+                    getSectionGroups={getSectionGroups}
+                    getSectionStatus={getSectionStatus}
+                    t={t}
+                />
+            ) : (
+                <SettingsSection
+                    title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
+                    icon={<RestoreIcon />}
                 >
-                    {getSectionGroups('asr').map(group => (
-                        <ModelCard
-                            key={group.key}
-                            models={group.models}
-                            {...sectionProps}
-                            actionsDisabled={localModelActionsDisabled}
-                        />
-                    ))}
-                </SettingsAccordion>
-
-                <SettingsAccordion
-                    title={t('settings.punctuation_models')}
-                    status={<span className={`status-badge ${getSectionStatus('punctuation').type}`}>{getSectionStatus('punctuation').text}</span>}
-                >
-                    {getSectionGroups('punctuation').map(group => (
-                        <ModelCard
-                            key={group.key}
-                            models={group.models}
-                            {...sectionProps}
-                            actionsDisabled={localModelActionsDisabled}
-                        />
-                    ))}
-                </SettingsAccordion>
-
-                <SettingsAccordion
-                    title={t('settings.vad_models')}
-                    status={<span className={`status-badge ${getSectionStatus('vad').type}`}>{getSectionStatus('vad').text}</span>}
-                >
-                    {getSectionGroups('vad').map(group => (
-                        <ModelCard
-                            key={group.key}
-                            models={group.models}
-                            {...sectionProps}
-                            actionsDisabled={localModelActionsDisabled}
-                        />
-                    ))}
-                </SettingsAccordion>
-
-                <SettingsAccordion
-                    title={t('settings.speaker_segmentation_models', { defaultValue: 'Speaker Segmentation Models' })}
-                    status={<span className={`status-badge ${getSectionStatus('speaker-segmentation').type}`}>{getSectionStatus('speaker-segmentation').text}</span>}
-                >
-                    {getSectionGroups('speaker-segmentation').map(group => (
-                        <ModelCard
-                            key={group.key}
-                            models={group.models}
-                            {...sectionProps}
-                            actionsDisabled={localModelActionsDisabled}
-                        />
-                    ))}
-                </SettingsAccordion>
-
-                <SettingsAccordion
-                    title={t('settings.speaker_embedding_models', { defaultValue: 'Speaker Embedding Models' })}
-                    status={<span className={`status-badge ${getSectionStatus('speaker-embedding').type}`}>{getSectionStatus('speaker-embedding').text}</span>}
-                >
-                    {getSectionGroups('speaker-embedding').map(group => (
-                        <ModelCard
-                            key={group.key}
-                            models={group.models}
-                            {...sectionProps}
-                            actionsDisabled={localModelActionsDisabled}
-                        />
-                    ))}
-                </SettingsAccordion>
-            </SettingsSection>
+                    {catalogLoadState === 'loading' && (
+                        <div className="settings-hint" role="status">
+                            {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
+                        </div>
+                    )}
+                    {catalogLoadState === 'error' && (
+                        <div className="settings-hint" role="status">
+                            {t('settings.models_check_failed', {
+                                error: catalogLoadError ?? '',
+                                defaultValue: 'Could not check local models. Download status may be stale.',
+                            })}
+                        </div>
+                    )}
+                </SettingsSection>
+            )}
 
             <SettingsSection
                 title={t('settings.online_model_management', { defaultValue: '在线模型管理' })}
