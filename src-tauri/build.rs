@@ -20,6 +20,9 @@ const SHERPA_ONNX_STATIC_LIBS: &[&str] = &[
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(sona_sherpa_directml)");
     println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
+    #[cfg(all(target_os = "windows", target_env = "msvc"))]
+    embed_windows_test_manifest();
+
     if let Ok(lib_dir) = env::var("SHERPA_ONNX_LIB_DIR") {
         println!("cargo:rustc-link-search=native={}", lib_dir);
 
@@ -34,6 +37,18 @@ fn main() {
     }
 
     tauri_build::build()
+}
+
+#[cfg(all(target_os = "windows", target_env = "msvc"))]
+fn embed_windows_test_manifest() {
+    let out_dir =
+        env::var("OUT_DIR").expect("OUT_DIR is required to compile Windows test resources");
+    println!("cargo:rerun-if-changed=windows-test-manifest.rc");
+    println!("cargo:rerun-if-changed=windows-test.exe.manifest");
+    println!("cargo:rustc-link-search=native={out_dir}");
+    embed_resource::compile_for_tests("windows-test-manifest.rc", embed_resource::NONE)
+        .manifest_required()
+        .expect("failed to embed Common Controls v6 manifest for Rust test binaries");
 }
 
 fn sherpa_lib_dir_has_directml(lib_dir: &Path) -> bool {

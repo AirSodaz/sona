@@ -249,6 +249,14 @@ pub fn resolve_transcribe_options(
     cli: TranscribeCliOptions,
     config: Option<CliConfigFile>,
 ) -> Result<ResolvedTranscribeOptions, String> {
+    resolve_transcribe_options_with_install_checker(cli, config, PresetModel::is_installed_at)
+}
+
+fn resolve_transcribe_options_with_install_checker(
+    cli: TranscribeCliOptions,
+    config: Option<CliConfigFile>,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<ResolvedTranscribeOptions, String> {
     let config = config.unwrap_or_default();
     let output_target = resolve_output_target(cli.output.clone());
     let export_format = resolve_export_format(
@@ -291,19 +299,27 @@ pub fn resolve_transcribe_options(
         .language
         .or(config.language)
         .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
-    let model_path = require_installed_model(model, &models_dir)?;
+    let model_path = require_installed_model(model, &models_dir, is_installed)?;
     let vad_model = if rules.requires_vad {
         let companion_id = vad_model_id.unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
-        Some(require_installed_companion(&companion_id, &models_dir)?)
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
     } else {
-        optional_installed_companion(vad_model_id.as_deref(), &models_dir)?
+        optional_installed_companion(vad_model_id.as_deref(), &models_dir, is_installed)?
     };
     let punctuation_model = if rules.requires_punctuation {
         let companion_id =
             punctuation_model_id.unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
-        Some(require_installed_companion(&companion_id, &models_dir)?)
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
     } else {
-        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir)?
+        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir, is_installed)?
     };
 
     Ok(ResolvedTranscribeOptions {
@@ -1044,9 +1060,13 @@ fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String>
     Ok(model)
 }
 
-fn require_installed_model(model: &PresetModel, models_dir: &Path) -> Result<String, String> {
+fn require_installed_model(
+    model: &PresetModel,
+    models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<String, String> {
     let path = model.resolve_install_path(models_dir);
-    if !model.is_installed_at(models_dir) {
+    if !is_installed(model, models_dir) {
         return Err(format!(
             "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             model.id,
@@ -1056,11 +1076,15 @@ fn require_installed_model(model: &PresetModel, models_dir: &Path) -> Result<Str
     Ok(path.to_string_lossy().to_string())
 }
 
-fn require_installed_companion(model_id: &str, models_dir: &Path) -> Result<String, String> {
+fn require_installed_companion(
+    model_id: &str,
+    models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<String, String> {
     let model = find_preset_model(model_id)
         .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
     let path = model.resolve_install_path(models_dir);
-    if !model.is_installed_at(models_dir) {
+    if !is_installed(model, models_dir) {
         return Err(format!(
             "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             path.display()
@@ -1072,9 +1096,10 @@ fn require_installed_companion(model_id: &str, models_dir: &Path) -> Result<Stri
 fn optional_installed_companion(
     model_id: Option<&str>,
     models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
 ) -> Result<Option<String>, String> {
     model_id
-        .map(|id| require_installed_companion(id, models_dir))
+        .map(|id| require_installed_companion(id, models_dir, is_installed))
         .transpose()
 }
 
@@ -1110,6 +1135,17 @@ mod tests {
     use crate::repositories::export::ExportFormat;
     use std::fs;
     use tempfile::tempdir;
+
+    fn test_model_exists(model: &PresetModel, models_dir: &Path) -> bool {
+        model.resolve_install_path(models_dir).exists()
+    }
+
+    fn resolve_test_transcribe_options(
+        cli: TranscribeCliOptions,
+        config: Option<CliConfigFile>,
+    ) -> Result<ResolvedTranscribeOptions, String> {
+        resolve_transcribe_options_with_install_checker(cli, config, test_model_exists)
+    }
 
     fn temp_cli_options() -> TranscribeCliOptions {
         TranscribeCliOptions {
@@ -1188,7 +1224,7 @@ mod tests {
         cli.enable_itn = Some(true);
         cli.hotwords = Some("cli-term".to_string());
 
-        let resolved = resolve_transcribe_options(
+        let resolved = resolve_test_transcribe_options(
             cli,
             Some(CliConfigFile {
                 threads: Some(2),
@@ -1222,7 +1258,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
 
         assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("auto"));
     }
@@ -1236,7 +1272,7 @@ mod tests {
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir.clone());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
 
         assert_eq!(
             resolved.request.vad_model.as_deref(),
@@ -1258,7 +1294,7 @@ mod tests {
         cli.model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
         cli.models_dir = Some(models_dir.clone());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
 
         assert_eq!(
             resolved.request.punctuation_model.as_deref(),
@@ -1280,7 +1316,7 @@ mod tests {
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
 
-        let error = resolve_transcribe_options(
+        let error = resolve_test_transcribe_options(
             cli,
             Some(CliConfigFile {
                 vad_model_id: Some("custom-vad".to_string()),
@@ -1306,7 +1342,8 @@ mod tests {
         cli.vad_model_id = Some("silero-vad".to_string());
 
         let resolved =
-            resolve_transcribe_options(cli, Some(load_config_file(&config_path).unwrap())).unwrap();
+            resolve_test_transcribe_options(cli, Some(load_config_file(&config_path).unwrap()))
+                .unwrap();
 
         assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("cpu"));
     }
@@ -1321,7 +1358,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved = resolve_transcribe_options(
+        let resolved = resolve_test_transcribe_options(
             cli,
             Some(CliConfigFile {
                 hotwords: Some("config-hotword".to_string()),
@@ -1344,7 +1381,7 @@ mod tests {
         cli.vad_model_id = Some("silero-vad".to_string());
         cli.gpu_acceleration = Some("cuda".to_string());
 
-        let resolved = resolve_transcribe_options(
+        let resolved = resolve_test_transcribe_options(
             cli,
             Some(CliConfigFile {
                 gpu_acceleration: Some("cpu".to_string()),
@@ -1362,7 +1399,7 @@ mod tests {
         cli.model_id = Some("not-a-real-model".to_string());
         cli.gpu_acceleration = Some("vulkan".to_string());
 
-        let error = resolve_transcribe_options(cli, None).unwrap_err();
+        let error = resolve_test_transcribe_options(cli, None).unwrap_err();
 
         assert!(error.contains("gpu_acceleration"));
         assert!(error.contains("auto, cpu, cuda, coreml, directml"));
@@ -1385,7 +1422,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
         assert_eq!(resolved.export_format, ExportFormat::Srt);
     }
 
@@ -1401,7 +1438,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
         assert_eq!(resolved.export_format, ExportFormat::Json);
     }
 
@@ -1601,7 +1638,7 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved = resolve_transcribe_options(cli, None).unwrap();
+        let resolved = resolve_test_transcribe_options(cli, None).unwrap();
         let retargeted = retarget_resolved_transcribe_options(
             &resolved,
             second_input.clone(),
@@ -1628,7 +1665,7 @@ mod tests {
         cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
         cli.models_dir = Some(models_dir);
 
-        let error = resolve_transcribe_options(cli, None).unwrap_err();
+        let error = resolve_test_transcribe_options(cli, None).unwrap_err();
         assert!(error.contains("Companion model 'silero-vad' was not found"));
     }
 

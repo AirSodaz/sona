@@ -55,6 +55,43 @@ Verify the packaged CLI bundle when you touch packaging or CLI behavior:
 pnpm run verify:cli-bundle
 ```
 
+Run the CI-style frontend gates before opening broad PRs:
+
+```bash
+pnpm run lint:ci
+pnpm run test:ci
+pnpm run build:ci
+```
+
+Run Rust backend checks when you touch `src-tauri/`:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --no-run
+cargo test --manifest-path src-tauri/Cargo.toml --test cli
+```
+
+If your change affects shared Rust behavior, also run the focused lib selectors
+that match the changed area. On Windows, the full Rust suite should now pass
+because Rust test binaries embed the Common Controls v6 manifest needed by the
+native dialog stack:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+Security audit checks:
+
+```bash
+pnpm audit --prod
+cargo audit --file src-tauri/Cargo.lock
+```
+
+`cargo audit` currently has no known-vulnerability findings for this repo, but
+it can still report tracked RustSec warnings from transitive desktop/runtime
+dependencies such as GTK3/Wry, `glib`, `unic`, `paste`, and
+`proc-macro-error`. Treat those warning families as known dependency risk unless
+your PR intentionally upgrades the Tauri/Wry/GTK stack.
+
 ## Commit message format
 
 This repo uses Conventional Commits:
@@ -113,8 +150,10 @@ If the staged file list is wider than the change you intend to ship, stop and fi
 
 Before opening a PR:
 
-- `pnpm run build` should pass.
+- `pnpm run lint:ci`, `pnpm run test:ci`, and `pnpm run build:ci` should pass.
 - Run focused tests that match the changed area.
+- For Rust backend changes, run `cargo test --manifest-path src-tauri/Cargo.toml --no-run` and the focused Rust tests that match the change.
+- For dependency or security-sensitive changes, run `pnpm audit --prod` and `cargo audit --file src-tauri/Cargo.lock`.
 - Update repo docs for user-visible workflow or settings changes.
 - Include screenshots or video for UI changes when they help reviewers.
 

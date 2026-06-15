@@ -17,6 +17,7 @@ crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+embed-resource = "3.0.9"
 
 
 [dependencies]

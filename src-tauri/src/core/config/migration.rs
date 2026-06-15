@@ -165,7 +165,7 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         "polishPresetId",
         "summaryTemplateId",
     ] {
-        if config.get(key).and_then(non_empty_str).is_none()
+        if config.get(key).and_then(flatten_id_value).is_none()
             && (key == "polishPresetId" || key == "summaryTemplateId")
         {
             return true;
@@ -190,12 +190,12 @@ fn normalize_current_config(existing: Value) -> Value {
     let summary_custom_templates =
         normalize_summary_custom_templates(config.get("summaryCustomTemplates"));
     let summary_template_id = coerce_summary_template_id(
-        config.get("summaryTemplateId").and_then(Value::as_str),
+        config.get("summaryTemplateId").and_then(flatten_id_value),
         Some(&summary_custom_templates),
     );
     let polish_custom_presets = normalize_polish_custom_presets(config.get("polishCustomPresets"));
     let polish_preset_id = coerce_polish_preset_id(
-        config.get("polishPresetId").and_then(Value::as_str),
+        config.get("polishPresetId").and_then(flatten_id_value),
         Some(&polish_custom_presets),
     );
     let polish_keyword_sets = migrate_legacy_polish_keywords(
@@ -278,6 +278,15 @@ fn remove_internal_marker(mut value: Value) -> Value {
         object.remove("__original");
     }
     value
+}
+
+fn flatten_id_value(value: &Value) -> Option<&str> {
+    value.as_str().or_else(|| {
+        value
+            .get("Builtin")
+            .or_else(|| value.get("Custom"))
+            .and_then(Value::as_str)
+    })
 }
 
 fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
@@ -2083,7 +2092,10 @@ mod tests {
         assert_eq!(result.config["captionBackgroundOpacity"], 0.0);
         assert_eq!(result.config["summaryTemplateId"], "general");
         assert_eq!(result.config["polishKeywords"], "");
-        assert_eq!(result.config["polishPresetId"], "custom-9158016c");
+        assert_eq!(
+            result.config["polishPresetId"],
+            json!({ "Custom": "custom-9158016c" })
+        );
         assert_eq!(
             result.config["polishCustomPresets"][0],
             json!({
@@ -2151,9 +2163,9 @@ mod tests {
             "streamingModelPath": "C:/models/live",
             "offlineModelPath": "C:/models/offline",
             "summaryEnabled": true,
-            "summaryTemplateId": "meeting",
+            "summaryTemplateId": { "Builtin": "meeting" },
             "summaryCustomTemplates": [],
-            "polishPresetId": "meeting",
+            "polishPresetId": { "Builtin": "meeting" },
             "polishCustomPresets": [],
             "polishKeywordSets": [],
             "speakerProfiles": [],
@@ -2191,8 +2203,14 @@ mod tests {
             result.config["asr"]["selections"]["voiceTyping"]["modelPath"],
             "C:/models/live"
         );
-        assert_eq!(result.config["summaryTemplateId"], "meeting");
-        assert_eq!(result.config["polishPresetId"], "meeting");
+        assert_eq!(
+            result.config["summaryTemplateId"],
+            json!({ "Builtin": "meeting" })
+        );
+        assert_eq!(
+            result.config["polishPresetId"],
+            json!({ "Builtin": "meeting" })
+        );
         assert_eq!(result.config["logLevel"], "debug");
         assert_eq!(result.config["keepMicrophoneActive"], true);
     }
@@ -2585,7 +2603,7 @@ mod tests {
 
         assert_eq!(resolved["summaryTemplateId"], "custom-summary");
         assert_eq!(resolved["translationLanguage"], "ja");
-        assert_eq!(resolved["polishPresetId"], "meeting");
+        assert_eq!(resolved["polishPresetId"], json!({ "Builtin": "meeting" }));
         assert_eq!(resolved["textReplacementSets"][0]["id"], "tr-a");
         assert_eq!(resolved["textReplacementSets"][0]["enabled"], false);
         assert_eq!(resolved["textReplacementSets"][1]["enabled"], true);

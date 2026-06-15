@@ -6,6 +6,10 @@ pub mod repositories;
 
 pub mod cli;
 
+#[cfg(all(test, target_os = "windows", target_env = "msvc"))]
+#[link(name = "windows-test-manifest")]
+unsafe extern "C" {}
+
 use tauri::{Emitter, Manager};
 
 /// Initializes and runs the Tauri application.

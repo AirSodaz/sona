@@ -902,7 +902,11 @@ mod tests {
             models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
         )
         .unwrap();
-        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+        fs::write(
+            models_dir.join("silero_vad.onnx"),
+            b"not the expected model",
+        )
+        .unwrap();
 
         let snapshot = build_model_catalog_snapshot(&models_dir);
 
@@ -921,10 +925,7 @@ mod tests {
             snapshot.restore_defaults.offline_model_path,
             Some(int8_path)
         );
-        assert_eq!(
-            snapshot.restore_defaults.vad_model_path,
-            Some(silero_path.clone())
-        );
+        assert_eq!(snapshot.restore_defaults.vad_model_path, None);
         assert_eq!(
             snapshot.restore_defaults.punctuation_model_path,
             Some(String::new())
@@ -952,7 +953,7 @@ mod tests {
                 model_id: "silero-vad".to_string(),
                 config_key: ModelDependencyConfigKey::VadModelPath,
                 install_path: silero_path,
-                is_installed: true,
+                is_installed: false,
             }]
         );
 

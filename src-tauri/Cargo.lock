@@ -5162,6 +5162,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "cpal",
+ "embed-resource",
  "enigo",
  "futures-util",
  "glob",
