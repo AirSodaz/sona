@@ -12,6 +12,7 @@ node_modules
 .pnpm/
 dist
 dist-ssr
+output/
 *.local
 .python-version
 __pycache__/

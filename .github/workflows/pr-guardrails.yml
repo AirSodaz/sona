@@ -46,3 +46,62 @@ jobs:
 
       - name: Run build
         run: pnpm run build:ci
+
+  rust-backend:
+    name: Rust Backend
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          cache-on-failure: true
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Node.js setup
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare ffmpeg sidecar
+        run: node scripts/setup-ffmpeg.js
+
+      - name: Compile Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-run
+
+      - name: Run CLI integration tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test cli
+
+      - name: Run pipeline tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::pipeline::tests
+
+      - name: Run preset model tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::preset_models::tests
+
+      - name: Run transcribe option tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib cli::transcribe::tests
+
+      - name: Run API server tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib app::server::tests
