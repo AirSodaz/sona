@@ -1,5 +1,6 @@
 import presetModelsData from '../shared/preset-models.json';
 import {
+    cancelDownload,
     downloadFile,
     extractTarBz2,
     getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
@@ -354,7 +355,6 @@ const downloadService = createModelDownloadService({
     downloadFile,
     extractTarBz2,
     cancelDownload: async (id: string) => {
-        const { cancelDownload } = await import('./tauri/app');
         await cancelDownload(id);
     },
     remove: async (path: string) => {

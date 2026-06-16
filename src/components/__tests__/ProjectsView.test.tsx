@@ -13,6 +13,10 @@ const virtuosoGridScrollToIndexMock = vi.hoisted(() => vi.fn());
 const workspaceQueryBackendMock = vi.hoisted(() => ({
   impl: null as null | ((args: any, items: any[]) => any),
 }));
+const aiRenameModuleState = vi.hoisted(() => ({
+  loadCount: 0,
+  generateAiTitleForHistoryItem: vi.fn().mockResolvedValue('AI Project Title'),
+}));
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -53,6 +57,13 @@ vi.mock('../../services/historyService', () => ({
     openHistoryFolder: vi.fn().mockResolvedValue(undefined),
   },
 }));
+
+vi.mock('../../services/aiRenameService', () => {
+  aiRenameModuleState.loadCount += 1;
+  return {
+    generateAiTitleForHistoryItem: aiRenameModuleState.generateAiTitleForHistoryItem,
+  };
+});
 
 vi.mock('../../services/tauri/history', () => {
   const summarize = (items: any[]) => ({
@@ -140,6 +151,7 @@ vi.mock('../history/HistoryItem', () => ({
     isSelected,
     isKeyboardActive,
     onToggleSelection,
+    onRename,
     searchQuery,
     searchSnippet,
     showProjectBadge = true,
@@ -155,6 +167,11 @@ vi.mock('../history/HistoryItem', () => ({
       {searchQuery && <span>{`Query ${searchQuery}`}</span>}
       {searchSnippet?.text && <span>{`Snippet ${searchSnippet.text}`}</span>}
       {isSelected && <span>{`Active ${item.id}`}</span>}
+      {onRename && !isSelectionMode && (
+        <button onClick={(event) => onRename(event, item.id)}>
+          {`Rename ${item.title}`}
+        </button>
+      )}
       {isSelectionMode && (
         <button onClick={() => onToggleSelection?.(item.id)}>
           {isSelected ? `Selected ${item.id}` : `Select ${item.id}`}
@@ -437,6 +454,26 @@ describe('ProjectsView', () => {
     expect(getButtonByContent('All Items')).toBeDefined();
     expect(getButtonByContent('Inbox')).toBeDefined();
     expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
+  });
+
+  it('loads the AI rename service only when the AI rename action is used', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    expect(aiRenameModuleState.loadCount).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Inbox Item' }));
+    expect(aiRenameModuleState.loadCount).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI Auto-rename' }));
+
+    await waitFor(() => {
+      expect(aiRenameModuleState.generateAiTitleForHistoryItem).toHaveBeenCalledWith('hist-inbox.json');
+    });
+    expect(aiRenameModuleState.loadCount).toBe(1);
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('AI Project Title')).toBeDefined();
+    });
   });
 
   it('does not render hidden workspace detail or result DOM while inactive', async () => {

@@ -13,7 +13,6 @@ import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseStat
 import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
 import type { RenameTarget } from './projects/types';
 import { historyService } from '../services/historyService';
-import { generateAiTitleForHistoryItem } from '../services/aiRenameService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -605,6 +604,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           if (!item) {
             return '';
           }
+          const { generateAiTitleForHistoryItem } = await import('../services/aiRenameService');
           return await generateAiTitleForHistoryItem(item.transcriptPath);
         }}
       />

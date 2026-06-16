@@ -90,6 +90,7 @@ function App(): React.JSX.Element {
   const [activePanelModal, setActivePanelModal] = useState<ActivePanelModal>(null);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const isProjectsMode = mode === 'projects';
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
@@ -218,7 +219,6 @@ function App(): React.JSX.Element {
   }
 
   const panelTitle = getPanelTitle(mode, t);
-  const isProjectsMode = mode === 'projects';
   const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
   const shouldShowTranscriptHost = !isProjectsMode || hasActiveTranscript;
   const appMainClassName = [

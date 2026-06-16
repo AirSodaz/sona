@@ -42,38 +42,76 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          const normalizedId = id.replace(/\\/g, "/");
-
-          if (normalizedId.includes("/node_modules/@tauri-apps/")) {
-            return "tauri-vendor";
-          }
-
-          if (normalizedId.includes("/node_modules/@dnd-kit/")) {
-            return "dnd-vendor";
-          }
-
-          if (normalizedId.includes("/node_modules/lucide-react/")) {
-            return "icons-vendor";
-          }
-
-          if (normalizedId.includes("/node_modules/i18next/")
-            || normalizedId.includes("/node_modules/react-i18next/")
-            || normalizedId.includes("/node_modules/i18next-browser-languagedetector/")) {
-            return "i18n-vendor";
-          }
-
-          if (normalizedId.includes("/src/components/DiagnosticsModal.tsx")
-            || normalizedId.includes("/src/components/RecoveryCenterModal.tsx")) {
-            return "settings-surface";
-          }
-
-          if (normalizedId.includes("/src/components/projects/")
-            || normalizedId.includes("/src/components/ProjectsView.tsx")) {
-            return "projects-surface";
-          }
-
-          return undefined;
+        strictExecutionOrder: true,
+        codeSplitting: {
+          includeDependenciesRecursively: false,
+          groups: [
+            {
+              name: "tauri-vendor",
+              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/@tauri-apps/"),
+            },
+            {
+              name: "dnd-vendor",
+              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/@dnd-kit/"),
+            },
+            {
+              name: "react-vendor",
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, "/");
+                return normalizedId.includes("/node_modules/.pnpm/react@")
+                  || normalizedId.includes("/node_modules/.pnpm/react-dom@")
+                  || normalizedId.includes("/node_modules/.pnpm/scheduler@")
+                  || normalizedId.includes("/node_modules/react/")
+                  || normalizedId.includes("/node_modules/react-dom/")
+                  || normalizedId.includes("/node_modules/scheduler/")
+                  || normalizedId.includes("/node_modules/.vite/deps/react.js")
+                  || normalizedId.includes("/node_modules/.vite/deps/react-dom");
+              },
+            },
+            {
+              name: "virtual-list-vendor",
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, "/");
+                return normalizedId.includes("/node_modules/.pnpm/react-virtuoso@")
+                  || normalizedId.includes("/node_modules/react-virtuoso/")
+                  || normalizedId.includes("/node_modules/.vite/deps/react-virtuoso");
+              },
+            },
+            {
+              name: "icons-vendor",
+              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/lucide-react/"),
+            },
+            {
+              name: "i18n-vendor",
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, "/");
+                return normalizedId.includes("/node_modules/i18next/")
+                  || normalizedId.includes("/node_modules/react-i18next/")
+                  || normalizedId.includes("/node_modules/i18next-browser-languagedetector/")
+                  || normalizedId.includes("/src/i18n.ts");
+              },
+            },
+            {
+              name: "i18n-locales",
+              test: (id) => id.replace(/\\/g, "/").includes("/src/locales/"),
+            },
+            {
+              name: "settings-surface",
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, "/");
+                return normalizedId.includes("/src/components/DiagnosticsModal.tsx")
+                  || normalizedId.includes("/src/components/RecoveryCenterModal.tsx");
+              },
+            },
+            {
+              name: "projects-surface",
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, "/");
+                return normalizedId.includes("/src/components/projects/")
+                  || normalizedId.includes("/src/components/ProjectsView.tsx");
+              },
+            },
+          ],
         },
       },
     },

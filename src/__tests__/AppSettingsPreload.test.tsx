@@ -219,21 +219,28 @@ describe('App settings preload', () => {
   });
 
   it('passes the active mode flag into the kept-mounted projects view', () => {
-    render(<App />);
+    const runtimeState = {
+      mode: 'live' as 'projects' | 'batch' | 'live',
+      setMode: vi.fn(),
+    };
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector(runtimeState));
+
+    const { rerender } = render(<App />);
 
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: false');
     expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: false }));
 
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
-      mode: 'projects',
-      setMode: vi.fn(),
-    }));
+    runtimeState.mode = 'projects';
+    rerender(<App />);
 
-    render(<App />);
-
-    const renderedProjectViews = screen.getAllByTestId('projects-view');
-    expect(renderedProjectViews[renderedProjectViews.length - 1]?.textContent).toBe('ProjectsView: true');
+    expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
     expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: true }));
+
+    runtimeState.mode = 'batch';
+    rerender(<App />);
+
+    expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: false');
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: false }));
   });
 
   it('keeps one transcript workbench instance while switching tabs around projects mode', () => {
