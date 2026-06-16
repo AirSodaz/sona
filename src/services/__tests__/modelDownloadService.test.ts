@@ -246,6 +246,45 @@ describe('modelDownloadService', () => {
     }));
   });
 
+  it('resets consecutive failures counter if progress is made', async () => {
+    const service = createModelDownloadService({
+      downloadFile,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+
+    let progressCallback: (event: any) => void = () => {};
+    listen.mockImplementation(async (_event: string, cb: any) => {
+      progressCallback = cb;
+      return vi.fn();
+    });
+
+    // Attempt 1: Fail immediately (no progress) -> consecutiveFailures = 1
+    // Attempt 2: Make progress, then fail -> consecutiveFailures = 1 (reset)
+    // Attempt 3: Fail immediately -> consecutiveFailures = 2
+    // Attempt 4: Fail immediately -> consecutiveFailures = 3 -> THROW
+    downloadFile
+      .mockRejectedValueOnce(new Error('fail 1'))
+      .mockImplementationOnce(async () => {
+        // Mock progress
+        progressCallback({ payload: { downloaded: 100, total: 1000, id: '' } });
+        throw new Error('fail 2 (progress)');
+      })
+      .mockRejectedValueOnce(new Error('fail 3'))
+      .mockRejectedValueOnce(new Error('fail 4'));
+
+    await expect(service.downloadModel({
+      modelId: 'model-a',
+      model: makeModel(),
+    })).rejects.toThrow('fail 4');
+
+    expect(downloadFile).toHaveBeenCalledTimes(4);
+  });
+
   it('cancels the active backend download when the abort signal fires', async () => {
     const service = createModelDownloadService({
       downloadFile,

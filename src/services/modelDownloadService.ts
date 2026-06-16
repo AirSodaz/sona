@@ -1,7 +1,6 @@
 import i18n from '../i18n';
 import { logger } from '../utils/logger';
 import { extractErrorMessage } from '../utils/errorUtils';
-import { retryWithBackoff } from '../utils/retryWithBackoff';
 import { TauriEvent } from './tauri/events';
 import type { ModelCatalogModel, ModelInfo, ProgressCallback } from './modelService';
 
@@ -166,8 +165,8 @@ class ModelDownloadService {
     const downloadUrl = `${mirrorPrefix}${url}`;
 
     let lastError: unknown = null;
-    let unlisten: (() => void) | undefined;
     let lastDownloaded = 0;
+    let uiLastDownloaded = 0;
     let lastTime = Date.now();
     const downloadId = Math.random().toString(36).substring(7);
 
@@ -181,86 +180,106 @@ class ModelDownloadService {
       });
     }
 
-    if (onProgress) {
-      unlisten = await this.ports.listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
-        const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
+    const unlisten = await this.ports.listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
+      const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
 
-        if (id && id !== downloadId) return;
+      if (id && id !== downloadId) return;
 
-        const now = Date.now();
-        const timeDiff = now - lastTime;
+      if (downloaded < lastDownloaded) {
+        uiLastDownloaded = 0;
+      }
+      lastDownloaded = downloaded;
 
-        if (timeDiff > 500 || total === downloaded) {
-          const bytesDiff = downloaded - lastDownloaded;
-          const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-          const speedStr = speedBytesPerSec > 1024 * 1024
-            ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-            : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+      const now = Date.now();
+      const timeDiff = now - lastTime;
 
-          lastDownloaded = downloaded;
-          lastTime = now;
+      if (onProgress && (timeDiff > 500 || total === downloaded)) {
+        const bytesDiff = Math.max(0, downloaded - uiLastDownloaded);
+        const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
+        const speedStr = speedBytesPerSec > 1024 * 1024
+          ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+          : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
-          if (total > 0) {
-            const percentage = Math.round((downloaded / total) * 100);
-            const downloadedMB = Math.round(downloaded / 1024 / 1024);
-            const totalMB = Math.round(total / 1024 / 1024);
-            onProgress(percentage, i18n.t('settings.model_download_status.downloading', {
-              label,
-              downloadedMB,
-              totalMB,
-              speed: speedStr,
-            }));
-          }
+        uiLastDownloaded = downloaded;
+        lastTime = now;
+
+        if (total > 0) {
+          const percentage = Math.round((downloaded / total) * 100);
+          const downloadedMB = Math.round(downloaded / 1024 / 1024);
+          const totalMB = Math.round(total / 1024 / 1024);
+          onProgress(percentage, i18n.t('settings.model_download_status.downloading', {
+            label,
+            downloadedMB,
+            totalMB,
+            speed: speedStr,
+          }));
         }
-      });
-    }
+      }
+    });
 
     try {
-      try {
-        await retryWithBackoff({
-          attempts: 3,
-          abortError: () => new Error('Download cancelled'),
-          run: async () => {
-            if (onProgress) {
-              onProgress(0, i18n.t(
-                mirrorPrefix
-                  ? 'settings.model_download_status.downloading_from_mirror'
-                  : 'settings.model_download_status.downloading_only',
-                { label },
-              ));
-            }
+      let consecutiveFailures = 0;
+      const maxConsecutiveFailures = 3;
+      let attempt = 0;
 
-            logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
-            await this.ports.downloadFile({
-              url: downloadUrl,
-              outputPath,
-              id: downloadId,
-              ...(expectedSha256 ? { expectedSha256 } : {}),
-            });
-          },
-          onFailedAttempt: (error, { attempt }) => {
-            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}:`, error);
-            lastError = error;
-          },
-          shouldRetry: (error) => {
-            if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
-              throw Object.assign(new Error('Download cancelled'), { cause: error });
-            }
-            return true;
-          },
-          signal,
-        });
-      } catch (error) {
-        if (extractErrorMessage(error) === 'Download cancelled') {
-          throw error;
+      while (consecutiveFailures < maxConsecutiveFailures) {
+        attempt++;
+        const downloadedAtStartOfAttempt = lastDownloaded;
+
+        try {
+          if (onProgress) {
+            onProgress(0, i18n.t(
+              mirrorPrefix
+                ? 'settings.model_download_status.downloading_from_mirror'
+                : 'settings.model_download_status.downloading_only',
+              { label },
+            ));
+          }
+
+          logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
+          await this.ports.downloadFile({
+            url: downloadUrl,
+            outputPath,
+            id: downloadId,
+            ...(expectedSha256 ? { expectedSha256 } : {}),
+          });
+
+          // Success, exit the loop
+          break;
+        } catch (error) {
+          if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
+            throw Object.assign(new Error('Download cancelled'), { cause: error });
+          }
+
+          if (lastDownloaded > downloadedAtStartOfAttempt) {
+            // We made progress! Reset consecutive failures to 1 (this was a failed attempt but fruitful)
+            consecutiveFailures = 1;
+            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}, but progress was made. Resetting consecutive failures.`, error);
+          } else {
+            consecutiveFailures++;
+            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}. Consecutive failures: ${consecutiveFailures}`, error);
+          }
+
+          lastError = error;
+
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            // Re-throw to be caught by the outer catch
+            throw error;
+          }
+
+          // Small delay before retrying might be beneficial, but keeping it simple for now as per previous logic
         }
-        const cause = lastError ?? error;
-        const lastErrorMessage = extractErrorMessage(cause);
-        throw Object.assign(
-          new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`),
-          { cause },
-        );
       }
+    } catch (error) {
+      if (extractErrorMessage(error) === 'Download cancelled') {
+        throw error;
+      }
+      const cause = lastError ?? error;
+      const lastErrorMessage = extractErrorMessage(cause);
+      throw Object.assign(
+        new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`),
+        { cause },
+      );
     } finally {
       if (unlisten) {
         unlisten();
