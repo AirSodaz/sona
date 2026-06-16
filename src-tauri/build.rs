@@ -1,7 +1,7 @@
 use std::env;
 use std::path::Path;
 
-const SHERPA_ONNX_STATIC_LIBS: &[&str] = &[
+const SHERPA_ONNX_LIBS: &[&str] = &[
     "sherpa-onnx-c-api",
     "sherpa-onnx-core",
     "kaldi-decoder-core",
@@ -32,7 +32,7 @@ fn main() {
         }
 
         if target_os == "linux" || target_os == "macos" || target_os == "windows" {
-            configure_static_sherpa_linking(&lib_dir, &target_os);
+            configure_sherpa_linking(&lib_dir, &target_os);
         }
     }
 
@@ -63,27 +63,51 @@ fn sherpa_lib_dir_has_directml(lib_dir: &Path) -> bool {
     .any(|file| lib_dir.join(file).exists())
 }
 
-fn configure_static_sherpa_linking(lib_dir: &str, target_os: &str) {
+fn configure_sherpa_linking(lib_dir: &str, target_os: &str) {
     let lib_path = Path::new(lib_dir);
     if !lib_path.exists() {
         panic!("SHERPA_ONNX_LIB_DIR does not exist: {}", lib_dir);
     }
 
-    let extension = if target_os == "windows" { "lib" } else { "a" };
-    for lib in SHERPA_ONNX_STATIC_LIBS {
-        let lib_file = lib_path.join(format!("lib{lib}.{extension}"));
-        let lib_file = if target_os == "windows" {
-            lib_path.join(format!("{lib}.{extension}"))
+    for lib in SHERPA_ONNX_LIBS {
+        let static_ext = if target_os == "windows" { "lib" } else { "a" };
+        let static_file = if target_os == "windows" {
+            lib_path.join(format!("{lib}.{static_ext}"))
         } else {
-            lib_file
+            lib_path.join(format!("lib{lib}.{static_ext}"))
         };
-        if !lib_file.exists() {
-            panic!(
-                "Missing required sherpa-onnx static library: {}",
-                lib_file.display()
-            );
+
+        if static_file.exists() {
+            // On Windows, .lib could be a static library or an import library.
+            // For simplicity and compatibility with the current setup, we link as static if it exists.
+            // If it's actually an import library, the linker will handle it correctly on Windows
+            // as long as the DLL is available at runtime.
+            // On Linux/macOS, .a is definitely a static library.
+            println!("cargo:rustc-link-lib=static={lib}");
+        } else {
+            // Try shared extension
+            let shared_ext = if target_os == "windows" {
+                "lib"
+            } else if target_os == "macos" {
+                "dylib"
+            } else {
+                "so"
+            };
+            let shared_file = if target_os == "windows" {
+                lib_path.join(format!("{lib}.{shared_ext}"))
+            } else {
+                lib_path.join(format!("lib{lib}.{shared_ext}"))
+            };
+
+            if shared_file.exists() {
+                println!("cargo:rustc-link-lib=dylib={lib}");
+            } else {
+                panic!(
+                    "Missing required sherpa-onnx library (static or shared): {}",
+                    lib
+                );
+            }
         }
-        println!("cargo:rustc-link-lib=static={lib}");
     }
 
     match target_os {

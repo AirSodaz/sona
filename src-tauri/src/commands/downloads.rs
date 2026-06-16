@@ -52,7 +52,9 @@ pub async fn download_file<R: tauri::Runtime>(
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
+    use reqwest::header::RANGE;
     use tauri::Emitter;
+    use tokio::fs::OpenOptions;
 
     let final_path = PathBuf::from(&output_path);
     let temp_path = temporary_download_path(&final_path, &id);
@@ -68,7 +70,26 @@ pub async fn download_file<R: tauri::Runtime>(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    // Check existing file size for resume
+    let current_size = tokio::fs::metadata(&temp_path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    let mut request = client.get(&url);
+    if current_size > 0 {
+        request = request.header(RANGE, format!("bytes={}-", current_size));
+    }
+
+    let res = request.send().await.map_err(|e| e.to_string())?;
+
+    if res.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+        // If range is invalid (e.g. file on disk is larger than remote), reset and start over
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        let mut downloads = state.downloads.lock().await;
+        downloads.remove(&id);
+        return Err("Range Not Satisfiable: resetting download".to_string());
+    }
 
     if !res.status().is_success() {
         let mut downloads = state.downloads.lock().await;
@@ -76,16 +97,32 @@ pub async fn download_file<R: tauri::Runtime>(
         return Err(format!("Download failed with status: {}", res.status()));
     }
 
-    let total_size = res.content_length().unwrap_or(0);
-    let file = tokio::fs::File::create(&temp_path)
-        .await
-        .map_err(|e| e.to_string())?;
+    let is_partial = res.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+    let content_length = res.content_length().unwrap_or(0);
+    let total_size = if is_partial {
+        current_size + content_length
+    } else {
+        content_length
+    };
+
+    let file = if is_partial {
+        OpenOptions::new()
+            .append(true)
+            .open(&temp_path)
+            .await
+            .map_err(|e| e.to_string())?
+    } else {
+        tokio::fs::File::create(&temp_path)
+            .await
+            .map_err(|e| e.to_string())?
+    };
+
     let mut writer = tokio::io::BufWriter::new(file);
     let mut stream = res
         .bytes_stream()
         .map(|item| item.map_err(|e| e.to_string()));
 
-    let mut downloaded: u64 = 0;
+    let mut downloaded: u64 = if is_partial { current_size } else { 0 };
     let mut last_emit = std::time::Instant::now();
 
     let result = tokio::select! {
@@ -123,7 +160,8 @@ pub async fn download_file<R: tauri::Runtime>(
         }
         Err(error) => {
             drop(writer);
-            cleanup_failed_download(&temp_path).await;
+            // We NO LONGER cleanup here. We preserve the partial file for resume.
+            // Cleanup only happens inside complete_download_file if verification fails.
             Err(error)
         }
     }
@@ -137,7 +175,7 @@ fn temporary_download_path(path: &Path, id: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
-async fn cleanup_failed_download(temp_path: &Path) {
+async fn remove_download_file(temp_path: &Path) {
     let _ = tokio::fs::remove_file(temp_path).await;
 }
 
@@ -155,7 +193,7 @@ async fn complete_download_file(
     match result {
         Ok(()) => Ok(()),
         Err(error) => {
-            cleanup_failed_download(temp_path).await;
+            remove_download_file(temp_path).await;
             Err(error)
         }
     }
@@ -226,14 +264,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cleanup_failed_download_removes_temp_without_touching_final() {
+    async fn remove_download_file_removes_temp_without_touching_final() {
         let dir = tempfile::tempdir().unwrap();
         let final_path = dir.path().join("silero_vad.onnx");
         let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
         tokio::fs::write(&final_path, b"old-good").await.unwrap();
         tokio::fs::write(&temp_path, b"partial").await.unwrap();
 
-        cleanup_failed_download(&temp_path).await;
+        remove_download_file(&temp_path).await;
 
         assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"old-good");
         assert!(!temp_path.exists());

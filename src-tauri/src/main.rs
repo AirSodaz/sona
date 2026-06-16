@@ -37,7 +37,7 @@ fn fix_console(show_new_console: bool) {
         if has_console {
             // Redirect stdout and stderr
             if let Ok(conout) = OpenOptions::new().write(true).open("CONOUT$") {
-                let handle = conout.as_raw_handle() as *mut std::ffi::c_void;
+                let handle = conout.as_raw_handle();
                 SetStdHandle(STD_OUTPUT_HANDLE, handle);
                 SetStdHandle(STD_ERROR_HANDLE, handle);
                 std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
@@ -45,7 +45,7 @@ fn fix_console(show_new_console: bool) {
 
             // Redirect stdin
             if let Ok(conin) = OpenOptions::new().read(true).open("CONIN$") {
-                let handle = conin.as_raw_handle() as *mut std::ffi::c_void;
+                let handle = conin.as_raw_handle();
                 SetStdHandle(STD_INPUT_HANDLE, handle);
                 std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
             }
