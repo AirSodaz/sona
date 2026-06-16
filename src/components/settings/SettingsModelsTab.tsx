@@ -78,6 +78,15 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
     getSectionStatus,
     t,
 }: LocalModelManagementSectionProps): React.JSX.Element {
+    const modelConfig = useModelConfig();
+    const updateConfig = useSetConfig();
+
+    const mirrorOptions = [
+        { value: 'direct', label: t('settings.model_download_mirror_direct') },
+        { value: 'ghproxy', label: t('settings.model_download_mirror_ghproxy') },
+        { value: 'ghnet', label: t('settings.model_download_mirror_ghnet') },
+    ];
+
     const isCatalogLoading = catalogLoadState === 'loading';
     const isCatalogReady = catalogLoadState === 'ready';
 
@@ -94,6 +103,21 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
             title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
             icon={<RestoreIcon />}
         >
+            <SettingsItem
+                title={t('settings.model_download_mirror')}
+                hint={t('settings.model_download_mirror_hint')}
+            >
+                <div style={{ width: '220px' }}>
+                    <Dropdown
+                        id="settings-download-mirror"
+                        value={modelConfig.modelDownloadMirror || 'direct'}
+                        onChange={(value) => updateConfig({ modelDownloadMirror: value })}
+                        options={mirrorOptions}
+                        style={{ flex: 1 }}
+                    />
+                </div>
+            </SettingsItem>
+
             {isCatalogLoading && (
                 <div className="settings-hint" role="status">
                     {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}

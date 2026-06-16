@@ -69,8 +69,21 @@ fn configure_sherpa_linking(lib_dir: &str, target_os: &str) {
         panic!("SHERPA_ONNX_LIB_DIR does not exist: {}", lib_dir);
     }
 
+    let static_ext = if target_os == "windows" { "lib" } else { "a" };
+
+    // Check if sherpa-onnx-core static library exists.
+    // If not, we are likely dealing with shared libraries, and sherpa-onnx-sys will handle the linking.
+    let core_static_file = if target_os == "windows" {
+        lib_path.join(format!("sherpa-onnx-core.{static_ext}"))
+    } else {
+        lib_path.join(format!("libsherpa-onnx-core.{static_ext}"))
+    };
+
+    if !core_static_file.exists() {
+        return; // Skip explicit static linking in Sona crate for shared libs
+    }
+
     for lib in SHERPA_ONNX_LIBS {
-        let static_ext = if target_os == "windows" { "lib" } else { "a" };
         let static_file = if target_os == "windows" {
             lib_path.join(format!("{lib}.{static_ext}"))
         } else {
@@ -78,35 +91,7 @@ fn configure_sherpa_linking(lib_dir: &str, target_os: &str) {
         };
 
         if static_file.exists() {
-            // On Windows, .lib could be a static library or an import library.
-            // For simplicity and compatibility with the current setup, we link as static if it exists.
-            // If it's actually an import library, the linker will handle it correctly on Windows
-            // as long as the DLL is available at runtime.
-            // On Linux/macOS, .a is definitely a static library.
             println!("cargo:rustc-link-lib=static={lib}");
-        } else {
-            // Try shared extension
-            let shared_ext = if target_os == "windows" {
-                "lib"
-            } else if target_os == "macos" {
-                "dylib"
-            } else {
-                "so"
-            };
-            let shared_file = if target_os == "windows" {
-                lib_path.join(format!("{lib}.{shared_ext}"))
-            } else {
-                lib_path.join(format!("lib{lib}.{shared_ext}"))
-            };
-
-            if shared_file.exists() {
-                println!("cargo:rustc-link-lib=dylib={lib}");
-            } else {
-                panic!(
-                    "Missing required sherpa-onnx library (static or shared): {}",
-                    lib
-                );
-            }
         }
     }
 

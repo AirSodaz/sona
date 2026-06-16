@@ -118,6 +118,8 @@ export interface ModelConfig {
   speakerSegmentationModelPath?: string;
   /** Path to the speaker embedding model. */
   speakerEmbeddingModelPath?: string;
+  /** Download mirror to use for preset models. */
+  modelDownloadMirror?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -221,7 +221,7 @@ export function useModelManager(isOpen: boolean) {
                 const model = getCatalogModel(modelId);
                 if (model && !downloads[modelId]) {
                     try {
-                        const path = await modelService.downloadModel(modelId, undefined);
+                        const path = await modelService.downloadModel(modelId, undefined, undefined, config.modelDownloadMirror);
                         await refreshModelCatalogSnapshot();
                         setModelPath(model, path);
                     } catch (e) {
@@ -235,7 +235,7 @@ export function useModelManager(isOpen: boolean) {
         return () => {
             document.removeEventListener('download-background-model', handleBackgroundDownload);
         };
-    }, [downloads, getCatalogModel, refreshModelCatalogSnapshot, setModelPath]);
+    }, [downloads, getCatalogModel, refreshModelCatalogSnapshot, setModelPath, config.modelDownloadMirror]);
 
     async function executeDownload(
         modelId: string,
@@ -330,7 +330,7 @@ export function useModelManager(isOpen: boolean) {
 
         await executeDownload(
             model.id,
-            (id, cb, sig) => modelService.downloadModel(id, cb, sig),
+            (id, cb, sig) => modelService.downloadModel(id, cb, sig, config.modelDownloadMirror),
             (path) => {
                 setModelPath(model, path);
             }

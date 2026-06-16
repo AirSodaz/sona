@@ -262,10 +262,11 @@ export class ModelService {
      * @param modelId The ID of the model to download.
      * @param onProgress Optional callback for progress updates.
      * @param signal Optional AbortSignal to cancel the download.
+     * @param mirror Optional mirror key to use for the download.
      * @return A promise resolving to the local path of the downloaded model.
      * @throws {Error} If the model is not found or download fails.
      */
-    async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
+    async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal, mirror?: string): Promise<string> {
         const catalogModel = await this.ports.registryService.resolveCatalogModel(modelId);
         const model = catalogModel ?? PRESET_MODELS_MAP.get(modelId);
         if (!model) throw new Error('Model not found');
@@ -277,6 +278,7 @@ export class ModelService {
             modelsDir,
             onProgress,
             signal,
+            mirror,
         });
     }
 

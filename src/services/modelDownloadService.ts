@@ -34,6 +34,7 @@ interface DownloadModelInput {
   modelsDir?: string;
   onProgress?: ProgressCallback;
   signal?: AbortSignal;
+  mirror?: string;
 }
 
 export function parseDownloadProgressPayload(payload: unknown): { downloaded: number; total: number; id: string } {
@@ -83,6 +84,7 @@ class ModelDownloadService {
     modelsDir,
     onProgress,
     signal,
+    mirror,
   }: DownloadModelInput): Promise<string> {
     const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
     const targetFilename = model.filename || `${modelId}.tar.bz2`;
@@ -91,7 +93,7 @@ class ModelDownloadService {
       : await this.ports.join(targetModelsDir, targetFilename);
 
     const expectedSha256 = model.sha256;
-    await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256);
+    await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, mirror);
 
     if (model.isArchive === false) {
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
@@ -152,12 +154,16 @@ class ModelDownloadService {
     signal?: AbortSignal,
     label: string = i18n.t('settings.model_download_status.download_label'),
     expectedSha256?: string,
+    mirrorKey: string = 'direct',
   ): Promise<void> {
-    const mirrors = [
-      '',
-      'https://mirror.ghproxy.com/',
-      'https://ghproxy.net/',
-    ];
+    const mirrorMap: Record<string, string> = {
+      direct: '',
+      ghproxy: 'https://mirror.ghproxy.com/',
+      ghnet: 'https://ghproxy.net/',
+    };
+
+    const mirrorPrefix = mirrorMap[mirrorKey] ?? '';
+    const downloadUrl = `${mirrorPrefix}${url}`;
 
     let lastError: unknown = null;
     let unlisten: (() => void) | undefined;
@@ -212,15 +218,12 @@ class ModelDownloadService {
     try {
       try {
         await retryWithBackoff({
-          attempts: mirrors.length,
+          attempts: 3,
           abortError: () => new Error('Download cancelled'),
-          run: async ({ attempt }) => {
-            const mirror = mirrors[attempt - 1];
-            const downloadUrl = mirror ? `${mirror}${url}` : url;
-
+          run: async () => {
             if (onProgress) {
               onProgress(0, i18n.t(
-                mirror
+                mirrorPrefix
                   ? 'settings.model_download_status.downloading_from_mirror'
                   : 'settings.model_download_status.downloading_only',
                 { label },
@@ -236,8 +239,7 @@ class ModelDownloadService {
             });
           },
           onFailedAttempt: (error, { attempt }) => {
-            const mirror = mirrors[attempt - 1];
-            logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
+            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}:`, error);
             lastError = error;
           },
           shouldRetry: (error) => {

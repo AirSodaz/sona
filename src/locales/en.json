@@ -1209,6 +1209,11 @@
         "offline_model_hint": "Used for processing audio/video files.",
         "offline_model_label": "Batch Import Model",
         "offline_model_management": "Local Model Management",
+        "model_download_mirror": "Download Mirror",
+        "model_download_mirror_hint": "Select a mirror for model downloads. If downloads are slow or failing, try switching to a proxy mirror.",
+        "model_download_mirror_direct": "Direct (GitHub)",
+        "model_download_mirror_ghproxy": "Mirror 1 (ghproxy.com)",
+        "model_download_mirror_ghnet": "Mirror 2 (ghproxy.net)",
         "select_offline_model": "Select local model...",
         "keep_microphone_active": "Keep Microphone Active",
         "keep_microphone_active_hint": "Turn on to keep the microphone warm for lower voice typing latency. Leave off to release it whenever you are not recording, dictating, or previewing input."

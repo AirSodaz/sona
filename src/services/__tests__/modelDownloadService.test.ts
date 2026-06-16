@@ -187,7 +187,7 @@ describe('modelDownloadService', () => {
     }));
   });
 
-  it('falls back through mirrors and reports the final failed download error', async () => {
+  it('retries the same mirror up to 3 times on failure', async () => {
     const service = createModelDownloadService({
       downloadFile,
       extractTarBz2,
@@ -198,27 +198,29 @@ describe('modelDownloadService', () => {
       getModelsDir,
     });
     downloadFile
-      .mockRejectedValueOnce(new Error('direct failed'))
-      .mockRejectedValueOnce(new Error('mirror one failed'))
-      .mockRejectedValueOnce(new Error('mirror two failed'));
+      .mockRejectedValueOnce(new Error('attempt 1 failed'))
+      .mockRejectedValueOnce(new Error('attempt 2 failed'))
+      .mockRejectedValueOnce(new Error('attempt 3 failed'));
 
     await expect(service.downloadModel({
       modelId: 'model-a',
       model: makeModel(),
-    })).rejects.toThrow('mirror two failed');
+      mirror: 'ghproxy',
+    })).rejects.toThrow('attempt 3 failed');
 
+    expect(downloadFile).toHaveBeenCalledTimes(3);
     expect(downloadFile).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      url: 'https://example.com/model-a.tar.bz2',
+      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
     }));
     expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
       url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
     }));
     expect(downloadFile).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      url: 'https://ghproxy.net/https://example.com/model-a.tar.bz2',
+      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
     }));
   });
 
-  it('stops mirror fallback once a retry succeeds', async () => {
+  it('stops retrying once an attempt succeeds', async () => {
     const service = createModelDownloadService({
       downloadFile,
       extractTarBz2,
@@ -229,17 +231,18 @@ describe('modelDownloadService', () => {
       getModelsDir,
     });
     downloadFile
-      .mockRejectedValueOnce(new Error('direct failed'))
+      .mockRejectedValueOnce(new Error('attempt 1 failed'))
       .mockResolvedValueOnce(undefined);
 
     await expect(service.downloadModel({
       modelId: 'model-a',
       model: makeModel(),
+      mirror: 'ghnet',
     })).resolves.toBe('/models/model-a');
 
     expect(downloadFile).toHaveBeenCalledTimes(2);
     expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
+      url: 'https://ghproxy.net/https://example.com/model-a.tar.bz2',
     }));
   });
 

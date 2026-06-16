@@ -87,6 +87,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   vadModelPath: '',
   speakerSegmentationModelPath: '',
   speakerEmbeddingModelPath: '',
+  modelDownloadMirror: 'direct',
 
   // Caption
   lockWindow: false,
