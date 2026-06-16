@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -48,6 +49,7 @@ pub async fn download_file<R: tauri::Runtime>(
     url: String,
     output_path: String,
     id: String,
+    expected_sha256: Option<String>,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
     use tauri::Emitter;
@@ -114,15 +116,17 @@ pub async fn download_file<R: tauri::Runtime>(
         downloads.remove(&id);
     }
 
-    if result.is_ok() {
-        drop(writer);
-        publish_download_file(&temp_path, &final_path).await?;
-    } else {
-        drop(writer);
-        cleanup_failed_download(&temp_path).await;
+    match result {
+        Ok(()) => {
+            drop(writer);
+            complete_download_file(&temp_path, &final_path, expected_sha256.as_deref()).await
+        }
+        Err(error) => {
+            drop(writer);
+            cleanup_failed_download(&temp_path).await;
+            Err(error)
+        }
     }
-
-    result
 }
 
 fn temporary_download_path(path: &Path, id: &str) -> PathBuf {
@@ -135,6 +139,63 @@ fn temporary_download_path(path: &Path, id: &str) -> PathBuf {
 
 async fn cleanup_failed_download(temp_path: &Path) {
     let _ = tokio::fs::remove_file(temp_path).await;
+}
+
+async fn complete_download_file(
+    temp_path: &Path,
+    final_path: &Path,
+    expected_sha256: Option<&str>,
+) -> Result<(), String> {
+    let result = async {
+        verify_download_file(temp_path, expected_sha256).await?;
+        publish_download_file(temp_path, final_path).await
+    }
+    .await;
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            cleanup_failed_download(temp_path).await;
+            Err(error)
+        }
+    }
+}
+
+async fn verify_download_file(
+    temp_path: &Path,
+    expected_sha256: Option<&str>,
+) -> Result<(), String> {
+    if let Some(expected_hash) = expected_sha256 {
+        let actual_hash = sha256_file(temp_path).await?;
+        if !actual_hash.eq_ignore_ascii_case(expected_hash) {
+            return Err(format!(
+                "Downloaded file hash mismatch for {}",
+                temp_path.display()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+async fn sha256_file(path: &Path) -> Result<String, String> {
+    use tokio::io::AsyncReadExt;
+
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+
+    loop {
+        let read = file.read(&mut buffer).await.map_err(|e| e.to_string())?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
 }
 
 async fn publish_download_file(temp_path: &Path, final_path: &Path) -> Result<(), String> {
@@ -191,6 +252,63 @@ mod tests {
             .unwrap();
 
         assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"complete");
+        assert!(!temp_path.exists());
+    }
+
+    #[tokio::test]
+    async fn complete_download_file_keeps_final_and_removes_temp_when_hash_mismatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("silero_vad.onnx");
+        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        tokio::fs::write(&final_path, b"old-good").await.unwrap();
+        tokio::fs::write(&temp_path, b"wrong").await.unwrap();
+
+        let result = complete_download_file(
+            &temp_path,
+            &final_path,
+            Some("eebbf6457e46a7f63acdf9b97390f790ba443d60cfa44b607da7e5c40aa1cc1d"),
+        )
+        .await;
+
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Downloaded file hash mismatch")
+        );
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"old-good");
+        assert!(!temp_path.exists());
+    }
+
+    #[tokio::test]
+    async fn complete_download_file_accepts_matching_hash_before_replacing_final() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("silero_vad.onnx");
+        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        tokio::fs::write(&final_path, b"old").await.unwrap();
+        tokio::fs::write(&temp_path, b"complete").await.unwrap();
+
+        complete_download_file(
+            &temp_path,
+            &final_path,
+            Some("eebbf6457e46a7f63acdf9b97390f790ba443d60cfa44b607da7e5c40aa1cc1d"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"complete");
+        assert!(!temp_path.exists());
+    }
+
+    #[tokio::test]
+    async fn complete_download_file_removes_temp_when_publish_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let final_path = dir.path().join("missing-parent").join("silero_vad.onnx");
+        tokio::fs::write(&temp_path, b"complete").await.unwrap();
+
+        let result = complete_download_file(&temp_path, &final_path, None).await;
+
+        assert!(result.is_err());
         assert!(!temp_path.exists());
     }
 }

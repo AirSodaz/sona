@@ -69,6 +69,7 @@ type DownloadFileArgs = {
   url: string;
   outputPath: string;
   id: string;
+  expectedSha256?: string;
 };
 
 type UpdateTrayMenuArgs = {

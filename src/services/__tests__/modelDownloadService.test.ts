@@ -105,6 +105,30 @@ describe('modelDownloadService', () => {
     expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
   });
 
+  it('passes expected sha256 for archive model downloads before extraction', async () => {
+    const service = createModelDownloadService({
+      downloadFile,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+
+    await service.downloadModel({
+      modelId: 'model-a',
+      model: makeModel({
+        sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+      }),
+    });
+
+    expect(downloadFile).toHaveBeenCalledWith(expect.objectContaining({
+      outputPath: '/models/model-a.tar.bz2',
+      expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+    }));
+  });
+
   it('returns the downloaded file path for non-archive models', async () => {
     const service = createModelDownloadService({
       downloadFile,
@@ -131,6 +155,36 @@ describe('modelDownloadService', () => {
 
     expect(extractTarBz2).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('passes expected sha256 to backend downloads for single-file models', async () => {
+    const service = createModelDownloadService({
+      downloadFile,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+    const model = makeModel({
+      id: 'speaker.onnx',
+      isArchive: false,
+      filename: 'speaker.onnx',
+      type: 'speaker-embedding',
+      url: 'https://example.com/speaker.onnx',
+      sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+    });
+
+    await service.downloadModel({
+      modelId: 'speaker.onnx',
+      model,
+    });
+
+    expect(downloadFile).toHaveBeenCalledWith(expect.objectContaining({
+      outputPath: '/models/speaker.onnx',
+      expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+    }));
   });
 
   it('falls back through mirrors and reports the final failed download error', async () => {

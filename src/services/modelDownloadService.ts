@@ -14,7 +14,7 @@ interface DownloadProgressPayloadObject {
   id?: string;
 }
 
-type DownloadFile = (input: { url: string; outputPath: string; id: string }) => Promise<void>;
+type DownloadFile = (input: { url: string; outputPath: string; id: string; expectedSha256?: string }) => Promise<void>;
 type ExtractTarBz2 = (input: { archivePath: string; targetDir: string }) => Promise<void>;
 type Listen = <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
 
@@ -90,7 +90,8 @@ class ModelDownloadService {
       ? model.downloadPath
       : await this.ports.join(targetModelsDir, targetFilename);
 
-    await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
+    const expectedSha256 = model.sha256;
+    await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256);
 
     if (model.isArchive === false) {
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
@@ -150,6 +151,7 @@ class ModelDownloadService {
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
     label: string = i18n.t('settings.model_download_status.download_label'),
+    expectedSha256?: string,
   ): Promise<void> {
     const mirrors = [
       '',
@@ -230,6 +232,7 @@ class ModelDownloadService {
               url: downloadUrl,
               outputPath,
               id: downloadId,
+              ...(expectedSha256 ? { expectedSha256 } : {}),
             });
           },
           onFailedAttempt: (error, { attempt }) => {

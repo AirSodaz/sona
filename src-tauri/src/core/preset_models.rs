@@ -1,7 +1,5 @@
 use crate::integrations::asr::ModelFileConfig;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tauri::Manager;
@@ -554,25 +552,6 @@ fn normalize_catalog_path(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }
 
-fn sha256_file_matches(path: &Path, expected_hash: &str) -> bool {
-    let Ok(mut file) = std::fs::File::open(path) else {
-        return false;
-    };
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
-
-    loop {
-        let read = match file.read(&mut buffer) {
-            Ok(0) => break,
-            Ok(read) => read,
-            Err(_) => return false,
-        };
-        hasher.update(&buffer[..read]);
-    }
-
-    hex::encode(hasher.finalize()).eq_ignore_ascii_case(expected_hash)
-}
-
 impl PresetModel {
     /// Resolves the installed model path under the given models directory.
     pub fn resolve_install_path(&self, models_dir: &Path) -> PathBuf {
@@ -609,10 +588,7 @@ impl PresetModel {
             return false;
         }
 
-        match self.sha256.as_deref() {
-            Some(expected_hash) => sha256_file_matches(install_path, expected_hash),
-            None => metadata.len() > 0,
-        }
+        metadata.len() > 0
     }
 
     /// Returns true when the preset ships as an archive.
@@ -711,7 +687,7 @@ mod tests {
             .iter()
             .find(|model| model.id == "silero-vad")
             .unwrap();
-        assert!(!silero.is_installed);
+        assert!(silero.is_installed);
         assert!(silero.install_path.ends_with("silero_vad.onnx"));
 
         let asr_section = snapshot
@@ -738,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    fn marks_sha256_mismatch_single_file_model_as_not_installed() {
+    fn treats_existing_non_empty_single_file_model_as_installed_without_runtime_hash_check() {
         let dir = tempfile::tempdir().unwrap();
         let models_dir = dir.path().join("models");
         fs::create_dir_all(&models_dir).unwrap();
@@ -755,7 +731,7 @@ mod tests {
             .find(|model| model.id == "silero-vad")
             .unwrap();
 
-        assert!(!silero.is_installed);
+        assert!(silero.is_installed);
     }
 
     #[test]
@@ -928,7 +904,10 @@ mod tests {
             snapshot.restore_defaults.offline_model_path,
             Some(int8_path)
         );
-        assert_eq!(snapshot.restore_defaults.vad_model_path, None);
+        assert_eq!(
+            snapshot.restore_defaults.vad_model_path,
+            Some(silero_path.clone())
+        );
         assert_eq!(
             snapshot.restore_defaults.punctuation_model_path,
             Some(String::new())
@@ -956,7 +935,7 @@ mod tests {
                 model_id: "silero-vad".to_string(),
                 config_key: ModelDependencyConfigKey::VadModelPath,
                 install_path: silero_path,
-                is_installed: false,
+                is_installed: true,
             }]
         );
 
