@@ -13,8 +13,8 @@ jobs:
     permissions:
       contents: write
     env:
-      SHERPA_ONNX_VERSION: 1.13.2
-      SHERPA_ONNX_TAG: v1.13.2
+      SHERPA_ONNX_VERSION: 1.13.3
+      SHERPA_ONNX_TAG: v1.13.3
     strategy:
       fail-fast: false
       matrix:
@@ -61,12 +61,16 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download and extract sherpa-onnx static libraries (Linux)
+      - name: Download and extract sherpa-onnx CUDA libraries (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
-          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
-          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib/lib" >> $GITHUB_ENV
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-gpu.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-gpu.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-gpu/lib" >> $GITHUB_ENV
+
+          # Prepare resources for bundling
+          mkdir -p src-tauri/resources
+          cp sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-gpu/lib/*.so* src-tauri/resources/ 2>/dev/null || true
 
       - name: Download and extract sherpa-onnx static libraries (macOS)
         if: startsWith(matrix.platform, 'macos')
@@ -75,14 +79,22 @@ jobs:
           tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
           echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib/lib" >> $GITHUB_ENV
 
-      - name: Download and extract sherpa-onnx static libraries (Windows x64)
+      - name: Download and extract sherpa-onnx CUDA libraries (Windows x64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == ''
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-cuda.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib\lib"
+          $extractDir = "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-cuda"
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "$extractDir\lib"
+          $binDir = Join-Path $env:GITHUB_WORKSPACE "$extractDir\bin"
           "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+
+          # Ensure resources directory exists and copy DLLs for bundling
+          if (!(Test-Path "src-tauri/resources")) { New-Item -ItemType Directory -Path "src-tauri/resources" }
+          if (Test-Path $binDir) {
+            Copy-Item -Path "$binDir\*.dll" -Destination "src-tauri/resources" -Force
+          }
 
       - name: Download and extract sherpa-onnx static libraries (Windows ARM64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == '--target aarch64-pc-windows-msvc'

@@ -38,6 +38,9 @@
     "externalBin": [
       "binaries/ffmpeg"
     ],
+    "resources": [
+      "resources/*"
+    ],
     "targets": [
       "app",
       "nsis",

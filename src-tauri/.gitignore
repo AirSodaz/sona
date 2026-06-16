@@ -9,4 +9,5 @@
 
 /models
 /binaries
+/resources
 *.dll
