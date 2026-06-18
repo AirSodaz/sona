@@ -115,6 +115,9 @@ pub struct ModelDownloadArgs {
     /// Suppresses progress logs.
     #[arg(long, help = "Hide per-download progress output")]
     quiet: bool,
+    /// Skips the interactive confirmation prompt when overwriting invalid files.
+    #[arg(long, help = "Overwrite invalid files without prompting for confirmation")]
+    pub yes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -279,9 +282,10 @@ fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
 
 async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
     let quiet = args.quiet;
+    let yes = args.yes;
     let models_dir = args.models_dir;
     let resolved = resolve_model_download(&args.model_id, models_dir.clone())?;
-    download_one_model(&resolved.model.id, &resolved, quiet).await?;
+    download_one_model(&resolved.model.id, &resolved, yes, quiet).await?;
 
     let RequiredCompanionModels {
         vad_model_id,
@@ -290,11 +294,11 @@ async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
 
     if let Some(vad_model_id) = vad_model_id {
         let vad_resolved = resolve_model_download(&vad_model_id, models_dir.clone())?;
-        download_one_model(&vad_model_id, &vad_resolved, quiet).await?;
+        download_one_model(&vad_model_id, &vad_resolved, yes, quiet).await?;
     }
     if let Some(punctuation_model_id) = punctuation_model_id {
         let punctuation_resolved = resolve_model_download(&punctuation_model_id, models_dir)?;
-        download_one_model(&punctuation_model_id, &punctuation_resolved, quiet).await?;
+        download_one_model(&punctuation_model_id, &punctuation_resolved, yes, quiet).await?;
     }
 
     Ok(())
@@ -345,6 +349,29 @@ fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, Str
     ))
 }
 
+fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> Result<bool, String> {
+    if !io::stdin().is_terminal() {
+        return Err("Cannot prompt for confirmation in non-interactive shell. Use --yes to override.".to_string());
+    }
+
+    eprint!(
+        "Model {model_id} already exists at {} but is invalid (checksum mismatch). Overwrite? [y/N] ",
+        install_path.display()
+    );
+    io::stderr()
+        .flush()
+        .map_err(|error| format!("Failed to flush confirmation prompt: {error}"))?;
+
+    let mut answer = String::new();
+    io::stdin()
+        .read_line(&mut answer)
+        .map_err(|error| format!("Failed to read confirmation: {error}"))?;
+    Ok(matches!(
+        answer.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
+}
+
 fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
     let metadata = match std::fs::symlink_metadata(install_path) {
         Ok(metadata) => metadata,
@@ -377,11 +404,12 @@ fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
 async fn download_one_model(
     display_model_id: &str,
     resolved: &ResolvedModelDownload,
+    yes: bool,
     quiet: bool,
 ) -> Result<(), String> {
     let stderr_is_terminal = io::stderr().is_terminal();
     let mut last_percentage: Option<i32> = None;
-    let install_path = download_model(resolved, |downloaded, total| {
+    let install_path = download_model(resolved, yes, |downloaded, total| {
         if quiet || total == 0 {
             return;
         }
@@ -451,24 +479,32 @@ pub fn resolve_model_download(
 /// Downloads a preset model into the local models directory.
 pub async fn download_model<F>(
     resolved: &ResolvedModelDownload,
+    yes: bool,
     mut on_progress: F,
 ) -> Result<PathBuf, String>
 where
     F: FnMut(u64, u64),
 {
     if resolved.model.is_installed_at(&resolved.models_dir) {
-        let is_valid = match &resolved.model.sha256 {
-            Some(expected_sha) => {
-                if let Ok(actual_sha) = sha256_file(&resolved.install_path).await {
-                    actual_sha.eq_ignore_ascii_case(expected_sha)
-                } else {
-                    false
+        let is_valid = if resolved.model.is_archive() {
+            true
+        } else {
+            match &resolved.model.sha256 {
+                Some(expected_sha) => {
+                    if let Ok(actual_sha) = sha256_file(&resolved.install_path).await {
+                        actual_sha.eq_ignore_ascii_case(expected_sha)
+                    } else {
+                        false
+                    }
                 }
+                None => true,
             }
-            None => true,
         };
+
         if is_valid {
             return Ok(resolved.install_path.clone());
+        } else if !yes && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)? {
+            return Err("Download cancelled: model files are invalid and user declined to overwrite.".to_string());
         }
     }
 
@@ -531,6 +567,27 @@ where
     }
 
     drop(writer);
+
+    // Validate SHA256 of the newly downloaded file before publishing
+    if let Some(expected_sha) = &resolved.model.sha256 {
+        let actual_sha = match sha256_file(&temp_download_path).await {
+            Ok(sha) => sha,
+            Err(err) => {
+                let _ = tokio::fs::remove_file(&temp_download_path).await;
+                return Err(format!("Failed to calculate hash of downloaded file: {err}"));
+            }
+        };
+        if !actual_sha.eq_ignore_ascii_case(expected_sha) {
+            let _ = tokio::fs::remove_file(&temp_download_path).await;
+            return Err(format!(
+                "Downloaded file hash mismatch for {}. Expected: {}, got: {}",
+                temp_download_path.display(),
+                expected_sha,
+                actual_sha
+            ));
+        }
+    }
+
     publish_download_file(&temp_download_path, &resolved.download_path).await?;
 
     if resolved.model.is_archive() {
@@ -760,11 +817,19 @@ mod tests {
             install_path,
         };
 
-        let result = download_model(&resolved, |_, _| {}).await;
+        // Case 1: yes = false, non-interactive shell should return "Cannot prompt for confirmation" error
+        let result = download_model(&resolved, false, |_, _| {}).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cannot prompt for confirmation"));
 
+        // Case 2: yes = true, it should bypass the prompt and proceed to download, failing on connection or gateway status
+        let result = download_model(&resolved, true, |_, _| {}).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
         assert!(
-            result.is_err(),
-            "partial single-file model should trigger a new download instead of returning installed"
+            err_msg.contains("Failed to download") || err_msg.contains("Download failed"),
+            "Expected error message to contain 'Failed to download' or 'Download failed', but was: '{}'",
+            err_msg
         );
     }
 

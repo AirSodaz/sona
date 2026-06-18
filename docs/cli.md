@@ -217,6 +217,7 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | `<model_id>` | Required | Known preset model id | None | Main model to download. |
 | `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Target models directory. |
 | `--quiet` | Optional | Flag | Off | Hides per-download progress. |
+| `--yes` | Optional | Flag | Off | Overwrite invalid files without prompting for confirmation. |
 | Companion downloads | Automatic | Required VAD and punctuation presets | Automatic | Downloading a main model also downloads required companions. |
 
 ### `models delete`
