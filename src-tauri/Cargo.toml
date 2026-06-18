@@ -50,6 +50,7 @@ rubato = "0.16"
 ringbuf = "0.4"
 tauri-plugin-process = "2"
 hound = "3.5.1"
+sherpa-onnx = "1.13.3"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 tauri-plugin-log = "2"
 log = "0.4.22"
@@ -93,12 +94,6 @@ windows = { version = "0.61", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
-
-[target.'cfg(any(target_os = "linux", all(target_os = "windows", target_arch = "x86_64")))'.dependencies]
-sherpa-onnx = { version = "1.13.3", default-features = false, features = ["shared"] }
-
-[target.'cfg(not(any(target_os = "linux", all(target_os = "windows", target_arch = "x86_64"))))'.dependencies]
-sherpa-onnx = { version = "1.13.3" }
 
 [dev-dependencies]
 tempfile = "3.20.0"

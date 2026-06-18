@@ -1,7 +1,7 @@
 use std::env;
 use std::path::Path;
 
-const SHERPA_ONNX_LIBS: &[&str] = &[
+const SHERPA_ONNX_STATIC_LIBS: &[&str] = &[
     "sherpa-onnx-c-api",
     "sherpa-onnx-core",
     "kaldi-decoder-core",
@@ -32,7 +32,7 @@ fn main() {
         }
 
         if target_os == "linux" || target_os == "macos" || target_os == "windows" {
-            configure_sherpa_linking(&lib_dir, &target_os);
+            configure_static_sherpa_linking(&lib_dir, &target_os);
         }
     }
 
@@ -63,36 +63,27 @@ fn sherpa_lib_dir_has_directml(lib_dir: &Path) -> bool {
     .any(|file| lib_dir.join(file).exists())
 }
 
-fn configure_sherpa_linking(lib_dir: &str, target_os: &str) {
+fn configure_static_sherpa_linking(lib_dir: &str, target_os: &str) {
     let lib_path = Path::new(lib_dir);
     if !lib_path.exists() {
         panic!("SHERPA_ONNX_LIB_DIR does not exist: {}", lib_dir);
     }
 
-    let static_ext = if target_os == "windows" { "lib" } else { "a" };
-
-    // Check if sherpa-onnx-core static library exists.
-    // If not, we are likely dealing with shared libraries, and sherpa-onnx-sys will handle the linking.
-    let core_static_file = if target_os == "windows" {
-        lib_path.join(format!("sherpa-onnx-core.{static_ext}"))
-    } else {
-        lib_path.join(format!("libsherpa-onnx-core.{static_ext}"))
-    };
-
-    if !core_static_file.exists() {
-        return; // Skip explicit static linking in Sona crate for shared libs
-    }
-
-    for lib in SHERPA_ONNX_LIBS {
-        let static_file = if target_os == "windows" {
-            lib_path.join(format!("{lib}.{static_ext}"))
+    let extension = if target_os == "windows" { "lib" } else { "a" };
+    for lib in SHERPA_ONNX_STATIC_LIBS {
+        let lib_file = lib_path.join(format!("lib{lib}.{extension}"));
+        let lib_file = if target_os == "windows" {
+            lib_path.join(format!("{lib}.{extension}"))
         } else {
-            lib_path.join(format!("lib{lib}.{static_ext}"))
+            lib_file
         };
-
-        if static_file.exists() {
-            println!("cargo:rustc-link-lib=static={lib}");
+        if !lib_file.exists() {
+            panic!(
+                "Missing required sherpa-onnx static library: {}",
+                lib_file.display()
+            );
         }
+        println!("cargo:rustc-link-lib=static={lib}");
     }
 
     match target_os {
