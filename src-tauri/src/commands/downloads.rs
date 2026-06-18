@@ -216,14 +216,14 @@ async fn verify_download_file(
     Ok(())
 }
 
-async fn sha256_file(path: &Path) -> Result<String, String> {
+pub(crate) async fn sha256_file(path: &Path) -> Result<String, String> {
     use tokio::io::AsyncReadExt;
 
     let mut file = tokio::fs::File::open(path)
         .await
         .map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 16 * 1024];
 
     loop {
         let read = file.read(&mut buffer).await.map_err(|e| e.to_string())?;

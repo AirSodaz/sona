@@ -182,8 +182,10 @@ describe('voiceTypingService', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         vi.clearAllTimers();
+        const service = await loadService();
+        service.destroy();
     });
 
     it('pre-warms the model and overlay window during initialization if enabled', async () => {

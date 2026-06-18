@@ -1003,6 +1003,11 @@
         "subtitle_behavior_desc": "Control how the live caption window behaves.",
         "subtitle_appearance_title": "Appearance",
         "subtitle_appearance_desc": "Customize the look of your live captions.",
+        "model_download_mirror": "다운로드 미러",
+        "model_download_mirror_hint": "모델 다운로드용 미러를 선택합니다. 다운로드 속도가 느리거나 실패할 경우 프록시 미러로 전환해 보세요.",
+        "model_download_mirror_direct": "직접 연결 (GitHub)",
+        "model_download_mirror_ghproxy": "미러 1 (ghproxy.com)",
+        "model_download_mirror_ghnet": "미러 2 (ghproxy.net)",
         "model_download_status": {
             "download_label": "Downloading",
             "downloading": "{{label}}... {{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",

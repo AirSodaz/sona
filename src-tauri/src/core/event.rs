@@ -29,6 +29,13 @@ pub struct MockEventEmitter {
 }
 
 #[cfg(test)]
+impl Default for MockEventEmitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
 impl MockEventEmitter {
     pub fn new() -> Self {
         Self {

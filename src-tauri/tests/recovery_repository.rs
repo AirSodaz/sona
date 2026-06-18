@@ -100,14 +100,14 @@ fn persist_queue_snapshot_filters_queue_items_and_normalizes_recovery_payloads()
     assert_eq!(snapshot.items[0].id, "pending-1");
     assert_eq!(snapshot.items[0].source, "automation");
     assert_eq!(snapshot.items[0].last_known_stage, "transcribing");
-    assert_eq!(snapshot.items[0].has_source_file, true);
-    assert_eq!(snapshot.items[0].can_resume, true);
+    assert!(snapshot.items[0].has_source_file);
+    assert!(snapshot.items[0].can_resume);
     assert_eq!(snapshot.items[0].segments[0].start, 0.0);
     assert!(snapshot.items[0].segments[0].timing.is_some());
     assert_eq!(snapshot.items[1].id, "existing-recovery-id");
     assert_eq!(snapshot.items[1].source, "batch_import");
-    assert_eq!(snapshot.items[1].has_source_file, false);
-    assert_eq!(snapshot.items[1].can_resume, false);
+    assert!(!snapshot.items[1].has_source_file);
+    assert!(!snapshot.items[1].can_resume);
 
     let persisted = read_recovery_json(dir.path());
     assert_eq!(persisted["version"], 1);
@@ -347,12 +347,12 @@ fn load_snapshot_recomputes_source_file_status_and_resume_guard() {
 
     let snapshot = repository.load_snapshot().unwrap();
 
-    assert_eq!(snapshot.items[0].has_source_file, true);
-    assert_eq!(snapshot.items[0].can_resume, true);
-    assert_eq!(snapshot.items[1].has_source_file, false);
-    assert_eq!(snapshot.items[1].can_resume, false);
-    assert_eq!(snapshot.items[2].has_source_file, false);
-    assert_eq!(snapshot.items[2].can_resume, false);
+    assert!(snapshot.items[0].has_source_file);
+    assert!(snapshot.items[0].can_resume);
+    assert!(!snapshot.items[1].has_source_file);
+    assert!(!snapshot.items[1].can_resume);
+    assert!(!snapshot.items[2].has_source_file);
+    assert!(!snapshot.items[2].can_resume);
 }
 
 #[test]
@@ -513,7 +513,7 @@ fn save_snapshot_filters_non_pending_items_and_defaults_legacy_fields() {
     assert_eq!(snapshot.items.len(), 1);
     assert_eq!(snapshot.items[0].source, "automation");
     assert_eq!(snapshot.items[0].last_known_stage, "queued");
-    assert_eq!(snapshot.items[0].has_source_file, true);
-    assert_eq!(snapshot.items[0].can_resume, true);
+    assert!(snapshot.items[0].has_source_file);
+    assert!(snapshot.items[0].can_resume);
     assert!(snapshot.items[0].updated_at >= 5);
 }

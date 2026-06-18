@@ -883,7 +883,7 @@ mod tests {
         let keep_item = sample_history_item("keep", HistoryItemStatus::Complete);
         let delete_item = sample_history_item("delete", HistoryItemStatus::Complete);
         repository
-            .write_index(&vec![keep_item.clone(), delete_item.clone()])
+            .write_index(&[keep_item.clone(), delete_item.clone()])
             .unwrap();
         fs::write(
             repository.audio_path(&delete_item.audio_path).unwrap(),
@@ -904,7 +904,7 @@ mod tests {
         .unwrap();
 
         repository
-            .delete_items(&vec![delete_item.id.clone()])
+            .delete_items(std::slice::from_ref(&delete_item.id))
             .unwrap();
 
         let items = repository.list_items().unwrap();
@@ -1071,7 +1071,7 @@ mod tests {
         let mut item = sample_history_item("history-1", HistoryItemStatus::Complete);
         item.preview_text = "stale preview".to_string();
         item.search_content = "stale search".to_string();
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(&[item.clone()]).unwrap();
 
         let updated = repository
             .update_transcript(
@@ -1273,7 +1273,7 @@ mod tests {
         repository.ensure_ready().unwrap();
 
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
 
         let first = repository
             .create_transcript_snapshot(
@@ -1311,7 +1311,7 @@ mod tests {
         repository.ensure_ready().unwrap();
 
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
 
         let metadata = repository
             .create_transcript_snapshot(
@@ -1354,7 +1354,7 @@ mod tests {
         repository.ensure_ready().unwrap();
 
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
 
         for index in 0..(TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT + 2) {
             repository
@@ -1431,7 +1431,7 @@ mod tests {
         repository.ensure_ready().unwrap();
 
         let item = sample_history_item("delete", HistoryItemStatus::Complete);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
         repository
             .create_transcript_snapshot(
                 &item.id,
@@ -1442,7 +1442,7 @@ mod tests {
         let versions_dir = repository.transcript_versions_dir(&item.id).unwrap();
         assert!(versions_dir.exists());
 
-        repository.delete_items(&vec![item.id.clone()]).unwrap();
+        repository.delete_items(std::slice::from_ref(&item.id)).unwrap();
 
         assert!(!versions_dir.exists());
     }

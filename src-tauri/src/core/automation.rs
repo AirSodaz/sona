@@ -857,7 +857,7 @@ mod tests {
 
         let payloads = sink.payloads.lock().unwrap().clone();
         assert_eq!(payloads.len(), 1);
-        assert_eq!(payloads[0].source_fingerprint.contains("::"), true);
+        assert!(payloads[0].source_fingerprint.contains("::"));
     }
 
     #[tokio::test]
@@ -892,8 +892,8 @@ mod tests {
             &["rule-ok".to_string(), "rule-fail".to_string()]
         );
         assert_eq!(results.len(), 2);
-        assert_eq!(results[0].started, true);
-        assert_eq!(results[1].started, false);
+        assert!(results[0].started);
+        assert!(!results[1].started);
         assert_eq!(results[1].error.as_deref(), Some("watch failed"));
     }
 }

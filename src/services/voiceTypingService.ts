@@ -44,6 +44,7 @@ export class VoiceTypingService {
     private initialized = false;
 
     private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
+    private unsubscribe: (() => void) | null = null;
 
     private readonly transcriptionService: TranscriptionService;
     private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
@@ -98,7 +99,7 @@ export class VoiceTypingService {
             enableITN: this.lastConfigSnapshot.enableItn,
         });
 
-        this.ports.subscribeConfig((state) => {
+        this.unsubscribe = this.ports.subscribeConfig((state) => {
             const newConfig = state.config;
             const previousSnapshot = this.lastConfigSnapshot ?? resolveVoiceTypingConfigSnapshot(newConfig);
             const nextSnapshot = resolveVoiceTypingConfigSnapshot(newConfig);
@@ -153,6 +154,15 @@ export class VoiceTypingService {
         if (this.lastConfigSnapshot.enabled) {
             void this.syncAndPrepare();
         }
+    }
+
+    public destroy() {
+        this.initialized = false;
+        if (this.unsubscribe) {
+            this.unsubscribe();
+            this.unsubscribe = null;
+        }
+        this.lastConfigSnapshot = null;
     }
 
     private async syncAndPrepare() {

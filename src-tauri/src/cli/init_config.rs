@@ -75,7 +75,9 @@ fn write_config_template(path: &Path, force: bool) -> Result<(), String> {
         ));
     }
 
-    if let Some(parent) = path.parent() && !parent.as_os_str().is_empty() {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
         fs::create_dir_all(parent).map_err(|error| {
             format!(
                 "Failed to create config directory {}: {error}",

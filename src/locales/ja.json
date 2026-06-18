@@ -1003,6 +1003,11 @@
         "subtitle_behavior_desc": "ライブ キャプション ウィンドウの動作を制御します。",
         "subtitle_appearance_title": "外観",
         "subtitle_appearance_desc": "ライブキャプションの外観をカスタマイズします。",
+        "model_download_mirror": "ダウンロードミラー",
+        "model_download_mirror_hint": "モデルダウンロード用のミラーを選択します。ダウンロードが遅い場合や失敗する場合は、プロキシミラーへの切り替えをお試しください。",
+        "model_download_mirror_direct": "直接 (GitHub)",
+        "model_download_mirror_ghproxy": "ミラー 1 (ghproxy.com)",
+        "model_download_mirror_ghnet": "ミラー 2 (ghproxy.net)",
         "model_download_status": {
             "download_label": "ダウンロード中",
             "downloading": "{{label}}...{{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",

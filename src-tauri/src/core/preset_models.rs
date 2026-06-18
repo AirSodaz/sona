@@ -610,6 +610,70 @@ impl PresetModel {
     }
 }
 
+impl ModelCatalogModel {
+    fn from_preset(model: &PresetModel, models_dir: &Path) -> Self {
+        let install_path = model.resolve_install_path(models_dir);
+        let download_path = model.resolve_download_path(models_dir);
+
+        Self {
+            id: model.id.clone(),
+            name: model.name.clone(),
+            description: model.description.clone(),
+            url: model.url.clone(),
+            model_type: model.model_type.clone(),
+            modes: model.modes.clone(),
+            language: model.language.clone(),
+            size: model.size.clone(),
+            is_recommended: model.is_recommended,
+            is_archive: model.is_archive(),
+            sha256: model.sha256.clone(),
+            filename: model.filename.clone(),
+            engine: model
+                .engine
+                .clone()
+                .unwrap_or_else(|| "sherpa-onnx".to_string()),
+            rules: model.resolved_rules(),
+            group_id: model.group_id.clone(),
+            version_label: model.version_label.clone(),
+            install_path: path_to_catalog_string(&install_path),
+            download_path: path_to_catalog_string(&download_path),
+            is_installed: model.is_installed_at(models_dir),
+        }
+    }
+
+    fn supports_mode(&self, mode: &str) -> bool {
+        self.modes
+            .as_ref()
+            .map(|modes| modes.iter().any(|item| item == mode))
+            .unwrap_or(false)
+    }
+
+    fn has_recognition_mode(&self) -> bool {
+        self.modes
+            .as_ref()
+            .map(|modes| !modes.is_empty())
+            .unwrap_or(false)
+    }
+}
+
+impl ModelSelectionOption {
+    fn from_catalog_model(model: &ModelCatalogModel) -> Self {
+        Self {
+            id: model.id.clone(),
+            label: model_selection_label(model),
+            install_path: model.install_path.clone(),
+            is_installed: model.is_installed,
+        }
+    }
+}
+
+fn model_selection_label(model: &ModelCatalogModel) -> String {
+    match &model.version_label {
+        Some(version_label) => format!("{} ({})", model.name, version_label),
+        None => model.name.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -950,69 +1014,5 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![ModelDependencyConfigKey::PunctuationModelPath]
         );
-    }
-}
-
-impl ModelCatalogModel {
-    fn from_preset(model: &PresetModel, models_dir: &Path) -> Self {
-        let install_path = model.resolve_install_path(models_dir);
-        let download_path = model.resolve_download_path(models_dir);
-
-        Self {
-            id: model.id.clone(),
-            name: model.name.clone(),
-            description: model.description.clone(),
-            url: model.url.clone(),
-            model_type: model.model_type.clone(),
-            modes: model.modes.clone(),
-            language: model.language.clone(),
-            size: model.size.clone(),
-            is_recommended: model.is_recommended,
-            is_archive: model.is_archive(),
-            sha256: model.sha256.clone(),
-            filename: model.filename.clone(),
-            engine: model
-                .engine
-                .clone()
-                .unwrap_or_else(|| "sherpa-onnx".to_string()),
-            rules: model.resolved_rules(),
-            group_id: model.group_id.clone(),
-            version_label: model.version_label.clone(),
-            install_path: path_to_catalog_string(&install_path),
-            download_path: path_to_catalog_string(&download_path),
-            is_installed: model.is_installed_at(models_dir),
-        }
-    }
-
-    fn supports_mode(&self, mode: &str) -> bool {
-        self.modes
-            .as_ref()
-            .map(|modes| modes.iter().any(|item| item == mode))
-            .unwrap_or(false)
-    }
-
-    fn has_recognition_mode(&self) -> bool {
-        self.modes
-            .as_ref()
-            .map(|modes| !modes.is_empty())
-            .unwrap_or(false)
-    }
-}
-
-impl ModelSelectionOption {
-    fn from_catalog_model(model: &ModelCatalogModel) -> Self {
-        Self {
-            id: model.id.clone(),
-            label: model_selection_label(model),
-            install_path: model.install_path.clone(),
-            is_installed: model.is_installed,
-        }
-    }
-}
-
-fn model_selection_label(model: &ModelCatalogModel) -> String {
-    match &model.version_label {
-        Some(version_label) => format!("{} ({})", model.name, version_label),
-        None => model.name.clone(),
     }
 }

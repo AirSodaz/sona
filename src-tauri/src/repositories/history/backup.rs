@@ -661,7 +661,7 @@ mod tests {
         let keep_item = sample_history_item("keep", HistoryItemStatus::Complete);
         let draft_item = sample_history_item("draft", HistoryItemStatus::Draft);
         repository
-            .write_index(&vec![keep_item.clone(), draft_item])
+            .write_index(&[keep_item.clone(), draft_item])
             .unwrap();
         write_json_pretty_atomic(
             &repository
@@ -1068,7 +1068,7 @@ mod tests {
         source_repository.ensure_ready().unwrap();
 
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        source_repository.write_index(&vec![item.clone()]).unwrap();
+        source_repository.write_index(std::slice::from_ref(&item)).unwrap();
         write_json_pretty_atomic(
             &source_repository
                 .transcript_path(&item.transcript_path)

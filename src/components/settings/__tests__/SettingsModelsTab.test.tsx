@@ -258,10 +258,10 @@ describe('SettingsModelsTab speaker model selections', () => {
         });
 
         // Expand accordions to mount ModelCards
-        const segAccordion = screen.getByRole('button', { name: /Speaker Segmentation Models/ });
+        const segAccordion = await screen.findByRole('button', { name: /Speaker Segmentation Models/ });
         fireEvent.click(segAccordion);
 
-        const embedAccordion = screen.getByRole('button', { name: /Speaker Embedding Models/ });
+        const embedAccordion = await screen.findByRole('button', { name: /Speaker Embedding Models/ });
         fireEvent.click(embedAccordion);
 
         expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');

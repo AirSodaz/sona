@@ -161,13 +161,13 @@ fn load_snapshot_marks_incomplete_running_tasks_as_interrupted() {
 
     assert_eq!(snapshot.tasks.len(), 2);
     assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
-    assert_eq!(snapshot.tasks[0].cancelable, false);
+    assert!(!snapshot.tasks[0].cancelable);
     assert_eq!(
         snapshot.tasks[0].error_message.as_deref(),
         Some("Task was interrupted before it finished.")
     );
     assert_eq!(snapshot.tasks[1].status, TaskLedgerStatus::Interrupted);
-    assert_eq!(snapshot.tasks[1].cancelable, false);
+    assert!(!snapshot.tasks[1].cancelable);
 }
 
 #[test]

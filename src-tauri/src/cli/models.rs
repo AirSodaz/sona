@@ -1,5 +1,6 @@
 use crate::cli::transcribe::{OutputTarget, write_output};
 use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
+use crate::commands::downloads::sha256_file;
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
 use std::io::{self, IsTerminal, Write};
@@ -456,7 +457,19 @@ where
     F: FnMut(u64, u64),
 {
     if resolved.model.is_installed_at(&resolved.models_dir) {
-        return Ok(resolved.install_path.clone());
+        let is_valid = match &resolved.model.sha256 {
+            Some(expected_sha) => {
+                if let Ok(actual_sha) = sha256_file(&resolved.install_path).await {
+                    actual_sha.eq_ignore_ascii_case(expected_sha)
+                } else {
+                    false
+                }
+            }
+            None => true,
+        };
+        if is_valid {
+            return Ok(resolved.install_path.clone());
+        }
     }
 
     tokio::fs::create_dir_all(&resolved.models_dir)

@@ -362,7 +362,7 @@ describe('Settings', () => {
 
         // Wait for completion (modelService.downloadModel resolves)
         await waitFor(() => {
-            expect(modelService.downloadModel).toHaveBeenCalledWith('test-model', expect.any(Function), expect.any(AbortSignal));
+            expect(modelService.downloadModel).toHaveBeenCalledWith('test-model', expect.any(Function), expect.any(AbortSignal), undefined);
         });
     }, MODEL_TAB_LOAD_TIMEOUT_MS + 1000);
 

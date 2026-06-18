@@ -589,7 +589,7 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
         repository.ensure_ready().unwrap();
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
@@ -659,7 +659,7 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
         repository.ensure_ready().unwrap();
         let item = sample_history_item("draft-1", HistoryItemStatus::Draft);
-        repository.write_index(&vec![item.clone()]).unwrap();
+        repository.write_index(std::slice::from_ref(&item)).unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
