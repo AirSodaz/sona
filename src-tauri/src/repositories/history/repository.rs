@@ -1442,7 +1442,9 @@ mod tests {
         let versions_dir = repository.transcript_versions_dir(&item.id).unwrap();
         assert!(versions_dir.exists());
 
-        repository.delete_items(std::slice::from_ref(&item.id)).unwrap();
+        repository
+            .delete_items(std::slice::from_ref(&item.id))
+            .unwrap();
 
         assert!(!versions_dir.exists());
     }

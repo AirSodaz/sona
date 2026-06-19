@@ -3,8 +3,7 @@ use crate::core::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
 use crate::integrations::asr::{
-    BatchTranscriptionRequest, transcribe_batch_with_progress_and_fallback_notice,
-    Recognizer,
+    BatchTranscriptionRequest, Recognizer, transcribe_batch_with_progress_and_fallback_notice,
 };
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
@@ -619,7 +618,9 @@ async fn run_batch_transcribe_plans(
         request.hotwords.clone(),
     )?;
 
-    let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref()).await;
+    let gpu_plan =
+        crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
+            .await;
 
     let recognizer_result = crate::integrations::asr::create_recognizer_with_gpu_plan(
         config_type,
@@ -630,7 +631,10 @@ async fn run_batch_transcribe_plans(
     // Print fallback notice once at the start of the batch if applicable
     if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
         if !first_plan.resolved.quiet {
-            eprintln!("DirectML transcription failed, retrying with CPU: {}", notice.error);
+            eprintln!(
+                "DirectML transcription failed, retrying with CPU: {}",
+                notice.error
+            );
         }
     }
 
@@ -646,20 +650,18 @@ async fn run_batch_transcribe_plans(
         }
         results
     } else {
-        stream::iter(
-            plans
-                .into_iter()
-                .enumerate()
-                .map({
-                    let shared_recognizer = shared_recognizer.clone();
-                    move |(index, plan)| {
-                        let rec = shared_recognizer.clone();
-                        async move {
-                            (index, run_batch_transcribe_plan(plan, rec, index, total).await)
-                        }
-                    }
-                }),
-        )
+        stream::iter(plans.into_iter().enumerate().map({
+            let shared_recognizer = shared_recognizer.clone();
+            move |(index, plan)| {
+                let rec = shared_recognizer.clone();
+                async move {
+                    (
+                        index,
+                        run_batch_transcribe_plan(plan, rec, index, total).await,
+                    )
+                }
+            }
+        }))
         .buffer_unordered(jobs)
         .collect::<Vec<_>>()
         .await
@@ -724,7 +726,7 @@ async fn run_batch_transcribe_plan(
                         eprintln!("DirectML transcription failed, retrying with CPU: {error}");
                     }
                 }
-            }
+            },
         )
         .await;
         reporter.finish_write();

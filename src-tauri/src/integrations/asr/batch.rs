@@ -4,16 +4,16 @@ use super::metrics::{
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
     log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
-use std::sync::Arc;
 use super::model_config::{
-    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
-    build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
+    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
+    SafeStream, build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
 };
 use super::state::AsrState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
 use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptSegment};
 use log::debug;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 
 pub async fn process_batch_request_impl(
@@ -43,7 +43,8 @@ pub async fn transcribe_batch_with_progress<F>(
 where
     F: FnMut(f32),
 {
-    transcribe_batch_with_progress_and_metrics_inner(request, None, &mut on_progress, None, |_| {}).await
+    transcribe_batch_with_progress_and_metrics_inner(request, None, &mut on_progress, None, |_| {})
+        .await
 }
 
 pub(crate) async fn transcribe_batch_with_progress_and_fallback_notice<F, N>(
@@ -119,9 +120,10 @@ where
             &request.language,
             request.hotwords.clone(),
         )?;
-        let gpu_plan =
-            crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
-                .await;
+        let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(
+            request.gpu_acceleration.as_deref(),
+        )
+        .await;
         let recognizer_result =
             create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)?;
         if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
@@ -133,7 +135,11 @@ where
             );
             on_fallback(notice);
         }
-        (Arc::new(recognizer_result.recognizer), false, duration_to_ms(model_load_started.elapsed()))
+        (
+            Arc::new(recognizer_result.recognizer),
+            false,
+            duration_to_ms(model_load_started.elapsed()),
+        )
     };
 
     let rss_after_mb = capture_process_memory_mb();

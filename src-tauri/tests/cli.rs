@@ -6,6 +6,7 @@ use tempfile::tempdir;
 fn cli_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_sona"));
     command.env("SONA_FORCE_CLI", "1");
+    command.env("SONA_TEST_NON_INTERACTIVE_OK", "1");
     command
 }
 

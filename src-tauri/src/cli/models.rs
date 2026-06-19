@@ -1,6 +1,6 @@
 use crate::cli::transcribe::{OutputTarget, write_output};
-use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use crate::commands::downloads::sha256_file;
+use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use clap::{Args, Subcommand};
 use futures_util::StreamExt;
 use std::io::{self, IsTerminal, Write};
@@ -116,7 +116,10 @@ pub struct ModelDownloadArgs {
     #[arg(long, help = "Hide per-download progress output")]
     quiet: bool,
     /// Skips the interactive confirmation prompt when overwriting invalid files.
-    #[arg(long, help = "Overwrite invalid files without prompting for confirmation")]
+    #[arg(
+        long,
+        help = "Overwrite invalid files without prompting for confirmation"
+    )]
     pub yes: bool,
 }
 
@@ -331,6 +334,13 @@ fn run_model_delete(args: ModelDeleteArgs) -> Result<(), String> {
 }
 
 fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, String> {
+    if !io::stdin().is_terminal() && std::env::var("SONA_TEST_NON_INTERACTIVE_OK").is_err() {
+        return Err(
+            "Cannot prompt for confirmation in non-interactive shell. Use --yes to override."
+                .to_string(),
+        );
+    }
+
     eprint!(
         "Delete model {model_id} at {}? [y/N] ",
         install_path.display()
@@ -350,8 +360,11 @@ fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, Str
 }
 
 fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> Result<bool, String> {
-    if !io::stdin().is_terminal() {
-        return Err("Cannot prompt for confirmation in non-interactive shell. Use --yes to override.".to_string());
+    if !io::stdin().is_terminal() && std::env::var("SONA_TEST_NON_INTERACTIVE_OK").is_err() {
+        return Err(
+            "Cannot prompt for confirmation in non-interactive shell. Use --yes to override."
+                .to_string(),
+        );
     }
 
     eprint!(
@@ -504,7 +517,10 @@ where
         if is_valid {
             return Ok(resolved.install_path.clone());
         } else if !yes && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)? {
-            return Err("Download cancelled: model files are invalid and user declined to overwrite.".to_string());
+            return Err(
+                "Download cancelled: model files are invalid and user declined to overwrite."
+                    .to_string(),
+            );
         }
     }
 
@@ -574,7 +590,9 @@ where
             Ok(sha) => sha,
             Err(err) => {
                 let _ = tokio::fs::remove_file(&temp_download_path).await;
-                return Err(format!("Failed to calculate hash of downloaded file: {err}"));
+                return Err(format!(
+                    "Failed to calculate hash of downloaded file: {err}"
+                ));
             }
         };
         if !actual_sha.eq_ignore_ascii_case(expected_sha) {
@@ -688,6 +706,8 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Resu
         let buffered = std::io::BufReader::new(file);
         let tar = bzip2::read::BzDecoder::new(buffered);
         let mut archive = tar::Archive::new(tar);
+        archive.set_preserve_permissions(false);
+        archive.set_unpack_xattrs(false);
         archive.unpack(&target_dir).map_err(|error| {
             format!(
                 "Failed to extract archive into {}: {error}",
@@ -820,7 +840,11 @@ mod tests {
         // Case 1: yes = false, non-interactive shell should return "Cannot prompt for confirmation" error
         let result = download_model(&resolved, false, |_, _| {}).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Cannot prompt for confirmation"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Cannot prompt for confirmation")
+        );
 
         // Case 2: yes = true, it should bypass the prompt and proceed to download, failing on connection or gateway status
         let result = download_model(&resolved, true, |_, _| {}).await;

@@ -129,7 +129,7 @@ job_ttl_minutes = 60
 
 | Parameter / config key | Required | Range | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `host` | Optional | Bind address | `0.0.0.0` | Use `127.0.0.1` for local-only access. |
+| `host` | Optional | Bind address | `127.0.0.1` | Use `0.0.0.0` to expose to the network. |
 | `port` | Optional | TCP port `0` to `65535` | `14200` | API server port. |
 | `api_key` | Optional | String | Empty | Empty means requests are not protected by Bearer auth. |
 | `models_dir` | Optional | Filesystem path | Desktop app models directory, when inferable | Used to resolve installed models. |
@@ -243,7 +243,7 @@ Generate shell completion scripts with `sona completions <shell>`. Supported she
 | Parameter / config key | Required | Range | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `-c, --config <path>` | Optional | TOML file path | None | Loads defaults from config. |
-| `--host <ip>` | Optional | Bind address | `0.0.0.0` | Overrides config. |
+| `--host <ip>` | Optional | Bind address | `127.0.0.1` | Overrides config. |
 | `--port <port>` | Optional | TCP port `0` to `65535` | `14200` | Overrides config. |
 | `--api-key <key>` | Optional | String | Empty | Empty means no Bearer auth. |
 | `--models-dir <path>` | Optional | Filesystem path | Desktop app models directory, when inferable | Overrides config. |

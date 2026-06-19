@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 const DEFAULT_SERVE_PORT: u16 = 14200;
-const DEFAULT_SERVE_HOST: &str = "0.0.0.0";
+const DEFAULT_SERVE_HOST: &str = "127.0.0.1";
 const DEFAULT_SERVE_IP_WHITELIST: &str = "localhost";
 const DEFAULT_MAX_CONCURRENT: usize = 2;
 const DEFAULT_MAX_QUEUE_SIZE: usize = 100;
@@ -78,6 +78,16 @@ pub async fn run_serve(args: ServeArgs) -> Result<(), String> {
         None => None,
     };
     let resolved = resolve_serve_options(args, config)?;
+
+    if resolved.api_key.is_empty() && resolved.host != "127.0.0.1" && resolved.host != "localhost" {
+        eprintln!(
+            "WARNING: API server is binding to {} without an API key. \
+             Any client that can reach this address may submit requests. \
+             Pass --api-key to require authentication, or --host 127.0.0.1 to restrict access.",
+            resolved.host
+        );
+    }
+
     let temp_dir = std::env::temp_dir().join("sona_api");
     let (_tx, rx) = tokio::sync::oneshot::channel();
     let parsed_whitelist = match crate::app::server::parse_ip_whitelist(&resolved.ip_whitelist) {
