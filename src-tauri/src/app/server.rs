@@ -506,9 +506,23 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
     }
 }
 
+async fn update_job_status(
+    jobs: &RwLock<HashMap<String, JobEntry>>,
+    job_id: &str,
+    status: JobStatus,
+) {
+    if let Some(job) = jobs.write().await.get_mut(job_id) {
+        let is_finished = matches!(status, JobStatus::Completed(_) | JobStatus::Failed(_));
+        job.status = status;
+        if is_finished {
+            job.completed_at = Some(std::time::Instant::now());
+        }
+    }
+}
+
 async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
-    manager: JobManager,
+    jobs: Arc<RwLock<HashMap<String, JobEntry>>>,
     models_dir: PathBuf,
     max_concurrent: usize,
     app: Option<tauri::AppHandle>,
@@ -517,7 +531,7 @@ async fn start_worker_loop(
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
     while let Some(job) = receiver.recv().await {
-        let manager = manager.clone();
+        let jobs = jobs.clone();
         let models_dir = models_dir.clone();
         let semaphore = semaphore.clone();
         let app_for_spawn = app.clone();
@@ -529,16 +543,16 @@ async fn start_worker_loop(
                 Ok(permit) => permit,
                 Err(_) => {
                     log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    manager
-                        .update_job(
-                            &job.job_id,
-                            JobStatus::Failed("Internal: worker pool closed".to_string()),
-                        )
-                        .await;
+                    update_job_status(
+                        &jobs,
+                        &job.job_id,
+                        JobStatus::Failed("Internal: worker pool closed".to_string()),
+                    )
+                    .await;
                     return;
                 }
             };
-            manager.update_job(&job.job_id, JobStatus::Processing).await;
+            update_job_status(&jobs, &job.job_id, JobStatus::Processing).await;
 
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
@@ -598,7 +612,7 @@ async fn start_worker_loop(
                 }
             };
 
-            manager.update_job(&job.job_id, final_status.clone()).await;
+            update_job_status(&jobs, &job.job_id, final_status.clone()).await;
 
             if job.webhook_url.is_some() {
                 let job_clone = job.clone();
@@ -1043,7 +1057,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     };
     let (tx, rx) = mpsc::channel(actual_queue_size);
     let job_manager = JobManager::new(tx);
-    let manager_clone = job_manager.clone();
+    let jobs_clone = job_manager.jobs.clone();
     let models_dir_clone = models_dir.clone();
     let app_clone = app.clone();
     let worker_defaults = transcription_defaults.clone();
@@ -1051,7 +1065,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     tokio::spawn(async move {
         start_worker_loop(
             rx,
-            manager_clone,
+            jobs_clone,
             models_dir_clone,
             max_concurrent,
             app_clone,
@@ -1060,28 +1074,36 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         .await;
     });
 
-    let manager_ttl_clone = job_manager.clone();
+    let jobs_ttl_clone = job_manager.jobs.clone();
+    let (shutdown_ttl_tx, mut shutdown_ttl_rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         let ttl_duration = std::time::Duration::from_secs(job_ttl_minutes * 60);
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
-            interval.tick().await;
-            if job_ttl_minutes > 0 {
-                let mut jobs = manager_ttl_clone.jobs.write().await;
-                jobs.retain(|_, entry| {
-                    if let Some(completed_at) = entry.completed_at {
-                        completed_at.elapsed() <= ttl_duration
-                    } else {
-                        true
+            tokio::select! {
+                _ = interval.tick() => {
+                    if job_ttl_minutes > 0 {
+                        let mut jobs = jobs_ttl_clone.write().await;
+                        jobs.retain(|_, entry| {
+                            if let Some(completed_at) = entry.completed_at {
+                                completed_at.elapsed() <= ttl_duration
+                            } else {
+                                true
+                            }
+                        });
                     }
-                });
+                }
+                _ = &mut shutdown_ttl_rx => {
+                    log::info!("TTL cleaner loop shutting down");
+                    break;
+                }
             }
         }
     });
 
     let state = ServerState {
         job_manager,
-        temp_dir,
+        temp_dir: temp_dir.clone(),
         models_dir,
         start_time: std::time::Instant::now(),
         api_key: api_key.clone(),
@@ -1145,16 +1167,27 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     log::info!("Starting HTTP API server on {}", addr);
-    axum::serve(
+    let clean_temp_dir = temp_dir.clone();
+    let serve_res = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(async move {
         let _ = shutdown_rx.await;
+        let _ = shutdown_ttl_tx.send(());
         log::info!("HTTP API server shutting down gracefully");
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string());
+
+    // Clean up temporary files on shutdown
+    log::info!(
+        "Cleaning up API server temporary directory: {:?}",
+        clean_temp_dir
+    );
+    let _ = tokio::fs::remove_dir_all(&clean_temp_dir).await;
+
+    serve_res
 }
 
 #[cfg(test)]

@@ -88,8 +88,59 @@ pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
         );
     }
 
-    let temp_dir = std::env::temp_dir().join("sona_api");
-    let (_tx, rx) = tokio::sync::oneshot::channel();
+    let temp_dir = std::env::temp_dir().join(format!("sona_api_{}", std::process::id()));
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    // Spawn signal handler task for graceful shutdown
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let sigint = signal(SignalKind::interrupt());
+            let sigterm = signal(SignalKind::terminate());
+
+            match (sigint, sigterm) {
+                (Ok(mut sigint), Ok(mut sigterm)) => {
+                    tokio::select! {
+                        _ = sigint.recv() => {
+                            eprintln!("\nReceived SIGINT (Ctrl+C), starting graceful shutdown...");
+                        }
+                        _ = sigterm.recv() => {
+                            eprintln!("\nReceived SIGTERM, starting graceful shutdown...");
+                        }
+                    }
+                    let _ = tx.send(());
+                }
+                (sigint_res, sigterm_res) => {
+                    if let Err(e) = sigint_res {
+                        eprintln!("Failed to install SIGINT handler: {e}");
+                    }
+                    if let Err(e) = sigterm_res {
+                        eprintln!("Failed to install SIGTERM handler: {e}");
+                    }
+                    // Keep the task alive indefinitely so `tx` is not dropped,
+                    // allowing the server to run without the signal handlers.
+                    std::future::pending::<()>().await;
+                }
+            }
+        }
+
+        #[cfg(not(unix))]
+        {
+            match tokio::signal::ctrl_c().await {
+                Ok(()) => {
+                    eprintln!("\nReceived Ctrl+C, starting graceful shutdown...");
+                    let _ = tx.send(());
+                }
+                Err(e) => {
+                    eprintln!("Failed to install Ctrl+C handler: {e}");
+                    // Keep the task alive indefinitely so `tx` is not dropped,
+                    // allowing the server to run without the signal handlers.
+                    std::future::pending::<()>().await;
+                }
+            }
+        }
+    });
     let parsed_whitelist = match crate::app::server::parse_ip_whitelist(&resolved.ip_whitelist) {
         Ok(nets) => nets,
         Err(e) => {
