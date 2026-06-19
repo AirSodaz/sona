@@ -1,4 +1,5 @@
 use crate::cli::transcribe::{OutputTarget, write_output};
+use crate::cli::{CliError, CliResult};
 use crate::commands::downloads::sha256_file;
 use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use clap::{Args, Subcommand};
@@ -153,7 +154,7 @@ pub struct ModelListEntry {
     install_path: String,
 }
 
-pub async fn run_models(args: ModelsArgs) -> Result<(), String> {
+pub async fn run_models(args: ModelsArgs) -> CliResult<()> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
         ModelCommands::Download(args) => run_model_download(args).await,
@@ -161,7 +162,7 @@ pub async fn run_models(args: ModelsArgs) -> Result<(), String> {
     }
 }
 
-fn run_model_list(args: ModelListArgs) -> Result<(), String> {
+fn run_model_list(args: ModelListArgs) -> CliResult<()> {
     let models = filter_models(list_models(args.models_dir.clone())?, &args);
     let output = if args.json {
         serde_json::to_string_pretty(
@@ -170,7 +171,7 @@ fn run_model_list(args: ModelListArgs) -> Result<(), String> {
                 .map(ModelListEntry::from)
                 .collect::<Vec<_>>(),
         )
-        .map_err(|error| format!("Failed to serialize model list: {error}"))?
+        .map_err(|error| CliError::Other(format!("Failed to serialize model list: {error}")))?
     } else {
         render_model_table(&models)
     };
@@ -283,7 +284,7 @@ fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
     output.push('\n');
 }
 
-async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
+async fn run_model_download(args: ModelDownloadArgs) -> CliResult<()> {
     let quiet = args.quiet;
     let yes = args.yes;
     let models_dir = args.models_dir;
@@ -307,7 +308,7 @@ async fn run_model_download(args: ModelDownloadArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn run_model_delete(args: ModelDeleteArgs) -> Result<(), String> {
+fn run_model_delete(args: ModelDeleteArgs) -> CliResult<()> {
     let resolved = resolve_model_download(&args.model_id, args.models_dir)?;
 
     if !resolved.model.is_installed_at(&resolved.models_dir) && !resolved.install_path.exists() {
@@ -333,12 +334,12 @@ fn run_model_delete(args: ModelDeleteArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, String> {
+fn confirm_model_delete(model_id: &str, install_path: &Path) -> CliResult<bool> {
     if !io::stdin().is_terminal() && std::env::var("SONA_TEST_NON_INTERACTIVE_OK").is_err() {
-        return Err(
+        return Err(CliError::Validation(
             "Cannot prompt for confirmation in non-interactive shell. Use --yes to override."
                 .to_string(),
-        );
+        ));
     }
 
     eprint!(
@@ -347,24 +348,24 @@ fn confirm_model_delete(model_id: &str, install_path: &Path) -> Result<bool, Str
     );
     io::stderr()
         .flush()
-        .map_err(|error| format!("Failed to flush confirmation prompt: {error}"))?;
+        .map_err(|error| CliError::Io(format!("Failed to flush confirmation prompt: {error}")))?;
 
     let mut answer = String::new();
     io::stdin()
         .read_line(&mut answer)
-        .map_err(|error| format!("Failed to read confirmation: {error}"))?;
+        .map_err(|error| CliError::Io(format!("Failed to read confirmation: {error}")))?;
     Ok(matches!(
         answer.trim().to_ascii_lowercase().as_str(),
         "y" | "yes"
     ))
 }
 
-fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> Result<bool, String> {
+fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> CliResult<bool> {
     if !io::stdin().is_terminal() && std::env::var("SONA_TEST_NON_INTERACTIVE_OK").is_err() {
-        return Err(
+        return Err(CliError::Validation(
             "Cannot prompt for confirmation in non-interactive shell. Use --yes to override."
                 .to_string(),
-        );
+        ));
     }
 
     eprint!(
@@ -373,43 +374,43 @@ fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> Result<bool, 
     );
     io::stderr()
         .flush()
-        .map_err(|error| format!("Failed to flush confirmation prompt: {error}"))?;
+        .map_err(|error| CliError::Io(format!("Failed to flush confirmation prompt: {error}")))?;
 
     let mut answer = String::new();
     io::stdin()
         .read_line(&mut answer)
-        .map_err(|error| format!("Failed to read confirmation: {error}"))?;
+        .map_err(|error| CliError::Io(format!("Failed to read confirmation: {error}")))?;
     Ok(matches!(
         answer.trim().to_ascii_lowercase().as_str(),
         "y" | "yes"
     ))
 }
 
-fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
+fn remove_model_install_path(install_path: &Path) -> CliResult<()> {
     let metadata = match std::fs::symlink_metadata(install_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(error) => {
-            return Err(format!(
+            return Err(CliError::Io(format!(
                 "Failed to inspect model path {}: {error}",
                 install_path.display()
-            ));
+            )));
         }
     };
 
     if metadata.file_type().is_dir() {
         std::fs::remove_dir_all(install_path).map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to delete model directory {}: {error}",
                 install_path.display()
-            )
+            ))
         })
     } else {
         std::fs::remove_file(install_path).map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to delete model file {}: {error}",
                 install_path.display()
-            )
+            ))
         })
     }
 }
@@ -419,7 +420,7 @@ async fn download_one_model(
     resolved: &ResolvedModelDownload,
     yes: bool,
     quiet: bool,
-) -> Result<(), String> {
+) -> CliResult<()> {
     let stderr_is_terminal = io::stderr().is_terminal();
     let mut last_percentage: Option<i32> = None;
     let install_path = download_model(resolved, yes, |downloaded, total| {
@@ -449,7 +450,7 @@ async fn download_one_model(
 }
 
 /// Returns preset models known to the CLI with installation status.
-pub fn list_models(models_dir: Option<PathBuf>) -> Result<Vec<CliModelSummary>, String> {
+pub fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<CliModelSummary>> {
     let models_dir = resolve_models_dir(models_dir)?;
     Ok(preset_models()
         .iter()
@@ -473,10 +474,10 @@ pub fn list_models(models_dir: Option<PathBuf>) -> Result<Vec<CliModelSummary>, 
 pub fn resolve_model_download(
     model_id: &str,
     models_dir: Option<PathBuf>,
-) -> Result<ResolvedModelDownload, String> {
+) -> CliResult<ResolvedModelDownload> {
     let models_dir = resolve_models_dir(models_dir)?;
     let model = find_preset_model(model_id)
-        .ok_or_else(|| format!("Unknown model id: {model_id}"))?
+        .ok_or_else(|| CliError::Validation(format!("Unknown model id: {model_id}")))?
         .clone();
     let download_path = model.resolve_download_path(&models_dir);
     let install_path = model.resolve_install_path(&models_dir);
@@ -494,7 +495,7 @@ pub async fn download_model<F>(
     resolved: &ResolvedModelDownload,
     yes: bool,
     mut on_progress: F,
-) -> Result<PathBuf, String>
+) -> Result<PathBuf, CliError>
 where
     F: FnMut(u64, u64),
 {
@@ -517,37 +518,37 @@ where
         if is_valid {
             return Ok(resolved.install_path.clone());
         } else if !yes && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)? {
-            return Err(
+            return Err(CliError::Model(
                 "Download cancelled: model files are invalid and user declined to overwrite."
                     .to_string(),
-            );
+            ));
         }
     }
 
     tokio::fs::create_dir_all(&resolved.models_dir)
         .await
         .map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to create models directory {}: {error}",
                 resolved.models_dir.display()
-            )
+            ))
         })?;
 
     let client = reqwest::Client::builder()
         .user_agent("Sona/1.0")
         .build()
-        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
+        .map_err(|error| CliError::Network(format!("Failed to create HTTP client: {error}")))?;
     let response = client
         .get(&resolved.model.url)
         .send()
         .await
-        .map_err(|error| format!("Failed to download model: {error}"))?;
+        .map_err(|error| CliError::Network(format!("Failed to download model: {error}")))?;
 
     if !response.status().is_success() {
-        return Err(format!(
+        return Err(CliError::Network(format!(
             "Download failed with status: {}",
             response.status()
-        ));
+        )));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -555,15 +556,15 @@ where
     let file = tokio::fs::File::create(&temp_download_path)
         .await
         .map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to create download file {}: {error}",
                 temp_download_path.display()
-            )
+            ))
         })?;
     let mut writer = tokio::io::BufWriter::new(file);
     let mut stream = response
         .bytes_stream()
-        .map(|item| item.map_err(|error| error.to_string()));
+        .map(|item| item.map_err(|error| CliError::Network(error.to_string())));
 
     if let Err(error) =
         process_download_stream(&mut stream, &mut writer, total_size, |downloaded, total| {
@@ -579,7 +580,9 @@ where
     if let Err(error) = writer.flush().await {
         drop(writer);
         let _ = tokio::fs::remove_file(&temp_download_path).await;
-        return Err(format!("Failed to flush download file: {error}"));
+        return Err(CliError::Io(format!(
+            "Failed to flush download file: {error}"
+        )));
     }
 
     drop(writer);
@@ -590,19 +593,19 @@ where
             Ok(sha) => sha,
             Err(err) => {
                 let _ = tokio::fs::remove_file(&temp_download_path).await;
-                return Err(format!(
+                return Err(CliError::Io(format!(
                     "Failed to calculate hash of downloaded file: {err}"
-                ));
+                )));
             }
         };
         if !actual_sha.eq_ignore_ascii_case(expected_sha) {
             let _ = tokio::fs::remove_file(&temp_download_path).await;
-            return Err(format!(
+            return Err(CliError::Model(format!(
                 "Downloaded file hash mismatch for {}. Expected: {}, got: {}",
                 temp_download_path.display(),
                 expected_sha,
                 actual_sha
-            ));
+            )));
         }
     }
 
@@ -613,10 +616,10 @@ where
         tokio::fs::remove_file(&resolved.download_path)
             .await
             .map_err(|error| {
-                format!(
+                CliError::Io(format!(
                     "Failed to remove archive {}: {error}",
                     resolved.download_path.display()
-                )
+                ))
             })?;
     }
 
@@ -629,27 +632,26 @@ fn temporary_download_path(path: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
-async fn publish_download_file(temp_path: &Path, final_path: &Path) -> Result<(), String> {
-    if tokio::fs::try_exists(final_path)
-        .await
-        .map_err(|error| format!("Failed to check {}: {error}", final_path.display()))?
-    {
+async fn publish_download_file(temp_path: &Path, final_path: &Path) -> CliResult<()> {
+    if tokio::fs::try_exists(final_path).await.map_err(|error| {
+        CliError::Io(format!("Failed to check {}: {error}", final_path.display()))
+    })? {
         tokio::fs::remove_file(final_path).await.map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to remove existing download target {}: {error}",
                 final_path.display()
-            )
+            ))
         })?;
     }
 
     tokio::fs::rename(temp_path, final_path)
         .await
         .map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to publish download {} to {}: {error}",
                 temp_path.display(),
                 final_path.display()
-            )
+            ))
         })
 }
 
@@ -669,9 +671,9 @@ async fn process_download_stream<S, W, F>(
     writer: &mut W,
     total_size: u64,
     mut on_progress: F,
-) -> Result<(), String>
+) -> CliResult<()>
 where
-    S: futures_util::Stream<Item = Result<bytes::Bytes, String>> + Unpin,
+    S: futures_util::Stream<Item = Result<bytes::Bytes, CliError>> + Unpin,
     W: tokio::io::AsyncWrite + Unpin,
     F: FnMut(u64, u64),
 {
@@ -683,7 +685,7 @@ where
         writer
             .write_all(&chunk)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| CliError::Io(error.to_string()))?;
         downloaded += chunk.len() as u64;
 
         if total_size > 0 && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100) {
@@ -695,13 +697,16 @@ where
     Ok(())
 }
 
-async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Result<(), String> {
+async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> CliResult<()> {
     let archive_path = archive_path.to_path_buf();
     let target_dir = target_dir.to_path_buf();
 
     tokio::task::spawn_blocking(move || {
         let file = std::fs::File::open(&archive_path).map_err(|error| {
-            format!("Failed to open archive {}: {error}", archive_path.display())
+            CliError::Io(format!(
+                "Failed to open archive {}: {error}",
+                archive_path.display()
+            ))
         })?;
         let buffered = std::io::BufReader::new(file);
         let tar = bzip2::read::BzDecoder::new(buffered);
@@ -709,23 +714,26 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Resu
         archive.set_preserve_permissions(false);
         archive.set_unpack_xattrs(false);
         archive.unpack(&target_dir).map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to extract archive into {}: {error}",
                 target_dir.display()
-            )
+            ))
         })
     })
     .await
-    .map_err(|error| format!("Failed to join extraction task: {error}"))?
+    .map_err(|error| CliError::Other(format!("Failed to join extraction task: {error}")))?
 }
 
-pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, String> {
+pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, CliError> {
     if let Some(path) = configured {
         return Ok(path);
     }
 
     default_models_dir().ok_or_else(|| {
-        "Unable to infer the desktop models directory. Pass --models-dir explicitly.".to_string()
+        CliError::Validation(
+            "Unable to infer the desktop models directory. Pass --models-dir explicitly."
+                .to_string(),
+        )
     })
 }
 
@@ -843,13 +851,14 @@ mod tests {
         assert!(
             result
                 .unwrap_err()
+                .to_string()
                 .contains("Cannot prompt for confirmation")
         );
 
         // Case 2: yes = true, it should bypass the prompt and proceed to download, failing on connection or gateway status
         let result = download_model(&resolved, true, |_, _| {}).await;
         assert!(result.is_err());
-        let err_msg = result.unwrap_err();
+        let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("Failed to download") || err_msg.contains("Download failed"),
             "Expected error message to contain 'Failed to download' or 'Download failed', but was: '{}'",

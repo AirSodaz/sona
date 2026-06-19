@@ -1,4 +1,5 @@
 use crate::cli::models::resolve_models_dir;
+use crate::cli::{CliError, CliResult};
 use crate::core::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
@@ -249,7 +250,7 @@ struct BatchTranscribeFileSummary {
 pub fn resolve_transcribe_options(
     cli: TranscribeCliOptions,
     config: Option<CliConfigFile>,
-) -> Result<ResolvedTranscribeOptions, String> {
+) -> Result<ResolvedTranscribeOptions, CliError> {
     resolve_transcribe_options_with_install_checker(cli, config, PresetModel::is_installed_at)
 }
 
@@ -257,7 +258,7 @@ fn resolve_transcribe_options_with_install_checker(
     cli: TranscribeCliOptions,
     config: Option<CliConfigFile>,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<ResolvedTranscribeOptions, String> {
+) -> Result<ResolvedTranscribeOptions, CliError> {
     let config = config.unwrap_or_default();
     let output_target = resolve_output_target(cli.output.clone());
     let export_format = resolve_export_format(
@@ -266,7 +267,8 @@ fn resolve_transcribe_options_with_install_checker(
             OutputTarget::Stdout => None,
             OutputTarget::File(path) => Some(path.as_path()),
         },
-    )?;
+    )
+    .map_err(CliError::Validation)?;
     let gpu_acceleration =
         resolve_cli_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
@@ -274,7 +276,10 @@ fn resolve_transcribe_options_with_install_checker(
     ensure_output_can_be_written(&output_target, cli.force)?;
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
     let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
-        "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
+        CliError::Validation(
+            "Missing required offline model. Pass --model-id or set model_id in --config."
+                .to_string(),
+        )
     })?;
     let model = resolve_offline_model(&model_id)?;
     let rules = model.resolved_rules();
@@ -285,7 +290,9 @@ fn resolve_transcribe_options_with_install_checker(
     let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
     let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
     if threads <= 0 {
-        return Err("threads must be greater than 0".to_string());
+        return Err(CliError::Validation(
+            "threads must be greater than 0".to_string(),
+        ));
     }
 
     let vad_buffer = cli
@@ -293,7 +300,9 @@ fn resolve_transcribe_options_with_install_checker(
         .or(config.vad_buffer_size)
         .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
     if vad_buffer <= 0.0 {
-        return Err("vad_buffer must be greater than 0".to_string());
+        return Err(CliError::Validation(
+            "vad_buffer must be greater than 0".to_string(),
+        ));
     }
 
     let language = cli
@@ -347,13 +356,13 @@ fn resolve_transcribe_options_with_install_checker(
             postprocessor: crate::integrations::asr::TranscriptPostprocessor::compile(
                 crate::integrations::asr::TranscriptPostprocessOptions::default(),
             )
-            .map_err(|e| e.to_string())?,
+            .map_err(|e| CliError::Other(e.to_string()))?,
             gpu_acceleration,
         },
     })
 }
 
-pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
+pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<()> {
     let config = match args.config.as_deref() {
         Some(path) => Some(load_config_file(path)?),
         None => None,
@@ -369,7 +378,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
 async fn run_single_transcribe(
     args: TranscribeArgs,
     config: Option<CliConfigFile>,
-) -> Result<(), String> {
+) -> CliResult<()> {
     let enable_itn = resolve_enable_itn(&args);
 
     let resolved = resolve_transcribe_options(
@@ -378,7 +387,7 @@ async fn run_single_transcribe(
                 .input
                 .into_iter()
                 .next()
-                .ok_or_else(|| "Missing input file path.".to_string())?,
+                .ok_or_else(|| CliError::Validation("Missing input file path.".to_string()))?,
             output: args.output,
             format: args.format,
             language: args.language,
@@ -416,35 +425,40 @@ async fn run_single_transcribe(
     })
     .await;
     reporter.finish_write();
-    let segments = segments?;
-    let content = export_segments(&segments, export_format)?;
+    let segments = segments.map_err(CliError::Other)?;
+    let content = export_segments(&segments, export_format).map_err(CliError::Other)?;
     write_output(&output_target, &content)
 }
 
 async fn run_batch_transcribe(
     args: TranscribeArgs,
     config: Option<CliConfigFile>,
-) -> Result<(), String> {
+) -> CliResult<()> {
     if args.save_wav.is_some() {
-        return Err("Batch directory transcription does not support --save-wav.".to_string());
+        return Err(CliError::Validation(
+            "Batch directory transcription does not support --save-wav.".to_string(),
+        ));
     }
 
     let output_dir = args.output_dir.clone().ok_or_else(|| {
-        "Batch transcription requires --output-dir so each file has a destination.".to_string()
+        CliError::Validation(
+            "Batch transcription requires --output-dir so each file has a destination.".to_string(),
+        )
     })?;
     let config = config.unwrap_or_default();
     let jobs = resolve_batch_jobs(args.jobs.or(config.jobs))?;
     let quiet = args.quiet || config.quiet.unwrap_or(false);
     let input_source = resolve_batch_input_source(&args)?;
     let export_format =
-        resolve_export_format(args.format.as_deref().or(config.format.as_deref()), None)?;
+        resolve_export_format(args.format.as_deref().or(config.format.as_deref()), None)
+            .map_err(CliError::Validation)?;
     let inputs = input_source.inputs;
 
     if inputs.is_empty() {
-        return Err(format!(
+        return Err(CliError::Validation(format!(
             "No supported media files found in {}.",
             input_source.base_dir.display()
-        ));
+        )));
     }
 
     let output_plans = plan_batch_output_files(
@@ -458,9 +472,9 @@ async fn run_batch_transcribe(
     let mut plans = Vec::with_capacity(output_plans.len());
     let format = Some(export_format_name(export_format).to_string());
     let enable_itn = resolve_enable_itn(&args);
-    let first_plan = output_plans
-        .first()
-        .ok_or_else(|| "No supported media files found for batch transcription.".to_string())?;
+    let first_plan = output_plans.first().ok_or_else(|| {
+        CliError::Validation("No supported media files found for batch transcription.".to_string())
+    })?;
     let resolved_template = resolve_transcribe_options(
         TranscribeCliOptions {
             input: first_plan.input_path.clone(),
@@ -527,7 +541,7 @@ fn should_run_path_batch(inputs: &[PathBuf]) -> bool {
             .any(|input| path_contains_glob_pattern(input.as_path()))
 }
 
-fn resolve_batch_input_source(args: &TranscribeArgs) -> Result<BatchInputSource, String> {
+fn resolve_batch_input_source(args: &TranscribeArgs) -> Result<BatchInputSource, CliError> {
     if let Some(input_dir) = args.input_dir.as_deref() {
         return Ok(BatchInputSource {
             inputs: collect_batch_input_files(input_dir, args.recursive)?,
@@ -545,27 +559,32 @@ fn resolve_batch_input_source(args: &TranscribeArgs) -> Result<BatchInputSource,
     })
 }
 
-fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, CliError> {
     let mut expanded = Vec::new();
 
     for input in inputs {
         if path_contains_glob_pattern(input) {
             let pattern = input.to_string_lossy().to_string();
             let mut matches = glob::glob(&pattern)
-                .map_err(|error| format!("Invalid glob pattern {}: {error}", input.display()))?
+                .map_err(|error| {
+                    CliError::Io(format!("Invalid glob pattern {}: {error}", input.display()))
+                })?
                 .map(|entry| {
                     entry.map_err(|error| {
-                        format!("Failed to read glob match for {}: {error}", input.display())
+                        CliError::Io(format!(
+                            "Failed to read glob match for {}: {error}",
+                            input.display()
+                        ))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             matches.retain(|path| path.is_file());
             matches.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
             if matches.is_empty() {
-                return Err(format!(
+                return Err(CliError::Validation(format!(
                     "No input files matched glob pattern: {}",
                     input.display()
-                ));
+                )));
             }
             expanded.extend(matches);
         } else {
@@ -588,18 +607,15 @@ fn path_contains_glob_pattern(path: &Path) -> bool {
         .any(|character| GLOB_PATTERN_CHARS.contains(&character))
 }
 
-fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, String> {
+fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, CliError> {
     let first_parent = inputs
         .first()
         .and_then(|path| path.parent())
-        .ok_or_else(|| "Missing input file path.".to_string())?;
+        .ok_or_else(|| CliError::Validation("Missing input file path.".to_string()))?;
     Ok(first_parent.to_path_buf())
 }
 
-async fn run_batch_transcribe_plans(
-    plans: Vec<BatchTranscribePlan>,
-    jobs: usize,
-) -> Result<(), String> {
+async fn run_batch_transcribe_plans(plans: Vec<BatchTranscribePlan>, jobs: usize) -> CliResult<()> {
     let total = plans.len();
     if total == 0 {
         return Ok(());
@@ -616,7 +632,8 @@ async fn run_batch_transcribe_plans(
         request.enable_itn,
         &request.language,
         request.hotwords.clone(),
-    )?;
+    )
+    .map_err(CliError::Model)?;
 
     let gpu_plan =
         crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
@@ -626,7 +643,8 @@ async fn run_batch_transcribe_plans(
         config_type,
         request.num_threads,
         gpu_plan,
-    )?;
+    )
+    .map_err(CliError::Model)?;
 
     // Print fallback notice once at the start of the batch if applicable
     if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
@@ -683,11 +701,13 @@ async fn run_batch_transcribe_plans(
         results: file_results,
     };
     let content = serde_json::to_string_pretty(&summary)
-        .map_err(|error| format!("Failed to serialize batch summary: {error}"))?;
+        .map_err(|error| CliError::Other(format!("Failed to serialize batch summary: {error}")))?;
     write_output(&OutputTarget::Stdout, &content)?;
 
     if failed > 0 {
-        Err(format!("{failed} of {total} batch files failed."))
+        Err(CliError::Other(format!(
+            "{failed} of {total} batch files failed."
+        )))
     } else {
         Ok(())
     }
@@ -730,8 +750,8 @@ async fn run_batch_transcribe_plan(
         )
         .await;
         reporter.finish_write();
-        let segments = segments?;
-        let content = export_segments(&segments, export_format)?;
+        let segments = segments.map_err(CliError::Other)?;
+        let content = export_segments(&segments, export_format).map_err(CliError::Other)?;
         write_output(&output_target, &content)
     }
     .await;
@@ -747,7 +767,7 @@ async fn run_batch_transcribe_plan(
             input_path: input_label,
             output_path: output_label,
             status: "error".to_string(),
-            error: Some(error),
+            error: Some(error.to_string()),
         },
     }
 }
@@ -891,7 +911,7 @@ impl CliProgressReporter {
 }
 
 /// Writes CLI output to the selected destination.
-pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> {
+pub fn write_output(target: &OutputTarget, content: &str) -> CliResult<()> {
     match target {
         OutputTarget::Stdout => {
             if content.ends_with('\n') {
@@ -901,34 +921,38 @@ pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> 
             }
             std::io::stdout()
                 .flush()
-                .map_err(|error| format!("Failed to flush stdout: {error}"))?;
+                .map_err(|error| CliError::Io(format!("Failed to flush stdout: {error}")))?;
             Ok(())
         }
-        OutputTarget::File(path) => fs::write(path, content)
-            .map_err(|error| format!("Failed to write output file {}: {error}", path.display())),
+        OutputTarget::File(path) => fs::write(path, content).map_err(|error| {
+            CliError::Io(format!(
+                "Failed to write output file {}: {error}",
+                path.display()
+            ))
+        }),
     }
 }
 
-fn ensure_output_can_be_written(target: &OutputTarget, force: bool) -> Result<(), String> {
+fn ensure_output_can_be_written(target: &OutputTarget, force: bool) -> CliResult<()> {
     match target {
         OutputTarget::Stdout => Ok(()),
         OutputTarget::File(path) if force || !path.exists() => Ok(()),
-        OutputTarget::File(path) => Err(format!(
+        OutputTarget::File(path) => Err(CliError::Io(format!(
             "Output file already exists: {}. Use --force to overwrite.",
             path.display()
-        )),
+        ))),
     }
 }
 
-fn ensure_output_parent(path: &Path) -> Result<(), String> {
+fn ensure_output_parent(path: &Path) -> CliResult<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
         fs::create_dir_all(parent).map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to create output directory {}: {error}",
                 parent.display()
-            )
+            ))
         })?;
     }
     Ok(())
@@ -955,14 +979,14 @@ fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     }
 }
 
-fn ensure_input_file_exists(input: &Path) -> Result<(), String> {
+fn ensure_input_file_exists(input: &Path) -> CliResult<()> {
     if input.is_file() {
         Ok(())
     } else {
-        Err(format!(
+        Err(CliError::Validation(format!(
             "Input file must be an existing file: {}",
             input.display()
-        ))
+        )))
     }
 }
 
@@ -976,12 +1000,12 @@ fn export_format_name(format: ExportFormat) -> &'static str {
     }
 }
 
-fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, String> {
+fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, CliError> {
     if !input_dir.is_dir() {
-        return Err(format!(
+        return Err(CliError::Validation(format!(
             "--input-dir must be an existing directory: {}",
             input_dir.display()
-        ));
+        )));
     }
 
     let walker = walkdir::WalkDir::new(input_dir)
@@ -990,8 +1014,9 @@ fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<Pa
     let mut files = Vec::new();
 
     for entry in walker {
-        let entry =
-            entry.map_err(|error| format!("Failed to read {}: {error}", input_dir.display()))?;
+        let entry = entry.map_err(|error| {
+            CliError::Io(format!("Failed to read {}: {error}", input_dir.display()))
+        })?;
         if entry.file_type().is_file() && is_supported_batch_media_path(entry.path()) {
             files.push(entry.path().to_path_buf());
         }
@@ -1018,27 +1043,28 @@ fn plan_batch_output_files(
     format: ExportFormat,
     preserve_relative_paths: bool,
     force: bool,
-) -> Result<Vec<BatchOutputPlan>, String> {
+) -> Result<Vec<BatchOutputPlan>, CliError> {
     let extension = export_format_name(format);
     let mut seen_outputs = HashSet::new();
     let mut plans = Vec::with_capacity(inputs.len());
 
     for input_path in inputs {
         let relative_output =
-            batch_relative_output_path(input_path, input_dir, extension, preserve_relative_paths)?;
+            batch_relative_output_path(input_path, input_dir, extension, preserve_relative_paths)
+                .map_err(CliError::Validation)?;
         let output_path = output_dir.join(relative_output);
         let output_key = output_path.to_string_lossy().to_ascii_lowercase();
         if !seen_outputs.insert(output_key) {
-            return Err(format!(
+            return Err(CliError::Io(format!(
                 "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
                 output_path.display()
-            ));
+            )));
         }
         if !force && output_path.exists() {
-            return Err(format!(
+            return Err(CliError::Io(format!(
                 "Output file already exists: {}. Use --force to overwrite.",
                 output_path.display()
-            ));
+            )));
         }
 
         plans.push(BatchOutputPlan {
@@ -1080,36 +1106,38 @@ fn batch_relative_output_path(
     Ok(output)
 }
 
-fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
+fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, CliError> {
     let jobs = value.unwrap_or(DEFAULT_BATCH_JOBS);
     if jobs == 0 {
-        Err("--jobs must be greater than 0.".to_string())
+        Err(CliError::Validation(
+            "--jobs must be greater than 0.".to_string(),
+        ))
     } else {
         Ok(jobs)
     }
 }
 
-pub fn resolve_cli_gpu_acceleration(value: Option<String>) -> Result<Option<String>, String> {
+pub fn resolve_cli_gpu_acceleration(value: Option<String>) -> Result<Option<String>, CliError> {
     let value = value.unwrap_or_else(|| DEFAULT_GPU_ACCELERATION.to_string());
     let normalized = value.trim().to_ascii_lowercase();
 
     if GPU_ACCELERATION_VALUES.contains(&normalized.as_str()) {
         Ok(Some(normalized))
     } else {
-        Err(format!(
+        Err(CliError::Validation(format!(
             "gpu_acceleration must be one of {}.",
             GPU_ACCELERATION_VALUES.join(", ")
-        ))
+        )))
     }
 }
 
-fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
-    let model =
-        find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
+fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, CliError> {
+    let model = find_preset_model(model_id)
+        .ok_or_else(|| CliError::Model(format!("Unknown model id: {model_id}")))?;
     if !model.supports_mode("offline") {
-        return Err(format!(
+        return Err(CliError::Model(format!(
             "Model '{model_id}' does not support offline transcription."
-        ));
+        )));
     }
     Ok(model)
 }
@@ -1118,14 +1146,14 @@ fn require_installed_model(
     model: &PresetModel,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<String, String> {
+) -> Result<String, CliError> {
     let path = model.resolve_install_path(models_dir);
     if !is_installed(model, models_dir) {
-        return Err(format!(
+        return Err(CliError::Model(format!(
             "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             model.id,
             path.display()
-        ));
+        )));
     }
     Ok(path.to_string_lossy().to_string())
 }
@@ -1134,15 +1162,15 @@ fn require_installed_companion(
     model_id: &str,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<String, String> {
+) -> Result<String, CliError> {
     let model = find_preset_model(model_id)
-        .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
+        .ok_or_else(|| CliError::Model(format!("Unknown companion model id: {model_id}")))?;
     let path = model.resolve_install_path(models_dir);
     if !is_installed(model, models_dir) {
-        return Err(format!(
+        return Err(CliError::Model(format!(
             "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
             path.display()
-        ));
+        )));
     }
     Ok(path.to_string_lossy().to_string())
 }
@@ -1151,7 +1179,7 @@ fn optional_installed_companion(
     model_id: Option<&str>,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, CliError> {
     model_id
         .map(|id| require_installed_companion(id, models_dir, is_installed))
         .transpose()
@@ -1176,11 +1204,19 @@ pub struct CliConfigFile {
 }
 
 /// Loads a TOML configuration file for the CLI.
-pub fn load_config_file(path: &Path) -> Result<CliConfigFile, String> {
-    let contents = fs::read_to_string(path)
-        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    toml::from_str(&contents)
-        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))
+pub fn load_config_file(path: &Path) -> Result<CliConfigFile, CliError> {
+    let contents = fs::read_to_string(path).map_err(|error| {
+        CliError::Io(format!(
+            "Failed to read config file {}: {error}",
+            path.display()
+        ))
+    })?;
+    toml::from_str(&contents).map_err(|error| {
+        CliError::Validation(format!(
+            "Failed to parse config file {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 #[cfg(test)]
@@ -1197,7 +1233,7 @@ mod tests {
     fn resolve_test_transcribe_options(
         cli: TranscribeCliOptions,
         config: Option<CliConfigFile>,
-    ) -> Result<ResolvedTranscribeOptions, String> {
+    ) -> Result<ResolvedTranscribeOptions, CliError> {
         resolve_transcribe_options_with_install_checker(cli, config, test_model_exists)
     }
 
@@ -1379,8 +1415,12 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(error.contains("Unknown companion model id: custom-vad"));
-        assert!(!error.contains("silero-vad"));
+        assert!(
+            error
+                .to_string()
+                .contains("Unknown companion model id: custom-vad")
+        );
+        assert!(!error.to_string().contains("silero-vad"));
     }
 
     #[test]
@@ -1455,9 +1495,13 @@ mod tests {
 
         let error = resolve_test_transcribe_options(cli, None).unwrap_err();
 
-        assert!(error.contains("gpu_acceleration"));
-        assert!(error.contains("auto, cpu, cuda, coreml, directml"));
-        assert!(!error.contains("Unknown model id"));
+        assert!(error.to_string().contains("gpu_acceleration"));
+        assert!(
+            error
+                .to_string()
+                .contains("auto, cpu, cuda, coreml, directml")
+        );
+        assert!(!error.to_string().contains("Unknown model id"));
     }
 
     #[test]
@@ -1590,8 +1634,8 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(error.contains("would overwrite"));
-        assert!(error.contains("demo.json"));
+        assert!(error.to_string().contains("would overwrite"));
+        assert!(error.to_string().contains("demo.json"));
     }
 
     #[test]
@@ -1616,9 +1660,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(error.contains("Output file already exists"));
-        assert!(error.contains("demo.json"));
-        assert!(error.contains("--force"));
+        assert!(error.to_string().contains("Output file already exists"));
+        assert!(error.to_string().contains("demo.json"));
+        assert!(error.to_string().contains("--force"));
     }
 
     #[test]
@@ -1653,7 +1697,11 @@ mod tests {
 
         let error = expand_input_patterns(&[pattern]).unwrap_err();
 
-        assert!(error.contains("No input files matched glob pattern"));
+        assert!(
+            error
+                .to_string()
+                .contains("No input files matched glob pattern")
+        );
     }
 
     #[test]
@@ -1674,7 +1722,12 @@ mod tests {
     fn batch_jobs_default_to_one_and_must_be_positive() {
         assert_eq!(resolve_batch_jobs(None).unwrap(), 1);
         assert_eq!(resolve_batch_jobs(Some(2)).unwrap(), 2);
-        assert!(resolve_batch_jobs(Some(0)).unwrap_err().contains("--jobs"));
+        assert!(
+            resolve_batch_jobs(Some(0))
+                .unwrap_err()
+                .to_string()
+                .contains("--jobs")
+        );
     }
 
     #[test]
@@ -1720,7 +1773,11 @@ mod tests {
         cli.models_dir = Some(models_dir);
 
         let error = resolve_test_transcribe_options(cli, None).unwrap_err();
-        assert!(error.contains("Companion model 'silero-vad' was not found"));
+        assert!(
+            error
+                .to_string()
+                .contains("Companion model 'silero-vad' was not found")
+        );
     }
 
     #[test]

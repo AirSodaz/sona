@@ -136,7 +136,8 @@ pub async fn start_api_server(
         .join(",");
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
     let transcription_defaults = ApiServerTranscriptionDefaults {
-        gpu_acceleration: crate::cli::resolve_cli_gpu_acceleration(Some(gpu_acceleration))?,
+        gpu_acceleration: crate::cli::resolve_cli_gpu_acceleration(Some(gpu_acceleration))
+            .map_err(|e| e.to_string())?,
         ..Default::default()
     };
 
@@ -593,7 +594,7 @@ async fn start_worker_loop(
                             Err(e) => JobStatus::Failed(e),
                         }
                     }
-                    Err(e) => JobStatus::Failed(e),
+                    Err(e) => JobStatus::Failed(e.to_string()),
                 }
             };
 

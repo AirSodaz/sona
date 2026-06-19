@@ -2,6 +2,8 @@ use clap::Args;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::cli::{CliError, CliResult};
+
 const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
 pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
@@ -58,7 +60,7 @@ pub struct InitConfigArgs {
     force: bool,
 }
 
-pub fn run_init_config(args: InitConfigArgs) -> Result<(), String> {
+pub fn run_init_config(args: InitConfigArgs) -> CliResult<()> {
     let path = args
         .path
         .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
@@ -67,27 +69,31 @@ pub fn run_init_config(args: InitConfigArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn write_config_template(path: &Path, force: bool) -> Result<(), String> {
+fn write_config_template(path: &Path, force: bool) -> CliResult<()> {
     if path.exists() && !force {
-        return Err(format!(
+        return Err(CliError::Io(format!(
             "Config file already exists: {}. Use --force to overwrite.",
             path.display()
-        ));
+        )));
     }
 
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
         fs::create_dir_all(parent).map_err(|error| {
-            format!(
+            CliError::Io(format!(
                 "Failed to create config directory {}: {error}",
                 parent.display()
-            )
+            ))
         })?;
     }
 
-    fs::write(path, CONFIG_TEMPLATE)
-        .map_err(|error| format!("Failed to write config file {}: {error}", path.display()))
+    fs::write(path, CONFIG_TEMPLATE).map_err(|error| {
+        CliError::Io(format!(
+            "Failed to write config file {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 #[cfg(test)]
@@ -149,7 +155,7 @@ mod tests {
 
         let error = write_config_template(&path, false).unwrap_err();
 
-        assert!(error.contains("--force"));
+        assert!(error.to_string().contains("--force"));
         assert_eq!(fs::read_to_string(path).unwrap(), "existing = true\n");
     }
 

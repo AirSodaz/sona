@@ -1,5 +1,5 @@
 use crate::cli::models::resolve_models_dir;
-use crate::cli::{DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
+use crate::cli::{CliError, CliResult, DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
 use clap::Args;
 use std::collections::HashMap;
 use std::fs;
@@ -72,7 +72,7 @@ pub struct ServeArgs {
     punctuation_model_id: Option<String>,
 }
 
-pub async fn run_serve(args: ServeArgs) -> Result<(), String> {
+pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
     let config = match args.config.as_deref() {
         Some(path) => Some(load_serve_config_file(path)?),
         None => None,
@@ -92,7 +92,11 @@ pub async fn run_serve(args: ServeArgs) -> Result<(), String> {
     let (_tx, rx) = tokio::sync::oneshot::channel();
     let parsed_whitelist = match crate::app::server::parse_ip_whitelist(&resolved.ip_whitelist) {
         Ok(nets) => nets,
-        Err(e) => return Err(format!("Failed to parse IP whitelist: {e}")),
+        Err(e) => {
+            return Err(CliError::Validation(format!(
+                "Failed to parse IP whitelist: {e}"
+            )));
+        }
     };
     let parsed_arc = Arc::new(parsed_whitelist);
 
@@ -114,6 +118,9 @@ pub async fn run_serve(args: ServeArgs) -> Result<(), String> {
         shutdown_rx: rx,
     })
     .await
+    .map_err(CliError::Other)?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -151,7 +158,7 @@ pub struct ResolvedServeOptions {
 pub fn resolve_serve_options(
     args: ServeArgs,
     config: Option<ServeConfigFile>,
-) -> Result<ResolvedServeOptions, String> {
+) -> CliResult<ResolvedServeOptions> {
     let config = config.unwrap_or_default();
     let gpu_acceleration = resolve_cli_gpu_acceleration(
         args.gpu_acceleration
@@ -206,11 +213,19 @@ pub fn resolve_serve_options(
     })
 }
 
-pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigFile, String> {
-    let contents = fs::read_to_string(path)
-        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    toml::from_str(&contents)
-        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))
+pub fn load_serve_config_file(path: &Path) -> CliResult<ServeConfigFile> {
+    let contents = fs::read_to_string(path).map_err(|error| {
+        CliError::Io(format!(
+            "Failed to read config file {}: {error}",
+            path.display()
+        ))
+    })?;
+    toml::from_str(&contents).map_err(|error| {
+        CliError::Validation(format!(
+            "Failed to parse config file {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 #[cfg(test)]
