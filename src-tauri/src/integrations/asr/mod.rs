@@ -29,8 +29,9 @@ pub(crate) use batch::transcribe_batch_with_progress_and_fallback_notice;
 pub use error::SherpaError;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
+pub use model_config::Recognizer;
 pub(crate) use model_config::{
-    Recognizer, RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, load_vad,
+    RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, load_vad,
 };
 pub use postprocess::TranscriptPostprocessor;
 pub use state::AsrState;

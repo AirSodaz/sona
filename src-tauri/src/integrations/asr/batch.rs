@@ -4,8 +4,9 @@ use super::metrics::{
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
     log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
+use std::sync::Arc;
 use super::model_config::{
-    Punctuation, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
+    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
     build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
 };
 use super::state::AsrState;
@@ -42,11 +43,12 @@ pub async fn transcribe_batch_with_progress<F>(
 where
     F: FnMut(f32),
 {
-    transcribe_batch_with_progress_and_metrics_inner(request, &mut on_progress, None, |_| {}).await
+    transcribe_batch_with_progress_and_metrics_inner(request, None, &mut on_progress, None, |_| {}).await
 }
 
 pub(crate) async fn transcribe_batch_with_progress_and_fallback_notice<F, N>(
     request: &BatchTranscriptionRequest,
+    preloaded_recognizer: Option<Arc<Recognizer>>,
     mut on_progress: F,
     mut on_fallback: N,
 ) -> Result<Vec<TranscriptSegment>, String>
@@ -56,6 +58,7 @@ where
 {
     transcribe_batch_with_progress_and_metrics_inner(
         request,
+        preloaded_recognizer,
         &mut on_progress,
         None,
         &mut on_fallback,
@@ -73,6 +76,7 @@ where
 {
     transcribe_batch_with_progress_and_metrics_inner(
         request,
+        None,
         &mut on_progress,
         metrics_store,
         |_| {},
@@ -82,6 +86,7 @@ where
 
 async fn transcribe_batch_with_progress_and_metrics_inner<F, N>(
     request: &BatchTranscriptionRequest,
+    preloaded_recognizer: Option<Arc<Recognizer>>,
     mut on_progress: F,
     metrics_store: Option<AsrMetricsStore>,
     mut on_fallback: N,
@@ -102,30 +107,35 @@ where
 
     let model_load_started = Instant::now();
     let rss_before_mb = capture_process_memory_mb();
-    let config_type = build_model_config(
-        Path::new(&request.model_path),
-        &request.model_type,
-        &request.file_config,
-        request.enable_itn,
-        &request.language,
-        request.hotwords.clone(),
-    )?;
-    let gpu_plan =
-        crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
-            .await;
-    let recognizer_result =
-        create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)?;
-    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
-        log::warn!(
-            "[batch] {} transcription failed, retrying with {}: {}",
-            notice.from_provider,
-            notice.to_provider,
-            notice.error
-        );
-        on_fallback(notice);
-    }
-    let recognizer = recognizer_result.recognizer;
-    let model_load_ms = duration_to_ms(model_load_started.elapsed());
+
+    let (recognizer, reused_from_pool, model_load_ms) = if let Some(r) = preloaded_recognizer {
+        (r, true, 0.0)
+    } else {
+        let config_type = build_model_config(
+            Path::new(&request.model_path),
+            &request.model_type,
+            &request.file_config,
+            request.enable_itn,
+            &request.language,
+            request.hotwords.clone(),
+        )?;
+        let gpu_plan =
+            crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref())
+                .await;
+        let recognizer_result =
+            create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)?;
+        if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
+            log::warn!(
+                "[batch] {} transcription failed, retrying with {}: {}",
+                notice.from_provider,
+                notice.to_provider,
+                notice.error
+            );
+            on_fallback(notice);
+        }
+        (Arc::new(recognizer_result.recognizer), false, duration_to_ms(model_load_started.elapsed()))
+    };
+
     let rss_after_mb = capture_process_memory_mb();
 
     if let Some(metrics_store) = metrics_store.as_ref() {
@@ -136,7 +146,7 @@ where
             model_type: request.model_type.clone(),
             recognizer_kind: recognizer.kind_label().to_string(),
             num_threads: request.num_threads,
-            reused_from_pool: false,
+            reused_from_pool,
             load_ms: model_load_ms,
             rss_before_mb,
             rss_after_mb,

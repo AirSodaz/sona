@@ -4,6 +4,7 @@ use crate::core::preset_models::{
 };
 use crate::integrations::asr::{
     BatchTranscriptionRequest, transcribe_batch_with_progress_and_fallback_notice,
+    Recognizer,
 };
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
@@ -12,6 +13,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub const DEFAULT_THREADS: i32 = 4;
 pub const DEFAULT_LANGUAGE: &str = "auto";
@@ -404,7 +406,7 @@ async fn run_single_transcribe(
     let stderr_is_terminal = io::stderr().is_terminal();
 
     let mut reporter = CliProgressReporter::single(quiet, stderr_is_terminal);
-    let segments = transcribe_with_cli_gpu_fallback(&request, |event| match event {
+    let segments = transcribe_with_cli_gpu_fallback(&request, None, |event| match event {
         CliTranscribeEvent::Progress(progress) => reporter.write(progress),
         CliTranscribeEvent::DirectMlRetry { error } => {
             reporter.finish_write();
@@ -600,10 +602,47 @@ async fn run_batch_transcribe_plans(
     jobs: usize,
 ) -> Result<(), String> {
     let total = plans.len();
+    if total == 0 {
+        return Ok(());
+    }
+
+    // Preload the shared model recognizer using the first plan's options
+    let first_plan = &plans[0];
+    let request = &first_plan.resolved.request;
+
+    let config_type = crate::integrations::asr::build_model_config(
+        Path::new(&request.model_path),
+        &request.model_type,
+        &request.file_config,
+        request.enable_itn,
+        &request.language,
+        request.hotwords.clone(),
+    )?;
+
+    let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref()).await;
+
+    let recognizer_result = crate::integrations::asr::create_recognizer_with_gpu_plan(
+        config_type,
+        request.num_threads,
+        gpu_plan,
+    )?;
+
+    // Print fallback notice once at the start of the batch if applicable
+    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
+        if !first_plan.resolved.quiet {
+            eprintln!("DirectML transcription failed, retrying with CPU: {}", notice.error);
+        }
+    }
+
+    let shared_recognizer = Arc::new(recognizer_result.recognizer);
+
     let mut results = if jobs == 1 {
         let mut results = Vec::with_capacity(total);
         for (index, plan) in plans.into_iter().enumerate() {
-            results.push((index, run_batch_transcribe_plan(plan, index, total).await));
+            results.push((
+                index,
+                run_batch_transcribe_plan(plan, shared_recognizer.clone(), index, total).await,
+            ));
         }
         results
     } else {
@@ -611,8 +650,14 @@ async fn run_batch_transcribe_plans(
             plans
                 .into_iter()
                 .enumerate()
-                .map(|(index, plan)| async move {
-                    (index, run_batch_transcribe_plan(plan, index, total).await)
+                .map({
+                    let shared_recognizer = shared_recognizer.clone();
+                    move |(index, plan)| {
+                        let rec = shared_recognizer.clone();
+                        async move {
+                            (index, run_batch_transcribe_plan(plan, rec, index, total).await)
+                        }
+                    }
                 }),
         )
         .buffer_unordered(jobs)
@@ -648,6 +693,7 @@ async fn run_batch_transcribe_plans(
 
 async fn run_batch_transcribe_plan(
     plan: BatchTranscribePlan,
+    shared_recognizer: Arc<Recognizer>,
     index: usize,
     total: usize,
 ) -> BatchTranscribeFileSummary {
@@ -667,15 +713,19 @@ async fn run_batch_transcribe_plan(
             total,
             input_label.clone(),
         );
-        let segments = transcribe_with_cli_gpu_fallback(&request, |event| match event {
-            CliTranscribeEvent::Progress(progress) => reporter.write(progress),
-            CliTranscribeEvent::DirectMlRetry { error } => {
-                reporter.finish_write();
-                if !quiet {
-                    eprintln!("DirectML transcription failed, retrying with CPU: {error}");
+        let segments = transcribe_with_cli_gpu_fallback(
+            &request,
+            Some(shared_recognizer),
+            |event| match event {
+                CliTranscribeEvent::Progress(progress) => reporter.write(progress),
+                CliTranscribeEvent::DirectMlRetry { error } => {
+                    reporter.finish_write();
+                    if !quiet {
+                        eprintln!("DirectML transcription failed, retrying with CPU: {error}");
+                    }
                 }
             }
-        })
+        )
         .await;
         reporter.finish_write();
         let segments = segments?;
@@ -702,6 +752,7 @@ async fn run_batch_transcribe_plan(
 
 async fn transcribe_with_cli_gpu_fallback<F>(
     request: &BatchTranscriptionRequest,
+    preloaded_recognizer: Option<Arc<Recognizer>>,
     on_event: F,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String>
 where
@@ -710,6 +761,7 @@ where
     let on_event = std::cell::RefCell::new(on_event);
     transcribe_batch_with_progress_and_fallback_notice(
         request,
+        preloaded_recognizer,
         |progress| {
             let mut on_event = on_event.borrow_mut();
             (*on_event)(CliTranscribeEvent::Progress(progress));
