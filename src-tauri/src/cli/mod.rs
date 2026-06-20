@@ -146,7 +146,7 @@ enum Commands {
     Models(ModelsArgs),
     /// Starts the HTTP API server in headless mode.
     Serve(ServeArgs),
-    /// Creates a commented TOML config template.
+    /// Creates a commented TOML starter template.
     InitConfig(InitConfigArgs),
     /// Generates shell completion scripts.
     Completions {

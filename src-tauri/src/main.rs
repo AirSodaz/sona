@@ -14,6 +14,7 @@ fn fix_console(show_new_console: bool) {
             fn AllocConsole() -> i32;
             fn AttachConsole(dwProcessId: u32) -> i32;
             fn SetStdHandle(nStdHandle: u32, hHandle: *mut std::ffi::c_void) -> i32;
+            fn GetLastError() -> u32;
         }
 
         const ATTACH_PARENT_PROCESS: u32 = 0xFFFFFFFF;
@@ -36,18 +37,43 @@ fn fix_console(show_new_console: bool) {
 
         if has_console {
             // Redirect stdout and stderr
-            if let Ok(conout) = OpenOptions::new().write(true).open("CONOUT$") {
-                let handle = conout.as_raw_handle();
-                SetStdHandle(STD_OUTPUT_HANDLE, handle);
-                SetStdHandle(STD_ERROR_HANDLE, handle);
-                std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
+            match OpenOptions::new().write(true).open("CONOUT$") {
+                Ok(conout) => {
+                    let handle = conout.as_raw_handle();
+                    if SetStdHandle(STD_OUTPUT_HANDLE, handle) == 0 {
+                        log::debug!(
+                            "Failed to set STD_OUTPUT_HANDLE: GetLastError() = {}",
+                            GetLastError()
+                        );
+                    }
+                    if SetStdHandle(STD_ERROR_HANDLE, handle) == 0 {
+                        log::debug!(
+                            "Failed to set STD_ERROR_HANDLE: GetLastError() = {}",
+                            GetLastError()
+                        );
+                    }
+                    std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
+                }
+                Err(e) => {
+                    log::debug!("Failed to open CONOUT$: {}", e);
+                }
             }
 
             // Redirect stdin
-            if let Ok(conin) = OpenOptions::new().read(true).open("CONIN$") {
-                let handle = conin.as_raw_handle();
-                SetStdHandle(STD_INPUT_HANDLE, handle);
-                std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
+            match OpenOptions::new().read(true).open("CONIN$") {
+                Ok(conin) => {
+                    let handle = conin.as_raw_handle();
+                    if SetStdHandle(STD_INPUT_HANDLE, handle) == 0 {
+                        log::debug!(
+                            "Failed to set STD_INPUT_HANDLE: GetLastError() = {}",
+                            GetLastError()
+                        );
+                    }
+                    std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
+                }
+                Err(e) => {
+                    log::debug!("Failed to open CONIN$: {}", e);
+                }
             }
         }
     }

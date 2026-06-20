@@ -158,9 +158,15 @@ mod tests {
             "max_upload_size_mb",
             "job_ttl_minutes",
         ] {
-            assert!(content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")), "template should include commented key {key}");
+            assert!(
+                content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")),
+                "template should include commented key {key}"
+            );
         }
-        assert!(content.contains("models_dir"), "template should include models_dir");
+        assert!(
+            content.contains("models_dir"),
+            "template should include models_dir"
+        );
     }
 
     #[test]
