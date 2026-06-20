@@ -7,6 +7,10 @@ use crate::cli::{CliError, CliResult};
 const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
 pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
+# Generated keys are commented out by default. Uncomment the settings you want
+# before using this file with Sona commands.
+# `sona transcribe` requires model_id to be enabled.
+# `sona serve` falls back to runtime defaults for omitted keys.
 # Save as sona-cli.toml, then pass it with:
 #   sona transcribe ./sample.wav -c ./sona-cli.toml
 #   sona serve -c ./sona-cli.toml
@@ -18,45 +22,45 @@ pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 {models_dir_line}
 
 # Transcribe defaults
-model_id = "sherpa-onnx-whisper-turbo"
-vad_model_id = "silero-vad"
-punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-language = "auto"
-threads = 4
-enable_itn = false
-vad_buffer_size = 5.0
-gpu_acceleration = "auto"
-hotwords = "Sona,offline ASR"
-format = "srt"
-quiet = false
-jobs = 1
+# model_id = "sherpa-onnx-whisper-turbo"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# language = "auto"
+# threads = 4
+# enable_itn = false
+# vad_buffer_size = 5.0
+# gpu_acceleration = "auto"
+# hotwords = "Sona,offline ASR"
+# format = "srt"
+# quiet = false
+# jobs = 1
 
 # Serve defaults
-host = "127.0.0.1"
-port = 14200
-api_key = ""
-ip_whitelist = "localhost"
-max_streaming = 2
-max_concurrent = 2
-max_queue_size = 100
-max_upload_size_mb = 50
-job_ttl_minutes = 60
+# host = "127.0.0.1"
+# port = 14200
+# api_key = ""
+# ip_whitelist = "localhost"
+# max_streaming = 2
+# max_concurrent = 2
+# max_queue_size = 100
+# max_upload_size_mb = 50
+# job_ttl_minutes = 60
 "#;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Create a commented TOML config template",
-    after_help = "Examples:\n  sona init-config\n  sona init-config ./sona-cli.toml\n  sona init-config ./sona-cli.toml --force"
+    about = "Create a commented TOML starter template",
+    after_help = "Examples:\n  sona init-config\n  sona init-config ./sona-cli.toml\n  sona init-config ./sona-cli.toml --force\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona transcribe` requires model_id to be enabled."
 )]
 pub struct InitConfigArgs {
     /// Target TOML path. Defaults to ./sona-cli.toml.
     #[arg(
         value_name = "PATH",
-        help = "Config path to create, default sona-cli.toml"
+        help = "Path to write the commented starter template, default sona-cli.toml"
     )]
     path: Option<PathBuf>,
     /// Overwrite the target file if it already exists.
-    #[arg(long, help = "Overwrite an existing config file")]
+    #[arg(long, help = "Overwrite an existing starter template or config file")]
     force: bool,
 }
 
@@ -132,7 +136,6 @@ mod tests {
     fn template_contains_transcribe_and_serve_keys() {
         let content = generate_config_content();
         for key in [
-            "models_dir",
             "model_id",
             "vad_model_id",
             "punctuation_model_id",
@@ -155,8 +158,9 @@ mod tests {
             "max_upload_size_mb",
             "job_ttl_minutes",
         ] {
-            assert!(content.contains(key), "template should include {key}");
+            assert!(content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")), "template should include commented key {key}");
         }
+        assert!(content.contains("models_dir"), "template should include models_dir");
     }
 
     #[test]

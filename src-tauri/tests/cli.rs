@@ -235,6 +235,8 @@ fn init_config_help_mentions_path_and_force() {
     assert!(stdout.contains("[PATH]"));
     assert!(stdout.contains("--force"));
     assert!(stdout.contains("sona-cli.toml"));
+    assert!(stdout.contains("commented TOML starter template"));
+    assert!(stdout.contains("model_id"));
 }
 
 #[test]
@@ -255,9 +257,9 @@ fn init_config_writes_commented_template_to_target_path() {
     assert!(stdout.is_empty());
     assert!(stderr.contains("Created config template"));
     assert!(contents.contains("# Sona CLI config template"));
-    assert!(contents.contains("model_id = \"sherpa-onnx-whisper-turbo\""));
-    assert!(contents.contains("api_key = \"\""));
-    assert!(contents.contains("max_upload_size_mb = 50"));
+    assert!(contents.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
+    assert!(contents.contains("# api_key = \"\""));
+    assert!(contents.contains("# max_upload_size_mb = 50"));
 }
 
 #[test]

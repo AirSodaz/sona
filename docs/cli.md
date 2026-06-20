@@ -73,38 +73,38 @@ sona init-config
 sona init-config ./sona-cli.toml --force
 ```
 
-`init-config` writes an English-commented TOML template to `sona-cli.toml` by default. Pass a path to write somewhere else. Existing files are protected unless `--force` is passed. The template is flat and can be reused by both `transcribe` and `serve`; each command reads the keys it supports and ignores unrelated keys.
+`init-config` writes an English-commented TOML starter template to `sona-cli.toml` by default. Pass a path to write somewhere else. Existing files are protected unless `--force` is passed. Uncomment the keys you want before using the file with `transcribe` or `serve`. `transcribe` requires `model_id` to be enabled. The template is flat and can be reused by both commands; each command reads the keys it supports and ignores unrelated keys.
 
 ## Config File
 
-Pass a TOML file with `-c` or `--config`. Command-line flags override config file values. Use `sona init-config` to create a commented starter template.
+Pass a TOML file with `-c` or `--config`. Command-line flags override config file values. Use `sona init-config` to create a commented starter template, then uncomment the keys you need before using it.
 
 Minimal generated template excerpt:
 
 ```toml
-models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
-model_id = "sherpa-onnx-whisper-turbo"
-vad_model_id = "silero-vad"
-punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-language = "auto"
-threads = 4
-enable_itn = false
-vad_buffer_size = 5.0
-gpu_acceleration = "auto"
-hotwords = "Sona,offline ASR"
-format = "srt"
-quiet = false
-jobs = 1
+# models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
+# model_id = "sherpa-onnx-whisper-turbo"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# language = "auto"
+# threads = 4
+# enable_itn = false
+# vad_buffer_size = 5.0
+# gpu_acceleration = "auto"
+# hotwords = "Sona,offline ASR"
+# format = "srt"
+# quiet = false
+# jobs = 1
 
-host = "127.0.0.1"
-port = 14200
-api_key = ""
-ip_whitelist = "localhost"
-max_streaming = 2
-max_concurrent = 2
-max_queue_size = 100
-max_upload_size_mb = 50
-job_ttl_minutes = 60
+# host = "127.0.0.1"
+# port = 14200
+# api_key = ""
+# ip_whitelist = "localhost"
+# max_streaming = 2
+# max_concurrent = 2
+# max_queue_size = 100
+# max_upload_size_mb = 50
+# job_ttl_minutes = 60
 ```
 
 ### `transcribe` config keys
