@@ -737,7 +737,7 @@ pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, CliErr
     })
 }
 
-fn default_models_dir() -> Option<PathBuf> {
+pub(crate) fn default_models_dir() -> Option<PathBuf> {
     default_models_dir_candidates()
         .into_iter()
         .map(|path| path.join("models"))

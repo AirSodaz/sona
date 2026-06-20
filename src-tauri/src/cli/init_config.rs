@@ -15,7 +15,7 @@ pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # unrelated keys.
 
 # Shared model location. If omitted, Sona tries the desktop app models directory.
-models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
+{models_dir_line}
 
 # Transcribe defaults
 model_id = "sherpa-onnx-whisper-turbo"
@@ -69,6 +69,28 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<()> {
     Ok(())
 }
 
+fn generate_config_content() -> String {
+    let models_dir_line = if let Some(path) = crate::cli::models::default_models_dir() {
+        // Format path with forward slashes even on Windows for TOML compatibility
+        let path_str = path.to_string_lossy().replace('\\', "/");
+        format!("# models_dir = \"{}\"", path_str)
+    } else {
+        // Fallback placeholder based on target OS
+        #[cfg(target_os = "windows")]
+        let default_path = "C:/Users/you/AppData/Local/com.asoda.sona/models";
+        #[cfg(target_os = "macos")]
+        let default_path = "/Users/you/Library/Application Support/com.asoda.sona/models";
+        #[cfg(target_os = "linux")]
+        let default_path = "/home/you/.local/share/com.asoda.sona/models";
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        let default_path = "/path/to/com.asoda.sona/models";
+
+        format!("# models_dir = \"{}\"", default_path)
+    };
+
+    CONFIG_TEMPLATE.replace("{models_dir_line}", &models_dir_line)
+}
+
 fn write_config_template(path: &Path, force: bool) -> CliResult<()> {
     if path.exists() && !force {
         return Err(CliError::Io(format!(
@@ -88,7 +110,8 @@ fn write_config_template(path: &Path, force: bool) -> CliResult<()> {
         })?;
     }
 
-    fs::write(path, CONFIG_TEMPLATE).map_err(|error| {
+    let content = generate_config_content();
+    fs::write(path, content).map_err(|error| {
         CliError::Io(format!(
             "Failed to write config file {}: {error}",
             path.display()
@@ -103,6 +126,7 @@ mod tests {
 
     #[test]
     fn template_contains_transcribe_and_serve_keys() {
+        let content = generate_config_content();
         for key in [
             "models_dir",
             "model_id",
@@ -127,11 +151,21 @@ mod tests {
             "max_upload_size_mb",
             "job_ttl_minutes",
         ] {
-            assert!(
-                CONFIG_TEMPLATE.contains(key),
-                "template should include {key}"
-            );
+            assert!(content.contains(key), "template should include {key}");
         }
+    }
+
+    #[test]
+    fn generated_config_has_correct_os_path_format() {
+        let content = generate_config_content();
+        assert!(content.contains("# models_dir = \""));
+        // Ensure no backslashes are in the models_dir line
+        let models_line = content.lines().find(|l| l.contains("models_dir")).unwrap();
+        assert!(
+            !models_line.contains('\\'),
+            "path should use forward slashes: {}",
+            models_line
+        );
     }
 
     #[test]
