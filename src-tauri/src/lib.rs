@@ -18,6 +18,12 @@ use tauri::{Emitter, Manager};
 /// and registers invoke handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(e) = run_app() {
+        panic!("error while running tauri application: {:?}", e);
+    }
+}
+
+pub fn run_app() -> Result<(), tauri::Error> {
     let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 
@@ -118,5 +124,4 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(crate::commands::get_handlers())
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }

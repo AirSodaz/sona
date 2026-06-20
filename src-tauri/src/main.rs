@@ -41,21 +41,21 @@ fn fix_console(show_new_console: bool) {
                 Ok(conout) => {
                     let handle = conout.as_raw_handle();
                     if SetStdHandle(STD_OUTPUT_HANDLE, handle) == 0 {
-                        log::debug!(
-                            "Failed to set STD_OUTPUT_HANDLE: GetLastError() = {}",
+                        eprintln!(
+                            "[debug] Failed to set STD_OUTPUT_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     if SetStdHandle(STD_ERROR_HANDLE, handle) == 0 {
-                        log::debug!(
-                            "Failed to set STD_ERROR_HANDLE: GetLastError() = {}",
+                        eprintln!(
+                            "[debug] Failed to set STD_ERROR_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
                 }
                 Err(e) => {
-                    log::debug!("Failed to open CONOUT$: {}", e);
+                    eprintln!("[debug] Failed to open CONOUT$: {}", e);
                 }
             }
 
@@ -64,23 +64,59 @@ fn fix_console(show_new_console: bool) {
                 Ok(conin) => {
                     let handle = conin.as_raw_handle();
                     if SetStdHandle(STD_INPUT_HANDLE, handle) == 0 {
-                        log::debug!(
-                            "Failed to set STD_INPUT_HANDLE: GetLastError() = {}",
+                        eprintln!(
+                            "[debug] Failed to set STD_INPUT_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
                 }
                 Err(e) => {
-                    log::debug!("Failed to open CONIN$: {}", e);
+                    eprintln!("[debug] Failed to open CONIN$: {}", e);
                 }
             }
         }
     }
 }
 
+#[cfg(target_os = "windows")]
+fn show_error_dialog(message: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    use windows::core::HSTRING;
+
+    let title = HSTRING::from("Sona Startup Error");
+    let msg = HSTRING::from(message);
+    unsafe {
+        MessageBoxW(None, &msg, &title, MB_OK | MB_ICONERROR);
+    }
+}
+
+fn setup_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "An unexpected panic occurred."
+        };
+        let location = info
+            .location()
+            .map(|loc| format!(" at {}:{}", loc.file(), loc.line()))
+            .unwrap_or_default();
+        let error_msg = format!("{}{}\n\nPlease report this issue.", message, location);
+
+        eprintln!("Application panicked: {error_msg}");
+
+        #[cfg(target_os = "windows")]
+        show_error_dialog(&error_msg);
+    }));
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
+    setup_panic_hook();
+
     let args: Vec<_> = std::env::args_os().collect();
 
     if tauri_appsona_lib::cli::should_run_cli(args.get(1..).unwrap_or(&[])) {
@@ -99,6 +135,13 @@ async fn main() -> ExitCode {
     #[cfg(target_os = "windows")]
     fix_console(false);
 
-    tauri_appsona_lib::run();
-    ExitCode::SUCCESS
+    match tauri_appsona_lib::run_app() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("Tauri startup failure: {err}");
+            #[cfg(target_os = "windows")]
+            show_error_dialog(&err.to_string());
+            ExitCode::FAILURE
+        }
+    }
 }
