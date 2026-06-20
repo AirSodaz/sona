@@ -425,6 +425,16 @@ impl JobManager {
             .map(|(k, v)| (k.clone(), v.status.clone()))
             .collect()
     }
+
+    pub async fn clean_expired_jobs(&self, ttl_duration: std::time::Duration) {
+        self.jobs.write().await.retain(|_, entry| {
+            if let Some(completed_at) = entry.completed_at {
+                completed_at.elapsed() <= ttl_duration
+            } else {
+                true
+            }
+        });
+    }
 }
 
 async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
@@ -506,23 +516,9 @@ async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
     }
 }
 
-async fn update_job_status(
-    jobs: &RwLock<HashMap<String, JobEntry>>,
-    job_id: &str,
-    status: JobStatus,
-) {
-    if let Some(job) = jobs.write().await.get_mut(job_id) {
-        let is_finished = matches!(status, JobStatus::Completed(_) | JobStatus::Failed(_));
-        job.status = status;
-        if is_finished {
-            job.completed_at = Some(std::time::Instant::now());
-        }
-    }
-}
-
 async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
-    jobs: Arc<RwLock<HashMap<String, JobEntry>>>,
+    job_manager: JobManager,
     models_dir: PathBuf,
     max_concurrent: usize,
     app: Option<tauri::AppHandle>,
@@ -531,7 +527,7 @@ async fn start_worker_loop(
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
     while let Some(job) = receiver.recv().await {
-        let jobs = jobs.clone();
+        let job_manager = job_manager.clone();
         let models_dir = models_dir.clone();
         let semaphore = semaphore.clone();
         let app_for_spawn = app.clone();
@@ -543,16 +539,18 @@ async fn start_worker_loop(
                 Ok(permit) => permit,
                 Err(_) => {
                     log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    update_job_status(
-                        &jobs,
-                        &job.job_id,
-                        JobStatus::Failed("Internal: worker pool closed".to_string()),
-                    )
-                    .await;
+                    job_manager
+                        .update_job(
+                            &job.job_id,
+                            JobStatus::Failed("Internal: worker pool closed".to_string()),
+                        )
+                        .await;
                     return;
                 }
             };
-            update_job_status(&jobs, &job.job_id, JobStatus::Processing).await;
+            job_manager
+                .update_job(&job.job_id, JobStatus::Processing)
+                .await;
 
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
@@ -612,7 +610,9 @@ async fn start_worker_loop(
                 }
             };
 
-            update_job_status(&jobs, &job.job_id, final_status.clone()).await;
+            job_manager
+                .update_job(&job.job_id, final_status.clone())
+                .await;
 
             if job.webhook_url.is_some() {
                 let job_clone = job.clone();
@@ -1057,7 +1057,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     };
     let (tx, rx) = mpsc::channel(actual_queue_size);
     let job_manager = JobManager::new(tx);
-    let jobs_clone = job_manager.jobs.clone();
+    let job_manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
     let app_clone = app.clone();
     let worker_defaults = transcription_defaults.clone();
@@ -1065,7 +1065,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     tokio::spawn(async move {
         start_worker_loop(
             rx,
-            jobs_clone,
+            job_manager_clone,
             models_dir_clone,
             max_concurrent,
             app_clone,
@@ -1074,7 +1074,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         .await;
     });
 
-    let jobs_ttl_clone = job_manager.jobs.clone();
+    let job_manager_ttl = job_manager.clone();
     let (shutdown_ttl_tx, mut shutdown_ttl_rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         let ttl_duration = std::time::Duration::from_secs(job_ttl_minutes * 60);
@@ -1083,14 +1083,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
             tokio::select! {
                 _ = interval.tick() => {
                     if job_ttl_minutes > 0 {
-                        let mut jobs = jobs_ttl_clone.write().await;
-                        jobs.retain(|_, entry| {
-                            if let Some(completed_at) = entry.completed_at {
-                                completed_at.elapsed() <= ttl_duration
-                            } else {
-                                true
-                            }
-                        });
+                        job_manager_ttl.clean_expired_jobs(ttl_duration).await;
                     }
                 }
                 _ = &mut shutdown_ttl_rx => {
@@ -1185,7 +1178,13 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         "Cleaning up API server temporary directory: {:?}",
         clean_temp_dir
     );
-    let _ = tokio::fs::remove_dir_all(&clean_temp_dir).await;
+    if let Err(e) = tokio::fs::remove_dir_all(&clean_temp_dir).await {
+        log::error!(
+            "Failed to clean up API server temporary directory {:?}: {}",
+            clean_temp_dir,
+            e
+        );
+    }
 
     serve_res
 }
@@ -1198,6 +1197,45 @@ mod tests {
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_clean_expired_jobs() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+
+        job_manager.jobs.write().await.insert(
+            "expired-job".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                completed_at: Some(std::time::Instant::now() - std::time::Duration::from_secs(120)),
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "fresh-job".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                completed_at: Some(std::time::Instant::now()),
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "pending-job".to_string(),
+            JobEntry {
+                status: JobStatus::Pending,
+                completed_at: None,
+            },
+        );
+
+        job_manager
+            .clean_expired_jobs(std::time::Duration::from_secs(60))
+            .await;
+
+        let jobs = job_manager.list_jobs().await;
+        assert!(!jobs.contains_key("expired-job"));
+        assert!(jobs.contains_key("fresh-job"));
+        assert!(jobs.contains_key("pending-job"));
+    }
 
     #[tokio::test]
     async fn test_health_endpoint() {
@@ -1456,5 +1494,121 @@ mod tests {
             options.punctuation_model_id.as_deref(),
             Some(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
         );
+    }
+
+    static TEST_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<Vec<String>>>> =
+        std::sync::OnceLock::new();
+
+    struct SimpleTestLogger {
+        logs: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl log::Log for SimpleTestLogger {
+        fn enabled(&self, _metadata: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            let mut logs = self.logs.lock().unwrap();
+            logs.push(format!("{}: {}", record.level(), record.args()));
+        }
+        fn flush(&self) {}
+    }
+
+    fn init_test_logger() -> Arc<std::sync::Mutex<Vec<String>>> {
+        let logs = TEST_LOGGER.get_or_init(|| {
+            let logs = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let logger = SimpleTestLogger { logs: logs.clone() };
+            let _ = log::set_boxed_logger(Box::new(logger));
+            let _ = log::set_max_level(log::LevelFilter::Debug);
+            logs
+        });
+        logs.clone()
+    }
+
+    async fn wait_for_log(logs: &Arc<std::sync::Mutex<Vec<String>>>, needle: &str) {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            if logs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|log_line| log_line.contains(needle))
+            {
+                return;
+            }
+
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "Timed out waiting for log {needle:?}. Current logs: {:?}",
+                *logs.lock().unwrap()
+            );
+
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_temp_directory_cleanup_failure_logging() {
+        let logs = init_test_logger();
+        {
+            let mut logs_lock = logs.lock().unwrap();
+            logs_lock.clear();
+        }
+
+        let temp_dir_handle = tempfile::tempdir().expect("Failed to create temporary directory");
+        let temp_dir = temp_dir_handle.path().to_path_buf();
+        let models_dir_handle = tempfile::tempdir().expect("Failed to create temporary directory");
+        let models_dir = models_dir_handle.path().to_path_buf();
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+        let config = ApiServerRuntimeConfig {
+            app: None,
+            host: "127.0.0.1".to_string(),
+            port: 0,
+            api_key: "".to_string(),
+            temp_dir: temp_dir.clone(),
+            models_dir,
+            max_concurrent: 1,
+            max_queue_size: 0,
+            max_upload_size_mb: 1,
+            job_ttl_minutes: 1,
+            max_streaming: 1,
+            ip_whitelist: std::sync::Arc::new(vec![]),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            shutdown_rx,
+        };
+
+        let handle = tokio::spawn(async move { run_server(config).await });
+
+        wait_for_log(&logs, "Starting HTTP API server on").await;
+
+        // Replace the directory with a file so shutdown cleanup reliably fails.
+        tokio::fs::remove_dir_all(&temp_dir)
+            .await
+            .expect("Failed to remove temp directory before shutdown");
+        tokio::fs::write(&temp_dir, b"cleanup should fail on this file")
+            .await
+            .expect("Failed to replace temp directory with a file");
+
+        let _ = shutdown_tx.send(());
+
+        let run_result = handle.await.expect("Server task panicked");
+        assert!(run_result.is_ok());
+
+        let logs_lock = logs.lock().unwrap();
+        let error_log_found = logs_lock
+            .iter()
+            .any(|log_line| log_line.contains("Failed to clean up API server temporary directory"));
+
+        assert!(
+            error_log_found,
+            "Expected error log message not found. Current logs: {:?}",
+            *logs_lock
+        );
+
+        drop(logs_lock);
+        let _ = tokio::fs::remove_file(&temp_dir).await;
     }
 }

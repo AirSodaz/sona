@@ -70,7 +70,11 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<()> {
 }
 
 fn generate_config_content() -> String {
-    let models_dir_line = if let Some(path) = crate::cli::models::default_models_dir() {
+    generate_config_content_inner(crate::cli::models::default_models_dir())
+}
+
+fn generate_config_content_inner(models_dir: Option<PathBuf>) -> String {
+    let models_dir_line = if let Some(path) = models_dir {
         // Format path with forward slashes even on Windows for TOML compatibility
         let path_str = path.to_string_lossy().replace('\\', "/");
         format!("# models_dir = \"{}\"", path_str)
@@ -157,13 +161,18 @@ mod tests {
 
     #[test]
     fn generated_config_has_correct_os_path_format() {
-        let content = generate_config_content();
-        assert!(content.contains("# models_dir = \""));
-        // Ensure no backslashes are in the models_dir line
-        let models_line = content.lines().find(|l| l.contains("models_dir")).unwrap();
+        let test_path = PathBuf::from("C:\\Users\\test\\models");
+        let content = generate_config_content_inner(Some(test_path));
+        assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
+
+        let content_fallback = generate_config_content_inner(None);
+        let models_line = content_fallback
+            .lines()
+            .find(|l| l.contains("models_dir"))
+            .unwrap();
         assert!(
             !models_line.contains('\\'),
-            "path should use forward slashes: {}",
+            "fallback path should use forward slashes: {}",
             models_line
         );
     }
