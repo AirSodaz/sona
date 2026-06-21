@@ -249,14 +249,14 @@ struct BatchTranscribeFileSummary {
 /// Resolves CLI arguments, config-file values, and defaults into a concrete request.
 pub fn resolve_transcribe_options(
     cli: TranscribeCliOptions,
-    config: Option<CliConfigFile>,
+    config: Option<crate::cli::config::TranscribeConfigSection>,
 ) -> Result<ResolvedTranscribeOptions, CliError> {
     resolve_transcribe_options_with_install_checker(cli, config, PresetModel::is_installed_at)
 }
 
 fn resolve_transcribe_options_with_install_checker(
     cli: TranscribeCliOptions,
-    config: Option<CliConfigFile>,
+    config: Option<crate::cli::config::TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
 ) -> Result<ResolvedTranscribeOptions, CliError> {
     let config = config.unwrap_or_default();
@@ -377,7 +377,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<()> {
 
 async fn run_single_transcribe(
     args: TranscribeArgs,
-    config: Option<CliConfigFile>,
+    config: Option<crate::cli::config::TranscribeConfigSection>,
 ) -> CliResult<()> {
     let enable_itn = resolve_enable_itn(&args);
 
@@ -432,7 +432,7 @@ async fn run_single_transcribe(
 
 async fn run_batch_transcribe(
     args: TranscribeArgs,
-    config: Option<CliConfigFile>,
+    config: Option<crate::cli::config::TranscribeConfigSection>,
 ) -> CliResult<()> {
     if args.save_wav.is_some() {
         return Err(CliError::Validation(
@@ -1229,37 +1229,24 @@ fn optional_installed_companion(
 }
 
 /// File-backed CLI configuration loaded from TOML.
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-pub struct CliConfigFile {
-    pub models_dir: Option<PathBuf>,
-    pub model_id: Option<String>,
-    pub vad_model_id: Option<String>,
-    pub punctuation_model_id: Option<String>,
-    pub language: Option<String>,
-    pub threads: Option<i32>,
-    pub enable_itn: Option<bool>,
-    pub hotwords: Option<String>,
-    pub quiet: Option<bool>,
-    pub jobs: Option<usize>,
-    pub vad_buffer_size: Option<f32>,
-    pub format: Option<String>,
-    pub gpu_acceleration: Option<String>,
-}
-
 /// Loads a TOML configuration file for the CLI.
-pub fn load_config_file(path: &Path) -> Result<CliConfigFile, CliError> {
+pub fn load_config_file(
+    path: &Path,
+) -> Result<crate::cli::config::TranscribeConfigSection, CliError> {
     let contents = fs::read_to_string(path).map_err(|error| {
         CliError::Io(format!(
             "Failed to read config file {}: {error}",
             path.display()
         ))
     })?;
-    toml::from_str(&contents).map_err(|error| {
-        CliError::Validation(format!(
-            "Failed to parse config file {}: {error}",
-            path.display()
-        ))
-    })
+    let unified: crate::cli::config::UnifiedConfigFile =
+        toml::from_str(&contents).map_err(|error| {
+            CliError::Validation(format!(
+                "Failed to parse config file {}: {error}",
+                path.display()
+            ))
+        })?;
+    Ok(unified.into_transcribe_config())
 }
 
 #[cfg(test)]
@@ -1275,7 +1262,7 @@ mod tests {
 
     fn resolve_test_transcribe_options(
         cli: TranscribeCliOptions,
-        config: Option<CliConfigFile>,
+        config: Option<crate::cli::config::TranscribeConfigSection>,
     ) -> Result<ResolvedTranscribeOptions, CliError> {
         resolve_transcribe_options_with_install_checker(cli, config, test_model_exists)
     }
@@ -1359,7 +1346,7 @@ mod tests {
 
         let resolved = resolve_test_transcribe_options(
             cli,
-            Some(CliConfigFile {
+            Some(crate::cli::config::TranscribeConfigSection {
                 threads: Some(2),
                 enable_itn: Some(false),
                 hotwords: Some("config-term".to_string()),
@@ -1451,7 +1438,7 @@ mod tests {
 
         let error = resolve_test_transcribe_options(
             cli,
-            Some(CliConfigFile {
+            Some(crate::cli::config::TranscribeConfigSection {
                 vad_model_id: Some("custom-vad".to_string()),
                 ..Default::default()
             }),
@@ -1497,7 +1484,7 @@ mod tests {
 
         let resolved = resolve_test_transcribe_options(
             cli,
-            Some(CliConfigFile {
+            Some(crate::cli::config::TranscribeConfigSection {
                 hotwords: Some("config-hotword".to_string()),
                 ..Default::default()
             }),
@@ -1520,7 +1507,7 @@ mod tests {
 
         let resolved = resolve_test_transcribe_options(
             cli,
-            Some(CliConfigFile {
+            Some(crate::cli::config::TranscribeConfigSection {
                 gpu_acceleration: Some("cpu".to_string()),
                 ..Default::default()
             }),

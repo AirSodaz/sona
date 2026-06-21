@@ -15,27 +15,36 @@ pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 #   sona transcribe ./sample.wav -c ./sona-cli.toml
 #   sona serve -c ./sona-cli.toml
 #
-# This is a flat TOML file. Each command reads the keys it supports and ignores
-# unrelated keys.
+# Top-level keys are shared defaults for both commands.
+# Uncomment the same key inside [transcribe] or [serve] to override it per command.
 
 # Shared model location. If omitted, Sona tries the desktop app models directory.
 {models_dir_line}
 
-# Transcribe defaults
-# model_id = "sherpa-onnx-whisper-turbo"
+# gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
 # punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+
+[transcribe]
+# models_dir = "..."
+# gpu_acceleration = "auto"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# model_id = "sherpa-onnx-whisper-turbo"
 # language = "auto"
 # threads = 4
 # enable_itn = false
 # vad_buffer_size = 5.0
-# gpu_acceleration = "auto"
 # hotwords = "Sona,offline ASR"
 # format = "srt"
 # quiet = false
 # jobs = 1
 
-# Serve defaults
+[serve]
+# models_dir = "..."
+# gpu_acceleration = "auto"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 # host = "127.0.0.1"
 # port = 14200
 # api_key = ""

@@ -315,8 +315,8 @@ fn init_config_force_overwrites_existing_target() {
     assert!(output.status.success());
     let contents = fs::read_to_string(&config_path).unwrap();
     assert!(!contents.contains("existing = true"));
-    assert!(contents.contains("# Transcribe defaults"));
-    assert!(contents.contains("# Serve defaults"));
+    assert!(contents.contains("[transcribe]"));
+    assert!(contents.contains("[serve]"));
 }
 
 #[test]

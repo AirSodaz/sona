@@ -73,7 +73,7 @@ sona init-config
 sona init-config ./sona-cli.toml --force
 ```
 
-`init-config` 默认把带英文注释的 TOML 起始模板写入 `sona-cli.toml`。也可以传入路径写到其他位置。已有文件默认受保护；只有传入 `--force` 才会覆盖。使用前请先取消注释需要的配置项，再把它传给 `transcribe` 或 `serve`。其中 `transcribe` 必须启用 `model_id`。模板是平铺 TOML，可同时给两个命令使用；每个命令只读取自己支持的键，并忽略无关键。
+`init-config` 默认把带英文注释的 TOML 起始模板写入 `sona-cli.toml`。也可以传入路径写到其他位置。已有文件默认受保护；只有传入 `--force` 才会覆盖。使用前请先取消注释需要的配置项，再把它传给 `transcribe` 或 `serve`。其中 `transcribe` 必须启用 `model_id`。模板使用 `[transcribe]` 和 `[serve]` 部分来划分命令设置，同时顶层的键可以作为两个命令的全局默认值。
 
 ## 配置文件
 
@@ -82,20 +82,34 @@ sona init-config ./sona-cli.toml --force
 生成模板的最小摘录：
 
 ```toml
+# Top-level keys are shared defaults for both commands.
+# Uncomment the same key inside [transcribe] or [serve] to override it per command.
+
 # models_dir = "C:/Users/you/AppData/Local/com.asoda.sona/models"
-# model_id = "sherpa-onnx-whisper-turbo"
+# gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
 # punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+
+[transcribe]
+# models_dir = "..."
+# gpu_acceleration = "auto"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# model_id = "sherpa-onnx-whisper-turbo"
 # language = "auto"
 # threads = 4
 # enable_itn = false
 # vad_buffer_size = 5.0
-# gpu_acceleration = "auto"
 # hotwords = "Sona,offline ASR"
 # format = "srt"
 # quiet = false
 # jobs = 1
 
+[serve]
+# models_dir = "..."
+# gpu_acceleration = "auto"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
 # host = "127.0.0.1"
 # port = 14200
 # api_key = ""

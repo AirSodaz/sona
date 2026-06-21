@@ -1,3 +1,4 @@
+pub mod config;
 pub mod init_config;
 pub mod models;
 pub mod serve;

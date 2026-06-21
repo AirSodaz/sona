@@ -1,5 +1,5 @@
 use crate::cli::models::resolve_models_dir;
-use crate::cli::{CliError, CliResult, DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
+use crate::cli::{CliError, CliResult, resolve_cli_gpu_acceleration};
 use clap::Args;
 use std::collections::HashMap;
 use std::fs;
@@ -174,23 +174,6 @@ pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-pub struct ServeConfigFile {
-    pub host: Option<String>,
-    pub port: Option<u16>,
-    pub api_key: Option<String>,
-    pub models_dir: Option<PathBuf>,
-    pub ip_whitelist: Option<String>,
-    pub max_streaming: Option<usize>,
-    pub max_concurrent: Option<usize>,
-    pub max_queue_size: Option<usize>,
-    pub max_upload_size_mb: Option<usize>,
-    pub job_ttl_minutes: Option<u64>,
-    pub gpu_acceleration: Option<String>,
-    pub vad_model_id: Option<String>,
-    pub punctuation_model_id: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct ResolvedServeOptions {
     pub host: String,
@@ -208,14 +191,11 @@ pub struct ResolvedServeOptions {
 
 pub fn resolve_serve_options(
     args: ServeArgs,
-    config: Option<ServeConfigFile>,
+    config: Option<crate::cli::config::ServeConfigSection>,
 ) -> CliResult<ResolvedServeOptions> {
     let config = config.unwrap_or_default();
-    let gpu_acceleration = resolve_cli_gpu_acceleration(
-        args.gpu_acceleration
-            .or(config.gpu_acceleration)
-            .or_else(|| Some(DEFAULT_GPU_ACCELERATION.to_string())),
-    )?;
+    let gpu_acceleration =
+        resolve_cli_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
 
     Ok(ResolvedServeOptions {
         host: args
@@ -264,19 +244,21 @@ pub fn resolve_serve_options(
     })
 }
 
-pub fn load_serve_config_file(path: &Path) -> CliResult<ServeConfigFile> {
+pub fn load_serve_config_file(path: &Path) -> CliResult<crate::cli::config::ServeConfigSection> {
     let contents = fs::read_to_string(path).map_err(|error| {
         CliError::Io(format!(
             "Failed to read config file {}: {error}",
             path.display()
         ))
     })?;
-    toml::from_str(&contents).map_err(|error| {
-        CliError::Validation(format!(
-            "Failed to parse config file {}: {error}",
-            path.display()
-        ))
-    })
+    let unified: crate::cli::config::UnifiedConfigFile =
+        toml::from_str(&contents).map_err(|error| {
+            CliError::Validation(format!(
+                "Failed to parse config file {}: {error}",
+                path.display()
+            ))
+        })?;
+    Ok(unified.into_serve_config())
 }
 
 #[cfg(test)]
@@ -313,7 +295,7 @@ mod tests {
 
         let resolved = resolve_serve_options(
             args,
-            Some(ServeConfigFile {
+            Some(crate::cli::config::ServeConfigSection {
                 host: Some("127.0.0.1".to_string()),
                 port: Some(15000),
                 api_key: Some("secret".to_string()),
@@ -371,7 +353,7 @@ mod tests {
 
         let resolved = resolve_serve_options(
             args,
-            Some(ServeConfigFile {
+            Some(crate::cli::config::ServeConfigSection {
                 host: Some("127.0.0.1".to_string()),
                 gpu_acceleration: Some("cuda".to_string()),
                 max_concurrent: Some(2),
