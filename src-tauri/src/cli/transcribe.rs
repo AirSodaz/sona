@@ -647,13 +647,13 @@ async fn run_batch_transcribe_plans(plans: Vec<BatchTranscribePlan>, jobs: usize
     .map_err(CliError::Model)?;
 
     // Print fallback notice once at the start of the batch if applicable
-    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
-        if !first_plan.resolved.quiet {
-            eprintln!(
-                "DirectML transcription failed, retrying with CPU: {}",
-                notice.error
-            );
-        }
+    if let Some(notice) = recognizer_result.fallback_notice.as_ref()
+        && !first_plan.resolved.quiet
+    {
+        eprintln!(
+            "DirectML transcription failed, retrying with CPU: {}",
+            notice.error
+        );
     }
 
     let shared_recognizer = Arc::new(recognizer_result.recognizer);

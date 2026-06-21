@@ -174,10 +174,10 @@ pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> CliR
     }
 
     match cli.command {
-        Commands::Transcribe(args) => transcribe::run_transcribe(*args).await.map_err(Into::into),
-        Commands::Models(args) => models::run_models(args).await.map_err(Into::into),
-        Commands::Serve(args) => serve::run_serve(args).await.map_err(Into::into),
-        Commands::InitConfig(args) => init_config::run_init_config(args).map_err(Into::into),
+        Commands::Transcribe(args) => transcribe::run_transcribe(*args).await,
+        Commands::Models(args) => models::run_models(args).await,
+        Commands::Serve(args) => serve::run_serve(args).await,
+        Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Completions { shell } => {
             let mut command = Cli::command();
             generate(

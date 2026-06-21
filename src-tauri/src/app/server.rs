@@ -1519,7 +1519,7 @@ mod tests {
             let logs = Arc::new(std::sync::Mutex::new(Vec::new()));
             let logger = SimpleTestLogger { logs: logs.clone() };
             let _ = log::set_boxed_logger(Box::new(logger));
-            let _ = log::set_max_level(log::LevelFilter::Debug);
+            log::set_max_level(log::LevelFilter::Debug);
             logs
         });
         logs.clone()
@@ -1597,18 +1597,19 @@ mod tests {
         let run_result = handle.await.expect("Server task panicked");
         assert!(run_result.is_ok());
 
-        let logs_lock = logs.lock().unwrap();
-        let error_log_found = logs_lock
-            .iter()
-            .any(|log_line| log_line.contains("Failed to clean up API server temporary directory"));
+        {
+            let logs_lock = logs.lock().unwrap();
+            let error_log_found = logs_lock.iter().any(|log_line| {
+                log_line.contains("Failed to clean up API server temporary directory")
+            });
 
-        assert!(
-            error_log_found,
-            "Expected error log message not found. Current logs: {:?}",
-            *logs_lock
-        );
+            assert!(
+                error_log_found,
+                "Expected error log message not found. Current logs: {:?}",
+                *logs_lock
+            );
+        }
 
-        drop(logs_lock);
         let _ = tokio::fs::remove_file(&temp_dir).await;
     }
 }
