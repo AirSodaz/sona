@@ -92,31 +92,6 @@ pub enum CliError {
 
 pub type CliResult<T> = Result<T, CliError>;
 
-impl From<String> for CliError {
-    fn from(value: String) -> Self {
-        if value.contains("model") || value.contains("Model") {
-            Self::Model(value)
-        } else if value.contains("download") || value.contains("HTTP") || value.contains("status") {
-            Self::Network(value)
-        } else if value.contains("read")
-            || value.contains("write")
-            || value.contains("file")
-            || value.contains("directory")
-            || value.contains("path")
-        {
-            Self::Io(value)
-        } else if value.contains("must")
-            || value.contains("Missing")
-            || value.contains("Invalid")
-            || value.contains("Unknown")
-        {
-            Self::Validation(value)
-        } else {
-            Self::Other(value)
-        }
-    }
-}
-
 struct CliLogger;
 
 impl log::Log for CliLogger {
@@ -233,17 +208,5 @@ mod tests {
 
         assert!(cli.verbose);
         assert!(matches!(cli.command, Commands::Models(_)));
-    }
-
-    #[test]
-    fn cli_error_display_preserves_message() {
-        let error = CliError::from(
-            "Output file already exists: out.srt. Use --force to overwrite.".to_string(),
-        );
-
-        assert_eq!(
-            error.to_string(),
-            "Output file already exists: out.srt. Use --force to overwrite."
-        );
     }
 }
