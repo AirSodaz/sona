@@ -431,7 +431,8 @@ async fn download_one_model(
         if stderr_is_terminal {
             eprint!("\rDownloading {display_model_id}: {percentage}%");
             let _ = io::stderr().flush();
-        } else if percentage == 100 || percentage % 10 == 0 && last_percentage != Some(percentage) {
+        } else if (percentage == 100 || percentage % 10 == 0) && last_percentage != Some(percentage)
+        {
             eprintln!("Downloading {display_model_id}: {percentage}%");
         }
         last_percentage = Some(percentage);
