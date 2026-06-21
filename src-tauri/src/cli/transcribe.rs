@@ -608,11 +608,44 @@ fn path_contains_glob_pattern(path: &Path) -> bool {
 }
 
 fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, CliError> {
-    let first_parent = inputs
-        .first()
-        .and_then(|path| path.parent())
-        .ok_or_else(|| CliError::Validation("Missing input file path.".to_string()))?;
-    Ok(first_parent.to_path_buf())
+    use std::path::Component;
+
+    if inputs.is_empty() {
+        return Err(CliError::Validation("Missing input file path.".to_string()));
+    }
+
+    // Start with the parent of the first path as our candidate directory, stripping leading `./`
+    let mut common = match inputs[0].parent() {
+        Some(p) => p
+            .components()
+            .filter(|c| !matches!(c, Component::CurDir))
+            .collect::<PathBuf>(),
+        None => return Err(CliError::Validation("Input path has no parent directory.".to_string())),
+    };
+
+    // Compare with subsequent paths' parent directories
+    for path in &inputs[1..] {
+        let parent = match path.parent() {
+            Some(p) => p,
+            None => return Err(CliError::Validation("Input path has no parent directory.".to_string())),
+        };
+
+        let mut new_common = PathBuf::new();
+        let mut common_comps = common.components();
+        // Strip leading `./` from the compared parent path components
+        let mut parent_comps = parent.components().filter(|c| !matches!(c, Component::CurDir));
+
+        while let (Some(c1), Some(c2)) = (common_comps.next(), parent_comps.next()) {
+            if c1 == c2 {
+                new_common.push(c1);
+            } else {
+                break;
+            }
+        }
+        common = new_common;
+    }
+
+    Ok(common)
 }
 
 async fn run_batch_transcribe_plans(plans: Vec<BatchTranscribePlan>, jobs: usize) -> CliResult<()> {
@@ -1839,5 +1872,59 @@ mod tests {
             Some("\r[2/3] demo.wav: 100%".to_string())
         );
         assert_eq!(reporter.finish(), Some("\n".to_string()));
+    }
+
+    #[test]
+    fn test_common_input_parent_empty() {
+        let inputs: Vec<PathBuf> = vec![];
+        let err = common_input_parent(&inputs).unwrap_err();
+        assert!(err.to_string().contains("Missing input file path"));
+    }
+
+    #[test]
+    fn test_common_input_parent_single() {
+        let inputs = vec![PathBuf::from("a/file1.wav")];
+        let parent = common_input_parent(&inputs).unwrap();
+        assert_eq!(parent, PathBuf::from("a"));
+    }
+
+    #[test]
+    fn test_common_input_parent_multiple_same_dir() {
+        let inputs = vec![
+            PathBuf::from("a/file1.wav"),
+            PathBuf::from("a/file2.wav"),
+        ];
+        let parent = common_input_parent(&inputs).unwrap();
+        assert_eq!(parent, PathBuf::from("a"));
+    }
+
+    #[test]
+    fn test_common_input_parent_multiple_nested_dir() {
+        let inputs = vec![
+            PathBuf::from("a/b/file1.wav"),
+            PathBuf::from("a/c/file2.wav"),
+        ];
+        let parent = common_input_parent(&inputs).unwrap();
+        assert_eq!(parent, PathBuf::from("a"));
+    }
+
+    #[test]
+    fn test_common_input_parent_no_common_dir() {
+        let inputs = vec![
+            PathBuf::from("a/file1.wav"),
+            PathBuf::from("b/file2.wav"),
+        ];
+        let parent = common_input_parent(&inputs).unwrap();
+        assert_eq!(parent, PathBuf::from(""));
+    }
+
+    #[test]
+    fn test_common_input_parent_mixed_relative_prefix() {
+        let inputs = vec![
+            PathBuf::from("./a/file1.wav"),
+            PathBuf::from("a/file2.wav"),
+        ];
+        let parent = common_input_parent(&inputs).unwrap();
+        assert_eq!(parent, PathBuf::from("a"));
     }
 }
