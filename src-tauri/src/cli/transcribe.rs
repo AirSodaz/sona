@@ -620,20 +620,30 @@ fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, CliError> {
             .components()
             .filter(|c| !matches!(c, Component::CurDir))
             .collect::<PathBuf>(),
-        None => return Err(CliError::Validation("Input path has no parent directory.".to_string())),
+        None => {
+            return Err(CliError::Validation(
+                "Input path has no parent directory.".to_string(),
+            ));
+        }
     };
 
     // Compare with subsequent paths' parent directories
     for path in &inputs[1..] {
         let parent = match path.parent() {
             Some(p) => p,
-            None => return Err(CliError::Validation("Input path has no parent directory.".to_string())),
+            None => {
+                return Err(CliError::Validation(
+                    "Input path has no parent directory.".to_string(),
+                ));
+            }
         };
 
         let mut new_common = PathBuf::new();
         let mut common_comps = common.components();
         // Strip leading `./` from the compared parent path components
-        let mut parent_comps = parent.components().filter(|c| !matches!(c, Component::CurDir));
+        let mut parent_comps = parent
+            .components()
+            .filter(|c| !matches!(c, Component::CurDir));
 
         while let (Some(c1), Some(c2)) = (common_comps.next(), parent_comps.next()) {
             if c1 == c2 {
@@ -811,18 +821,18 @@ async fn transcribe_with_cli_gpu_fallback<F>(
     on_event: F,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String>
 where
-    F: FnMut(CliTranscribeEvent<'_>),
+    F: FnMut(CliTranscribeEvent<'_>) + Send,
 {
-    let on_event = std::cell::RefCell::new(on_event);
+    let on_event = std::sync::Mutex::new(on_event);
     transcribe_batch_with_progress_and_fallback_notice(
         request,
         preloaded_recognizer,
         |progress| {
-            let mut on_event = on_event.borrow_mut();
+            let mut on_event = on_event.lock().unwrap();
             (*on_event)(CliTranscribeEvent::Progress(progress));
         },
         |notice| {
-            let mut on_event = on_event.borrow_mut();
+            let mut on_event = on_event.lock().unwrap();
             (*on_event)(CliTranscribeEvent::DirectMlRetry {
                 error: &notice.error,
             });
@@ -1890,10 +1900,7 @@ mod tests {
 
     #[test]
     fn test_common_input_parent_multiple_same_dir() {
-        let inputs = vec![
-            PathBuf::from("a/file1.wav"),
-            PathBuf::from("a/file2.wav"),
-        ];
+        let inputs = vec![PathBuf::from("a/file1.wav"), PathBuf::from("a/file2.wav")];
         let parent = common_input_parent(&inputs).unwrap();
         assert_eq!(parent, PathBuf::from("a"));
     }
@@ -1910,20 +1917,14 @@ mod tests {
 
     #[test]
     fn test_common_input_parent_no_common_dir() {
-        let inputs = vec![
-            PathBuf::from("a/file1.wav"),
-            PathBuf::from("b/file2.wav"),
-        ];
+        let inputs = vec![PathBuf::from("a/file1.wav"), PathBuf::from("b/file2.wav")];
         let parent = common_input_parent(&inputs).unwrap();
         assert_eq!(parent, PathBuf::from(""));
     }
 
     #[test]
     fn test_common_input_parent_mixed_relative_prefix() {
-        let inputs = vec![
-            PathBuf::from("./a/file1.wav"),
-            PathBuf::from("a/file2.wav"),
-        ];
+        let inputs = vec![PathBuf::from("./a/file1.wav"), PathBuf::from("a/file2.wav")];
         let parent = common_input_parent(&inputs).unwrap();
         assert_eq!(parent, PathBuf::from("a"));
     }
