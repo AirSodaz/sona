@@ -142,8 +142,8 @@ pub struct VolcengineDoubaoAsrConfig {
 
 #[derive(Debug, Clone)]
 pub struct BatchTranscriptionRequest {
-    pub file_path: String,
-    pub save_to_path: Option<String>,
+    pub file_path: std::path::PathBuf,
+    pub save_to_path: Option<std::path::PathBuf>,
     pub model_path: String,
     pub num_threads: i32,
     pub enable_itn: bool,

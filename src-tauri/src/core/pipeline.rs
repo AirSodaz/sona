@@ -25,7 +25,7 @@ fn pcm_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
-pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::Result<()> {
+pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &Path) -> hound::Result<()> {
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate,
@@ -65,7 +65,7 @@ pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, String> {
 }
 
 pub async fn extract_and_resample_audio(
-    filepath: &str,
+    filepath: &Path,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, String> {
     // Build the target triple specific sidecar name
@@ -80,21 +80,19 @@ pub async fn extract_and_resample_audio(
     command.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
     let output = command
-        .args([
-            "-loglevel",
-            "error",
-            "-i",
-            filepath,
-            "-f",
-            "s16le",
-            "-acodec",
-            "pcm_s16le",
-            "-ar",
-            &target_sample_rate.to_string(),
-            "-ac",
-            "1",
-            "-",
-        ])
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-i")
+        .arg(filepath)
+        .arg("-f")
+        .arg("s16le")
+        .arg("-acodec")
+        .arg("pcm_s16le")
+        .arg("-ar")
+        .arg(target_sample_rate.to_string())
+        .arg("-ac")
+        .arg("1")
+        .arg("-")
         .output()
         .await
         .map_err(|e| format!("Failed to run ffmpeg command: {}", e))?;

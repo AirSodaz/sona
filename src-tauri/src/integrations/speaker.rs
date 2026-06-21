@@ -157,8 +157,11 @@ pub async fn annotate_speaker_segments_from_file(
         return Ok(segments);
     }
 
-    let samples =
-        crate::core::pipeline::extract_and_resample_audio(&file_path, SAMPLE_RATE as u32).await?;
+    let samples = crate::core::pipeline::extract_and_resample_audio(
+        std::path::Path::new(&file_path),
+        SAMPLE_RATE as u32,
+    )
+    .await?;
     annotate_segments_with_speakers(&samples, &segments, speaker_processing.as_ref())
 }
 
@@ -168,8 +171,11 @@ pub async fn import_speaker_profile_sample<R: Runtime>(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<SpeakerProfileSample, String> {
-    let samples =
-        crate::core::pipeline::extract_and_resample_audio(&source_path, SAMPLE_RATE as u32).await?;
+    let samples = crate::core::pipeline::extract_and_resample_audio(
+        std::path::Path::new(&source_path),
+        SAMPLE_RATE as u32,
+    )
+    .await?;
     let duration_seconds = samples.len() as f32 / SAMPLE_RATE as f32;
     let sample_id = uuid::Uuid::new_v4().to_string();
     let sample_name = source_name
@@ -189,12 +195,8 @@ pub async fn import_speaker_profile_sample<R: Runtime>(
     std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
 
     let output_path = profile_dir.join(format!("{sample_id}.wav"));
-    crate::core::pipeline::save_wav_file(
-        &samples,
-        SAMPLE_RATE as u32,
-        &output_path.to_string_lossy(),
-    )
-    .map_err(|e| e.to_string())?;
+    crate::core::pipeline::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
+        .map_err(|e| e.to_string())?;
 
     Ok(SpeakerProfileSample {
         id: sample_id,

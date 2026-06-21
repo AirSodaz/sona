@@ -113,9 +113,8 @@ fn config_fields(request_config: &Value) -> VolcengineDoubaoConfigFields {
     }
 }
 
-fn detect_audio_format(file_path: &str) -> &'static str {
-    let path = std::path::Path::new(file_path);
-    match path
+fn detect_audio_format(file_path: &std::path::Path) -> &'static str {
+    match file_path
         .extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
@@ -263,7 +262,7 @@ fn build_frame(
 }
 
 fn build_flash_batch_request_body(
-    file_path: &str,
+    file_path: &std::path::Path,
     audio_data: String,
     request: &AsrTranscriptionRequest,
 ) -> Value {
@@ -517,8 +516,8 @@ impl AsrBatchProcessor for VolcengineBatchProcessor {
         &self,
         emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
-        file_path: String,
-        _save_to_path: Option<String>,
+        file_path: std::path::PathBuf,
+        _save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
         _speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
@@ -791,7 +790,7 @@ async fn stop_streaming_recognizer_impl(
 pub async fn process_batch_file_impl(
     emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
-    file_path: String,
+    file_path: std::path::PathBuf,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
     if request.mode != AsrMode::Offline {
@@ -873,7 +872,7 @@ pub async fn process_batch_file_impl(
     log_inference_metric(&metric);
     let _ = emitter.emit(
         super::BATCH_PROGRESS_EVENT,
-        serde_json::json!([file_path.as_str(), 100.0_f32]),
+        serde_json::json!([file_path.to_string_lossy().as_ref(), 100.0_f32]),
     );
     Ok(segments)
 }
@@ -882,6 +881,7 @@ pub async fn process_batch_file_impl(
 mod tests {
     use super::super::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
     use super::*;
+    use std::path::Path;
 
     fn config(api_key: &str) -> Value {
         serde_json::json!({
@@ -943,7 +943,7 @@ mod tests {
         };
 
         let body = build_flash_batch_request_body(
-            "C:/recordings/meeting.mp3",
+            Path::new("C:/recordings/meeting.mp3"),
             "bG9jYWwtYXVkaW8=".to_string(),
             &request,
         );
@@ -1061,26 +1061,26 @@ mod tests {
 
     #[test]
     fn detect_audio_format_maps_known_extensions() {
-        assert_eq!(detect_audio_format("recording.mp3"), "mp3");
-        assert_eq!(detect_audio_format("recording.MP3"), "mp3");
-        assert_eq!(detect_audio_format("recording.wav"), "wav");
-        assert_eq!(detect_audio_format("recording.flac"), "flac");
-        assert_eq!(detect_audio_format("recording.m4a"), "m4a");
-        assert_eq!(detect_audio_format("recording.ogg"), "ogg");
-        assert_eq!(detect_audio_format("recording.oga"), "ogg");
-        assert_eq!(detect_audio_format("recording.aac"), "aac");
-        assert_eq!(detect_audio_format("recording.opus"), "opus");
-        assert_eq!(detect_audio_format("recording.webm"), "webm");
-        assert_eq!(detect_audio_format("recording.pcm"), "pcm");
-        assert_eq!(detect_audio_format("recording.amr"), "amr");
-        assert_eq!(detect_audio_format("recording.wma"), "wma");
+        assert_eq!(detect_audio_format(Path::new("recording.mp3")), "mp3");
+        assert_eq!(detect_audio_format(Path::new("recording.MP3")), "mp3");
+        assert_eq!(detect_audio_format(Path::new("recording.wav")), "wav");
+        assert_eq!(detect_audio_format(Path::new("recording.flac")), "flac");
+        assert_eq!(detect_audio_format(Path::new("recording.m4a")), "m4a");
+        assert_eq!(detect_audio_format(Path::new("recording.ogg")), "ogg");
+        assert_eq!(detect_audio_format(Path::new("recording.oga")), "ogg");
+        assert_eq!(detect_audio_format(Path::new("recording.aac")), "aac");
+        assert_eq!(detect_audio_format(Path::new("recording.opus")), "opus");
+        assert_eq!(detect_audio_format(Path::new("recording.webm")), "webm");
+        assert_eq!(detect_audio_format(Path::new("recording.pcm")), "pcm");
+        assert_eq!(detect_audio_format(Path::new("recording.amr")), "amr");
+        assert_eq!(detect_audio_format(Path::new("recording.wma")), "wma");
     }
 
     #[test]
     fn detect_audio_format_defaults_to_wav_for_unknown() {
-        assert_eq!(detect_audio_format("recording.xyz"), "wav");
-        assert_eq!(detect_audio_format("recording"), "wav");
-        assert_eq!(detect_audio_format(""), "wav");
+        assert_eq!(detect_audio_format(Path::new("recording.xyz")), "wav");
+        assert_eq!(detect_audio_format(Path::new("recording")), "wav");
+        assert_eq!(detect_audio_format(Path::new("")), "wav");
     }
 
     #[test]

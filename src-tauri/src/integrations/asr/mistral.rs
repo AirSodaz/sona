@@ -58,8 +58,8 @@ impl AsrBatchProcessor for MistralVoxtralBatchProcessor {
         &self,
         emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
-        file_path: String,
-        _save_to_path: Option<String>,
+        file_path: std::path::PathBuf,
+        _save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
         _speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
@@ -130,7 +130,7 @@ fn config_from_request(
 pub async fn process_batch_file_impl(
     emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
     state: &AsrState,
-    file_path: String,
+    file_path: std::path::PathBuf,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
     if request.mode != AsrMode::Offline {
@@ -220,7 +220,7 @@ pub async fn process_batch_file_impl(
 
     let _ = emitter.emit(
         crate::integrations::asr::BATCH_PROGRESS_EVENT,
-        serde_json::json!([file_path.as_str(), 100.0_f32]),
+        serde_json::json!([file_path.to_string_lossy().as_ref(), 100.0_f32]),
     );
 
     Ok(segments)

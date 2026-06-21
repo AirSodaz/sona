@@ -28,7 +28,7 @@ pub async fn process_batch_request_impl(
         |progress| {
             let _ = emitter.emit(
                 BATCH_PROGRESS_EVENT,
-                serde_json::json!([progress_file_path.as_str(), progress]),
+                serde_json::json!([progress_file_path.to_string_lossy().as_ref(), progress]),
             );
         },
         Some(state.metrics.clone()),

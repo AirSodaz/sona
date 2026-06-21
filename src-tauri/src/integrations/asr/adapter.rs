@@ -95,8 +95,8 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
         &self,
         emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
         state: &AsrState,
-        file_path: String,
-        save_to_path: Option<String>,
+        file_path: std::path::PathBuf,
+        save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
         speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {

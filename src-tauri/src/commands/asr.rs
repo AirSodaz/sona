@@ -118,8 +118,8 @@ pub async fn process_batch_file(
         .process_file(
             emitter,
             &state,
-            file_path,
-            save_to_path,
+            file_path.into(),
+            save_to_path.map(Into::into),
             asr_request,
             speaker_processing,
         )

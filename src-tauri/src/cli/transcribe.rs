@@ -337,8 +337,8 @@ fn resolve_transcribe_options_with_install_checker(
         output_target,
         quiet: cli.quiet || config.quiet.unwrap_or(false),
         request: BatchTranscriptionRequest {
-            file_path: cli.input.to_string_lossy().to_string(),
-            save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
+            file_path: cli.input.clone(),
+            save_to_path: cli.save_wav.clone(),
             model_path,
             num_threads: threads,
             enable_itn,
@@ -530,7 +530,7 @@ fn retarget_resolved_transcribe_options(
 ) -> ResolvedTranscribeOptions {
     let mut retargeted = resolved.clone();
     retargeted.output_target = OutputTarget::File(output_path);
-    retargeted.request.file_path = input_path.to_string_lossy().to_string();
+    retargeted.request.file_path = input_path.clone();
     retargeted
 }
 
@@ -1752,9 +1752,9 @@ mod tests {
             second_output.clone(),
         );
 
-        assert_eq!(resolved.request.file_path, first_input.to_string_lossy());
+        assert_eq!(resolved.request.file_path, first_input);
         assert_eq!(resolved.output_target, OutputTarget::File(first_output));
-        assert_eq!(retargeted.request.file_path, second_input.to_string_lossy());
+        assert_eq!(retargeted.request.file_path, second_input);
         assert_eq!(retargeted.output_target, OutputTarget::File(second_output));
         assert_eq!(retargeted.request.model_path, resolved.request.model_path);
     }
