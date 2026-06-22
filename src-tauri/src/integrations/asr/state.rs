@@ -77,6 +77,13 @@ impl AsrState {
         self.active_sessions.lock().await.contains_key(instance_id)
     }
 
+    pub async fn remove_session(&self, instance_id: &str) -> Option<Arc<dyn AsrStreamingSession>> {
+        let mut sessions = self.active_sessions.lock().await;
+        let session = sessions.remove(instance_id);
+        self.instance_engines.lock().await.remove(instance_id);
+        session
+    }
+
     pub async fn set_instance_engine(&self, instance_id: &str, engine: AsrEngine) {
         self.instance_engines
             .lock()
@@ -126,5 +133,78 @@ mod tests {
         assert_ne!(key(Some("cpu")), key(Some("cuda")));
         assert_ne!(key(Some("cpu")), key(None));
         assert_eq!(key(Some("cpu")), key(Some("cpu")));
+    }
+
+    struct DummySession;
+
+    #[async_trait::async_trait]
+    impl AsrStreamingSession for DummySession {
+        async fn start(
+            &self,
+            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _state: &AsrState,
+            _instance_id: &str,
+        ) -> Result<(), crate::integrations::asr::SherpaError> {
+            Ok(())
+        }
+        async fn stop(
+            &self,
+            _state: &AsrState,
+            _instance_id: &str,
+        ) -> Result<(), crate::integrations::asr::SherpaError> {
+            Ok(())
+        }
+        async fn flush(
+            &self,
+            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _state: &AsrState,
+            _instance_id: &str,
+        ) -> Result<(), crate::integrations::asr::SherpaError> {
+            Ok(())
+        }
+        async fn feed_audio_chunk(
+            &self,
+            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _state: &AsrState,
+            _instance_id: &str,
+            _samples: Vec<u8>,
+        ) -> Result<(), crate::integrations::asr::SherpaError> {
+            Ok(())
+        }
+        async fn feed_audio_samples(
+            &self,
+            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _state: &AsrState,
+            _instance_id: &str,
+            _samples: &[f32],
+        ) -> Result<(), crate::integrations::asr::SherpaError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_remove_session() {
+        let state = AsrState::new();
+        let instance_id = "test_instance";
+
+        {
+            let mut active = state.active_sessions.lock().await;
+            active.insert(instance_id.to_string(), Arc::new(DummySession));
+        }
+        state
+            .set_instance_engine(instance_id, AsrEngine::LocalSherpa)
+            .await;
+
+        assert!(state.has_online_session(instance_id).await);
+        assert_eq!(
+            state.instance_engine(instance_id).await,
+            Some(AsrEngine::LocalSherpa)
+        );
+
+        let removed = state.remove_session(instance_id).await;
+        assert!(removed.is_some());
+
+        assert!(!state.has_online_session(instance_id).await);
+        assert_eq!(state.instance_engine(instance_id).await, None);
     }
 }

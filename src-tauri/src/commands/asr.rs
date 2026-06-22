@@ -51,12 +51,10 @@ pub async fn stop_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
+    let session = state
+        .remove_session(&instance_id)
+        .await
+        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     session.stop(&state, &instance_id).await
 }
 
