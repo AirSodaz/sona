@@ -546,7 +546,6 @@ where
 
     let temp_download_path = crate::core::downloads::temporary_download_path(
         &resolved.download_path,
-        &resolved.model.id,
     );
 
     let notify = std::sync::Arc::new(tokio::sync::Notify::new());

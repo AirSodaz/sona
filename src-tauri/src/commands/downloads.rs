@@ -60,7 +60,7 @@ pub async fn download_file<R: tauri::Runtime>(
     use tauri::Emitter;
 
     let final_path = std::path::PathBuf::from(&output_path);
-    let temp_path = temporary_download_path(&final_path, &id);
+    let temp_path = temporary_download_path(&final_path);
 
     let notify = Arc::new(Notify::new());
     {

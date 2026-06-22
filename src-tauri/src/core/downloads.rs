@@ -21,12 +21,12 @@ pub enum DownloadError {
     HttpStatus(reqwest::StatusCode),
     #[error("Downloaded file hash mismatch for {0}")]
     HashMismatch(String),
+    #[error("Download already in progress by another process")]
+    AlreadyInProgress,
 }
 
-pub fn temporary_download_path(path: &Path, id: &str) -> PathBuf {
+pub fn temporary_download_path(path: &Path) -> PathBuf {
     let mut s = path.as_os_str().to_os_string();
-    s.push(".");
-    s.push(id);
     s.push(".download");
     PathBuf::from(s)
 }
@@ -148,15 +148,7 @@ pub async fn download_file(
             content_length
         };
 
-        if let Some(parent) = temp_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        let file = if is_partial {
-            OpenOptions::new().append(true).open(&temp_path).await?
-        } else {
-            tokio::fs::File::create(&temp_path).await?
-        };
+        let file = acquire_download_file(temp_path, is_partial).await?;
 
         let mut writer = tokio::io::BufWriter::new(file);
         use futures_util::StreamExt;
@@ -218,6 +210,34 @@ pub async fn download_file(
     }
 }
 
+async fn acquire_download_file(
+    temp_path: &Path,
+    is_partial: bool,
+) -> Result<tokio::fs::File, DownloadError> {
+    if let Some(parent) = temp_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    let file = if is_partial {
+        OpenOptions::new().append(true).open(temp_path).await?
+    } else {
+        OpenOptions::new().write(true).create(true).open(temp_path).await?
+    };
+
+    use fs3::FileExt;
+    let std_file = file.into_std().await;
+    if std_file.try_lock_exclusive().is_err() {
+        return Err(DownloadError::AlreadyInProgress);
+    }
+    let file = tokio::fs::File::from_std(std_file);
+
+    if !is_partial {
+        file.set_len(0).await?;
+    }
+
+    Ok(file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,16 +245,16 @@ mod tests {
 
     #[test]
     fn temporary_download_path_uses_sibling_file() {
-        let path = temporary_download_path(Path::new("C:/models/silero_vad.onnx"), "abc123");
+        let path = temporary_download_path(Path::new("C:/models/silero_vad.onnx"));
 
-        assert_eq!(path, Path::new("C:/models/silero_vad.onnx.abc123.download"));
+        assert_eq!(path, Path::new("C:/models/silero_vad.onnx.download"));
     }
 
     #[tokio::test]
     async fn remove_download_file_removes_temp_without_touching_final() {
         let dir = tempfile::tempdir().unwrap();
         let final_path = dir.path().join("silero_vad.onnx");
-        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
         tokio::fs::write(&final_path, b"old-good").await.unwrap();
         tokio::fs::write(&temp_path, b"partial").await.unwrap();
 
@@ -248,7 +268,7 @@ mod tests {
     async fn publish_download_file_replaces_final_only_after_temp_exists() {
         let dir = tempfile::tempdir().unwrap();
         let final_path = dir.path().join("silero_vad.onnx");
-        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
         tokio::fs::write(&final_path, b"old").await.unwrap();
         tokio::fs::write(&temp_path, b"complete").await.unwrap();
 
@@ -264,7 +284,7 @@ mod tests {
     async fn complete_download_file_keeps_final_and_removes_temp_when_hash_mismatches() {
         let dir = tempfile::tempdir().unwrap();
         let final_path = dir.path().join("silero_vad.onnx");
-        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
         tokio::fs::write(&final_path, b"old-good").await.unwrap();
         tokio::fs::write(&temp_path, b"wrong").await.unwrap();
 
@@ -284,7 +304,7 @@ mod tests {
     async fn complete_download_file_accepts_matching_hash_before_replacing_final() {
         let dir = tempfile::tempdir().unwrap();
         let final_path = dir.path().join("silero_vad.onnx");
-        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
         tokio::fs::write(&final_path, b"old").await.unwrap();
         tokio::fs::write(&temp_path, b"complete").await.unwrap();
 
@@ -303,7 +323,7 @@ mod tests {
     #[tokio::test]
     async fn complete_download_file_removes_temp_when_publish_fails() {
         let dir = tempfile::tempdir().unwrap();
-        let temp_path = dir.path().join("silero_vad.onnx.abc123.download");
+        let temp_path = dir.path().join("silero_vad.onnx.download");
         let final_path = dir.path().join("missing-parent").join("silero_vad.onnx");
         tokio::fs::write(&temp_path, b"complete").await.unwrap();
 
@@ -311,5 +331,41 @@ mod tests {
 
         assert!(matches!(result, Err(DownloadError::Io(_))));
         assert!(!temp_path.exists());
+    }
+
+    #[tokio::test]
+    async fn concurrent_calls_return_already_in_progress() {
+        use axum::{routing::get, Router};
+        use fs3::FileExt;
+        use std::sync::Arc;
+        use tokio::fs::File;
+        use tokio::net::TcpListener;
+        use tokio::sync::Notify;
+
+        let dir = tempfile::tempdir().unwrap();
+        let temp_path = dir.path().join("test.onnx.download");
+
+        // Start a dummy axum server to satisfy the network request
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{}/test", addr);
+
+        let app = Router::new().route("/test", get(|| async { "dummy content" }));
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        // Pre-create and lock the file
+        let file = File::create(&temp_path).await.unwrap();
+        let std_file = file.try_clone().await.unwrap().into_std().await;
+        std_file.try_lock_exclusive().unwrap();
+
+        let client = reqwest::Client::new();
+        let notify = Arc::new(Notify::new());
+
+        // This should fail with AlreadyInProgress
+        let result = download_file(&client, &url, &temp_path, notify, None).await;
+
+        assert!(matches!(result, Err(DownloadError::AlreadyInProgress)));
     }
 }
