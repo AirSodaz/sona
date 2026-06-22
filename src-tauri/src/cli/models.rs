@@ -544,9 +544,8 @@ where
         .build()
         .map_err(|error| CliError::Network(format!("Failed to create HTTP client: {error}")))?;
 
-    let temp_download_path = crate::core::downloads::temporary_download_path(
-        &resolved.download_path,
-    );
+    let temp_download_path =
+        crate::core::downloads::temporary_download_path(&resolved.download_path);
 
     let notify = std::sync::Arc::new(tokio::sync::Notify::new());
     let notify_clone = notify.clone();

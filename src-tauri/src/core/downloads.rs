@@ -1,10 +1,11 @@
 use reqwest::header::RANGE;
 use sha2::{Digest, Sha256};
+use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::fs::OpenOptions;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Notify;
 
 #[derive(Error, Debug)]
@@ -102,23 +103,25 @@ pub async fn download_file(
     notify: Arc<Notify>,
     mut on_progress: Option<Box<dyn FnMut(u64, u64) + Send>>,
 ) -> Result<(), DownloadError> {
+    // Acquire an exclusive lock on the download file BEFORE establishing any
+    // network connection. This lets us fail fast with AlreadyInProgress
+    // instead of wasting a TCP connection and downloading bytes we cannot use.
+    let mut file = open_and_lock_download_file(temp_path).await?;
+
     let max_retries = 3;
     let mut attempt = 0;
 
     loop {
-        let current_size = tokio::fs::metadata(&temp_path)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
+        // Read the current on-disk size from the already-open handle so we
+        // know whether to request a byte range for resumption.
+        let current_size = file.metadata().await.map(|m| m.len()).unwrap_or(0);
 
         let mut request = client.get(url);
-
         if current_size > 0 {
             request = request.header(RANGE, format!("bytes={}-", current_size));
         }
 
         let res_result = request.send().await;
-
         let res = match res_result {
             Ok(r) => r,
             Err(e) => {
@@ -132,7 +135,10 @@ pub async fn download_file(
         };
 
         if res.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
-            let _ = tokio::fs::remove_file(&temp_path).await;
+            // The server does not recognise our byte range; truncate the
+            // partial file in-place and restart from the beginning.
+            file.set_len(0).await?;
+            file.seek(SeekFrom::Start(0)).await?;
             continue;
         }
 
@@ -148,9 +154,17 @@ pub async fn download_file(
             content_length
         };
 
-        let file = acquire_download_file(temp_path, is_partial).await?;
+        // Position the file cursor before streaming begins.
+        if is_partial {
+            // Resume: append after the bytes already on disk.
+            file.seek(SeekFrom::End(0)).await?;
+        } else {
+            // Full response: overwrite from the beginning.
+            file.set_len(0).await?;
+            file.seek(SeekFrom::Start(0)).await?;
+        }
 
-        let mut writer = tokio::io::BufWriter::new(file);
+        let mut writer = tokio::io::BufWriter::new(&mut file);
         use futures_util::StreamExt;
         let mut stream = res.bytes_stream();
         let mut downloaded: u64 = if is_partial { current_size } else { 0 };
@@ -188,7 +202,9 @@ pub async fn download_file(
         };
 
         writer.flush().await?;
-        writer.into_inner().sync_all().await?;
+        // Drop the writer to release the &mut borrow before calling sync_all.
+        drop(writer);
+        file.sync_all().await?;
 
         if cancelled {
             return Err(DownloadError::Cancelled);
@@ -210,32 +226,35 @@ pub async fn download_file(
     }
 }
 
-async fn acquire_download_file(
-    temp_path: &Path,
-    is_partial: bool,
-) -> Result<tokio::fs::File, DownloadError> {
+/// Opens `temp_path` for reading and writing (creating it if absent) and
+/// acquires an exclusive byte-range lock on the file handle.
+///
+/// Failing early here — before any network activity — means a competing
+/// download (e.g. the GUI) is detected without wasting a TCP connection.
+async fn open_and_lock_download_file(temp_path: &Path) -> Result<tokio::fs::File, DownloadError> {
     if let Some(parent) = temp_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    let file = if is_partial {
-        OpenOptions::new().append(true).open(temp_path).await?
-    } else {
-        OpenOptions::new().write(true).create(true).open(temp_path).await?
-    };
+    // Open for both reading and writing so that a single handle supports
+    // seek, truncation, and streaming writes across all retry attempts.
+    // `.truncate(false)` is intentional: any existing partial download bytes
+    // are preserved for resumption; truncation is performed explicitly inside
+    // the download loop when the server returns a full (non-partial) response.
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(temp_path)
+        .await?;
 
     use fs3::FileExt;
     let std_file = file.into_std().await;
     if std_file.try_lock_exclusive().is_err() {
         return Err(DownloadError::AlreadyInProgress);
     }
-    let file = tokio::fs::File::from_std(std_file);
-
-    if !is_partial {
-        file.set_len(0).await?;
-    }
-
-    Ok(file)
+    Ok(tokio::fs::File::from_std(std_file))
 }
 
 #[cfg(test)]
@@ -335,7 +354,7 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_calls_return_already_in_progress() {
-        use axum::{routing::get, Router};
+        use axum::{Router, routing::get};
         use fs3::FileExt;
         use std::sync::Arc;
         use tokio::fs::File;
