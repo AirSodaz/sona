@@ -89,6 +89,21 @@ pub enum CliError {
     Model(String),
     #[error("{0}")]
     Other(String),
+    #[error("{0}")]
+    PartialFailure(String),
+}
+
+impl CliError {
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            CliError::Other(_) => 1,
+            CliError::Validation(_) => 2,
+            CliError::Model(_) => 3,
+            CliError::Network(_) => 4,
+            CliError::Io(_) => 5,
+            CliError::PartialFailure(_) => 6,
+        }
+    }
 }
 
 pub type CliResult<T> = Result<T, CliError>;
@@ -209,5 +224,15 @@ mod tests {
 
         assert!(cli.verbose);
         assert!(matches!(cli.command, Commands::Models(_)));
+    }
+
+    #[test]
+    fn test_cli_error_exit_code_mapping() {
+        assert_eq!(CliError::Other("test".to_string()).exit_code(), 1);
+        assert_eq!(CliError::Validation("test".to_string()).exit_code(), 2);
+        assert_eq!(CliError::Model("test".to_string()).exit_code(), 3);
+        assert_eq!(CliError::Network("test".to_string()).exit_code(), 4);
+        assert_eq!(CliError::Io("test".to_string()).exit_code(), 5);
+        assert_eq!(CliError::PartialFailure("test".to_string()).exit_code(), 6);
     }
 }

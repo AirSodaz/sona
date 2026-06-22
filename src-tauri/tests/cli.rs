@@ -134,7 +134,7 @@ fn transcribe_input_dir_requires_output_dir_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--output-dir"));
     assert!(!stderr.contains("Unknown model id"));
@@ -161,7 +161,7 @@ fn transcribe_input_dir_rejects_zero_jobs_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--jobs"));
     assert!(!stderr.contains("Unknown model id"));
@@ -187,7 +187,7 @@ fn transcribe_input_dir_rejects_duplicate_output_names_before_model_resolution()
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(5));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("would overwrite"));
     assert!(stderr.contains("demo.json"));
@@ -290,7 +290,7 @@ fn init_config_rejects_existing_target_without_force() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(5));
     assert_eq!(
         fs::read_to_string(&config_path).unwrap(),
         "existing = true\n"
@@ -326,7 +326,7 @@ fn serve_invalid_gpu_acceleration_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("gpu_acceleration"));
     assert!(stderr.contains("auto, cpu, cuda, coreml, directml"));
@@ -339,7 +339,7 @@ fn serve_invalid_ip_whitelist_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Failed to parse IP whitelist"));
     assert!(stderr.contains("not-an-ip-rule"));
@@ -530,7 +530,7 @@ fn missing_config_file_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(5));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Failed to read config file"));
 }
@@ -553,7 +553,7 @@ fn unknown_model_id_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(3));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
 }
@@ -570,7 +570,7 @@ fn missing_single_file_input_returns_failure_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Input file must be an existing file"));
     assert!(stderr.contains(&missing_input.display().to_string()));
@@ -594,7 +594,7 @@ fn existing_single_output_returns_failure_before_model_resolution_without_force(
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(5));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Output file already exists"));
     assert!(stderr.contains(&output_path.display().to_string()));
@@ -620,7 +620,7 @@ fn existing_single_output_with_force_reaches_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(3));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
     assert!(!stderr.contains("Output file already exists"));
@@ -646,7 +646,7 @@ fn existing_batch_output_returns_failure_before_model_resolution_without_force()
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(5));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Output file already exists"));
     assert!(stderr.contains("sample.json"));
@@ -670,7 +670,7 @@ fn multiple_positional_inputs_require_output_dir_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--output-dir"));
     assert!(!stderr.contains("Unknown model id"));
@@ -690,7 +690,7 @@ fn glob_inputs_require_output_dir_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("--output-dir"));
     assert!(!stderr.contains("Unknown model id"));
@@ -710,7 +710,7 @@ fn invalid_gpu_acceleration_returns_failure_before_model_resolution() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("gpu_acceleration"));
     assert!(stderr.contains("auto, cpu, cuda, coreml, directml"));
@@ -724,7 +724,7 @@ fn unknown_download_model_id_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
 }
@@ -736,7 +736,7 @@ fn unknown_delete_model_id_returns_failure() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown model id"));
 }

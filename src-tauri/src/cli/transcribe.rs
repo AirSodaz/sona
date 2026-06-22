@@ -748,9 +748,13 @@ async fn run_batch_transcribe_plans(plans: Vec<BatchTranscribePlan>, jobs: usize
     write_output(&OutputTarget::Stdout, &content)?;
 
     if failed > 0 {
-        Err(CliError::Other(format!(
-            "{failed} of {total} batch files failed."
-        )))
+        if failed < total {
+            Err(CliError::PartialFailure(format!(
+                "{failed} of {total} batch files failed."
+            )))
+        } else {
+            Err(CliError::Other(format!("All {total} batch files failed.")))
+        }
     } else {
         Ok(())
     }
@@ -1252,6 +1256,43 @@ pub fn load_config_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_batch_failure_differentiation() {
+        use crate::cli::CliError;
+        // Differentiate complete failure vs partial failure
+        let total = 5;
+
+        // Case 1: Partial failure (failed > 0 && failed < total)
+        let failed_partial = 3;
+        let err_partial = if failed_partial > 0 {
+            if failed_partial < total {
+                CliError::PartialFailure(format!("{failed_partial} of {total} batch files failed."))
+            } else {
+                CliError::Other(format!("All {total} batch files failed."))
+            }
+        } else {
+            CliError::Other("Unreachable".to_string())
+        };
+        assert!(matches!(err_partial, CliError::PartialFailure(_)));
+        assert_eq!(err_partial.exit_code(), 6);
+
+        // Case 2: Complete failure (failed == total)
+        let failed_complete = 5;
+        let err_complete = if failed_complete > 0 {
+            if failed_complete < total {
+                CliError::PartialFailure(format!(
+                    "{failed_complete} of {total} batch files failed."
+                ))
+            } else {
+                CliError::Other(format!("All {total} batch files failed."))
+            }
+        } else {
+            CliError::Other("Unreachable".to_string())
+        };
+        assert!(matches!(err_complete, CliError::Other(_)));
+        assert_eq!(err_complete.exit_code(), 1);
+    }
     use crate::repositories::export::ExportFormat;
     use std::fs;
     use tempfile::tempdir;
