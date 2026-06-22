@@ -79,7 +79,8 @@
         "model": {
             "download_failed": "モデルのダウンロードに失敗しました。",
             "load_failed": "モデルのロードに失敗しました: {{name}}",
-            "delete_failed": "モデルの削除に失敗しました: {{name}}"
+            "delete_failed": "モデルの削除に失敗しました: {{name}}",
+            "already_in_progress": "このモデルは別のプロセスでダウンロード中です。完了するまでお待ちください。"
         },
         "export": {
             "failed": "トランスクリプトのエクスポートに失敗しました。"

@@ -79,7 +79,8 @@
         "model": {
             "download_failed": "下載模型失敗。",
             "load_failed": "載入模型失敗：{{name}}",
-            "delete_failed": "刪除模型失敗：{{name}}"
+            "delete_failed": "刪除模型失敗：{{name}}",
+            "already_in_progress": "該模型當前正被另一個進程下載，請等待其完成。"
         },
         "export": {
             "failed": "匯出轉錄失敗。"

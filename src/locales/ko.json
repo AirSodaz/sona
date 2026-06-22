@@ -79,7 +79,8 @@
         "model": {
             "download_failed": "모델을 다운로드하지 못했습니다.",
             "load_failed": "모델을 불러오지 못했습니다: {{name}}",
-            "delete_failed": "모델을 삭제하지 못했습니다: {{name}}"
+            "delete_failed": "모델을 삭제하지 못했습니다: {{name}}",
+            "already_in_progress": "이 모델은 현재 다른 프로세스에서 다운로드 중입니다. 완료될 때까지 기다려 주세요."
         },
         "export": {
             "failed": "전사를 내보내지 못했습니다."

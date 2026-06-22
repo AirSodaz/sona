@@ -91,6 +91,7 @@ export function useModelManager(isOpen: boolean) {
     const setConfig = useConfigStore((state) => state.setConfig);
     const confirm = useDialogStore((state) => state.confirm);
     const showError = useDialogStore((state) => state.showError);
+    const alert = useDialogStore((state) => state.alert);
     const { t } = useTranslation();
 
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
@@ -265,8 +266,13 @@ export function useModelManager(isOpen: boolean) {
             await onSuccess(downloadedPath);
 
         } catch (error) {
-            if (extractErrorMessage(error) === 'Download cancelled') {
+            const errorMsg = extractErrorMessage(error);
+            if (errorMsg === 'Download cancelled') {
                 logger.info('Download cancelled by user');
+            } else if (errorMsg.includes('Download already in progress')) {
+                await alert(
+                    t('errors.model.already_in_progress')
+                );
             } else {
                 await showError({
                     code: 'model.download_failed',
