@@ -664,16 +664,28 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> CliR
 }
 
 pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, CliError> {
-    if let Some(path) = configured {
-        return Ok(path);
+    let path = if let Some(path) = configured {
+        path
+    } else {
+        default_models_dir().ok_or_else(|| {
+            CliError::Validation(
+                "Unable to infer the desktop models directory. Pass --models-dir explicitly."
+                    .to_string(),
+            )
+        })?
+    };
+
+    if std::fs::metadata(&path)
+        .map(|meta| !meta.is_dir())
+        .unwrap_or(false)
+    {
+        return Err(CliError::Validation(format!(
+            "Models directory '{}' exists but is not a directory.",
+            path.display()
+        )));
     }
 
-    default_models_dir().ok_or_else(|| {
-        CliError::Validation(
-            "Unable to infer the desktop models directory. Pass --models-dir explicitly."
-                .to_string(),
-        )
-    })
+    Ok(path)
 }
 
 pub(crate) fn default_models_dir() -> Option<PathBuf> {
@@ -803,5 +815,39 @@ mod tests {
             "Expected error message to contain 'Failed to download' or 'Download failed', but was: '{}'",
             err_msg
         );
+    }
+
+    #[test]
+    fn resolve_models_dir_fails_when_path_is_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("not_a_dir.txt");
+        std::fs::write(&file_path, b"dummy data").unwrap();
+
+        let result = resolve_models_dir(Some(file_path));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, CliError::Validation(_)));
+        assert!(err.to_string().contains("exists but is not a directory"));
+    }
+
+    #[test]
+    fn resolve_models_dir_succeeds_when_path_is_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().join("valid_dir");
+        std::fs::create_dir_all(&dir_path).unwrap();
+
+        let result = resolve_models_dir(Some(dir_path.clone()));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), dir_path);
+    }
+
+    #[test]
+    fn resolve_models_dir_succeeds_when_path_does_not_exist() {
+        let dir = tempfile::tempdir().unwrap();
+        let non_existent_path = dir.path().join("does_not_exist");
+
+        let result = resolve_models_dir(Some(non_existent_path.clone()));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), non_existent_path);
     }
 }
