@@ -1025,6 +1025,34 @@ async fn ip_whitelist_middleware(
     }
 }
 
+fn format_bind_error(e: std::io::Error, addr: &str) -> String {
+    let raw_code = e.raw_os_error();
+    let os_err_suffix = match raw_code {
+        Some(code) => format!(" (os error {code})"),
+        None => "".to_string(),
+    };
+    match e.kind() {
+        std::io::ErrorKind::AddrInUse => {
+            format!(
+                "Address already in use: {addr}. Make sure the port is not being used by another process.{os_err_suffix}"
+            )
+        }
+        std::io::ErrorKind::AddrNotAvailable => {
+            format!("Address not available: {addr}.{os_err_suffix}")
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            format!("Permission denied: Failed to bind to {addr}.{os_err_suffix}")
+        }
+        _ => {
+            if let Some(code) = raw_code {
+                format!("Failed to bind to {addr} (os error {code})")
+            } else {
+                format!("Failed to bind to {addr}: {e}")
+            }
+        }
+    }
+}
+
 pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     let ApiServerRuntimeConfig {
         app,
@@ -1157,7 +1185,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     let addr = format!("{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format_bind_error(e, &addr))?;
 
     log::info!("Starting HTTP API server on {}", addr);
     let clean_temp_dir = temp_dir.clone();
@@ -1611,5 +1639,42 @@ mod tests {
         }
 
         let _ = tokio::fs::remove_file(&temp_dir).await;
+    }
+
+    #[test]
+    fn test_format_bind_error() {
+        let addr = "127.0.0.1:14200";
+
+        let in_use_err = std::io::Error::new(std::io::ErrorKind::AddrInUse, "address in use");
+        let formatted = format_bind_error(in_use_err, addr);
+        assert!(formatted.contains("Address already in use: 127.0.0.1:14200"));
+
+        let not_avail_err =
+            std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "not available");
+        let formatted = format_bind_error(not_avail_err, addr);
+        assert!(formatted.contains("Address not available: 127.0.0.1:14200"));
+
+        let permission_err =
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let formatted = format_bind_error(permission_err, addr);
+        assert!(formatted.contains("Permission denied: Failed to bind to 127.0.0.1:14200"));
+
+        #[cfg(target_os = "windows")]
+        let os_code = 10048;
+        #[cfg(target_os = "macos")]
+        let os_code = 48;
+        #[cfg(target_os = "linux")]
+        let os_code = 98;
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        let os_code = 98;
+
+        let custom_os_err = std::io::Error::from_raw_os_error(os_code);
+        let formatted = format_bind_error(custom_os_err, addr);
+        assert!(formatted.contains("Address already in use: 127.0.0.1:14200"));
+        assert!(formatted.contains(&format!("os error {os_code}")));
+
+        let other_err = std::io::Error::other("something went wrong");
+        let formatted = format_bind_error(other_err, addr);
+        assert!(formatted.contains("Failed to bind to 127.0.0.1:14200: something went wrong"));
     }
 }
