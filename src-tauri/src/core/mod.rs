@@ -3,6 +3,7 @@ pub mod config;
 pub mod dashboard;
 pub mod diagnostics;
 pub mod domain;
+pub mod downloads;
 pub mod event;
 pub mod pipeline;
 pub mod preset_models;

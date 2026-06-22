@@ -91,6 +91,8 @@ pub enum CliError {
     Other(String),
     #[error("{0}")]
     PartialFailure(String),
+    #[error("Cancelled: {0}")]
+    Cancelled(String),
 }
 
 impl CliError {
@@ -102,6 +104,7 @@ impl CliError {
             CliError::Network(_) => 4,
             CliError::Io(_) => 5,
             CliError::PartialFailure(_) => 6,
+            CliError::Cancelled(_) => 130,
         }
     }
 }
@@ -234,5 +237,6 @@ mod tests {
         assert_eq!(CliError::Network("test".to_string()).exit_code(), 4);
         assert_eq!(CliError::Io("test".to_string()).exit_code(), 5);
         assert_eq!(CliError::PartialFailure("test".to_string()).exit_code(), 6);
+        assert_eq!(CliError::Cancelled("test".to_string()).exit_code(), 130);
     }
 }

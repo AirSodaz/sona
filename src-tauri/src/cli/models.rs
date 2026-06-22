@@ -1,12 +1,11 @@
 use crate::cli::transcribe::{OutputTarget, write_output};
 use crate::cli::{CliError, CliResult};
-use crate::commands::downloads::sha256_file;
+use crate::core::downloads::sha256_file;
 use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
 use clap::{Args, Subcommand};
-use futures_util::StreamExt;
+
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CliModelSummary {
@@ -422,24 +421,29 @@ async fn download_one_model(
     quiet: bool,
 ) -> CliResult<()> {
     let stderr_is_terminal = io::stderr().is_terminal();
+    let has_printed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let has_printed_clone = has_printed.clone();
+    let display_id = display_model_id.to_string();
     let mut last_percentage: Option<i32> = None;
-    let install_path = download_model(resolved, yes, |downloaded, total| {
+
+    let install_path = download_model(resolved, yes, move |downloaded, total| {
         if quiet || total == 0 {
             return;
         }
         let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
         if stderr_is_terminal {
-            eprint!("\rDownloading {display_model_id}: {percentage}%");
+            eprint!("\rDownloading {display_id}: {percentage}%");
             let _ = io::stderr().flush();
+            has_printed_clone.store(true, std::sync::atomic::Ordering::Relaxed);
         } else if (percentage == 100 || percentage % 10 == 0) && last_percentage != Some(percentage)
         {
-            eprintln!("Downloading {display_model_id}: {percentage}%");
+            eprintln!("Downloading {display_id}: {percentage}%");
+            last_percentage = Some(percentage);
         }
-        last_percentage = Some(percentage);
     })
     .await?;
 
-    if !quiet && stderr_is_terminal && last_percentage.is_some() {
+    if has_printed.load(std::sync::atomic::Ordering::Relaxed) {
         eprintln!();
     }
     eprintln!(
@@ -495,10 +499,10 @@ pub fn resolve_model_download(
 pub async fn download_model<F>(
     resolved: &ResolvedModelDownload,
     yes: bool,
-    mut on_progress: F,
+    on_progress: F,
 ) -> Result<PathBuf, CliError>
 where
-    F: FnMut(u64, u64),
+    F: FnMut(u64, u64) + Send + 'static,
 {
     if resolved.model.is_installed_at(&resolved.models_dir) {
         let is_valid = if resolved.model.is_archive() {
@@ -539,54 +543,40 @@ where
         .user_agent("Sona/1.0")
         .build()
         .map_err(|error| CliError::Network(format!("Failed to create HTTP client: {error}")))?;
-    let response = client
-        .get(&resolved.model.url)
-        .send()
-        .await
-        .map_err(|error| CliError::Network(format!("Failed to download model: {error}")))?;
 
-    if !response.status().is_success() {
-        return Err(CliError::Network(format!(
-            "Download failed with status: {}",
-            response.status()
-        )));
-    }
+    let temp_download_path = crate::core::downloads::temporary_download_path(
+        &resolved.download_path,
+        &resolved.model.id,
+    );
 
-    let total_size = response.content_length().unwrap_or(0);
-    let temp_download_path = temporary_download_path(&resolved.download_path);
-    let file = tokio::fs::File::create(&temp_download_path)
-        .await
-        .map_err(|error| {
-            CliError::Io(format!(
-                "Failed to create download file {}: {error}",
-                temp_download_path.display()
-            ))
-        })?;
-    let mut writer = tokio::io::BufWriter::new(file);
-    let mut stream = response
-        .bytes_stream()
-        .map(|item| item.map_err(|error| CliError::Network(error.to_string())));
+    let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    let notify_clone = notify.clone();
+    let ctrl_c_task = tokio::spawn(async move {
+        if let Ok(()) = tokio::signal::ctrl_c().await {
+            notify_clone.notify_one();
+        }
+    });
 
-    if let Err(error) =
-        process_download_stream(&mut stream, &mut writer, total_size, |downloaded, total| {
-            on_progress(downloaded, total);
-        })
-        .await
-    {
-        drop(writer);
-        let _ = tokio::fs::remove_file(&temp_download_path).await;
-        return Err(error);
-    }
+    let result = crate::core::downloads::download_file(
+        &client,
+        &resolved.model.url,
+        &temp_download_path,
+        notify,
+        Some(Box::new(on_progress)),
+    )
+    .await;
 
-    if let Err(error) = writer.flush().await {
-        drop(writer);
-        let _ = tokio::fs::remove_file(&temp_download_path).await;
-        return Err(CliError::Io(format!(
-            "Failed to flush download file: {error}"
-        )));
-    }
+    ctrl_c_task.abort();
 
-    drop(writer);
+    result.map_err(|error| match error {
+        crate::core::downloads::DownloadError::Cancelled => {
+            CliError::Cancelled("Download cancelled by user".to_string())
+        }
+        crate::core::downloads::DownloadError::HttpStatus(status) => {
+            CliError::Network(format!("Download failed with status: {status}"))
+        }
+        error => CliError::Network(format!("Failed to download model: {error}")),
+    })?;
 
     // Validate SHA256 of the newly downloaded file before publishing
     if let Some(expected_sha) = &resolved.model.sha256 {
@@ -610,7 +600,15 @@ where
         }
     }
 
-    publish_download_file(&temp_download_path, &resolved.download_path).await?;
+    crate::core::downloads::publish_download_file(&temp_download_path, &resolved.download_path)
+        .await
+        .map_err(|error| {
+            CliError::Io(format!(
+                "Failed to publish download {} to {}: {error}",
+                temp_download_path.display(),
+                resolved.download_path.display()
+            ))
+        })?;
 
     if resolved.model.is_archive() {
         extract_tar_bz2_archive(&resolved.download_path, &resolved.models_dir).await?;
@@ -627,35 +625,6 @@ where
     Ok(resolved.install_path.clone())
 }
 
-fn temporary_download_path(path: &Path) -> PathBuf {
-    let mut s = path.as_os_str().to_os_string();
-    s.push(".download");
-    PathBuf::from(s)
-}
-
-async fn publish_download_file(temp_path: &Path, final_path: &Path) -> CliResult<()> {
-    if tokio::fs::try_exists(final_path).await.map_err(|error| {
-        CliError::Io(format!("Failed to check {}: {error}", final_path.display()))
-    })? {
-        tokio::fs::remove_file(final_path).await.map_err(|error| {
-            CliError::Io(format!(
-                "Failed to remove existing download target {}: {error}",
-                final_path.display()
-            ))
-        })?;
-    }
-
-    tokio::fs::rename(temp_path, final_path)
-        .await
-        .map_err(|error| {
-            CliError::Io(format!(
-                "Failed to publish download {} to {}: {error}",
-                temp_path.display(),
-                final_path.display()
-            ))
-        })
-}
-
 /// Returns suggested companion model ids for the given preset model.
 pub fn required_companion_models(model: &PresetModel) -> RequiredCompanionModels {
     let rules = model.resolved_rules();
@@ -665,37 +634,6 @@ pub fn required_companion_models(model: &PresetModel) -> RequiredCompanionModels
             "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8".to_string()
         }),
     }
-}
-
-async fn process_download_stream<S, W, F>(
-    stream: &mut S,
-    writer: &mut W,
-    total_size: u64,
-    mut on_progress: F,
-) -> CliResult<()>
-where
-    S: futures_util::Stream<Item = Result<bytes::Bytes, CliError>> + Unpin,
-    W: tokio::io::AsyncWrite + Unpin,
-    F: FnMut(u64, u64),
-{
-    let mut downloaded: u64 = 0;
-    let mut last_emit = std::time::Instant::now();
-
-    while let Some(item) = stream.next().await {
-        let chunk = item?;
-        writer
-            .write_all(&chunk)
-            .await
-            .map_err(|error| CliError::Io(error.to_string()))?;
-        downloaded += chunk.len() as u64;
-
-        if total_size > 0 && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100) {
-            on_progress(downloaded, total_size);
-            last_emit = std::time::Instant::now();
-        }
-    }
-
-    Ok(())
 }
 
 async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> CliResult<()> {
@@ -865,28 +803,5 @@ mod tests {
             "Expected error message to contain 'Failed to download' or 'Download failed', but was: '{}'",
             err_msg
         );
-    }
-
-    #[test]
-    fn temporary_download_path_appends_download_suffix() {
-        let path = temporary_download_path(Path::new("C:/models/silero_vad.onnx"));
-
-        assert_eq!(path, PathBuf::from("C:/models/silero_vad.onnx.download"));
-    }
-
-    #[tokio::test]
-    async fn publish_download_file_replaces_existing_target() {
-        let dir = tempfile::tempdir().unwrap();
-        let final_path = dir.path().join("silero_vad.onnx");
-        let temp_path = dir.path().join("silero_vad.onnx.download");
-        tokio::fs::write(&final_path, b"old").await.unwrap();
-        tokio::fs::write(&temp_path, b"complete").await.unwrap();
-
-        publish_download_file(&temp_path, &final_path)
-            .await
-            .unwrap();
-
-        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"complete");
-        assert!(!temp_path.exists());
     }
 }
