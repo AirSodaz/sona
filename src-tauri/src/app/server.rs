@@ -62,6 +62,7 @@ pub struct ApiServerRuntimeConfig {
     pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
 pub struct ApiServerController {
@@ -150,6 +151,9 @@ pub async fn start_api_server(
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     *sender_lock = Some(tx);
+    drop(sender_lock);
+
+    let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
 
     let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
     let temp_dir = app_local_data_dir.join("api_temp");
@@ -176,6 +180,7 @@ pub async fn start_api_server(
             online_asr_config,
             transcription_defaults,
             shutdown_rx: rx,
+            bind_tx: Some(bind_tx),
         })
         .await
         {
@@ -183,7 +188,11 @@ pub async fn start_api_server(
         }
     });
 
-    Ok(normalized_whitelist)
+    match bind_rx.await {
+        Ok(Ok(())) => Ok(normalized_whitelist),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("API Server failed to start: task terminated prematurely".to_string()),
+    }
 }
 
 pub async fn stop_api_server(
@@ -334,6 +343,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 online_asr_config,
                 transcription_defaults,
                 shutdown_rx: rx,
+                bind_tx: None,
             })
             .await
             {
@@ -1070,13 +1080,18 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         online_asr_config,
         transcription_defaults,
         shutdown_rx,
+        bind_tx,
     } = config;
 
     // Resource Cleanup: clean temp_dir on startup
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-    tokio::fs::create_dir_all(&temp_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
+        let err_msg = e.to_string();
+        if let Some(tx) = bind_tx {
+            let _ = tx.send(Err(err_msg.clone()));
+        }
+        return Err(err_msg);
+    }
 
     let actual_queue_size = if max_queue_size == 0 {
         100_000
@@ -1183,9 +1198,19 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         .layer(cors)
         .with_state(state);
     let addr = format!("{}:{}", host, port);
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .map_err(|e| format_bind_error(e, &addr))?;
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            let err_msg = format_bind_error(e, &addr);
+            if let Some(tx) = bind_tx {
+                let _ = tx.send(Err(err_msg.clone()));
+            }
+            return Err(err_msg);
+        }
+    };
+    if let Some(tx) = bind_tx {
+        let _ = tx.send(Ok(()));
+    }
 
     log::info!("Starting HTTP API server on {}", addr);
     let clean_temp_dir = temp_dir.clone();
@@ -1606,6 +1631,7 @@ mod tests {
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
             shutdown_rx,
+            bind_tx: None,
         };
 
         let handle = tokio::spawn(async move { run_server(config).await });
@@ -1676,5 +1702,53 @@ mod tests {
         let other_err = std::io::Error::other("something went wrong");
         let formatted = format_bind_error(other_err, addr);
         assert!(formatted.contains("Failed to bind to 127.0.0.1:14200: something went wrong"));
+    }
+
+    #[tokio::test]
+    async fn test_start_api_server_bind_failure() {
+        // First bind to a port to occupy it
+        let addr = "127.0.0.1:0"; // bind to any ephemeral port
+        let occupier = tokio::net::TcpListener::bind(addr)
+            .await
+            .expect("Failed to bind occupier");
+        let occupied_addr = occupier.local_addr().expect("Failed to get local address");
+        let port = occupied_addr.port();
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
+
+        let temp_dir_handle = tempfile::tempdir().expect("Failed to create tempdir");
+        let temp_dir = temp_dir_handle.path().to_path_buf();
+        let models_dir = temp_dir.join("models");
+
+        let config = ApiServerRuntimeConfig {
+            app: None,
+            host: "127.0.0.1".to_string(),
+            port,
+            api_key: "".to_string(),
+            temp_dir,
+            models_dir,
+            max_concurrent: 1,
+            max_queue_size: 0,
+            max_upload_size_mb: 1,
+            job_ttl_minutes: 1,
+            max_streaming: 1,
+            ip_whitelist: std::sync::Arc::new(vec![]),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            shutdown_rx,
+            bind_tx: Some(bind_tx),
+        };
+
+        // Spawning run_server should return Err because the port is occupied
+        let handle = tokio::spawn(async move { run_server(config).await });
+
+        let bind_res = bind_rx.await.expect("bind_rx closed");
+        assert!(bind_res.is_err());
+        let err_msg = bind_res.unwrap_err();
+        assert!(err_msg.contains("Address already in use") || err_msg.contains("os error 10048"));
+
+        let _ = shutdown_tx.send(());
+        let _ = handle.await;
     }
 }

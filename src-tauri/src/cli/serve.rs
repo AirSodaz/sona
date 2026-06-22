@@ -167,6 +167,7 @@ pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
         online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         transcription_defaults: resolved.transcription_defaults,
         shutdown_rx: rx,
+        bind_tx: None,
     })
     .await
     .map_err(CliError::Other)?;
