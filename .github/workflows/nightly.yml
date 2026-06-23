@@ -1,0 +1,154 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: universal-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        shell: pwsh
+        run: corepack enable
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Download sherpa-onnx
+        shell: pwsh
+        run: node scripts/download-sherpa.js
+
+      - name: Set nightly version
+        shell: pwsh
+        run: |
+          $baseVersion = node -p "require('./package.json').version"
+          $parts = $baseVersion -split '\.'
+          $major = $parts[0]
+          $minor = [int]$parts[1] + 1
+          $date = (Get-Date -Format 'yyyyMMdd')
+          $nightlyVersion = "${major}.${minor}.0-nightly.${date}"
+          Write-Host "Nightly version: $nightlyVersion"
+          node -e "const p=require('./package.json'); p.version='$nightlyVersion'; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2)+'\n')"
+          node -e "const p=require('./src-tauri/tauri.conf.json'); p.version='$nightlyVersion'; require('fs').writeFileSync('./src-tauri/tauri.conf.json', JSON.stringify(p, null, 2)+'\n')"
+          (Get-Content src-tauri/Cargo.toml) -replace '^version = ".*"', "version = `"$nightlyVersion`"" | Set-Content src-tauri/Cargo.toml
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        shell: pwsh
+        run: node scripts/tauri.js build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.target }}-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/**
+            !src-tauri/target/release/bundle/**/*.d
+
+  publish:
+    name: Publish Nightly Release
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        shell: pwsh
+        run: corepack enable
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: nightly-artifacts
+
+      - name: Generate updater-nightly.json
+        shell: pwsh
+        run: node scripts/generate-nightly-updater-json.js
+
+      - name: Force-push nightly tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f nightly
+          git push origin nightly --force
+
+      - name: Publish Nightly Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: nightly-artifacts/**/*
+          name: Nightly Build ${{ github.run_number }}
+          omitBodyDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          tag: nightly
+          token: ${{ secrets.GITHUB_TOKEN }}
