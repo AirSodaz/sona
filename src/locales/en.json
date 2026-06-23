@@ -96,7 +96,8 @@
             "failed": "Summary generation failed."
         },
         "update": {
-            "failed": "Update failed."
+            "failed": "Update failed.",
+            "channel_stable_fetch_failed": "Failed to fetch stable release info. Please try again later."
         },
         "runtime": {
             "unexpected": "The application hit an unexpected error. Try again, and restart the app if it keeps happening."
@@ -998,6 +999,15 @@
         "minimize_to_tray": "Minimize to tray on exit",
         "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting.",
         "auto_check_updates": "Automatically check for updates",
+        "channel": "Update Channel",
+        "channel_stable": "Stable",
+        "channel_nightly": "Nightly",
+        "channel_switch_confirm_title": "Switch to Nightly Channel",
+        "channel_switch_confirm_body": "The Nightly channel provides daily builds with the latest features, but may be less stable. Switch and check for updates?",
+        "channel_switch_confirm_confirm": "Switch",
+        "channel_switch_confirm_cancel": "Cancel",
+        "channel_download_stable": "Download Stable",
+        "channel_download_nightly": "Download Nightly",
         "shortcuts_title": "Keyboard Shortcuts",
         "shortcuts_description": "View application hotkeys.",
         "subtitle_behavior_title": "Window Behavior",

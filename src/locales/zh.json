@@ -96,7 +96,8 @@
             "failed": "生成摘要失败。"
         },
         "update": {
-            "failed": "更新失败。"
+            "failed": "更新失败。",
+            "channel_stable_fetch_failed": "获取稳定版信息失败，请稍后重试。"
         },
         "runtime": {
             "unexpected": "应用程序遇到意外错误。请重试，如果问题持续，请重启应用。"
@@ -998,6 +999,15 @@
         "minimize_to_tray": "退出时最小化到系统托盘",
         "minimize_to_tray_hint": "启用后，关闭窗口将使应用程序最小化到托盘而不是退出。",
         "auto_check_updates": "自动检查更新",
+        "channel": "更新通道",
+        "channel_stable": "稳定版",
+        "channel_nightly": "每日构建版",
+        "channel_switch_confirm_title": "切换到 Nightly 频道",
+        "channel_switch_confirm_body": "Nightly 频道提供每日构建版本，包含最新功能但可能不够稳定。确定要切换并检查更新吗？",
+        "channel_switch_confirm_confirm": "确认切换",
+        "channel_switch_confirm_cancel": "取消",
+        "channel_download_stable": "下载稳定版",
+        "channel_download_nightly": "下载每日构建版",
         "shortcuts_title": "键盘快捷键",
         "shortcuts_description": "查看应用程序快捷键。",
         "subtitle_behavior_title": "窗口行为",
