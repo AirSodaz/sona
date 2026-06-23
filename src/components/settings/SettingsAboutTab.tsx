@@ -7,6 +7,7 @@ import { useAppUpdater } from '../../hooks/useAppUpdater';
 import { useConfigStore } from '../../stores/configStore';
 import { logger } from '../../utils/logger';
 import { openLogFolder } from '../../services/tauri/app';
+import { RELEASE_BASE_URL } from '../../stores/appUpdaterStore';
 
 /**
  * Redesigned About page with centered card-based layout.
@@ -19,6 +20,8 @@ export function SettingsAboutTab(): React.JSX.Element {
     const setConfig = useConfigStore((s) => s.setConfig);
     const [showChannelConfirm, setShowChannelConfirm] = React.useState(false);
     const [pendingChannel, setPendingChannel] = React.useState<'stable' | 'nightly' | null>(null);
+    const homepageUrl = RELEASE_BASE_URL.replace(/\/releases$/, '');
+    const displayRepoName = RELEASE_BASE_URL.replace(/^https?:\/\//, '').replace(/\/releases$/, '');
 
     const applyChannelChange = (newChannel: 'stable' | 'nightly') => {
         setConfig({ channel: newChannel });
@@ -51,7 +54,7 @@ export function SettingsAboutTab(): React.JSX.Element {
 
     const handleOpenHomepage = async () => {
         try {
-            await openUrl('https://github.com/AirSodaz/sona');
+            await openUrl(homepageUrl);
         } catch (error) {
             logger.error('Failed to open homepage:', error);
         }
@@ -213,7 +216,7 @@ export function SettingsAboutTab(): React.JSX.Element {
                     </div>
                     <div className="about-card-content">
                         <div className="about-card-title">{t('settings.about_source_code')}</div>
-                        <div className="about-card-subtitle">github.com/AirSodaz/sona</div>
+                        <div className="about-card-subtitle">{displayRepoName}</div>
                     </div>
                     <div className="about-card-arrow">
                         <ExternalLinkIcon />

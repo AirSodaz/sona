@@ -44,9 +44,13 @@ interface AppUpdaterState {
   relaunchToUpdate: () => Promise<void>;
 }
 
+// Centralized so repo moves/forks only need a single change. The updater plugin
+// endpoint in tauri.conf.json mirrors the stable URL here.
+export const RELEASE_BASE_URL = 'https://github.com/AirSodaz/sona/releases';
+
 async function openLatestReleasePage() {
   try {
-    await openUrl('https://github.com/AirSodaz/sona/releases/latest');
+    await openUrl(`${RELEASE_BASE_URL}/latest`);
   } catch (openErr) {
     logger.error('Failed to open URL:', openErr);
   }
@@ -125,7 +129,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
     // semver cannot downgrade, so we fetch updater.json manually and offer browser download.
     if (opts?.channelSwitch && channel === 'stable') {
       try {
-        const responseText = await fetchUrl('https://github.com/AirSodaz/sona/releases/latest/download/updater.json');
+        const responseText = await fetchUrl(`${RELEASE_BASE_URL}/latest/download/updater.json`);
         const data = JSON.parse(responseText);
         const stableVersion: string = data.version;
 
@@ -151,11 +155,10 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
           notificationVisible: false,
         });
       } catch (error) {
-        const errorMessage = extractErrorMessage(error);
         logger.error('Cross-channel fetch failed:', error);
         set({
           status: 'error',
-          error: errorMessage,
+          error: i18n.t('errors.update.channel_stable_fetch_failed'),
         });
       }
       return;
@@ -164,7 +167,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
     // Normal check (within-channel or stable→nightly switch)
     try {
       const endpoints = channel === 'nightly'
-        ? ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json']
+        ? [`${RELEASE_BASE_URL}/download/nightly/updater-nightly.json`]
         : undefined;
 
       const update = await check({ endpoints });
