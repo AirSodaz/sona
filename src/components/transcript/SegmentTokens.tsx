@@ -3,7 +3,7 @@ import { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript'
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
-import { renderSafeTranscriptRichText } from './richText';
+import { sanitizeTranscriptHtml } from '../../utils/transcriptTextUtils';
 
 /** Props for SegmentTokens component. */
 export interface SegmentTokensProps {
@@ -167,13 +167,12 @@ function TokenListComponent({
                                     }
                                 }
                             }}
-                        >
-                            {renderSafeTranscriptRichText(tokenObj.text)}
-                        </span>
+                            dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
+                        />
                     );
                 })
             ) : (
-                <span>{renderSafeTranscriptRichText(segmentText)}</span>
+                <span dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(segmentText) }} />
             )}
         </p>
     );

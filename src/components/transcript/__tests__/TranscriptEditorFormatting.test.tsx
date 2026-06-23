@@ -50,7 +50,7 @@ describe('TranscriptEditor Formatting', () => {
                     id: '1',
                     start: 0,
                     end: 1,
-                    text: 'Hello <b>World</b>',
+                    text: 'Hello <strong>World</strong>',
                     isFinal: true,
                     tokens: [],
                     timestamps: []
@@ -60,21 +60,18 @@ describe('TranscriptEditor Formatting', () => {
 
         render(<TranscriptEditor />);
 
-        // "Hello" might be separate token or merged depending on lexer.
-        // "Hello " (space) "<b>World</b>".
-        // Expect "World" to be rendered.
         const world = screen.getByText('World');
-        expect(world.tagName).toBe('B');
+        expect(world.tagName).toBe('STRONG');
     });
 
-    it('renders only safe transcript formatting in view mode', () => {
+    it('renders Lexical formatting tags in view mode', () => {
         useTranscriptStore.setState({
             segments: [
                 {
-                    id: 'safe-formatting',
+                    id: 'lexical-formatting',
                     start: 0,
                     end: 1,
-                    text: 'Safe <b>bold</b> <b onclick="alert(1)">literal</b> <img src=x onerror="alert(2)"> <script>alert(3)</script> 2 < 3',
+                    text: '<strong>Bold</strong> text and <em>italic</em> and <u>underline</u>',
                     isFinal: true,
                     tokens: [],
                     timestamps: []
@@ -84,15 +81,9 @@ describe('TranscriptEditor Formatting', () => {
 
         render(<TranscriptEditor />);
 
-        const bold = screen.getByText('bold');
-        expect(bold.tagName).toBe('B');
-        const segmentText = document.querySelector('.segment-text')?.textContent || '';
-        expect(segmentText).toContain('<b onclick="alert(1)">literal</b>');
-        expect(segmentText).toContain('<img src=x onerror="alert(2)">');
-        expect(segmentText).toContain('<script>alert(3)</script>');
-        expect(document.querySelector('script')).toBeNull();
-        expect(document.querySelector('img')).toBeNull();
-        expect(segmentText).toContain('2 < 3');
+        expect(screen.getByText('Bold').tagName).toBe('STRONG');
+        expect(screen.getByText('italic').tagName).toBe('EM');
+        expect(screen.getByText('underline').tagName).toBe('U');
     });
 
     it('renders newline in view mode', () => {

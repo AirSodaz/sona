@@ -495,7 +495,19 @@
   resize: none;
   min-height: 1.8em;
   /* Ensure at least one line height */
-  overflow: hidden;
+  overflow-y: auto;
+}
+
+.editor-bold {
+  font-weight: bold;
+}
+
+.editor-italic {
+  font-style: italic;
+}
+
+.editor-underline {
+  text-decoration: underline;
 }
 
 .segment-input:focus {

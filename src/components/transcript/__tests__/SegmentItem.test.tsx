@@ -1,5 +1,5 @@
 
-import { fireEvent, render, screen, act } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
@@ -71,11 +71,6 @@ describe('SegmentItem Highlighting', () => {
         </TranscriptUIContext.Provider>
     );
 
-    const renderEditingComponent = () => {
-        uiStore.setState({ editingSegmentId: segment.id });
-        return renderComponent();
-    };
-
     it('highlights the first token at start time', () => {
         // currentTime 0 (start)
         useTranscriptStore.setState({ currentTime: 0 });
@@ -140,23 +135,5 @@ describe('SegmentItem Highlighting', () => {
         expect(token0.className).not.toContain('active-token');
     });
 
-    it('saves the latest editor DOM content on blur', () => {
-        const { container } = renderEditingComponent();
-        const input = container.querySelector('.segment-input') as HTMLDivElement;
 
-        input.innerHTML = 'Fresh blur text';
-        fireEvent.blur(input);
-
-        expect(defaultProps.onSave).toHaveBeenCalledWith(segment.id, 'Fresh blur text');
-    });
-
-    it('saves the latest editor DOM content with Enter', () => {
-        const { container } = renderEditingComponent();
-        const input = container.querySelector('.segment-input') as HTMLDivElement;
-
-        input.innerHTML = 'Fresh enter text';
-        fireEvent.keyDown(input, { key: 'Enter' });
-
-        expect(defaultProps.onSave).toHaveBeenCalledWith(segment.id, 'Fresh enter text');
-    });
 });

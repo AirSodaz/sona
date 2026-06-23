@@ -5,6 +5,11 @@ import {
     useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import { vi, describe, beforeEach, afterEach, it, expect } from 'vitest';
+import {
+    FORMAT_TEXT_COMMAND,
+    UNDO_COMMAND,
+    REDO_COMMAND,
+} from 'lexical';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -18,8 +23,19 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+vi.mock('../../stores/transcriptRuntimeStore', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../stores/transcriptRuntimeStore')>();
+    return {
+        ...actual,
+        getActiveEditor: vi.fn(),
+    };
+});
+
+import { getActiveEditor } from '../../stores/transcriptRuntimeStore';
+
 describe('EditorToolbar', () => {
-    let execCommandMock: any;
+    let dispatchMock: ReturnType<typeof vi.fn>;
+    let updateMock: ReturnType<typeof vi.fn>;
     const flushMicrotasks = async () => {
         await act(async () => {
             await Promise.resolve();
@@ -29,8 +45,12 @@ describe('EditorToolbar', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         resetTranscriptStores();
-        execCommandMock = vi.fn();
-        document.execCommand = execCommandMock;
+        dispatchMock = vi.fn();
+        updateMock = vi.fn();
+        vi.mocked(getActiveEditor).mockReturnValue({
+            dispatchCommand: dispatchMock,
+            update: updateMock,
+        } as any);
     });
 
     afterEach(() => {
@@ -142,19 +162,28 @@ describe('EditorToolbar', () => {
         expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
     });
 
-    it('calls execCommand on button click', () => {
+    it('dispatches lexical commands on button click', () => {
         useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 
         render(<EditorToolbar />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
-        expect(execCommandMock).toHaveBeenCalledWith('bold', false, undefined);
+        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'bold');
 
         fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
-        expect(execCommandMock).toHaveBeenCalledWith('italic', false, undefined);
+        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'italic');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Underline' }));
+        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'underline');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+        expect(dispatchMock).toHaveBeenCalledWith(UNDO_COMMAND, undefined);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+        expect(dispatchMock).toHaveBeenCalledWith(REDO_COMMAND, undefined);
 
         fireEvent.click(screen.getByRole('button', { name: 'Split segment' }));
-        expect(execCommandMock).toHaveBeenCalledWith('insertLineBreak', false, undefined);
+        expect(updateMock).toHaveBeenCalled();
     });
 
     it('prevents default on mouse down to preserve focus', () => {

@@ -3,7 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { splitTranscriptSegment } from '../stores/transcriptCoordinator';
-import { getCaretCharacterOffset } from './transcript/richText';
+import { getActiveEditor } from '../stores/transcriptRuntimeStore';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import {
+  FORMAT_TEXT_COMMAND,
+  UNDO_COMMAND,
+  REDO_COMMAND,
+  $getSelection,
+  $isRangeSelection,
+  $isTextNode,
+  $splitNode,
+  type LexicalEditor,
+} from 'lexical';
 import {
     UndoIcon,
     RedoIcon,
@@ -14,6 +25,51 @@ import {
 } from './Icons';
 
 const SAVED_STATUS_VISIBLE_MS = 1500;
+
+function handleToolbarSplit(editor: LexicalEditor, segmentId: string): void {
+  let leftHtml = '';
+  let rightHtml = '';
+
+  editor.update(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
+
+    const anchorNode = selection.anchor.getNode();
+    const parentBlock = anchorNode.getTopLevelElementOrThrow();
+    const anchorOffset = selection.anchor.offset;
+
+    if ($isTextNode(anchorNode)) {
+      anchorNode.splitText(anchorOffset);
+    }
+
+    const blockChildren = parentBlock.getChildren();
+    const rightSibling = anchorNode.getNextSibling();
+    const splitIndex = rightSibling
+      ? blockChildren.indexOf(rightSibling)
+      : blockChildren.length;
+
+    if (splitIndex <= 0) return;
+
+    const [leftBlock, rightBlock] = $splitNode(parentBlock, splitIndex);
+    if (!leftBlock) return;
+
+    const root = parentBlock.getParentOrThrow();
+
+    rightBlock.remove();
+    leftHtml = $generateHtmlFromNodes(editor, null);
+
+    leftBlock.remove();
+    root.append(rightBlock);
+    rightHtml = $generateHtmlFromNodes(editor, null);
+
+    root.append(leftBlock);
+    rightBlock.remove();
+  });
+
+  if (leftHtml && rightHtml) {
+    splitTranscriptSegment(segmentId, leftHtml, rightHtml);
+  }
+}
 
 export function EditorToolbar(): React.JSX.Element | null {
     const { t } = useTranslation();
@@ -26,17 +82,32 @@ export function EditorToolbar(): React.JSX.Element | null {
     const isEditing = Boolean(editingSegmentId);
     const [isSavedVisible, setIsSavedVisible] = useState(false);
 
-    const handleAction = (command: string, value?: string) => {
-        if (command === 'insertLineBreak' && editingSegmentId) {
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement.classList.contains('segment-input')) {
-                const caretOffset = getCaretCharacterOffset(activeElement as HTMLElement);
-                const currentHtml = activeElement.innerHTML;
-                splitTranscriptSegment(editingSegmentId, caretOffset, currentHtml);
-                return;
-            }
+    const handleAction = (command: string) => {
+        const editor = getActiveEditor();
+        if (!editor) return;
+
+        switch (command) {
+            case 'undo':
+                editor.dispatchCommand(UNDO_COMMAND, undefined);
+                break;
+            case 'redo':
+                editor.dispatchCommand(REDO_COMMAND, undefined);
+                break;
+            case 'bold':
+                editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
+                break;
+            case 'italic':
+                editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
+                break;
+            case 'underline':
+                editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+                break;
+            case 'insertLineBreak':
+                if (editingSegmentId) {
+                    handleToolbarSplit(editor, editingSegmentId);
+                }
+                break;
         }
-        document.execCommand(command, false, value);
     };
 
     // Prevent button click from stealing focus from the editable element

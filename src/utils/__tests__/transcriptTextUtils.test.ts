@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   alignTextToTimedTokens,
   stripHtmlTags,
+  sanitizeTranscriptHtml,
 } from '../transcriptTextUtils';
 
 describe('transcriptTextUtils', () => {
@@ -50,6 +51,44 @@ describe('transcriptTextUtils', () => {
     expect(result).toEqual([
       { text: 'Hello', timing: { timestamp: 5 } },
     ]);
+  });
+
+  it('sanitizes HTML by removing unsafe tags, but preserves text between them', () => {
+    expect(sanitizeTranscriptHtml('<script>alert(1)</script>Hello')).toBe('alert(1)Hello');
+  });
+
+  it('sanitizes HTML by removing unsafe attributes', () => {
+    expect(sanitizeTranscriptHtml('<strong onclick="alert(1)">Bold</strong>')).toBe(
+      '<strong>Bold</strong>',
+    );
+  });
+
+  it('preserves safe tags and their class attributes', () => {
+    expect(sanitizeTranscriptHtml('<strong class="editor-bold">Bold</strong>')).toBe(
+      '<strong class="editor-bold">Bold</strong>',
+    );
+  });
+
+  it('preserves <em> and <u> tags', () => {
+    expect(sanitizeTranscriptHtml('<em>Italic</em> and <u>underline</u>')).toBe(
+      '<em>Italic</em> and <u>underline</u>',
+    );
+  });
+
+  it('preserves old format <b> and <i> tags', () => {
+    expect(sanitizeTranscriptHtml('<b>Bold</b> <i>Italic</i>')).toBe(
+      '<b>Bold</b> <i>Italic</i>',
+    );
+  });
+
+  it('removes <img> tags', () => {
+    expect(sanitizeTranscriptHtml('text <img src=x onerror="alert(1)"> more')).toBe(
+      'text  more',
+    );
+  });
+
+  it('handles empty input', () => {
+    expect(sanitizeTranscriptHtml('')).toBe('');
   });
 
   it('falls back to the last token with normalized text when trailing tokens normalize empty', () => {

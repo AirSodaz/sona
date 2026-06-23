@@ -1,7 +1,7 @@
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
 const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
 const WHITESPACE_ONLY_REGEX = /^\s+$/;
-const LEXER_REGEX = /(<\/?(?:b|i|u)>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
+const LEXER_REGEX = /(<\/?(?:b|i|u|strong|em)>)|(<\/?p>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
 
 export interface TimedTextToken<Timing> {
   text: string;
@@ -16,6 +16,26 @@ export interface AlignedTextUnit<Timing> {
 interface FormattedTextUnit {
   text: string;
   normalizedText: string;
+}
+
+const SAFE_TAGS = new Set(['strong', 'em', 'u', 'b', 'i', 'span', 'p', 'br']);
+
+/**
+ * Sanitizes HTML for safe rendering via dangerouslySetInnerHTML.
+ * Only allows known-safe inline/block tags and strips all attributes
+ * except `class` (needed for Lexical theme classes).
+ */
+export function sanitizeTranscriptHtml(text: string): string {
+  return text.replace(/<[^>]*>/g, (tag) => {
+    const tagNameMatch = tag.match(/^<\/?([a-zA-Z0-9]+)/);
+    if (!tagNameMatch) return '';
+    const tagName = tagNameMatch[1].toLowerCase();
+    if (!SAFE_TAGS.has(tagName)) return '';
+    if (tag.startsWith('</')) return `</${tagName}>`;
+    const classMatch = tag.match(/\bclass\s*=\s*"([^"]*)"/);
+    const cls = classMatch ? ` class="${classMatch[1]}"` : '';
+    return `<${tagName}${cls}>`;
+  });
 }
 
 /** Strips HTML-like formatting tags from transcript text. */
@@ -36,11 +56,15 @@ function buildFormattedTextUnits(text: string): FormattedTextUnit[] {
   LEXER_REGEX.lastIndex = 0;
 
   while ((match = LEXER_REGEX.exec(text)) !== null) {
-    const [full, tag] = match;
+    const [full, inlineTag, blockTag] = match;
 
-    if (tag) {
-      const tagName = tag.replace(/[</>]/g, '').toLowerCase();
-      if (tag.startsWith('</')) {
+    if (blockTag) {
+      continue;
+    }
+
+    if (inlineTag) {
+      const tagName = inlineTag.replace(/[</>]/g, '').toLowerCase();
+      if (inlineTag.startsWith('</')) {
         activeTags.delete(tagName);
       } else {
         activeTags.add(tagName);

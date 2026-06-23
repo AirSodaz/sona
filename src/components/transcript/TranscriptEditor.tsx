@@ -40,7 +40,7 @@ interface TranscriptContext {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
-    onSplit: (id: string, caretOffset: number, currentHtml: string) => void;
+    onSplit: (id: string, leftText: string, rightText: string) => void;
     onAnimationEnd: (id: string) => void;
 }
 
@@ -114,8 +114,8 @@ export function TranscriptEditor(): React.JSX.Element {
         }
     }, [confirm, t]);
 
-    const handleSplit = useCallback((id: string, caretOffset: number, currentHtml: string) => {
-        splitTranscriptSegment(id, caretOffset, currentHtml);
+    const handleSplit = useCallback((id: string, leftText: string, rightText: string) => {
+        splitTranscriptSegment(id, leftText, rightText);
     }, []);
 
     // Stable context for Virtuoso items (callbacks only)

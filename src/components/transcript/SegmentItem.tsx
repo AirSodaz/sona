@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -18,7 +18,7 @@ import {
     buildSpeakerCorrectionProfileSections,
     speakerCorrectionService,
 } from '../../services/speakerCorrectionService';
-import { editorHtmlToTranscriptText, transcriptTextToEditorHtml, getCaretCharacterOffset } from './richText';
+import { SegmentEditor } from './SegmentEditor';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -31,60 +31,11 @@ export interface SegmentItemProps {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
-    onSplit?: (id: string, caretOffset: number, currentHtml: string) => void;
+    onSplit?: (id: string, leftText: string, rightText: string) => void;
     onAnimationEnd: (id: string) => void;
 }
 
-const ContentEditable = React.forwardRef<HTMLDivElement, {
-    html: string;
-    onChange: (e: React.FormEvent<HTMLDivElement>) => void;
-    onBlur: (e: React.FocusEvent<HTMLDivElement>) => void;
-    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-    className?: string;
-}>(function ContentEditable({ html, onChange, onBlur, onKeyDown, className }, ref) {
-    const divRef = useRef<HTMLDivElement>(null);
 
-    // Sync html prop to div
-    useLayoutEffect(() => {
-        if (divRef.current && divRef.current.innerHTML !== html) {
-             divRef.current.innerHTML = html;
-        }
-
-        if (typeof ref === 'function') {
-            ref(divRef.current);
-        } else if (ref) {
-            ref.current = divRef.current;
-        }
-    }, [html, ref]);
-
-    const handlePaste = (e: React.ClipboardEvent) => {
-        e.preventDefault();
-        const text = e.clipboardData.getData('text/plain');
-        // Insert plain text (strips formatting from source to be safe,
-        // or we could sanitize HTML paste, but plain text is safer default)
-        document.execCommand('insertText', false, text);
-    };
-
-    return (
-        <div
-            ref={divRef}
-            className={className}
-            contentEditable
-            onInput={onChange}
-            onBlur={onBlur}
-            onKeyDown={onKeyDown}
-            onPaste={handlePaste}
-            style={{
-                whiteSpace: 'pre-wrap',
-                overflowY: 'auto',
-                // Mimic textarea styles from css if needed, but class should handle most
-                minHeight: '1.8em',
-                outline: 'none'
-            }}
-        />
-    );
-});
-ContentEditable.displayName = 'ContentEditable';
 
 /**
  * Individual transcript segment item.
@@ -144,11 +95,9 @@ function SegmentItemComponent({
     }, [segment.id]));
 
     // Local state stores HTML for the editor
-    const [editText, setEditText] = useState(() => transcriptTextToEditorHtml(segment.text));
     const [isSpeakerMenuOpen, setIsSpeakerMenuOpen] = useState(false);
     const [showAllSpeakerProfiles, setShowAllSpeakerProfiles] = useState(false);
     const [isApplyingSpeakerProfile, setIsApplyingSpeakerProfile] = useState(false);
-    const inputRef = useRef<HTMLDivElement>(null);
     const speakerMenuRef = useRef<HTMLDivElement>(null);
     const speakerProfileSections = useMemo(
         () => buildSpeakerCorrectionProfileSections(speakerProfiles, activeProject),
@@ -158,14 +107,6 @@ function SegmentItemComponent({
     const speakerGroupId = segment.speakerAttribution?.groupId || segment.speaker?.id || '';
     const speakerCandidates = segment.speakerAttribution?.candidates || [];
     const canResetSpeakerGroup = Boolean(segment.speakerAttribution && segment.speakerAttribution.state !== 'anonymous');
-
-    useEffect(() => {
-        if (isEditing && inputRef.current) {
-            inputRef.current.focus();
-            // Optional: Move cursor to end? ContentEditable logic makes this tricky without selection API.
-            // But browser often focuses at start.
-        }
-    }, [isEditing]);
 
     useEffect(() => {
         if (!isSpeakerMenuOpen) {
@@ -192,58 +133,22 @@ function SegmentItemComponent({
     function handleTextDoubleClick(e: React.MouseEvent): void {
         if (!isEditing) {
             e.stopPropagation();
-            setEditText(transcriptTextToEditorHtml(segment.text));
             onEdit(segment.id);
         }
     }
 
-    function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-        if (e.key === 'Enter' && e.shiftKey) {
-            e.preventDefault();
-            if (onSplit) {
-                const caretOffset = getCaretCharacterOffset(e.currentTarget);
-                const currentHtml = e.currentTarget.innerHTML;
-                onSplit(segment.id, caretOffset, currentHtml);
-            }
-            return;
-        }
-
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            // Save current HTML converted to text
-            onSave(segment.id, editorHtmlToTranscriptText(e.currentTarget.innerHTML));
-            return;
-        }
-
-        if (e.key === 'Escape') {
-            setEditText(transcriptTextToEditorHtml(segment.text));
-            // Save original (cancel)
-            onSave(segment.id, segment.text);
-            return;
-        }
-
-        if (e.ctrlKey || e.metaKey) {
-             const key = e.key.toLowerCase();
-             let command = '';
-             switch (key) {
-                 case 'b': command = 'bold'; break;
-                 case 'i': command = 'italic'; break;
-                 case 'u': command = 'underline'; break;
-             }
-
-             if (command) {
-                 e.preventDefault();
-                 document.execCommand(command);
-             }
-        }
+    function handleSave(text: string): void {
+        onSave(segment.id, text);
     }
 
-    function handleBlur(e: React.FocusEvent<HTMLDivElement>): void {
-        onSave(segment.id, editorHtmlToTranscriptText(e.currentTarget.innerHTML));
+    function handleCancel(): void {
+        onSave(segment.id, segment.text);
     }
 
-    function handleChange(e: React.FormEvent<HTMLDivElement>) {
-        setEditText(e.currentTarget.innerHTML);
+    function handleSplitSegment(leftText: string, rightText: string): void {
+        if (onSplit) {
+            onSplit(segment.id, leftText, rightText);
+        }
     }
 
     function closeSpeakerMenu(): void {
@@ -468,13 +373,12 @@ function SegmentItemComponent({
 
                 <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
                     {isEditing ? (
-                        <ContentEditable
-                            ref={inputRef}
-                            className="segment-input"
-                            html={editText}
-                            onChange={handleChange}
-                            onKeyDown={handleKeyDown}
-                            onBlur={handleBlur}
+                        <SegmentEditor
+                            segmentId={segment.id}
+                            initialHtml={segment.text}
+                            onSave={handleSave}
+                            onCancel={handleCancel}
+                            onSplit={handleSplitSegment}
                         />
                     ) : (
                         <SegmentTokens

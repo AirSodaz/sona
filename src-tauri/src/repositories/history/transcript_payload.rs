@@ -28,7 +28,7 @@ pub(super) fn normalize_history_transcript_segments(
 
     let search_content = parsed_segments
         .iter()
-        .map(|segment| segment.text.as_str())
+        .map(|segment| strip_html_tags(&segment.text))
         .collect::<Vec<_>>()
         .join(" ");
     let preview_text =
@@ -87,6 +87,20 @@ fn ensure_number_field(source: &mut Map<String, Value>, key: &str, fallback: f64
     }
 
     source.insert(key.to_string(), Value::from(fallback));
+}
+
+fn strip_html_tags(text: &str) -> String {
+    let mut result = String::new();
+    let mut in_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => result.push(ch),
+            _ => {}
+        }
+    }
+    result
 }
 
 fn preview_text_from_search_content(search_content: &str, has_segments: bool) -> String {

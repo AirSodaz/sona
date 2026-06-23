@@ -4,7 +4,7 @@ import type { TranscriptSegment, TranscriptUpdate, AppMode, ProcessingStatus, Tr
 import { areSpeakerTagsEqual } from '../types/speaker';
 import { normalizeTranscriptSegment, normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { findSegmentAndIndexForTime, stripHtmlTags, performSegmentSplit } from '../utils/segmentUtils';
-import { editorHtmlToTranscriptText, splitTranscriptText } from '../components/transcript/richText';
+
 import { createDefaultSummaryState, DEFAULT_LLM_STATE, type LlmState, type AutoSaveStatus, type AutoSaveState, rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry, resolveTranscriptHistoryKey } from './transcriptSidecarState';
 
 export interface SessionData {
@@ -89,7 +89,7 @@ export interface TranscriptStore {
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
   deleteSegment: (id: string) => void;
   mergeSegments: (id1: string, id2: string) => void;
-  splitTranscriptSegment: (id: string, caretOffset: number, currentHtml: string) => string | null;
+  splitTranscriptSegment: (id: string, leftText: string, rightText: string) => string | null;
   finalizeLastSegment: () => void;
   applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
   upsertTranscriptSegmentAndSetActive: (segment: TranscriptSegment) => void;
@@ -295,9 +295,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       if (!seg1 || !seg2) return {};
       const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
       if (!areSpeakerTagsEqual(first.speaker, second.speaker)) return {};
+      const stripParagraph = (t: string) => t.replace(/<\/?p>/g, '');
       const merged: TranscriptSegment = {
         id: first.id, start: first.start, end: second.end,
-        text: `${first.text} ${second.text}`.trim(),
+        text: `<p>${stripParagraph(first.text)} ${stripParagraph(second.text)}</p>`,
         isFinal: first.isFinal && second.isFinal,
         speaker: first.speaker, speakerAttribution: first.speakerAttribution,
       };
@@ -308,13 +309,12 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
-  splitTranscriptSegment: (id, caretOffset, currentHtml) => {
+  splitTranscriptSegment: (id, leftText, rightText) => {
     const session = getActiveSession(get());
     const segment = session.segments.find((s) => s.id === id);
     if (!segment) return null;
-    const fullText = editorHtmlToTranscriptText(currentHtml);
-    const [leftText, rightText] = splitTranscriptText(fullText, caretOffset);
-    const plainText = stripHtmlTags(fullText);
+    const plainText = stripHtmlTags(leftText) + stripHtmlTags(rightText);
+    const caretOffset = stripHtmlTags(leftText).length;
     const newSegmentId = uuidv4();
     const { segmentLeft, segmentRight } = performSegmentSplit(segment, caretOffset, plainText, leftText, rightText, newSegmentId);
 

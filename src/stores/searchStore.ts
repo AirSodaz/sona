@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { TranscriptSegment } from '../types/transcript';
+import { stripHtmlTags } from '../utils/transcriptTextUtils';
 
 export interface Match {
     segmentId: string;
@@ -85,7 +86,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
         const lowerQuery = query.toLowerCase();
 
         segments.forEach((segment) => {
-            const text = segment.text;
+            const text = stripHtmlTags(segment.text);
             const lowerText = text.toLowerCase();
             let startIndex = 0;
             let index = lowerText.indexOf(lowerQuery, startIndex);
