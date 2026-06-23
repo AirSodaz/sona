@@ -96,7 +96,8 @@
             "failed": "要約の生成に失敗しました。"
         },
         "update": {
-            "failed": "アップデートに失敗しました。"
+            "failed": "アップデートに失敗しました。",
+            "channel_stable_fetch_failed": "安定版リリース情報の取得に失敗しました。後でもう一度お試しください。"
         },
         "runtime": {
             "unexpected": "アプリケーションで予期しないエラーが発生しました。もう一度試して、引き続き発生する場合はアプリを再起動してください。"
@@ -998,6 +999,15 @@
         "minimize_to_tray": "排出時にトレイに最小化する",
         "minimize_to_tray_hint": "有効にすると、ウィンドウを閉じると、アプリケーションが終了するのではなく、システム トレイに最小化されます。",
         "auto_check_updates": "アップデートを自動的にチェックする",
+        "channel": "アップデートチャンネル",
+        "channel_stable": "安定版",
+        "channel_nightly": "ナイトリー",
+        "channel_switch_confirm_title": "ナイトリーチャンネルに切り替え",
+        "channel_switch_confirm_body": "ナイトリー チャンネルは、最新機能を備えた毎日のビルドを提供しますが、安定性が低い可能性があります。切り替えてアップデートを確認しますか？",
+        "channel_switch_confirm_confirm": "切り替え",
+        "channel_switch_confirm_cancel": "キャンセル",
+        "channel_download_stable": "安定版をダウンロード",
+        "channel_download_nightly": "ナイトリーをダウンロード",
         "shortcuts_title": "キーボードショートカット",
         "shortcuts_description": "アプリケーションのホットキーを表示します。",
         "subtitle_behavior_title": "ウィンドウの動作",

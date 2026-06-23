@@ -4,6 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import packageJson from '../../../package.json';
 import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
+import { useConfigStore } from '../../stores/configStore';
 import { logger } from '../../utils/logger';
 import { openLogFolder } from '../../services/tauri/app';
 
@@ -13,7 +14,40 @@ import { openLogFolder } from '../../services/tauri/app';
  */
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate } = useAppUpdater();
+    const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate, crossChannelDownloadUrl } = useAppUpdater();
+    const channel = useConfigStore((s) => s.config.channel ?? 'stable');
+    const setConfig = useConfigStore((s) => s.setConfig);
+    const [showChannelConfirm, setShowChannelConfirm] = React.useState(false);
+    const [pendingChannel, setPendingChannel] = React.useState<'stable' | 'nightly' | null>(null);
+
+    const applyChannelChange = (newChannel: 'stable' | 'nightly') => {
+        setConfig({ channel: newChannel });
+        void checkUpdate({ manual: true, channelSwitch: true });
+    };
+
+    const handleChannelChange = (newChannel: 'stable' | 'nightly') => {
+        if (newChannel === channel) return;
+
+        if (newChannel === 'nightly') {
+            setPendingChannel(newChannel);
+            setShowChannelConfirm(true);
+        } else {
+            applyChannelChange(newChannel);
+        }
+    };
+
+    const confirmChannelSwitch = () => {
+        if (pendingChannel) {
+            applyChannelChange(pendingChannel);
+        }
+        setShowChannelConfirm(false);
+        setPendingChannel(null);
+    };
+
+    const cancelChannelSwitch = () => {
+        setShowChannelConfirm(false);
+        setPendingChannel(null);
+    };
 
     const handleOpenHomepage = async () => {
         try {
@@ -50,6 +84,31 @@ export function SettingsAboutTab(): React.JSX.Element {
                     </div>
                 );
             case 'available':
+                if (crossChannelDownloadUrl) {
+                    const isStable = channel === 'stable';
+                    return (
+                        <div className="update-available-container">
+                            <div className="update-info">
+                                <DownloadIcon className="w-5 h-5 text-primary" />
+                                <span>
+                                    {t('settings.update_available', { version: updateInfo?.version || (isStable ? t('settings.channel_stable') : t('settings.channel_nightly')) })}
+                                </span>
+                            </div>
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={async () => {
+                                    try {
+                                        await openUrl(crossChannelDownloadUrl);
+                                    } catch (err) {
+                                        logger.error('Failed to open download URL:', err);
+                                    }
+                                }}
+                            >
+                                {isStable ? t('settings.channel_download_stable') : t('settings.channel_download_nightly')}
+                            </button>
+                        </div>
+                    );
+                }
                 return (
                     <div className="update-available-container">
                         <div className="update-info">
@@ -120,7 +179,22 @@ export function SettingsAboutTab(): React.JSX.Element {
                 </div>
                 <div className="about-title">
                     <h2>Sona</h2>
-                    <span className="about-version-badge">v{packageJson.version}</span>
+                    <div className="about-version-row">
+                        <span className="about-version-badge">v{packageJson.version}</span>
+                        <div className="about-channel-selector">
+                            <label htmlFor="channel-select">{t('settings.channel')}:</label>
+                            <select
+                                id="channel-select"
+                                value={channel}
+                                onChange={(e) => handleChannelChange(e.target.value as 'stable' | 'nightly')}
+                                className="channel-select"
+                                aria-label={t('settings.channel')}
+                            >
+                                <option value="stable">{t('settings.channel_stable')}</option>
+                                <option value="nightly">{t('settings.channel_nightly')}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <p className="about-description">
                     {t('settings.about_desc')}
@@ -183,6 +257,23 @@ export function SettingsAboutTab(): React.JSX.Element {
             <div className="about-footer">
                 <span>{t('settings.about_license')}</span>
             </div>
+
+            {showChannelConfirm && (
+                <div className="modal-overlay" onClick={cancelChannelSwitch}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="channel-confirm-title">
+                        <h3 id="channel-confirm-title">{t('settings.channel_switch_confirm_title')}</h3>
+                        <p>{t('settings.channel_switch_confirm_body')}</p>
+                        <div className="modal-actions">
+                            <button className="btn btn-ghost" onClick={cancelChannelSwitch}>
+                                {t('settings.channel_switch_confirm_cancel')}
+                            </button>
+                            <button className="btn btn-primary" onClick={confirmChannelSwitch}>
+                                {t('settings.channel_switch_confirm_confirm')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

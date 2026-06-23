@@ -12,6 +12,7 @@ interface UseAppUpdaterReturn {
   notificationVisible: boolean;
   dismissNotification: () => void;
   relaunchToUpdate: () => Promise<void>;
+  crossChannelDownloadUrl: string | null;
 }
 
 export function useAppUpdater(): UseAppUpdaterReturn {
@@ -25,5 +26,6 @@ export function useAppUpdater(): UseAppUpdaterReturn {
     notificationVisible: state.notificationVisible,
     dismissNotification: state.dismissNotification,
     relaunchToUpdate: state.relaunchToUpdate,
+    crossChannelDownloadUrl: state.crossChannelDownloadUrl,
   })));
 }

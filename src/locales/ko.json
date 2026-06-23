@@ -96,7 +96,8 @@
             "failed": "요약을 생성하지 못했습니다."
         },
         "update": {
-            "failed": "업데이트에 실패했습니다."
+            "failed": "업데이트에 실패했습니다.",
+            "channel_stable_fetch_failed": "안정판 릴리스 정보를 가져오지 못했습니다. 나중에 다시 시도해 주세요."
         },
         "runtime": {
             "unexpected": "앱에서 예상치 못한 오류가 발생했습니다. 다시 시도하고, 계속 발생하면 앱을 다시 시작하세요."
@@ -998,6 +999,15 @@
         "minimize_to_tray": "닫을 때 트레이로 최소화",
         "minimize_to_tray_hint": "켜면 창을 닫을 때 앱을 종료하지 않고 시스템 트레이로 최소화합니다.",
         "auto_check_updates": "시작할 때 업데이트 확인",
+        "channel": "업데이트 채널",
+        "channel_stable": "안정",
+        "channel_nightly": "나이틀리",
+        "channel_switch_confirm_title": "나이틀리 채널로 전환",
+        "channel_switch_confirm_body": "나이틀리 채널은 최신 기능을 갖춘 일일 빌드를 제공하지만 안정성이 떨어질 수 있습니다. 전환하고 업데이트를 확인하시겠습니까?",
+        "channel_switch_confirm_confirm": "전환",
+        "channel_switch_confirm_cancel": "취소",
+        "channel_download_stable": "안정판 다운로드",
+        "channel_download_nightly": "나이틀리 다운로드",
         "shortcuts_title": "Keyboard Shortcuts",
         "shortcuts_description": "View application hotkeys.",
         "subtitle_behavior_title": "Window Behavior",

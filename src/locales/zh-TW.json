@@ -96,7 +96,8 @@
             "failed": "生成摘要失敗。"
         },
         "update": {
-            "failed": "更新失敗。"
+            "failed": "更新失敗。",
+            "channel_stable_fetch_failed": "無法獲取穩定版釋出資訊。請稍後再試。"
         },
         "runtime": {
             "unexpected": "應用程式遇到意外錯誤。請重試，如果問題持續，請重新啟動應用。"
@@ -998,6 +999,15 @@
         "minimize_to_tray": "結束時最小化到系統匣",
         "minimize_to_tray_hint": "啟用後，關閉視窗會將應用程式最小化到系統匣，而不是結束。",
         "auto_check_updates": "自動檢查更新",
+        "channel": "更新通道",
+        "channel_stable": "穩定版",
+        "channel_nightly": "夜間版",
+        "channel_switch_confirm_title": "切換至夜間通道",
+        "channel_switch_confirm_body": "夜間通道提供每日建置，包含最新功能，但穩定性可能較低。是否切換並檢查更新？",
+        "channel_switch_confirm_confirm": "切換",
+        "channel_switch_confirm_cancel": "取消",
+        "channel_download_stable": "下載穩定版",
+        "channel_download_nightly": "下載夜間版",
         "shortcuts_title": "鍵盤快速鍵",
         "shortcuts_description": "查看應用程式快速鍵。",
         "subtitle_behavior_title": "視窗行為",
