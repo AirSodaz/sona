@@ -2,7 +2,7 @@ use super::network::{LlmApiUrl, post_json_request};
 use super::*;
 use futures_util::StreamExt;
 use log::warn;
-use reqwest::{Client, header::CONTENT_TYPE};
+use reqwest::header::CONTENT_TYPE;
 use rig::client::{CompletionClient, Nothing};
 use rig::completion::{CompletionModel, GetTokenUsage};
 use rig::providers::{anthropic, gemini, ollama};
@@ -775,9 +775,12 @@ where
                         .await?,
                 )
             } else {
+                let reqwest_client = LlmApiUrl::parse(&request.config.base_url)?
+                    .client(request.config.timeout_seconds)?;
                 let client = anthropic::Client::builder()
                     .api_key(&request.config.api_key)
                     .base_url(&request.config.base_url)
+                    .http_client(reqwest_client)
                     .build()
                     .map_err(|error| error.to_string())?;
                 Some(
@@ -795,9 +798,12 @@ where
             if request.config.reasoning_enabled.unwrap_or(false) {
                 Some(stream_gemini_custom_completion(&request.config, &input, accumulator).await?)
             } else {
+                let reqwest_client = LlmApiUrl::parse(&request.config.base_url)?
+                    .client(request.config.timeout_seconds)?;
                 let client = gemini::Client::builder()
                     .api_key(&request.config.api_key)
                     .base_url(clean_gemini_base_url(&request.config.base_url))
+                    .http_client(reqwest_client)
                     .build()
                     .map_err(|error| error.to_string())?;
                 Some(
@@ -812,9 +818,12 @@ where
             }
         }
         LlmProviderStrategy::Ollama => {
+            let reqwest_client = LlmApiUrl::parse(&request.config.base_url)?
+                .client(request.config.timeout_seconds)?;
             let client = ollama::Client::builder()
                 .api_key(Nothing)
                 .base_url(request.config.base_url.trim_end_matches("/v1"))
+                .http_client(reqwest_client)
                 .build()
                 .map_err(|error| error.to_string())?;
             Some(
@@ -974,7 +983,8 @@ pub(crate) async fn generate_with_rig(
         max_tokens: None,
     };
 
-    let client = Client::new();
+    let url = LlmApiUrl::parse(&request.config.base_url)?;
+    let client = url.client(request.config.timeout_seconds)?;
     let response = adapter.generate(&client, &std_req, &request.config).await?;
 
     Ok(response)

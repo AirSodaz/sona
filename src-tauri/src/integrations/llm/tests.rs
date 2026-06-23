@@ -1622,3 +1622,22 @@ async fn run_summary_task_streams_direct_single_chunk_without_intermediate_stage
         }]
     );
 }
+
+#[test]
+fn llm_api_url_client_builds_for_https_and_loopback_with_various_timeouts() {
+    let cases = [
+        ("https://api.example.com/v1", None),
+        ("https://api.example.com/v1", Some(30)),
+        ("http://localhost:1234/v1", Some(60)),
+        ("http://127.0.0.1:11434", None),
+    ];
+
+    for (base_url, timeout_seconds) in cases {
+        let url = LlmApiUrl::parse(base_url).unwrap_or_else(|_| panic!("{base_url} should parse"));
+
+        // Two calls share a cache key; the second hits the cached clone. Both
+        // must succeed for the construction + cache path to hold.
+        assert!(url.client(timeout_seconds).is_ok());
+        assert!(url.client(timeout_seconds).is_ok());
+    }
+}
