@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppUpdaterStore } from '../appUpdaterStore';
+import { useConfigStore } from '../configStore';
 
 const checkMock = vi.fn();
 const relaunchMock = vi.fn();
@@ -35,6 +36,12 @@ vi.mock('../errorDialogStore', () => ({
       showError: showErrorMock,
     }),
   },
+}));
+
+const fetchUrlMock = vi.fn();
+
+vi.mock('../../services/tauri/app', () => ({
+  fetchUrl: (...args: unknown[]) => fetchUrlMock(...args),
 }));
 
 function makeUpdate(version: string, overrides: Record<string, unknown> = {}) {
@@ -186,5 +193,64 @@ describe('appUpdaterStore', () => {
 
     expect(runGuardedQuitMock).toHaveBeenCalledTimes(1);
     expect(relaunchMock).not.toHaveBeenCalled();
+  });
+
+  it('routes to nightly endpoint when store channel is nightly', async () => {
+    useAppUpdaterStore.setState({ channel: 'nightly' });
+    checkMock.mockResolvedValueOnce(makeUpdate('1.0.0'));
+
+    await useAppUpdaterStore.getState().checkUpdate();
+
+    expect(checkMock).toHaveBeenCalledWith({
+      endpoints: ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json'],
+    });
+    expect(useAppUpdaterStore.getState().status).toBe('available');
+  });
+
+  it('cross-channel workaround from nightly to stable sets available with download URL', async () => {
+    fetchUrlMock.mockResolvedValueOnce(JSON.stringify({
+      version: '0.8.0',
+      platforms: {
+        'windows-x86_64': { url: 'https://example.com/sona-0.8.0.exe' },
+        'linux-x86_64': { url: 'https://example.com/sona-0.8.0.AppImage' },
+      },
+    }));
+
+    await useAppUpdaterStore.getState().checkUpdate({ channelSwitch: true });
+
+    expect(fetchUrlMock).toHaveBeenCalledWith(
+      'https://github.com/AirSodaz/sona/releases/latest/download/updater.json',
+    );
+    expect(useAppUpdaterStore.getState().status).toBe('available');
+    expect(useAppUpdaterStore.getState().crossChannelDownloadUrl).toBeTruthy();
+    expect(checkMock).not.toHaveBeenCalled();
+  });
+
+  it('cross-channel workaround sets uptodate when version matches', async () => {
+    fetchUrlMock.mockResolvedValueOnce(JSON.stringify({
+      version: '0.7.4',
+      platforms: {},
+    }));
+
+    await useAppUpdaterStore.getState().checkUpdate({ channelSwitch: true });
+
+    expect(fetchUrlMock).toHaveBeenCalled();
+    expect(useAppUpdaterStore.getState().status).toBe('uptodate');
+    expect(useAppUpdaterStore.getState().crossChannelDownloadUrl).toBeNull();
+  });
+
+  it('channel switch from stable to nightly goes through normal check without workaround', async () => {
+    useConfigStore.setState({
+      config: { ...useConfigStore.getState().config, channel: 'nightly' },
+    });
+    checkMock.mockResolvedValueOnce(makeUpdate('1.0.0'));
+
+    await useAppUpdaterStore.getState().checkUpdate({ channelSwitch: true });
+
+    expect(fetchUrlMock).not.toHaveBeenCalled();
+    expect(checkMock).toHaveBeenCalledWith({
+      endpoints: ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json'],
+    });
+    expect(useAppUpdaterStore.getState().status).toBe('available');
   });
 });
