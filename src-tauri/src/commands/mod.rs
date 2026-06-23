@@ -4,6 +4,7 @@ pub mod audio;
 pub mod automation;
 pub mod downloads;
 pub mod export;
+pub mod fetch_url;
 pub mod history;
 pub mod llm;
 pub mod project;
@@ -118,6 +119,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::asr::process_batch_file,
         crate::commands::asr::get_asr_runtime_metrics,
         crate::commands::export::export_transcript_file,
+        crate::commands::fetch_url::fetch_url,
         crate::commands::system::annotate_speaker_segments_from_file,
         crate::commands::system::import_speaker_profile_sample,
         crate::commands::system::build_speaker_review_snapshot,
