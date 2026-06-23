@@ -13,7 +13,7 @@ export function useAutoUpdateCheck(isLoaded: boolean) {
     }
 
     const timer = window.setTimeout(() => {
-      void checkUpdate(false);
+      void checkUpdate();
     }, 5000);
 
     return () => window.clearTimeout(timer);

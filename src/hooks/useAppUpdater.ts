@@ -1,12 +1,12 @@
 import { useShallow } from 'zustand/shallow';
 import { Update } from '@tauri-apps/plugin-updater';
-import { useAppUpdaterStore, UpdateStatus } from '../stores/appUpdaterStore';
+import { useAppUpdaterStore, UpdateStatus, CheckUpdateOptions } from '../stores/appUpdaterStore';
 
 interface UseAppUpdaterReturn {
   status: UpdateStatus;
   error: string | null;
   updateInfo: Update | null;
-  checkUpdate: (manual?: boolean) => Promise<void>;
+  checkUpdate: (opts?: CheckUpdateOptions) => Promise<void>;
   installUpdate: () => Promise<void>;
   progress: number;
   notificationVisible: boolean;

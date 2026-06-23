@@ -355,6 +355,10 @@ export type TauriCommandContractMap = {
     args: { paths: string[] };
     result: boolean[];
   };
+  [TauriCommand.app.fetchUrl]: {
+    args: { url: string };
+    result: string;
+  };
   [TauriCommand.audio.setSystemAudioMute]: {
     args: { mute: boolean };
     result: void;

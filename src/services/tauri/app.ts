@@ -123,3 +123,7 @@ export async function setMinimizeToTray(enabled: boolean): Promise<void> {
 export async function setLogLevel(level: AppLogLevel): Promise<void> {
   await invokeTauri(TauriCommand.app.setLogLevel, { level });
 }
+
+export async function fetchUrl(url: string): Promise<string> {
+  return invokeTauri(TauriCommand.app.fetchUrl, { url });
+}

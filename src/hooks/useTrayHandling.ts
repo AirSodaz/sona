@@ -66,7 +66,7 @@ export function useTrayHandling(
                     if (!isMounted) return;
                     setSettingsInitialTab('about');
                     setIsSettingsOpen(true);
-                    void useAppUpdaterStore.getState().checkUpdate(true);
+                    void useAppUpdaterStore.getState().checkUpdate({ manual: true });
                 });
                 if (isMounted) unlistenFunctions.push(unlistenCheckUpdates);
                 else unlistenCheckUpdates();

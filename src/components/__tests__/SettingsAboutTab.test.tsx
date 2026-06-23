@@ -68,6 +68,8 @@ function resetUpdaterStore() {
     dismissedVersion: null,
     notificationVisible: false,
     hasAutoCheckedThisSession: false,
+    channel: 'stable',
+    crossChannelDownloadUrl: null,
   });
 }
 
@@ -93,7 +95,7 @@ describe('SettingsAboutTab', () => {
     });
 
     await waitFor(() => {
-      expect(checkMock).toHaveBeenCalledWith();
+      expect(checkMock).toHaveBeenCalledWith({ endpoints: undefined });
       expect(screen.getByText('settings.update_available:1.2.3')).toBeDefined();
     });
 

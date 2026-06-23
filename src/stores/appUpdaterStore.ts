@@ -4,9 +4,12 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import i18n from '../i18n';
 import { runGuardedQuit } from '../services/quitGuard';
+import { fetchUrl } from '../services/tauri/app';
 import { buildErrorDialogViewModel, extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { useConfigStore } from './configStore';
 import { useErrorDialogStore } from './errorDialogStore';
+import packageJson from '../../package.json';
 
 export type UpdateStatus =
   | 'idle'
@@ -18,6 +21,13 @@ export type UpdateStatus =
   | 'downloaded'
   | 'error';
 
+export type Channel = 'stable' | 'nightly';
+
+export interface CheckUpdateOptions {
+  manual?: boolean;
+  channelSwitch?: boolean;
+}
+
 interface AppUpdaterState {
   status: UpdateStatus;
   error: string | null;
@@ -26,7 +36,9 @@ interface AppUpdaterState {
   dismissedVersion: string | null;
   notificationVisible: boolean;
   hasAutoCheckedThisSession: boolean;
-  checkUpdate: (manual?: boolean) => Promise<void>;
+  channel: Channel;
+  crossChannelDownloadUrl: string | null;
+  checkUpdate: (opts?: CheckUpdateOptions) => Promise<void>;
   installUpdate: () => Promise<void>;
   dismissNotification: () => void;
   relaunchToUpdate: () => Promise<void>;
@@ -54,6 +66,23 @@ async function showUpdateError(error: unknown) {
   }
 }
 
+function getPlatformKey(): string {
+  const platform = navigator.platform?.toLowerCase() || '';
+  const userAgent = navigator.userAgent?.toLowerCase() || '';
+
+  if (platform.includes('win')) {
+    return userAgent.includes('aarch64') || userAgent.includes('arm64')
+      ? 'windows-aarch64'
+      : 'windows-x86_64';
+  }
+  if (platform.includes('mac')) {
+    return userAgent.includes('aarch64') || userAgent.includes('arm64')
+      ? 'darwin-aarch64'
+      : 'darwin-x86_64';
+  }
+  return 'linux-x86_64';
+}
+
 export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
   status: 'idle',
   error: null,
@@ -62,15 +91,20 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
   dismissedVersion: null,
   notificationVisible: false,
   hasAutoCheckedThisSession: false,
+  channel: 'stable',
+  crossChannelDownloadUrl: null,
 
-  checkUpdate: async (manual = false) => {
+  checkUpdate: async (opts?: CheckUpdateOptions) => {
     const state = get();
+    const channel = opts?.channelSwitch
+      ? (useConfigStore.getState().config.channel ?? 'stable')
+      : state.channel;
 
     if (state.status === 'checking') {
       return;
     }
 
-    if (!manual && state.hasAutoCheckedThisSession) {
+    if (!opts?.manual && state.hasAutoCheckedThisSession) {
       return;
     }
 
@@ -82,11 +116,58 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       status: 'checking',
       error: null,
       progress: 0,
-      hasAutoCheckedThisSession: manual ? state.hasAutoCheckedThisSession : true,
+      channel,
+      crossChannelDownloadUrl: null,
+      hasAutoCheckedThisSession: opts?.manual ? state.hasAutoCheckedThisSession : true,
     });
 
+    // Cross-channel switch from nightly back to stable:
+    // semver cannot downgrade, so we fetch updater.json manually and offer browser download.
+    if (opts?.channelSwitch && channel === 'stable') {
+      try {
+        const responseText = await fetchUrl('https://github.com/AirSodaz/sona/releases/latest/download/updater.json');
+        const data = JSON.parse(responseText);
+        const stableVersion: string = data.version;
+
+        if (stableVersion && stableVersion !== packageJson.version) {
+          const platformKey = getPlatformKey();
+          const downloadUrl = data.platforms?.[platformKey]?.url;
+          if (!downloadUrl) {
+            throw new Error('No matching platform URL found in updater.json');
+          }
+          set({
+            status: 'available',
+            updateInfo: null,
+            error: null,
+            crossChannelDownloadUrl: downloadUrl,
+          });
+          return;
+        }
+
+        // Same version as current — up to date
+        set({
+          status: 'uptodate',
+          error: null,
+          notificationVisible: false,
+        });
+      } catch (error) {
+        const errorMessage = extractErrorMessage(error);
+        logger.error('Cross-channel fetch failed:', error);
+        set({
+          status: 'error',
+          error: errorMessage,
+        });
+      }
+      return;
+    }
+
+    // Normal check (within-channel or stable→nightly switch)
     try {
-      const update = await check();
+      const endpoints = channel === 'nightly'
+        ? ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json']
+        : undefined;
+
+      const update = await check({ endpoints });
 
       if (update) {
         const dismissedVersion = get().dismissedVersion;
@@ -95,7 +176,9 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
           status: 'available',
           error: null,
           progress: 0,
-          notificationVisible: manual ? previousNotificationVisible : dismissedVersion !== update.version,
+          notificationVisible: opts?.manual
+            ? previousNotificationVisible
+            : dismissedVersion !== update.version,
         });
         return;
       }
@@ -111,7 +194,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       logger.error('Update check failed:', error);
       const errorMessage = extractErrorMessage(error);
 
-      if (manual) {
+      if (opts?.manual) {
         set({
           updateInfo: previousUpdateInfo,
           status: previousUpdateInfo ? 'available' : 'idle',

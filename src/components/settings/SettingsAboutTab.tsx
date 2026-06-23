@@ -37,7 +37,7 @@ export function SettingsAboutTab(): React.JSX.Element {
                 return (
                     <button
                         className="btn btn-primary"
-                        onClick={() => checkUpdate(true)}
+                        onClick={() => checkUpdate({ manual: true })}
                     >
                         {t('settings.about_check_updates')}
                     </button>

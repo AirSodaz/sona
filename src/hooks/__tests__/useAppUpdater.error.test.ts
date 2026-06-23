@@ -46,7 +46,7 @@ describe('useAppUpdater error handling', () => {
     const { result } = renderHook(() => useAppUpdater());
 
     await act(async () => {
-      await result.current.checkUpdate(true);
+      await result.current.checkUpdate({ manual: true });
     });
 
     expect(showErrorMock).toHaveBeenCalled();

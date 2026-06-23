@@ -56,6 +56,8 @@ function resetUpdaterStore() {
     dismissedVersion: null,
     notificationVisible: false,
     hasAutoCheckedThisSession: false,
+    channel: 'stable',
+    crossChannelDownloadUrl: null,
   });
 }
 
@@ -72,7 +74,7 @@ describe('appUpdaterStore', () => {
   it('shows the notification after an automatic update check finds a new version', async () => {
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
 
     expect(useAppUpdaterStore.getState().status).toBe('available');
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(true);
@@ -82,13 +84,13 @@ describe('appUpdaterStore', () => {
   it('does not reopen the toast for the same version after it was dismissed in this session', async () => {
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
     useAppUpdaterStore.getState().dismissNotification();
 
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
     useAppUpdaterStore.setState({ hasAutoCheckedThisSession: false });
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
 
     expect(useAppUpdaterStore.getState().dismissedVersion).toBe('1.2.3');
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);
@@ -98,12 +100,12 @@ describe('appUpdaterStore', () => {
   it('keeps manual checks usable after the toast was dismissed', async () => {
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
     useAppUpdaterStore.getState().dismissNotification();
 
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
 
-    await useAppUpdaterStore.getState().checkUpdate(true);
+    await useAppUpdaterStore.getState().checkUpdate({ manual: true });
 
     expect(useAppUpdaterStore.getState().status).toBe('available');
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);
@@ -113,13 +115,13 @@ describe('appUpdaterStore', () => {
   it('shows the toast again when a newer version appears later in the same session', async () => {
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.3'));
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
     useAppUpdaterStore.getState().dismissNotification();
 
     checkMock.mockResolvedValueOnce(makeUpdate('1.2.4'));
     useAppUpdaterStore.setState({ hasAutoCheckedThisSession: false });
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
 
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(true);
     expect(useAppUpdaterStore.getState().updateInfo?.version).toBe('1.2.4');
@@ -128,7 +130,7 @@ describe('appUpdaterStore', () => {
   it('keeps automatic check failures silent instead of surfacing an error state', async () => {
     checkMock.mockRejectedValueOnce(new Error('network timeout'));
 
-    await useAppUpdaterStore.getState().checkUpdate(false);
+    await useAppUpdaterStore.getState().checkUpdate();
 
     expect(useAppUpdaterStore.getState().status).toBe('idle');
     expect(useAppUpdaterStore.getState().error).toBe('network timeout');

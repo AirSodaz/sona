@@ -24,6 +24,7 @@ export const TauriCommand = {
     setMinimizeToTray: 'set_minimize_to_tray',
     setLogLevel: 'set_log_level',
     checkMediaFormats: 'check_media_formats',
+    fetchUrl: 'fetch_url',
   },
   audio: {
     setSystemAudioMute: 'set_system_audio_mute',
