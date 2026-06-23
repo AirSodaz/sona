@@ -3,12 +3,36 @@ use super::metrics::{
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
-use super::model_config::Recognizer;
+use super::model_config::{Punctuation, Recognizer};
 use super::traits::AsrStreamingSession;
 use super::types::AsrEngine;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
+
+type RecognizerCell = Arc<OnceCell<Arc<Recognizer>>>;
+type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
+
+#[derive(Clone)]
+pub struct RecognizerPool {
+    pub recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
+    pub punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
+}
+
+impl Default for RecognizerPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RecognizerPool {
+    pub fn new() -> Self {
+        Self {
+            recognizers: Arc::new(Mutex::new(HashMap::new())),
+            punctuations: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModelConfigKey {
@@ -53,7 +77,7 @@ impl ModelConfigKey {
 pub struct AsrState {
     pub active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
     pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
-    pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
+    pub recognizer_pool: RecognizerPool,
     pub(crate) metrics: AsrMetricsStore,
 }
 
@@ -68,7 +92,7 @@ impl AsrState {
         Self {
             active_sessions: Mutex::new(HashMap::new()),
             instance_engines: Mutex::new(HashMap::new()),
-            recognizer_pool: Mutex::new(HashMap::new()),
+            recognizer_pool: RecognizerPool::new(),
             metrics: new_metrics_store(),
         }
     }
@@ -206,5 +230,29 @@ mod tests {
 
         assert!(!state.has_online_session(instance_id).await);
         assert_eq!(state.instance_engine(instance_id).await, None);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_punctuation_behavior() {
+        let pool = RecognizerPool::new();
+
+        // 1. None should return None
+        let res_none =
+            crate::integrations::asr::sherpa_onnx::resolve_punctuation(&pool, None).await;
+        assert!(res_none.is_none());
+
+        // 2. Empty path should return None
+        let res_empty =
+            crate::integrations::asr::sherpa_onnx::resolve_punctuation(&pool, Some("".to_string()))
+                .await;
+        assert!(res_empty.is_none());
+
+        // 3. Non-existent path should return None
+        let res_nonexistent = crate::integrations::asr::sherpa_onnx::resolve_punctuation(
+            &pool,
+            Some("nonexistent_path_123".to_string()),
+        )
+        .await;
+        assert!(res_nonexistent.is_none());
     }
 }

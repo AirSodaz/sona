@@ -576,4 +576,32 @@ describe('TranscriptionService voice typing diagnostics', () => {
         ]);
     });
 
+    it('re-initializes the backend on subsequent start if stopped in between', async () => {
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        service.setModelPath('path/to/model');
+
+        // First start
+        await service.start(vi.fn(), vi.fn());
+        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.anything());
+        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
+
+        vi.clearAllMocks();
+
+        // Second start immediately without stopping: should NOT call init_recognizer again
+        await service.start(vi.fn(), vi.fn());
+        expect(mocks.invoke).not.toHaveBeenCalledWith('init_recognizer', expect.anything());
+
+        // Stop the service
+        await service.stop();
+
+        vi.clearAllMocks();
+
+        // Third start after stopping: should call init_recognizer again!
+        await service.start(vi.fn(), vi.fn());
+        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.anything());
+        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
+    });
+
 });

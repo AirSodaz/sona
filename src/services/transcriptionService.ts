@@ -189,10 +189,12 @@ export class TranscriptionService {
 
     async stop(): Promise<void> {
         await this.lifecycle.stop();
+        this.runningConfig = null;
     }
 
     async softStop(): Promise<void> {
         await this.lifecycle.flushAndStop();
+        this.runningConfig = null;
     }
 
     async pauseStream(): Promise<void> {

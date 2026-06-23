@@ -510,35 +510,56 @@ async fn load_recognizer(
         None,
     );
 
-    let mut pool = state.recognizer_pool.lock().await;
-    for provider in gpu_plan.provider_options() {
-        if let Some(r) = pool.get(&key.with_gpu_provider(provider)) {
-            return Ok(r.clone());
+    let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
+    let primary_key = key.with_gpu_provider(primary_provider.clone());
+
+    let (cell, _is_new) = {
+        let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+        let existing = gpu_plan
+            .provider_options()
+            .into_iter()
+            .find_map(|provider| pool_guard.get(&key.with_gpu_provider(provider)).cloned());
+
+        if let Some(c) = existing {
+            (c, false)
+        } else {
+            let cell = Arc::new(tokio::sync::OnceCell::new());
+            pool_guard.insert(primary_key.clone(), cell.clone());
+            (cell, true)
         }
-    }
+    };
 
-    let recognizer_result =
-        crate::integrations::asr::create_recognizer_with_gpu_plan(config, 2, gpu_plan)?;
-    if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
-        log::warn!(
-            "[streaming] {} recognizer creation failed, retrying with {}: {}",
-            notice.from_provider,
-            notice.to_provider,
-            notice.error
-        );
-    }
-    let recognizer = Arc::new(recognizer_result.recognizer);
-    if !matches!(
-        recognizer.inner,
-        crate::integrations::asr::RecognizerInner::Offline(_)
-    ) {
-        return Err("Only offline models are supported for streaming API".to_string());
-    }
+    let recognizer = cell
+        .get_or_try_init(|| async {
+            let recognizer_result =
+                crate::integrations::asr::create_recognizer_with_gpu_plan(config, 2, gpu_plan)?;
+            if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
+                log::warn!(
+                    "[streaming] {} recognizer creation failed, retrying with {}: {}",
+                    notice.from_provider,
+                    notice.to_provider,
+                    notice.error
+                );
+            }
+            let r = Arc::new(recognizer_result.recognizer);
+            if !matches!(
+                r.inner,
+                crate::integrations::asr::RecognizerInner::Offline(_)
+            ) {
+                return Err("Only offline models are supported for streaming API".to_string());
+            }
 
-    pool.insert(
-        key.with_gpu_provider(recognizer_result.provider.clone()),
-        recognizer.clone(),
-    );
+            let actual_provider = recognizer_result.provider.clone();
+            if actual_provider != primary_provider {
+                let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+                pool_guard.insert(key.with_gpu_provider(actual_provider), cell.clone());
+            }
+
+            Ok::<Arc<crate::integrations::asr::Recognizer>, String>(r)
+        })
+        .await?
+        .clone();
+
     Ok(recognizer)
 }
 

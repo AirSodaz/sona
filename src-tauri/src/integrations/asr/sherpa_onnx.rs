@@ -306,6 +306,30 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
     }
 }
 
+pub async fn resolve_punctuation(
+    pool: &crate::integrations::asr::state::RecognizerPool,
+    punctuation_model: Option<String>,
+) -> Option<Arc<Punctuation>> {
+    let p_path = punctuation_model?;
+    if p_path.is_empty() || !Path::new(&p_path).exists() {
+        return None;
+    }
+    let cell = {
+        let mut map = pool.punctuations.lock().await;
+        map.entry(p_path.clone())
+            .or_insert_with(|| Arc::new(tokio::sync::OnceCell::new()))
+            .clone()
+    };
+    cell.get_or_try_init(|| async {
+        load_punctuation(Some(p_path.clone()))
+            .map(Arc::new)
+            .ok_or_else(|| "Failed to load punctuation model".to_string())
+    })
+    .await
+    .ok()
+    .cloned()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn init_recognizer_impl(
     state: &AsrState,
@@ -346,19 +370,39 @@ pub async fn init_recognizer_impl(
     let rss_before_mb = capture_process_memory_mb();
     let mut reused_from_pool = false;
 
-    let recognizer = {
-        let mut pool = state.recognizer_pool.lock().await;
-        if let Some(r) = gpu_plan
+    let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
+    let primary_key = config_key.with_gpu_provider(primary_provider.clone());
+
+    let (cell, is_new) = {
+        let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+        let existing = gpu_plan
             .provider_options()
             .into_iter()
-            .find_map(|provider| pool.get(&config_key.with_gpu_provider(provider)).cloned())
-        {
-            // Heavy recognizers are reused across logical instances when their
-            // model path and runtime knobs match exactly.
-            info!("[init_recognizer] Reusing existing recognizer from pool");
-            reused_from_pool = true;
-            r.clone()
+            .find_map(|provider| {
+                pool_guard
+                    .get(&config_key.with_gpu_provider(provider))
+                    .cloned()
+            });
+
+        if let Some(c) = existing {
+            (c, false)
         } else {
+            let cell = Arc::new(tokio::sync::OnceCell::new());
+            pool_guard.insert(primary_key.clone(), cell.clone());
+            (cell, true)
+        }
+    };
+
+    // A cell may exist in the pool but still be uninitialized if a prior
+    // `get_or_try_init` failed. Only count it as reused when it actually holds
+    // a recognizer, so the load metric reflects a genuine reuse rather than a
+    // retry that has to build the model this time around.
+    if !is_new && cell.initialized() {
+        reused_from_pool = true;
+    }
+
+    let recognizer = cell
+        .get_or_try_init(|| async {
             info!("[init_recognizer] Creating new recognizer and adding to pool");
             let config_type = build_model_config(
                 Path::new(&model_path),
@@ -366,7 +410,7 @@ pub async fn init_recognizer_impl(
                 &file_config,
                 enable_itn,
                 &language,
-                hotwords,
+                hotwords.clone(),
             )?;
             let create_result = crate::integrations::asr::create_recognizer_with_gpu_plan(
                 config_type,
@@ -381,14 +425,18 @@ pub async fn init_recognizer_impl(
                     notice.error
                 );
             }
+            let actual_provider = create_result.provider.clone();
             let r = Arc::new(create_result.recognizer);
-            pool.insert(
-                config_key.with_gpu_provider(create_result.provider),
-                r.clone(),
-            );
-            r
-        }
-    };
+
+            if actual_provider != primary_provider {
+                let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+                pool_guard.insert(config_key.with_gpu_provider(actual_provider), cell.clone());
+            }
+
+            Ok::<Arc<Recognizer>, String>(r)
+        })
+        .await?
+        .clone();
     let load_ms = duration_to_ms(load_started.elapsed());
     let rss_after_mb = capture_process_memory_mb();
     let model_load_metric = AsrModelLoadMetric {
@@ -410,13 +458,13 @@ pub async fn init_recognizer_impl(
         .await;
     log_model_load_metric(&model_load_metric);
 
-    let punctuation = load_punctuation(punctuation_model);
+    let punctuation = resolve_punctuation(&state.recognizer_pool, punctuation_model).await;
     let vad = load_vad(vad_model.clone());
 
     let session_instance = SherpaInstance {
         recognizer: Some(recognizer),
         vad,
-        punctuation: punctuation.map(Arc::new),
+        punctuation,
         vad_model: vad_model.clone(),
         vad_buffer,
         normalization_options: normalization_options.unwrap_or_default(),
@@ -453,9 +501,12 @@ async fn start_recognizer_impl_inner(
     start_instance_runtime(instance, stream);
 
     if instance.vad_model.is_some() {
-        // Reload VAD per start so any prior run-specific detector state cannot
-        // bleed into the next recording/caption session.
-        instance.vad = load_vad(instance.vad_model.clone());
+        if let Some(SafeVad(v)) = instance.vad.as_mut() {
+            v.reset();
+            v.clear();
+        } else {
+            instance.vad = load_vad(instance.vad_model.clone());
+        }
     }
 
     if let Some(label) = diagnostics_instance_label(instance_id) {

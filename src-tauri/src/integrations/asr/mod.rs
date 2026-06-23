@@ -34,8 +34,8 @@ pub(crate) use model_config::{
     RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, load_vad,
 };
 pub use postprocess::TranscriptPostprocessor;
-pub use state::AsrState;
 pub(crate) use state::ModelConfigKey;
+pub use state::{AsrState, RecognizerPool};
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 pub(crate) use transcript::{
     ensure_transcript_segment_timing, finalize_transcript_text, normalize_recognizer_text,

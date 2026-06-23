@@ -709,14 +709,7 @@ pub struct ServerState {
     pub start_time: std::time::Instant,
     pub api_key: String,
     pub streaming_semaphore: Arc<tokio::sync::Semaphore>,
-    pub recognizer_pool: Arc<
-        tokio::sync::Mutex<
-            HashMap<
-                crate::integrations::asr::ModelConfigKey,
-                Arc<crate::integrations::asr::Recognizer>,
-            >,
-        >,
-    >,
+    pub recognizer_pool: crate::integrations::asr::RecognizerPool,
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
@@ -1137,6 +1130,14 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         }
     });
 
+    let recognizer_pool = if let Some(app_handle) = &app {
+        use tauri::Manager;
+        let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
+        sherpa_state.recognizer_pool.clone()
+    } else {
+        crate::integrations::asr::RecognizerPool::new()
+    };
+
     let state = ServerState {
         job_manager,
         temp_dir: temp_dir.clone(),
@@ -1144,7 +1145,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         start_time: std::time::Instant::now(),
         api_key: api_key.clone(),
         streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
-        recognizer_pool: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        recognizer_pool,
         ip_whitelist: ip_whitelist.clone(),
         online_asr_config,
         transcription_defaults,
@@ -1310,9 +1311,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
-                std::collections::HashMap::new(),
-            )),
+            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
@@ -1368,9 +1367,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
-                std::collections::HashMap::new(),
-            )),
+            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
@@ -1435,9 +1432,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             api_key: "".to_string(),
             streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: std::sync::Arc::new(tokio::sync::Mutex::new(
-                std::collections::HashMap::new(),
-            )),
+            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
             ip_whitelist: std::sync::Arc::new(vec![]),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
