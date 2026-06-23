@@ -1,7 +1,8 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { useConfigStore } from '../../stores/configStore';
 
 const checkMock = vi.fn();
 const runGuardedQuitMock = vi.fn();
@@ -73,11 +74,73 @@ function resetUpdaterStore() {
   });
 }
 
+function resetConfigStore() {
+  useConfigStore.setState({ config: { ...useConfigStore.getState().config, channel: 'stable' } });
+}
+
 describe('SettingsAboutTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     runGuardedQuitMock.mockReset();
     resetUpdaterStore();
+    resetConfigStore();
+  });
+
+  it('renders channel selector with both stable and nightly options', () => {
+    render(<SettingsAboutTab />);
+    const select = screen.getByRole('combobox', { name: 'settings.channel' });
+    expect(select).toBeDefined();
+    expect(screen.getByText('settings.channel_stable')).toBeDefined();
+    expect(screen.getByText('settings.channel_nightly')).toBeDefined();
+  });
+
+  it('shows confirmation dialog when switching from stable to nightly', () => {
+    render(<SettingsAboutTab />);
+    const select = screen.getByRole('combobox', { name: 'settings.channel' });
+    fireEvent.change(select, { target: { value: 'nightly' } });
+    expect(screen.getByText('settings.channel_switch_confirm_title')).toBeDefined();
+    expect(screen.getByText('settings.channel_switch_confirm_body')).toBeDefined();
+  });
+
+  it('canceling confirmation dialog hides it and does not change channel', async () => {
+    render(<SettingsAboutTab />);
+    const select = screen.getByRole('combobox', { name: 'settings.channel' });
+    fireEvent.change(select, { target: { value: 'nightly' } });
+    await act(async () => {
+      screen.getByText('settings.channel_switch_confirm_cancel').click();
+    });
+    expect(screen.queryByText('settings.channel_switch_confirm_title')).toBeNull();
+    expect(useConfigStore.getState().config.channel).toBe('stable');
+  });
+
+  it('confirming switch changes channel to nightly', async () => {
+    render(<SettingsAboutTab />);
+    const select = screen.getByRole('combobox', { name: 'settings.channel' });
+    fireEvent.change(select, { target: { value: 'nightly' } });
+    await act(async () => {
+      screen.getByText('settings.channel_switch_confirm_confirm').click();
+    });
+    expect(screen.queryByText('settings.channel_switch_confirm_title')).toBeNull();
+    expect(useConfigStore.getState().config.channel).toBe('nightly');
+  });
+
+  it('switching from nightly to stable does not show confirmation dialog', () => {
+    useConfigStore.setState({ config: { ...useConfigStore.getState().config, channel: 'nightly' } });
+    render(<SettingsAboutTab />);
+    const select = screen.getByRole('combobox', { name: 'settings.channel' });
+    fireEvent.change(select, { target: { value: 'stable' } });
+    expect(screen.queryByText('settings.channel_switch_confirm_title')).toBeNull();
+    expect(useConfigStore.getState().config.channel).toBe('stable');
+  });
+
+  it('renders cross-channel download button when crossChannelDownloadUrl is set', () => {
+    useAppUpdaterStore.setState({
+      status: 'available',
+      crossChannelDownloadUrl: 'https://example.com/download',
+      updateInfo: null,
+    });
+    render(<SettingsAboutTab />);
+    expect(screen.getByText('settings.channel_download_stable')).toBeDefined();
   });
 
   it('shows the available update after a manual trigger even if the toast was dismissed', async () => {

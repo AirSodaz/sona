@@ -259,11 +259,15 @@ export function SettingsAboutTab(): React.JSX.Element {
             </div>
 
             {showChannelConfirm && (
-                <div className="modal-overlay" onClick={cancelChannelSwitch}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="channel-confirm-title">
-                        <h3 id="channel-confirm-title">{t('settings.channel_switch_confirm_title')}</h3>
-                        <p>{t('settings.channel_switch_confirm_body')}</p>
-                        <div className="modal-actions">
+                <div className="shared-modal-overlay" onClick={cancelChannelSwitch}>
+                    <div className="shared-modal-shell shared-modal-sm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="channel-confirm-title">
+                        <div className="shared-modal-header">
+                            <h3 className="shared-modal-title" id="channel-confirm-title">{t('settings.channel_switch_confirm_title')}</h3>
+                        </div>
+                        <div className="shared-modal-body">
+                            <p>{t('settings.channel_switch_confirm_body')}</p>
+                        </div>
+                        <div className="shared-modal-footer">
                             <button className="btn btn-ghost" onClick={cancelChannelSwitch}>
                                 {t('settings.channel_switch_confirm_cancel')}
                             </button>
