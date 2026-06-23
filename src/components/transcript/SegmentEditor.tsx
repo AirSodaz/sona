@@ -8,15 +8,12 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import {
   $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $splitNode,
-  $isTextNode,
   type EditorState,
   type LexicalEditor,
 } from 'lexical';
 import { setActiveEditor } from '../../stores/transcriptRuntimeStore';
 import { convertOldFormatToLexical } from '../../utils/dataMigrationUtils';
+import { serializeSplitBlocks } from '../../utils/lexicalSplitUtils';
 
 /** Props for SegmentEditor. */
 export interface SegmentEditorProps {
@@ -114,7 +111,10 @@ export function SegmentEditor({
         e.stopPropagation();
         const editor = editorRef.current;
         if (editor) {
-          handleSplit(editor, onSplit);
+          const result = serializeSplitBlocks(editor);
+          if (result) {
+            onSplit(result.leftHtml, result.rightHtml);
+          }
         }
         return;
       }
@@ -157,64 +157,4 @@ export function SegmentEditor({
       <OnChangePlugin onChange={handleEditorReady} />
     </LexicalComposer>
   );
-}
-
-/**
- * Splits the current paragraph at the caret using Lexical's $splitNode API,
- * serializes both halves, and calls onSplit.
- */
-function handleSplit(
-  editor: LexicalEditor,
-  onSplit: (leftHtml: string, rightHtml: string) => void,
-): void {
-  let leftHtml = '';
-  let rightHtml = '';
-
-  editor.update(() => {
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
-
-    const anchorNode = selection.anchor.getNode();
-    const parentBlock = anchorNode.getTopLevelElementOrThrow();
-    const anchorOffset = selection.anchor.offset;
-
-    // Split the text node at the caret to create two adjacent nodes
-    if ($isTextNode(anchorNode)) {
-      anchorNode.splitText(anchorOffset);
-    }
-
-    // Get all children of the parent block
-    const blockChildren = parentBlock.getChildren();
-    // Find the split point: it's the index of the right sibling
-    const rightSibling = anchorNode.getNextSibling();
-    const splitIndex = rightSibling
-      ? blockChildren.indexOf(rightSibling)
-      : blockChildren.length;
-
-    if (splitIndex <= 0) return;
-
-    // Use $splitNode to split the block at the child index
-    const [leftBlock, rightBlock] = $splitNode(parentBlock, splitIndex);
-
-    if (!leftBlock) return;
-
-    const root = parentBlock.getParentOrThrow();
-
-    // Serialize left half: keep only leftBlock in tree
-    rightBlock.remove();
-    leftHtml = $generateHtmlFromNodes(editor, null);
-
-    // Serialize right half: swap to rightBlock
-    leftBlock.remove();
-    root.append(rightBlock);
-    rightHtml = $generateHtmlFromNodes(editor, null);
-
-    // Restore leftBlock as the only child (current segment)
-    root.append(leftBlock);
-    rightBlock.remove();
-  });
-
-  if (leftHtml && rightHtml) {
-    onSplit(leftHtml, rightHtml);
-  }
 }

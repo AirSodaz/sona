@@ -91,6 +91,22 @@ describe('transcriptTextUtils', () => {
     expect(sanitizeTranscriptHtml('')).toBe('');
   });
 
+  it('preserves <p> tags', () => {
+    expect(sanitizeTranscriptHtml('<p>Hello <strong>World</strong></p>')).toBe(
+      '<p>Hello <strong>World</strong></p>',
+    );
+  });
+
+  it('preserves <br> tags', () => {
+    expect(sanitizeTranscriptHtml('Line1<br>Line2')).toBe('Line1<br>Line2');
+  });
+
+  it('escapes literal < followed by non-tag content', () => {
+    expect(sanitizeTranscriptHtml('2 < 3 and < something > else')).toBe(
+      '2 &lt; 3 and &lt; something &gt; else',
+    );
+  });
+
   it('falls back to the last token with normalized text when trailing tokens normalize empty', () => {
     const result = alignTextToTimedTokens('Hello extra', [
       { text: 'hello', timing: { timestamp: 5 } },

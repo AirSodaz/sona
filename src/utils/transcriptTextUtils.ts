@@ -28,7 +28,9 @@ const SAFE_TAGS = new Set(['strong', 'em', 'u', 'b', 'i', 'span', 'p', 'br']);
 export function sanitizeTranscriptHtml(text: string): string {
   return text.replace(/<[^>]*>/g, (tag) => {
     const tagNameMatch = tag.match(/^<\/?([a-zA-Z0-9]+)/);
-    if (!tagNameMatch) return '';
+    if (!tagNameMatch) {
+      return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
     const tagName = tagNameMatch[1].toLowerCase();
     if (!SAFE_TAGS.has(tagName)) return '';
     if (tag.startsWith('</')) return `</${tagName}>`;

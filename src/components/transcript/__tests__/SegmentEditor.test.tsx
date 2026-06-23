@@ -70,9 +70,10 @@ describe('SegmentEditor', () => {
     // Focus and set cursor at middle of text
     input.focus();
     const textSpan = input.querySelector('[data-lexical-text="true"]');
-    if (textSpan?.firstChild) {
+    const textNode = textSpan?.firstChild;
+    if (textNode && textNode.nodeType === Node.TEXT_NODE && textNode.textContent && textNode.textContent.length > 5) {
       const range = document.createRange();
-      range.setStart(textSpan.firstChild, 5);
+      range.setStart(textNode, 5);
       range.collapse(true);
       const sel = window.getSelection();
       sel?.removeAllRanges();

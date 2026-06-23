@@ -20,27 +20,27 @@ describe('convertOldFormatToLexical', () => {
     );
   });
 
-  it('passes through Lexical format (<p> prefix) unchanged', () => {
+  it('is idempotent for full Lexical format (re-wraps in <p>)', () => {
     expect(convertOldFormatToLexical('<p>Hello <strong>World</strong></p>')).toBe(
       '<p>Hello <strong>World</strong></p>',
     );
   });
 
-  it('passes through Lexical format (<strong> prefix) unchanged', () => {
+  it('wraps Lexical-style tags without <p> wrapper', () => {
     expect(convertOldFormatToLexical('<strong>Bold text</strong>')).toBe(
-      '<strong>Bold text</strong>',
+      '<p><strong>Bold text</strong></p>',
     );
   });
 
-  it('passes through Lexical format (<em> prefix) unchanged', () => {
+  it('wraps <em> text in <p>', () => {
     expect(convertOldFormatToLexical('<em>Italic text</em>')).toBe(
-      '<em>Italic text</em>',
+      '<p><em>Italic text</em></p>',
     );
   });
 
-  it('passes through Lexical format (<u> prefix) unchanged', () => {
+  it('wraps <u> text in <p>', () => {
     expect(convertOldFormatToLexical('<u>Underlined text</u>')).toBe(
-      '<u>Underlined text</u>',
+      '<p><u>Underlined text</u></p>',
     );
   });
 

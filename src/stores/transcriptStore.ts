@@ -295,7 +295,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       if (!seg1 || !seg2) return {};
       const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
       if (!areSpeakerTagsEqual(first.speaker, second.speaker)) return {};
-      const stripParagraph = (t: string) => t.replace(/<\/?p>/g, '');
+      const stripParagraph = (t: string) => t.replace(/<\/?p[^>]*>/gi, '');
       const merged: TranscriptSegment = {
         id: first.id, start: first.start, end: second.end,
         text: `<p>${stripParagraph(first.text)} ${stripParagraph(second.text)}</p>`,

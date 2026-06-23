@@ -5,27 +5,22 @@
  * Old format example: "Hello <b>World</b>"
  * New format example: "<p>Hello <strong>World</strong></p>"
  *
- * If the text is already in Lexical format (contains `<p>` wrapper),
- * it's returned unchanged.
+ * The function is idempotent: passing already-converted Lexical HTML
+ * produces the same result.
  */
 export function convertOldFormatToLexical(text: string): string {
   if (!text) return '';
 
-  // Detect Lexical format: starts with a block tag or inline formatting tag
-  if (text.startsWith('<p>') || text.startsWith('<strong>') || text.startsWith('<em>') || text.startsWith('<u>')) {
-    return text;
-  }
+  // Strip any existing <p> wrappers to avoid double-wrapping
+  let result = text.replace(/<\/?p[^>]*>/gi, '');
 
-  let result = text
-    .replace(/<b>/g, '<strong>')
-    .replace(/<\/b>/g, '</strong>')
-    .replace(/<i>/g, '<em>')
-    .replace(/<\/i>/g, '</em>');
+  // Convert old format tags to Lexical equivalents
+  result = result
+    .replace(/<b>/gi, '<strong>')
+    .replace(/<\/b>/gi, '</strong>')
+    .replace(/<i>/gi, '<em>')
+    .replace(/<\/i>/gi, '</em>');
 
   // Wrap in <p> to match Lexical's paragraph block structure
-  if (!result.startsWith('<p>')) {
-    result = `<p>${result}</p>`;
-  }
-
-  return result;
+  return `<p>${result}</p>`;
 }

@@ -4,15 +4,11 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { splitTranscriptSegment } from '../stores/transcriptCoordinator';
 import { getActiveEditor } from '../stores/transcriptRuntimeStore';
-import { $generateHtmlFromNodes } from '@lexical/html';
+import { serializeSplitBlocks } from '../utils/lexicalSplitUtils';
 import {
   FORMAT_TEXT_COMMAND,
   UNDO_COMMAND,
   REDO_COMMAND,
-  $getSelection,
-  $isRangeSelection,
-  $isTextNode,
-  $splitNode,
   type LexicalEditor,
 } from 'lexical';
 import {
@@ -27,47 +23,9 @@ import {
 const SAVED_STATUS_VISIBLE_MS = 1500;
 
 function handleToolbarSplit(editor: LexicalEditor, segmentId: string): void {
-  let leftHtml = '';
-  let rightHtml = '';
-
-  editor.update(() => {
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection) || !selection.isCollapsed()) return;
-
-    const anchorNode = selection.anchor.getNode();
-    const parentBlock = anchorNode.getTopLevelElementOrThrow();
-    const anchorOffset = selection.anchor.offset;
-
-    if ($isTextNode(anchorNode)) {
-      anchorNode.splitText(anchorOffset);
-    }
-
-    const blockChildren = parentBlock.getChildren();
-    const rightSibling = anchorNode.getNextSibling();
-    const splitIndex = rightSibling
-      ? blockChildren.indexOf(rightSibling)
-      : blockChildren.length;
-
-    if (splitIndex <= 0) return;
-
-    const [leftBlock, rightBlock] = $splitNode(parentBlock, splitIndex);
-    if (!leftBlock) return;
-
-    const root = parentBlock.getParentOrThrow();
-
-    rightBlock.remove();
-    leftHtml = $generateHtmlFromNodes(editor, null);
-
-    leftBlock.remove();
-    root.append(rightBlock);
-    rightHtml = $generateHtmlFromNodes(editor, null);
-
-    root.append(leftBlock);
-    rightBlock.remove();
-  });
-
-  if (leftHtml && rightHtml) {
-    splitTranscriptSegment(segmentId, leftHtml, rightHtml);
+  const result = serializeSplitBlocks(editor);
+  if (result) {
+    splitTranscriptSegment(segmentId, result.leftHtml, result.rightHtml);
   }
 }
 
