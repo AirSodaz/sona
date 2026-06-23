@@ -11,6 +11,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  SHERPA_ONNX_VERSION: 1.13.2
+  SHERPA_ONNX_TAG: v1.13.2
 
 jobs:
   build:
@@ -34,11 +36,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - name: Node.js setup
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: 24
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install pnpm
         shell: pwsh
@@ -71,12 +77,49 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      - name: Download sherpa-onnx
+      - name: Download and extract sherpa-onnx static libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib/lib" >> $GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib/lib" >> $GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (Windows x64)
+        if: runner.os == 'Windows' && matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
-        run: node scripts/download-sherpa.js
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          tar -xjf sherpa-onnx-win.tar.bz2
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib\lib"
+          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          tar -xjf sherpa-onnx-win.tar.bz2
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib\lib"
+          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+
+      - name: Configure RUSTFLAGS
+        if: runner.os != 'Windows'
+        run: |
+          echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
 
       - name: Set nightly version
         shell: pwsh
+        # Invariant: Nightly version uses a minor bump (minor+1) compared to the base
+        # package.json version under development. This ensures that the nightly
+        # prerelease tag (e.g. 0.8.0-nightly.YYYYMMDD) is semantically greater than the
+        # current stable version (e.g. 0.7.4), allowing Tauri's updater to offer the upgrade.
         run: |
           $baseVersion = node -p "require('./package.json').version"
           $parts = $baseVersion -split '\.'
@@ -95,15 +138,44 @@ jobs:
 
       - name: Build Tauri app
         shell: pwsh
-        run: node scripts/tauri.js build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # The Linux matrix row builds the host triple directly (matches release.yml);
+        # every other row is cross-compiled and needs --target.
+        run: node scripts/tauri.js build ${{ matrix.target != 'x86_64-unknown-linux-gnu' && format('--target {0}', matrix.target) || '' }}
+
+      - name: Rename macOS assets for architecture
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            ARCH="aarch64"
+          elif [[ "${{ matrix.target }}" == "x86_64-apple-darwin" ]]; then
+            ARCH="x64"
+          elif [[ "${{ matrix.target }}" == "universal-apple-darwin" ]]; then
+            ARCH="universal"
+          else
+            ARCH="unknown"
+          fi
+          echo "Detected architecture: $ARCH"
+          # Cross-target builds land under target/<target>/release/bundle; host build under target/release/bundle.
+          cd $(ls -d src-tauri/target/*/release/bundle/macos/ 2>/dev/null | head -1)
+          if [ -f "Sona.app.tar.gz" ]; then
+            mv "Sona.app.tar.gz" "Sona_${ARCH}.app.tar.gz"
+            if [ -f "Sona.app.tar.gz.sig" ]; then
+                mv "Sona.app.tar.gz.sig" "Sona_${ARCH}.app.tar.gz.sig"
+            fi
+            echo "Renamed assets to append Arch: $ARCH"
+          fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-${{ matrix.target }}-${{ github.sha }}
           path: |
-            src-tauri/target/release/bundle/**
-            !src-tauri/target/release/bundle/**/*.d
+            src-tauri/target/**/release/bundle/**
+            !src-tauri/target/**/release/bundle/**/*.d
 
   publish:
     name: Publish Nightly Release
@@ -112,22 +184,21 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Node.js setup
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
-
-      - name: Install pnpm
-        shell: pwsh
-        run: corepack enable
+          node-version: 24
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: nightly-artifacts
+          merge-multiple: true
 
       - name: Generate updater-nightly.json
         shell: pwsh
