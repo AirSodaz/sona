@@ -249,3 +249,75 @@
 .shared-empty-action {
   margin-top: 4px;
 }
+
+
+/* --- SearchUI Styles --- */
+.search-ui-container {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: search-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  box-shadow: var(--shadow-xl);
+  min-width: 320px;
+}
+
+.search-input {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 14px;
+  width: 100%;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.search-input:focus {
+  box-shadow: none;
+  background: transparent;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  flex-shrink: 0;
+}
+
+.search-count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 0 8px;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+.search-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.btn-icon-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes search-slide-up {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
