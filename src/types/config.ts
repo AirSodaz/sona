@@ -34,6 +34,8 @@ export interface UIConfig {
   minimizeToTrayOnExit?: boolean;
   /** Whether to automatically check for updates on startup. */
   autoCheckUpdates?: boolean;
+  /** Update channel preference. Default: 'stable'. */
+  channel?: 'stable' | 'nightly';
   /** Minimum log level for frontend and native application logs. Default: 'info'. */
   logLevel?: AppLogLevel;
   /** Workspace view mode. Default: 'list' */
