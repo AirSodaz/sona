@@ -3,9 +3,9 @@ use super::*;
 use async_trait::async_trait;
 use log::warn;
 use reqwest::Client;
-use rig::client::{CompletionClient, Nothing};
-use rig::completion::CompletionModel;
-use rig::providers::{anthropic, gemini, ollama, openai};
+use rig_core::client::{CompletionClient, Nothing};
+use rig_core::completion::CompletionModel;
+use rig_core::providers::{anthropic, azure, copilot, gemini, ollama, openai, perplexity};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
@@ -243,6 +243,131 @@ impl LlmAdapter for OllamaAdapter {
     }
 }
 
+pub struct AzureAdapter;
+
+#[async_trait]
+impl LlmAdapter for AzureAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let input = req
+            .messages
+            .iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let api_version = config.api_version.as_deref().unwrap_or("2024-10-21");
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
+        let client = azure::Client::builder()
+            .api_key(azure::AzureOpenAIAuth::ApiKey(config.api_key.clone()))
+            .azure_endpoint(config.base_url.clone())
+            .api_version(api_version)
+            .http_client(reqwest_client)
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
+        })
+    }
+}
+
+pub struct CopilotAdapter;
+
+#[async_trait]
+impl LlmAdapter for CopilotAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
+        let client = copilot::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(&config.base_url)
+            .http_client(reqwest_client)
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let input = req
+            .messages
+            .iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
+        })
+    }
+}
+
+pub struct PerplexityAdapter;
+
+#[async_trait]
+impl LlmAdapter for PerplexityAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
+        let client = perplexity::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(&config.base_url)
+            .http_client(reqwest_client)
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let input = req
+            .messages
+            .iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
+        })
+    }
+}
+
 pub struct GeminiAdapter;
 
 #[async_trait]
@@ -448,8 +573,7 @@ impl LlmAdapter for GenericHttpAdapter {
                 )
                 .await?
             }
-            LlmProviderStrategy::AzureOpenAi => generate_with_azure_openai(config, &input).await?,
-            LlmProviderStrategy::Perplexity => generate_with_perplexity(config, &input).await?,
+
             _ => generate_with_openai_custom_path(config, &input).await?,
         };
 
@@ -484,6 +608,9 @@ impl AdapterFactory {
             LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => {
                 Box::new(GoogleTranslateAdapter)
             }
+            LlmProviderStrategy::AzureOpenAi => Box::new(AzureAdapter),
+            LlmProviderStrategy::Copilot => Box::new(CopilotAdapter),
+            LlmProviderStrategy::Perplexity => Box::new(PerplexityAdapter),
             _ => Box::new(GenericHttpAdapter),
         }
     }
@@ -749,6 +876,7 @@ pub(crate) fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> 
             | LlmProviderStrategy::AzureOpenAi
             | LlmProviderStrategy::Volcengine
             | LlmProviderStrategy::Perplexity
+            | LlmProviderStrategy::Copilot
             | LlmProviderStrategy::OpenAiCompatibleCustomPath
             | LlmProviderStrategy::GoogleTranslate
             | LlmProviderStrategy::GoogleTranslateFree
@@ -756,12 +884,12 @@ pub(crate) fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> 
 }
 
 pub(crate) fn extract_text_response(
-    choice: &rig::OneOrMany<rig::completion::AssistantContent>,
+    choice: &rig_core::OneOrMany<rig_core::completion::AssistantContent>,
 ) -> Result<String, String> {
     let parts = choice
         .iter()
         .filter_map(|content| match content {
-            rig::completion::AssistantContent::Text(text) => Some(text.text.clone()),
+            rig_core::completion::AssistantContent::Text(text) => Some(text.text.clone()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -916,7 +1044,7 @@ fn normalize_token_usage(
 }
 
 pub(crate) fn token_usage_from_rig_usage(
-    usage: Option<rig::completion::Usage>,
+    usage: Option<rig_core::completion::Usage>,
 ) -> Option<TokenUsage> {
     usage.and_then(|usage| {
         normalize_token_usage(usage.input_tokens, usage.output_tokens, usage.total_tokens)

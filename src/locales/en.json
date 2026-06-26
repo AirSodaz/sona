@@ -544,6 +544,7 @@
             "perplexity": "Perplexity",
             "volcengine": "VolcEngine",
             "chatglm": "ChatGLM",
+            "copilot": "GitHub Copilot",
             "google_translate": "Google Translate",
             "google_translate_free": "Google Translate (Free)"
         },

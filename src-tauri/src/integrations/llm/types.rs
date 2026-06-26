@@ -28,6 +28,7 @@ pub enum LlmProviderStrategy {
     Perplexity,
     Volcengine,
     Chatglm,
+    Copilot,
     #[serde(rename = "google_translate")]
     GoogleTranslate,
     #[serde(rename = "google_translate_free")]
@@ -52,6 +53,7 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::MoonshotCn => Self::MoonshotCn,
                 BuiltinLlmProvider::Xiaomi => Self::Xiaomi,
                 BuiltinLlmProvider::Perplexity => Self::Perplexity,
+                BuiltinLlmProvider::Copilot => Self::Copilot,
                 BuiltinLlmProvider::Volcengine => Self::OpenAiCompatibleCustomPath,
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
@@ -89,6 +91,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "perplexity" => Self::Perplexity,
             "volcengine" => Self::Volcengine,
             "chatglm" => Self::Chatglm,
+            "copilot" | "github_copilot" => Self::Copilot,
             "google_translate" => Self::GoogleTranslate,
             "google_translate_free" => Self::GoogleTranslateFree,
             "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,

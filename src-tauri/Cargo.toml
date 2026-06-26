@@ -38,7 +38,7 @@ toml = "0.8.20"
 async-trait = "0.1"
 reqwest = { version = "0.13", features = ["stream", "rustls", "json", "multipart"] }
 regex = "1"
-rig-core = "0.34"
+rig-core = "0.39"
 futures-util = "0.3"
 glob = "0.3"
 bytes = "1"

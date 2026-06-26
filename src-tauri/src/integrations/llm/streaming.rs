@@ -3,10 +3,10 @@ use super::*;
 use futures_util::StreamExt;
 use log::warn;
 use reqwest::header::CONTENT_TYPE;
-use rig::client::{CompletionClient, Nothing};
-use rig::completion::{CompletionModel, GetTokenUsage};
-use rig::providers::{anthropic, gemini, ollama};
-use rig::streaming::StreamedAssistantContent;
+use rig_core::client::{CompletionClient, Nothing};
+use rig_core::completion::{CompletionModel, GetTokenUsage};
+use rig_core::providers::{anthropic, copilot, gemini, ollama};
+use rig_core::streaming::StreamedAssistantContent;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
@@ -231,7 +231,7 @@ where
         usage: stream
             .response
             .as_ref()
-            .and_then(|response| token_usage_from_rig_usage(response.token_usage())),
+            .and_then(|response| token_usage_from_rig_usage(Some(response.token_usage()))),
     })
 }
 
@@ -839,6 +839,25 @@ where
         LlmProviderStrategy::OpenAiResponses => {
             Some(stream_openai_responses_completion(&request.config, &input, accumulator).await?)
         }
+        LlmProviderStrategy::Copilot => {
+            let reqwest_client = LlmApiUrl::parse(&request.config.base_url)?
+                .client(request.config.timeout_seconds)?;
+            let client = copilot::Client::builder()
+                .api_key(&request.config.api_key)
+                .base_url(&request.config.base_url)
+                .http_client(reqwest_client)
+                .build()
+                .map_err(|error| error.to_string())?;
+            Some(
+                stream_rig_completion_model(
+                    client.completion_model(&request.config.model),
+                    &input,
+                    request.config.temperature.unwrap_or(0.7),
+                    accumulator,
+                )
+                .await?,
+            )
+        }
         LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => None,
         _ => Some(stream_openai_chat_completion(&request.config, &input, accumulator).await?),
     };
@@ -923,50 +942,12 @@ pub(crate) async fn generate_with_openai_responses_api(
     })
 }
 
-pub(crate) async fn generate_with_azure_openai(
-    config: &LlmConfig,
-    input: &str,
-) -> Result<StandardLlmResponse, String> {
-    let version = config.api_version.as_deref().unwrap_or("2024-10-21");
-    let deployment = config.model.trim();
-    let base_url = LlmApiUrl::parse(&config.base_url)?;
-    let endpoint = base_url
-        .join(&format!(
-            "/openai/deployments/{}/chat/completions",
-            deployment
-        ))?
-        .with_query(&format!("api-version={}", version))?;
-
-    let payload = build_openai_chat_payload(config, input, false);
-
-    let response = post_json_request(
-        &endpoint,
-        vec![("api-key", config.api_key.to_string())],
-        payload,
-        config.timeout_seconds,
-    )
-    .await?;
-
-    Ok(StandardLlmResponse {
-        text: extract_text_from_json_response(&response)?,
-        usage: extract_usage_from_json_response(&response),
-    })
-}
-
 pub(crate) async fn generate_with_openai_custom_path(
     config: &LlmConfig,
     input: &str,
 ) -> Result<StandardLlmResponse, String> {
     let base_url = LlmApiUrl::parse(&config.base_url)?;
     let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
-    generate_with_openai_chat_api(&url, config, input, vec![]).await
-}
-
-pub(crate) async fn generate_with_perplexity(
-    config: &LlmConfig,
-    input: &str,
-) -> Result<StandardLlmResponse, String> {
-    let url = LlmApiUrl::parse("https://api.perplexity.ai/chat/completions")?;
     generate_with_openai_chat_api(&url, config, input, vec![]).await
 }
 

@@ -128,6 +128,8 @@ pub enum BuiltinLlmProvider {
     Perplexity,
     Volcengine,
     Chatglm,
+    #[serde(rename = "copilot", alias = "github_copilot")]
+    Copilot,
     #[serde(
         rename = "custom-openai-compatible",
         alias = "openai_compatible",
@@ -163,6 +165,7 @@ impl BuiltinLlmProvider {
             Self::Perplexity => "https://api.perplexity.ai",
             Self::Volcengine => "https://ark.cn-beijing.volces.com",
             Self::Chatglm => "https://open.bigmodel.cn/api/paas/v4/",
+            Self::Copilot => "https://api.githubcopilot.com",
             Self::CustomOpenAiCompatible => "",
         }
     }

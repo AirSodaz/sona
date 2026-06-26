@@ -4,9 +4,9 @@
 /* Types */
 export type BuiltinLlmProvider = BuiltinLlmProvider_Serialize | BuiltinLlmProvider_Deserialize;
 
-export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "custom-openai-compatible" | "openai_compatible" | "open_ai_compatible";
+export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "github_copilot" | "custom-openai-compatible" | "openai_compatible" | "open_ai_compatible";
 
-export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "custom-openai-compatible";
+export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "custom-openai-compatible";
 
 export type BuiltinPolishPresetId = "general" | "customer_service" | "meeting" | "interview" | "lecture" | "podcast";
 

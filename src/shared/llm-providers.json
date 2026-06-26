@@ -382,6 +382,23 @@
         "requiresApiKey": true,
         "editableApiHost": true
       }
+    },
+    {
+      "id": "copilot",
+      "aliases": ["github_copilot"],
+      "strategy": "copilot",
+      "ui": {
+        "labelKey": "settings.llm_providers.copilot",
+        "labelDefault": "GitHub Copilot"
+      },
+      "defaults": {
+        "apiHost": "https://api.githubcopilot.com"
+      },
+      "capabilities": {
+        "supportsModelListing": false,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
     }
   ]
 }
