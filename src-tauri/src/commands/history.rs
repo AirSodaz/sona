@@ -4,9 +4,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Runtime, State};
 
+use crate::core::history_store::HistoryStore;
 use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::history::HistoryRepository;
+use crate::repositories::history::FileHistoryStore;
 use crate::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
@@ -28,11 +29,11 @@ async fn run_history_task_inner<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(FileHistoryStore) -> Result<T, String> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
-        task(HistoryRepository::new(app_local_data_dir))
+        task(FileHistoryStore::new(app_local_data_dir))
     })
     .await
     .map_err(|error| error.to_string())?
@@ -45,7 +46,7 @@ async fn run_history_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(FileHistoryStore) -> Result<T, String> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     run_history_task_inner(app_local_data_dir, state.lock.clone(), task).await
@@ -58,7 +59,7 @@ async fn run_history_task_with_state<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(FileHistoryStore) -> Result<T, String> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     run_history_task_inner(app_local_data_dir, state.lock.clone(), task).await
@@ -110,7 +111,7 @@ pub(crate) async fn history_save_llm_summary<R: Runtime>(
 }
 
 fn create_llm_transcript_snapshot_record(
-    repository: &HistoryRepository,
+    repository: &FileHistoryStore,
     history_id: &str,
     reason: TranscriptSnapshotReason,
     segments: Vec<TranscriptSegment>,
@@ -138,7 +139,7 @@ fn create_llm_transcript_snapshot_record(
 }
 
 fn update_llm_transcript_segments_record(
-    repository: &HistoryRepository,
+    repository: &FileHistoryStore,
     history_id: &str,
     segments: Vec<TranscriptSegment>,
 ) -> Result<Option<HistoryItemRecord>, String> {
@@ -155,7 +156,7 @@ fn update_llm_transcript_segments_record(
 }
 
 fn save_llm_summary_payload(
-    repository: &HistoryRepository,
+    repository: &FileHistoryStore,
     history_id: &str,
     summary_payload: Value,
 ) -> Result<(), String> {
@@ -480,7 +481,7 @@ pub async fn history_open_folder<R: Runtime>(
     let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
     {
         let _guard = state.lock.lock().map_err(|error| error.to_string())?;
-        HistoryRepository::new(app_local_data_dir.clone()).ensure_ready()?;
+        FileHistoryStore::new(app_local_data_dir.clone()).ensure_ready()?;
     }
 
     use tauri_plugin_opener::OpenerExt;
@@ -594,7 +595,7 @@ mod tests {
     #[test]
     fn llm_history_helpers_create_snapshot_then_update_transcript() {
         let root = tempdir().unwrap();
-        let repository = HistoryRepository::new(root.path().to_path_buf());
+        let repository = FileHistoryStore::new(root.path().to_path_buf());
         repository.ensure_ready().unwrap();
         let item = sample_history_item("history-1", HistoryItemStatus::Complete);
         repository.write_index(std::slice::from_ref(&item)).unwrap();
@@ -624,17 +625,14 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(snapshot_record.segments[0].text, "before");
-        let transcript = repository
-            .load_transcript(&item.transcript_path)
-            .unwrap()
-            .unwrap();
+        let transcript = repository.load_transcript(&item.id).unwrap().unwrap();
         assert_eq!(transcript[0].translation.as_deref(), Some("after"));
     }
 
     #[test]
     fn llm_history_helpers_skip_current_jobs_without_writing() {
         let root = tempdir().unwrap();
-        let repository = HistoryRepository::new(root.path().to_path_buf());
+        let repository = FileHistoryStore::new(root.path().to_path_buf());
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
@@ -664,7 +662,7 @@ mod tests {
     #[test]
     fn llm_history_snapshot_helper_skips_drafts() {
         let root = tempdir().unwrap();
-        let repository = HistoryRepository::new(root.path().to_path_buf());
+        let repository = FileHistoryStore::new(root.path().to_path_buf());
         repository.ensure_ready().unwrap();
         let item = sample_history_item("draft-1", HistoryItemStatus::Draft);
         repository.write_index(std::slice::from_ref(&item)).unwrap();
@@ -689,7 +687,7 @@ mod tests {
     #[test]
     fn llm_history_summary_helper_saves_sidecar_payload() {
         let root = tempdir().unwrap();
-        let repository = HistoryRepository::new(root.path().to_path_buf());
+        let repository = FileHistoryStore::new(root.path().to_path_buf());
 
         save_llm_summary_payload(
             &repository,

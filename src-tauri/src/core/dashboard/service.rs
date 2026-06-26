@@ -5,14 +5,15 @@ use chrono::{Duration, Local, NaiveDate, TimeZone};
 
 use super::error::DashboardServiceError;
 use super::models::*;
-use super::ports::{AnalyticsRepository, HistoryRepository, ProjectRepository};
+use super::ports::{AnalyticsRepository, ProjectRepository};
+use crate::core::history_store::HistoryStore;
 use crate::repositories::history::{HistoryItemKind, HistoryItemRecord};
 
 const RECENT_DAILY_WINDOW: i64 = 30;
 
 pub struct DashboardService<H, P, A>
 where
-    H: HistoryRepository,
+    H: HistoryStore,
     P: ProjectRepository,
     A: AnalyticsRepository,
 {
@@ -23,7 +24,7 @@ where
 
 impl<H, P, A> DashboardService<H, P, A>
 where
-    H: HistoryRepository,
+    H: HistoryStore,
     P: ProjectRepository,
     A: AnalyticsRepository,
 {
@@ -39,14 +40,17 @@ where
         &self,
         deep: bool,
     ) -> Result<DashboardSnapshotDomainModel, DashboardServiceError> {
-        let history_items = self.history_repo.read_history_items().await?;
+        let history_items = self
+            .history_repo
+            .list_items()
+            .map_err(DashboardServiceError::HistoryStore)?;
         let project_count = self.project_repo.count_projects().await?;
         let llm_usage = self.analytics_repo.read_dashboard_stats().await?;
 
         let mut overview = create_overview(&history_items, project_count, deep);
 
         let speakers = if deep {
-            let transcript_analytics = self.aggregate_transcript_analytics(&history_items).await?;
+            let transcript_analytics = self.aggregate_transcript_analytics(&history_items)?;
             overview.transcript_character_count =
                 Some(transcript_analytics.transcript_character_count);
             overview.transcript_character_count_display = Some(format_number(
@@ -66,7 +70,7 @@ where
         })
     }
 
-    async fn aggregate_transcript_analytics(
+    fn aggregate_transcript_analytics(
         &self,
         history_items: &[HistoryItemRecord],
     ) -> Result<TranscriptAnalytics, DashboardServiceError> {
@@ -76,24 +80,37 @@ where
         let mut leader_map: HashMap<String, SpeakerLeaderAccumulator> = HashMap::new();
 
         for item in history_items {
-            if item.transcript_path.trim().is_empty() {
-                continue;
-            }
-
-            let segments = match self
-                .history_repo
-                .read_transcript_segments(&item.transcript_path)
-                .await
-            {
-                Ok(segments) => segments,
+            let transcript_segments = match self.history_repo.load_transcript(&item.id) {
+                Ok(Some(segments)) => segments,
+                Ok(None) => continue,
                 Err(error) => {
                     log::warn!(
                         "[Dashboard] Skipping transcript during deep scan: {} {error}",
-                        item.transcript_path
+                        item.id
                     );
                     continue;
                 }
             };
+
+            let segments: Vec<ParsedTranscriptSegment> = transcript_segments
+                .into_iter()
+                .map(|s| {
+                    let speaker = s.speaker.map(|sp| SpeakerTag {
+                        id: sp.id.clone(),
+                        label: sp.label.clone(),
+                        kind: if sp.kind == "identified" {
+                            SpeakerKind::Identified
+                        } else {
+                            SpeakerKind::Anonymous
+                        },
+                    });
+                    ParsedTranscriptSegment {
+                        text: s.text,
+                        duration_seconds: (s.end - s.start).max(0.0),
+                        speaker,
+                    }
+                })
+                .collect();
 
             let mut item_has_speaker = false;
             let mut anonymous_ids_in_item: HashSet<String> = HashSet::new();
@@ -401,31 +418,291 @@ fn format_date_key(date_key: &str) -> String {
 mod tests {
     use super::*;
     use crate::core::dashboard::error::DashboardServiceError;
+    use crate::integrations::asr::TranscriptSegment;
     use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
-    use crate::repositories::history::HistoryItemStatus;
+    use crate::repositories::history::{
+        HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
+        HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+        HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+        HistoryWorkspaceSummary, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+        TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    };
+    use serde_json::Value;
+    use std::collections::BTreeMap;
 
     struct MockHistoryRepo {
         items: Vec<HistoryItemRecord>,
         segments: HashMap<String, Vec<ParsedTranscriptSegment>>,
     }
 
-    #[async_trait::async_trait]
-    impl HistoryRepository for MockHistoryRepo {
-        async fn read_history_items(
-            &self,
-        ) -> Result<Vec<HistoryItemRecord>, DashboardServiceError> {
+    impl HistoryStore for MockHistoryRepo {
+        fn ensure_ready(&self) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
             Ok(self.items.clone())
         }
 
-        async fn read_transcript_segments(
+        fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
+            Ok(self.items.clone())
+        }
+
+        fn query_workspace(
             &self,
-            transcript_path: &str,
-        ) -> Result<Vec<ParsedTranscriptSegment>, DashboardServiceError> {
-            Ok(self
-                .segments
-                .get(transcript_path)
-                .cloned()
-                .unwrap_or_default())
+            _request: HistoryWorkspaceQueryRequest,
+        ) -> Result<HistoryWorkspaceQueryResult, String> {
+            Ok(HistoryWorkspaceQueryResult {
+                filtered_items: vec![],
+                scoped_items: vec![],
+                scoped_item_ids: vec![],
+                search_match_by_item_id: BTreeMap::new(),
+                summary: HistoryWorkspaceSummary {
+                    total_items: 0,
+                    total_duration: 0.0,
+                    latest_timestamp: None,
+                    recording_count: 0,
+                    batch_count: 0,
+                },
+                item_counts: HistoryWorkspaceItemCounts {
+                    inbox: 0,
+                    by_project_id: BTreeMap::new(),
+                },
+            })
+        }
+
+        fn create_live_draft(
+            &self,
+            _request: HistoryCreateLiveDraftRequest,
+        ) -> Result<LiveRecordingDraftResult, String> {
+            Ok(LiveRecordingDraftResult {
+                item: HistoryItemRecord {
+                    id: String::new(),
+                    timestamp: 0,
+                    duration: 0.0,
+                    audio_path: String::new(),
+                    transcript_path: String::new(),
+                    title: String::new(),
+                    preview_text: String::new(),
+                    icon: None,
+                    kind: HistoryItemKind::Recording,
+                    search_content: String::new(),
+                    project_id: None,
+                    status: HistoryItemStatus::Draft,
+                    draft_source: Some(HistoryDraftSource::LiveRecord),
+                },
+                audio_absolute_path: String::new(),
+            })
+        }
+
+        fn complete_live_draft(
+            &self,
+            _history_id: &str,
+            _segments: Value,
+            _duration: f64,
+        ) -> Result<HistoryItemRecord, String> {
+            Ok(HistoryItemRecord {
+                id: _history_id.to_string(),
+                timestamp: 0,
+                duration: _duration,
+                audio_path: String::new(),
+                transcript_path: String::new(),
+                title: String::new(),
+                preview_text: String::new(),
+                icon: None,
+                kind: HistoryItemKind::Recording,
+                search_content: String::new(),
+                project_id: None,
+                status: HistoryItemStatus::Complete,
+                draft_source: None,
+            })
+        }
+
+        fn save_recording(
+            &self,
+            _request: HistorySaveRecordingRequest,
+        ) -> Result<HistoryItemRecord, String> {
+            Ok(HistoryItemRecord {
+                id: String::new(),
+                timestamp: 0,
+                duration: _request.duration,
+                audio_path: String::new(),
+                transcript_path: String::new(),
+                title: String::new(),
+                preview_text: String::new(),
+                icon: None,
+                kind: HistoryItemKind::Recording,
+                search_content: String::new(),
+                project_id: None,
+                status: HistoryItemStatus::Complete,
+                draft_source: None,
+            })
+        }
+
+        fn save_imported_file(
+            &self,
+            _request: HistorySaveImportedFileRequest,
+        ) -> Result<HistoryItemRecord, String> {
+            Ok(HistoryItemRecord {
+                id: String::new(),
+                timestamp: 0,
+                duration: _request.duration,
+                audio_path: String::new(),
+                transcript_path: String::new(),
+                title: String::new(),
+                preview_text: String::new(),
+                icon: None,
+                kind: HistoryItemKind::Recording,
+                search_content: String::new(),
+                project_id: None,
+                status: HistoryItemStatus::Complete,
+                draft_source: None,
+            })
+        }
+
+        fn delete_items(&self, _ids: &[String]) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn load_transcript(
+            &self,
+            history_id: &str,
+        ) -> Result<Option<Vec<TranscriptSegment>>, String> {
+            let parsed = self.segments.get(history_id).cloned().unwrap_or_default();
+            Ok(Some(
+                parsed
+                    .into_iter()
+                    .map(|s| TranscriptSegment {
+                        id: String::new(),
+                        text: s.text,
+                        start: 0.0,
+                        end: s.duration_seconds,
+                        is_final: true,
+                        timing: None,
+                        tokens: None,
+                        timestamps: None,
+                        durations: None,
+                        translation: None,
+                        speaker: s
+                            .speaker
+                            .map(|sp| crate::integrations::speaker::SpeakerTag {
+                                id: sp.id,
+                                label: sp.label,
+                                kind: if sp.kind == SpeakerKind::Identified {
+                                    "identified".to_string()
+                                } else {
+                                    "anonymous".to_string()
+                                },
+                                score: None,
+                            }),
+                        speaker_attribution: None,
+                    })
+                    .collect(),
+            ))
+        }
+
+        fn update_transcript(
+            &self,
+            history_id: &str,
+            _segments: Value,
+        ) -> Result<HistoryItemRecord, String> {
+            Ok(HistoryItemRecord {
+                id: history_id.to_string(),
+                ..self
+                    .list_items()?
+                    .into_iter()
+                    .find(|i| i.id == history_id)
+                    .unwrap_or(HistoryItemRecord {
+                        id: history_id.to_string(),
+                        timestamp: 0,
+                        duration: 0.0,
+                        audio_path: String::new(),
+                        transcript_path: String::new(),
+                        title: String::new(),
+                        preview_text: String::new(),
+                        icon: None,
+                        kind: HistoryItemKind::Recording,
+                        search_content: String::new(),
+                        project_id: None,
+                        status: HistoryItemStatus::Complete,
+                        draft_source: None,
+                    })
+            })
+        }
+
+        fn create_transcript_snapshot(
+            &self,
+            history_id: &str,
+            reason: TranscriptSnapshotReason,
+            _segments: Value,
+        ) -> Result<TranscriptSnapshotMetadata, String> {
+            Ok(TranscriptSnapshotMetadata {
+                id: String::new(),
+                history_id: history_id.to_string(),
+                reason,
+                created_at: 0,
+                segment_count: 0,
+            })
+        }
+
+        fn list_transcript_snapshots(
+            &self,
+            _history_id: &str,
+        ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
+            Ok(vec![])
+        }
+
+        fn load_transcript_snapshot(
+            &self,
+            _history_id: &str,
+            _snapshot_id: &str,
+        ) -> Result<Option<TranscriptSnapshotRecord>, String> {
+            Ok(None)
+        }
+
+        fn update_item_meta(&self, _history_id: &str, _updates: Value) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn update_project_assignments(
+            &self,
+            _ids: &[String],
+            _project_id: Option<String>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn reassign_project(
+            &self,
+            _current_project_id: String,
+            _next_project_id: Option<String>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn load_summary(&self, _history_id: &str) -> Result<Option<Value>, String> {
+            Ok(None)
+        }
+
+        fn save_summary(&self, _history_id: &str, _summary_payload: Value) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn delete_summary(&self, _history_id: &str) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn resolve_audio_path(&self, _history_id: &str) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
+            Ok(HistoryBackupSnapshot {
+                items: vec![],
+                transcript_files: vec![],
+                summary_files: vec![],
+                snapshot_files: vec![],
+            })
         }
     }
 
@@ -477,13 +754,13 @@ mod tests {
         }
     }
 
-    fn history_item(id: &str, transcript_path: &str) -> HistoryItemRecord {
+    fn history_item(id: &str) -> HistoryItemRecord {
         HistoryItemRecord {
             id: id.to_string(),
             timestamp: 1_776_668_400_000,
             duration: 60.0,
             audio_path: "".to_string(),
-            transcript_path: transcript_path.to_string(),
+            transcript_path: format!("{id}.json"),
             title: "".to_string(),
             preview_text: "".to_string(),
             icon: None,
@@ -499,7 +776,7 @@ mod tests {
     async fn aggregates_transcript_characters_and_speaker_insights() {
         let mut segments = HashMap::new();
         segments.insert(
-            "hist-1.json".to_string(),
+            "hist-1".to_string(),
             vec![
                 ParsedTranscriptSegment {
                     text: "hello world".to_string(),
@@ -529,7 +806,7 @@ mod tests {
 
         let service = DashboardService::new(
             Arc::new(MockHistoryRepo {
-                items: vec![history_item("hist-1", "hist-1.json")],
+                items: vec![history_item("hist-1")],
                 segments,
             }),
             Arc::new(MockProjectRepo { count: 1 }),

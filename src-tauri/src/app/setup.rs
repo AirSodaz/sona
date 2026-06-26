@@ -11,7 +11,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .expect("Failed to get app_local_data_dir");
 
-    let history_repo = Arc::new(crate::repositories::history::HistoryRepository::new(
+    let history_repo = Arc::new(crate::repositories::history::FileHistoryStore::new(
         app_local_data_dir.clone(),
     ));
     let project_repo = Arc::new(crate::repositories::project::ProjectRepository::new(

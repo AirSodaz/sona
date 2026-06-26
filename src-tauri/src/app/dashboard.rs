@@ -5,11 +5,11 @@ use tauri::State;
 
 use crate::core::dashboard::DashboardService;
 use crate::repositories::analytics::AnalyticsRepositoryImpl;
-use crate::repositories::history::HistoryRepository;
+use crate::repositories::history::FileHistoryStore;
 use crate::repositories::project::ProjectRepository;
 
 pub type AppDashboardService =
-    DashboardService<HistoryRepository, ProjectRepository, AnalyticsRepositoryImpl>;
+    DashboardService<FileHistoryStore, ProjectRepository, AnalyticsRepositoryImpl>;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

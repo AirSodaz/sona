@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod domain;
 pub mod downloads;
 pub mod event;
+pub mod history_store;
 pub mod paths;
 pub mod pipeline;
 pub mod preset_models;

@@ -296,9 +296,9 @@ pub struct PreparedBackupImport {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct HistoryBackupSnapshot {
-    pub(crate) items: Vec<HistoryItemRecord>,
-    pub(crate) transcript_files: Vec<(String, Value)>,
-    pub(crate) summary_files: Vec<(String, Value)>,
-    pub(crate) snapshot_files: Vec<(String, Value)>,
+pub struct HistoryBackupSnapshot {
+    pub items: Vec<HistoryItemRecord>,
+    pub transcript_files: Vec<(String, Value)>,
+    pub summary_files: Vec<(String, Value)>,
+    pub snapshot_files: Vec<(String, Value)>,
 }

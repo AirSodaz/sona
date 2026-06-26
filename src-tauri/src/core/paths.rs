@@ -65,6 +65,13 @@ impl MockPathProvider {
 }
 
 #[cfg(test)]
+impl Default for MockPathProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
 impl PathProvider for MockPathProvider {
     fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
         self.entries
