@@ -63,7 +63,6 @@ function resetUpdaterStore() {
     dismissedVersion: null,
     notificationVisible: false,
     hasAutoCheckedThisSession: false,
-    channel: 'stable',
     crossChannelDownloadUrl: null,
   });
 }
@@ -72,6 +71,9 @@ describe('appUpdaterStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetUpdaterStore();
+    useConfigStore.setState({
+      config: { ...useConfigStore.getState().config, channel: 'stable' },
+    });
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
       await onExit();
       return true;
@@ -195,14 +197,16 @@ describe('appUpdaterStore', () => {
     expect(relaunchMock).not.toHaveBeenCalled();
   });
 
-  it('routes to nightly endpoint when store channel is nightly', async () => {
-    useAppUpdaterStore.setState({ channel: 'nightly' });
+  it('routes to nightly endpoint when config store channel is nightly', async () => {
+    useConfigStore.setState({
+      config: { ...useConfigStore.getState().config, channel: 'nightly' },
+    });
     checkMock.mockResolvedValueOnce(makeUpdate('1.0.0'));
 
     await useAppUpdaterStore.getState().checkUpdate();
 
     expect(checkMock).toHaveBeenCalledWith({
-      endpoints: ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json'],
+      endpoints: ['https://github.com/AirSodaz/sona/releases/download/nightly/updater-nightly.json'],
     });
     expect(useAppUpdaterStore.getState().status).toBe('available');
   });
@@ -249,7 +253,7 @@ describe('appUpdaterStore', () => {
 
     expect(fetchUrlMock).not.toHaveBeenCalled();
     expect(checkMock).toHaveBeenCalledWith({
-      endpoints: ['https://github.com/AirSodaz/sona/releases/latest/download/updater-nightly.json'],
+      endpoints: ['https://github.com/AirSodaz/sona/releases/download/nightly/updater-nightly.json'],
     });
     expect(useAppUpdaterStore.getState().status).toBe('available');
   });

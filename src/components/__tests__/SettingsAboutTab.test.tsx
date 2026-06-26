@@ -69,7 +69,6 @@ function resetUpdaterStore() {
     dismissedVersion: null,
     notificationVisible: false,
     hasAutoCheckedThisSession: false,
-    channel: 'stable',
     crossChannelDownloadUrl: null,
   });
 }

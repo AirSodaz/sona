@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { check, Update } from '@tauri-apps/plugin-updater';
+import type { CheckOptions } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import i18n from '../i18n';
@@ -21,8 +22,6 @@ export type UpdateStatus =
   | 'downloaded'
   | 'error';
 
-export type Channel = 'stable' | 'nightly';
-
 export interface CheckUpdateOptions {
   manual?: boolean;
   channelSwitch?: boolean;
@@ -36,7 +35,6 @@ interface AppUpdaterState {
   dismissedVersion: string | null;
   notificationVisible: boolean;
   hasAutoCheckedThisSession: boolean;
-  channel: Channel;
   crossChannelDownloadUrl: string | null;
   checkUpdate: (opts?: CheckUpdateOptions) => Promise<void>;
   installUpdate: () => Promise<void>;
@@ -95,14 +93,11 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
   dismissedVersion: null,
   notificationVisible: false,
   hasAutoCheckedThisSession: false,
-  channel: 'stable',
   crossChannelDownloadUrl: null,
 
   checkUpdate: async (opts?: CheckUpdateOptions) => {
     const state = get();
-    const channel = opts?.channelSwitch
-      ? (useConfigStore.getState().config.channel ?? 'stable')
-      : state.channel;
+    const channel = useConfigStore.getState().config.channel ?? 'stable';
 
     if (state.status === 'checking') {
       return;
@@ -120,7 +115,6 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       status: 'checking',
       error: null,
       progress: 0,
-      channel,
       crossChannelDownloadUrl: null,
       hasAutoCheckedThisSession: opts?.manual ? state.hasAutoCheckedThisSession : true,
     });
@@ -170,7 +164,7 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
         ? [`${RELEASE_BASE_URL}/download/nightly/updater-nightly.json`]
         : undefined;
 
-      const update = await check({ endpoints });
+      const update = await check({ endpoints } as CheckOptions & { endpoints?: string[] });
 
       if (update) {
         const dismissedVersion = get().dismissedVersion;
