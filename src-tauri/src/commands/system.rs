@@ -2,19 +2,23 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
+use crate::core::paths::PathProvider;
+
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use crate::core::task_ledger::repository::TaskLedgerRepository;
 use crate::core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
 };
 
-async fn run_task_ledger_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
+async fn run_task_ledger_repository_task<T, F>(
+    provider: &dyn PathProvider,
+    task: F,
+) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + 'static,
     F: FnOnce(TaskLedgerRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
         task(TaskLedgerRepository::new(app_local_data_dir))
     })
@@ -34,13 +38,15 @@ fn emit_task_ledger_snapshot<R: Runtime>(
 use crate::core::recovery::repository::RecoveryRepository;
 use crate::core::recovery::types::RecoverySnapshot;
 
-async fn run_recovery_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
+async fn run_recovery_repository_task<T, F>(
+    provider: &dyn PathProvider,
+    task: F,
+) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + 'static,
     F: FnOnce(RecoveryRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || task(RecoveryRepository::new(app_local_data_dir)))
         .await
         .map_err(|error| error.to_string())?
@@ -203,7 +209,7 @@ pub async fn webdav_download_backup(
 pub async fn get_model_catalog_snapshot(
     app: AppHandle,
 ) -> Result<crate::core::preset_models::ModelCatalogSnapshot, String> {
-    crate::core::preset_models::get_model_catalog_snapshot(app).await
+    crate::core::preset_models::get_model_catalog_snapshot(&app as &dyn PathProvider).await
 }
 
 #[tauri::command(rename = "resolve_model_catalog_selected_ids")]
@@ -211,7 +217,11 @@ pub async fn resolve_model_catalog_selected_ids_command(
     app: AppHandle,
     paths: crate::core::preset_models::ModelSelectionPaths,
 ) -> Result<crate::core::preset_models::ModelCatalogSelectedIds, String> {
-    crate::core::preset_models::resolve_model_catalog_selected_ids_command(app, paths).await
+    crate::core::preset_models::resolve_model_catalog_selected_ids_command(
+        &app as &dyn PathProvider,
+        paths,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -220,14 +230,18 @@ pub async fn get_diagnostics_core_snapshot(
     state: State<'_, crate::integrations::asr::AsrState>,
     input: crate::core::diagnostics::DiagnosticsCoreInput,
 ) -> Result<crate::core::diagnostics::DiagnosticsCoreSnapshot, String> {
-    crate::core::diagnostics::get_diagnostics_core_snapshot(app, state, input).await
+    crate::core::diagnostics::get_diagnostics_core_snapshot(&app as &dyn PathProvider, state, input)
+        .await
 }
 
 // Relocated task_ledger commands
 
 #[tauri::command]
 pub async fn task_ledger_load_snapshot(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(app, |repository| repository.load_snapshot()).await
+    run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
+        repository.load_snapshot()
+    })
+    .await
 }
 
 #[tauri::command]
@@ -235,7 +249,7 @@ pub async fn task_ledger_upsert_task(
     app: AppHandle,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(app.clone(), move |repository| {
+    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
         repository.upsert_task(record)
     })
     .await?;
@@ -249,7 +263,7 @@ pub async fn task_ledger_patch_task(
     id: String,
     patch: Value,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(app.clone(), move |repository| {
+    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
         repository.patch_task(&id, patch)
     })
     .await?;
@@ -262,18 +276,20 @@ pub async fn task_ledger_remove_task(
     app: AppHandle,
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot =
-        run_task_ledger_repository_task(app.clone(), move |repository| repository.remove_task(&id))
-            .await?;
+    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+        repository.remove_task(&id)
+    })
+    .await?;
     emit_task_ledger_snapshot(&app, &snapshot)?;
     Ok(snapshot)
 }
 
 #[tauri::command]
 pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot =
-        run_task_ledger_repository_task(app.clone(), |repository| repository.clear_resolved())
-            .await?;
+    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
+        repository.clear_resolved()
+    })
+    .await?;
     emit_task_ledger_snapshot(&app, &snapshot)?;
     Ok(snapshot)
 }
@@ -282,7 +298,10 @@ pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnap
 
 #[tauri::command]
 pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, String> {
-    run_recovery_repository_task(app, |repository| repository.load_snapshot()).await
+    run_recovery_repository_task(&app as &dyn PathProvider, |repository| {
+        repository.load_snapshot()
+    })
+    .await
 }
 
 #[tauri::command]
@@ -290,7 +309,10 @@ pub async fn recovery_save_snapshot(
     app: AppHandle,
     items: Vec<Value>,
 ) -> Result<RecoverySnapshot, String> {
-    run_recovery_repository_task(app, move |repository| repository.save_snapshot(items)).await
+    run_recovery_repository_task(&app as &dyn PathProvider, move |repository| {
+        repository.save_snapshot(items)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -299,7 +321,7 @@ pub async fn recovery_persist_queue_snapshot(
     queue_items: Vec<Value>,
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
-    run_recovery_repository_task(app, move |repository| {
+    run_recovery_repository_task(&app as &dyn PathProvider, move |repository| {
         repository
             .persist_queue_snapshot_with_resolved_ids(queue_items, resolved_ids.unwrap_or_default())
             .map(|_| ())
@@ -331,7 +353,7 @@ pub async fn import_speaker_profile_sample(
     source_name: Option<String>,
 ) -> Result<crate::integrations::speaker::SpeakerProfileSample, String> {
     crate::integrations::speaker::import_speaker_profile_sample(
-        app,
+        &app as &dyn PathProvider,
         profile_id,
         source_path,
         source_name,

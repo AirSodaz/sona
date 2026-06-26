@@ -1,3 +1,4 @@
+use crate::core::paths::PathProvider;
 use crate::integrations::llm::{LlmUsageCategory, TokenUsage};
 use chrono::{DateTime, Duration, Local};
 use log::warn;
@@ -9,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
-use tauri::{Manager, Runtime};
+use tauri::Runtime;
 
 const ANALYTICS_DIR: &str = "analytics";
 const LLM_USAGE_FILE_NAME: &str = "llm-usage.json";
@@ -110,8 +111,7 @@ pub(crate) struct UsageRecord {
 
 pub async fn llm_usage_ensure_storage<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     let app_dir = app
-        .path()
-        .app_local_data_dir()
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;
 
     tauri::async_runtime::spawn_blocking(move || ensure_storage_at_dir(&app_dir))
@@ -121,8 +121,7 @@ pub async fn llm_usage_ensure_storage<R: Runtime>(app: tauri::AppHandle<R>) -> R
 
 pub async fn llm_usage_read_raw<R: Runtime>(app: tauri::AppHandle<R>) -> Result<String, String> {
     let app_dir = app
-        .path()
-        .app_local_data_dir()
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;
 
     tauri::async_runtime::spawn_blocking(move || read_raw_from_dir(&app_dir))
@@ -135,8 +134,7 @@ pub async fn llm_usage_replace_raw<R: Runtime>(
     content: String,
 ) -> Result<(), String> {
     let app_dir = app
-        .path()
-        .app_local_data_dir()
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;
 
     tauri::async_runtime::spawn_blocking(move || replace_raw_at_dir(&app_dir, &content))
@@ -149,8 +147,7 @@ pub(crate) fn record_usage<R: Runtime>(
     record: UsageRecord,
 ) -> Result<(), String> {
     let app_dir = app
-        .path()
-        .app_local_data_dir()
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;
 
     record_usage_at_dir(&app_dir, record)

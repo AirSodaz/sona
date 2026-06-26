@@ -1,13 +1,14 @@
 use std::sync::Arc;
 use tauri::{Listener, Manager};
 
+use crate::core::paths::PathProvider;
+
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
     let controller = app_handle_for_listener.state::<crate::app::server::ApiServerController>();
 
-    let app_local_data_dir = app_handle_for_listener
-        .path()
-        .app_local_data_dir()
+    let app_local_data_dir = (&app_handle_for_listener as &dyn PathProvider)
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)
         .expect("Failed to get app_local_data_dir");
 
     let history_repo = Arc::new(crate::repositories::history::HistoryRepository::new(
@@ -28,7 +29,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     app.manage(dashboard_service);
 
-    let initial_config = crate::app::server::load_online_asr_config(&app_handle_for_listener);
+    let initial_config = crate::app::server::load_online_asr_config(
+        &app_handle_for_listener as &dyn crate::core::paths::PathProvider,
+    );
     let config_for_init = controller.online_asr_config.clone();
     tauri::async_runtime::spawn(async move {
         *config_for_init.write().await = initial_config;
@@ -40,7 +43,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let config_for_listener = config_for_listener.clone();
         let app_handle = listener_app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let new_config_map = crate::app::server::load_online_asr_config(&app_handle);
+            let new_config_map = crate::app::server::load_online_asr_config(
+                &app_handle as &dyn crate::core::paths::PathProvider,
+            );
             *config_for_listener.write().await = new_config_map;
         });
     });

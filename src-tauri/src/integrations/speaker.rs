@@ -2,6 +2,7 @@ use crate::integrations::asr::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
 
+use crate::core::paths::{PathKind, PathProvider};
 use crate::core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,6 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tauri::{AppHandle, Manager, Runtime};
 
 const SPEAKER_PROCESSING_LOG_TARGET: &str = "speaker_processing";
 const SAMPLE_RATE: i32 = 16_000;
@@ -165,8 +165,8 @@ pub async fn annotate_speaker_segments_from_file(
     annotate_segments_with_speakers(&samples, &segments, speaker_processing.as_ref())
 }
 
-pub async fn import_speaker_profile_sample<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn import_speaker_profile_sample(
+    provider: &dyn PathProvider,
     profile_id: String,
     source_path: String,
     source_name: Option<String>,
@@ -190,7 +190,7 @@ pub async fn import_speaker_profile_sample<R: Runtime>(
         })
         .unwrap_or_else(|| "Sample".to_string());
 
-    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     let profile_dir = app_data_dir.join("speaker-profiles").join(&profile_id);
     std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
 

@@ -1,8 +1,8 @@
+use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr::ModelFileConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use tauri::Manager;
 
 const PRESET_MODELS_JSON: &str = include_str!("../../../src/shared/preset-models.json");
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =
@@ -233,12 +233,11 @@ pub struct ModelCatalogSelectedIds {
 }
 
 /// Returns a settings-page-ready catalog snapshot for the app-local models dir.
-pub async fn get_model_catalog_snapshot<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn get_model_catalog_snapshot(
+    provider: &dyn PathProvider,
 ) -> Result<ModelCatalogSnapshot, String> {
-    let models_dir = app
-        .path()
-        .app_local_data_dir()
+    let models_dir = provider
+        .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?
         .join("models");
 
@@ -300,13 +299,12 @@ pub fn resolve_model_catalog_selected_ids(
     }
 }
 
-pub async fn resolve_model_catalog_selected_ids_command<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub async fn resolve_model_catalog_selected_ids_command(
+    provider: &dyn PathProvider,
     paths: ModelSelectionPaths,
 ) -> Result<ModelCatalogSelectedIds, String> {
-    let models_dir = app
-        .path()
-        .app_local_data_dir()
+    let models_dir = provider
+        .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?
         .join("models");
 

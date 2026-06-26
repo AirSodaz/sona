@@ -76,14 +76,13 @@ pub(crate) async fn open_log_folder<R: tauri::Runtime>(
     Ok(())
 }
 
-pub(crate) fn resolve_runtime_environment_status<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
+pub(crate) fn resolve_runtime_environment_status(
+    provider: &dyn crate::core::paths::PathProvider,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let ffmpeg_path = crate::core::pipeline::resolve_ffmpeg_sidecar_path()?;
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e: tauri::Error| e.to_string())?;
+    let log_dir = provider
+        .resolve_path(crate::core::paths::PathKind::AppLogData)
+        .map_err(|e: String| -> String { e })?;
 
     Ok(RuntimeEnvironmentStatus {
         ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),
@@ -92,10 +91,10 @@ pub(crate) fn resolve_runtime_environment_status<R: tauri::Runtime>(
     })
 }
 
-pub(crate) async fn get_runtime_environment_status<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub(crate) async fn get_runtime_environment_status(
+    app: tauri::AppHandle,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    resolve_runtime_environment_status(&app)
+    resolve_runtime_environment_status(&app as &dyn crate::core::paths::PathProvider)
 }
 
 pub(crate) async fn get_path_statuses(

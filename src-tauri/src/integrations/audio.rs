@@ -1,3 +1,4 @@
+use crate::core::paths::{PathKind, PathProvider};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
@@ -358,8 +359,8 @@ fn requested_device_label(device_name: &Option<String>) -> String {
     device_name.as_deref().unwrap_or("default").to_string()
 }
 
-fn create_history_recording_path<R: Runtime>(app: &AppHandle<R>) -> Result<String, String> {
-    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+fn create_history_recording_path(provider: &dyn PathProvider) -> Result<String, String> {
+    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     let history_dir = app_data_dir.join("history");
     if !history_dir.exists() {
         std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
@@ -383,8 +384,8 @@ where
     }
 }
 
-fn queue_recording_start<R: Runtime>(
-    app: &AppHandle<R>,
+fn queue_recording_start(
+    provider: &dyn PathProvider,
     recorder_tx: Option<&tokio::sync::mpsc::Sender<RecorderCommand>>,
     should_record: bool,
     capture_label: &str,
@@ -407,7 +408,7 @@ fn queue_recording_start<R: Runtime>(
     };
 
     let wav_filepath =
-        resolve_recording_output_path(output_path, || create_history_recording_path(app))?;
+        resolve_recording_output_path(output_path, || create_history_recording_path(provider))?;
     if let Err(err) = tx.try_send(RecorderCommand::Start(wav_filepath.clone())) {
         eprintln!(
             "[Audio] Failed to queue {} recorder start for instance {} at {}: {}",
@@ -630,7 +631,7 @@ fn start_shared_capture(
             );
             drop(capture);
             queue_recording_start(
-                &app,
+                &app as &dyn PathProvider,
                 recorder_tx.as_ref(),
                 kind.should_record(&instance_id),
                 kind.label(),
@@ -692,7 +693,7 @@ fn start_shared_capture(
     }
 
     queue_recording_start(
-        &app,
+        &app as &dyn PathProvider,
         Some(&recorder_tx),
         kind.should_record(&instance_id),
         kind.label(),

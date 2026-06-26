@@ -1,3 +1,4 @@
+use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
@@ -5,7 +6,6 @@ use serde_json::Value;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 
 use super::types::*;
@@ -485,13 +485,12 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-pub async fn run_repository_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
+pub async fn run_repository_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + 'static,
     F: FnOnce(AutomationRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
         task(AutomationRepository::new(app_local_data_dir))
     })

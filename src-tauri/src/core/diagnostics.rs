@@ -1,3 +1,4 @@
+use crate::core::paths::{PathKind, PathProvider};
 use crate::core::preset_models::{
     ModelCatalogModel, ModelRules as PresetModelRules, ModelSelectionPaths,
     build_model_catalog_snapshot, resolve_model_catalog_selected_ids,
@@ -5,7 +6,7 @@ use crate::core::preset_models::{
 use crate::integrations::asr::{AsrRuntimeMetricsSnapshot, AsrState};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::State;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,23 +137,22 @@ pub struct DiagnosticsCoreSnapshot {
     pub punctuation_required: bool,
 }
 
-pub async fn get_diagnostics_core_snapshot<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn get_diagnostics_core_snapshot(
+    provider: &dyn PathProvider,
     state: State<'_, AsrState>,
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
-    let input = enrich_diagnostics_core_input(&app, state.inner(), input).await?;
+    let input = enrich_diagnostics_core_input(provider, state.inner(), input).await?;
     Ok(build_diagnostics_core_snapshot(input))
 }
 
-async fn enrich_diagnostics_core_input<R: Runtime>(
-    app: &AppHandle<R>,
+async fn enrich_diagnostics_core_input(
+    provider: &dyn PathProvider,
     state: &AsrState,
     mut input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreInput, String> {
-    let models_dir = app
-        .path()
-        .app_local_data_dir()
+    let models_dir = provider
+        .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?
         .join("models");
     std::fs::create_dir_all(&models_dir).map_err(|error| {
@@ -197,7 +197,7 @@ async fn enrich_diagnostics_core_input<R: Runtime>(
         punctuation: resolve_core_path_status(input.config.punctuation_model_path.trim()),
     };
     input.runtime_environment = runtime_environment_input(
-        crate::app::runtime_status::resolve_runtime_environment_status(app)?,
+        crate::app::runtime_status::resolve_runtime_environment_status(provider)?,
     );
     input.asr_runtime_metrics = state.metrics_snapshot().await;
     input.onboarding_ready = !input.config.streaming_model_path.trim().is_empty()

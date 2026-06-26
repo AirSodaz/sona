@@ -15,7 +15,7 @@ pub async fn project_list<R: Runtime>(
     fallback_enabled_polish_keyword_set_ids: Option<Vec<String>>,
     fallback_enabled_speaker_profile_ids: Option<Vec<String>>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_task(app, move |repository| {
+    run_project_task(&app, move |repository| {
         repository.list(ProjectListOptions {
             fallback_enabled_polish_keyword_set_ids: fallback_enabled_polish_keyword_set_ids
                 .unwrap_or_default(),
@@ -31,7 +31,7 @@ pub async fn project_save_all<R: Runtime>(
     app: AppHandle<R>,
     projects: Vec<Value>,
 ) -> Result<(), String> {
-    run_project_task(app, move |repository| repository.save_all_values(projects)).await
+    run_project_task(&app, move |repository| repository.save_all_values(projects)).await
 }
 
 #[tauri::command]
@@ -42,7 +42,7 @@ pub async fn project_create<R: Runtime>(
     icon: Option<String>,
     defaults: ProjectDefaultsInput,
 ) -> Result<ProjectRecord, String> {
-    run_project_task(app, move |repository| {
+    run_project_task(&app, move |repository| {
         repository.create(ProjectCreateInput {
             name,
             description,
@@ -59,7 +59,7 @@ pub async fn project_update<R: Runtime>(
     project_id: String,
     updates: Value,
 ) -> Result<Option<ProjectRecord>, String> {
-    run_project_task(app, move |repository| {
+    run_project_task(&app, move |repository| {
         repository.update(&project_id, updates)
     })
     .await
@@ -70,7 +70,7 @@ pub async fn project_delete<R: Runtime>(
     app: AppHandle<R>,
     project_id: String,
 ) -> Result<(), String> {
-    run_project_task(app, move |repository| repository.delete(&project_id)).await
+    run_project_task(&app, move |repository| repository.delete(&project_id)).await
 }
 
 #[tauri::command]
@@ -78,7 +78,7 @@ pub async fn project_reorder<R: Runtime>(
     app: AppHandle<R>,
     project_ids: Vec<String>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_task(app, move |repository| repository.reorder(project_ids)).await
+    run_project_task(&app, move |repository| repository.reorder(project_ids)).await
 }
 
 #[tauri::command]

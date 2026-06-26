@@ -14,7 +14,7 @@ use tauri::{AppHandle, Runtime, State};
 pub async fn automation_load_repository_state<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<AutomationRepositoryState, String> {
-    run_repository_task(app, |repository| repository.load_state()).await
+    run_repository_task(&app, |repository| repository.load_state()).await
 }
 
 #[tauri::command]
@@ -22,7 +22,7 @@ pub async fn automation_persist_rules<R: Runtime>(
     app: AppHandle<R>,
     rules: Vec<Value>,
 ) -> Result<(), String> {
-    run_repository_task(app, move |repository| repository.persist_rules(rules)).await
+    run_repository_task(&app, move |repository| repository.persist_rules(rules)).await
 }
 
 #[tauri::command]
@@ -30,7 +30,7 @@ pub async fn automation_persist_processed_entries<R: Runtime>(
     app: AppHandle<R>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_repository_task(app, move |repository| {
+    run_repository_task(&app, move |repository| {
         repository.persist_processed_entries(processed_entries)
     })
     .await
@@ -42,7 +42,7 @@ pub async fn automation_persist_repository_state<R: Runtime>(
     rules: Vec<Value>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_repository_task(app, move |repository| {
+    run_repository_task(&app, move |repository| {
         repository.persist_state(rules, processed_entries)
     })
     .await

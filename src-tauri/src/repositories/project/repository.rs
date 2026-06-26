@@ -1,3 +1,4 @@
+use crate::core::paths::{PathKind, PathProvider};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -5,7 +6,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 
 use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
@@ -219,13 +219,12 @@ pub fn set_active_project_id_in_dir(
     )
 }
 
-pub async fn run_project_task<R, T, F>(app: AppHandle<R>, task: F) -> Result<T, String>
+pub async fn run_project_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + 'static,
     F: FnOnce(ProjectRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = PROJECT_REPOSITORY_LOCK
             .lock()

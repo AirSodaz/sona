@@ -25,6 +25,8 @@ type HmacSha256 = Hmac<Sha256>;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::core::paths::{PathKind, PathProvider};
+
 pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,10 +85,10 @@ impl Default for ApiServerController {
 }
 
 pub fn load_online_asr_config(
-    app: &tauri::AppHandle,
+    provider: &dyn PathProvider,
 ) -> std::collections::HashMap<String, serde_json::Value> {
     let mut online_asr_config = std::collections::HashMap::new();
-    if let Ok(data_dir) = crate::app::paths::resolve_app_data_dir(app) {
+    if let Ok(data_dir) = provider.resolve_path(PathKind::AppData) {
         let config_path = data_dir.join("settings.json");
         match std::fs::read_to_string(&config_path) {
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
@@ -155,7 +157,7 @@ pub async fn start_api_server(
 
     let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
 
-    let app_local_data_dir = crate::app::paths::resolve_app_local_data_dir(&app)?;
+    let app_local_data_dir = app.resolve_path(PathKind::AppLocalData)?;
     let temp_dir = app_local_data_dir.join("api_temp");
     let models_dir = app_local_data_dir.join("models");
 
@@ -209,7 +211,7 @@ pub async fn stop_api_server(
 pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let app_data_dir = match crate::app::paths::resolve_app_data_dir(&app_handle) {
+        let app_data_dir = match app_handle.resolve_path(PathKind::AppData) {
             Ok(dir) => dir,
             Err(e) => {
                 log::error!("Failed to get app_data_dir: {}", e);
@@ -284,14 +286,13 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         }
 
         if http_server_enabled {
-            let app_local_data_dir =
-                match crate::app::paths::resolve_app_local_data_dir(&app_handle) {
-                    Ok(dir) => dir,
-                    Err(e) => {
-                        log::error!("Failed to get app_local_data_dir: {}", e);
-                        return;
-                    }
-                };
+            let app_local_data_dir = match app_handle.resolve_path(PathKind::AppLocalData) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    log::error!("Failed to get app_local_data_dir: {}", e);
+                    return;
+                }
+            };
             let temp_dir = app_local_data_dir.join("api_temp");
             let models_dir = app_local_data_dir.join("models");
 
