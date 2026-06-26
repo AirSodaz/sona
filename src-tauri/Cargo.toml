@@ -45,7 +45,7 @@ bytes = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.23.1", features = ["rustls-tls-webpki-roots"] }
 base64 = "0.22"
-cpal = "0.15"
+cpal = "0.18"
 rubato = "0.16"
 ringbuf = "0.4"
 tauri-plugin-process = "2"

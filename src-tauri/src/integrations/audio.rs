@@ -112,7 +112,7 @@ impl CaptureKind {
         }
     }
 
-    fn config_error_message(self, err: cpal::DefaultStreamConfigError) -> String {
+    fn config_error_message(self, err: cpal::Error) -> String {
         match self {
             CaptureKind::System => format!("Failed to get default config: {}", err),
             CaptureKind::Microphone => format!("Failed to get default mic config: {}", err),
@@ -133,14 +133,14 @@ impl CaptureKind {
         }
     }
 
-    fn build_stream_error_message(self, err: cpal::BuildStreamError) -> String {
+    fn build_stream_error_message(self, err: cpal::Error) -> String {
         match self {
             CaptureKind::System => format!("Failed to build input stream: {}", err),
             CaptureKind::Microphone => format!("Failed to build mic input stream: {}", err),
         }
     }
 
-    fn play_stream_error_message(self, err: cpal::PlayStreamError) -> String {
+    fn play_stream_error_message(self, err: cpal::Error) -> String {
         match self {
             CaptureKind::System => format!("Failed to play stream: {}", err),
             CaptureKind::Microphone => format!("Failed to play mic stream: {}", err),
@@ -346,8 +346,9 @@ pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
     let devices = host.output_devices().map_err(|e| e.to_string())?;
 
     let result = devices
-        .filter_map(|device| device.name().ok())
-        .map(|name| AudioDevice { name })
+        .map(|device| AudioDevice {
+            name: device.to_string(),
+        })
         .collect();
 
     Ok(result)
@@ -734,17 +735,17 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             CaptureKind::System => device_name
                 .as_ref()
                 .and_then(|name| {
-                    host.output_devices().ok().and_then(|mut devices| {
-                        devices.find(|d| d.name().map(|n| n == *name).unwrap_or(false))
-                    })
+                    host.output_devices()
+                        .ok()
+                        .and_then(|mut devices| devices.find(|d| d.to_string() == *name))
                 })
                 .or_else(|| host.default_output_device()),
             CaptureKind::Microphone => device_name
                 .as_ref()
                 .and_then(|name| {
-                    host.input_devices().ok().and_then(|mut devices| {
-                        devices.find(|d| d.name().map(|n| n == *name).unwrap_or(false))
-                    })
+                    host.input_devices()
+                        .ok()
+                        .and_then(|mut devices| devices.find(|d| d.to_string() == *name))
                 })
                 .or_else(|| host.default_input_device()),
         };
@@ -753,7 +754,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             fail_start(kind.no_device_message().to_string());
             return;
         };
-        let resolved_device_name = device.name().unwrap_or_else(|_| "unknown".to_string());
+        let resolved_device_name = device.to_string();
 
         let supported_config = match kind {
             CaptureKind::System => device.default_output_config(),
@@ -769,7 +770,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
 
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
-        let sample_rate = config.sample_rate.0;
+        let sample_rate = config.sample_rate;
         let channels = config.channels;
         let chunk_size_out = 1024;
 
@@ -792,7 +793,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             SampleFormat::F32 => {
                 let window_clone = window.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[f32], _: &_| {
                         let boost = kind.read_boost(window_clone.app_handle());
                         process_capture_audio(
@@ -817,7 +818,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             SampleFormat::I16 => {
                 let window_clone = window.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[i16], _: &_| {
                         let boost = kind.read_boost(window_clone.app_handle());
                         let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
@@ -843,7 +844,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             SampleFormat::U16 => {
                 let window_clone = window.clone();
                 device.build_input_stream(
-                    &config,
+                    config,
                     move |data: &[u16], _: &_| {
                         let boost = kind.read_boost(window_clone.app_handle());
                         let data_f32: Vec<f32> = data
@@ -944,8 +945,9 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     let devices = host.input_devices().map_err(|e| e.to_string())?;
 
     let result = devices
-        .filter_map(|device| device.name().ok())
-        .map(|name| AudioDevice { name })
+        .map(|device| AudioDevice {
+            name: device.to_string(),
+        })
         .collect();
 
     Ok(result)
