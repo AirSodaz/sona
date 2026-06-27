@@ -544,6 +544,7 @@
             "perplexity": "困惑",
             "volcengine": "ボルクエンジン",
             "chatglm": "チャットGLM",
+            "copilot": "GitHub Copilot",
             "google_translate": "Google翻訳",
             "google_translate_free": "Google翻訳（無料）"
         },
