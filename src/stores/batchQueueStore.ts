@@ -29,6 +29,7 @@ import {
   setTranscriptSegments,
   syncSavedRecordingMeta,
 } from './transcriptCoordinator';
+import { useTranscriptSessionStore } from './transcriptSessionStore';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import {
@@ -292,6 +293,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     setActiveItem: (id) => {
+        // Flush current session segments back to the previous queue item
+        const prevActiveId = get().activeItemId;
+        if (prevActiveId !== null && prevActiveId !== id) {
+            const sessionSegments = useTranscriptSessionStore.getState().segments;
+            set((s) => ({
+                queueItems: s.queueItems.map((item) =>
+                    item.id === prevActiveId
+                        ? { ...item, segments: sessionSegments }
+                        : item
+                ),
+            }));
+        }
+
         set({ activeItemId: id });
 
         const state = get();
@@ -385,6 +399,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     removeItem: (id) => {
+        // Flush session segments back to the item before removing it
+        if (get().activeItemId === id) {
+            const sessionSegments = useTranscriptSessionStore.getState().segments;
+            set((s) => ({
+                queueItems: s.queueItems.map((item) =>
+                    item.id === id ? { ...item, segments: sessionSegments } : item
+                ),
+            }));
+        }
+
         const state = get();
         const removedItem = state.queueItems.find((item) => item.id === id);
         const newItems = state.queueItems.filter((item) => item.id !== id);
@@ -407,6 +431,17 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     clearQueue: () => {
+        // Flush session segments back to the active item before clearing
+        const activeId = get().activeItemId;
+        if (activeId !== null) {
+            const sessionSegments = useTranscriptSessionStore.getState().segments;
+            set((s) => ({
+                queueItems: s.queueItems.map((item) =>
+                    item.id === activeId ? { ...item, segments: sessionSegments } : item
+                ),
+            }));
+        }
+
         const state = get();
         set({
             queueItems: [],

@@ -374,4 +374,43 @@ describe('batchQueueStore', () => {
         expect(transcriptState.audioUrl).toBeNull();
         expect(transcriptState.segments).toHaveLength(0);
     });
+
+    it('flushes session segments back to queue cache when switching to a different item', () => {
+        const seg = { id: 'seg-1', text: 'original', start: 0, end: 1, isFinal: true };
+
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'complete', progress: 100, segments: [seg], audioUrl: null, projectId: null },
+                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: null, projectId: null },
+            ],
+            activeItemId: null,
+        });
+
+        // Open session matching item 1
+        useBatchQueueStore.getState().setActiveItem('1');
+
+        // Edit the segments in the session
+        useTranscriptStore.getState().setSegments([
+            { id: 'seg-1', text: 'edited text', start: 0, end: 1, isFinal: true },
+        ]);
+
+        // Switch to item 2
+        useBatchQueueStore.getState().setActiveItem('2');
+
+        // Item 1's segments in the queue cache should reflect the edit
+        const item1 = useBatchQueueStore.getState().queueItems.find((i) => i.id === '1');
+        expect(item1?.segments).toEqual([
+            expect.objectContaining({ text: 'edited text' }),
+        ]);
+    });
+
+    it('preserves existing switch and clear behavior regardless of active item state', () => {
+        // Verifies that setActiveItem and clearQueue continue to work correctly
+        // when no queue items exist (edge case)
+        useBatchQueueStore.getState().setActiveItem(null);
+        expect(useBatchQueueStore.getState().activeItemId).toBeNull();
+
+        useBatchQueueStore.getState().clearQueue();
+        expect(useBatchQueueStore.getState().queueItems).toHaveLength(0);
+    });
 });
