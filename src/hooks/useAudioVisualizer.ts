@@ -15,9 +15,7 @@ export function useAudioVisualizer({ canvasRef, peakLevelRef, isPaused }: UseAud
     const amplitudeRef = useRef(0);
     const phaseRef = useRef(0);
 
-    useEffect(() => {
-        isPausedRef.current = isPaused;
-    }, [isPaused]);
+    const prevIsPausedRef = useRef(isPaused);
 
     const drawVisualizer = useCallback(() => {
         if (animationRef.current) {
@@ -99,6 +97,16 @@ export function useAudioVisualizer({ canvasRef, peakLevelRef, isPaused }: UseAud
 
         draw();
     }, [canvasRef, peakLevelRef]);
+
+    useEffect(() => {
+        const wasPaused = prevIsPausedRef.current;
+        prevIsPausedRef.current = isPaused;
+        isPausedRef.current = isPaused;
+
+        if (wasPaused && !isPaused) {
+            drawVisualizer();
+        }
+    }, [isPaused, drawVisualizer]);
 
     const stopVisualizer = useCallback(() => {
         if (animationRef.current) {
