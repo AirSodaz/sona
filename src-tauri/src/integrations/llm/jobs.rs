@@ -156,17 +156,30 @@ async fn create_transcript_job_snapshot(
     Ok(())
 }
 
-async fn run_translate_job(
+async fn run_segment_rewrite_job<F, Fut, TItem>(
     app: AppHandle,
     history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
-) -> Result<TranscriptLlmJobResult, String> {
+    task_type: LlmTaskType,
+    snapshot_reason: TranscriptSnapshotReason,
+    run_with_observer: F,
+    merge_items_into_segments: fn(Vec<TranscriptSegment>, &[TItem]) -> Vec<TranscriptSegment>,
+) -> Result<TranscriptLlmJobResult, String>
+where
+    F: FnOnce(
+        AppHandle,
+        TranscriptLlmJobRequest,
+        Box<dyn FnMut(&[TItem]) -> Result<(), String> + Send + 'static>,
+    ) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<TItem>, String>>,
+    TItem: Clone + Send + Sync + 'static,
+{
     let history_id = normalized_job_history_id(request.job_history_id.as_deref());
     create_transcript_job_snapshot(
         app.clone(),
         history_state.clone(),
         history_id.as_deref(),
-        TranscriptSnapshotReason::Translate,
+        snapshot_reason,
         &request.segments,
     )
     .await?;
@@ -176,34 +189,28 @@ async fn run_translate_job(
     let update_app = app.clone();
     let update_task_id = request.task_id.clone();
     let update_history_id = history_id.clone();
-    let llm_request = TranslateSegmentsRequest {
-        task_id: request.task_id.clone(),
-        config: request.config.clone(),
-        segments: segment_inputs_from_transcript(&request.segments),
-        chunk_size: request.chunk_size,
-        target_language: request.target_language.unwrap_or_else(|| "zh".to_string()),
-        target_language_name: request.target_language_name.clone(),
-    };
 
-    commands::translate_transcript_segments_with_observer(app.clone(), llm_request, move |items| {
+    let callback = move |items: &[TItem]| -> Result<(), String> {
         let next_segments = {
             let mut guard = observer_segments
                 .lock()
                 .map_err(|error| error.to_string())?;
-            *guard = merge_translated_items_into_segments(guard.clone(), items);
+            *guard = merge_items_into_segments(guard.clone(), items);
             guard.clone()
         };
         emit_transcript_job_update(
             &update_app,
             &update_task_id,
-            LlmTaskType::Translate,
+            task_type,
             update_history_id.clone(),
             Some(next_segments),
             None,
             None,
         )
-    })
-    .await?;
+    };
+
+    let task_id = request.task_id.clone();
+    run_with_observer(app.clone(), request, Box::new(callback)).await?;
 
     let final_segments = merged_segments
         .lock()
@@ -223,8 +230,8 @@ async fn run_translate_job(
 
     emit_transcript_job_update(
         &app,
-        &request.task_id,
-        LlmTaskType::Translate,
+        &task_id,
+        task_type,
         history_id.clone(),
         Some(final_segments.clone()),
         None,
@@ -232,8 +239,8 @@ async fn run_translate_job(
     )?;
 
     Ok(TranscriptLlmJobResult {
-        task_id: request.task_id,
-        task_type: LlmTaskType::Translate,
+        task_id,
+        task_type,
         job_history_id: history_id,
         segments: Some(final_segments),
         summary: None,
@@ -241,89 +248,64 @@ async fn run_translate_job(
     })
 }
 
+async fn run_translate_job(
+    app: AppHandle,
+    history_state: HistoryRepositoryState,
+    request: TranscriptLlmJobRequest,
+) -> Result<TranscriptLlmJobResult, String> {
+    run_segment_rewrite_job(
+        app,
+        history_state,
+        request,
+        LlmTaskType::Translate,
+        TranscriptSnapshotReason::Translate,
+        |app, req, mut callback| async move {
+            let llm_request = TranslateSegmentsRequest {
+                task_id: req.task_id,
+                config: req.config,
+                segments: segment_inputs_from_transcript(&req.segments),
+                chunk_size: req.chunk_size,
+                target_language: req.target_language.unwrap_or_else(|| "zh".to_string()),
+                target_language_name: req.target_language_name,
+            };
+            commands::translate_transcript_segments_with_observer(app, llm_request, move |items| {
+                callback(items)
+            })
+            .await
+        },
+        merge_translated_items_into_segments,
+    )
+    .await
+}
+
 async fn run_polish_job(
     app: AppHandle,
     history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
-    let history_id = normalized_job_history_id(request.job_history_id.as_deref());
-    create_transcript_job_snapshot(
-        app.clone(),
-        history_state.clone(),
-        history_id.as_deref(),
-        TranscriptSnapshotReason::Polish,
-        &request.segments,
-    )
-    .await?;
-
-    let merged_segments = Arc::new(Mutex::new(request.segments.clone()));
-    let observer_segments = merged_segments.clone();
-    let update_app = app.clone();
-    let update_task_id = request.task_id.clone();
-    let update_history_id = history_id.clone();
-    let llm_request = PolishSegmentsRequest {
-        task_id: request.task_id.clone(),
-        config: request.config.clone(),
-        segments: segment_inputs_from_transcript(&request.segments),
-        chunk_size: request.chunk_size,
-        context: request.context.clone(),
-        keywords: request.keywords.clone(),
-    };
-
-    commands::polish_transcript_segments_with_observer(app.clone(), llm_request, move |items| {
-        let next_segments = {
-            let mut guard = observer_segments
-                .lock()
-                .map_err(|error| error.to_string())?;
-            *guard = merge_polished_items_into_segments(guard.clone(), items);
-            guard.clone()
-        };
-        emit_transcript_job_update(
-            &update_app,
-            &update_task_id,
-            LlmTaskType::Polish,
-            update_history_id.clone(),
-            Some(next_segments),
-            None,
-            None,
-        )
-    })
-    .await?;
-
-    let final_segments = merged_segments
-        .lock()
-        .map_err(|error| error.to_string())?
-        .clone();
-    let history_item = if let Some(history_id) = history_id.clone() {
-        history_update_llm_transcript_segments(
-            app.clone(),
-            history_state,
-            history_id,
-            final_segments.clone(),
-        )
-        .await?
-    } else {
-        None
-    };
-
-    emit_transcript_job_update(
-        &app,
-        &request.task_id,
+    run_segment_rewrite_job(
+        app,
+        history_state,
+        request,
         LlmTaskType::Polish,
-        history_id.clone(),
-        Some(final_segments.clone()),
-        None,
-        history_item.clone(),
-    )?;
-
-    Ok(TranscriptLlmJobResult {
-        task_id: request.task_id,
-        task_type: LlmTaskType::Polish,
-        job_history_id: history_id,
-        segments: Some(final_segments),
-        summary: None,
-        history_item,
-    })
+        TranscriptSnapshotReason::Polish,
+        |app, req, mut callback| async move {
+            let llm_request = PolishSegmentsRequest {
+                task_id: req.task_id,
+                config: req.config,
+                segments: segment_inputs_from_transcript(&req.segments),
+                chunk_size: req.chunk_size,
+                context: req.context,
+                keywords: req.keywords,
+            };
+            commands::polish_transcript_segments_with_observer(app, llm_request, move |items| {
+                callback(items)
+            })
+            .await
+        },
+        merge_polished_items_into_segments,
+    )
+    .await
 }
 
 async fn run_summary_job(
