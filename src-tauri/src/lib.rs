@@ -27,6 +27,13 @@ pub fn run_app() -> Result<(), tauri::Error> {
     let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 
+    // Enable browser reload, devtools, and right-click context menu in debug builds;
+    // block them in production builds for a native desktop application experience.
+    #[cfg(debug_assertions)]
+    let prevent_default = tauri_plugin_prevent_default::debug();
+    #[cfg(not(debug_assertions))]
+    let prevent_default = tauri_plugin_prevent_default::Builder::new().build();
+
     #[cfg(debug_assertions)]
     {
         tauri_specta::Builder::<tauri::Wry>::new()
@@ -122,6 +129,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(prevent_default)
         .invoke_handler(crate::commands::get_handlers())
         .run(tauri::generate_context!())
 }
