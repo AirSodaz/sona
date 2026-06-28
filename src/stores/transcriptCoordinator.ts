@@ -53,3 +53,15 @@ export const applyTranscriptUpdate = (...args: Parameters<TranscriptStore['apply
 export const upsertTranscriptSegmentAndSetActive = (...args: Parameters<TranscriptStore['upsertTranscriptSegmentAndSetActive']>) => {
   return useTranscriptStore.getState().upsertTranscriptSegmentAndSetActive(...args);
 };
+
+export const applyTranscriptUpdateToSession = (
+  ...args: Parameters<TranscriptStore['applyTranscriptUpdateToSession']>
+) => {
+  return useTranscriptStore.getState().applyTranscriptUpdateToSession(...args);
+};
+
+export const setRecordingSessionId = (
+  ...args: Parameters<TranscriptStore['setRecordingSessionId']>
+) => {
+  return useTranscriptStore.getState().setRecordingSessionId(...args);
+};

@@ -350,6 +350,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         isInitializing,
         isTransitioning,
         recordingElapsedMs,
-        peakLevelRef
+        peakLevelRef,
+        setRecordSessionId: session.setRecordSessionId,
     };
 }

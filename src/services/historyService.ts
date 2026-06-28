@@ -109,8 +109,9 @@ export class HistoryService {
         audioExtension: string,
         projectId: string | null = null,
         icon: string | null = 'system:mic',
+        id?: string,
     ): Promise<LiveRecordingDraftHandle> {
-        const result = await this.ports.historyCreateLiveDraft(audioExtension, projectId, icon);
+        const result = await this.ports.historyCreateLiveDraft(id ?? null, audioExtension, projectId, icon);
 
         return {
             item: normalizeHistoryItem(result?.item),
@@ -192,6 +193,7 @@ export class HistoryService {
         duration: number = 0,
         convertedFilePath?: string,
         projectId: string | null = null,
+        id?: string,
     ): Promise<HistoryItem | null> {
         logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
 
@@ -206,6 +208,7 @@ export class HistoryService {
             duration,
             projectId,
             convertedSourcePath: convertedFilePath,
+            id: id ?? null,
         });
 
         return normalizeHistoryItem(item);

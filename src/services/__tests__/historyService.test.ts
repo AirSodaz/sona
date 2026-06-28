@@ -46,6 +46,7 @@ describe('historyService', () => {
     const result = await historyService.createLiveRecordingDraft('.webm', 'project-1', 'system:mic');
 
     expect(testContext.invokeMock).toHaveBeenCalledWith('history_create_live_draft', {
+      id: null,
       audioExtension: '.webm',
       projectId: 'project-1',
       icon: 'system:mic',
@@ -154,6 +155,7 @@ describe('historyService', () => {
       duration: 5,
       projectId: 'project-1',
       convertedSourcePath: 'C:\\Temp\\meeting.wav',
+      id: null,
     });
   });
 

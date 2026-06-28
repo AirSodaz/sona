@@ -234,6 +234,8 @@
         "edit_tooltip": "编辑分段",
         "merge_tooltip": "合并至下一段",
         "delete_tooltip": "删除分段",
+        "locked_not_final": "请先完成转录以启用编辑",
+        "locked_merge_not_final": "需要两个连续完成的分段才能合并",
         "seek_label": "跳转至 {{time}}",
         "edit_label": "编辑 {{time}} 处的分段",
         "merge_label": "合并 {{time}} 处的分段至下一段",

@@ -138,7 +138,7 @@ export function TranscriptEditor(): React.JSX.Element {
                 segment={segment}
                 index={index}
                 showSpeakerLabel={Boolean(segment.speaker) && !areSpeakerTagsEqual(previousSegment?.speaker, segment.speaker)}
-                canMergeWithNext={!nextSegment || areSpeakerTagsEqual(segment.speaker, nextSegment.speaker)}
+                canMergeWithNext={segment.isFinal && (!nextSegment || (nextSegment.isFinal && areSpeakerTagsEqual(segment.speaker, nextSegment.speaker)))}
                 onSeek={context.onSeek}
                 onEdit={context.onEdit}
                 onSave={context.onSave}

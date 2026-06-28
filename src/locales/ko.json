@@ -234,6 +234,8 @@
         "edit_tooltip": "세그먼트 편집",
         "merge_tooltip": "다음 세그먼트와 합치기",
         "delete_tooltip": "세그먼트 삭제",
+        "locked_not_final": "편집을 사용하려면 먼저 마무리하세요",
+        "locked_merge_not_final": "병합하려면 연속된 두 개의 완료된 세그먼트가 필요합니다",
         "seek_label": "{{time}}로 이동",
         "edit_label": "{{time}}의 세그먼트 편집",
         "merge_label": "{{time}}의 세그먼트를 다음 세그먼트와 합치기",

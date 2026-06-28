@@ -90,7 +90,8 @@
 .toolbar-btn:disabled,
 .settings-tab-btn:disabled,
 .accordion-header-btn:disabled,
-.dropdown-trigger:disabled {
+.dropdown-trigger:disabled,
+.speaker-badge-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none !important;

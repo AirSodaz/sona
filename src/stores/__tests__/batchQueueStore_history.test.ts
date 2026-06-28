@@ -174,6 +174,7 @@ describe('batchQueueStore History Integration', () => {
             2, // Duration from last segment
             '/tmp/test-uuid-123.wav',
             null,
+            'test-uuid-123',
         );
 
         // Assert Item Status
@@ -231,6 +232,7 @@ describe('batchQueueStore History Integration', () => {
             2,
             undefined,
             null,
+            'test-uuid-123',
         );
         expect(useBatchQueueStore.getState().queueItems[0]).toEqual(expect.objectContaining({
             historyId: 'history-1',

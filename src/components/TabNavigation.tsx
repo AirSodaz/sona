@@ -4,6 +4,8 @@ import { AppMode } from '../types/transcript';
 import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
 
 import { MicIcon, FolderIcon, BookIcon } from './Icons';
 
@@ -36,6 +38,21 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
             return;
         }
         setMode(newMode);
+
+        if (newMode === 'live') {
+            const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+            useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
+        }
+
+        if (newMode === 'batch') {
+            const activeItemId = useBatchQueueStore.getState().activeItemId;
+            if (activeItemId) {
+                const sessions = useTranscriptStore.getState().sessions;
+                if (sessions[activeItemId]) {
+                    useTranscriptStore.setState({ activeSessionId: activeItemId });
+                }
+            }
+        }
     }, [mode, setMode]);
 
     useEffect(() => {

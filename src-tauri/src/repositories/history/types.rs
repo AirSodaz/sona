@@ -158,6 +158,7 @@ pub struct LiveRecordingDraftResult {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HistoryCreateLiveDraftRequest {
+    pub id: Option<String>,
     pub audio_extension: String,
     pub project_id: Option<String>,
     pub icon: Option<String>,
@@ -175,6 +176,7 @@ pub struct HistorySaveRecordingRequest {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HistorySaveImportedFileRequest {
+    pub id: Option<String>,
     pub source_path: String,
     pub segments: Value,
     pub duration: f64,

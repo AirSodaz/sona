@@ -173,7 +173,15 @@ export function resetLiveRecordHistoryMocks(
       audioExtension: string,
       projectId?: string | null,
       icon?: string | null,
-    ) => drafts.createNext(audioExtension, projectId, icon),
+      id?: string,
+    ) => {
+      if (id) {
+        const draft = createLiveRecordingDraftHandle(id, audioExtension, { projectId, icon: icon ?? 'system:mic' });
+        drafts.handles.set(id, draft);
+        return draft;
+      }
+      return drafts.createNext(audioExtension, projectId, icon);
+    },
   );
   mocks.mockCompleteLiveRecordingDraft.mockImplementation(
     async (historyId: string, segments: SegmentLike[], duration: number) =>
@@ -193,7 +201,8 @@ export function createLiveRecordHistoryServiceMockModule(
         audioExtension: string,
         projectId?: string | null,
         icon?: string | null,
-      ) => mocks.mockCreateLiveRecordingDraft(audioExtension, projectId, icon),
+        id?: string,
+      ) => mocks.mockCreateLiveRecordingDraft(audioExtension, projectId, icon, id),
       completeLiveRecordingDraft: (
         historyId: string,
         segments: SegmentLike[],
@@ -210,6 +219,10 @@ export function createLiveRecordHistoryServiceMockModule(
       saveTranscriptFile: vi.fn(),
       getAll: vi.fn().mockResolvedValue([]),
       init: vi.fn(),
+      loadSummary: vi.fn().mockResolvedValue(null),
+      deleteSummary: vi.fn().mockResolvedValue(undefined),
+      saveSummary: vi.fn().mockResolvedValue(undefined),
+      loadAllSummaries: vi.fn().mockResolvedValue([]),
     },
   };
 }

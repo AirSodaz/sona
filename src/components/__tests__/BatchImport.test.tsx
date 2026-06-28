@@ -209,6 +209,7 @@ describe('BatchImport Integration', () => {
             1,
             expect.stringMatching(/^\/tmp\/.+\.wav$/),
             null,
+            expect.any(String),
         );
         expect(historyService.updateTranscript).toHaveBeenCalledWith(
             'mock-history-id',

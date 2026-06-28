@@ -27,9 +27,9 @@ import {
   clearActiveTranscriptSession,
   openTranscriptSession,
   setTranscriptSegments,
-  syncSavedRecordingMeta,
 } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
+import { useTranscriptStore } from './transcriptStore';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import {
@@ -274,7 +274,23 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 });
 
                 if (get().activeItemId === id) {
-                    syncSavedRecordingMeta(savedMeta.title, savedMeta.historyId, savedMeta.icon, savedMeta.audioUrl ?? null);
+                    const transcriptStore = useTranscriptStore.getState();
+                    const session = transcriptStore.sessions[id];
+                    if (session) {
+                        useTranscriptStore.setState({
+                            sessions: {
+                                ...transcriptStore.sessions,
+                                [id]: {
+                                    ...session,
+                                    sourceHistoryId: savedMeta.historyId,
+                                    title: savedMeta.title,
+                                    icon: savedMeta.icon ?? null,
+                                    audioUrl: savedMeta.audioUrl !== undefined ? savedMeta.audioUrl : session.audioUrl,
+                                }
+                            }
+                        });
+                        transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
+                    }
                     void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
                 }
             },
@@ -310,13 +326,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         const state = get();
         const item = state.queueItems.find((queueItem) => queueItem.id === id);
-        if (item) {
-            openTranscriptSession({
-                segments: item.segments,
-                sourceHistoryId: item.historyId || null,
-                title: item.historyTitle || item.filename,
-                audioUrl: item.audioUrl || null,
-            });
+        if (id !== null && item) {
+            const existingSession = useTranscriptStore.getState().sessions[id];
+            if (existingSession && existingSession.segments.length > 0) {
+                // Session already has data from updateItemSegments, just activate it
+                useTranscriptStore.setState({ activeSessionId: id });
+            } else {
+                openTranscriptSession({
+                    segments: item.segments,
+                    sourceHistoryId: id,
+                    title: item.historyTitle || item.filename,
+                    audioUrl: item.audioUrl || null,
+                });
+            }
             void useProjectStore.getState().setActiveProjectId(item.projectId);
         } else if (id === null) {
             clearActiveTranscriptSession({ clearAudio: true, title: '' });
@@ -367,6 +389,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             };
         });
         scheduleRecoverySnapshotSync(nextQueueItems);
+
+        // Write to dedicated session in transcript store
+        useTranscriptStore.getState().setSegmentsForSession(id, segments);
 
         const state = get();
         if (state.activeItemId === id) {

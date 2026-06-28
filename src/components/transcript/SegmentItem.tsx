@@ -80,6 +80,8 @@ function SegmentItemComponent({
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
 
+    const isLocked = !segment.isFinal;
+
     // Search matches
     // Optimize: Select only what we need to avoid re-renders on every store change
     const matches = useSearchStore(useShallow(state =>
@@ -131,7 +133,7 @@ function SegmentItemComponent({
     }
 
     function handleTextDoubleClick(e: React.MouseEvent): void {
-        if (!isEditing) {
+        if (!isEditing && !isLocked) {
             e.stopPropagation();
             onEdit(segment.id);
         }
@@ -240,6 +242,8 @@ function SegmentItemComponent({
                     defaultValue: `Change speaker ${segment.speaker.label}`,
                 })}
                 onClick={handleSpeakerBadgeClick}
+                disabled={isLocked}
+                data-tooltip={isLocked ? t('editor.locked_not_final') : undefined}
             >
                 {segment.speaker.label}
             </button>
@@ -411,7 +415,8 @@ function SegmentItemComponent({
                             e.stopPropagation();
                             onEdit(segment.id);
                         }}
-                        data-tooltip={t('editor.edit_tooltip')}
+                        disabled={isLocked}
+                        data-tooltip={isLocked ? t('editor.locked_not_final') : t('editor.edit_tooltip')}
                         aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
                     >
                         <EditIcon />
@@ -423,8 +428,8 @@ function SegmentItemComponent({
                                 e.stopPropagation();
                                 onMergeWithNext(segment.id);
                             }}
-                            disabled={!canMergeWithNext}
-                            data-tooltip={t('editor.merge_tooltip')}
+                            disabled={isLocked || !canMergeWithNext}
+                            data-tooltip={isLocked ? t('editor.locked_not_final') : (!canMergeWithNext ? t('editor.locked_merge_not_final') : t('editor.merge_tooltip'))}
                             aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
                         >
                             <MergeIcon />
@@ -436,7 +441,8 @@ function SegmentItemComponent({
                             e.stopPropagation();
                             onDelete(segment.id);
                         }}
-                        data-tooltip={t('editor.delete_tooltip')}
+                        disabled={isLocked}
+                        data-tooltip={isLocked ? t('editor.locked_not_final') : t('editor.delete_tooltip')}
                         aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
                     >
                         <TrashIcon />

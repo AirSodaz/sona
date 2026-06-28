@@ -1,12 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { v4 as uuidv4 } from 'uuid';
 import { useConfigStore } from '../stores/configStore';
 import {
-    applyTranscriptUpdate,
+    applyTranscriptUpdateToSession,
+    openTranscriptSession,
+    setRecordingSessionId,
     updateTranscriptSegment,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { polishService } from '../services/polishService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { RecordingTimer } from './RecordingTimer';
@@ -97,7 +100,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             return;
         }
 
-        applyTranscriptUpdate(update, latestSegment?.id ?? null);
+        if (meta.sessionId) {
+            applyTranscriptUpdateToSession(meta.sessionId, update, latestSegment?.id ?? null);
+        }
 
         // Auto-Polish Logic
         const config = useConfigStore.getState().config;
@@ -105,7 +110,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         const frequency = config.autoPolishFrequency ?? 5;
 
         if (autoPolish && frequency > 0) {
-            const allSegments = useTranscriptSessionStore.getState().segments;
+            const session = meta.sessionId ? useTranscriptStore.getState().sessions[meta.sessionId] : null;
+            const allSegments = session?.segments || [];
             const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
 
             if (unpolished.length >= frequency) {
@@ -132,7 +138,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         isInitializing,
         isTransitioning,
         recordingElapsedMs,
-        peakLevelRef
+        peakLevelRef,
+        setRecordSessionId,
     } = useAudioRecorder({
         inputSource,
         onSegment
@@ -149,14 +156,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (isRecording) {
             await stopRecording();
             stopVisualizer();
+            setRecordingSessionId(null);
         } else {
+            const historyId = uuidv4();
+            openTranscriptSession({
+                segments: [],
+                sourceHistoryId: historyId,
+                title: '',
+            });
+            setRecordSessionId(historyId);
+            setRecordingSessionId(historyId);
+
             polishedIdsRef.current.clear();
             const success = await startRecording();
             if (success) {
                 startVisualizer();
             }
         }
-    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer]);
+    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer, setRecordSessionId]);
 
     const handleTogglePause = useCallback(async () => {
         if (isPaused) {

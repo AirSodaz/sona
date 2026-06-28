@@ -91,11 +91,12 @@ export function createRecordingPersistence({
         await writeFile(filePath, contents);
     }
 
-    async function createLiveRecordingDraft(audioExtension: string): Promise<LiveRecordingDraftHandle> {
+    async function createLiveRecordingDraft(audioExtension: string, id?: string): Promise<LiveRecordingDraftHandle> {
         const draft = await history.createLiveRecordingDraft(
             audioExtension,
             getActiveProjectId(),
             'system:mic',
+            id,
         );
         await persistSavedItem(draft.item, 'add');
         return draft;

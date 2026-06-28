@@ -401,6 +401,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.history.createLiveDraft]: {
     args: {
+      id?: string | null;
       audioExtension: string;
       projectId: string | null;
       icon: string | null;
@@ -433,6 +434,7 @@ export type TauriCommandContractMap = {
       duration: number;
       projectId: string | null;
       convertedSourcePath?: string;
+      id?: string | null;
     };
     result: Partial<HistoryItem>;
   };

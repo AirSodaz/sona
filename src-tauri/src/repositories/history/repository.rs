@@ -339,6 +339,7 @@ impl HistoryRepository {
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
         let HistorySaveImportedFileRequest {
+            id,
             source_path,
             segments,
             duration,
@@ -346,8 +347,13 @@ impl HistoryRepository {
             converted_source_path,
         } = request;
         let normalized_transcript = normalize_history_transcript_segments(segments)?;
-        let imported =
-            create_imported_file_item(source_path, converted_source_path, duration, project_id)?;
+        let imported = create_imported_file_item(
+            id,
+            source_path,
+            converted_source_path,
+            duration,
+            project_id,
+        )?;
         let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
@@ -931,6 +937,7 @@ mod tests {
 
         let draft = repository
             .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
                 audio_extension: "webm".to_string(),
                 project_id: Some("project-1".to_string()),
                 icon: Some("system:mic".to_string()),
@@ -978,6 +985,7 @@ mod tests {
 
         let draft = repository
             .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
                 audio_extension: "wav".to_string(),
                 project_id: None,
                 icon: Some("system:mic".to_string()),
@@ -1017,6 +1025,7 @@ mod tests {
 
         let draft = repository
             .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
                 audio_extension: "wav".to_string(),
                 project_id: None,
                 icon: Some("system:mic".to_string()),
@@ -1037,6 +1046,7 @@ mod tests {
 
         let draft = repository
             .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
                 audio_extension: "wav".to_string(),
                 project_id: None,
                 icon: Some("system:mic".to_string()),
@@ -1123,6 +1133,7 @@ mod tests {
 
         let imported = repository
             .save_imported_file(HistorySaveImportedFileRequest {
+                id: None,
                 source_path: source_path.to_string_lossy().into_owned(),
                 segments: json!([segment_value("seg-1", "Imported text", 0.0, 1.0)]),
                 duration: 2.0,
@@ -1151,6 +1162,7 @@ mod tests {
 
         let imported = repository
             .save_imported_file(HistorySaveImportedFileRequest {
+                id: None,
                 source_path: original_path.to_string_lossy().into_owned(),
                 segments: json!([segment_value("seg-1", "Converted text", 0.0, 1.0)]),
                 duration: 1.0,

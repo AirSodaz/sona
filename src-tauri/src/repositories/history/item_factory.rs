@@ -17,7 +17,7 @@ pub(super) fn current_time_millis() -> Result<u64, String> {
 pub(super) fn create_live_draft_item(
     request: HistoryCreateLiveDraftRequest,
 ) -> Result<HistoryItemRecord, String> {
-    let id = Uuid::new_v4().to_string();
+    let id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let timestamp = current_time_millis()?;
     let audio_extension = sanitize_audio_extension(&request.audio_extension, "webm");
     let mut item = build_history_item_record(
@@ -66,13 +66,14 @@ pub(super) struct ImportedFileItem {
 }
 
 pub(super) fn create_imported_file_item(
+    id: Option<String>,
     source_path: String,
     converted_source_path: Option<String>,
     duration: f64,
     project_id: Option<String>,
 ) -> Result<ImportedFileItem, String> {
     let timestamp = current_time_millis()?;
-    let id = Uuid::new_v4().to_string();
+    let id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let title_file_name = file_name_from_path(&source_path, "Imported File");
     let copy_source_path = converted_source_path.unwrap_or_else(|| source_path.clone());
     let audio_extension = extension_from_path(&copy_source_path, "wav");

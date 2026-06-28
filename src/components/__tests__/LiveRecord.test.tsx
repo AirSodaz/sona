@@ -355,8 +355,8 @@ describe('LiveRecord', () => {
         expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         expect(useTranscriptStore.getState().isRecording).toBe(true);
-        expect(useTranscriptStore.getState().sourceHistoryId).toBe('draft-1');
-        expect(mockCreateLiveRecordingDraft).toHaveBeenCalledWith('wav', null, 'system:mic');
+        expect(useTranscriptStore.getState().sourceHistoryId).toEqual(expect.any(String));
+        expect(mockCreateLiveRecordingDraft).toHaveBeenCalledWith('wav', null, 'system:mic', expect.any(String));
     });
 
     it('pauses native recording by flushing the current final segment and blocks later partials until resume', async () => {
@@ -577,15 +577,24 @@ describe('LiveRecord', () => {
             }
             return undefined;
         });
+        let webHistoryId = '';
         mockCreateLiveRecordingDraft
-            .mockResolvedValueOnce(createDraftHandle('native-fallback-draft', 'wav'))
-            .mockResolvedValueOnce(createDraftHandle('web-history-id', 'webm'));
-        mockCompleteLiveRecordingDraft.mockResolvedValueOnce(createCompletedHistoryItem('web-history-id', 'webm', {
-            id: 'web-history-id',
-            title: 'Recording 2026-04-27 09-00-00',
-            icon: 'system:mic',
-            projectId: null,
-        }));
+            .mockImplementationOnce((_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) =>
+                Promise.resolve(createDraftHandle(id || 'native-fallback-draft', 'wav'))
+            )
+            .mockImplementationOnce((_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) => {
+                webHistoryId = id || 'web-history-id';
+                return Promise.resolve(createDraftHandle(webHistoryId, 'webm'));
+            });
+        mockCompleteLiveRecordingDraft.mockImplementationOnce(
+            (historyId: string) =>
+                Promise.resolve(createCompletedHistoryItem(historyId, 'webm', {
+                    id: historyId,
+                    title: 'Recording 2026-04-27 09-00-00',
+                    icon: 'system:mic',
+                    projectId: null,
+                }))
+        );
 
         render(<LiveRecord />);
 
@@ -607,11 +616,11 @@ describe('LiveRecord', () => {
         });
 
         expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
-            'web-history-id',
+            webHistoryId,
             expect.any(Array),
             expect.any(Number),
         );
-        expect(useTranscriptStore.getState().sourceHistoryId).toBe('web-history-id');
+        expect(useTranscriptStore.getState().sourceHistoryId).toEqual(expect.any(String));
         expect(useTranscriptStore.getState().title).toBe('Recording 2026-04-27 09-00-00');
         expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
 
 const taskLedgerContext = vi.hoisted(() => ({
     upsertTaskLedgerRecord: vi.fn(),
@@ -412,5 +413,39 @@ describe('batchQueueStore', () => {
 
         useBatchQueueStore.getState().clearQueue();
         expect(useBatchQueueStore.getState().queueItems).toHaveLength(0);
+    });
+
+    it('writes segments to dedicated session when item is not active', () => {
+        // Manually set up two items with distinct IDs (uuid mock always returns the same value)
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: 'item-1', filename: 'file1.mp3', filePath: '/file1.mp3', status: 'pending', progress: 0, segments: [], audioUrl: null, projectId: null },
+                { id: 'item-2', filename: 'file2.mp3', filePath: '/file2.mp3', status: 'pending', progress: 0, segments: [], audioUrl: null, projectId: null },
+            ],
+            activeItemId: 'item-1',
+        });
+
+        // Simulate: open session for the active item
+        useRealTranscriptStore.getState().openSession({
+            segments: [],
+            sourceHistoryId: 'item-1',
+            title: 'file1.mp3',
+        });
+
+        // Switch to the other item
+        useBatchQueueStore.getState().setActiveItem('item-2');
+
+        // Now updateItemSegments for item-1 while item-2 is active
+        const mockSegments = [
+            { id: 'seg1', text: 'Hello', start: 0, end: 1, isFinal: true },
+            { id: 'seg2', text: 'World', start: 1, end: 2, isFinal: true },
+        ];
+
+        useBatchQueueStore.getState().updateItemSegments('item-1', mockSegments);
+
+        // The item's session should have segments regardless of active status
+        const session = useRealTranscriptStore.getState().sessions['item-1'];
+        expect(session).toBeDefined();
+        expect(session.segments).toEqual(mockSegments);
     });
 });

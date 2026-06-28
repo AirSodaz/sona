@@ -70,6 +70,8 @@ export function createRecordSessionController({
     getIsRecording,
     softStopRecordRuntime,
 }: CreateRecordSessionControllerArgs) {
+    let pendingExternalSessionId: string | null = null;
+
     function getSessionId(): string | null {
         return refs.recordSessionIdRef.current;
     }
@@ -94,10 +96,15 @@ export function createRecordSessionController({
         return refs.recordSessionIdRef.current === sessionId || refs.recordSessionIdRef.current === null;
     }
 
+    function setRecordSessionId(id: string): void {
+        pendingExternalSessionId = id;
+        refs.recordSessionIdRef.current = id;
+    }
+
     function openRecordSession(): string {
-        // Opening a session clears UI/runtime state up front so any stale async
-        // callback can be rejected by session id before it mutates the new run.
-        const sessionId = createRecordSessionId();
+        const presetId = pendingExternalSessionId;
+        pendingExternalSessionId = null;
+        const sessionId = presetId || createRecordSessionId();
         refs.recordSessionIdRef.current = sessionId;
         refs.recordSessionPhaseRef.current = 'starting';
         refs.peakLevelRef.current = 0;
@@ -105,7 +112,9 @@ export function createRecordSessionController({
         resetLiveTimingState();
         setIsRecording(false);
         setIsPaused(false);
-        clearSegments();
+        if (!presetId) {
+            clearSegments();
+        }
         logger.info(`[useAudioRecorder] Record session opened. session=${sessionId} input=${getInputSource()}`);
         return sessionId;
     }
@@ -195,5 +204,6 @@ export function createRecordSessionController({
         getPhase,
         setPhase,
         isActiveSession,
+        setRecordSessionId,
     };
 }

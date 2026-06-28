@@ -76,6 +76,7 @@ export interface RecordingHistorySaver {
         audioExtension: string,
         projectId?: string | null,
         icon?: string | null,
+        id?: string,
     ) => Promise<LiveRecordingDraftHandle>;
     completeLiveRecordingDraft: (
         historyId: string,

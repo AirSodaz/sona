@@ -421,7 +421,7 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('history wrappers forward item creation intents without caller-built items', async () => {
-    await historyCreateLiveDraft('webm', 'project-1', 'system:mic');
+    await historyCreateLiveDraft(null, 'webm', 'project-1', 'system:mic');
     await historySaveRecording({
       segments: [],
       duration: 3,
@@ -438,6 +438,7 @@ describe('tauri boundary wrappers', () => {
     });
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.createLiveDraft, {
+      id: null,
       audioExtension: 'webm',
       projectId: 'project-1',
       icon: 'system:mic',

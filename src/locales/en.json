@@ -234,6 +234,8 @@
         "edit_tooltip": "Edit segment",
         "merge_tooltip": "Merge with next",
         "delete_tooltip": "Delete segment",
+        "locked_not_final": "Finalize to enable editing",
+        "locked_merge_not_final": "Need two consecutive finalized segments to merge",
         "seek_label": "Seek to {{time}}",
         "edit_label": "Edit segment at {{time}}",
         "merge_label": "Merge segment at {{time}} with next",

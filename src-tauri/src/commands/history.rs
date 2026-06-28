@@ -205,11 +205,13 @@ pub async fn history_query_workspace<R: Runtime>(
 pub async fn history_create_live_draft<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
+    id: Option<String>,
     audio_extension: String,
     project_id: Option<String>,
     icon: Option<String>,
 ) -> Result<LiveRecordingDraftResult, String> {
     let request = HistoryCreateLiveDraftRequest {
+        id,
         audio_extension,
         project_id,
         icon,
@@ -261,9 +263,11 @@ pub async fn history_save_recording<R: Runtime>(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn history_save_imported_file<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
+    id: Option<String>,
     source_path: String,
     segments: Value,
     duration: f64,
@@ -271,6 +275,7 @@ pub async fn history_save_imported_file<R: Runtime>(
     converted_source_path: Option<String>,
 ) -> Result<HistoryItemRecord, String> {
     let request = HistorySaveImportedFileRequest {
+        id,
         source_path,
         segments,
         duration,

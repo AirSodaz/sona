@@ -56,11 +56,13 @@ export async function historyListItems(): Promise<Partial<HistoryItem>[]> {
 }
 
 export async function historyCreateLiveDraft(
+  id: string | null,
   audioExtension: string,
   projectId: string | null,
   icon: string | null,
 ): Promise<HistoryDraftHandle> {
   return invokeTauri(TauriCommand.history.createLiveDraft, {
+    id,
     audioExtension,
     projectId,
     icon,

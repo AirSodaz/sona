@@ -47,6 +47,7 @@ export const DEFAULT_SESSION_DATA: SessionData = {
 export interface TranscriptStore {
   // --- Core State ---
   activeSessionId: string;
+  recordingSessionId: string | null;
   sessions: Record<string, SessionData>;
 
   // --- Runtime (Global) ---
@@ -64,6 +65,7 @@ export interface TranscriptStore {
 
   // --- Actions ---
   // Coordinator / Session Pointers
+  setRecordingSessionId: (id: string | null) => void;
   openSession: (args: string | { segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null, audioUrl?: string | null }) => void;
   loadTranscriptSession: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => void;
   clearActiveTranscriptSession: (options?: { clearAudio?: boolean, title?: string | null }) => void;
@@ -84,6 +86,7 @@ export interface TranscriptStore {
   setTitle: (title: string | null) => void;
   setIcon: (icon: string | null) => void;
   setSegments: (segments: TranscriptSegment[]) => void;
+  setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => void;
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
@@ -92,6 +95,7 @@ export interface TranscriptStore {
   splitTranscriptSegment: (id: string, leftText: string, rightText: string) => string | null;
   finalizeLastSegment: () => void;
   applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
+  applyTranscriptUpdateToSession: (sessionId: string, update: TranscriptUpdate, activeSegmentId?: string | null) => void;
   upsertTranscriptSegmentAndSetActive: (segment: TranscriptSegment) => void;
   setEditingSegmentId: (id: string | null) => void;
   addAligningSegmentId: (id: string) => void;
@@ -173,6 +177,7 @@ function calculateSegmentUpdate(segments: TranscriptSegment[], segment: Transcri
 
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   activeSessionId: 'default',
+  recordingSessionId: null,
   sessions: { 'default': { ...DEFAULT_SESSION_DATA } },
 
   mode: 'live',
@@ -195,6 +200,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIsPaused: (isPaused) => set({ isPaused }),
 
   // --- Coordinator / Pointers ---
+  setRecordingSessionId: (id) => set({ recordingSessionId: id }),
   openSession: (args) => {
     if (typeof args === 'string') {
         get().setAudioUrl(args);
@@ -239,22 +245,21 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   clearTranscriptSegments: () => get().clearActiveTranscriptSession(),
   syncSavedRecordingMeta: (title, historyId, icon, audioUrl) => {
     const state = get();
-    const activeId = state.activeSessionId;
-    const session = state.sessions[activeId];
+    const session = state.sessions[historyId];
     if (!session) return;
 
-    // re-key the session in the dictionary
-    const newSessions = { ...state.sessions };
-    delete newSessions[activeId];
-    newSessions[historyId] = {
-      ...session,
-      sourceHistoryId: historyId,
-      title,
-      icon: icon || null,
-      audioUrl: audioUrl !== undefined ? audioUrl : session.audioUrl,
-    };
-
-    set({ activeSessionId: historyId, sessions: newSessions });
+    set({
+      sessions: {
+        ...state.sessions,
+        [historyId]: {
+          ...session,
+          sourceHistoryId: historyId,
+          title,
+          icon: icon || null,
+          audioUrl: audioUrl !== undefined ? audioUrl : session.audioUrl,
+        }
+      }
+    });
     get().rekeyCurrentSummaryState(historyId);
   },
 
@@ -265,6 +270,17 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setSegments: (segments) => updateActiveSession(set, () => ({
     segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start)
   })),
+  setSegmentsForSession: (sessionId, segments) => {
+    set((state: TranscriptStore) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: {
+          ...(state.sessions[sessionId] || DEFAULT_SESSION_DATA),
+          segments,
+        }
+      }
+    }));
+  },
   addSegment: (segment) => {
     const id = uuidv4();
     const newSegment = normalizeTranscriptSegment({ ...segment, id });
@@ -367,6 +383,45 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         else nextActiveIndex = activeIndex;
       }
       return { segments: nextSegments, activeSegmentId: nextActiveId, activeSegmentIndex: nextActiveIndex };
+    });
+  },
+  applyTranscriptUpdateToSession: (sessionId, update, activeSegmentIdParam) => {
+    set((state: TranscriptStore) => {
+      const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
+      const normalizedUpdate = normalizeTranscriptUpdate(update);
+      const removeIds = new Set(normalizedUpdate.removeIds);
+      let nextSegments = removeIds.size > 0
+        ? session.segments.filter(s => !removeIds.has(s.id))
+        : [...session.segments];
+
+      normalizedUpdate.upsertSegments.forEach(seg => {
+        const existingIndex = nextSegments.findIndex(c => c.id === seg.id);
+        if (existingIndex !== -1) nextSegments[existingIndex] = seg;
+        else nextSegments = [...nextSegments, seg].sort((a, b) => a.start - b.start);
+      });
+
+      let nextActiveId = session.activeSegmentId;
+      let nextActiveIndex = -1;
+      if (activeSegmentIdParam !== undefined) {
+        nextActiveId = activeSegmentIdParam;
+        nextActiveIndex = nextActiveId ? nextSegments.findIndex(s => s.id === nextActiveId) : -1;
+      } else if (nextActiveId && removeIds.has(nextActiveId)) {
+        const activeIndex = nextSegments.findIndex(s => s.id === nextActiveId);
+        if (activeIndex === -1) nextActiveId = null;
+        else nextActiveIndex = activeIndex;
+      }
+
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            segments: nextSegments,
+            activeSegmentId: nextActiveId,
+            activeSegmentIndex: nextActiveIndex,
+          }
+        }
+      };
     });
   },
   upsertTranscriptSegmentAndSetActive: (segment) => updateActiveSession(set, (session) => {

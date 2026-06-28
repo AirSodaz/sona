@@ -1,4 +1,4 @@
-import { finalizeLastTranscriptSegment } from '../../stores/transcriptCoordinator';
+import { finalizeLastTranscriptSegment, setRecordingSessionId } from '../../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { transcriptionService } from '../../services/transcriptionService';
 import type { AppConfig } from '../../types/config';
@@ -71,7 +71,7 @@ interface RecordControllerTiming {
 }
 
 interface RecordControllerPersistence {
-    createLiveRecordingDraft: (audioExtension: string) => Promise<LiveRecordingDraftHandle>;
+    createLiveRecordingDraft: (audioExtension: string, id?: string) => Promise<LiveRecordingDraftHandle>;
     discardLiveRecordingDraft: (draft: LiveRecordingDraftHandle) => Promise<void>;
     persistNativeRecording: (
         draft: LiveRecordingDraftHandle,
@@ -123,6 +123,7 @@ export function createRecordController({
 }: CreateRecordControllerArgs) {
     async function startRecording(): Promise<boolean> {
         const sessionId = session.openRecordSession();
+        setRecordingSessionId(sessionId);
         setAudioUrl(null);
         setAudioFile(null);
         setIsInitializing(true);
@@ -133,7 +134,7 @@ export function createRecordController({
             liveDraftRef.current = null;
 
             const createLiveDraft = async (audioExtension: string) => {
-                const draft = await persistence.createLiveRecordingDraft(audioExtension);
+                const draft = await persistence.createLiveRecordingDraft(audioExtension, session.getSessionId() ?? undefined);
                 liveDraftRef.current = draft;
                 return draft;
             };
@@ -205,6 +206,7 @@ export function createRecordController({
                 }
             }
             session.resetRecordSession(sessionId, 'start_failed', true);
+            setRecordingSessionId(null);
 
             if (session.canMutateActiveRecordResources(sessionId)) {
                 const isTranscriptionError = isTranscriptionStartupError(error);
@@ -291,6 +293,7 @@ export function createRecordController({
                 `[useAudioRecorder] Recording session stopped without transcript. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`,
             );
             session.resetRecordSession(sessionId, 'stop_completed');
+            setRecordingSessionId(null);
             return;
         }
 
@@ -313,6 +316,7 @@ export function createRecordController({
             `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`,
         );
         session.resetRecordSession(sessionId, 'stop_completed');
+        setRecordingSessionId(null);
     }
 
     async function pauseRecording(): Promise<void> {

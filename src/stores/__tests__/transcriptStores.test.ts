@@ -79,14 +79,14 @@ describe('Transcript Stores', () => {
 
     openTranscriptSession({
       segments: [{ id: 'seg-1', text: 'Hello', start: 0, end: 1, isFinal: true }],
-      sourceHistoryId: null,
+      sourceHistoryId: 'history-1',
       title: 'Draft',
       icon: 'system:mic',
       audioUrl: 'asset:///draft.wav',
     });
 
     expect(useTranscriptSessionStore.getState()).toEqual(expect.objectContaining({
-      sourceHistoryId: null,
+      sourceHistoryId: 'history-1',
       title: 'Draft',
       icon: 'system:mic',
     }));

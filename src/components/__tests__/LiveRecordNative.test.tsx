@@ -547,19 +547,28 @@ describe('LiveRecord Native Capture', () => {
 
         expect(mockCompleteLiveRecordingDraft).toHaveBeenCalled();
         const callArgs = mockCompleteLiveRecordingDraft.mock.calls[0];
-        expect(callArgs[0]).toBe('draft-1');
+        expect(callArgs[0]).toEqual(expect.any(String));
         expect(callArgs[1]).toHaveLength(1);
     });
 
     it('syncs the saved history title into the editor after native recording is persisted', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-        mockCreateLiveRecordingDraft.mockResolvedValueOnce(createDraftHandle('native-history-id', 'wav'));
-        mockCompleteLiveRecordingDraft.mockResolvedValueOnce(createCompletedHistoryItem('native-history-id', 'wav', {
-            id: 'native-history-id',
-            title: 'Recording 2026-04-27 09-30-00',
-            icon: 'system:mic',
-            projectId: null,
-        }));
+        let nativeHistoryId = '';
+        mockCreateLiveRecordingDraft.mockImplementationOnce(
+            (_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) => {
+                nativeHistoryId = id || 'native-history-id';
+                return Promise.resolve(createDraftHandle(nativeHistoryId, 'wav'));
+            }
+        );
+        mockCompleteLiveRecordingDraft.mockImplementationOnce(
+            (historyId: string) =>
+                Promise.resolve(createCompletedHistoryItem(historyId, 'wav', {
+                    id: historyId,
+                    title: 'Recording 2026-04-27 09-30-00',
+                    icon: 'system:mic',
+                    projectId: null,
+                }))
+        );
 
         render(<LiveRecord />);
 
@@ -581,11 +590,11 @@ describe('LiveRecord Native Capture', () => {
         });
 
         expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
-            'native-history-id',
+            nativeHistoryId,
             expect.any(Array),
             expect.any(Number),
         );
-        expect(useTranscriptStore.getState().sourceHistoryId).toBe('native-history-id');
+        expect(useTranscriptStore.getState().sourceHistoryId).toEqual(expect.any(String));
         expect(useTranscriptStore.getState().title).toBe('Recording 2026-04-27 09-30-00');
         expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });

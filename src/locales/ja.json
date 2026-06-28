@@ -234,6 +234,8 @@
         "edit_tooltip": "セグメントの編集",
         "merge_tooltip": "次と結合",
         "delete_tooltip": "セグメントの削除",
+        "locked_not_final": "確定後に編集が有効になります",
+        "locked_merge_not_final": "結合には連続する2つの確定セグメントが必要です",
         "seek_label": "{{time}} を参照してください",
         "edit_label": "{{time}} のセグメントを編集します",
         "merge_label": "{{time}} のセグメントを次のセグメントとマージします",
