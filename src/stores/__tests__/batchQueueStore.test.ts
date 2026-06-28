@@ -446,6 +446,40 @@ describe('batchQueueStore', () => {
         // The item's session should have segments regardless of active status
         const session = useRealTranscriptStore.getState().sessions['item-1'];
         expect(session).toBeDefined();
-        expect(session.segments).toEqual(mockSegments);
+        expect(session.segments).toEqual(
+            mockSegments.map(s => expect.objectContaining(s))
+        );
+    });
+
+    it('activates correct transcript session when switching between processed items', () => {
+        const seg1 = { id: 'seg-1', text: 'First item', start: 0, end: 1, isFinal: true };
+        const seg2 = { id: 'seg-2', text: 'Second item', start: 0, end: 1, isFinal: true };
+
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: 'item-1', filename: 'file1.mp3', filePath: '/file1.mp3', status: 'complete', progress: 100, segments: [seg1], audioUrl: null, projectId: null },
+                { id: 'item-2', filename: 'file2.mp3', filePath: '/file2.mp3', status: 'complete', progress: 100, segments: [seg2], audioUrl: null, projectId: null },
+            ],
+            activeItemId: null,
+        });
+
+        // Simulate processing: updateItemSegments writes to dedicated sessions
+        useBatchQueueStore.getState().updateItemSegments('item-1', [seg1]);
+        useBatchQueueStore.getState().updateItemSegments('item-2', [seg2]);
+
+        // Click item 1
+        useBatchQueueStore.getState().setActiveItem('item-1');
+        expect(useTranscriptStore.getState().activeSessionId).toBe('item-1');
+        expect(useTranscriptStore.getState().segments).toEqual([expect.objectContaining(seg1)]);
+
+        // Click item 2
+        useBatchQueueStore.getState().setActiveItem('item-2');
+        expect(useTranscriptStore.getState().activeSessionId).toBe('item-2');
+        expect(useTranscriptStore.getState().segments).toEqual([expect.objectContaining(seg2)]);
+
+        // Click back to item 1
+        useBatchQueueStore.getState().setActiveItem('item-1');
+        expect(useTranscriptStore.getState().activeSessionId).toBe('item-1');
+        expect(useTranscriptStore.getState().segments).toEqual([expect.objectContaining(seg1)]);
     });
 });

@@ -276,7 +276,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         ...state.sessions,
         [sessionId]: {
           ...(state.sessions[sessionId] || DEFAULT_SESSION_DATA),
-          segments,
+          segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
         }
       }
     }));

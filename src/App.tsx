@@ -16,6 +16,7 @@ import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
 import { useOnboardingStore } from './stores/onboardingStore';
+import { useBatchQueueStore } from './stores/batchQueueStore';
 import { AutomationIcon, SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -211,8 +212,12 @@ function App(): React.JSX.Element {
   }, [reopenOnboarding]);
 
   const closeTranscriptSession = useCallback(() => {
-    clearActiveTranscriptSession({ clearAudio: true });
-  }, []);
+    if (mode === 'batch') {
+      useBatchQueueStore.getState().setActiveItem(null);
+    } else {
+      clearActiveTranscriptSession({ clearAudio: true });
+    }
+  }, [mode]);
 
   if (!isLoaded) {
     return <></>; // Wait for config and onboarding state to load

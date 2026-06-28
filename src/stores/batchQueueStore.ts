@@ -29,7 +29,7 @@ import {
   setTranscriptSegments,
 } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
-import { useTranscriptStore } from './transcriptStore';
+import { useTranscriptStore, DEFAULT_SESSION_DATA } from './transcriptStore';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import {
@@ -273,24 +273,23 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     title: historyItem.title,
                 });
 
-                if (get().activeItemId === id) {
-                    const transcriptStore = useTranscriptStore.getState();
-                    const session = transcriptStore.sessions[id];
-                    if (session) {
-                        useTranscriptStore.setState({
-                            sessions: {
-                                ...transcriptStore.sessions,
-                                [id]: {
-                                    ...session,
-                                    sourceHistoryId: savedMeta.historyId,
-                                    title: savedMeta.title,
-                                    icon: savedMeta.icon ?? null,
-                                    audioUrl: savedMeta.audioUrl !== undefined ? savedMeta.audioUrl : session.audioUrl,
-                                }
-                            }
-                        });
-                        transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
+                const transcriptStore = useTranscriptStore.getState();
+                const session = transcriptStore.sessions[id] || DEFAULT_SESSION_DATA;
+                useTranscriptStore.setState({
+                    sessions: {
+                        ...transcriptStore.sessions,
+                        [id]: {
+                            ...session,
+                            sourceHistoryId: savedMeta.historyId,
+                            title: savedMeta.title,
+                            icon: savedMeta.icon ?? null,
+                            audioUrl: savedMeta.audioUrl !== undefined ? savedMeta.audioUrl : session.audioUrl,
+                        }
                     }
+                });
+                if (get().activeItemId === id) {
+                    transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
+                    transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
                     void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
                 }
             },
@@ -312,7 +311,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         // Flush current session segments back to the previous queue item
         const prevActiveId = get().activeItemId;
         if (prevActiveId !== null && prevActiveId !== id) {
-            const sessionSegments = useTranscriptSessionStore.getState().segments;
+            const sessionSegments = useTranscriptSessionStore.getState().segments.length > 0
+                ? useTranscriptSessionStore.getState().segments
+                : (useTranscriptStore.getState().sessions[prevActiveId]?.segments || []);
             set((s) => ({
                 queueItems: s.queueItems.map((item) =>
                     item.id === prevActiveId
@@ -330,7 +331,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             const existingSession = useTranscriptStore.getState().sessions[id];
             if (existingSession && existingSession.segments.length > 0) {
                 // Session already has data from updateItemSegments, just activate it
-                useTranscriptStore.setState({ activeSessionId: id });
+                useTranscriptStore.setState({
+                    activeSessionId: id,
+                    sessions: {
+                        ...useTranscriptStore.getState().sessions,
+                        [id]: {
+                            ...existingSession,
+                            sourceHistoryId: item.historyId || existingSession.sourceHistoryId,
+                            title: item.historyTitle || existingSession.title,
+                            audioUrl: item.audioUrl || existingSession.audioUrl,
+                        }
+                    }
+                });
+                useTranscriptStore.getState().setAudioUrl(item.audioUrl || existingSession.audioUrl);
             } else {
                 openTranscriptSession({
                     segments: item.segments,
@@ -395,7 +408,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         const state = get();
         if (state.activeItemId === id) {
-            setTranscriptSegments(segments);
+            if (useTranscriptStore.getState().activeSessionId === id) {
+                setTranscriptSegments(segments);
+            }
         }
     },
 
