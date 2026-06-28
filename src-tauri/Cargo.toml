@@ -1,6 +1,6 @@
 [package]
 name = "sona"
-version = "0.7.4"
+version = "0.7.5"
 description = "Sona - A privacy-first, offline transcript editor"
 authors = ["AirSodaz"]
 edition = "2024"
