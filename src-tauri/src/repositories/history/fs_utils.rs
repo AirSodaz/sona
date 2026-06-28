@@ -2,11 +2,12 @@ use bzip2::read::BzDecoder;
 use bzip2::write::BzEncoder;
 use serde_json::Value;
 use std::fs::{self, File};
-use std::io::{BufReader, BufWriter, ErrorKind};
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+pub(crate) use crate::repositories::storage::remove_path_if_exists;
 pub(crate) use crate::repositories::storage::write_binary_atomic;
 pub(crate) use crate::repositories::storage::write_json_pretty_atomic;
 
@@ -53,17 +54,6 @@ pub(crate) fn ensure_json_object_value(value: Value, label: &str) -> Result<Valu
 pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&content).map_err(|error| error.to_string())
-}
-
-pub(crate) fn remove_path_if_exists(path: &Path) -> Result<(), String> {
-    match fs::metadata(path) {
-        Ok(metadata) if metadata.is_dir() => {
-            fs::remove_dir_all(path).map_err(|error| error.to_string())
-        }
-        Ok(_) => fs::remove_file(path).map_err(|error| error.to_string()),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.to_string()),
-    }
 }
 
 pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {

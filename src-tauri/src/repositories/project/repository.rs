@@ -1,5 +1,5 @@
 use crate::core::paths::{PathKind, PathProvider};
-use serde::Serialize;
+use crate::repositories::storage::write_json_pretty_atomic;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -335,34 +335,6 @@ pub(crate) fn read_settings(app_data_dir: &Path) -> Result<Map<String, Value>, S
 pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&content).map_err(|error| error.to_string())
-}
-
-pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
-    path: &Path,
-    value: &T,
-) -> Result<(), String> {
-    let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
-    write_binary_atomic(path, &serialized)
-}
-
-pub(crate) fn write_binary_atomic(path: &Path, contents: &[u8]) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or("json");
-    let temp_path = path.with_extension(format!("{extension}.tmp-{}", Uuid::new_v4()));
-    fs::write(&temp_path, contents).map_err(|error| error.to_string())?;
-    match fs::rename(&temp_path, path) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = fs::remove_file(&temp_path);
-            Err(error.to_string())
-        }
-    }
 }
 
 pub(crate) fn current_time_millis() -> Result<u64, String> {

@@ -68,7 +68,7 @@ fn replace_path_atomically(temp_path: &Path, final_path: &Path) -> Result<(), St
     }
 }
 
-fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+pub(crate) fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     match fs::metadata(path) {
         Ok(metadata) if metadata.is_dir() => {
             fs::remove_dir_all(path).map_err(|error| error.to_string())
