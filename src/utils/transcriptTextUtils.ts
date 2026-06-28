@@ -26,16 +26,25 @@ const SAFE_TAGS = new Set(['strong', 'em', 'u', 'b', 'i', 'span', 'p', 'br']);
  * except `class` (needed for Lexical theme classes).
  */
 export function sanitizeTranscriptHtml(text: string): string {
-  return text.replace(/<[^>]*>/g, (tag) => {
+  // Regex matches HTML tags, handling double-quoted, single-quoted attributes, and unclosed tags.
+  // Allowing < inside to match the original parser's cross-tag behavior for literal <.
+  const TAG_REGEX = /<(?:"[^"]*"|'[^']*'|[^'">])*(?:>|$)/g;
+
+  return text.replace(TAG_REGEX, (tag) => {
     const tagNameMatch = tag.match(/^<\/?([a-zA-Z0-9]+)/);
     if (!tagNameMatch) {
       return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
     const tagName = tagNameMatch[1].toLowerCase();
-    if (!SAFE_TAGS.has(tagName)) return '';
+    if (!SAFE_TAGS.has(tagName)) {
+      return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
     if (tag.startsWith('</')) return `</${tagName}>`;
-    const classMatch = tag.match(/\bclass\s*=\s*"([^"]*)"/);
-    const cls = classMatch ? ` class="${classMatch[1]}"` : '';
+
+    // Match double, single, or unquoted class values
+    const classMatch = tag.match(/\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/);
+    const clsVal = classMatch ? (classMatch[1] || classMatch[2] || classMatch[3]) : '';
+    const cls = classMatch ? ` class="${clsVal}"` : '';
     return `<${tagName}${cls}>`;
   });
 }

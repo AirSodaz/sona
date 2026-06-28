@@ -53,8 +53,10 @@ describe('transcriptTextUtils', () => {
     ]);
   });
 
-  it('sanitizes HTML by removing unsafe tags, but preserves text between them', () => {
-    expect(sanitizeTranscriptHtml('<script>alert(1)</script>Hello')).toBe('alert(1)Hello');
+  it('sanitizes HTML by escaping unsafe tags, preserving text between them', () => {
+    expect(sanitizeTranscriptHtml('<script>alert(1)</script>Hello')).toBe(
+      '&lt;script&gt;alert(1)&lt;/script&gt;Hello'
+    );
   });
 
   it('sanitizes HTML by removing unsafe attributes', () => {
@@ -81,9 +83,9 @@ describe('transcriptTextUtils', () => {
     );
   });
 
-  it('removes <img> tags', () => {
+  it('escapes unsafe <img> tags', () => {
     expect(sanitizeTranscriptHtml('text <img src=x onerror="alert(1)"> more')).toBe(
-      'text  more',
+      'text &lt;img src=x onerror="alert(1)"&gt; more'
     );
   });
 
@@ -104,6 +106,33 @@ describe('transcriptTextUtils', () => {
   it('escapes literal < followed by non-tag content', () => {
     expect(sanitizeTranscriptHtml('2 < 3 and < something > else')).toBe(
       '2 &lt; 3 and &lt; something &gt; else',
+    );
+  });
+
+  it('escapes unclosed unsafe tags', () => {
+    expect(sanitizeTranscriptHtml('<script src="evil.js"')).toBe(
+      '&lt;script src="evil.js"'
+    );
+    expect(sanitizeTranscriptHtml('<img src=x onerror="alert(1)"')).toBe(
+      '&lt;img src=x onerror="alert(1)"'
+    );
+  });
+
+  it('handles attributes containing > correctly', () => {
+    expect(sanitizeTranscriptHtml('<strong class="bold" title="a > b">Bold</strong>')).toBe(
+      '<strong class="bold">Bold</strong>'
+    );
+    expect(sanitizeTranscriptHtml('<img src="x" onerror="if(1>2)alert(1)">')).toBe(
+      '&lt;img src="x" onerror="if(1&gt;2)alert(1)"&gt;'
+    );
+  });
+
+  it('handles class attributes with single and no quotes', () => {
+    expect(sanitizeTranscriptHtml("<strong class='editor-bold'>Bold</strong>")).toBe(
+      '<strong class="editor-bold">Bold</strong>'
+    );
+    expect(sanitizeTranscriptHtml('<strong class=editor-bold>Bold</strong>')).toBe(
+      '<strong class="editor-bold">Bold</strong>'
     );
   });
 
