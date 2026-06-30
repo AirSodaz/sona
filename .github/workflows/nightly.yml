@@ -1,0 +1,358 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Build even if there are no new commits since the last nightly"
+        type: boolean
+        default: false
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: true
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      last_sha: ${{ steps.check.outputs.last_sha }}
+    steps:
+      - name: Compare HEAD with last nightly tag
+        id: check
+        run: |
+          LAST_NIGHTLY_SHA=$(git ls-remote "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" refs/tags/nightly | cut -f1)
+          echo "last_sha=$LAST_NIGHTLY_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Forced build requested via workflow_dispatch."
+            exit 0
+          fi
+
+          echo "HEAD: ${{ github.sha }}"
+          echo "Last nightly tag: ${LAST_NIGHTLY_SHA:-<none>}"
+
+          if [ -n "$LAST_NIGHTLY_SHA" ] && [ "$LAST_NIGHTLY_SHA" = "${{ github.sha }}" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits on master since the last nightly build. Skipping."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  prepare:
+    needs: check-commits
+    if: needs.check-commits.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_date: ${{ steps.version.outputs.build_date }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Compute nightly version
+        id: version
+        run: |
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          VERSION="${BASE_VERSION}-${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "Computed nightly version: $VERSION"
+
+  build-tauri:
+    needs: prepare
+    permissions:
+      contents: read
+    env:
+      SHERPA_ONNX_VERSION: 1.13.2
+      SHERPA_ONNX_TAG: v1.13.2
+      NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target universal-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+          - platform: "windows-latest"
+            args: "--target aarch64-pc-windows-msvc"
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64-pc-windows-msvc') && 'aarch64-pc-windows-msvc' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '')) }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Node.js setup
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Patch nightly version & identifiers
+        run: node scripts/patch-channel.js --channel nightly --version "${{ env.NIGHTLY_VERSION }}"
+
+      - name: Download and extract sherpa-onnx static libraries (Linux)
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib/lib" >> $GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib/lib" >> $GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (Windows x64)
+        if: startsWith(matrix.platform, 'windows') && matrix.args == ''
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          tar -xjf sherpa-onnx-win.tar.bz2
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib\lib"
+          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+
+      - name: Download and extract sherpa-onnx static libraries (Windows ARM64)
+        if: startsWith(matrix.platform, 'windows') && matrix.args == '--target aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          tar -xjf sherpa-onnx-win.tar.bz2
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib\lib"
+          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+
+      - name: Configure RUSTFLAGS
+        if: startsWith(matrix.platform, 'ubuntu') || startsWith(matrix.platform, 'macos')
+        run: |
+          echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
+
+      - name: Build the app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/tauri.js build ${{ matrix.args }}
+
+      - name: Rename macOS assets for architecture
+        if: matrix.platform == 'macos-latest'
+        run: |
+          if [[ "${{ matrix.args }}" == *"--target aarch64-apple-darwin"* ]]; then
+            ARCH="aarch64"
+          elif [[ "${{ matrix.args }}" == *"--target x86_64-apple-darwin"* ]]; then
+            ARCH="x64"
+          elif [[ "${{ matrix.args }}" == *"--target universal-apple-darwin"* ]]; then
+            ARCH="universal"
+          else
+            ARCH="unknown"
+          fi
+
+          echo "Detected architecture: $ARCH"
+          cd src-tauri/target/*/release/bundle/macos/
+
+          for f in *.app.tar.gz; do
+            [ -f "$f" ] || continue
+            base="${f%.app.tar.gz}"
+            mv "$f" "${base}_${ARCH}.app.tar.gz"
+            if [ -f "${f}.sig" ]; then
+              mv "${f}.sig" "${base}_${ARCH}.app.tar.gz.sig"
+            fi
+          done
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-assets-${{ matrix.platform }}-${{ strategy.job-index }}
+          path: |
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/rpm/*.rpm
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz.sig
+            src-tauri/target/**/release/bundle/dmg/*.sig
+            src-tauri/target/**/release/bundle/deb/*.sig
+            src-tauri/target/**/release/bundle/appimage/*.sig
+            src-tauri/target/**/release/bundle/msi/*.sig
+            src-tauri/target/**/release/bundle/nsis/*.sig
+            src-tauri/target/**/release/bundle/rpm/*.sig
+          if-no-files-found: warn
+
+  publish-nightly:
+    needs: [check-commits, prepare, build-tauri]
+    if: needs.build-tauri.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: all-artifacts
+          pattern: "nightly-assets-*"
+          merge-multiple: true
+
+      - name: Generate changelog since last nightly
+        id: changelog
+        env:
+          LAST_SHA: ${{ needs.check-commits.outputs.last_sha }}
+        run: |
+          if [ -n "$LAST_SHA" ] && git cat-file -e "$LAST_SHA" 2>/dev/null; then
+            git log --oneline "${LAST_SHA}..${{ github.sha }}" > changelog.txt || true
+          else
+            echo "(first nightly build, or previous nightly commit no longer reachable)" > changelog.txt
+          fi
+          {
+            echo "changelog<<EOF"
+            cat changelog.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Move nightly tag to current commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly "${{ github.sha }}"
+          git push origin nightly --force
+
+      - name: Build updater.json from signatures
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/nightly"
+
+          read_sig() {
+            local pattern="$1"
+            local sig_file
+            sig_file=$(find all-artifacts -name "$pattern" -type f 2>/dev/null | head -1)
+            if [ -n "$sig_file" ] && [ -f "$sig_file" ]; then
+              cat "$sig_file"
+            else
+              echo ""
+            fi
+          }
+
+          find_filename() {
+            local pattern="$1"
+            local file
+            file=$(find all-artifacts -name "$pattern" -type f 2>/dev/null | head -1)
+            if [ -n "$file" ]; then
+                basename "$file"
+            else
+                echo ""
+            fi
+          }
+
+          MACOS_AARCH64_SIG=$(read_sig "*_aarch64.app.tar.gz.sig")
+          MACOS_X64_SIG=$(read_sig "*_x64.app.tar.gz.sig")
+          WINDOWS_NSIS_SIG=$(read_sig "*_x64-setup.exe.sig")
+          WINDOWS_ARM64_NSIS_SIG=$(read_sig "*_arm64-setup.exe.sig")
+          LINUX_AMD64_SIG=$(read_sig "*_amd64.AppImage.sig")
+
+          MACOS_AARCH64_FILE=$(find_filename "*_aarch64.app.tar.gz")
+          MACOS_X64_FILE=$(find_filename "*_x64.app.tar.gz")
+          WINDOWS_NSIS_FILE=$(find_filename "*_x64-setup.exe")
+          WINDOWS_ARM64_NSIS_FILE=$(find_filename "*_arm64-setup.exe")
+          LINUX_AMD64_FILE=$(find_filename "*_amd64.AppImage")
+
+          if [ -z "$MACOS_AARCH64_SIG" ] || [ -z "$MACOS_AARCH64_FILE" ] || \
+             [ -z "$MACOS_X64_SIG" ] || [ -z "$MACOS_X64_FILE" ] || \
+             [ -z "$WINDOWS_NSIS_SIG" ] || [ -z "$WINDOWS_NSIS_FILE" ] || \
+             [ -z "$WINDOWS_ARM64_NSIS_SIG" ] || [ -z "$WINDOWS_ARM64_NSIS_FILE" ] || \
+             [ -z "$LINUX_AMD64_SIG" ] || [ -z "$LINUX_AMD64_FILE" ]; then
+            echo "Error: Missing platform assets or signatures required for updater.json!"
+            exit 1
+          fi
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "Nightly build from commit ${{ github.sha }}" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg dl "$DOWNLOAD_BASE" \
+            --arg mac_a64_sig "$MACOS_AARCH64_SIG" \
+            --arg mac_x64_sig "$MACOS_X64_SIG" \
+            --arg win_nsis_sig "$WINDOWS_NSIS_SIG" \
+            --arg win_arm64_nsis_sig "$WINDOWS_ARM64_NSIS_SIG" \
+            --arg linux_amd64_sig "$LINUX_AMD64_SIG" \
+            --arg mac_a64_file "$MACOS_AARCH64_FILE" \
+            --arg mac_x64_file "$MACOS_X64_FILE" \
+            --arg win_nsis_file "$WINDOWS_NSIS_FILE" \
+            --arg win_arm64_nsis_file "$WINDOWS_ARM64_NSIS_FILE" \
+            --arg linux_amd64_file "$LINUX_AMD64_FILE" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": { url: "\($dl)/\($mac_a64_file)", signature: $mac_a64_sig },
+                "darwin-x86_64": { url: "\($dl)/\($mac_x64_file)", signature: $mac_x64_sig },
+                "windows-x86_64": { url: "\($dl)/\($win_nsis_file)", signature: $win_nsis_sig },
+                "windows-aarch64": { url: "\($dl)/\($win_arm64_nsis_file)", signature: $win_arm64_nsis_sig },
+                "linux-x86_64": { url: "\($dl)/\($linux_amd64_file)", signature: $linux_amd64_sig }
+              }
+            }' > updater.json
+
+          echo "Generated updater.json:"
+          cat updater.json
+
+      - name: Create or update nightly release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          commit: ${{ github.sha }}
+          name: "Nightly ${{ needs.prepare.outputs.build_date }} (${{ needs.prepare.outputs.version }})"
+          body: |
+            Automated nightly build from commit `${{ github.sha }}`, built ${{ needs.prepare.outputs.build_date }} UTC.
+
+            This is an unstable, unsigned-for-trust-only-by-you build for testing.
+            Use the [stable releases](https://github.com/AirSodaz/sona/releases/latest) for everyday use.
+
+            **Changes since last nightly:**
+            ```
+            ${{ steps.changelog.outputs.changelog }}
+            ```
+          prerelease: true
+          makeLatest: false
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "all-artifacts/**/*,updater.json"
