@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   check-commits:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
@@ -46,6 +48,8 @@ jobs:
   prepare:
     needs: check-commits
     if: needs.check-commits.outputs.should_build == 'true'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -244,12 +248,19 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Move nightly tag to current commit
+      - name: Move nightly tag via API
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f nightly "${{ github.sha }}"
-          git push origin nightly --force
+          if gh api "repos/${{ github.repository }}/git/refs/tags/nightly" --jq '.object.sha' &>/dev/null; then
+            gh api --method PATCH "repos/${{ github.repository }}/git/refs/tags/nightly" \
+              -f sha="${{ github.sha }}" \
+              -F force=true
+          else
+            gh api --method POST "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/nightly" \
+              -f sha="${{ github.sha }}"
+          fi
 
       - name: Build updater.json from signatures
         env:
