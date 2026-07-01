@@ -280,7 +280,7 @@ mod tests {
             conn.execute_batch(
                 "CREATE VIRTUAL TABLE test_fts USING fts5(content, tokenize='trigram');
                  INSERT INTO test_fts(content) VALUES ('中华人民共和国');
-                 INSERT INTO test_fts(content) VALUES ('Hello World');"
+                 INSERT INTO test_fts(content) VALUES ('Hello World');",
             )?;
             let mut stmt = conn.prepare("SELECT content FROM test_fts WHERE test_fts MATCH ?1")?;
             {
@@ -292,7 +292,8 @@ mod tests {
                 assert!(rows2.next()?.is_some());
             }
             Ok(())
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     #[test]
