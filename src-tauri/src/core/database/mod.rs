@@ -44,6 +44,8 @@ impl Database {
         let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
         conn.execute_batch("PRAGMA journal_mode=WAL;")
             .map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA busy_timeout=5000;")
+            .map_err(|e| e.to_string())?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")
             .map_err(|e| e.to_string())?;
 

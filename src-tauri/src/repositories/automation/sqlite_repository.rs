@@ -53,7 +53,7 @@ impl SqliteAutomationRepository {
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let val: Value = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 Ok(val)
             })?;
             let mut items = Vec::new();
@@ -68,7 +68,7 @@ impl SqliteAutomationRepository {
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let val: Value = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 Ok(val)
             })?;
             let mut items = Vec::new();

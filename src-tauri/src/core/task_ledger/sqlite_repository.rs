@@ -54,7 +54,7 @@ impl SqliteLedgerRepository {
                 let data_str: String = row.get(0)?;
                 let _version: i64 = row.get(1)?;
                 let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 // Auto-assign timestamps if missing
                 if record.created_at == 0 {
                     record.created_at = Self::now_ms();

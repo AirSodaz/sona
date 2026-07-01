@@ -41,7 +41,7 @@ impl SqliteConfigStore {
             if let Some(row) = rows.next()? {
                 let config_str: String = row.get(0)?;
                 let config: Value = serde_json::from_str(&config_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 Ok(Some(config))
             } else {
                 Ok(None)

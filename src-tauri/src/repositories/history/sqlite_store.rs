@@ -244,64 +244,79 @@ impl HistoryStore for SqliteHistoryStore {
     }
 
     fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
-        let mut items = self.list_items()?;
-        let mut changed = false;
-
-        for item in &mut items {
-            if item.status != HistoryItemStatus::Draft
-                || item.draft_source != Some(HistoryDraftSource::LiveRecord)
-            {
-                continue;
-            }
-
-            let Some(audio_path) =
-                optional_history_child_path(&self.history_dir(), &item.audio_path)
-            else {
-                continue;
-            };
-            let _audio_metadata = match fs::metadata(&audio_path) {
-                Ok(metadata) if metadata.is_file() && metadata.len() > 0 => metadata,
-                _ => continue,
-            };
-
-            let segments_val: Option<Value> = self.get_db().with_connection(|conn| {
-                let mut stmt =
-                    conn.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1")?;
-                let mut rows = stmt.query([&item.id])?;
-                if let Some(row) = rows.next()? {
-                    let segments_str: String = row.get(0)?;
-                    let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
-                    Ok(Some(val))
-                } else {
-                    Ok(None)
+        self.get_db().with_transaction(|tx| {
+            let mut items = {
+                let mut stmt = tx.prepare(
+                    "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                     FROM history_items
+                     ORDER BY timestamp DESC"
+                )?;
+                let rows = stmt.query_map([], map_row_to_item)?;
+                let mut items = Vec::new();
+                for row in rows {
+                    items.push(row?);
                 }
-            })?;
-
-            let Some(segments_val) = segments_val else {
-                continue;
+                items
             };
+            let mut changed = false;
 
-            let normalized_transcript = match normalize_history_transcript_segments(segments_val) {
-                Ok(transcript) if !transcript.segments.is_empty() => transcript,
-                _ => continue,
-            };
+            for item in &mut items {
+                if item.status != HistoryItemStatus::Draft
+                    || item.draft_source != Some(HistoryDraftSource::LiveRecord)
+                {
+                    continue;
+                }
 
-            item.preview_text = normalized_transcript.preview_text.clone();
-            item.search_content = normalized_transcript.search_content.clone();
-            let transcript_duration = normalized_transcript
-                .segments
-                .iter()
-                .filter_map(|segment| segment.end.is_finite().then_some(segment.end))
-                .fold(0.0, f64::max);
-            item.duration = item.duration.max(transcript_duration).max(0.0);
-            item.status = HistoryItemStatus::Complete;
-            item.draft_source = None;
+                let Some(audio_path) =
+                    optional_history_child_path(&self.history_dir(), &item.audio_path)
+                else {
+                    continue;
+                };
+                let _audio_metadata = match fs::metadata(&audio_path) {
+                    Ok(metadata) if metadata.is_file() && metadata.len() > 0 => metadata,
+                    _ => continue,
+                };
 
-            let segments_str = serde_json::to_string(&normalized_transcript.segments)
-                .map_err(|e| e.to_string())?;
+                let segments_val: Option<Value> = {
+                    let mut stmt =
+                        tx.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1")?;
+                    let mut rows = stmt.query([&item.id])?;
+                    let result: Result<Option<Value>, rusqlite::Error> = (|| {
+                        if let Some(row) = rows.next()? {
+                            let segments_str: String = row.get(0)?;
+                            let val: Value = serde_json::from_str(&segments_str)
+                                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                            Ok(Some(val))
+                        } else {
+                            Ok(None)
+                        }
+                    })();
+                    result
+                }?;
 
-            self.get_db().with_transaction(|tx| {
+                let Some(segments_val) = segments_val else {
+                    continue;
+                };
+
+                let normalized_transcript = match normalize_history_transcript_segments(segments_val) {
+                    Ok(transcript) if !transcript.segments.is_empty() => transcript,
+                    _ => continue,
+                };
+
+                item.preview_text = normalized_transcript.preview_text.clone();
+                item.search_content = normalized_transcript.search_content.clone();
+                let transcript_duration = normalized_transcript
+                    .segments
+                    .iter()
+                    .filter_map(|segment| segment.end.is_finite().then_some(segment.end))
+                    .fold(0.0, f64::max);
+                item.duration = item.duration.max(transcript_duration).max(0.0);
+                item.status = HistoryItemStatus::Complete;
+                item.draft_source = None;
+
+                let segments_str = serde_json::to_string(&normalized_transcript.segments)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
                 tx.execute(
                     "UPDATE history_items SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL WHERE id = ?4",
                     rusqlite::params![
@@ -315,17 +330,26 @@ impl HistoryStore for SqliteHistoryStore {
                     "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
                     rusqlite::params![item.id, segments_str]
                 )?;
-                Ok(())
-            })?;
 
-            changed = true;
-        }
+                changed = true;
+            }
 
-        if changed {
-            return self.list_items();
-        }
+            if changed {
+                let mut stmt = tx.prepare(
+                    "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                     FROM history_items
+                     ORDER BY timestamp DESC"
+                )?;
+                let rows = stmt.query_map([], map_row_to_item)?;
+                let mut items = Vec::new();
+                for row in rows {
+                    items.push(row?);
+                }
+                return Ok(items);
+            }
 
-        Ok(items)
+            Ok(items)
+        })
     }
 
     fn query_workspace(
@@ -578,9 +602,9 @@ impl HistoryStore for SqliteHistoryStore {
             if let Some(row) = rows.next()? {
                 let segments_str: String = row.get(0)?;
                 let parsed_val: Value = serde_json::from_str(&segments_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(rusqlite::Error::InvalidParameterName)?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
                 Ok(Some(normalized.segments))
             } else {
                 let exists: bool = conn.query_row(
@@ -591,8 +615,8 @@ impl HistoryStore for SqliteHistoryStore {
                 if exists {
                     Ok(None)
                 } else {
-                    Err(rusqlite::Error::InvalidParameterName(
-                        format!("History item not found: {history_id}")
+                    Err(rusqlite::Error::ToSqlConversionFailure(
+                        Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("History item not found: {history_id}")))
                     ))
                 }
             }
@@ -688,8 +712,8 @@ impl HistoryStore for SqliteHistoryStore {
                 |row| row.get(0),
             )?;
             if !exists {
-                return Err(rusqlite::Error::InvalidParameterName(
-                    format!("History item not found: {history_id}")
+                return Err(rusqlite::Error::ToSqlConversionFailure(
+                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("History item not found: {history_id}")))
                 ));
             }
 
@@ -797,10 +821,15 @@ impl HistoryStore for SqliteHistoryStore {
                 };
 
                 let parsed_val: Value = serde_json::from_str(&segments_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
-                let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(rusqlite::Error::InvalidParameterName)?;
+                let normalized =
+                    normalize_history_transcript_segments(parsed_val).map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            e,
+                        )))
+                    })?;
 
                 let metadata = TranscriptSnapshotMetadata {
                     id: snapshot_id.to_string(),
@@ -919,7 +948,7 @@ impl HistoryStore for SqliteHistoryStore {
             if let Some(row) = rows.next()? {
                 let payload_str: String = row.get(0)?;
                 let val: Value = serde_json::from_str(&payload_str)
-                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 Ok(Some(val))
             } else {
                 Ok(None)
@@ -1023,7 +1052,7 @@ impl HistoryStore for SqliteHistoryStore {
                 if let Some(row) = rows.next()? {
                     let segments_str: String = row.get(0)?;
                     let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                     Ok(Some(val))
                 } else {
                     Ok(None)
