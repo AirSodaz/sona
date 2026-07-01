@@ -2,7 +2,7 @@ pub mod legacy_migration;
 pub mod schema;
 
 use rusqlite::{Connection, Transaction};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
 static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
@@ -15,10 +15,12 @@ static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 /// tracking.
 pub struct Database {
     conn: Mutex<Connection>,
-    #[allow(dead_code)]
-    path: Option<PathBuf>,
-    #[allow(dead_code)]
-    analytics_path: Option<PathBuf>,
+}
+
+impl std::fmt::Debug for Database {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Database").finish()
+    }
 }
 
 impl Database {
@@ -57,8 +59,6 @@ impl Database {
 
         let db = Self {
             conn: Mutex::new(conn),
-            path: Some(db_path),
-            analytics_path: Some(analytics_path),
         };
 
         schema::run_migrations(&db)?;
@@ -77,8 +77,6 @@ impl Database {
 
         let db = Self {
             conn: Mutex::new(conn),
-            path: None,
-            analytics_path: None,
         };
 
         schema::run_migrations(&db)?;
@@ -107,6 +105,25 @@ impl Database {
         let result = f(&tx).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(result)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DbProvider {
+    db: Option<std::sync::Arc<Database>>,
+}
+
+impl DbProvider {
+    pub fn new(db: Option<std::sync::Arc<Database>>) -> Self {
+        Self { db }
+    }
+
+    pub fn get(&self) -> &Database {
+        if let Some(ref db) = self.db {
+            db
+        } else {
+            Database::global()
+        }
     }
 }
 
@@ -286,5 +303,30 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests_provider {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_db_provider_fallback() {
+        let provider = DbProvider::default();
+        // This should panic since Database::global() is not initialized in this unit test context
+        let result = std::panic::catch_unwind(|| {
+            provider.get();
+        });
+        assert!(result.is_err());
+
+        let local_db = Database::open_in_memory().unwrap();
+        let provider_with_db = DbProvider::new(Some(Arc::new(local_db)));
+        assert!(
+            std::panic::catch_unwind(|| {
+                provider_with_db.get();
+            })
+            .is_ok()
+        );
     }
 }

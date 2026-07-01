@@ -1,3 +1,7 @@
+use super::fs_utils::{
+    ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
+};
+use super::transcript_payload::normalize_history_transcript_segments;
 use crate::core::database::Database;
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
@@ -11,24 +15,18 @@ use crate::repositories::history::{
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
-
-use super::fs_utils::{
-    ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
-};
-use super::transcript_payload::normalize_history_transcript_segments;
 
 #[derive(Clone)]
 pub struct SqliteHistoryStore {
     app_local_data_dir: PathBuf,
-    db: Option<Arc<Database>>,
+    db: crate::core::database::DbProvider,
 }
 
 impl SqliteHistoryStore {
     pub fn new(app_local_data_dir: PathBuf) -> Self {
         Self {
             app_local_data_dir,
-            db: None,
+            db: crate::core::database::DbProvider::default(),
         }
     }
 
@@ -36,16 +34,12 @@ impl SqliteHistoryStore {
     pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
         Self {
             app_local_data_dir,
-            db: Some(Arc::new(db)),
+            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
         }
     }
 
     fn get_db(&self) -> &Database {
-        if let Some(ref db) = self.db {
-            db
-        } else {
-            Database::global()
-        }
+        self.db.get()
     }
 
     fn history_dir(&self) -> PathBuf {

@@ -1,7 +1,6 @@
 use crate::core::database::Database;
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
 
@@ -9,14 +8,14 @@ use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, Proj
 pub struct SqliteProjectRepository {
     #[allow(dead_code)]
     app_local_data_dir: PathBuf,
-    db: Option<Arc<Database>>,
+    db: crate::core::database::DbProvider,
 }
 
 impl SqliteProjectRepository {
     pub fn new(app_local_data_dir: PathBuf) -> Self {
         Self {
             app_local_data_dir,
-            db: None,
+            db: crate::core::database::DbProvider::default(),
         }
     }
 
@@ -24,16 +23,12 @@ impl SqliteProjectRepository {
     pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
         Self {
             app_local_data_dir,
-            db: Some(Arc::new(db)),
+            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
         }
     }
 
     fn get_db(&self) -> &Database {
-        if let Some(ref db) = self.db {
-            db
-        } else {
-            Database::global()
-        }
+        self.db.get()
     }
 
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {

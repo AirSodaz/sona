@@ -1,7 +1,6 @@
 use crate::core::database::Database;
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use super::types::AutomationRepositoryState;
 
@@ -9,14 +8,14 @@ use super::types::AutomationRepositoryState;
 pub struct SqliteAutomationRepository {
     #[allow(dead_code)]
     app_local_data_dir: PathBuf,
-    db: Option<Arc<Database>>,
+    db: crate::core::database::DbProvider,
 }
 
 impl SqliteAutomationRepository {
     pub fn new(app_local_data_dir: PathBuf) -> Self {
         Self {
             app_local_data_dir,
-            db: None,
+            db: crate::core::database::DbProvider::default(),
         }
     }
 
@@ -24,16 +23,12 @@ impl SqliteAutomationRepository {
     pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
         Self {
             app_local_data_dir,
-            db: Some(Arc::new(db)),
+            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
         }
     }
 
     fn get_db(&self) -> &Database {
-        if let Some(ref db) = self.db {
-            db
-        } else {
-            Database::global()
-        }
+        self.db.get()
     }
 
     fn ensure_id(data: &mut Value) -> String {
