@@ -366,5 +366,5 @@ jobs:
           removeArtifacts: true
           replacesArtifacts: true
           artifactErrorsFailBuild: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           artifacts: "all-artifacts/**/*,updater.json"
