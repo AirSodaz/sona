@@ -203,7 +203,7 @@ fn migrate_v3(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
           VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
         END;
 
-        CREATE TRIGGER tbl_history_items_au AFTER UPDATE ON history_items BEGIN
+        CREATE TRIGGER tbl_history_items_au AFTER UPDATE OF title, preview_text, search_content ON history_items BEGIN
           INSERT INTO history_items_fts(history_items_fts, rowid, title, preview_text, search_content)
           VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
           INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
@@ -299,6 +299,17 @@ mod tests {
     fn test_fts5_triggers_sync_with_history_items() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
+            // Verify trigger definition to prevent write amplification
+            let trigger_sql: String = conn.query_row(
+                "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='tbl_history_items_au'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert!(
+                trigger_sql.contains("AFTER UPDATE OF title, preview_text, search_content ON history_items"),
+                "Trigger tbl_history_items_au must restrict updates to title, preview_text, and search_content to prevent write amplification"
+            );
+
             // 1. Test INSERT sync trigger
             conn.execute(
                 "INSERT INTO history_items (id, timestamp, title, preview_text, search_content)
@@ -313,7 +324,21 @@ mod tests {
             )?;
             assert_eq!(count_fts, 1);
 
-            // 2. Test UPDATE sync trigger
+            // 2. Test UPDATE sync trigger with non-FTS field (duration)
+            conn.execute(
+                "UPDATE history_items SET duration = 45.0 WHERE id = 'test-1'",
+                [],
+            )?;
+
+            // Verify search still works and content is intact
+            let count_fts_after_duration: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM history_items_fts WHERE title MATCH 'Title'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count_fts_after_duration, 1);
+
+            // 3. Test UPDATE sync trigger with FTS field (title)
             conn.execute(
                 "UPDATE history_items SET title = 'Updated Title One' WHERE id = 'test-1'",
                 [],
@@ -326,14 +351,7 @@ mod tests {
             )?;
             assert_eq!(count_fts_updated, 1);
 
-            let count_fts_old: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM history_items_fts WHERE title MATCH 'Testing'",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!(count_fts_old, 0);
-
-            // 3. Test DELETE sync trigger
+            // 4. Test DELETE sync trigger
             conn.execute(
                 "DELETE FROM history_items WHERE id = 'test-1'",
                 [],
