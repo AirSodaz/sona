@@ -308,7 +308,9 @@ fn test_migration_and_crud() {
     assert_eq!(snapshots.len(), 1);
 
     // Delete
-    store.delete_items(std::slice::from_ref(&recording.id)).unwrap();
+    store
+        .delete_items(std::slice::from_ref(&recording.id))
+        .unwrap();
     let items = store.list_items().unwrap();
     assert_eq!(items.len(), 2);
 }

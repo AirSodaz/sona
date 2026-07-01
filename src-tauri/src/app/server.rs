@@ -93,11 +93,16 @@ pub fn load_online_asr_config(
         match std::fs::read_to_string(&config_path) {
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
                 Ok(json) => {
-                    if let Some(config) = json
-                        .get("asr")
-                        .and_then(|v| v.get("providers"))
-                        .and_then(|v| v.get("online"))
-                        && let Some(map) = config.as_object()
+                    let config = json
+                        .get("sona-config")
+                        .or_else(|| json.get("sona_config"))
+                        .or_else(|| json.get("config"));
+                    if let Some(config) = config
+                        && let Some(online) = config
+                            .get("asr")
+                            .and_then(|v| v.get("providers"))
+                            .and_then(|v| v.get("online"))
+                        && let Some(map) = online.as_object()
                     {
                         for (k, v) in map {
                             online_asr_config.insert(k.clone(), v.clone());

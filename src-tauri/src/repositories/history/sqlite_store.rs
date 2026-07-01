@@ -1152,7 +1152,9 @@ mod tests {
         );
 
         // 6. Delete item
-        store.delete_items(std::slice::from_ref(&recording.id)).unwrap();
+        store
+            .delete_items(std::slice::from_ref(&recording.id))
+            .unwrap();
         let items = store.list_items().unwrap();
         assert!(items.is_empty());
     }
@@ -1209,7 +1211,9 @@ mod tests {
             .unwrap();
 
         // Delete parent item
-        store.delete_items(std::slice::from_ref(&recording.id)).unwrap();
+        store
+            .delete_items(std::slice::from_ref(&recording.id))
+            .unwrap();
 
         // Verify child tables are automatically pruned by ON DELETE CASCADE
         store
