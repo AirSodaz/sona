@@ -1,0 +1,331 @@
+use crate::core::database::Database;
+use serde_json::Value;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::core::task_ledger::types::{
+    TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+};
+
+const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
+
+#[derive(Clone)]
+pub struct SqliteLedgerRepository {
+    #[allow(dead_code)]
+    app_local_data_dir: PathBuf,
+    db: Option<Arc<Database>>,
+}
+
+impl SqliteLedgerRepository {
+    pub fn new(app_local_data_dir: PathBuf) -> Self {
+        Self {
+            app_local_data_dir,
+            db: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
+        Self {
+            app_local_data_dir,
+            db: Some(Arc::new(db)),
+        }
+    }
+
+    fn get_db(&self) -> &Database {
+        if let Some(ref db) = self.db {
+            db
+        } else {
+            Database::global()
+        }
+    }
+
+    fn now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+        let records = self.get_db().with_connection(|conn| {
+            let mut stmt = conn.prepare("SELECT data, version FROM task_ledger ORDER BY id")?;
+            let rows = stmt.query_map([], |row| {
+                let data_str: String = row.get(0)?;
+                let _version: i64 = row.get(1)?;
+                let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+                // Auto-assign timestamps if missing
+                if record.created_at == 0 {
+                    record.created_at = Self::now_ms();
+                }
+                if record.updated_at == 0 {
+                    record.updated_at = record.created_at;
+                }
+                // Interrupt running tasks
+                if matches!(
+                    record.status,
+                    TaskLedgerStatus::Running | TaskLedgerStatus::CancelRequested
+                ) {
+                    record.status = TaskLedgerStatus::Interrupted;
+                    record.cancelable = false;
+                    if record
+                        .error_message
+                        .as_deref()
+                        .unwrap_or("")
+                        .trim()
+                        .is_empty()
+                    {
+                        record.error_message = Some(INTERRUPTED_MESSAGE.to_string());
+                    }
+                }
+                Ok(record)
+            })?;
+            let mut records = Vec::new();
+            for row in rows {
+                records.push(row?);
+            }
+            // Filter to only persisted statuses
+            records.retain(|r| is_persisted_status(&r.status));
+            Ok(records)
+        })?;
+
+        let updated_at = records.iter().map(|r| r.updated_at).max();
+        Ok(TaskLedgerSnapshot {
+            version: TASK_LEDGER_VERSION,
+            updated_at: if records.is_empty() { None } else { updated_at },
+            tasks: records,
+        })
+    }
+
+    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<(), String> {
+        let normalized = normalize_record(record);
+        let data_str = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
+        let now = Self::now_ms();
+
+        self.get_db().with_connection(|conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO task_ledger (id, data, version, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![normalized.id, data_str, TASK_LEDGER_VERSION, now.to_string()],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), String> {
+        let existing: Option<String> = self.get_db().with_connection(|conn| {
+            let mut stmt = conn.prepare("SELECT data FROM task_ledger WHERE id = ?1")?;
+            let mut rows = stmt.query([id])?;
+            if let Some(row) = rows.next()? {
+                Ok(Some(row.get(0)?))
+            } else {
+                Ok(None)
+            }
+        })?;
+
+        let Some(data_str) = existing else {
+            return Ok(());
+        };
+
+        let mut record: TaskLedgerRecord =
+            serde_json::from_str(&data_str).map_err(|e| e.to_string())?;
+
+        if let Some(patch_obj) = patch.as_object() {
+            let mut current = serde_json::to_value(&record).map_err(|e| e.to_string())?;
+            if let Some(current_obj) = current.as_object_mut() {
+                for (key, val) in patch_obj {
+                    current_obj.insert(key.clone(), val.clone());
+                }
+            }
+            record = serde_json::from_value(current).map_err(|e| e.to_string())?;
+        }
+
+        record.updated_at = Self::now_ms();
+        let new_data_str = serde_json::to_string(&record).map_err(|e| e.to_string())?;
+        let now = record.updated_at.to_string();
+
+        self.get_db().with_connection(|conn| {
+            conn.execute(
+                "UPDATE task_ledger SET data = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![new_data_str, now, id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn remove_task(&self, id: &str) -> Result<(), String> {
+        self.get_db().with_connection(|conn| {
+            conn.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
+            Ok(())
+        })
+    }
+
+    pub fn clear_resolved(&self) -> Result<(), String> {
+        // Keep only tasks with persisted statuses; remove cancelled/succeeded
+        self.get_db().with_connection(|conn| {
+            // We need to load all, check status, delete non-persisted ones
+            let mut stmt = conn.prepare("SELECT id, data FROM task_ledger")?;
+            let rows = stmt.query_map([], |row| {
+                let id: String = row.get(0)?;
+                let data_str: String = row.get(1)?;
+                Ok((id, data_str))
+            })?;
+            let mut to_delete = Vec::new();
+            for row in rows {
+                let (id, data_str) = row?;
+                if let Ok(record) = serde_json::from_str::<TaskLedgerRecord>(&data_str)
+                    && !is_persisted_status(&record.status)
+                {
+                    to_delete.push(id);
+                }
+            }
+            let mut stmt = conn.prepare("DELETE FROM task_ledger WHERE id = ?1")?;
+            for id in to_delete {
+                stmt.execute([id])?;
+            }
+            Ok(())
+        })
+    }
+}
+
+fn is_persisted_status(status: &TaskLedgerStatus) -> bool {
+    matches!(
+        status,
+        TaskLedgerStatus::Pending
+            | TaskLedgerStatus::Running
+            | TaskLedgerStatus::CancelRequested
+            | TaskLedgerStatus::Failed
+            | TaskLedgerStatus::Recoverable
+            | TaskLedgerStatus::Interrupted
+    )
+}
+
+fn normalize_record(mut record: TaskLedgerRecord) -> TaskLedgerRecord {
+    record.id = record.id.trim().to_string();
+    record.title = record.title.trim().to_string();
+    if record.title.is_empty() {
+        record.title = "Task".to_string();
+    }
+    record.progress = if record.progress.is_finite() {
+        record.progress.clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    let now = SqliteLedgerRepository::now_ms();
+    if record.created_at == 0 {
+        record.created_at = now;
+    }
+    if record.updated_at == 0 {
+        record.updated_at = record.created_at;
+    }
+    record
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::database::Database;
+    use crate::core::task_ledger::types::TaskLedgerKind;
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    fn make_record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
+        TaskLedgerRecord {
+            id: id.to_string(),
+            kind: TaskLedgerKind::LlmPolish,
+            status,
+            title: format!("Task {}", id),
+            progress: 50.0,
+            created_at: 1000,
+            updated_at: 1000,
+            retryable: false,
+            cancelable: true,
+            recoverable: false,
+            stage: None,
+            history_id: None,
+            project_id: None,
+            file_path: None,
+            automation_rule_id: None,
+            source_fingerprint: None,
+            error_message: None,
+            template_id: None,
+            target_language: None,
+        }
+    }
+
+    #[test]
+    fn test_ledger_upsert_and_load() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+
+        let record = make_record("task-1", TaskLedgerStatus::Running);
+        repo.upsert_task(record).unwrap();
+
+        let snapshot = repo.load_snapshot().unwrap();
+        assert_eq!(snapshot.tasks.len(), 1);
+        // Running tasks should be interrupted on load
+        assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
+        assert_eq!(snapshot.tasks[0].id, "task-1");
+    }
+
+    #[test]
+    fn test_ledger_patch_task() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+
+        let record = make_record("task-2", TaskLedgerStatus::Pending);
+        repo.upsert_task(record).unwrap();
+
+        repo.patch_task("task-2", json!({"progress": 75.0}))
+            .unwrap();
+
+        let snapshot = repo.load_snapshot().unwrap();
+        assert_eq!(snapshot.tasks.len(), 1);
+        assert_eq!(snapshot.tasks[0].progress, 75.0);
+    }
+
+    #[test]
+    fn test_ledger_remove_task() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+
+        let record = make_record("task-3", TaskLedgerStatus::Pending);
+        repo.upsert_task(record).unwrap();
+        repo.remove_task("task-3").unwrap();
+
+        let snapshot = repo.load_snapshot().unwrap();
+        assert!(snapshot.tasks.is_empty());
+    }
+
+    #[test]
+    fn test_ledger_clear_resolved() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+
+        repo.upsert_task(make_record("t1", TaskLedgerStatus::Pending))
+            .unwrap();
+        repo.upsert_task(make_record("t2", TaskLedgerStatus::Running))
+            .unwrap();
+        repo.upsert_task(make_record("t3", TaskLedgerStatus::Succeeded))
+            .unwrap();
+        repo.upsert_task(make_record("t4", TaskLedgerStatus::Cancelled))
+            .unwrap();
+
+        repo.clear_resolved().unwrap();
+
+        let snapshot = repo.load_snapshot().unwrap();
+        assert_eq!(snapshot.tasks.len(), 2);
+        for task in &snapshot.tasks {
+            assert!(is_persisted_status(&task.status));
+        }
+    }
+
+    #[test]
+    fn test_ledger_empty_snapshot() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+
+        let snapshot = repo.load_snapshot().unwrap();
+        assert!(snapshot.tasks.is_empty());
+    }
+}

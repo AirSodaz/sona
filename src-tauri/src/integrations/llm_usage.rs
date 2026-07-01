@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::core::paths::PathProvider;
 use crate::integrations::llm::{LlmUsageCategory, TokenUsage};
 use chrono::{DateTime, Duration, Local};
@@ -418,7 +420,7 @@ fn local_date_key(occurred_at: &str) -> String {
         .unwrap_or_else(|_| Local::now().format("%Y-%m-%d").to_string())
 }
 
-fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
+pub(crate) fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
     let by_provider = to_sorted_breakdown(&stats.by_provider);
     let by_category = to_sorted_breakdown(&stats.by_category);
 

@@ -93,25 +93,25 @@ fn copy_from_target_dir(target_os: &str) -> bool {
         if let Ok(entries) = std::fs::read_dir(&target_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
-                    if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                        let should_copy = if target_os == "windows" {
-                            filename == "sherpa-onnx-c-api.dll" || filename == "onnxruntime.dll"
-                        } else if target_os == "macos" {
-                            filename == "libsherpa-onnx-c-api.dylib"
-                                || filename == "libonnxruntime.dylib"
-                        } else if target_os == "linux" {
-                            filename.starts_with("libsherpa-onnx-c-api.so")
-                                || filename.starts_with("libonnxruntime.so")
-                        } else {
-                            false
-                        };
-                        if should_copy {
-                            let dest_path = dest_dir.join(filename);
-                            if std::fs::copy(&path, &dest_path).is_ok() {
-                                copied = true;
-                                println!("cargo:rerun-if-changed={}", path.display());
-                            }
+                if path.is_file()
+                    && let Some(filename) = path.file_name().and_then(|f| f.to_str())
+                {
+                    let should_copy = if target_os == "windows" {
+                        filename == "sherpa-onnx-c-api.dll" || filename == "onnxruntime.dll"
+                    } else if target_os == "macos" {
+                        filename == "libsherpa-onnx-c-api.dylib"
+                            || filename == "libonnxruntime.dylib"
+                    } else if target_os == "linux" {
+                        filename.starts_with("libsherpa-onnx-c-api.so")
+                            || filename.starts_with("libonnxruntime.so")
+                    } else {
+                        false
+                    };
+                    if should_copy {
+                        let dest_path = dest_dir.join(filename);
+                        if std::fs::copy(&path, &dest_path).is_ok() {
+                            copied = true;
+                            println!("cargo:rerun-if-changed={}", path.display());
                         }
                     }
                 }
@@ -136,16 +136,15 @@ fn copy_shared_libs(lib_dir: &str, target_os: &str) {
     // Files locked by a running process are silently skipped
     if let Ok(entries) = std::fs::read_dir(dest_dir) {
         for entry in entries.flatten() {
-            if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
-                if let Err(e) = std::fs::remove_file(entry.path()) {
-                    if e.kind() != std::io::ErrorKind::PermissionDenied {
-                        eprintln!(
-                            "Warning: could not remove {}: {}",
-                            entry.path().display(),
-                            e
-                        );
-                    }
-                }
+            if entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+                && let Err(e) = std::fs::remove_file(entry.path())
+                && e.kind() != std::io::ErrorKind::PermissionDenied
+            {
+                eprintln!(
+                    "Warning: could not remove {}: {}",
+                    entry.path().display(),
+                    e
+                );
             }
         }
     }
@@ -157,36 +156,36 @@ fn copy_shared_libs(lib_dir: &str, target_os: &str) {
     if let Ok(entries) = std::fs::read_dir(lib_path) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                    let should_copy = if target_os == "windows" {
-                        filename.ends_with(".dll")
-                    } else if target_os == "macos" {
-                        filename.ends_with(".dylib") || filename.contains(".dylib.")
-                    } else if target_os == "linux" {
-                        filename.ends_with(".so") || filename.contains(".so.")
-                    } else {
-                        false
-                    };
-                    if should_copy {
-                        let dest_path = dest_dir.join(filename);
-                        if let Err(e) = std::fs::copy(&path, &dest_path) {
-                            if e.kind() == std::io::ErrorKind::PermissionDenied {
-                                eprintln!(
-                                    "Warning: could not replace {} (in use by another process). Old version retained.",
-                                    filename
-                                );
-                            } else {
-                                panic!(
-                                    "Failed to copy shared library {} to {}: {}",
-                                    path.display(),
-                                    dest_path.display(),
-                                    e
-                                );
-                            }
+            if path.is_file()
+                && let Some(filename) = path.file_name().and_then(|f| f.to_str())
+            {
+                let should_copy = if target_os == "windows" {
+                    filename.ends_with(".dll")
+                } else if target_os == "macos" {
+                    filename.ends_with(".dylib") || filename.contains(".dylib.")
+                } else if target_os == "linux" {
+                    filename.ends_with(".so") || filename.contains(".so.")
+                } else {
+                    false
+                };
+                if should_copy {
+                    let dest_path = dest_dir.join(filename);
+                    if let Err(e) = std::fs::copy(&path, &dest_path) {
+                        if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            eprintln!(
+                                "Warning: could not replace {} (in use by another process). Old version retained.",
+                                filename
+                            );
                         } else {
-                            println!("cargo:rerun-if-changed={}", path.display());
+                            panic!(
+                                "Failed to copy shared library {} to {}: {}",
+                                path.display(),
+                                dest_path.display(),
+                                e
+                            );
                         }
+                    } else {
+                        println!("cargo:rerun-if-changed={}", path.display());
                     }
                 }
             }

@@ -411,11 +411,13 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
 pub async fn run_repository_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(AutomationRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(crate::repositories::automation::SqliteAutomationRepository) -> Result<T, String>
+        + Send
+        + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
-        task(AutomationRepository::new(app_local_data_dir))
+        task(crate::repositories::automation::SqliteAutomationRepository::new(app_local_data_dir))
     })
     .await
     .map_err(|error| error.to_string())?

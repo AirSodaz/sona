@@ -222,14 +222,18 @@ pub fn set_active_project_id_in_dir(
 pub async fn run_project_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(ProjectRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(crate::repositories::project::SqliteProjectRepository) -> Result<T, String>
+        + Send
+        + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = PROJECT_REPOSITORY_LOCK
             .lock()
             .map_err(|error| error.to_string())?;
-        task(ProjectRepository::new(app_local_data_dir))
+        task(crate::repositories::project::SqliteProjectRepository::new(
+            app_local_data_dir,
+        ))
     })
     .await
     .map_err(|error| error.to_string())?

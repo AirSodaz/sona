@@ -56,6 +56,7 @@ pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     serde_json::from_str(&content).map_err(|error| error.to_string())
 }
 
+#[allow(dead_code)]
 pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
     if !source.is_dir() {
         return Err(format!(

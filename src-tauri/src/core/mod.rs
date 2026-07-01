@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod config;
 pub mod dashboard;
+pub mod database;
 pub mod diagnostics;
 pub mod domain;
 pub mod downloads;
@@ -13,4 +14,6 @@ pub mod recovery;
 pub mod speaker_correction;
 pub mod speaker_review;
 pub mod task_ledger;
+#[path = "task_ledger/sqlite_repository.rs"]
+pub mod task_ledger_sqlite;
 pub mod text_alignment;

@@ -53,16 +53,19 @@ pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSu
 }
 
 #[tauri::command]
-pub async fn llm_usage_ensure_storage(app: AppHandle) -> Result<(), String> {
-    crate::integrations::llm::llm_usage::llm_usage_ensure_storage(app).await
+pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
-    crate::integrations::llm::llm_usage::llm_usage_read_raw(app).await
+pub async fn llm_usage_read_raw(_app: AppHandle) -> Result<String, String> {
+    crate::integrations::llm_usage_sqlite::read_raw(crate::core::database::Database::global())
 }
 
 #[tauri::command]
-pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
-    crate::integrations::llm::llm_usage::llm_usage_replace_raw(app, content).await
+pub async fn llm_usage_replace_raw(_app: AppHandle, content: String) -> Result<(), String> {
+    crate::integrations::llm_usage_sqlite::replace_raw(
+        crate::core::database::Database::global(),
+        &content,
+    )
 }

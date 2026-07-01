@@ -6,32 +6,32 @@ use std::path::PathBuf;
 use crate::integrations::asr::TranscriptSegment;
 
 #[derive(Clone, Debug)]
-pub(crate) struct PreparedBackupImportSnapshot {
-    pub(crate) archive_path: String,
-    pub(crate) extraction_dir: PathBuf,
+pub struct PreparedBackupImportSnapshot {
+    pub archive_path: String,
+    pub extraction_dir: PathBuf,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum HistoryItemKind {
     Recording,
     Batch,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum HistoryItemStatus {
     Draft,
     Complete,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum HistoryDraftSource {
     LiveRecord,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryItemRecord {
     pub id: String,

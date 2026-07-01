@@ -39,6 +39,7 @@ async-trait = "0.1"
 reqwest = { version = "0.13", features = ["stream", "rustls", "json", "multipart"] }
 regex = "1"
 rig-core = "0.39"
+rusqlite = { version = "0.40.1", features = ["bundled", "backup"] }
 futures-util = "0.3"
 glob = "0.3"
 bytes = "1"

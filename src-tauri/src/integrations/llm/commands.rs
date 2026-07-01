@@ -74,9 +74,9 @@ impl UsageRecorder {
 
     fn record(&self, response: &StandardLlmResponse) {
         let occurred_at = chrono::Utc::now().to_rfc3339();
-        if let Err(error) = crate::integrations::llm::llm_usage::record_usage(
-            &self.app,
-            crate::integrations::llm::llm_usage::UsageRecord {
+        if let Err(error) = crate::integrations::llm_usage_sqlite::record_usage(
+            crate::core::database::Database::global(),
+            &crate::integrations::llm::llm_usage::UsageRecord {
                 occurred_at: occurred_at.clone(),
                 provider: self.config.provider.as_str(),
                 category: self.category,

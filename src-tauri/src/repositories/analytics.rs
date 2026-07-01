@@ -1,12 +1,14 @@
-use std::path::PathBuf;
+pub struct AnalyticsRepositoryImpl;
 
-pub struct AnalyticsRepositoryImpl {
-    app_local_data_dir: PathBuf,
+impl Default for AnalyticsRepositoryImpl {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AnalyticsRepositoryImpl {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self { app_local_data_dir }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -18,8 +20,10 @@ impl crate::core::dashboard::ports::AnalyticsRepository for AnalyticsRepositoryI
         crate::integrations::llm::llm_usage::LlmUsageDashboardStats,
         crate::core::dashboard::error::DashboardServiceError,
     > {
-        let stats =
-            crate::integrations::llm::llm_usage::read_dashboard_stats(&self.app_local_data_dir);
+        let stats = crate::integrations::llm_usage_sqlite::read_dashboard_stats(
+            crate::core::database::Database::global(),
+        )
+        .map_err(crate::core::dashboard::error::DashboardServiceError::AnalyticsRepository)?;
         Ok(stats)
     }
 }

@@ -7,20 +7,24 @@ use uuid::Uuid;
 use crate::repositories::project::normalize_project_record_for_import;
 
 use super::fs_utils::{
-    copy_directory_recursive, create_tar_bz2_archive, create_temp_directory,
-    ensure_json_array_value, ensure_json_object_value, ensure_safe_file_name,
-    extract_tar_bz2_archive, read_json_value, remove_path_if_exists, write_json_pretty_atomic,
+    create_tar_bz2_archive, create_temp_directory, ensure_json_array_value,
+    ensure_json_object_value, ensure_safe_file_name, extract_tar_bz2_archive, read_json_value,
+    remove_path_if_exists, write_json_pretty_atomic,
 };
 use super::repository::{HistoryRepository, normalize_history_item_value};
+use super::sqlite_store::SqliteHistoryStore;
 use super::types::PreparedBackupImportSnapshot;
 use super::{
     ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
     AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, BACKUP_HISTORY_MODE,
     BACKUP_SCHEMA_VERSION, BackupManifest, BackupManifestCounts, BackupManifestScopes,
     CONFIG_DIR_NAME, CONFIG_FILE_NAME, ExportBackupArchiveRequest, HISTORY_DIR_NAME,
-    HISTORY_VERSIONS_DIR_NAME, HistoryItemStatus, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
-    PreparedBackupImport, SUMMARY_FILE_SUFFIX,
+    HISTORY_VERSIONS_DIR_NAME, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
+    HistoryItemStatus, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME, PreparedBackupImport,
+    SUMMARY_FILE_SUFFIX, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
+use crate::core::history_store::HistoryStore;
 
 pub(crate) fn build_backup_manifest(
     app_version: String,
@@ -334,7 +338,7 @@ fn js_truthy(value: Option<&Value>) -> bool {
     }
 }
 
-pub(crate) fn export_backup_archive_inner(
+pub fn export_backup_archive_inner(
     app_local_data_dir: &Path,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
@@ -343,8 +347,8 @@ pub(crate) fn export_backup_archive_inner(
         serde_json::from_str(&request.analytics_content).map_err(|error| error.to_string())?;
     ensure_json_object_value(analytics_json, "Backup analytics")?;
 
-    let repository = HistoryRepository::new(app_local_data_dir.to_path_buf());
-    let history = repository.history_snapshot_for_backup()?;
+    let store = SqliteHistoryStore::new(app_local_data_dir.to_path_buf());
+    let history = store.history_snapshot_for_backup()?;
     let manifest = build_backup_manifest(
         request.app_version,
         request.projects.len(),
@@ -419,7 +423,7 @@ pub(crate) fn export_backup_archive_inner(
     }
 }
 
-pub(crate) fn prepare_backup_import_inner(
+pub fn prepare_backup_import_inner(
     archive_path: &Path,
 ) -> Result<(PreparedBackupImport, PreparedBackupImportSnapshot), String> {
     let extraction_dir = create_temp_directory("backup-import")?;
@@ -584,9 +588,9 @@ pub(crate) fn prepare_backup_import_inner(
     result
 }
 
-pub(crate) fn apply_prepared_history_import_inner(
-    app_local_data_dir: &Path,
-    import_id: &str,
+pub fn apply_prepared_history_import_inner(
+    _app_local_data_dir: &Path,
+    _import_id: &str,
     extraction_dir: &Path,
 ) -> Result<(), String> {
     let extracted_history_dir = extraction_dir.join(HISTORY_DIR_NAME);
@@ -594,95 +598,234 @@ pub(crate) fn apply_prepared_history_import_inner(
         return Err("Prepared backup import is missing the history directory.".to_string());
     }
 
-    let repository = HistoryRepository::new(app_local_data_dir.to_path_buf());
-    repository.ensure_ready()?;
+    let db = crate::core::database::Database::global();
 
-    let target_history_dir = repository.history_dir();
-    let staged_history_dir = app_local_data_dir.join(format!("history.importing-{import_id}"));
-    let previous_history_dir = app_local_data_dir.join(format!("history.previous-{import_id}"));
+    let items: Vec<HistoryItemRecord> =
+        read_json_value(&extracted_history_dir.join(PROJECTS_INDEX_FILE_NAME))
+            .and_then(|v| ensure_json_array_value(v, "History index"))
+            .and_then(|v| serde_json::from_value(v).map_err(|e| e.to_string()))?;
 
-    remove_path_if_exists(&staged_history_dir)?;
-    remove_path_if_exists(&previous_history_dir)?;
+    let mut transcript_entries: Vec<(String, String)> = Vec::with_capacity(items.len());
+    let mut summary_entries: Vec<(String, String)> = Vec::new();
+    let mut snapshot_data: Vec<(String, String, String, i64, i64, String)> = Vec::new();
 
-    copy_directory_recursive(&extracted_history_dir, &staged_history_dir)?;
+    for item in &items {
+        let transcript_path = extracted_history_dir.join(&item.transcript_path);
+        let transcript_val = read_json_value(&transcript_path)?;
+        let segments_str = serde_json::to_string(&transcript_val).map_err(|e| e.to_string())?;
+        transcript_entries.push((item.id.clone(), segments_str));
 
-    let had_existing = target_history_dir.exists();
-    if had_existing {
-        fs::rename(&target_history_dir, &previous_history_dir)
-            .map_err(|error| error.to_string())?;
+        let summary_path =
+            extracted_history_dir.join(format!("{}{}", item.id, SUMMARY_FILE_SUFFIX));
+        if summary_path.exists() {
+            let summary_val = read_json_value(&summary_path)?;
+            let payload_str = serde_json::to_string(&summary_val).map_err(|e| e.to_string())?;
+            summary_entries.push((item.id.clone(), payload_str));
+        }
+
+        let snapshot_dir = extracted_history_dir
+            .join(HISTORY_VERSIONS_DIR_NAME)
+            .join(&item.id);
+        if snapshot_dir.exists() {
+            let snapshot_index_path = snapshot_dir.join(PROJECTS_INDEX_FILE_NAME);
+            let snapshot_metadatas: Vec<TranscriptSnapshotMetadata> =
+                read_json_value(&snapshot_index_path)
+                    .and_then(|v| serde_json::from_value(v).map_err(|e| e.to_string()))?;
+
+            for meta in &snapshot_metadatas {
+                let snapshot_path = snapshot_dir.join(format!("{}.json", meta.id));
+                if snapshot_path.exists() {
+                    let record_val = read_json_value(&snapshot_path)?;
+                    let record: TranscriptSnapshotRecord =
+                        serde_json::from_value(record_val).map_err(|e| e.to_string())?;
+
+                    let reason_str = match record.metadata.reason {
+                        TranscriptSnapshotReason::Polish => "polish",
+                        TranscriptSnapshotReason::Translate => "translate",
+                        TranscriptSnapshotReason::Retranscribe => "retranscribe",
+                        TranscriptSnapshotReason::Restore => "restore",
+                    };
+                    let seg_str =
+                        serde_json::to_string(&record.segments).map_err(|e| e.to_string())?;
+
+                    snapshot_data.push((
+                        record.metadata.id,
+                        record.metadata.history_id,
+                        reason_str.to_string(),
+                        record.metadata.created_at as i64,
+                        record.metadata.segment_count as i64,
+                        seg_str,
+                    ));
+                }
+            }
+        }
     }
 
-    match fs::rename(&staged_history_dir, &target_history_dir) {
-        Ok(()) => {
-            if had_existing {
-                remove_path_if_exists(&previous_history_dir)?;
-            }
-            Ok(())
+    db.with_transaction(|tx| {
+        tx.execute("DELETE FROM transcript_snapshots", [])?;
+        tx.execute("DELETE FROM history_summaries", [])?;
+        tx.execute("DELETE FROM history_transcripts", [])?;
+        tx.execute("DELETE FROM history_items", [])?;
+
+        for item in &items {
+            let kind_str = match item.kind {
+                HistoryItemKind::Batch => "batch",
+                HistoryItemKind::Recording => "recording",
+            };
+            let status_str = match item.status {
+                HistoryItemStatus::Draft => "draft",
+                HistoryItemStatus::Complete => "complete",
+            };
+            let draft_source_str = item.draft_source.map(|s| match s {
+                HistoryDraftSource::LiveRecord => "live_record",
+            });
+
+            tx.execute(
+                "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                rusqlite::params![
+                    item.id,
+                    item.timestamp as i64,
+                    item.duration,
+                    item.audio_path,
+                    item.transcript_path,
+                    item.title,
+                    item.preview_text,
+                    item.icon,
+                    kind_str,
+                    item.search_content,
+                    item.project_id,
+                    status_str,
+                    draft_source_str,
+                ],
+            )?;
         }
-        Err(error) => {
-            if had_existing && !target_history_dir.exists() {
-                let _ = fs::rename(&previous_history_dir, &target_history_dir);
-            }
-            let _ = remove_path_if_exists(&staged_history_dir);
-            Err(error.to_string())
+
+        for (history_id, segments_str) in &transcript_entries {
+            tx.execute(
+                "INSERT INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
+                rusqlite::params![history_id, segments_str],
+            )?;
         }
-    }
+
+        for (history_id, payload_str) in &summary_entries {
+            tx.execute(
+                "INSERT INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
+                rusqlite::params![history_id, payload_str],
+            )?;
+        }
+
+        for (id, history_id, reason, created_at, segment_count, segments_str) in &snapshot_data {
+            tx.execute(
+                "INSERT INTO transcript_snapshots (id, history_id, reason, created_at, segment_count, segments)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![id, history_id, reason, created_at, segment_count, segments_str],
+            )?;
+        }
+
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::database::Database;
     use crate::repositories::history::fs_utils::{
         create_tar_bz2_archive, extract_tar_bz2_archive, read_json_value, remove_path_if_exists,
         write_json_pretty_atomic,
     };
-    use crate::repositories::history::repository::HistoryRepository;
+    use crate::repositories::history::sqlite_store::SqliteHistoryStore;
     use crate::repositories::history::state::PreparedBackupImportState;
-    use crate::repositories::history::test_support::{
-        create_valid_backup_archive, sample_history_item,
-    };
-    use crate::repositories::history::types::{HistoryItemStatus, TranscriptSnapshotReason};
+    use crate::repositories::history::test_support::create_valid_backup_archive;
+    use crate::repositories::history::types::TranscriptSnapshotReason;
     use crate::repositories::history::{
         ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
         AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, CONFIG_DIR_NAME,
-        CONFIG_FILE_NAME, HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, PROJECTS_DIR_NAME,
-        PROJECTS_INDEX_FILE_NAME,
+        CONFIG_FILE_NAME, HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, HistorySaveRecordingRequest,
+        PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
     };
     use serde_json::{Value, json};
     use std::fs;
+    use std::sync::{Mutex, Once};
     use tempfile::tempdir;
+
+    static BACKUP_TEST_LOCK: Mutex<()> = Mutex::new(());
+    static INIT_GLOBAL_DB: Once = Once::new();
+
+    fn init_global_db() {
+        INIT_GLOBAL_DB.call_once(|| {
+            let db = Database::open_in_memory().unwrap();
+            Database::set_global(db).unwrap();
+        });
+    }
+
+    fn clear_global_db() {
+        Database::global()
+            .with_transaction(|tx| {
+                tx.execute("DELETE FROM history_items", [])?;
+                Ok(())
+            })
+            .unwrap();
+    }
 
     #[test]
     fn export_backup_archive_skips_draft_items_and_preserves_manifest() {
-        let root = tempdir().unwrap();
-        let repository = HistoryRepository::new(root.path().to_path_buf());
-        repository.ensure_ready().unwrap();
+        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
+        init_global_db();
+        clear_global_db();
 
-        let keep_item = sample_history_item("keep", HistoryItemStatus::Complete);
-        let draft_item = sample_history_item("draft", HistoryItemStatus::Draft);
-        repository
-            .write_index(&[keep_item.clone(), draft_item])
+        let root = tempdir().unwrap();
+        let store = SqliteHistoryStore::new(root.path().to_path_buf());
+        store.ensure_ready().unwrap();
+
+        let keep_item = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([{
+                    "id": "seg-1",
+                    "text": "keep",
+                    "start": 0.0,
+                    "end": 1.0,
+                    "isFinal": true
+                }]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1, 2, 3]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
             .unwrap();
-        write_json_pretty_atomic(
-            &repository
-                .transcript_path(&keep_item.transcript_path)
-                .unwrap(),
-            &json!([{ "id": "seg-1" }]),
-        )
-        .unwrap();
-        write_json_pretty_atomic(
-            &repository.summary_path(&keep_item.id).unwrap(),
-            &json!({ "activeTemplateId": "general" }),
-        )
-        .unwrap();
-        let keep_snapshot = repository
+
+        Database::global()
+            .with_transaction(|tx| {
+                tx.execute(
+                    "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, kind, status, draft_source)
+                     VALUES ('draft', 1, 2.0, 'draft.wav', 'draft.json', 'Item draft', 'recording', 'draft', 'live_record')",
+                    [],
+                )?;
+                tx.execute(
+                    "INSERT INTO history_transcripts (history_id, segments) VALUES ('draft', '[]')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        store
+            .save_summary(&keep_item.id, json!({ "activeTemplateId": "general" }))
+            .unwrap();
+
+        let keep_snapshot = store
             .create_transcript_snapshot(
                 &keep_item.id,
                 TranscriptSnapshotReason::Polish,
                 json!([{ "id": "seg-1", "text": "keep before" }]),
             )
             .unwrap();
-        let draft_snapshot = repository
+
+        let _draft_snapshot = store
             .create_transcript_snapshot(
                 "draft",
                 TranscriptSnapshotReason::Translate,
@@ -725,29 +868,20 @@ mod tests {
             exported_items.as_array().unwrap()[0]["id"]
                 .as_str()
                 .unwrap(),
-            "keep"
+            keep_item.id
         );
         let exported_versions_dir = extract_dir
             .path()
             .join(HISTORY_DIR_NAME)
             .join(HISTORY_VERSIONS_DIR_NAME);
-        let keep_index = exported_versions_dir
-            .join("keep")
-            .join(PROJECTS_INDEX_FILE_NAME);
-        assert!(keep_index.exists());
+        let keep_versions_dir = exported_versions_dir.join(&keep_item.id);
+        assert!(keep_versions_dir.join(PROJECTS_INDEX_FILE_NAME).exists());
         assert!(
-            exported_versions_dir
-                .join("keep")
+            keep_versions_dir
                 .join(format!("{}.json", keep_snapshot.id))
                 .exists()
         );
         assert!(!exported_versions_dir.join("draft").exists());
-        assert!(
-            !exported_versions_dir
-                .join("draft")
-                .join(format!("{}.json", draft_snapshot.id))
-                .exists()
-        );
     }
 
     #[test]
@@ -1022,14 +1156,11 @@ mod tests {
 
     #[test]
     fn apply_prepared_history_import_replaces_history_and_dispose_cleans_snapshot() {
+        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
+        init_global_db();
+        clear_global_db();
+
         let app_data_dir = tempdir().unwrap();
-        let history_dir = app_data_dir.path().join(HISTORY_DIR_NAME);
-        fs::create_dir_all(&history_dir).unwrap();
-        write_json_pretty_atomic(
-            &history_dir.join(PROJECTS_INDEX_FILE_NAME),
-            &vec![json!({ "id": "old-history" })],
-        )
-        .unwrap();
 
         let archive_dir = tempdir().unwrap();
         let archive_path = archive_dir.path().join("valid-backup.tar.bz2");
@@ -1048,13 +1179,17 @@ mod tests {
         )
         .unwrap();
 
-        let replaced_items = read_json_value(&history_dir.join(PROJECTS_INDEX_FILE_NAME)).unwrap();
-        assert_eq!(
-            replaced_items.as_array().unwrap()[0]["id"]
-                .as_str()
-                .unwrap(),
-            "history-1"
-        );
+        let store = SqliteHistoryStore::new(app_data_dir.path().to_path_buf());
+        let items = store.list_items().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "history-1");
+
+        let transcript = store.load_transcript("history-1").unwrap().unwrap();
+        assert_eq!(transcript.len(), 1);
+        assert_eq!(transcript[0].id, "seg-1");
+
+        let summary = store.load_summary("history-1").unwrap().unwrap();
+        assert_eq!(summary["activeTemplateId"], "general");
 
         let removed = state.remove(&prepared.import_id).unwrap().unwrap();
         remove_path_if_exists(&removed.extraction_dir).unwrap();
@@ -1063,22 +1198,33 @@ mod tests {
 
     #[test]
     fn export_and_import_round_trip_restores_transcript_snapshots() {
-        let source_dir = tempdir().unwrap();
-        let source_repository = HistoryRepository::new(source_dir.path().to_path_buf());
-        source_repository.ensure_ready().unwrap();
+        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
+        init_global_db();
+        clear_global_db();
 
-        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        source_repository
-            .write_index(std::slice::from_ref(&item))
+        let source_dir = tempdir().unwrap();
+        let source_store = SqliteHistoryStore::new(source_dir.path().to_path_buf());
+        source_store.ensure_ready().unwrap();
+
+        let item = source_store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([{
+                    "id": "seg-1",
+                    "text": "current",
+                    "start": 0.0,
+                    "end": 1.0,
+                    "isFinal": true
+                }]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1, 2, 3]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
             .unwrap();
-        write_json_pretty_atomic(
-            &source_repository
-                .transcript_path(&item.transcript_path)
-                .unwrap(),
-            &json!([{ "id": "seg-1", "text": "current" }]),
-        )
-        .unwrap();
-        let first = source_repository
+
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let first = source_store
             .create_transcript_snapshot(
                 &item.id,
                 TranscriptSnapshotReason::Polish,
@@ -1086,7 +1232,7 @@ mod tests {
             )
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1));
-        let second = source_repository
+        let second = source_store
             .create_transcript_snapshot(
                 &item.id,
                 TranscriptSnapshotReason::Translate,
@@ -1110,6 +1256,13 @@ mod tests {
         )
         .unwrap();
 
+        Database::global()
+            .with_transaction(|tx| {
+                tx.execute("DELETE FROM history_items", [])?;
+                Ok(())
+            })
+            .unwrap();
+
         let restore_dir = tempdir().unwrap();
         let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
         apply_prepared_history_import_inner(
@@ -1119,15 +1272,13 @@ mod tests {
         )
         .unwrap();
 
-        let restored_repository = HistoryRepository::new(restore_dir.path().to_path_buf());
-        let snapshots = restored_repository
-            .list_transcript_snapshots(&item.id)
-            .unwrap();
+        let restored_store = SqliteHistoryStore::new(restore_dir.path().to_path_buf());
+        let snapshots = restored_store.list_transcript_snapshots(&item.id).unwrap();
         assert_eq!(snapshots.len(), 2);
         assert_eq!(snapshots[0].id, second.id);
         assert_eq!(snapshots[1].id, first.id);
 
-        let restored_first = restored_repository
+        let restored_first = restored_store
             .load_transcript_snapshot(&item.id, &first.id)
             .unwrap()
             .unwrap();

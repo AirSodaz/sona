@@ -1,6 +1,7 @@
 pub mod defaults;
 pub mod error;
 pub mod migration;
+pub mod sqlite_store;
 pub mod types;
 
 pub use error::ConfigError;

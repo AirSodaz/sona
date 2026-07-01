@@ -5,10 +5,10 @@ use tauri::{AppHandle, Emitter, Runtime, State};
 use crate::core::paths::PathProvider;
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
-use crate::core::task_ledger::repository::TaskLedgerRepository;
 use crate::core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
 };
+use crate::core::task_ledger_sqlite::SqliteLedgerRepository;
 
 async fn run_task_ledger_repository_task<T, F>(
     provider: &dyn PathProvider,
@@ -16,11 +16,11 @@ async fn run_task_ledger_repository_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(TaskLedgerRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(SqliteLedgerRepository) -> Result<T, String> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
-        task(TaskLedgerRepository::new(app_local_data_dir))
+        task(SqliteLedgerRepository::new(app_local_data_dir))
     })
     .await
     .map_err(|error| error.to_string())?
@@ -249,12 +249,14 @@ pub async fn task_ledger_upsert_task(
     app: AppHandle,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
-        repository.upsert_task(record)
+    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+        repository.upsert_task(record)?;
+        repository.load_snapshot()
     })
-    .await?;
-    emit_task_ledger_snapshot(&app, &snapshot)?;
-    Ok(snapshot)
+    .await
+    .inspect(|snapshot| {
+        let _ = emit_task_ledger_snapshot(&app, snapshot);
+    })
 }
 
 #[tauri::command]
@@ -263,12 +265,14 @@ pub async fn task_ledger_patch_task(
     id: String,
     patch: Value,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
-        repository.patch_task(&id, patch)
+    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+        repository.patch_task(&id, patch)?;
+        repository.load_snapshot()
     })
-    .await?;
-    emit_task_ledger_snapshot(&app, &snapshot)?;
-    Ok(snapshot)
+    .await
+    .inspect(|snapshot| {
+        let _ = emit_task_ledger_snapshot(&app, snapshot);
+    })
 }
 
 #[tauri::command]
@@ -276,22 +280,26 @@ pub async fn task_ledger_remove_task(
     app: AppHandle,
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
-        repository.remove_task(&id)
+    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+        repository.remove_task(&id)?;
+        repository.load_snapshot()
     })
-    .await?;
-    emit_task_ledger_snapshot(&app, &snapshot)?;
-    Ok(snapshot)
+    .await
+    .inspect(|snapshot| {
+        let _ = emit_task_ledger_snapshot(&app, snapshot);
+    })
 }
 
 #[tauri::command]
 pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
-        repository.clear_resolved()
+    run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
+        repository.clear_resolved()?;
+        repository.load_snapshot()
     })
-    .await?;
-    emit_task_ledger_snapshot(&app, &snapshot)?;
-    Ok(snapshot)
+    .await
+    .inspect(|snapshot| {
+        let _ = emit_task_ledger_snapshot(&app, snapshot);
+    })
 }
 
 // Relocated recovery commands

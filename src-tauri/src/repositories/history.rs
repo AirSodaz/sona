@@ -1,10 +1,12 @@
-pub(crate) mod backup;
+pub mod backup;
 pub(crate) mod fs_utils;
 mod item_factory;
 pub(crate) mod repository;
+pub mod sqlite_store;
 mod state;
 pub(crate) mod store;
 pub use repository::HistoryRepository;
+pub use sqlite_store::SqliteHistoryStore;
 pub use store::FileHistoryStore;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -22,9 +24,9 @@ pub use types::{
     HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSearchRange,
     HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
-    LiveRecordingDraftResult, PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow,
-    TranscriptDiffStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    LiveRecordingDraftResult, PreparedBackupImport, PreparedBackupImportSnapshot,
+    TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
 pub(crate) const HISTORY_DIR_NAME: &str = "history";
