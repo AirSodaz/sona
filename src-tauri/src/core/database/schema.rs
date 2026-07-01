@@ -7,6 +7,7 @@ type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
     (1, "Initial schema", migrate_v1),
     (2, "LLM usage analytics table", migrate_v2),
+    (3, "Add FTS search table and triggers", migrate_v3),
 ];
 
 /// Runs all pending migrations against the database. Migrations that have
@@ -178,6 +179,43 @@ fn migrate_v2(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// v3: Add FTS search table and triggers
+// ---------------------------------------------------------------------------
+fn migrate_v3(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "CREATE VIRTUAL TABLE history_items_fts USING fts5(
+            title,
+            preview_text,
+            search_content,
+            content='history_items',
+            content_rowid='rowid',
+            tokenize='trigram'
+        );
+
+        CREATE TRIGGER tbl_history_items_ai AFTER INSERT ON history_items BEGIN
+          INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
+          VALUES (new.rowid, new.title, new.preview_text, new.search_content);
+        END;
+
+        CREATE TRIGGER tbl_history_items_ad AFTER DELETE ON history_items BEGIN
+          INSERT INTO history_items_fts(history_items_fts, rowid, title, preview_text, search_content)
+          VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
+        END;
+
+        CREATE TRIGGER tbl_history_items_au AFTER UPDATE ON history_items BEGIN
+          INSERT INTO history_items_fts(history_items_fts, rowid, title, preview_text, search_content)
+          VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
+          INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
+          VALUES (new.rowid, new.title, new.preview_text, new.search_content);
+        END;
+
+        INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
+        SELECT rowid, title, preview_text, search_content FROM history_items;"
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,7 +230,7 @@ mod tests {
         db.with_connection(|conn| {
             let count: i64 =
                 conn.query_row("SELECT COUNT(*) FROM schema_version", [], |row| row.get(0))?;
-            assert_eq!(count, 2); // v1 + v2
+            assert_eq!(count, 3); // v1 + v2 + v3
             Ok(())
         })
         .unwrap();
@@ -213,6 +251,7 @@ mod tests {
             "automation_rules",
             "automation_processed",
             "task_ledger",
+            "history_items_fts",
         ];
 
         db.with_connection(|conn| {
@@ -232,5 +271,82 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn test_trigram_support() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            conn.execute_batch(
+                "CREATE VIRTUAL TABLE test_fts USING fts5(content, tokenize='trigram');
+                 INSERT INTO test_fts(content) VALUES ('中华人民共和国');
+                 INSERT INTO test_fts(content) VALUES ('Hello World');"
+            )?;
+            let mut stmt = conn.prepare("SELECT content FROM test_fts WHERE test_fts MATCH ?1")?;
+            {
+                let mut rows = stmt.query(["华人民"])?;
+                assert!(rows.next()?.is_some());
+            }
+            {
+                let mut rows2 = stmt.query(["hello"])?;
+                assert!(rows2.next()?.is_some());
+            }
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn test_fts5_triggers_sync_with_history_items() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            // 1. Test INSERT sync trigger
+            conn.execute(
+                "INSERT INTO history_items (id, timestamp, title, preview_text, search_content)
+                 VALUES ('test-1', 12345, 'Testing Title One', 'Testing Preview One', 'Testing Search Content One')",
+                [],
+            )?;
+
+            let count_fts: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM history_items_fts WHERE title MATCH 'Title'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count_fts, 1);
+
+            // 2. Test UPDATE sync trigger
+            conn.execute(
+                "UPDATE history_items SET title = 'Updated Title One' WHERE id = 'test-1'",
+                [],
+            )?;
+
+            let count_fts_updated: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM history_items_fts WHERE title MATCH 'Updated'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count_fts_updated, 1);
+
+            let count_fts_old: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM history_items_fts WHERE title MATCH 'Testing'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count_fts_old, 0);
+
+            // 3. Test DELETE sync trigger
+            conn.execute(
+                "DELETE FROM history_items WHERE id = 'test-1'",
+                [],
+            )?;
+
+            let count_fts_deleted: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM history_items_fts",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count_fts_deleted, 0);
+
+            Ok(())
+        }).unwrap();
     }
 }
