@@ -162,6 +162,9 @@ pub fn should_run_cli(args: &[OsString]) -> bool {
 }
 
 pub async fn run_cli_from_args(args: impl IntoIterator<Item = OsString>) -> CliResult<()> {
+    #[cfg(target_os = "windows")]
+    crate::init_dll_directory();
+
     let cli = Cli::parse_from(args);
     if cli.verbose {
         init_cli_logger();

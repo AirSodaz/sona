@@ -42,3 +42,11 @@ docs/superpowers
 .superpowers
 
 .env
+target_*
+temp_*
+.placeholder
+
+# Sherpa-onnx shared libraries (build artifacts copied by build.rs)
+src-tauri/resources/shared_libs/*.dll
+src-tauri/resources/shared_libs/*.dylib
+src-tauri/resources/shared_libs/*.so

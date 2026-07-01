@@ -13,8 +13,8 @@ jobs:
     permissions:
       contents: write
     env:
-      SHERPA_ONNX_VERSION: 1.13.2
-      SHERPA_ONNX_TAG: v1.13.2
+      SHERPA_ONNX_VERSION: 1.13.3
+      SHERPA_ONNX_TAG: v1.13.3
     strategy:
       fail-fast: false
       matrix:
@@ -61,36 +61,36 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download and extract sherpa-onnx static libraries (Linux)
+      - name: Download and extract sherpa-onnx shared libraries (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
-          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
-          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-static-lib/lib" >> $GITHUB_ENV
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib/lib" >> $GITHUB_ENV
 
-      - name: Download and extract sherpa-onnx static libraries (macOS)
+      - name: Download and extract sherpa-onnx shared libraries (macOS)
         if: startsWith(matrix.platform, 'macos')
         run: |
-          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
-          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-static-lib/lib" >> $GITHUB_ENV
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib.tar.bz2
+          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib/lib" >> $GITHUB_ENV
 
-      - name: Download and extract sherpa-onnx static libraries (Windows x64)
+      - name: Download and extract sherpa-onnx shared libraries (Windows x64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == ''
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-shared-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-static-MT-Release-lib\lib"
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-shared-MT-Release-lib\lib"
           "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
 
-      - name: Download and extract sherpa-onnx static libraries (Windows ARM64)
+      - name: Download and extract sherpa-onnx shared libraries (Windows ARM64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == '--target aarch64-pc-windows-msvc'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-shared-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-static-MT-Release-lib\lib"
+          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-shared-MT-Release-lib\lib"
           "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
 
       - name: Configure RUSTFLAGS
@@ -102,6 +102,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
         run: node scripts/tauri.js build ${{ matrix.args }}
 
       # 3. Handle macOS architecture renaming (Solve 422 Already Exists)

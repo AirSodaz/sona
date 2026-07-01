@@ -23,7 +23,48 @@ pub fn run() {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn init_dll_directory() {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::System::LibraryLoader::SetDllDirectoryW;
+    use windows::core::PCWSTR;
+
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+    {
+        let candidates = [
+            exe_dir.join("resources").join("shared_libs"),
+            exe_dir
+                .join("..")
+                .join("..")
+                .join("resources")
+                .join("shared_libs"),
+            exe_dir
+                .join("..")
+                .join("..")
+                .join("..")
+                .join("resources")
+                .join("shared_libs"),
+        ];
+
+        for path in &candidates {
+            if path.exists() {
+                let mut path_u16: Vec<u16> = path.as_os_str().encode_wide().collect();
+                path_u16.push(0);
+                unsafe {
+                    let _ = SetDllDirectoryW(PCWSTR(path_u16.as_ptr()));
+                }
+                break;
+            }
+        }
+    }
+}
+
 pub fn run_app() -> Result<(), tauri::Error> {
+    #[cfg(target_os = "windows")]
+    init_dll_directory();
+
     let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 

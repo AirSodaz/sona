@@ -35,6 +35,9 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/shared_libs/*"
+    ],
     "externalBin": [
       "binaries/ffmpeg"
     ],
