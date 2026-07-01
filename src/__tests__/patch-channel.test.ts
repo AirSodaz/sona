@@ -10,9 +10,17 @@ describe('patch-channel.js integration', () => {
     try {
       const scriptsDir = path.join(tempDir, 'scripts');
       const tauriDir = path.join(tempDir, 'src-tauri');
+      const iconsNightlyDir = path.join(tauriDir, 'icons-nightly');
+      const iconsDir = path.join(tauriDir, 'icons');
 
       fs.mkdirSync(scriptsDir, { recursive: true });
       fs.mkdirSync(tauriDir, { recursive: true });
+      fs.mkdirSync(iconsNightlyDir, { recursive: true });
+      fs.mkdirSync(iconsDir, { recursive: true });
+
+      // Create a mock icon file in icons-nightly
+      const mockIconPath = path.join(iconsNightlyDir, 'icon.png');
+      fs.writeFileSync(mockIconPath, 'mock icon content');
 
       // Create mock package.json
       fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({
@@ -71,6 +79,11 @@ edition = "2024"
 
       const patchedTauriWindows = JSON.parse(fs.readFileSync(path.join(tauriDir, 'tauri.windows.conf.json'), 'utf8'));
       expect(patchedTauriWindows.identifier).toBe('com.asoda.sona.nightly');
+
+      // Assert that mock icon file was correctly copied to the mock icons directory
+      const copiedIconPath = path.join(iconsDir, 'icon.png');
+      expect(fs.existsSync(copiedIconPath)).toBe(true);
+      expect(fs.readFileSync(copiedIconPath, 'utf8')).toBe('mock icon content');
     } finally {
       // Cleanup
       fs.rmSync(tempDir, { recursive: true, force: true });

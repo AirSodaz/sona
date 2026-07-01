@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Soft, modern drop shadow for the badge capsule -->
+    <filter id="badge-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#5c4d43" flood-opacity="0.18" />
+    </filter>
+  </defs>
+
+  <!-- Terracotta & Cream background -->
+  <rect width="512" height="512" rx="112" fill="#f9f5f0" />
+
+  <g transform="translate(256, 256)" stroke="#5c4d43" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Abstract "S" formed by an audio wave -->
+    <path d="M64 -144
+             C16 -144 -64 -144 -64 -64
+             C-64 16 64 -16 64 64
+             C64 144 -16 144 -64 144" />
+
+    <!-- Accent audio bar 1 (Left) -->
+    <path d="M-128 -32 L-128 32" stroke-width="32" opacity="0.6" />
+
+    <!-- Accent audio bar 2 (Right) -->
+    <path d="M128 -32 L128 32" stroke-width="32" opacity="0.6" />
+  </g>
+
+  <!-- Outer cut-out background to blend with the icon background -->
+  <rect x="280" y="380" width="180" height="74" rx="37" fill="#f9f5f0" />
+
+  <!-- Badge capsule with premium drop shadow (Deep Violet/Midnight Indigo) -->
+  <rect x="288" y="388" width="164" height="58" rx="29" fill="#2b1d6c" filter="url(#badge-shadow)" />
+
+  <!-- Badge text "NIGHTLY" in modern sans-serif -->
+  <text x="370" y="417" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" font-weight="900" letter-spacing="1.2" text-anchor="middle" dominant-baseline="central">NIGHTLY</text>
+</svg>

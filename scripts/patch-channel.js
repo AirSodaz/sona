@@ -103,6 +103,16 @@ function patchTauriWindowsConf(config) {
   }
 }
 
+function copyNightlyIcons() {
+  const srcDir = path.join(repoRoot, 'src-tauri', 'icons-nightly');
+  const destDir = path.join(repoRoot, 'src-tauri', 'icons');
+  if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
+    throw new Error(`Nightly icons directory not found at ${srcDir}`);
+  }
+  fs.cpSync(srcDir, destDir, { recursive: true, force: true });
+  console.log(`[patch-channel] Copied nightly icons from ${srcDir} to ${destDir}`);
+}
+
 function main() {
   const channel = readArg('channel');
   const version = readArg('version');
@@ -122,6 +132,10 @@ function main() {
   patchCargoToml(version);
   patchTauriConf(version, config);
   patchTauriWindowsConf(config);
+
+  if (channel === 'nightly') {
+    copyNightlyIcons();
+  }
 }
 
 main();
