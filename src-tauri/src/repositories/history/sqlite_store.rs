@@ -13,7 +13,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::fs_utils::{ensure_safe_file_name, optional_history_child_path};
+use super::fs_utils::{
+    ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
+};
 use super::transcript_payload::normalize_history_transcript_segments;
 
 #[derive(Clone)]
@@ -604,7 +606,7 @@ impl HistoryStore for SqliteHistoryStore {
                 let parsed_val: Value = serde_json::from_str(&segments_str)
                     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                 let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?;
                 Ok(Some(normalized.segments))
             } else {
                 let exists: bool = conn.query_row(
@@ -616,7 +618,7 @@ impl HistoryStore for SqliteHistoryStore {
                     Ok(None)
                 } else {
                     Err(rusqlite::Error::ToSqlConversionFailure(
-                        Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("History item not found: {history_id}")))
+                        Box::new(std::io::Error::other(format!("History item not found: {history_id}")))
                     ))
                 }
             }
@@ -713,7 +715,7 @@ impl HistoryStore for SqliteHistoryStore {
             )?;
             if !exists {
                 return Err(rusqlite::Error::ToSqlConversionFailure(
-                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("History item not found: {history_id}")))
+                    Box::new(std::io::Error::other(format!("History item not found: {history_id}")))
                 ));
             }
 
@@ -825,8 +827,7 @@ impl HistoryStore for SqliteHistoryStore {
 
                 let normalized =
                     normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
                             e,
                         )))
                     })?;
@@ -1040,66 +1041,160 @@ impl HistoryStore for SqliteHistoryStore {
             Ok(items)
         })?;
 
-        let mut transcript_files = Vec::with_capacity(items.len());
-        let mut summary_files = Vec::new();
-        let mut snapshot_files = Vec::new();
+        if items.is_empty() {
+            return Ok(HistoryBackupSnapshot {
+                items,
+                transcript_files: vec![],
+                summary_files: vec![],
+                snapshot_files: vec![],
+            });
+        }
 
-        for item in &items {
-            let transcript_opt: Option<Value> = self.get_db().with_connection(|conn| {
-                let mut stmt =
-                    conn.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1")?;
-                let mut rows = stmt.query([&item.id])?;
-                if let Some(row) = rows.next()? {
-                    let segments_str: String = row.get(0)?;
+        let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let (transcript_files, summary_files, snapshot_files) = self.get_db().with_connection(|conn| {
+            // Bulk fetch transcripts
+            let mut transcript_files: Vec<(String, Value)> = Vec::with_capacity(items.len());
+
+            {
+                let sql = format!(
+                    "SELECT history_id, segments FROM history_transcripts WHERE history_id IN ({})",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                    let history_id: String = row.get(0)?;
+                    let segments_str: String = row.get(1)?;
                     let val: Value = serde_json::from_str(&segments_str)
                         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                    Ok(Some(val))
-                } else {
-                    Ok(None)
-                }
-            })?;
+                    Ok((history_id, val))
+                })?;
 
-            let transcript_val = match transcript_opt {
-                Some(val) => crate::repositories::history::fs_utils::ensure_json_array_value(
-                    val,
-                    &format!("Transcript for history item {}", item.id),
-                )?,
-                None => {
-                    return Err(format!(
-                        "History item \"{}\" is missing its transcript file.",
-                        item.title
-                    ));
+                let mut transcript_map: std::collections::HashMap<String, Value> =
+                    std::collections::HashMap::new();
+                for r in rows {
+                    let (hid, val) = r?;
+                    transcript_map.insert(hid, val);
                 }
-            };
-            transcript_files.push((item.transcript_path.clone(), transcript_val));
 
-            let summary_opt = self.load_summary(&item.id)?;
-            if let Some(summary_val) = summary_opt {
-                summary_files.push((item.id.clone(), summary_val));
+                for item in &items {
+                    let transcript_val = match transcript_map.remove(item.id.as_str()) {
+                        Some(val) => ensure_json_array_value(
+                            val,
+                            &format!("Transcript for history item {}", item.id),
+                        ).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?,
+                        None => {
+                            return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+                                format!("History item \"{}\" is missing its transcript file.", item.title),
+                            ))));
+                        }
+                    };
+                    transcript_files.push((item.transcript_path.clone(), transcript_val));
+                }
             }
 
-            let snapshots = self.list_transcript_snapshots(&item.id)?;
-            if !snapshots.is_empty() {
-                let snapshots_val = serde_json::to_value(&snapshots).map_err(|e| e.to_string())?;
-                snapshot_files.push((format!("versions/{}/index.json", item.id), snapshots_val));
+            // Bulk fetch summaries
+            let mut summary_files: Vec<(String, Value)> = Vec::new();
+            {
+                let sql = format!(
+                    "SELECT history_id, payload FROM history_summaries WHERE history_id IN ({})",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                    let history_id: String = row.get(0)?;
+                    let payload_str: String = row.get(1)?;
+                    let val: Value = serde_json::from_str(&payload_str)
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                    Ok((history_id, val))
+                })?;
 
-                for snapshot in snapshots {
-                    let record = self
-                        .load_transcript_snapshot(&item.id, &snapshot.id)?
-                        .ok_or_else(|| {
-                            format!(
-                                "Transcript snapshot \"{}\" for history item \"{}\" is missing.",
-                                snapshot.id, item.id
-                            )
+                for r in rows {
+                    let (hid, val) = r?;
+                    summary_files.push((hid, val));
+                }
+            }
+
+            // Bulk fetch snapshots with segments
+            let mut snapshot_files: Vec<(String, Value)> = Vec::new();
+            {
+                let sql = format!(
+                    "SELECT id, history_id, reason, created_at, segment_count, segments
+                     FROM transcript_snapshots
+                     WHERE history_id IN ({})
+                     ORDER BY created_at DESC, id DESC",
+                    placeholders
+                );
+                let mut stmt = conn.prepare(&sql)?;
+                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                    let snapshot_id: String = row.get(0)?;
+                    let history_id: String = row.get(1)?;
+                    let reason_str: String = row.get(2)?;
+                    let created_at: i64 = row.get(3)?;
+                    let segment_count: i64 = row.get(4)?;
+                    let segments_str: String = row.get(5)?;
+
+                    let reason = match reason_str.as_str() {
+                        "polish" => TranscriptSnapshotReason::Polish,
+                        "translate" => TranscriptSnapshotReason::Translate,
+                        "retranscribe" => TranscriptSnapshotReason::Retranscribe,
+                        "restore" => TranscriptSnapshotReason::Restore,
+                        _ => TranscriptSnapshotReason::Polish,
+                    };
+
+                    let parsed_val: Value = serde_json::from_str(&segments_str)
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+                    let normalized =
+                        normalize_history_transcript_segments(parsed_val).map_err(|e| {
+                            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+                                e,
+                            )))
                         })?;
-                    let record_val = serde_json::to_value(&record).map_err(|e| e.to_string())?;
-                    snapshot_files.push((
-                        format!("versions/{}/{}.json", item.id, snapshot.id),
-                        record_val,
-                    ));
+
+                    let metadata = TranscriptSnapshotMetadata {
+                        id: snapshot_id.clone(),
+                        history_id: history_id.clone(),
+                        reason,
+                        created_at: created_at as u64,
+                        segment_count: segment_count as u64,
+                    };
+
+                    Ok((history_id, metadata, normalized.segments))
+                })?;
+
+                let mut snapshots_by_item: std::collections::HashMap<String, Vec<TranscriptSnapshotRecord>> =
+                    std::collections::HashMap::new();
+                for r in rows {
+                    let (hid, metadata, segments) = r?;
+                    snapshots_by_item
+                        .entry(hid)
+                        .or_default()
+                        .push(TranscriptSnapshotRecord { metadata, segments });
+                }
+
+                for item in &items {
+                    if let Some(records) = snapshots_by_item.remove(item.id.as_str()) {
+                        let meta_list: Vec<TranscriptSnapshotMetadata> = records.iter().map(|r| r.metadata.clone()).collect();
+                        snapshot_files.push((
+                            format!("versions/{}/index.json", item.id),
+                            serde_json::to_value(&meta_list)
+                                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+                        ));
+                        for rec in records {
+                            snapshot_files.push((
+                                format!("versions/{}/{}.json", item.id, rec.metadata.id),
+                                serde_json::to_value(&rec)
+                                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+                            ));
+                        }
+                    }
                 }
             }
-        }
+
+            Ok((transcript_files, summary_files, snapshot_files))
+        })?;
 
         Ok(HistoryBackupSnapshot {
             items,
