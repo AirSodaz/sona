@@ -344,37 +344,21 @@ impl HistoryStore for SqliteHistoryStore {
 
             // 2. Perform FTS pre-filtering if query exists
             let trimmed_query = request.query.trim();
-            let mut candidate_ids = Vec::new();
             let mut search_contents = std::collections::HashMap::new();
 
             if !trimmed_query.is_empty() {
                 let fts_expr = build_fts_query(trimmed_query);
                 if !fts_expr.is_empty() {
                     let mut stmt = tx.prepare(
-                        "SELECT h.id FROM history_items h
+                        "SELECT h.id, h.search_content FROM history_items h
                          JOIN history_items_fts f ON h.rowid = f.rowid
                          WHERE history_items_fts MATCH ?1"
                     )?;
-                    let rows = stmt.query_map([fts_expr], |row| row.get::<_, String>(0))?;
-                    for row in rows {
-                        candidate_ids.push(row?);
-                    }
-
-                    // Load search_content ONLY for matching candidate items
-                    if !candidate_ids.is_empty() {
-                        let placeholders = candidate_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                        let query_str = format!(
-                            "SELECT id, search_content FROM history_items WHERE id IN ({})",
-                            placeholders
-                        );
-                        let mut stmt = tx.prepare(&query_str)?;
-                        let params = rusqlite::params_from_iter(candidate_ids.iter());
-                        let mut rows = stmt.query(params)?;
-                        while let Some(row) = rows.next()? {
-                            let id: String = row.get(0)?;
-                            let content: String = row.get(1)?;
-                            search_contents.insert(id, content);
-                        }
+                    let mut rows = stmt.query([fts_expr])?;
+                    while let Some(row) = rows.next()? {
+                        let id: String = row.get(0)?;
+                        let content: String = row.get(1)?;
+                        search_contents.insert(id, content);
                     }
                 }
             }
