@@ -115,6 +115,75 @@ impl SqliteHistoryStore {
 
         Ok(())
     }
+
+    fn reconcile_live_drafts(tx: &rusqlite::Transaction, history_dir: &std::path::Path) -> Result<(), String> {
+        let mut stmt = tx.prepare(
+            "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source
+             FROM history_items
+             WHERE status = 'draft' AND draft_source = 'live_record'"
+        ).map_err(|e| e.to_string())?;
+
+        let rows = stmt.query_map([], map_row_to_item).map_err(|e| e.to_string())?;
+        let mut draft_items = Vec::new();
+        for row in rows {
+            draft_items.push(row.map_err(|e| e.to_string())?);
+        }
+
+        for mut item in draft_items {
+            let Some(audio_path) = optional_history_child_path(history_dir, &item.audio_path) else {
+                continue;
+            };
+            let _metadata = match std::fs::metadata(&audio_path) {
+                Ok(m) if m.is_file() && m.len() > 0 => m,
+                _ => continue,
+            };
+
+            let segments_val: Option<Value> = {
+                let mut stmt = tx.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1").map_err(|e| e.to_string())?;
+                let mut rows = stmt.query([&item.id]).map_err(|e| e.to_string())?;
+                if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+                    let segments_str: String = row.get(0).map_err(|e| e.to_string())?;
+                    let val: Value = serde_json::from_str(&segments_str).map_err(|e| e.to_string())?;
+                    Some(val)
+                } else {
+                    None
+                }
+            };
+
+            let Some(segments_val) = segments_val else {
+                continue;
+            };
+
+            let normalized_transcript = match normalize_history_transcript_segments(segments_val) {
+                Ok(t) if !t.segments.is_empty() => t,
+                _ => continue,
+            };
+
+            item.preview_text = normalized_transcript.preview_text.clone();
+            item.search_content = normalized_transcript.search_content.clone();
+            let transcript_duration = normalized_transcript
+                .segments
+                .iter()
+                .filter_map(|s| s.end.is_finite().then_some(s.end))
+                .fold(0.0, f64::max);
+            item.duration = item.duration.max(transcript_duration).max(0.0);
+            item.status = HistoryItemStatus::Complete;
+            item.draft_source = None;
+
+            let segments_str = serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
+
+            tx.execute(
+                "UPDATE history_items SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL WHERE id = ?4",
+                rusqlite::params![item.preview_text, item.search_content, item.duration, item.id]
+            ).map_err(|e| e.to_string())?;
+
+            tx.execute(
+                "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
+                rusqlite::params![item.id, segments_str]
+            ).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
 }
 
 fn validate_id(id: &str, label: &str) -> Result<(), String> {
@@ -247,109 +316,18 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.get_db().with_transaction(|tx| {
-            let mut items = {
-                let mut stmt = tx.prepare(
-                    "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                     FROM history_items
-                     ORDER BY timestamp DESC"
-                )?;
-                let rows = stmt.query_map([], map_row_to_item)?;
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(row?);
-                }
-                items
-            };
-            let mut changed = false;
-
-            for item in &mut items {
-                if item.status != HistoryItemStatus::Draft
-                    || item.draft_source != Some(HistoryDraftSource::LiveRecord)
-                {
-                    continue;
-                }
-
-                let Some(audio_path) =
-                    optional_history_child_path(&self.history_dir(), &item.audio_path)
-                else {
-                    continue;
-                };
-                let _audio_metadata = match fs::metadata(&audio_path) {
-                    Ok(metadata) if metadata.is_file() && metadata.len() > 0 => metadata,
-                    _ => continue,
-                };
-
-                let segments_val: Option<Value> = {
-                    let mut stmt =
-                        tx.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1")?;
-                    let mut rows = stmt.query([&item.id])?;
-                    let result: Result<Option<Value>, rusqlite::Error> = (|| {
-                        if let Some(row) = rows.next()? {
-                            let segments_str: String = row.get(0)?;
-                            let val: Value = serde_json::from_str(&segments_str)
-                                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                            Ok(Some(val))
-                        } else {
-                            Ok(None)
-                        }
-                    })();
-                    result
-                }?;
-
-                let Some(segments_val) = segments_val else {
-                    continue;
-                };
-
-                let normalized_transcript = match normalize_history_transcript_segments(segments_val) {
-                    Ok(transcript) if !transcript.segments.is_empty() => transcript,
-                    _ => continue,
-                };
-
-                item.preview_text = normalized_transcript.preview_text.clone();
-                item.search_content = normalized_transcript.search_content.clone();
-                let transcript_duration = normalized_transcript
-                    .segments
-                    .iter()
-                    .filter_map(|segment| segment.end.is_finite().then_some(segment.end))
-                    .fold(0.0, f64::max);
-                item.duration = item.duration.max(transcript_duration).max(0.0);
-                item.status = HistoryItemStatus::Complete;
-                item.draft_source = None;
-
-                let segments_str = serde_json::to_string(&normalized_transcript.segments)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-                tx.execute(
-                    "UPDATE history_items SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL WHERE id = ?4",
-                    rusqlite::params![
-                        item.preview_text,
-                        item.search_content,
-                        item.duration,
-                        item.id
-                    ]
-                )?;
-                tx.execute(
-                    "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
-                    rusqlite::params![item.id, segments_str]
-                )?;
-
-                changed = true;
+            Self::reconcile_live_drafts(tx, &self.history_dir())
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?;
+            let mut stmt = tx.prepare(
+                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                 FROM history_items
+                 ORDER BY timestamp DESC"
+            )?;
+            let rows = stmt.query_map([], map_row_to_item)?;
+            let mut items = Vec::new();
+            for row in rows {
+                items.push(row?);
             }
-
-            if changed {
-                let mut stmt = tx.prepare(
-                    "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                     FROM history_items
-                     ORDER BY timestamp DESC"
-                )?;
-                let rows = stmt.query_map([], map_row_to_item)?;
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(row?);
-                }
-                return Ok(items);
-            }
-
             Ok(items)
         })
     }
@@ -358,10 +336,69 @@ impl HistoryStore for SqliteHistoryStore {
         &self,
         request: HistoryWorkspaceQueryRequest,
     ) -> Result<HistoryWorkspaceQueryResult, String> {
-        let items = self.list_items_with_reconciled_live_drafts()?;
-        Ok(super::workspace_query::query_workspace_items(
-            items, request,
-        ))
+        self.ensure_ready()?;
+        self.get_db().with_transaction(|tx| {
+            // 1. Reconcile drafts first
+            Self::reconcile_live_drafts(tx, &self.history_dir())
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?;
+
+            // 2. Perform FTS pre-filtering if query exists
+            let trimmed_query = request.query.trim();
+            let mut candidate_ids = Vec::new();
+            let mut search_contents = std::collections::HashMap::new();
+
+            if !trimmed_query.is_empty() {
+                let fts_expr = build_fts_query(trimmed_query);
+                if !fts_expr.is_empty() {
+                    let mut stmt = tx.prepare(
+                        "SELECT h.id FROM history_items h
+                         JOIN history_items_fts f ON h.rowid = f.rowid
+                         WHERE history_items_fts MATCH ?1"
+                    )?;
+                    let rows = stmt.query_map([fts_expr], |row| row.get::<_, String>(0))?;
+                    for row in rows {
+                        candidate_ids.push(row?);
+                    }
+
+                    // Load search_content ONLY for matching candidate items
+                    if !candidate_ids.is_empty() {
+                        let placeholders = candidate_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                        let query_str = format!(
+                            "SELECT id, search_content FROM history_items WHERE id IN ({})",
+                            placeholders
+                        );
+                        let mut stmt = tx.prepare(&query_str)?;
+                        let params = rusqlite::params_from_iter(candidate_ids.iter());
+                        let mut rows = stmt.query(params)?;
+                        while let Some(row) = rows.next()? {
+                            let id: String = row.get(0)?;
+                            let content: String = row.get(1)?;
+                            search_contents.insert(id, content);
+                        }
+                    }
+                }
+            }
+
+            // 3. Load all workspace items without search_content
+            let mut stmt = tx.prepare(
+                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source
+                 FROM history_items
+                 ORDER BY timestamp DESC"
+            )?;
+
+            let rows = stmt.query_map([], map_row_to_item)?;
+            let mut items = Vec::new();
+            for row in rows {
+                let mut item = row?;
+                if let Some(content) = search_contents.remove(&item.id) {
+                    item.search_content = content;
+                }
+                items.push(item);
+            }
+
+            // 4. Delegate to existing in-memory matching logic for highlighting/snippets
+            Ok(super::workspace_query::query_workspace_items(items, request))
+        })
     }
 
     fn create_live_draft(
@@ -1203,6 +1240,18 @@ impl HistoryStore for SqliteHistoryStore {
     }
 }
 
+fn build_fts_query(query: &str) -> String {
+    let terms: Vec<String> = query
+        .split(|c: char| c.is_whitespace() || ",.?!;:()[]{}<>\"'/\\|~`-=_+，。？！；：（）［］｛｝《》“”‘’—～／｜·".contains(c))
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let escaped = s.replace('"', "\"\"");
+            format!("\"{}\"", escaped)
+        })
+        .collect();
+    terms.join(" AND ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1425,5 +1474,83 @@ mod tests {
             result.filtered_items[0].preview_text,
             "Alpha roadmap discussion..."
         );
+    }
+
+    #[test]
+    fn test_build_fts_query() {
+        assert_eq!(build_fts_query("hello world"), "\"hello\" AND \"world\"");
+        assert_eq!(build_fts_query("hello, world!"), "\"hello\" AND \"world\"");
+        assert_eq!(build_fts_query("hello \"world\""), "\"hello\" AND \"world\"");
+        assert_eq!(build_fts_query("  "), "");
+    }
+
+    #[test]
+    fn test_workspace_query_with_reconciliation() {
+        use crate::repositories::history::{
+            HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceScope,
+            HistoryWorkspaceSortOrder,
+        };
+
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        // 1. Create a live draft item
+        let draft_res = store.create_live_draft(HistoryCreateLiveDraftRequest {
+            id: None,
+            audio_extension: "wav".to_string(),
+            project_id: Some("project-1".to_string()),
+            icon: None,
+        }).unwrap();
+
+        // At this point, the draft is in the database with status = 'draft' and draft_source = 'live_record'.
+        // But since there is no audio file yet (or segments in transcripts), reconcile_live_drafts should skip it.
+        let result = store.query_workspace(HistoryWorkspaceQueryRequest {
+            scope: HistoryWorkspaceScope::All,
+            query: "".to_string(),
+            filter_type: HistoryWorkspaceFilterType::All,
+            date_filter: HistoryWorkspaceDateFilter::All,
+            sort_order: HistoryWorkspaceSortOrder::Newest,
+        }).unwrap();
+        assert_eq!(result.filtered_items.len(), 1);
+        assert_eq!(result.filtered_items[0].status, HistoryItemStatus::Draft);
+
+        // 2. Write the audio file so reconcile_live_drafts will process it
+        let audio_path = root.path().join("history").join(&draft_res.item.audio_path);
+        if let Some(parent) = audio_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&audio_path, [1, 2, 3]).unwrap();
+
+        // 3. Insert some dummy transcript segments into history_transcripts
+        let segments_str = serde_json::to_string(&json!([
+            {
+                "id": "seg-1",
+                "text": "Hello world from reconciled draft",
+                "start": 0.0,
+                "end": 5.0
+            }
+        ])).unwrap();
+        store.get_db().with_transaction(|tx| {
+            tx.execute(
+                "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
+                rusqlite::params![draft_res.item.id, segments_str]
+            )?;
+            Ok(())
+        }).unwrap();
+
+        // 4. Query workspace again, which should trigger reconciliation
+        let result = store.query_workspace(HistoryWorkspaceQueryRequest {
+            scope: HistoryWorkspaceScope::All,
+            query: "reconciled".to_string(),
+            filter_type: HistoryWorkspaceFilterType::All,
+            date_filter: HistoryWorkspaceDateFilter::All,
+            sort_order: HistoryWorkspaceSortOrder::Newest,
+        }).unwrap();
+
+        assert_eq!(result.filtered_items.len(), 1);
+        assert_eq!(result.filtered_items[0].status, HistoryItemStatus::Complete);
+        assert_eq!(result.filtered_items[0].preview_text, "Hello world from reconciled draft...");
     }
 }
