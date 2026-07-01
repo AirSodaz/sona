@@ -222,17 +222,17 @@ fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCo
 }
 
 #[derive(Clone)]
-struct NormalizedSearchText {
-    text: String,
-    raw_segments: Vec<NormalizedRawSegment>,
+pub(super) struct NormalizedSearchText {
+    pub(super) text: String,
+    pub(super) raw_segments: Vec<NormalizedRawSegment>,
 }
 
 #[derive(Clone)]
-struct NormalizedRawSegment {
-    byte_start: usize,
-    byte_end: usize,
-    utf16_start: usize,
-    utf16_end: usize,
+pub(super) struct NormalizedRawSegment {
+    pub(super) byte_start: usize,
+    pub(super) byte_end: usize,
+    pub(super) utf16_start: usize,
+    pub(super) utf16_end: usize,
 }
 
 #[derive(Clone)]
@@ -242,7 +242,7 @@ struct WorkspaceMatchRange {
     display_range: HistoryWorkspaceSearchRange,
 }
 
-fn normalize_workspace_search_text(value: &str) -> NormalizedSearchText {
+pub(super) fn normalize_workspace_search_text(value: &str) -> NormalizedSearchText {
     let mut normalized = String::new();
     let mut raw_segments: Vec<NormalizedRawSegment> = Vec::new();
     let mut raw_utf16_offset = 0;
