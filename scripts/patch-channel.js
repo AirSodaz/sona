@@ -10,7 +10,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const CHANNEL_CONFIG = {
   nightly: {
     identifier: 'com.asoda.sona.nightly',
-    productName: 'Sona Nightly',
+    productName: 'Sona-Nightly',
     updaterEndpoints: [
       'https://github.com/AirSodaz/sona/releases/download/nightly/updater.json',
     ],
