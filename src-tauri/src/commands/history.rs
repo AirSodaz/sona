@@ -575,9 +575,9 @@ pub async fn dispose_prepared_backup_import(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::database::Database;
     use crate::integrations::asr::TranscriptSegment;
-    use crate::repositories::history::FileHistoryStore;
-    use crate::repositories::history::test_support::sample_history_item;
+    use crate::repositories::history::sqlite_store::SqliteHistoryStore;
     use serde_json::json;
     use tempfile::tempdir;
 
@@ -598,13 +598,28 @@ mod tests {
         }
     }
 
+    fn make_store() -> (tempfile::TempDir, SqliteHistoryStore) {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+        (root, store)
+    }
+
     #[test]
     fn llm_history_helpers_create_snapshot_then_update_transcript() {
-        let root = tempdir().unwrap();
-        let repository = FileHistoryStore::new(root.path().to_path_buf());
-        repository.ensure_ready().unwrap();
-        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
-        repository.write_index(std::slice::from_ref(&item)).unwrap();
+        let (_root, repository) = make_store();
+
+        let item = repository
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([{"id": "seg-1", "text": "before", "start": 0.0, "end": 1.0, "isFinal": true}]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![]),
+                native_audio_path: None,
+                audio_extension: None,
+            })
+            .unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
@@ -638,7 +653,8 @@ mod tests {
     #[test]
     fn llm_history_helpers_skip_current_jobs_without_writing() {
         let root = tempdir().unwrap();
-        let repository = FileHistoryStore::new(root.path().to_path_buf());
+        let db = Database::open_in_memory().unwrap();
+        let repository = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
@@ -662,20 +678,25 @@ mod tests {
 
         assert!(snapshot.is_none());
         assert!(updated.is_none());
-        assert!(!repository.history_dir().exists());
+        assert!(!root.path().join(HISTORY_DIR_NAME).exists());
     }
 
     #[test]
     fn llm_history_snapshot_helper_skips_drafts() {
-        let root = tempdir().unwrap();
-        let repository = FileHistoryStore::new(root.path().to_path_buf());
-        repository.ensure_ready().unwrap();
-        let item = sample_history_item("draft-1", HistoryItemStatus::Draft);
-        repository.write_index(std::slice::from_ref(&item)).unwrap();
+        let (_root, repository) = make_store();
+
+        let draft = repository
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
+                audio_extension: "wav".to_string(),
+                project_id: None,
+                icon: None,
+            })
+            .unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,
-            &item.id,
+            &draft.item.id,
             TranscriptSnapshotReason::Polish,
             vec![segment("seg-1", "before")],
         )
@@ -684,7 +705,7 @@ mod tests {
         assert!(snapshot.is_none());
         assert!(
             repository
-                .list_transcript_snapshots(&item.id)
+                .list_transcript_snapshots(&draft.item.id)
                 .unwrap()
                 .is_empty()
         );
@@ -692,12 +713,22 @@ mod tests {
 
     #[test]
     fn llm_history_summary_helper_saves_sidecar_payload() {
-        let root = tempdir().unwrap();
-        let repository = FileHistoryStore::new(root.path().to_path_buf());
+        let (_root, repository) = make_store();
+
+        let item = repository
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([{"id": "seg-1", "text": "test", "start": 0.0, "end": 1.0, "isFinal": true}]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![]),
+                native_audio_path: None,
+                audio_extension: None,
+            })
+            .unwrap();
 
         save_llm_summary_payload(
             &repository,
-            "history-1",
+            &item.id,
             json!({
                 "activeTemplateId": "meeting",
                 "record": {
@@ -711,7 +742,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            repository.load_summary("history-1").unwrap(),
+            repository.load_summary(&item.id).unwrap(),
             Some(json!({
                 "activeTemplateId": "meeting",
                 "record": {

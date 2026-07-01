@@ -827,9 +827,7 @@ impl HistoryStore for SqliteHistoryStore {
 
                 let normalized =
                     normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                            e,
-                        )))
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
                     })?;
 
                 let metadata = TranscriptSnapshotMetadata {
