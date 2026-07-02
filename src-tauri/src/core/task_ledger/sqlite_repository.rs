@@ -108,39 +108,42 @@ impl SqliteLedgerRepository {
     }
 
     pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), String> {
-        let existing: Option<String> = self.get_db().with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT data FROM task_ledger WHERE id = ?1")?;
-            let mut rows = stmt.query([id])?;
-            if let Some(row) = rows.next()? {
-                Ok(Some(row.get(0)?))
-            } else {
-                Ok(None)
-            }
-        })?;
-
-        let Some(data_str) = existing else {
-            return Ok(());
-        };
-
-        let mut record: TaskLedgerRecord =
-            serde_json::from_str(&data_str).map_err(|e| e.to_string())?;
-
-        if let Some(patch_obj) = patch.as_object() {
-            let mut current = serde_json::to_value(&record).map_err(|e| e.to_string())?;
-            if let Some(current_obj) = current.as_object_mut() {
-                for (key, val) in patch_obj {
-                    current_obj.insert(key.clone(), val.clone());
+        self.get_db().with_transaction(|tx| {
+            let existing: Option<String> = {
+                let mut stmt = tx.prepare("SELECT data FROM task_ledger WHERE id = ?1")?;
+                let mut rows = stmt.query([id])?;
+                if let Some(row) = rows.next()? {
+                    Some(row.get(0)?)
+                } else {
+                    None
                 }
+            };
+
+            let Some(data_str) = existing else {
+                return Ok(());
+            };
+
+            let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+            if let Some(patch_obj) = patch.as_object() {
+                let mut current = serde_json::to_value(&record)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                if let Some(current_obj) = current.as_object_mut() {
+                    for (key, val) in patch_obj {
+                        current_obj.insert(key.clone(), val.clone());
+                    }
+                }
+                record = serde_json::from_value(current)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
             }
-            record = serde_json::from_value(current).map_err(|e| e.to_string())?;
-        }
 
-        record.updated_at = Self::now_ms();
-        let new_data_str = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-        let now = record.updated_at.to_string();
+            record.updated_at = Self::now_ms();
+            let new_data_str = serde_json::to_string(&record)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let now = record.updated_at.to_string();
 
-        self.get_db().with_connection(|conn| {
-            conn.execute(
+            tx.execute(
                 "UPDATE task_ledger SET data = ?1, updated_at = ?2 WHERE id = ?3",
                 rusqlite::params![new_data_str, now, id],
             )?;

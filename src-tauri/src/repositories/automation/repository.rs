@@ -423,6 +423,26 @@ where
     .map_err(|error| error.to_string())?
 }
 
+pub async fn run_automation_task<T, F>(
+    provider: &dyn PathProvider,
+    lock: std::sync::Arc<std::sync::Mutex<()>>,
+    task: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(crate::repositories::automation::SqliteAutomationRepository) -> Result<T, String>
+        + Send
+        + 'static,
+{
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = lock.lock().map_err(|error| error.to_string())?;
+        task(crate::repositories::automation::SqliteAutomationRepository::new(app_local_data_dir))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
