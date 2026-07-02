@@ -237,14 +237,19 @@ impl SqliteProjectRepository {
     }
 
     pub fn delete(&self, project_id: &str) -> Result<(), String> {
-        self.get_db().with_connection(|conn| {
-            conn.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
+        self.get_db().with_transaction(|tx| {
+            tx.execute(
+                "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
+                [project_id],
+            )?;
+            tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
             Ok(())
         })
     }
 
     pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), String> {
         self.get_db().with_transaction(|tx| {
+            tx.execute("UPDATE history_items SET project_id = NULL", [])?;
             tx.execute("DELETE FROM projects", [])?;
             let mut stmt = tx.prepare(
                 "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
