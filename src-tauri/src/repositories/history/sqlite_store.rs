@@ -112,13 +112,21 @@ impl SqliteHistoryStore {
 
     fn reconcile_live_drafts(&self) -> Result<(), String> {
         let history_dir = self.history_dir();
-        let draft_items = self.get_db().with_connection(|conn| {
+        #[allow(clippy::type_complexity)]
+        let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db().with_connection(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source
-                 FROM history_items
-                 WHERE status = 'draft' AND draft_source = 'live_record'"
+                "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
+                 FROM history_items h
+                 LEFT JOIN history_transcripts t ON h.id = t.history_id
+                 WHERE h.status = 'draft' AND h.draft_source = 'live_record'"
             )?;
-            let rows = stmt.query_map([], map_row_to_item)?;
+            let rows = stmt.query_map([], |row| {
+                let item = map_row_to_item(row)?;
+                let segments: Option<String> = row.get(13)?;
+                let segments_val = segments
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                Ok((item, segments_val))
+            })?;
             let mut items = Vec::new();
             for row in rows {
                 items.push(row?);
@@ -128,7 +136,7 @@ impl SqliteHistoryStore {
 
         let mut verified_updates = Vec::new();
 
-        for mut item in draft_items {
+        for (mut item, segments_val) in draft_items {
             let Some(audio_path) = optional_history_child_path(&history_dir, &item.audio_path)
             else {
                 continue;
@@ -137,20 +145,6 @@ impl SqliteHistoryStore {
                 Ok(m) if m.is_file() && m.len() > 0 => m,
                 _ => continue,
             };
-
-            let segments_val: Option<Value> = self.get_db().with_connection(|conn| {
-                let mut stmt =
-                    conn.prepare("SELECT segments FROM history_transcripts WHERE history_id = ?1")?;
-                let mut rows = stmt.query([&item.id])?;
-                if let Some(row) = rows.next()? {
-                    let segments_str: String = row.get(0)?;
-                    let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                    Ok(Some(val))
-                } else {
-                    Ok(None)
-                }
-            })?;
 
             let Some(segments_val) = segments_val else {
                 continue;
