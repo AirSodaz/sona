@@ -676,7 +676,7 @@ impl HistoryRepository {
                 read_json_value(&transcript_path)?,
                 &format!("Transcript for history item {}", item.id),
             )?;
-            transcript_files.push((item.transcript_path.clone(), transcript));
+            transcript_files.push((format!("{}.json", item.id), transcript));
 
             let summary_path = self.summary_path(&item.id)?;
             if summary_path.exists() {

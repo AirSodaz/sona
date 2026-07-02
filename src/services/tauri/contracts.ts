@@ -443,7 +443,7 @@ export type TauriCommandContractMap = {
     result: void;
   };
   [TauriCommand.history.loadTranscript]: {
-    args: { filename: string };
+    args: { historyId: string };
     result: TranscriptSegment[] | null;
   };
   [TauriCommand.history.updateTranscript]: {
@@ -525,7 +525,7 @@ export type TauriCommandContractMap = {
     result: void;
   };
   [TauriCommand.history.resolveAudioPath]: {
-    args: { filename: string };
+    args: { historyId: string };
     result: string | null;
   };
   [TauriCommand.history.queryWorkspace]: {

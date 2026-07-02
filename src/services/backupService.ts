@@ -243,7 +243,7 @@ export class BackupService {
       return;
     }
 
-    const segments = await this.ports.historyServiceLoadTranscript(matchingItem.transcriptPath);
+    const segments = await this.ports.historyServiceLoadTranscript(matchingItem.id);
     if (!segments) {
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
       return;
@@ -254,7 +254,7 @@ export class BackupService {
       sourceHistoryId: matchingItem.id,
       title: matchingItem.title,
       icon: matchingItem.icon || null,
-      audioUrl: await this.ports.historyServiceGetAudioUrl(matchingItem.audioPath),
+      audioUrl: await this.ports.historyServiceGetAudioUrl(matchingItem.id),
     });
     this.ports.setAudioFile(null);
   }
@@ -376,8 +376,8 @@ export const backupService = createBackupService({
   migrateConfig,
   projectServiceGetAll: (options) => projectService.getAll(options),
   projectServiceSaveAll: (projects) => projectService.saveAll(projects),
-  historyServiceLoadTranscript: (path) => historyService.loadTranscript(path),
-  historyServiceGetAudioUrl: (path) => historyService.getAudioUrl(path),
+  historyServiceLoadTranscript: (historyId) => historyService.loadTranscript(historyId),
+  historyServiceGetAudioUrl: (historyId) => historyService.getAudioUrl(historyId),
   llmUsageReadRaw,
   llmUsageReplaceRaw,
   openDialog,

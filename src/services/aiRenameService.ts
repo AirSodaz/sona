@@ -64,12 +64,12 @@ export async function generateAiTitle(segments: TranscriptSegment[]): Promise<st
 /**
  * Generates an AI title for a history item by loading its transcript file first.
  *
- * @param transcriptPath The path to the transcript JSON file.
+ * @param historyId The history item ID.
  * @returns A promise that resolves to the generated title.
  */
-export async function generateAiTitleForHistoryItem(transcriptPath: string): Promise<string> {
+export async function generateAiTitleForHistoryItem(historyId: string): Promise<string> {
     try {
-        const segments = await historyService.loadTranscript(transcriptPath);
+        const segments = await historyService.loadTranscript(historyId);
         if (!segments) {
             throw new Error(i18n.t('history.no_transcript', { defaultValue: 'No transcript available.' }));
         }

@@ -227,8 +227,8 @@ export class HistoryService {
         }
     }
 
-    async loadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
-        return await this.ports.historyLoadTranscript(filename);
+    async loadTranscript(historyId: string): Promise<TranscriptSegment[] | null> {
+        return await this.ports.historyLoadTranscript(historyId);
     }
 
     async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<HistoryItem> {
@@ -310,12 +310,12 @@ export class HistoryService {
         await this.ports.historyDeleteSummary(historyId);
     }
 
-    async getAudioAbsolutePath(filename: string): Promise<string | null> {
-        return await this.ports.historyResolveAudioPath(filename);
+    async getAudioAbsolutePath(historyId: string): Promise<string | null> {
+        return await this.ports.historyResolveAudioPath(historyId);
     }
 
-    async getAudioUrl(filename: string): Promise<string | null> {
-        const fullPath = await this.getAudioAbsolutePath(filename);
+    async getAudioUrl(historyId: string): Promise<string | null> {
+        const fullPath = await this.getAudioAbsolutePath(historyId);
         return fullPath ? this.ports.convertManagedAudioFileSrc(fullPath) : null;
     }
 

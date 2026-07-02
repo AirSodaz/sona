@@ -97,8 +97,8 @@ export async function historyDeleteItems(ids: string[]): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteItems, { ids });
 }
 
-export async function historyLoadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
-  return invokeTauri(TauriCommand.history.loadTranscript, { filename });
+export async function historyLoadTranscript(historyId: string): Promise<TranscriptSegment[] | null> {
+  return invokeTauri(TauriCommand.history.loadTranscript, { historyId });
 }
 
 export async function historyUpdateTranscript(
@@ -197,8 +197,8 @@ export async function historyDeleteSummary(historyId: string): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteSummary, { historyId });
 }
 
-export async function historyResolveAudioPath(filename: string): Promise<string | null> {
-  return invokeTauri(TauriCommand.history.resolveAudioPath, { filename });
+export async function historyResolveAudioPath(historyId: string): Promise<string | null> {
+  return invokeTauri(TauriCommand.history.resolveAudioPath, { historyId });
 }
 
 export async function historyQueryWorkspace(

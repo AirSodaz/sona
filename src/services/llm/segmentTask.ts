@@ -78,7 +78,7 @@ interface ApplySegmentItemsToTranscriptJobOptions<TItem> {
   logLabel: string;
   getCurrentHistoryId: () => string;
   applyToCurrentTranscript: (items: TItem[]) => void | Promise<void>;
-  loadTranscript: (filename: string) => Promise<TranscriptSegment[] | null>;
+  loadTranscript: (historyId: string) => Promise<TranscriptSegment[] | null>;
   updateTranscript: (historyId: string, segments: TranscriptSegment[]) => Promise<void>;
   mergeIntoSegments: (segments: TranscriptSegment[], items: TItem[]) => TranscriptSegment[];
 }
@@ -309,7 +309,7 @@ export async function applySegmentItemsToTranscriptJob<TItem>({
   }
 
   try {
-    const backgroundSegments = await loadTranscript(`${jobHistoryId}.json`);
+    const backgroundSegments = await loadTranscript(jobHistoryId);
     if (!backgroundSegments) {
       return;
     }

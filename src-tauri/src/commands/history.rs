@@ -304,10 +304,10 @@ pub async fn history_delete_items<R: Runtime>(
 pub async fn history_load_transcript<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    filename: String,
+    history_id: String,
 ) -> Result<Option<Vec<TranscriptSegment>>, String> {
     run_history_task(&app as &dyn PathProvider, state, move |repository| {
-        repository.load_transcript(&filename)
+        repository.load_transcript(&history_id)
     })
     .await
 }
@@ -470,10 +470,10 @@ pub async fn history_delete_summary<R: Runtime>(
 pub async fn history_resolve_audio_path<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    filename: String,
+    history_id: String,
 ) -> Result<Option<String>, String> {
     run_history_task(&app as &dyn PathProvider, state, move |repository| {
-        repository.resolve_audio_path(&filename)
+        repository.resolve_audio_path(&history_id)
     })
     .await
 }

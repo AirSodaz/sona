@@ -468,7 +468,7 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'AI Auto-rename' }));
 
     await waitFor(() => {
-      expect(aiRenameModuleState.generateAiTitleForHistoryItem).toHaveBeenCalledWith('hist-inbox.json');
+      expect(aiRenameModuleState.generateAiTitleForHistoryItem).toHaveBeenCalledWith('hist-inbox');
     });
     expect(aiRenameModuleState.loadCount).toBe(1);
     await waitFor(() => {

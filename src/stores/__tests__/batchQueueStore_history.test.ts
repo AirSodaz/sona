@@ -309,7 +309,7 @@ describe('batchQueueStore History Integration', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        expect(historyService.getAudioUrl).toHaveBeenCalledWith('history-player.wav');
+        expect(historyService.getAudioUrl).toHaveBeenCalledWith('history-player');
         expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
             sourceHistoryId: 'history-player',
             title: 'Batch player.wav',

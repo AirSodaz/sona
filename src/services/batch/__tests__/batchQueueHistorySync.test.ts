@@ -49,7 +49,7 @@ describe('batchQueueHistorySync', () => {
       projectId: 'project-1',
       audioUrl: 'asset:///history/history-1.wav',
     });
-    expect(getAudioUrl).toHaveBeenCalledWith('history-1.wav');
+    expect(getAudioUrl).toHaveBeenCalledWith('history-1');
   });
 
   it('does not fall back to the queue source audio URL when history audio is unavailable', async () => {

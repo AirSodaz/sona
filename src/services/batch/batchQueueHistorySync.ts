@@ -12,7 +12,7 @@ export interface SavedBatchHistoryMeta {
 interface ResolveSavedBatchHistoryMetaInput {
   historyItem: HistoryItem;
   fallbackProjectId?: string | null;
-  getAudioUrl: (audioPath: string) => Promise<string | null | undefined>;
+  getAudioUrl: (historyId: string) => Promise<string | null | undefined>;
 }
 
 export async function resolveSavedBatchHistoryMeta({
@@ -24,7 +24,7 @@ export async function resolveSavedBatchHistoryMeta({
 
   if (historyItem.audioPath) {
     try {
-      historyAudioUrl = await getAudioUrl(historyItem.audioPath);
+      historyAudioUrl = await getAudioUrl(historyItem.id);
     } catch {
       historyAudioUrl = null;
     }

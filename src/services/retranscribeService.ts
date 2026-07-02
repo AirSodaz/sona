@@ -39,7 +39,7 @@ export class RetranscribeService {
             throw new Error('Live recording draft must be completed before re-transcribing.');
         }
 
-        const audioAbsolutePath = await this.ports.historyService.getAudioAbsolutePath(item.audioPath);
+        const audioAbsolutePath = await this.ports.historyService.getAudioAbsolutePath(item.id);
         if (!audioAbsolutePath) {
             throw new Error('Audio file not found on disk.');
         }

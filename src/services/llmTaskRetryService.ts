@@ -67,7 +67,7 @@ async function resolveRetryTranscript(task: TaskLedgerRecord): Promise<RetryTran
       };
     }
 
-    const segments = await historyService.loadTranscript(`${task.historyId}.json`);
+    const segments = await historyService.loadTranscript(task.historyId);
     if (!hasSegments(segments)) {
       throw new Error('Transcript is no longer available for retry.');
     }

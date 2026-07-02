@@ -135,7 +135,7 @@ describe('retryLlmTaskFromLedger', () => {
 
     await retryLlmTaskFromLedger(makeTask({ historyId: 'history-b' }));
 
-    expect(historyService.loadTranscript).toHaveBeenCalledWith('history-b.json');
+    expect(historyService.loadTranscript).toHaveBeenCalledWith('history-b');
     expect(translationService.retryTranslateTranscriptJob).toHaveBeenCalledWith({
       segments,
       historyId: 'history-b',

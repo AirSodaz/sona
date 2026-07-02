@@ -760,28 +760,30 @@ impl HistoryStore for SqliteHistoryStore {
                 "SELECT t.segments
                  FROM history_items i
                  JOIN history_transcripts t ON i.id = t.history_id
-                 WHERE i.id = ?1 OR i.transcript_path = ?1"
+                 WHERE i.id = ?1",
             )?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let segments_str: String = row.get(0)?;
                 let parsed_val: Value = serde_json::from_str(&segments_str)
                     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?;
+                let normalized =
+                    normalize_history_transcript_segments(parsed_val).map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
+                    })?;
                 Ok(Some(normalized.segments))
             } else {
                 let exists: bool = conn.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM history_items WHERE id = ?1 OR transcript_path = ?1)",
+                    "SELECT EXISTS(SELECT 1 FROM history_items WHERE id = ?1)",
                     [history_id],
                     |row| row.get(0),
                 )?;
                 if exists {
                     Ok(None)
                 } else {
-                    Err(rusqlite::Error::ToSqlConversionFailure(
-                        Box::new(std::io::Error::other(format!("History item not found: {history_id}")))
-                    ))
+                    Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+                        std::io::Error::other(format!("History item not found: {history_id}")),
+                    )))
                 }
             }
         })
@@ -1152,8 +1154,7 @@ impl HistoryStore for SqliteHistoryStore {
         validate_id(history_id, "History ID")?;
 
         let audio_path_opt: Option<String> = self.get_db().with_connection(|conn| {
-            let mut stmt = conn
-                .prepare("SELECT audio_path FROM history_items WHERE id = ?1 OR audio_path = ?1")?;
+            let mut stmt = conn.prepare("SELECT audio_path FROM history_items WHERE id = ?1")?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let p: String = row.get(0)?;
@@ -1250,7 +1251,7 @@ impl HistoryStore for SqliteHistoryStore {
                             ))));
                         }
                     };
-                    transcript_files.push((item.transcript_path.clone(), transcript_val));
+                    transcript_files.push((format!("{}.json", item.id), transcript_val));
                 }
             }
 

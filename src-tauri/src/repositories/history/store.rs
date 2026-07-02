@@ -93,7 +93,7 @@ impl HistoryStore for FileHistoryStore {
         let items = self.repo.list_items()?;
         let item = items
             .iter()
-            .find(|entry| entry.id == history_id || entry.transcript_path == history_id)
+            .find(|entry| entry.id == history_id)
             .ok_or_else(|| format!("History item not found: {history_id}"))?;
         self.repo.load_transcript(&item.transcript_path)
     }
@@ -168,7 +168,7 @@ impl HistoryStore for FileHistoryStore {
         let items = self.repo.list_items()?;
         let item = items
             .iter()
-            .find(|entry| entry.id == history_id || entry.audio_path == history_id)
+            .find(|entry| entry.id == history_id)
             .ok_or_else(|| format!("History item not found: {history_id}"))?;
         self.repo.resolve_audio_path(&item.audio_path)
     }

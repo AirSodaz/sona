@@ -309,7 +309,7 @@ describe('segmentTask helpers', () => {
     });
 
     expect(applyToCurrentTranscript).not.toHaveBeenCalled();
-    expect(loadTranscript).toHaveBeenCalledWith('history-a.json');
+    expect(loadTranscript).toHaveBeenCalledWith('history-a');
     expect(updateTranscript).toHaveBeenCalledWith('history-a', [
       { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true },
     ]);

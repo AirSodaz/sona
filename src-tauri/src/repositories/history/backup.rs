@@ -465,13 +465,11 @@ pub fn prepare_backup_import_inner(
                 ));
             }
 
-            let transcript_file_name = ensure_safe_file_name(
-                &item.transcript_path,
-                &format!("History transcript path for {}", item.id),
-            )?;
+            let safe_id =
+                ensure_safe_file_name(&item.id, &format!("History item ID for {}", item.id))?;
             let transcript_path = extraction_dir
                 .join(HISTORY_DIR_NAME)
-                .join(transcript_file_name);
+                .join(format!("{safe_id}.json"));
             ensure_json_array_value(
                 read_json_value(&transcript_path)?,
                 &format!("Transcript for history item {}", item.id),
@@ -480,7 +478,7 @@ pub fn prepare_backup_import_inner(
 
             let summary_path = extraction_dir
                 .join(HISTORY_DIR_NAME)
-                .join(format!("{}{}", item.id, SUMMARY_FILE_SUFFIX));
+                .join(format!("{safe_id}{SUMMARY_FILE_SUFFIX}"));
             if summary_path.exists() {
                 ensure_json_object_value(
                     read_json_value(&summary_path)?,
@@ -610,13 +608,13 @@ pub fn apply_prepared_history_import_inner(
     let mut snapshot_data: Vec<(String, String, String, i64, i64, String)> = Vec::new();
 
     for item in &items {
-        let transcript_path = extracted_history_dir.join(&item.transcript_path);
+        let safe_id = ensure_safe_file_name(&item.id, &format!("History item ID for {}", item.id))?;
+        let transcript_path = extracted_history_dir.join(format!("{safe_id}.json"));
         let transcript_val = read_json_value(&transcript_path)?;
         let segments_str = serde_json::to_string(&transcript_val).map_err(|e| e.to_string())?;
         transcript_entries.push((item.id.clone(), segments_str));
 
-        let summary_path =
-            extracted_history_dir.join(format!("{}{}", item.id, SUMMARY_FILE_SUFFIX));
+        let summary_path = extracted_history_dir.join(format!("{safe_id}{SUMMARY_FILE_SUFFIX}"));
         if summary_path.exists() {
             let summary_val = read_json_value(&summary_path)?;
             let payload_str = serde_json::to_string(&summary_val).map_err(|e| e.to_string())?;
@@ -625,7 +623,7 @@ pub fn apply_prepared_history_import_inner(
 
         let snapshot_dir = extracted_history_dir
             .join(HISTORY_VERSIONS_DIR_NAME)
-            .join(&item.id);
+            .join(&safe_id);
         if snapshot_dir.exists() {
             let snapshot_index_path = snapshot_dir.join(PROJECTS_INDEX_FILE_NAME);
             let snapshot_metadatas: Vec<TranscriptSnapshotMetadata> =
@@ -688,7 +686,7 @@ pub fn apply_prepared_history_import_inner(
                     item.timestamp as i64,
                     item.duration,
                     item.audio_path,
-                    item.transcript_path,
+                    format!("{}.json", item.id),
                     item.title,
                     item.preview_text,
                     item.icon,

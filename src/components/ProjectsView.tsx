@@ -92,8 +92,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     try {
-      let segments = await historyService.loadTranscript(item.transcriptPath);
-      const url = await historyService.getAudioUrl(item.audioPath);
+      let segments = await historyService.loadTranscript(item.id);
+      const url = await historyService.getAudioUrl(item.id);
 
       if (!segments && !url) {
         await showError({
@@ -605,7 +605,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             return '';
           }
           const { generateAiTitleForHistoryItem } = await import('../services/aiRenameService');
-          return await generateAiTitleForHistoryItem(item.transcriptPath);
+          return await generateAiTitleForHistoryItem(item.id);
         }}
       />
     </div>

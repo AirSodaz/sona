@@ -257,7 +257,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 const savedMeta = await resolveSavedBatchHistoryMeta({
                     historyItem,
                     fallbackProjectId: item.projectId,
-                    getAudioUrl: (audioPath) => historyService.getAudioUrl(audioPath),
+                    getAudioUrl: (historyId) => historyService.getAudioUrl(historyId),
                 });
                 let nextQueueItems: BatchQueueItem[] = [];
                 set((currentState) => {
