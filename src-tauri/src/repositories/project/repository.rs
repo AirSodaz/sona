@@ -1,17 +1,10 @@
 use crate::core::paths::{PathKind, PathProvider};
-use crate::repositories::storage::write_json_pretty_atomic;
 use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
 
-use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
+use super::types::{ProjectDefaults, ProjectListOptions, ProjectRecord};
 
-pub(crate) const PROJECTS_DIR_NAME: &str = "projects";
-pub(crate) const PROJECTS_INDEX_FILE_NAME: &str = "index.json";
 pub(crate) const SETTINGS_FILE_NAME: &str = "settings.json";
 pub(crate) const ACTIVE_PROJECT_SETTINGS_KEY: &str = "sona-active-project-id";
 pub(crate) const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
@@ -20,203 +13,9 @@ pub(crate) const DEFAULT_POLISH_PRESET_ID: &str = "general";
 
 pub(crate) static PROJECT_REPOSITORY_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Clone)]
-pub struct ProjectRepository {
-    pub(crate) app_local_data_dir: PathBuf,
-}
-
-impl ProjectRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self { app_local_data_dir }
-    }
-
-    pub(crate) fn projects_dir(&self) -> PathBuf {
-        self.app_local_data_dir.join(PROJECTS_DIR_NAME)
-    }
-
-    pub(crate) fn projects_index_path(&self) -> PathBuf {
-        self.projects_dir().join(PROJECTS_INDEX_FILE_NAME)
-    }
-
-    pub fn ensure_ready(&self) -> Result<(), String> {
-        fs::create_dir_all(self.projects_dir()).map_err(|error| error.to_string())?;
-        let index_path = self.projects_index_path();
-        if !index_path.exists() {
-            write_json_pretty_atomic(&index_path, &Value::Array(Vec::new()))?;
-        }
-        Ok(())
-    }
-
-    pub fn list(&self, options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
-        self.ensure_ready()?;
-        let raw = read_json_value(&self.projects_index_path())?;
-        let raw_projects = raw
-            .as_array()
-            .ok_or_else(|| "Project index must be an array.".to_string())?;
-
-        let projects = raw_projects
-            .iter()
-            .map(|item| normalize_project_value(item, &options))
-            .collect::<Vec<_>>();
-        let normalized = serde_json::to_value(&projects).map_err(|error| error.to_string())?;
-        if normalized != raw {
-            self.write_projects(&projects)?;
-        }
-        Ok(projects)
-    }
-
-    pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), String> {
-        self.ensure_ready()?;
-        let normalized = projects
-            .iter()
-            .map(|project| normalize_project_value(project, &ProjectListOptions::default()))
-            .collect::<Vec<_>>();
-        self.write_projects(&normalized)
-    }
-
-    pub fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
-        let now = current_time_millis()?;
-        let project = normalize_project_value(
-            &json_object([
-                ("id", Value::String(Uuid::new_v4().to_string())),
-                ("name", Value::String(input.name)),
-                (
-                    "description",
-                    Value::String(input.description.unwrap_or_default()),
-                ),
-                ("icon", Value::String(input.icon.unwrap_or_default())),
-                ("createdAt", Value::Number(now.into())),
-                ("updatedAt", Value::Number(now.into())),
-                (
-                    "defaults",
-                    serde_json::to_value(input.defaults).map_err(|error| error.to_string())?,
-                ),
-            ]),
-            &ProjectListOptions::default(),
-        );
-
-        let mut projects = self.list(ProjectListOptions::default())?;
-        projects.insert(0, project.clone());
-        self.write_projects(&projects)?;
-        Ok(project)
-    }
-
-    pub fn update(
-        &self,
-        project_id: &str,
-        updates: Value,
-    ) -> Result<Option<ProjectRecord>, String> {
-        let mut projects = self.list(ProjectListOptions::default())?;
-        let Some(index) = projects.iter().position(|project| project.id == project_id) else {
-            return Ok(None);
-        };
-        let Some(updates) = updates.as_object() else {
-            return Ok(Some(projects[index].clone()));
-        };
-
-        let mut value =
-            serde_json::to_value(&projects[index]).map_err(|error| error.to_string())?;
-        let source = value
-            .as_object_mut()
-            .ok_or_else(|| "Normalized project must be an object.".to_string())?;
-
-        copy_string_update(updates, source, "name");
-        copy_string_update(updates, source, "description");
-        copy_string_update(updates, source, "icon");
-
-        if let Some(default_updates) = updates.get("defaults").and_then(Value::as_object) {
-            let defaults = source
-                .entry("defaults")
-                .or_insert_with(|| Value::Object(Map::new()))
-                .as_object_mut()
-                .ok_or_else(|| "Project defaults must be an object.".to_string())?;
-            for (key, value) in default_updates {
-                defaults.insert(key.clone(), value.clone());
-            }
-        }
-
-        source.insert(
-            "updatedAt".to_string(),
-            Value::Number(current_time_millis()?.into()),
-        );
-
-        let updated = normalize_project_value(&value, &ProjectListOptions::default());
-        projects[index] = updated.clone();
-        self.write_projects(&projects)?;
-        Ok(Some(updated))
-    }
-
-    pub fn delete(&self, project_id: &str) -> Result<(), String> {
-        let mut projects = self.list(ProjectListOptions::default())?;
-        projects.retain(|project| project.id != project_id);
-        self.write_projects(&projects)
-    }
-
-    pub fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
-        let projects = self.list(ProjectListOptions::default())?;
-        let mut by_id = projects
-            .iter()
-            .cloned()
-            .map(|project| (project.id.clone(), project))
-            .collect::<HashMap<_, _>>();
-        let mut added_ids = HashSet::new();
-        let mut reordered = Vec::with_capacity(projects.len());
-
-        for project_id in project_ids {
-            if added_ids.contains(&project_id) {
-                continue;
-            }
-            if let Some(project) = by_id.remove(&project_id) {
-                added_ids.insert(project_id);
-                reordered.push(project);
-            }
-        }
-
-        for project in projects {
-            if !added_ids.contains(&project.id) {
-                reordered.push(project);
-            }
-        }
-
-        self.write_projects(&reordered)?;
-        Ok(reordered)
-    }
-
-    pub(crate) fn write_projects(&self, projects: &[ProjectRecord]) -> Result<(), String> {
-        write_json_pretty_atomic(&self.projects_index_path(), projects)
-    }
-}
-
 pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, String> {
     let project = normalize_project_value(input, &ProjectListOptions::default());
     serde_json::to_value(project).map_err(|error| error.to_string())
-}
-
-#[allow(dead_code)]
-pub fn get_active_project_id_from_dir(app_data_dir: &Path) -> Result<Option<String>, String> {
-    let settings = read_settings(app_data_dir)?;
-    Ok(settings
-        .get(ACTIVE_PROJECT_SETTINGS_KEY)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned))
-}
-
-#[allow(dead_code)]
-pub fn set_active_project_id_in_dir(
-    app_data_dir: &Path,
-    project_id: Option<String>,
-) -> Result<(), String> {
-    let mut settings = read_settings(app_data_dir)?;
-    settings.insert(
-        ACTIVE_PROJECT_SETTINGS_KEY.to_string(),
-        project_id.map(Value::String).unwrap_or(Value::Null),
-    );
-    write_json_pretty_atomic(
-        &app_data_dir.join(SETTINGS_FILE_NAME),
-        &Value::Object(settings),
-    )
 }
 
 pub async fn run_project_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
@@ -322,25 +121,6 @@ pub(crate) fn normalize_defaults(
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn read_settings(app_data_dir: &Path) -> Result<Map<String, Value>, String> {
-    let path = app_data_dir.join(SETTINGS_FILE_NAME);
-    match fs::read_to_string(&path) {
-        Ok(content) => match serde_json::from_str::<Value>(&content) {
-            Ok(Value::Object(settings)) => Ok(settings),
-            Ok(_) => Ok(Map::new()),
-            Err(error) => Err(error.to_string()),
-        },
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Map::new()),
-        Err(error) => Err(error.to_string()),
-    }
-}
-
-pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&content).map_err(|error| error.to_string())
-}
-
 pub(crate) fn current_time_millis() -> Result<u64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -376,35 +156,4 @@ pub(crate) fn string_array(value: Option<&Value>) -> Option<Vec<String>> {
             .map(ToOwned::to_owned)
             .collect(),
     )
-}
-
-pub(crate) fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
-    Value::Object(
-        entries
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
-    )
-}
-
-pub(crate) fn copy_string_update(
-    updates: &Map<String, Value>,
-    target: &mut Map<String, Value>,
-    key: &str,
-) {
-    if let Some(value) = updates.get(key).and_then(Value::as_str) {
-        target.insert(key.to_string(), Value::String(value.to_string()));
-    }
-}
-
-#[async_trait::async_trait]
-impl crate::core::dashboard::ports::ProjectRepository for ProjectRepository {
-    async fn count_projects(
-        &self,
-    ) -> Result<u64, crate::core::dashboard::error::DashboardServiceError> {
-        let projects = self.list(ProjectListOptions::default()).map_err(|e| {
-            crate::core::dashboard::error::DashboardServiceError::ProjectRepository(e)
-        })?;
-        Ok(projects.len() as u64)
-    }
 }

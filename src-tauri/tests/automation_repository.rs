@@ -9,8 +9,8 @@ pub mod core {
 use tauri_appsona_lib::repositories::automation as automation_repository;
 
 use automation_repository::{
-    AutomationRepository, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
-    create_automation_fingerprint, normalize_automation_path, validate_rule_activation_inner,
+    AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
+    normalize_automation_path, validate_rule_activation_inner,
 };
 use serde_json::{Value, json};
 use std::fs;
@@ -72,65 +72,10 @@ fn valid_global_config(offline_model_path: &str) -> Value {
 }
 
 #[test]
-fn load_state_creates_compatible_manifest_files() {
-    let dir = tempdir().unwrap();
-    let repository = AutomationRepository::new(dir.path().to_path_buf());
-
-    let state = repository.load_state().unwrap();
-
-    assert_eq!(state.rules, Vec::<Value>::new());
-    assert_eq!(state.processed_entries, Vec::<Value>::new());
-    assert_eq!(
-        fs::read_to_string(dir.path().join("automation").join("rules.json")).unwrap(),
-        "[]"
-    );
-    assert_eq!(
-        fs::read_to_string(dir.path().join("automation").join("processed.json")).unwrap(),
-        "[]"
-    );
-}
-
-#[test]
-fn persist_state_round_trips_existing_json_shapes() {
-    let dir = tempdir().unwrap();
-    let repository = AutomationRepository::new(dir.path().to_path_buf());
-    let rules = vec![json!({
-        "id": "rule-1",
-        "name": "Meeting Inbox",
-        "watchDirectory": "C:/watch",
-        "stageConfig": {
-            "autoPolish": true,
-            "autoTranslate": false
-        }
-    })];
-    let processed_entries = vec![json!({
-        "ruleId": "rule-1",
-        "filePath": "C:/watch/meeting.wav",
-        "sourceFingerprint": "c:\\watch\\meeting.wav::10::20",
-        "size": 10,
-        "mtimeMs": 20,
-        "status": "complete",
-        "processedAt": 30
-    })];
-
-    repository
-        .persist_state(rules.clone(), processed_entries.clone())
-        .unwrap();
-    let state = repository.load_state().unwrap();
-
-    assert_eq!(state.rules, rules);
-    assert_eq!(state.processed_entries, processed_entries);
-}
-
-#[test]
 fn path_normalization_matches_the_frontend_fingerprint_contract() {
     assert_eq!(
         normalize_automation_path(" C:/Watch/Sub// "),
         "c:\\watch\\sub"
-    );
-    assert_eq!(
-        create_automation_fingerprint(" C:/Watch/Meeting.WAV ", 42, 1000),
-        "c:\\watch\\meeting.wav::42::1000"
     );
 }
 

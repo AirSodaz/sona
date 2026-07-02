@@ -2,98 +2,11 @@ use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
-use crate::repositories::storage::write_json_pretty_atomic;
 use serde_json::Value;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::types::*;
-
-const AUTOMATION_DIR_NAME: &str = "automation";
-const RULES_FILE_NAME: &str = "rules.json";
-const PROCESSED_FILE_NAME: &str = "processed.json";
-
-#[derive(Clone, Debug)]
-pub struct AutomationRepository {
-    app_local_data_dir: PathBuf,
-}
-
-impl AutomationRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self { app_local_data_dir }
-    }
-
-    fn automation_dir(&self) -> PathBuf {
-        self.app_local_data_dir.join(AUTOMATION_DIR_NAME)
-    }
-
-    fn rules_path(&self) -> PathBuf {
-        self.automation_dir().join(RULES_FILE_NAME)
-    }
-
-    fn processed_path(&self) -> PathBuf {
-        self.automation_dir().join(PROCESSED_FILE_NAME)
-    }
-
-    pub fn ensure_ready(&self) -> Result<(), String> {
-        fs::create_dir_all(self.automation_dir()).map_err(|error| error.to_string())?;
-        ensure_json_array_file(&self.rules_path())?;
-        ensure_json_array_file(&self.processed_path())?;
-        Ok(())
-    }
-
-    pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
-        self.ensure_ready()?;
-        Ok(AutomationRepositoryState {
-            rules: read_json_array_or_empty(&self.rules_path()),
-            processed_entries: read_json_array_or_empty(&self.processed_path()),
-        })
-    }
-
-    pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), String> {
-        self.ensure_ready()?;
-        write_json_pretty_atomic(&self.rules_path(), &rules)
-    }
-
-    pub fn persist_processed_entries(&self, processed_entries: Vec<Value>) -> Result<(), String> {
-        self.ensure_ready()?;
-        write_json_pretty_atomic(&self.processed_path(), &processed_entries)
-    }
-
-    pub fn persist_state(
-        &self,
-        rules: Vec<Value>,
-        processed_entries: Vec<Value>,
-    ) -> Result<(), String> {
-        self.ensure_ready()?;
-        write_json_pretty_atomic(&self.rules_path(), &rules)?;
-        write_json_pretty_atomic(&self.processed_path(), &processed_entries)
-    }
-}
-
-fn ensure_json_array_file(path: &Path) -> Result<(), String> {
-    if path.exists() {
-        return Ok(());
-    }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    fs::write(path, "[]").map_err(|error| error.to_string())
-}
-
-fn read_json_array_or_empty(path: &Path) -> Vec<Value> {
-    let content = match fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(_) => return Vec::new(),
-    };
-
-    match serde_json::from_str::<Value>(&content) {
-        Ok(Value::Array(items)) => items,
-        _ => Vec::new(),
-    }
-}
 
 pub fn normalize_automation_path(path: &str) -> String {
     path.trim()
@@ -101,17 +14,6 @@ pub fn normalize_automation_path(path: &str) -> String {
         .trim_end_matches('\\')
         .to_lowercase()
 }
-
-#[allow(dead_code)]
-pub fn create_automation_fingerprint(file_path: &str, size: u64, mtime_ms: u64) -> String {
-    format!(
-        "{}::{}::{}",
-        normalize_automation_path(file_path),
-        size,
-        mtime_ms
-    )
-}
-
 fn is_same_automation_path(a: &str, b: &str) -> bool {
     normalize_automation_path(a) == normalize_automation_path(b)
 }

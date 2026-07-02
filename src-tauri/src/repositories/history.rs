@@ -4,10 +4,8 @@ mod item_factory;
 pub(crate) mod repository;
 pub mod sqlite_store;
 mod state;
-pub(crate) mod store;
 pub use repository::HistoryRepository;
 pub use sqlite_store::SqliteHistoryStore;
-pub use store::FileHistoryStore;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod transcript_diff;
