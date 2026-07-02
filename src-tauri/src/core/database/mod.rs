@@ -3,23 +3,31 @@ pub mod schema;
 
 use rusqlite::{Connection, Transaction};
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Number of connections in the pool. With WAL mode, multiple readers can
+/// proceed concurrently through separate connections, and writers are
+/// serialized by SQLite's internal locking (handled via `busy_timeout`).
+const POOL_SIZE: usize = 4;
 
 static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 
-/// Central database handle for all SQLite operations.
+/// Central database handle backed by a pool of SQLite connections.
 ///
-/// Wraps a single `Connection` behind a `Mutex` for thread-safe access.
-/// The main database (`sona.db`) stores all structured data. An analytics
-/// database (`sona-analytics.db`) is ATTACHed as `analytics` for LLM usage
-/// tracking.
+/// WAL mode combined with a multi-connection pool allows concurrent reads
+/// without blocking each other — each read acquires an idle connection and
+/// proceeds in parallel.
 pub struct Database {
-    conn: Mutex<Connection>,
+    pool: Vec<Mutex<Connection>>,
+    next: AtomicUsize,
 }
 
 impl std::fmt::Debug for Database {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Database").finish()
+        f.debug_struct("Database")
+            .field("pool_size", &self.pool.len())
+            .finish()
     }
 }
 
@@ -36,42 +44,34 @@ impl Database {
 
     /// Opens (or creates) the main database at `{app_local_data_dir}/sona.db`,
     /// enables WAL mode and foreign keys, ATTACHes the analytics database,
-    /// and runs any pending schema migrations.
+    /// creates a pool of connections, and runs pending schema migrations.
     pub fn open(app_local_data_dir: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(app_local_data_dir).map_err(|e| e.to_string())?;
 
         let db_path = app_local_data_dir.join("sona.db");
         let analytics_path = app_local_data_dir.join("sona-analytics.db");
 
-        let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;")
-            .map_err(|e| e.to_string())?;
-        conn.execute_batch("PRAGMA busy_timeout=5000;")
-            .map_err(|e| e.to_string())?;
-        conn.execute_batch("PRAGMA foreign_keys=ON;")
-            .map_err(|e| e.to_string())?;
-
-        let attach_sql = format!(
-            "ATTACH DATABASE '{}' AS analytics",
-            analytics_path.to_string_lossy().replace('\'', "''")
-        );
-        conn.execute_batch(&attach_sql).map_err(|e| e.to_string())?;
-
-        // Request SQLite to perform internal maintenance/optimization at startup
-        conn.execute_batch("PRAGMA optimize;")
-            .map_err(|e| format!("startup optimize: {e}"))?;
+        let mut pool = Vec::with_capacity(POOL_SIZE);
+        for _ in 0..POOL_SIZE {
+            let conn = Self::open_connection(&db_path)?;
+            Self::attach_analytics(&conn, &analytics_path)?;
+            pool.push(Mutex::new(conn));
+        }
 
         let db = Self {
-            conn: Mutex::new(conn),
+            pool,
+            next: AtomicUsize::new(0),
         };
 
         schema::run_migrations(&db)?;
+        db.run_optimize()?;
 
         Ok(db)
     }
 
-    /// Opens an in-memory database for testing. WAL is not applicable to
-    /// in-memory databases but foreign keys are enabled and migrations run.
+    /// Opens an in-memory database for testing.
+    /// Uses a single connection since in-memory databases are per-connection
+    /// and cannot be shared across multiple handles.
     pub fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")
@@ -80,7 +80,8 @@ impl Database {
             .map_err(|e| e.to_string())?;
 
         let db = Self {
-            conn: Mutex::new(conn),
+            pool: vec![Mutex::new(conn)],
+            next: AtomicUsize::new(0),
         };
 
         schema::run_migrations(&db)?;
@@ -88,13 +89,42 @@ impl Database {
         Ok(db)
     }
 
-    /// Executes a closure with a shared reference to the connection.
-    /// The Mutex is held for the duration of the closure.
+    fn open_connection(db_path: &Path) -> Result<Connection, String> {
+        let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA busy_timeout=5000;")
+            .map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA foreign_keys=ON;")
+            .map_err(|e| e.to_string())?;
+        Ok(conn)
+    }
+
+    fn attach_analytics(conn: &Connection, analytics_path: &Path) -> Result<(), String> {
+        let attach_sql = format!(
+            "ATTACH DATABASE '{}' AS analytics",
+            analytics_path.to_string_lossy().replace('\'', "''")
+        );
+        conn.execute_batch(&attach_sql).map_err(|e| e.to_string())
+    }
+
+    /// Acquires a connection from the pool via round-robin.
+    fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        if self.pool.is_empty() {
+            return Err("connection pool is empty".into());
+        }
+        let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
+        self.pool[idx].lock().map_err(|e| e.to_string())
+    }
+
+    /// Executes a closure with a shared reference to a pooled connection.
+    /// The mutex for that specific connection is held for the duration of the
+    /// closure, but other connections in the pool remain available.
     pub fn with_connection<F, T>(&self, f: F) -> Result<T, String>
     where
         F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
     {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.acquire()?;
         f(&conn).map_err(|e| e.to_string())
     }
 
@@ -102,9 +132,8 @@ impl Database {
     /// (analyze, query planner stats, etc.). Safe to call periodically.
     pub fn run_optimize(&self) -> Result<(), String> {
         let conn = self
-            .conn
-            .lock()
-            .map_err(|e| format!("lock optimize: {e}"))?;
+            .acquire()
+            .map_err(|e| format!("acquire for optimize: {e}"))?;
         conn.execute_batch("PRAGMA optimize;")
             .map_err(|e| format!("optimize: {e}"))
     }
@@ -113,7 +142,9 @@ impl Database {
     /// unused space and defragment. Should be called after large bulk deletes
     /// (e.g., clearing resolved tasks).
     pub fn vacuum(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| format!("lock vacuum: {e}"))?;
+        let conn = self
+            .acquire()
+            .map_err(|e| format!("acquire for vacuum: {e}"))?;
         conn.execute_batch("VACUUM;")
             .map_err(|e| format!("vacuum main: {e}"))?;
         conn.execute_batch("VACUUM analytics;")
@@ -127,7 +158,7 @@ impl Database {
     where
         F: FnOnce(&Transaction) -> Result<T, rusqlite::Error>,
     {
-        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut conn = self.acquire()?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         let result = f(&tx).map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
@@ -137,11 +168,11 @@ impl Database {
 
 #[derive(Clone, Debug, Default)]
 pub struct DbProvider {
-    db: Option<std::sync::Arc<Database>>,
+    db: Option<Arc<Database>>,
 }
 
 impl DbProvider {
-    pub fn new(db: Option<std::sync::Arc<Database>>) -> Self {
+    pub fn new(db: Option<Arc<Database>>) -> Self {
         Self { db }
     }
 
@@ -352,6 +383,45 @@ mod tests {
         .unwrap();
         // VACUUM should succeed and reclaim the free space
         db.vacuum().unwrap();
+    }
+
+    #[test]
+    fn test_concurrent_reads_on_pool() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Arc::new(Database::open(tmp.path()).unwrap());
+
+        // Populate some test data
+        db.with_connection(|conn| {
+            conn.execute_batch(
+                "INSERT INTO app_settings (key, value) VALUES ('c1', 'v1'), ('c2', 'v2'), ('c3', 'v3')",
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        // Spawn 4 threads that each perform a read concurrently.
+        // With POOL_SIZE=4 they should use separate connections.
+        let threads: Vec<_> = (0..4)
+            .map(|_| {
+                let db = Arc::clone(&db);
+                std::thread::spawn(move || {
+                    db.with_connection(|conn| {
+                        let count: i64 =
+                            conn.query_row("SELECT COUNT(*) FROM app_settings", [], |row| {
+                                row.get(0)
+                            })?;
+                        assert_eq!(count, 3);
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+
+        for t in threads {
+            t.join()
+                .expect("reader thread panicked")
+                .expect("reader query failed");
+        }
     }
 }
 
