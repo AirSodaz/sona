@@ -8,13 +8,97 @@ use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+    HistoryWorkspaceScope, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+
+use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
+use rusqlite::types::ToSql;
+
+fn compute_date_threshold_millis(date_filter: HistoryWorkspaceDateFilter) -> Option<i64> {
+    use HistoryWorkspaceDateFilter::*;
+    match date_filter {
+        All => None,
+        _ => {
+            let now = Local::now();
+            let today = match Local.with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0) {
+                LocalResult::Single(value) => value,
+                LocalResult::Ambiguous(earliest, _) => earliest,
+                LocalResult::None => return None,
+            };
+            let threshold = match date_filter {
+                Today => today,
+                Week => today - Duration::days(7),
+                Month => {
+                    let (year, month) = if today.month() == 1 {
+                        (today.year() - 1, 12)
+                    } else {
+                        (today.year(), today.month() - 1)
+                    };
+                    match Local.with_ymd_and_hms(
+                        year,
+                        month,
+                        today.day().min(days_in_month(year, month)),
+                        0,
+                        0,
+                        0,
+                    ) {
+                        LocalResult::Single(value) => value,
+                        LocalResult::Ambiguous(earliest, _) => earliest,
+                        LocalResult::None => today - Duration::days(30),
+                    }
+                }
+                _ => unreachable!(),
+            };
+            Some(threshold.timestamp_millis())
+        }
+    }
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    let next_month = if month == 12 { 1 } else { month + 1 };
+    let next_year = if month == 12 { year + 1 } else { year };
+    let Some(first_next_month) = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1) else {
+        return 28;
+    };
+    (first_next_month - Duration::days(1)).day()
+}
+
+fn add_workspace_query_conditions(
+    request: &HistoryWorkspaceQueryRequest,
+    clauses: &mut Vec<String>,
+    params: &mut Vec<Box<dyn ToSql>>,
+) {
+    match &request.scope {
+        HistoryWorkspaceScope::All => {}
+        HistoryWorkspaceScope::Inbox => {
+            clauses.push("project_id IS NULL".to_string());
+        }
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
+        }
+    }
+    match request.filter_type {
+        HistoryWorkspaceFilterType::All => {}
+        HistoryWorkspaceFilterType::Recording => {
+            clauses.push("kind = 'recording'".to_string());
+        }
+        HistoryWorkspaceFilterType::Batch => {
+            clauses.push("kind = 'batch'".to_string());
+        }
+    }
+    if let Some(threshold) = compute_date_threshold_millis(request.date_filter) {
+        clauses.push("timestamp >= ?".to_string());
+        params.push(Box::new(threshold));
+    }
+}
 
 #[derive(Clone)]
 pub struct SqliteHistoryStore {
@@ -346,7 +430,34 @@ impl HistoryStore for SqliteHistoryStore {
         self.reconcile_live_drafts()?;
 
         self.get_db().with_connection(|conn| {
-            // 2. Perform FTS pre-filtering if query exists
+            // 1. Compute item counts via aggregate query (index-only, lightweight)
+            let item_counts = {
+                let mut stmt = conn.prepare(
+                    "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id"
+                )?;
+                let mut inbox = 0usize;
+                let mut by_project_id = BTreeMap::new();
+                let rows = stmt.query_map([], |row| {
+                    let pid: Option<String> = row.get(0)?;
+                    let cnt: i64 = row.get(1)?;
+                    Ok((pid, cnt as usize))
+                })?;
+                for row in rows {
+                    let (pid, cnt) = row?;
+                    match pid {
+                        None => inbox = cnt,
+                        Some(id) => { by_project_id.insert(id, cnt); }
+                    }
+                }
+                HistoryWorkspaceItemCounts { inbox, by_project_id }
+            };
+
+            // 2. Build dynamic WHERE clause + params from request filters
+            let mut conditions: Vec<String> = Vec::new();
+            let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+            add_workspace_query_conditions(&request, &mut conditions, &mut params);
+
+            // 3. Perform FTS pre-filtering if query exists
             let trimmed_query = request.query.trim();
             let mut search_contents = std::collections::HashMap::new();
             let mut fts_used = false;
@@ -354,12 +465,20 @@ impl HistoryStore for SqliteHistoryStore {
             if !trimmed_query.is_empty() {
                 let fts_expr = build_fts_query(trimmed_query);
                 if !fts_expr.is_empty() {
-                    let mut stmt = conn.prepare(
+                    let mut fts_conditions = vec!["history_items_fts MATCH ?".to_string()];
+                    let mut fts_params: Vec<Box<dyn ToSql>> = vec![Box::new(fts_expr)];
+                    add_workspace_query_conditions(&request, &mut fts_conditions, &mut fts_params);
+
+                    let fts_sql = format!(
                         "SELECT h.id, h.search_content FROM history_items h
                          JOIN history_items_fts f ON h.rowid = f.rowid
-                         WHERE history_items_fts MATCH ?1"
-                    )?;
-                    let mut rows = stmt.query([fts_expr])?;
+                         WHERE {}",
+                        fts_conditions.join(" AND ")
+                    );
+                    let mut stmt = conn.prepare(&fts_sql)?;
+                    let fts_param_refs: Vec<&dyn ToSql> =
+                        fts_params.iter().map(|p| p.as_ref()).collect();
+                    let mut rows = stmt.query(fts_param_refs.as_slice())?;
                     while let Some(row) = rows.next()? {
                         let id: String = row.get(0)?;
                         let content: String = row.get(1)?;
@@ -369,20 +488,28 @@ impl HistoryStore for SqliteHistoryStore {
                 }
             }
 
-            // 3. Load all workspace items
-            // When FTS was used, load empty search_content (will be populated
-            // from FTS results). When FTS was skipped (query too short for
-            // trigram), load the actual column so in-memory matching works.
-            let sql = if fts_used {
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source
-                 FROM history_items ORDER BY timestamp DESC"
+            // 4. Load workspace items with SQL-level filtering
+            //    When FTS was used, load empty search_content (populated from
+            //    FTS results). When FTS was skipped, load the actual column so
+            //    in-memory matching works for short queries.
+            let column_select = if fts_used {
+                "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source"
             } else {
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items ORDER BY timestamp DESC"
+                "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source"
             };
-            let mut stmt = conn.prepare(sql)?;
+            let where_clause = if conditions.is_empty() {
+                String::new()
+            } else {
+                format!("WHERE {}", conditions.join(" AND "))
+            };
+            let sql = format!(
+                "SELECT {} FROM history_items {} ORDER BY timestamp DESC",
+                column_select, where_clause
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-            let rows = stmt.query_map([], map_row_to_item)?;
+            let rows = stmt.query_map(param_refs.as_slice(), map_row_to_item)?;
             let mut items = Vec::new();
             for row in rows {
                 let mut item = row?;
@@ -392,8 +519,10 @@ impl HistoryStore for SqliteHistoryStore {
                 items.push(item);
             }
 
-            // 4. Delegate to existing in-memory matching logic for highlighting/snippets
-            Ok(super::workspace_query::query_workspace_items(items, request))
+            // 5. In-memory text search matching (highlighting/snippets) and sorting
+            Ok(super::workspace_query::query_workspace_items_with_counts(
+                items, request, item_counts,
+            ))
         })
     }
 

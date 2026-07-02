@@ -17,6 +17,22 @@ pub(super) fn query_workspace_items(
     request: HistoryWorkspaceQueryRequest,
 ) -> HistoryWorkspaceQueryResult {
     let item_counts = count_items_by_project(&items);
+    query_workspace_items_impl(items, request, item_counts)
+}
+
+pub(super) fn query_workspace_items_with_counts(
+    items: Vec<HistoryItemRecord>,
+    request: HistoryWorkspaceQueryRequest,
+    item_counts: HistoryWorkspaceItemCounts,
+) -> HistoryWorkspaceQueryResult {
+    query_workspace_items_impl(items, request, item_counts)
+}
+
+fn query_workspace_items_impl(
+    items: Vec<HistoryItemRecord>,
+    request: HistoryWorkspaceQueryRequest,
+    item_counts: HistoryWorkspaceItemCounts,
+) -> HistoryWorkspaceQueryResult {
     let scoped_items = items
         .into_iter()
         .filter(|item| matches_scope(item, &request.scope))
