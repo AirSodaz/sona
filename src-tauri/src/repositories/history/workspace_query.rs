@@ -12,6 +12,7 @@ use super::{
 
 const DEFAULT_SNIPPET_LENGTH: usize = 72;
 
+#[allow(dead_code)]
 pub(super) fn query_workspace_items(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
@@ -218,6 +219,7 @@ fn summarize_items(items: &[HistoryItemRecord]) -> HistoryWorkspaceSummary {
     }
 }
 
+#[allow(dead_code)]
 fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
     let mut inbox = 0;
     let mut by_project_id = BTreeMap::new();

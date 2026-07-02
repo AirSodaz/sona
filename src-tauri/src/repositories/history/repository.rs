@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde_json::{Map, Value, to_value};
 use std::fs;
 use std::io::ErrorKind;
