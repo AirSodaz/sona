@@ -27,7 +27,20 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             migration_result.history_count,
             migration_result.project_count,
         );
-        crate::core::database::legacy_migration::move_legacy_to_backup(&app_local_data_dir)?;
+
+        if !migration_result.errors.is_empty() {
+            for err in &migration_result.errors {
+                log::error!("[Migration] {err}");
+            }
+            log::warn!(
+                "[Migration] {} error(s) occurred; legacy data preserved at original location",
+                migration_result.errors.len(),
+            );
+        }
+
+        if migration_result.errors.is_empty() {
+            crate::core::database::legacy_migration::move_legacy_to_backup(&app_local_data_dir)?;
+        }
     }
 
     let history_repo = Arc::new(crate::repositories::history::SqliteHistoryStore::new(
