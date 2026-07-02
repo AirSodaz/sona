@@ -44,7 +44,7 @@ impl SqliteAutomationRepository {
 
     pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
         let rules = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT data FROM automation_rules ORDER BY id")?;
+            let mut stmt = conn.prepare_cached("SELECT data FROM automation_rules ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let val: Value = serde_json::from_str(&data_str).map_err(|e| {
@@ -64,7 +64,8 @@ impl SqliteAutomationRepository {
         })?;
 
         let processed_entries = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT data FROM automation_processed ORDER BY id")?;
+            let mut stmt =
+                conn.prepare_cached("SELECT data FROM automation_processed ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let val: Value = serde_json::from_str(&data_str).map_err(|e| {
@@ -92,7 +93,8 @@ impl SqliteAutomationRepository {
     pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), String> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_rules", [])?;
-            let mut stmt = tx.prepare("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
+            let mut stmt =
+                tx.prepare_cached("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
             for mut rule in rules {
                 let id = Self::ensure_id(&mut rule);
                 let data_str = serde_json::to_string(&rule)
@@ -107,7 +109,7 @@ impl SqliteAutomationRepository {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_processed", [])?;
             let mut stmt =
-                tx.prepare("INSERT INTO automation_processed (id, data) VALUES (?1, ?2)")?;
+                tx.prepare_cached("INSERT INTO automation_processed (id, data) VALUES (?1, ?2)")?;
             for mut entry in entries {
                 let id = Self::ensure_id(&mut entry);
                 let data_str = serde_json::to_string(&entry)
@@ -123,7 +125,7 @@ impl SqliteAutomationRepository {
             tx.execute("DELETE FROM automation_rules", [])?;
             {
                 let mut stmt =
-                    tx.prepare("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
+                    tx.prepare_cached("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
                 for mut rule in rules {
                     let id = Self::ensure_id(&mut rule);
                     let data_str = serde_json::to_string(&rule)
@@ -133,8 +135,9 @@ impl SqliteAutomationRepository {
             }
             tx.execute("DELETE FROM automation_processed", [])?;
             {
-                let mut stmt =
-                    tx.prepare("INSERT INTO automation_processed (id, data) VALUES (?1, ?2)")?;
+                let mut stmt = tx.prepare_cached(
+                    "INSERT INTO automation_processed (id, data) VALUES (?1, ?2)",
+                )?;
                 for mut entry in entries {
                     let id = Self::ensure_id(&mut entry);
                     let data_str = serde_json::to_string(&entry)

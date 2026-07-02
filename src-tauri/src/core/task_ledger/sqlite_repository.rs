@@ -44,7 +44,8 @@ impl SqliteLedgerRepository {
 
     pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
         let records = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT data, version FROM task_ledger ORDER BY id")?;
+            let mut stmt =
+                conn.prepare_cached("SELECT data, version FROM task_ledger ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let _version: i64 = row.get(1)?;
@@ -116,7 +117,7 @@ impl SqliteLedgerRepository {
     pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), String> {
         self.get_db()?.with_transaction(|tx| {
             let existing: Option<String> = {
-                let mut stmt = tx.prepare("SELECT data FROM task_ledger WHERE id = ?1")?;
+                let mut stmt = tx.prepare_cached("SELECT data FROM task_ledger WHERE id = ?1")?;
                 let mut rows = stmt.query([id])?;
                 if let Some(row) = rows.next()? {
                     Some(row.get(0)?)
@@ -176,7 +177,7 @@ impl SqliteLedgerRepository {
 
     pub fn clear_resolved(&self) -> Result<(), String> {
         let deleted_count = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT id, data FROM task_ledger")?;
+            let mut stmt = conn.prepare_cached("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {
                 let id: String = row.get(0)?;
                 let data_str: String = row.get(1)?;
@@ -191,7 +192,7 @@ impl SqliteLedgerRepository {
                     to_delete.push(id);
                 }
             }
-            let mut stmt = conn.prepare("DELETE FROM task_ledger WHERE id = ?1")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM task_ledger WHERE id = ?1")?;
             for id in &to_delete {
                 stmt.execute([id])?;
             }

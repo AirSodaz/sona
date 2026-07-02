@@ -17,7 +17,7 @@ pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-    HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
+    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSearchRange,

@@ -282,7 +282,8 @@ mod tests {
                  INSERT INTO test_fts(content) VALUES ('中华人民共和国');
                  INSERT INTO test_fts(content) VALUES ('Hello World');",
             )?;
-            let mut stmt = conn.prepare("SELECT content FROM test_fts WHERE test_fts MATCH ?1")?;
+            let mut stmt =
+                conn.prepare_cached("SELECT content FROM test_fts WHERE test_fts MATCH ?1")?;
             {
                 let mut rows = stmt.query(["华人民"])?;
                 assert!(rows.next()?.is_some());

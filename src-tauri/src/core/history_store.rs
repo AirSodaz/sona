@@ -1,6 +1,6 @@
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
-    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryItemRecord,
+    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
@@ -13,6 +13,16 @@ pub trait HistoryStore: Send + Sync {
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String>;
 
     fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String>;
+
+    fn list_items_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, String>;
+
+    fn list_items_with_reconciled_live_drafts_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, String>;
 
     fn query_workspace(
         &self,

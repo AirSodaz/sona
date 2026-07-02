@@ -3,32 +3,52 @@ import type {
   BackupWebDavConfig,
   BackupWebDavTestResult,
   RemoteBackupEntry,
-} from '../../types/backup';
-import type { DashboardSnapshot, LlmGenerateCommandRequest } from '../../types/dashboard';
-import type { HistoryItem } from '../../types/history';
+} from "../../types/backup";
+import type {
+  DashboardSnapshot,
+  LlmGenerateCommandRequest,
+} from "../../types/dashboard";
+import type { HistoryItem } from "../../types/history";
 import type {
   AsrRuntimeMetricsSnapshot,
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
-} from '../../types/runtime';
-import type { AppConfig, AppLogLevel, TextReplacementRuleSet } from '../../types/config';
+} from "../../types/runtime";
+import type {
+  AppConfig,
+  AppLogLevel,
+  TextReplacementRuleSet,
+} from "../../types/config";
 import type {
   AutomationProcessedEntry,
   AutomationRule,
   AutomationRuleValidationResult,
-} from '../../types/automation';
-import type { ProjectDefaults, ProjectRecord } from '../../types/project';
-import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
-import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
+} from "../../types/automation";
+import type { ProjectDefaults, ProjectRecord } from "../../types/project";
+import type {
+  SpeakerProfileSample,
+  SpeakerProcessingConfig,
+} from "../../types/speaker";
+import type {
+  HistorySummaryPayload,
+  TranscriptSegment,
+} from "../../types/transcript";
 import type {
   TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
-} from '../../types/transcriptSnapshot';
-import type { BatchQueueItem } from '../../types/batchQueue';
-import type { RecoveredQueueItem, RecoverySnapshot } from '../../types/recovery';
-import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
+} from "../../types/transcriptSnapshot";
+import type { BatchQueueItem } from "../../types/batchQueue";
+import type {
+  RecoveredQueueItem,
+  RecoverySnapshot,
+} from "../../types/recovery";
+import type {
+  TaskLedgerPatch,
+  TaskLedgerRecord,
+  TaskLedgerSnapshot,
+} from "../../types/taskLedger";
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -38,23 +58,23 @@ import type {
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
-} from '../llmTaskTypes';
-import type { ModelFileConfig } from '../../types/model';
-import type { ModelCatalogSnapshot } from '../modelService';
+} from "../llmTaskTypes";
+import type { ModelFileConfig } from "../../types/model";
+import type { ModelCatalogSnapshot } from "../modelService";
 import type {
   DiagnosticsCoreInput,
   DiagnosticsCoreFactsSnapshot,
-} from '../diagnosticsSnapshotBuilders';
+} from "../diagnosticsSnapshotBuilders";
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
   SpeakerGroupRequest,
-} from '../speakerCorrectionService';
+} from "../speakerCorrectionService";
 import type {
   SpeakerReviewFilter,
   SpeakerReviewSnapshot,
-} from '../speakerReviewService';
-import { TauriCommand, type TauriCommandName } from './commands';
+} from "../speakerReviewService";
+import { TauriCommand, type TauriCommandName } from "./commands";
 
 type AudioDevice = {
   name: string;
@@ -108,7 +128,7 @@ type TranscriptPostprocessOptions = {
 };
 
 type AsrTranscriptionRequestBase = {
-  mode: 'streaming' | 'offline' | 'batch';
+  mode: "streaming" | "offline" | "batch";
   language: string;
   enableItn: boolean;
   normalizationOptions: {
@@ -118,21 +138,21 @@ type AsrTranscriptionRequestBase = {
 };
 
 type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
-  engine: 'local-sherpa';
+  engine: "local-sherpa";
   modelId?: string | null;
   modelPath: string;
   numThreads: number;
   punctuationModel: string | null;
   vadModel: string | null;
   vadBuffer: number;
-  batchSegmentationMode?: 'vad' | 'whole';
+  batchSegmentationMode?: "vad" | "whole";
   modelType: string;
   fileConfig?: ModelFileConfig;
   hotwords: string | null;
 };
 
 type OnlineAsrRequest = AsrTranscriptionRequestBase & {
-  engine: 'online';
+  engine: "online";
   onlineProvider: {
     providerId: string;
     profileId: string;
@@ -143,16 +163,15 @@ type OnlineAsrRequest = AsrTranscriptionRequestBase & {
 type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
 
 type WorkspaceQueryScope =
-  | { kind: 'all' }
-  | { kind: 'inbox' }
-  | { kind: 'project'; projectId: string };
+  { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string };
 
 type WorkspaceQueryArgs = {
   scope: WorkspaceQueryScope;
   query: string;
-  filterType: 'all' | 'recording' | 'batch';
-  dateFilter: 'all' | 'today' | 'week' | 'month';
-  sortOrder: 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
+  filterType: "all" | "recording" | "batch";
+  dateFilter: "all" | "today" | "week" | "month";
+  sortOrder:
+    "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
 };
 
 type WorkspaceSearchRange = {
@@ -167,7 +186,7 @@ type WorkspaceSearchSnippet = {
 };
 
 type WorkspaceItemSearchMatch = {
-  matchedField: 'title' | 'previewText' | 'searchContent';
+  matchedField: "title" | "previewText" | "searchContent";
   titleMatch: WorkspaceSearchRange | null;
   displaySnippet: WorkspaceSearchSnippet;
 };
@@ -192,8 +211,8 @@ type WorkspaceQueryResult = {
 
 type ExportTranscriptFileArgs = {
   segments: TranscriptSegment[];
-  format: 'srt' | 'json' | 'txt' | 'vtt' | 'md';
-  mode: 'original' | 'translation' | 'bilingual';
+  format: "srt" | "json" | "txt" | "vtt" | "md";
+  mode: "original" | "translation" | "bilingual";
   outputPath: string;
 };
 
@@ -216,7 +235,9 @@ type ProjectCreateArgs = {
 
 type ProjectUpdateArgs = {
   projectId: string;
-  updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>;
+  updates: Partial<
+    Pick<ProjectRecord, "name" | "description" | "icon" | "defaults">
+  >;
 };
 
 type AutomationRepositoryState = {
@@ -396,7 +417,7 @@ export type TauriCommandContractMap = {
     result: void;
   };
   [TauriCommand.history.listItems]: {
-    args: undefined;
+    args: { limit?: number | null; offset?: number | null } | undefined;
     result: Partial<HistoryItem>[];
   };
   [TauriCommand.history.createLiveDraft]: {
@@ -829,7 +850,7 @@ export type TauriCommandContractMap = {
       jobTtlMinutes: number;
       maxStreaming: number;
       ipWhitelist: string;
-      gpuAcceleration: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
+      gpuAcceleration: "auto" | "cpu" | "cuda" | "coreml" | "directml";
     };
     result: string;
   };
@@ -841,19 +862,27 @@ export type TauriCommandContractMap = {
 
 type Assert<T extends true> = T;
 export type TauriAllCommandsCovered = Assert<
-  Exclude<TauriCommandName, keyof TauriCommandContractMap> extends never ? true : false
+  Exclude<TauriCommandName, keyof TauriCommandContractMap> extends never
+    ? true
+    : false
 >;
 export type TauriNoExtraContracts = Assert<
-  Exclude<keyof TauriCommandContractMap, TauriCommandName> extends never ? true : false
+  Exclude<keyof TauriCommandContractMap, TauriCommandName> extends never
+    ? true
+    : false
 >;
 
 export type KnownTauriCommandName = keyof TauriCommandContractMap;
 export type TauriCommandArgs<TCommand extends KnownTauriCommandName> =
-  TauriCommandContractMap[TCommand]['args'];
+  TauriCommandContractMap[TCommand]["args"];
 export type TauriCommandResult<TCommand extends KnownTauriCommandName> =
-  TauriCommandContractMap[TCommand]['result'];
+  TauriCommandContractMap[TCommand]["result"];
 export type TauriCommandsWithArgs = {
-  [TCommand in KnownTauriCommandName]:
-    TauriCommandArgs<TCommand> extends undefined ? never : TCommand;
+  [
+    TCommand in KnownTauriCommandName
+  ]: TauriCommandArgs<TCommand> extends undefined ? never : TCommand;
 }[KnownTauriCommandName];
-export type TauriCommandsWithoutArgs = Exclude<KnownTauriCommandName, TauriCommandsWithArgs>;
+export type TauriCommandsWithoutArgs = Exclude<
+  KnownTauriCommandName,
+  TauriCommandsWithArgs
+>;

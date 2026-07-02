@@ -33,7 +33,7 @@ impl SqliteProjectRepository {
 
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
                  FROM projects
                  ORDER BY sort_order"
@@ -251,7 +251,7 @@ impl SqliteProjectRepository {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("UPDATE history_items SET project_id = NULL", [])?;
             tx.execute("DELETE FROM projects", [])?;
-            let mut stmt = tx.prepare(
+            let mut stmt = tx.prepare_cached(
                 "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"
             )?;
@@ -306,7 +306,8 @@ impl SqliteProjectRepository {
 
     pub fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
         self.get_db()?.with_transaction(|tx| {
-            let mut stmt = tx.prepare("UPDATE projects SET sort_order = ?1 WHERE id = ?2")?;
+            let mut stmt =
+                tx.prepare_cached("UPDATE projects SET sort_order = ?1 WHERE id = ?2")?;
             for (i, id) in project_ids.iter().enumerate() {
                 stmt.execute(rusqlite::params![i as i64, id])?;
             }
@@ -318,7 +319,7 @@ impl SqliteProjectRepository {
 
     fn get_by_id(&self, project_id: &str) -> Result<Option<ProjectRecord>, String> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
                  FROM projects WHERE id = ?1"
             )?;

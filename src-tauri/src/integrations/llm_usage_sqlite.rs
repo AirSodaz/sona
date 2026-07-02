@@ -54,7 +54,7 @@ pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), St
 
 pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, String> {
     let rows: Vec<(String, String, String, i64, i64, i64)> = db.with_connection(|conn| {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens FROM analytics.llm_usage ORDER BY occurred_at"
         )?;
         let rows = stmt.query_map([], |row| {
@@ -128,7 +128,7 @@ pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, String> {
 
 pub fn read_raw(db: &Database) -> Result<String, String> {
     let rows: Vec<Value> = db.with_connection(|conn| {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare_cached(
             "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens FROM analytics.llm_usage ORDER BY occurred_at"
         )?;
         let rows = stmt.query_map([], |row| {
@@ -163,7 +163,7 @@ pub fn replace_raw(db: &Database, content: &str) -> Result<(), String> {
 
     db.with_transaction(|tx| {
         tx.execute("DELETE FROM analytics.llm_usage", [])?;
-        let mut stmt = tx.prepare(
+        let mut stmt = tx.prepare_cached(
             "INSERT INTO analytics.llm_usage (occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
         )?;

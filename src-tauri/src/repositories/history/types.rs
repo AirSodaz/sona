@@ -121,6 +121,12 @@ pub struct HistoryWorkspaceItemSearchMatch {
     pub display_snippet: HistoryWorkspaceSearchSnippet,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HistoryListOptions {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryWorkspaceSummary {

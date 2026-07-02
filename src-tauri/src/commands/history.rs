@@ -14,12 +14,12 @@ use crate::repositories::history::backup::{
 use crate::repositories::history::fs_utils::remove_path_if_exists;
 use crate::repositories::history::{
     BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
-    HistoryItemRecord, HistoryItemStatus, HistoryRepositoryState, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
-    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
-    HistoryWorkspaceSortOrder, LiveRecordingDraftResult, PreparedBackupImport,
-    PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistoryRepositoryState,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
+    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
+    PreparedBackupImport, PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
 async fn run_history_task_inner<T, F>(
@@ -171,9 +171,12 @@ fn save_llm_summary_payload(
 pub async fn history_list_items<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
+    limit: Option<usize>,
+    offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
-    run_history_task(&app as &dyn PathProvider, state, |repository| {
-        repository.list_items_with_reconciled_live_drafts()
+    let opts = HistoryListOptions { limit, offset };
+    run_history_task(&app as &dyn PathProvider, state, move |repository| {
+        repository.list_items_with_reconciled_live_drafts_paginated(opts)
     })
     .await
 }

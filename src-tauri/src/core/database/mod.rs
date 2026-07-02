@@ -3,8 +3,9 @@ pub mod schema;
 
 use rusqlite::{Connection, Transaction};
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, TryLockError};
+use std::time::{Duration, Instant};
 
 /// Number of connections in the pool. With WAL mode, multiple readers can
 /// proceed concurrently through separate connections, and writers are
@@ -21,6 +22,7 @@ static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 pub struct Database {
     pool: Vec<Mutex<Connection>>,
     next: AtomicUsize,
+    slow_query_threshold_us: AtomicI64,
 }
 
 impl std::fmt::Debug for Database {
@@ -63,6 +65,7 @@ impl Database {
         let db = Self {
             pool,
             next: AtomicUsize::new(0),
+            slow_query_threshold_us: AtomicI64::new(0),
         };
 
         schema::run_migrations(&db)?;
@@ -84,6 +87,7 @@ impl Database {
         let db = Self {
             pool: vec![Mutex::new(conn)],
             next: AtomicUsize::new(0),
+            slow_query_threshold_us: AtomicI64::new(0),
         };
 
         schema::run_migrations(&db)?;
@@ -151,7 +155,36 @@ impl Database {
         F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
     {
         let conn = self.acquire()?;
-        f(&conn).map_err(|e| e.to_string())
+        let start = Instant::now();
+        let result = f(&conn).map_err(|e| e.to_string());
+        if let Some(elapsed) = self.check_slow(start.elapsed()) {
+            log::warn!("slow with_connection ({elapsed:?})");
+        }
+        result
+    }
+
+    /// Sets a threshold for slow query logging.
+    /// When a `with_connection` or `with_transaction` call exceeds this
+    /// duration, a warning is logged via `log::warn!`.
+    /// Pass `Duration::ZERO` to disable (default).
+    pub fn set_slow_query_threshold(&self, threshold: Duration) {
+        let us = if threshold.is_zero() {
+            0
+        } else {
+            threshold.as_micros() as i64
+        };
+        self.slow_query_threshold_us.store(us, Ordering::Relaxed);
+    }
+
+    fn check_slow(&self, elapsed: Duration) -> Option<Duration> {
+        let threshold_us = self.slow_query_threshold_us.load(Ordering::Relaxed);
+        if threshold_us > 0 {
+            let threshold = Duration::from_micros(threshold_us as u64);
+            if elapsed > threshold {
+                return Some(elapsed);
+            }
+        }
+        None
     }
 
     /// Runs `PRAGMA optimize;` to let SQLite perform internal maintenance
@@ -185,11 +218,47 @@ impl Database {
         F: FnOnce(&Transaction) -> Result<T, rusqlite::Error>,
     {
         let mut conn = self.acquire()?;
+        let start = Instant::now();
         let tx = conn.transaction().map_err(|e| e.to_string())?;
-        let result = f(&tx).map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-        Ok(result)
+        let result = f(&tx).map_err(|e| e.to_string());
+        let elapsed = start.elapsed();
+        // On success, commit. On failure, Transaction::Drop rolls back.
+        let result = match result {
+            Ok(value) => {
+                tx.commit().map_err(|e| e.to_string())?;
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        };
+        if let Some(_elapsed) = self.check_slow(elapsed) {
+            log::warn!("slow with_transaction ({elapsed:?})");
+        }
+        result
     }
+}
+
+/// Times a single query or query batch and logs a warning if it exceeds
+/// `threshold`. The `label` identifies the operation in the log message.
+///
+/// ```ignore
+/// time_query("list_items", "SELECT ...", Duration::from_millis(200), || {
+///     let mut stmt = conn.prepare_cached("SELECT ...")?;
+///     stmt.query_map([], |row| { ... })
+/// })?;
+/// ```
+pub fn time_query<T>(
+    label: &str,
+    sql: &str,
+    threshold: Duration,
+    f: impl FnOnce() -> Result<T, rusqlite::Error>,
+) -> Result<T, String> {
+    let start = Instant::now();
+    let result = f().map_err(|e| e.to_string());
+    let elapsed = start.elapsed();
+    if !threshold.is_zero() && elapsed > threshold {
+        log::warn!("slow query [{label}] ({elapsed:?}): {sql}");
+    }
+    result
 }
 
 #[derive(Clone, Debug, Default)]

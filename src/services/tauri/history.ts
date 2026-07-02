@@ -1,36 +1,46 @@
-import type { HistoryItem } from '../../types/history';
-import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
+import type { HistoryItem } from "../../types/history";
+import type {
+  HistorySummaryPayload,
+  TranscriptSegment,
+} from "../../types/transcript";
 import type {
   TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
-} from '../../types/transcriptSnapshot';
-import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
-import { TauriCommand } from './commands';
-import type { TauriCommandArgs, TauriCommandResult } from './contracts';
-import { invokeTauri } from './invoke';
+} from "../../types/transcriptSnapshot";
+import type { WorkspaceItemSearchMatch } from "../../utils/workspaceSearch";
+import { TauriCommand } from "./commands";
+import type { TauriCommandArgs, TauriCommandResult } from "./contracts";
+import { invokeTauri } from "./invoke";
 
-type HistoryDraftTransportHandle = TauriCommandResult<typeof TauriCommand.history.createLiveDraft>;
-type HistorySaveRecordingRequest = TauriCommandArgs<typeof TauriCommand.history.saveRecording>;
-type HistorySaveImportedFileRequest = TauriCommandArgs<typeof TauriCommand.history.saveImportedFile>;
+type HistoryDraftTransportHandle = TauriCommandResult<
+  typeof TauriCommand.history.createLiveDraft
+>;
+type HistorySaveRecordingRequest = TauriCommandArgs<
+  typeof TauriCommand.history.saveRecording
+>;
+type HistorySaveImportedFileRequest = TauriCommandArgs<
+  typeof TauriCommand.history.saveImportedFile
+>;
 
-export interface HistoryDraftHandle<TItem = Partial<HistoryItem>>
-  extends Omit<HistoryDraftTransportHandle, 'item'> {
+export interface HistoryDraftHandle<TItem = Partial<HistoryItem>> extends Omit<
+  HistoryDraftTransportHandle,
+  "item"
+> {
   item: TItem;
 }
 
 export type HistoryWorkspaceQueryScope =
-  | { kind: 'all' }
-  | { kind: 'inbox' }
-  | { kind: 'project'; projectId: string };
+  { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string };
 
 export interface HistoryWorkspaceQueryRequest {
   scope: HistoryWorkspaceQueryScope;
   query: string;
-  filterType: 'all' | 'recording' | 'batch';
-  dateFilter: 'all' | 'today' | 'week' | 'month';
-  sortOrder: 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
+  filterType: "all" | "recording" | "batch";
+  dateFilter: "all" | "today" | "week" | "month";
+  sortOrder:
+    "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
 }
 
 export interface HistoryWorkspaceQueryResult {
@@ -51,8 +61,11 @@ export interface HistoryWorkspaceQueryResult {
   };
 }
 
-export async function historyListItems(): Promise<Partial<HistoryItem>[]> {
-  return invokeTauri(TauriCommand.history.listItems);
+export async function historyListItems(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Partial<HistoryItem>[]> {
+  return invokeTauri(TauriCommand.history.listItems, opts ?? {});
 }
 
 export async function historyCreateLiveDraft(
@@ -97,7 +110,9 @@ export async function historyDeleteItems(ids: string[]): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteItems, { ids });
 }
 
-export async function historyLoadTranscript(historyId: string): Promise<TranscriptSegment[] | null> {
+export async function historyLoadTranscript(
+  historyId: string,
+): Promise<TranscriptSegment[] | null> {
   return invokeTauri(TauriCommand.history.loadTranscript, { historyId });
 }
 
@@ -126,14 +141,19 @@ export async function historyCreateTranscriptSnapshot(
 export async function historyListTranscriptSnapshots(
   historyId: string,
 ): Promise<TranscriptSnapshotMetadata[]> {
-  return invokeTauri(TauriCommand.history.listTranscriptSnapshots, { historyId });
+  return invokeTauri(TauriCommand.history.listTranscriptSnapshots, {
+    historyId,
+  });
 }
 
 export async function historyLoadTranscriptSnapshot(
   historyId: string,
   snapshotId: string,
 ): Promise<TranscriptSnapshotRecord | null> {
-  return invokeTauri(TauriCommand.history.loadTranscriptSnapshot, { historyId, snapshotId });
+  return invokeTauri(TauriCommand.history.loadTranscriptSnapshot, {
+    historyId,
+    snapshotId,
+  });
 }
 
 export async function historyBuildTranscriptDiff(
@@ -160,14 +180,20 @@ export async function historyUpdateItemMeta(
   historyId: string,
   updates: Partial<HistoryItem>,
 ): Promise<void> {
-  await invokeTauri(TauriCommand.history.updateItemMeta, { historyId, updates });
+  await invokeTauri(TauriCommand.history.updateItemMeta, {
+    historyId,
+    updates,
+  });
 }
 
 export async function historyUpdateProjectAssignments(
   ids: string[],
   projectId: string | null,
 ): Promise<void> {
-  await invokeTauri(TauriCommand.history.updateProjectAssignments, { ids, projectId });
+  await invokeTauri(TauriCommand.history.updateProjectAssignments, {
+    ids,
+    projectId,
+  });
 }
 
 export async function historyReassignProject(
@@ -190,14 +216,19 @@ export async function historySaveSummary(
   historyId: string,
   summaryPayload: HistorySummaryPayload,
 ): Promise<void> {
-  await invokeTauri(TauriCommand.history.saveSummary, { historyId, summaryPayload });
+  await invokeTauri(TauriCommand.history.saveSummary, {
+    historyId,
+    summaryPayload,
+  });
 }
 
 export async function historyDeleteSummary(historyId: string): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteSummary, { historyId });
 }
 
-export async function historyResolveAudioPath(historyId: string): Promise<string | null> {
+export async function historyResolveAudioPath(
+  historyId: string,
+): Promise<string | null> {
   return invokeTauri(TauriCommand.history.resolveAudioPath, { historyId });
 }
 

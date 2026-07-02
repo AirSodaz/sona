@@ -422,10 +422,10 @@ mod tests {
     use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
     use crate::repositories::history::{
         HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-        HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
-        HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-        HistoryWorkspaceSummary, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-        TranscriptSnapshotReason, TranscriptSnapshotRecord,
+        HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
+        HistorySaveRecordingRequest, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
+        HistoryWorkspaceQueryResult, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+        TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
     };
     use serde_json::Value;
     use std::collections::BTreeMap;
@@ -445,6 +445,20 @@ mod tests {
         }
 
         fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
+            Ok(self.items.clone())
+        }
+
+        fn list_items_paginated(
+            &self,
+            _opts: HistoryListOptions,
+        ) -> Result<Vec<HistoryItemRecord>, String> {
+            Ok(self.items.clone())
+        }
+
+        fn list_items_with_reconciled_live_drafts_paginated(
+            &self,
+            _opts: HistoryListOptions,
+        ) -> Result<Vec<HistoryItemRecord>, String> {
             Ok(self.items.clone())
         }
 

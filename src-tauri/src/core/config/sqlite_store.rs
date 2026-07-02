@@ -31,7 +31,7 @@ impl SqliteConfigStore {
 
     pub fn load_config(&self) -> Result<Option<Value>, String> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT config FROM app_config WHERE id = 1")?;
+            let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
             let mut rows = stmt.query([])?;
             if let Some(row) = rows.next()? {
                 let config_str: String = row.get(0)?;

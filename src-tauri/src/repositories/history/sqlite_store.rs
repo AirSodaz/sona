@@ -7,7 +7,7 @@ use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-    HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
+    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
     HistoryWorkspaceScope, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
@@ -198,7 +198,7 @@ impl SqliteHistoryStore {
         let history_dir = self.history_dir();
         #[allow(clippy::type_complexity)]
         let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
                  FROM history_items h
                  LEFT JOIN history_transcripts t ON h.id = t.history_id
@@ -391,7 +391,7 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  ORDER BY timestamp DESC"
@@ -408,7 +408,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.reconcile_live_drafts()?;
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  ORDER BY timestamp DESC"
@@ -422,6 +422,36 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
+    fn list_items_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, String> {
+        self.get_db()?.with_connection(|conn| {
+            let limit = opts.limit.map(|l| l as i64).unwrap_or(-1);
+            let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
+            let mut stmt = conn.prepare_cached(
+                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                 FROM history_items
+                 ORDER BY timestamp DESC
+                 LIMIT ?1 OFFSET ?2"
+            )?;
+            let rows = stmt.query_map(rusqlite::params![limit, offset], map_row_to_item)?;
+            let mut items = Vec::new();
+            for row in rows {
+                items.push(row?);
+            }
+            Ok(items)
+        })
+    }
+
+    fn list_items_with_reconciled_live_drafts_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, String> {
+        self.reconcile_live_drafts()?;
+        self.list_items_paginated(opts)
+    }
+
     fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
@@ -432,7 +462,7 @@ impl HistoryStore for SqliteHistoryStore {
         self.get_db()?.with_connection(|conn| {
             // 1. Compute item counts via aggregate query (index-only, lightweight)
             let item_counts = {
-                let mut stmt = conn.prepare(
+                let mut stmt = conn.prepare_cached(
                     "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id"
                 )?;
                 let mut inbox = 0usize;
@@ -475,7 +505,7 @@ impl HistoryStore for SqliteHistoryStore {
                          WHERE {}",
                         fts_conditions.join(" AND ")
                     );
-                    let mut stmt = conn.prepare(&fts_sql)?;
+                    let mut stmt = conn.prepare_cached(&fts_sql)?;
                     let fts_param_refs: Vec<&dyn ToSql> =
                         fts_params.iter().map(|p| p.as_ref()).collect();
                     let mut rows = stmt.query(fts_param_refs.as_slice())?;
@@ -506,7 +536,7 @@ impl HistoryStore for SqliteHistoryStore {
                 "SELECT {} FROM history_items {} ORDER BY timestamp DESC",
                 column_select, where_clause
             );
-            let mut stmt = conn.prepare(&sql)?;
+            let mut stmt = conn.prepare_cached(&sql)?;
             let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
             let rows = stmt.query_map(param_refs.as_slice(), map_row_to_item)?;
@@ -594,7 +624,7 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  WHERE id = ?1"
@@ -726,7 +756,8 @@ impl HistoryStore for SqliteHistoryStore {
 
         let audio_paths = self.get_db()?.with_connection(|conn| {
             let mut audio_paths = Vec::new();
-            let mut stmt = conn.prepare("SELECT audio_path FROM history_items WHERE id = ?1")?;
+            let mut stmt =
+                conn.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
             for id in ids {
                 let mut rows = stmt.query([id])?;
                 if let Some(row) = rows.next()? {
@@ -744,7 +775,7 @@ impl HistoryStore for SqliteHistoryStore {
         }
 
         self.get_db()?.with_transaction(|tx| {
-            let mut stmt = tx.prepare("DELETE FROM history_items WHERE id = ?1")?;
+            let mut stmt = tx.prepare_cached("DELETE FROM history_items WHERE id = ?1")?;
             for id in ids {
                 stmt.execute([id])?;
             }
@@ -756,7 +787,7 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn load_transcript(&self, history_id: &str) -> Result<Option<Vec<TranscriptSegment>>, String> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT t.segments
                  FROM history_items i
                  JOIN history_transcripts t ON i.id = t.history_id
@@ -838,7 +869,7 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  WHERE id = ?1"
@@ -925,7 +956,7 @@ impl HistoryStore for SqliteHistoryStore {
     ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
         validate_id(history_id, "History ID")?;
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, reason, created_at, segment_count
                  FROM transcript_snapshots
                  WHERE history_id = ?1
@@ -971,7 +1002,7 @@ impl HistoryStore for SqliteHistoryStore {
         validate_id(snapshot_id, "Snapshot ID")?;
 
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT reason, created_at, segment_count, segments
                  FROM transcript_snapshots
                  WHERE history_id = ?1 AND id = ?2",
@@ -1028,7 +1059,7 @@ impl HistoryStore for SqliteHistoryStore {
             .ok_or_else(|| "History item updates must be an object.".to_string())?;
 
         self.get_db()?.with_transaction(|tx| {
-            let mut stmt = tx.prepare(
+            let mut stmt = tx.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  WHERE id = ?1"
@@ -1089,7 +1120,8 @@ impl HistoryStore for SqliteHistoryStore {
         }
 
         self.get_db()?.with_transaction(|tx| {
-            let mut stmt = tx.prepare("UPDATE history_items SET project_id = ?1 WHERE id = ?2")?;
+            let mut stmt =
+                tx.prepare_cached("UPDATE history_items SET project_id = ?1 WHERE id = ?2")?;
             for id in ids {
                 stmt.execute(rusqlite::params![project_id, id])?;
             }
@@ -1116,7 +1148,7 @@ impl HistoryStore for SqliteHistoryStore {
 
         self.get_db()?.with_connection(|conn| {
             let mut stmt =
-                conn.prepare("SELECT payload FROM history_summaries WHERE history_id = ?1")?;
+                conn.prepare_cached("SELECT payload FROM history_summaries WHERE history_id = ?1")?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let payload_str: String = row.get(0)?;
@@ -1169,7 +1201,8 @@ impl HistoryStore for SqliteHistoryStore {
         validate_id(history_id, "History ID")?;
 
         let audio_path_opt: Option<String> = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare("SELECT audio_path FROM history_items WHERE id = ?1")?;
+            let mut stmt =
+                conn.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let p: String = row.get(0)?;
@@ -1200,7 +1233,7 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
         let items = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare(
+            let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
                  WHERE status != 'draft'
@@ -1238,7 +1271,7 @@ impl HistoryStore for SqliteHistoryStore {
                     "SELECT history_id, segments FROM history_transcripts WHERE history_id IN ({})",
                     placeholders
                 );
-                let mut stmt = conn.prepare(&sql)?;
+                let mut stmt = conn.prepare_cached(&sql)?;
                 let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
                     let history_id: String = row.get(0)?;
                     let segments_str: String = row.get(1)?;
@@ -1277,7 +1310,7 @@ impl HistoryStore for SqliteHistoryStore {
                     "SELECT history_id, payload FROM history_summaries WHERE history_id IN ({})",
                     placeholders
                 );
-                let mut stmt = conn.prepare(&sql)?;
+                let mut stmt = conn.prepare_cached(&sql)?;
                 let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
                     let history_id: String = row.get(0)?;
                     let payload_str: String = row.get(1)?;
@@ -1302,7 +1335,7 @@ impl HistoryStore for SqliteHistoryStore {
                      ORDER BY created_at DESC, id DESC",
                     placeholders
                 );
-                let mut stmt = conn.prepare(&sql)?;
+                let mut stmt = conn.prepare_cached(&sql)?;
                 let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
                     let snapshot_id: String = row.get(0)?;
                     let history_id: String = row.get(1)?;
