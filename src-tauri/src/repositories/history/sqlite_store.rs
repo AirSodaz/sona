@@ -355,6 +355,7 @@ impl HistoryStore for SqliteHistoryStore {
             // 2. Perform FTS pre-filtering if query exists
             let trimmed_query = request.query.trim();
             let mut search_contents = std::collections::HashMap::new();
+            let mut fts_used = false;
 
             if !trimmed_query.is_empty() {
                 let fts_expr = build_fts_query(trimmed_query);
@@ -370,15 +371,22 @@ impl HistoryStore for SqliteHistoryStore {
                         let content: String = row.get(1)?;
                         search_contents.insert(id, content);
                     }
+                    fts_used = true;
                 }
             }
 
-            // 3. Load all workspace items without search_content
-            let mut stmt = conn.prepare(
+            // 3. Load all workspace items
+            // When FTS was used, load empty search_content (will be populated
+            // from FTS results). When FTS was skipped (query too short for
+            // trigram), load the actual column so in-memory matching works.
+            let sql = if fts_used {
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source
-                 FROM history_items
-                 ORDER BY timestamp DESC"
-            )?;
+                 FROM history_items ORDER BY timestamp DESC"
+            } else {
+                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                 FROM history_items ORDER BY timestamp DESC"
+            };
+            let mut stmt = conn.prepare(sql)?;
 
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1236,16 +1244,27 @@ impl HistoryStore for SqliteHistoryStore {
 
 fn build_fts_query(query: &str) -> String {
     let normalized = super::workspace_query::normalize_workspace_search_text(query);
-    let terms: Vec<String> = normalized
+    let terms: Vec<&str> = normalized
         .text
         .split(|c: char| c.is_whitespace() || ",.?!;:()[]{}<>'/\\|~`-=_+\"".contains(c))
         .filter(|s| !s.is_empty())
+        .collect();
+
+    // FTS5 trigram tokenizer operates at the byte level and needs at least 3
+    // bytes per term to form a trigram. Shorter terms would silently match
+    // nothing, causing the entire AND query to return zero results.
+    if terms.iter().any(|t| t.len() < 3) {
+        return String::new();
+    }
+
+    terms
+        .iter()
         .map(|s| {
             let escaped = s.replace('"', "\"\"");
             format!("\"{}\"", escaped)
         })
-        .collect();
-    terms.join(" AND ")
+        .collect::<Vec<_>>()
+        .join(" AND ")
 }
 
 #[cfg(test)]
@@ -1481,6 +1500,15 @@ mod tests {
             "\"hello\" AND \"world\""
         );
         assert_eq!(build_fts_query("  "), "");
+
+        // Short queries (< 3 bytes) are skipped — trigram can't form a match
+        assert_eq!(build_fts_query("ab"), "");
+        assert_eq!(build_fts_query("a"), "");
+        assert_eq!(build_fts_query("ab cd"), "");
+        assert_eq!(build_fts_query("hello ab"), "");
+
+        // 3-byte minimum: "abc" has exactly 3 bytes → one trigram possible
+        assert_eq!(build_fts_query("abc"), "\"abc\"");
     }
 
     #[test]
@@ -1669,5 +1697,36 @@ mod tests {
         let res_punc2 = store.query_workspace(req_punc2).unwrap();
         assert_eq!(res_punc2.filtered_items.len(), 1);
         assert_eq!(res_punc2.filtered_items[0].id, item_punc.id);
+
+        // 5. Test short Chinese query (6 bytes / 2 chars): valid for
+        //    byte-level trigram — FTS should be used for both items
+        let req_short_zh = HistoryWorkspaceQueryRequest {
+            scope: HistoryWorkspaceScope::All,
+            query: "你好".to_string(), // 2 chars, 6 bytes
+            filter_type: HistoryWorkspaceFilterType::All,
+            date_filter: HistoryWorkspaceDateFilter::All,
+            sort_order: HistoryWorkspaceSortOrder::Newest,
+        };
+        let res_short_zh = store.query_workspace(req_short_zh).unwrap();
+        let short_zh_ids: std::collections::HashSet<&str> = res_short_zh
+            .filtered_items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect();
+        assert!(short_zh_ids.contains(item.id.as_str()));
+        assert!(short_zh_ids.contains(item_punc.id.as_str()));
+
+        // 6. Test short ASCII query (< 3 bytes): must fall back to in-memory
+        //    matching on search_content loaded from DB
+        let req_short_en = HistoryWorkspaceQueryRequest {
+            scope: HistoryWorkspaceScope::All,
+            query: "fa".to_string(), // 2 bytes — too short for trigram
+            filter_type: HistoryWorkspaceFilterType::All,
+            date_filter: HistoryWorkspaceDateFilter::All,
+            sort_order: HistoryWorkspaceSortOrder::Newest,
+        };
+        let res_short_en = store.query_workspace(req_short_en).unwrap();
+        assert_eq!(res_short_en.filtered_items.len(), 1);
+        assert_eq!(res_short_en.filtered_items[0].id, item.id);
     }
 }
