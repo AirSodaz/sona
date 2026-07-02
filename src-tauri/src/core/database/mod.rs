@@ -57,6 +57,10 @@ impl Database {
         );
         conn.execute_batch(&attach_sql).map_err(|e| e.to_string())?;
 
+        // Request SQLite to perform internal maintenance/optimization at startup
+        conn.execute_batch("PRAGMA optimize;")
+            .map_err(|e| format!("startup optimize: {e}"))?;
+
         let db = Self {
             conn: Mutex::new(conn),
         };
@@ -92,6 +96,29 @@ impl Database {
     {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         f(&conn).map_err(|e| e.to_string())
+    }
+
+    /// Runs `PRAGMA optimize;` to let SQLite perform internal maintenance
+    /// (analyze, query planner stats, etc.). Safe to call periodically.
+    pub fn run_optimize(&self) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| format!("lock optimize: {e}"))?;
+        conn.execute_batch("PRAGMA optimize;")
+            .map_err(|e| format!("optimize: {e}"))
+    }
+
+    /// Runs `VACUUM` on both the main and analytics databases to reclaim
+    /// unused space and defragment. Should be called after large bulk deletes
+    /// (e.g., clearing resolved tasks).
+    pub fn vacuum(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| format!("lock vacuum: {e}"))?;
+        conn.execute_batch("VACUUM;")
+            .map_err(|e| format!("vacuum main: {e}"))?;
+        conn.execute_batch("VACUUM analytics;")
+            .map_err(|e| format!("vacuum analytics: {e}"))?;
+        Ok(())
     }
 
     /// Executes a closure inside a transaction. The transaction is committed
@@ -303,6 +330,28 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn test_run_optimize() {
+        let db = Database::open_in_memory().unwrap();
+        db.run_optimize().unwrap();
+    }
+
+    #[test]
+    fn test_vacuum() {
+        let db = Database::open_in_memory().unwrap();
+        // Insert some data then delete it to create free pages
+        db.with_connection(|conn| {
+            conn.execute_batch(
+                "INSERT INTO app_settings (key, value) VALUES ('k1', 'v1'), ('k2', 'v2'), ('k3', 'v3')",
+            )?;
+            conn.execute_batch("DELETE FROM app_settings")?;
+            Ok(())
+        })
+        .unwrap();
+        // VACUUM should succeed and reclaim the free space
+        db.vacuum().unwrap();
     }
 }
 

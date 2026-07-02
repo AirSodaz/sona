@@ -156,9 +156,7 @@ impl SqliteLedgerRepository {
     }
 
     pub fn clear_resolved(&self) -> Result<(), String> {
-        // Keep only tasks with persisted statuses; remove cancelled/succeeded
-        self.get_db().with_connection(|conn| {
-            // We need to load all, check status, delete non-persisted ones
+        let deleted_count = self.get_db().with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {
                 let id: String = row.get(0)?;
@@ -175,11 +173,17 @@ impl SqliteLedgerRepository {
                 }
             }
             let mut stmt = conn.prepare("DELETE FROM task_ledger WHERE id = ?1")?;
-            for id in to_delete {
+            for id in &to_delete {
                 stmt.execute([id])?;
             }
-            Ok(())
-        })
+            Ok(to_delete.len())
+        })?;
+
+        if deleted_count > 0 {
+            self.get_db().vacuum()?;
+        }
+
+        Ok(())
     }
 }
 
