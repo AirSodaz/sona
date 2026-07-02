@@ -122,7 +122,7 @@ impl SqliteHistoryStore {
         }
     }
 
-    fn get_db(&self) -> &Database {
+    fn get_db(&self) -> Result<&Database, String> {
         self.db.get()
     }
 
@@ -197,7 +197,7 @@ impl SqliteHistoryStore {
     fn reconcile_live_drafts(&self) -> Result<(), String> {
         let history_dir = self.history_dir();
         #[allow(clippy::type_complexity)]
-        let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db().with_connection(|conn| {
+        let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
                  FROM history_items h
@@ -257,7 +257,7 @@ impl SqliteHistoryStore {
         }
 
         if !verified_updates.is_empty() {
-            self.get_db().with_transaction(|tx| {
+            self.get_db()?.with_transaction(|tx| {
                 for (item, segments_str) in &verified_updates {
                     tx.execute(
                         "UPDATE history_items SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL WHERE id = ?4",
@@ -390,7 +390,7 @@ impl HistoryStore for SqliteHistoryStore {
     }
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -407,7 +407,7 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.reconcile_live_drafts()?;
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -429,7 +429,7 @@ impl HistoryStore for SqliteHistoryStore {
         self.ensure_ready()?;
         self.reconcile_live_drafts()?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             // 1. Compute item counts via aggregate query (index-only, lightweight)
             let item_counts = {
                 let mut stmt = conn.prepare(
@@ -537,7 +537,7 @@ impl HistoryStore for SqliteHistoryStore {
             .to_string_lossy()
             .into_owned();
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, "[]")?;
             Ok(())
         })?;
@@ -558,7 +558,7 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str =
             serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
 
-        let exists: bool = self.get_db().with_connection(|conn| {
+        let exists: bool = self.get_db()?.with_connection(|conn| {
             Ok(conn
                 .query_row(
                     "SELECT 1 FROM history_items WHERE id = ?1",
@@ -572,7 +572,7 @@ impl HistoryStore for SqliteHistoryStore {
             return Err(format!("History item not found: {history_id}"));
         }
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL
@@ -593,7 +593,7 @@ impl HistoryStore for SqliteHistoryStore {
             Ok(())
         })?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -660,7 +660,7 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str =
             serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             Ok(())
         })?;
@@ -711,7 +711,7 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str =
             serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             Ok(())
         })?;
@@ -724,7 +724,7 @@ impl HistoryStore for SqliteHistoryStore {
             return Ok(());
         }
 
-        let audio_paths = self.get_db().with_connection(|conn| {
+        let audio_paths = self.get_db()?.with_connection(|conn| {
             let mut audio_paths = Vec::new();
             let mut stmt = conn.prepare("SELECT audio_path FROM history_items WHERE id = ?1")?;
             for id in ids {
@@ -743,7 +743,7 @@ impl HistoryStore for SqliteHistoryStore {
             }
         }
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare("DELETE FROM history_items WHERE id = ?1")?;
             for id in ids {
                 stmt.execute([id])?;
@@ -755,7 +755,7 @@ impl HistoryStore for SqliteHistoryStore {
     }
 
     fn load_transcript(&self, history_id: &str) -> Result<Option<Vec<TranscriptSegment>>, String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT t.segments
                  FROM history_items i
@@ -765,8 +765,13 @@ impl HistoryStore for SqliteHistoryStore {
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let segments_str: String = row.get(0)?;
-                let parsed_val: Value = serde_json::from_str(&segments_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let parsed_val: Value = serde_json::from_str(&segments_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
                 let normalized =
                     normalize_history_transcript_segments(parsed_val).map_err(|e| {
                         rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
@@ -798,7 +803,7 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str =
             serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
 
-        let exists: bool = self.get_db().with_connection(|conn| {
+        let exists: bool = self.get_db()?.with_connection(|conn| {
             Ok(conn
                 .query_row(
                     "SELECT 1 FROM history_items WHERE id = ?1",
@@ -812,7 +817,7 @@ impl HistoryStore for SqliteHistoryStore {
             return Err(format!("History item not found: {history_id}"));
         }
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2
@@ -832,7 +837,7 @@ impl HistoryStore for SqliteHistoryStore {
             Ok(())
         })?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -871,7 +876,7 @@ impl HistoryStore for SqliteHistoryStore {
 
         let segments_str = serde_json::to_string(&parsed_segments).map_err(|e| e.to_string())?;
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let exists: bool = tx.query_row(
                 "SELECT EXISTS(SELECT 1 FROM history_items WHERE id = ?1)",
                 [history_id],
@@ -919,7 +924,7 @@ impl HistoryStore for SqliteHistoryStore {
         history_id: &str,
     ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
         validate_id(history_id, "History ID")?;
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, reason, created_at, segment_count
                  FROM transcript_snapshots
@@ -965,7 +970,7 @@ impl HistoryStore for SqliteHistoryStore {
         validate_id(history_id, "History ID")?;
         validate_id(snapshot_id, "Snapshot ID")?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT reason, created_at, segment_count, segments
                  FROM transcript_snapshots
@@ -986,8 +991,13 @@ impl HistoryStore for SqliteHistoryStore {
                     _ => TranscriptSnapshotReason::Polish,
                 };
 
-                let parsed_val: Value = serde_json::from_str(&segments_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let parsed_val: Value = serde_json::from_str(&segments_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
 
                 let normalized =
                     normalize_history_transcript_segments(parsed_val).map_err(|e| {
@@ -1017,7 +1027,7 @@ impl HistoryStore for SqliteHistoryStore {
             .as_object()
             .ok_or_else(|| "History item updates must be an object.".to_string())?;
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -1078,7 +1088,7 @@ impl HistoryStore for SqliteHistoryStore {
             return Ok(());
         }
 
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare("UPDATE history_items SET project_id = ?1 WHERE id = ?2")?;
             for id in ids {
                 stmt.execute(rusqlite::params![project_id, id])?;
@@ -1092,7 +1102,7 @@ impl HistoryStore for SqliteHistoryStore {
         current_project_id: String,
         next_project_id: Option<String>,
     ) -> Result<(), String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
                 rusqlite::params![next_project_id, current_project_id],
@@ -1104,14 +1114,19 @@ impl HistoryStore for SqliteHistoryStore {
     fn load_summary(&self, history_id: &str) -> Result<Option<Value>, String> {
         validate_id(history_id, "History ID")?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt =
                 conn.prepare("SELECT payload FROM history_summaries WHERE history_id = ?1")?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let payload_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&payload_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let val: Value = serde_json::from_str(&payload_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
                 Ok(Some(val))
             } else {
                 Ok(None)
@@ -1129,7 +1144,7 @@ impl HistoryStore for SqliteHistoryStore {
 
         let payload_str = serde_json::to_string(&summary_payload).map_err(|e| e.to_string())?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
                 rusqlite::params![history_id, payload_str],
@@ -1141,7 +1156,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn delete_summary(&self, history_id: &str) -> Result<(), String> {
         validate_id(history_id, "History ID")?;
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "DELETE FROM history_summaries WHERE history_id = ?1",
                 [history_id],
@@ -1153,7 +1168,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, String> {
         validate_id(history_id, "History ID")?;
 
-        let audio_path_opt: Option<String> = self.get_db().with_connection(|conn| {
+        let audio_path_opt: Option<String> = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT audio_path FROM history_items WHERE id = ?1")?;
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
@@ -1184,7 +1199,7 @@ impl HistoryStore for SqliteHistoryStore {
     }
 
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
-        let items = self.get_db().with_connection(|conn| {
+        let items = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
                  FROM history_items
@@ -1214,7 +1229,7 @@ impl HistoryStore for SqliteHistoryStore {
         let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-        let (transcript_files, summary_files, snapshot_files) = self.get_db().with_connection(|conn| {
+        let (transcript_files, summary_files, snapshot_files) = self.get_db()?.with_connection(|conn| {
             // Bulk fetch transcripts
             let mut transcript_files: Vec<(String, Value)> = Vec::with_capacity(items.len());
 
@@ -1228,7 +1243,7 @@ impl HistoryStore for SqliteHistoryStore {
                     let history_id: String = row.get(0)?;
                     let segments_str: String = row.get(1)?;
                     let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
                     Ok((history_id, val))
                 })?;
 
@@ -1267,7 +1282,7 @@ impl HistoryStore for SqliteHistoryStore {
                     let history_id: String = row.get(0)?;
                     let payload_str: String = row.get(1)?;
                     let val: Value = serde_json::from_str(&payload_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
                     Ok((history_id, val))
                 })?;
 
@@ -1305,7 +1320,7 @@ impl HistoryStore for SqliteHistoryStore {
                     };
 
                     let parsed_val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
 
                     let normalized =
                         normalize_history_transcript_segments(parsed_val).map_err(|e| {
@@ -1497,6 +1512,7 @@ mod tests {
         // Verify they exist in DB
         store
             .get_db()
+            .unwrap()
             .with_connection(|conn| {
                 let t_count: i64 = conn.query_row(
                     "SELECT COUNT(*) FROM history_transcripts WHERE history_id = ?1",
@@ -1528,6 +1544,7 @@ mod tests {
         // Verify child tables are automatically pruned by ON DELETE CASCADE
         store
             .get_db()
+            .unwrap()
             .with_connection(|conn| {
                 let t_count: i64 = conn.query_row(
                     "SELECT COUNT(*) FROM history_transcripts WHERE history_id = ?1",
@@ -1690,6 +1707,7 @@ mod tests {
         .unwrap();
         store
             .get_db()
+            .unwrap()
             .with_transaction(|tx| {
                 tx.execute(
                 "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",

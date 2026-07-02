@@ -4,7 +4,7 @@ pub mod schema;
 use rusqlite::{Connection, Transaction};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, TryLockError};
 
 /// Number of connections in the pool. With WAL mode, multiple readers can
 /// proceed concurrently through separate connections, and writers are
@@ -32,8 +32,10 @@ impl std::fmt::Debug for Database {
 }
 
 impl Database {
-    pub fn global() -> &'static Database {
-        GLOBAL_DB.get().expect("Database not initialized")
+    pub fn global() -> Result<&'static Database, String> {
+        GLOBAL_DB
+            .get()
+            .ok_or_else(|| "Database not initialized".to_string())
     }
 
     pub fn set_global(db: Database) -> Result<(), String> {
@@ -108,13 +110,37 @@ impl Database {
         conn.execute_batch(&attach_sql).map_err(|e| e.to_string())
     }
 
-    /// Acquires a connection from the pool via round-robin.
+    /// Acquires a connection from the pool via round-robin with fallback.
+    /// Uses try_lock to avoid indefinite blocking; if the selected slot is
+    /// busy, scans all other slots for an idle connection. Recovers from
+    /// poisoned mutexes by consuming the poison error.
     fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
         if self.pool.is_empty() {
             return Err("connection pool is empty".into());
         }
         let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
-        self.pool[idx].lock().map_err(|e| e.to_string())
+
+        match self.pool[idx].try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(TryLockError::Poisoned(poisoned)) => {
+                return Ok(poisoned.into_inner());
+            }
+            Err(TryLockError::WouldBlock) => {}
+        }
+
+        for i in 0..self.pool.len() {
+            if i != idx {
+                match self.pool[i].try_lock() {
+                    Ok(guard) => return Ok(guard),
+                    Err(TryLockError::Poisoned(poisoned)) => {
+                        return Ok(poisoned.into_inner());
+                    }
+                    Err(TryLockError::WouldBlock) => {}
+                }
+            }
+        }
+
+        Err("all database connections are busy".into())
     }
 
     /// Executes a closure with a shared reference to a pooled connection.
@@ -176,9 +202,9 @@ impl DbProvider {
         Self { db }
     }
 
-    pub fn get(&self) -> &Database {
+    pub fn get(&self) -> Result<&Database, String> {
         if let Some(ref db) = self.db {
-            db
+            Ok(db)
         } else {
             Database::global()
         }
@@ -433,19 +459,10 @@ mod tests_provider {
     #[test]
     fn test_db_provider_fallback() {
         let provider = DbProvider::default();
-        // This should panic since Database::global() is not initialized in this unit test context
-        let result = std::panic::catch_unwind(|| {
-            provider.get();
-        });
-        assert!(result.is_err());
+        assert!(provider.get().is_err());
 
         let local_db = Database::open_in_memory().unwrap();
         let provider_with_db = DbProvider::new(Some(Arc::new(local_db)));
-        assert!(
-            std::panic::catch_unwind(|| {
-                provider_with_db.get();
-            })
-            .is_ok()
-        );
+        assert!(provider_with_db.get().is_ok());
     }
 }

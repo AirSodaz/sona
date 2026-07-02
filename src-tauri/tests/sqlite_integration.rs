@@ -29,6 +29,7 @@ fn init_global_db() {
 
 fn clear_global_db() {
     Database::global()
+        .unwrap()
         .with_transaction(|tx| {
             for table in &[
                 "transcript_snapshots",
@@ -202,7 +203,7 @@ fn test_migration_and_crud() {
     setup_legacy_data(root.path());
 
     // Run legacy migration on the global DB
-    let report = migrate_legacy_to_sqlite(Database::global(), root.path()).unwrap();
+    let report = migrate_legacy_to_sqlite(Database::global().unwrap(), root.path()).unwrap();
     assert!(report.migrated, "Migration should have found legacy data");
     assert_eq!(report.history_count, 2);
     assert_eq!(report.project_count, 2);
@@ -214,6 +215,7 @@ fn test_migration_and_crud() {
 
     // Verify all tables via global DB connection
     Database::global()
+        .unwrap()
         .with_connection(|conn| {
             let h: i64 = conn
                 .query_row("SELECT COUNT(*) FROM history_items", [], |r| r.get(0))

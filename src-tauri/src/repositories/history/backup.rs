@@ -596,7 +596,7 @@ pub fn apply_prepared_history_import_inner(
         return Err("Prepared backup import is missing the history directory.".to_string());
     }
 
-    let db = crate::core::database::Database::global();
+    let db = crate::core::database::Database::global()?;
 
     let items: Vec<HistoryItemRecord> =
         read_json_value(&extracted_history_dir.join(PROJECTS_INDEX_FILE_NAME))
@@ -762,6 +762,7 @@ mod tests {
 
     fn clear_global_db() {
         Database::global()
+            .unwrap()
             .with_transaction(|tx| {
                 tx.execute("DELETE FROM history_items", [])?;
                 Ok(())
@@ -796,7 +797,7 @@ mod tests {
             })
             .unwrap();
 
-        Database::global()
+        Database::global().unwrap()
             .with_transaction(|tx| {
                 tx.execute(
                     "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, kind, status, draft_source)
@@ -1255,6 +1256,7 @@ mod tests {
         .unwrap();
 
         Database::global()
+            .unwrap()
             .with_transaction(|tx| {
                 tx.execute("DELETE FROM history_items", [])?;
                 Ok(())

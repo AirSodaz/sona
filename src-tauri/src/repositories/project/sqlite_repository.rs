@@ -27,12 +27,12 @@ impl SqliteProjectRepository {
         }
     }
 
-    fn get_db(&self) -> &Database {
+    fn get_db(&self) -> Result<&Database, String> {
         self.db.get()
     }
 
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
                  FROM projects
@@ -60,7 +60,7 @@ impl SqliteProjectRepository {
         let icon = input.icon.clone().unwrap_or_default();
         let name = input.name.clone();
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
@@ -208,7 +208,7 @@ impl SqliteProjectRepository {
         }
         let settings_str = settings_val.to_string();
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "UPDATE projects SET name = ?1, icon = ?2, updated_at = ?3, summary_template_id = ?4, translation_language = ?5, polish_preset_id = ?6, settings = ?7 WHERE id = ?8",
                 rusqlite::params![
@@ -237,7 +237,7 @@ impl SqliteProjectRepository {
     }
 
     pub fn delete(&self, project_id: &str) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute(
                 "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
                 [project_id],
@@ -248,7 +248,7 @@ impl SqliteProjectRepository {
     }
 
     pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute("UPDATE history_items SET project_id = NULL", [])?;
             tx.execute("DELETE FROM projects", [])?;
             let mut stmt = tx.prepare(
@@ -305,7 +305,7 @@ impl SqliteProjectRepository {
     }
 
     pub fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare("UPDATE projects SET sort_order = ?1 WHERE id = ?2")?;
             for (i, id) in project_ids.iter().enumerate() {
                 stmt.execute(rusqlite::params![i as i64, id])?;
@@ -317,7 +317,7 @@ impl SqliteProjectRepository {
     }
 
     fn get_by_id(&self, project_id: &str) -> Result<Option<ProjectRecord>, String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
                  FROM projects WHERE id = ?1"

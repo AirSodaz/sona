@@ -27,7 +27,7 @@ impl SqliteAutomationRepository {
         }
     }
 
-    fn get_db(&self) -> &Database {
+    fn get_db(&self) -> Result<&Database, String> {
         self.db.get()
     }
 
@@ -43,12 +43,17 @@ impl SqliteAutomationRepository {
     }
 
     pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
-        let rules = self.get_db().with_connection(|conn| {
+        let rules = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT data FROM automation_rules ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let val: Value = serde_json::from_str(&data_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
                 Ok(val)
             })?;
             let mut items = Vec::new();
@@ -58,12 +63,17 @@ impl SqliteAutomationRepository {
             Ok(items)
         })?;
 
-        let processed_entries = self.get_db().with_connection(|conn| {
+        let processed_entries = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT data FROM automation_processed ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let val: Value = serde_json::from_str(&data_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
                 Ok(val)
             })?;
             let mut items = Vec::new();
@@ -80,7 +90,7 @@ impl SqliteAutomationRepository {
     }
 
     pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_rules", [])?;
             let mut stmt = tx.prepare("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
             for mut rule in rules {
@@ -94,7 +104,7 @@ impl SqliteAutomationRepository {
     }
 
     pub fn persist_processed_entries(&self, entries: Vec<Value>) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_processed", [])?;
             let mut stmt =
                 tx.prepare("INSERT INTO automation_processed (id, data) VALUES (?1, ?2)")?;
@@ -109,7 +119,7 @@ impl SqliteAutomationRepository {
     }
 
     pub fn persist_state(&self, rules: Vec<Value>, entries: Vec<Value>) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_rules", [])?;
             {
                 let mut stmt =

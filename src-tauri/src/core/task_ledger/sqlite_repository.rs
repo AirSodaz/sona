@@ -31,7 +31,7 @@ impl SqliteLedgerRepository {
         }
     }
 
-    fn get_db(&self) -> &Database {
+    fn get_db(&self) -> Result<&Database, String> {
         self.db.get()
     }
 
@@ -43,13 +43,19 @@ impl SqliteLedgerRepository {
     }
 
     pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
-        let records = self.get_db().with_connection(|conn| {
+        let records = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT data, version FROM task_ledger ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
                 let data_str: String = row.get(0)?;
                 let _version: i64 = row.get(1)?;
-                let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let mut record: TaskLedgerRecord =
+                    serde_json::from_str(&data_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?;
                 // Auto-assign timestamps if missing
                 if record.created_at == 0 {
                     record.created_at = Self::now_ms();
@@ -98,7 +104,7 @@ impl SqliteLedgerRepository {
         let data_str = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
         let now = Self::now_ms();
 
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO task_ledger (id, data, version, updated_at) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![normalized.id, data_str, TASK_LEDGER_VERSION, now.to_string()],
@@ -108,7 +114,7 @@ impl SqliteLedgerRepository {
     }
 
     pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), String> {
-        self.get_db().with_transaction(|tx| {
+        self.get_db()?.with_transaction(|tx| {
             let existing: Option<String> = {
                 let mut stmt = tx.prepare("SELECT data FROM task_ledger WHERE id = ?1")?;
                 let mut rows = stmt.query([id])?;
@@ -123,8 +129,13 @@ impl SqliteLedgerRepository {
                 return Ok(());
             };
 
-            let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let mut record: TaskLedgerRecord = serde_json::from_str(&data_str).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
 
             if let Some(patch_obj) = patch.as_object() {
                 let mut current = serde_json::to_value(&record)
@@ -134,8 +145,13 @@ impl SqliteLedgerRepository {
                         current_obj.insert(key.clone(), val.clone());
                     }
                 }
-                record = serde_json::from_value(current)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                record = serde_json::from_value(current).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             }
 
             record.updated_at = Self::now_ms();
@@ -152,14 +168,14 @@ impl SqliteLedgerRepository {
     }
 
     pub fn remove_task(&self, id: &str) -> Result<(), String> {
-        self.get_db().with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             conn.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
             Ok(())
         })
     }
 
     pub fn clear_resolved(&self) -> Result<(), String> {
-        let deleted_count = self.get_db().with_connection(|conn| {
+        let deleted_count = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {
                 let id: String = row.get(0)?;
@@ -183,7 +199,7 @@ impl SqliteLedgerRepository {
         })?;
 
         if deleted_count > 0 {
-            self.get_db().vacuum()?;
+            self.get_db()?.vacuum()?;
         }
 
         Ok(())

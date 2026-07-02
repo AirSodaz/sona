@@ -18,7 +18,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Migrate legacy JSON data to SQLite
     let migration_result = crate::core::database::legacy_migration::migrate_legacy_to_sqlite(
-        crate::core::database::Database::global(),
+        crate::core::database::Database::global()?,
         &app_local_data_dir,
     )?;
     if migration_result.migrated {
