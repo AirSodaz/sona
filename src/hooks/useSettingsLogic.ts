@@ -15,6 +15,7 @@ export type SettingsTab =
     | 'llm_service'
     | 'vocabulary'
     | 'automation'
+    | 'storage'
     | 'api_server';
 export type SettingsTabInput = SettingsTab | 'context';
 

@@ -215,6 +215,24 @@ pub struct HistorySaveImportedFileRequest {
     pub converted_source_path: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryAudioCleanupRequest {
+    pub retention_days: Option<u64>,
+    pub exclude_history_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryAudioCleanupReport {
+    pub eligible_count: u64,
+    pub removed_count: u64,
+    pub removed_bytes: u64,
+    pub missing_marked_count: u64,
+    pub failed_count: u64,
+    pub skipped_active_count: u64,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TranscriptSnapshotReason {

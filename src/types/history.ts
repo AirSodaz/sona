@@ -2,6 +2,15 @@ export type HistoryItemStatus = 'draft' | 'complete';
 export type HistoryAudioStatus = 'available' | 'missing' | 'removed';
 export type HistoryDraftSource = 'live_record';
 
+export interface HistoryAudioCleanupReport {
+    eligibleCount: number;
+    removedCount: number;
+    removedBytes: number;
+    missingMarkedCount: number;
+    failedCount: number;
+    skippedActiveCount: number;
+}
+
 export interface HistoryItem {
     id: string;
     timestamp: number;

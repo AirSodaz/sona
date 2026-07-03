@@ -198,6 +198,48 @@ describe("historyService", () => {
     );
   });
 
+  it("forwards history audio cleanup preview and apply requests", async () => {
+    testContext.invokeMock
+      .mockResolvedValueOnce({
+        eligibleCount: 2,
+        removedCount: 2,
+        removedBytes: 123,
+        missingMarkedCount: 0,
+        failedCount: 0,
+        skippedActiveCount: 1,
+      })
+      .mockResolvedValueOnce({
+        eligibleCount: 1,
+        removedCount: 0,
+        removedBytes: 0,
+        missingMarkedCount: 1,
+        failedCount: 0,
+        skippedActiveCount: 0,
+      });
+
+    const preview = await historyService.previewAudioCleanup(30, "history-open");
+    const cleanup = await historyService.cleanupAudio(null, null);
+
+    expect(testContext.invokeMock).toHaveBeenNthCalledWith(
+      1,
+      "history_preview_audio_cleanup",
+      {
+        retentionDays: 30,
+        excludeHistoryId: "history-open",
+      },
+    );
+    expect(testContext.invokeMock).toHaveBeenNthCalledWith(
+      2,
+      "history_cleanup_audio",
+      {
+        retentionDays: null,
+        excludeHistoryId: null,
+      },
+    );
+    expect(preview.removedBytes).toBe(123);
+    expect(cleanup.missingMarkedCount).toBe(1);
+  });
+
   it("loadTranscript trusts Rust-normalized timing from the Rust bridge", async () => {
     testContext.invokeMock.mockResolvedValue([
       {

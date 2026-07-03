@@ -3,6 +3,7 @@ import { useRecoveryStore } from '../../stores/recoveryStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { logger } from '../../utils/logger';
 import { healthCheckService } from '../healthCheckService';
+import { runHistoryAudioCleanupForCurrentConfig } from '../historyAudioCleanupService';
 import { voiceTypingService } from '../voiceTypingService';
 
 async function runStartupStep(label: string, action: () => Promise<void>): Promise<void> {
@@ -33,4 +34,8 @@ export async function startAppRuntimeServices(): Promise<void> {
   await runStartupStep('run health check', () => (
     healthCheckService.runHealthCheck()
   ));
+
+  await runStartupStep('clean up history audio', async () => {
+    await runHistoryAudioCleanupForCurrentConfig();
+  });
 }

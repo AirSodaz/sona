@@ -85,6 +85,9 @@ vi.mock('../settings/SettingsVocabularyTab', () => ({
 vi.mock('../settings/SettingsAutomationTab', () => ({
     SettingsAutomationTab: () => <div>Automation Tab</div>
 }));
+vi.mock('../settings/SettingsStorageTab', () => ({
+    SettingsStorageTab: () => <div>Storage Tab</div>
+}));
 vi.mock('../settings/SettingsLLMServiceTab', () => ({
     SettingsLLMServiceTab: () => <div>LLM Service Tab</div>
 }));
@@ -213,6 +216,7 @@ describe('Settings Focus Trap & Navigation', () => {
             'settings.model_hub',
             'settings.vocabulary',
             'settings.automation',
+            'settings.storage.title',
             'settings.api_server.title',
             'settings.llm.title',
             'shortcuts.title',

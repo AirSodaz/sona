@@ -17,6 +17,7 @@ import type {
   VoiceTypingConfig,
   ApiServerConfig,
   LlmAssistantConfig,
+  HistoryStorageConfig,
 } from '../types/config';
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   polishKeywordSets: [],
   speakerProfiles: [],
   hotwords: [],
+
+  // History storage
+  historyAudioRetentionDays: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -230,6 +234,9 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerIpWhitelist',
   'gpuAcceleration',
 ];
+const HISTORY_STORAGE_KEYS: (keyof HistoryStorageConfig)[] = [
+  'historyAudioRetentionDays',
+];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -287,6 +294,11 @@ export function useLlmAssistantConfig(): LlmAssistantConfig {
 /** HTTP API Server settings. */
 export function useApiServerConfig(): ApiServerConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, API_SERVER_KEYS)));
+}
+
+/** History audio retention and storage settings. */
+export function useHistoryStorageConfig(): HistoryStorageConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, HISTORY_STORAGE_KEYS)));
 }
 
 // ---------------------------------------------------------------------------

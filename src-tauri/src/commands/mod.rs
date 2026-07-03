@@ -49,6 +49,8 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::history_save_summary,
         crate::commands::history::history_delete_summary,
         crate::commands::history::history_resolve_audio_path,
+        crate::commands::history::history_preview_audio_cleanup,
+        crate::commands::history::history_cleanup_audio,
         crate::commands::history::history_open_folder,
         crate::commands::history::export_backup_archive,
         crate::commands::history::prepare_backup_import,

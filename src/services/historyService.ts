@@ -1,4 +1,4 @@
-import { HistoryItem } from '../types/history';
+import { HistoryAudioCleanupReport, HistoryItem } from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import {
     TranscriptDiffResult,
@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 import {
     historyCompleteLiveDraft,
     historyCreateLiveDraft,
+    historyCleanupAudio,
     historyDeleteItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
@@ -21,6 +22,7 @@ import {
     historyListTranscriptSnapshots,
     historyLoadTranscriptSnapshot,
     historyOpenFolder,
+    historyPreviewAudioCleanup,
     historyReassignProject,
     historyRestoreTranscriptDiffRows,
     historyResolveAudioPath,
@@ -79,6 +81,7 @@ export interface HistoryServicePorts {
     historyListItems: typeof historyListItems;
     historyCreateLiveDraft: typeof historyCreateLiveDraft;
     historyCompleteLiveDraft: typeof historyCompleteLiveDraft;
+    historyCleanupAudio: typeof historyCleanupAudio;
     historyDeleteItems: typeof historyDeleteItems;
     historyDeleteSummary: typeof historyDeleteSummary;
     historyCreateTranscriptSnapshot: typeof historyCreateTranscriptSnapshot;
@@ -88,6 +91,7 @@ export interface HistoryServicePorts {
     historyListTranscriptSnapshots: typeof historyListTranscriptSnapshots;
     historyLoadTranscriptSnapshot: typeof historyLoadTranscriptSnapshot;
     historyOpenFolder: typeof historyOpenFolder;
+    historyPreviewAudioCleanup: typeof historyPreviewAudioCleanup;
     historyReassignProject: typeof historyReassignProject;
     historyRestoreTranscriptDiffRows: typeof historyRestoreTranscriptDiffRows;
     historyResolveAudioPath: typeof historyResolveAudioPath;
@@ -322,6 +326,20 @@ export class HistoryService {
         return fullPath ? this.ports.convertManagedAudioFileSrc(fullPath) : null;
     }
 
+    async previewAudioCleanup(
+        retentionDays: number | null,
+        excludeHistoryId: string | null = null,
+    ): Promise<HistoryAudioCleanupReport> {
+        return this.ports.historyPreviewAudioCleanup({ retentionDays, excludeHistoryId });
+    }
+
+    async cleanupAudio(
+        retentionDays: number | null,
+        excludeHistoryId: string | null = null,
+    ): Promise<HistoryAudioCleanupReport> {
+        return this.ports.historyCleanupAudio({ retentionDays, excludeHistoryId });
+    }
+
     async openHistoryFolder(): Promise<void> {
         await this.ports.historyOpenFolder();
     }
@@ -335,6 +353,7 @@ export const historyService = createHistoryService({
     historyListItems,
     historyCreateLiveDraft,
     historyCompleteLiveDraft,
+    historyCleanupAudio,
     historyDeleteItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
@@ -344,6 +363,7 @@ export const historyService = createHistoryService({
     historyListTranscriptSnapshots,
     historyLoadTranscriptSnapshot,
     historyOpenFolder,
+    historyPreviewAudioCleanup,
     historyReassignProject,
     historyRestoreTranscriptDiffRows,
     historyResolveAudioPath,

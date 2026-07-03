@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Type, Server } from 'lucide-react';
+import { BarChart3, HardDrive, Type, Server } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogStore } from '../stores/dialogStore';
@@ -19,6 +19,7 @@ import {
     loadSettingsMicrophoneTab,
     loadSettingsModelsPane,
     loadSettingsShortcutsTab,
+    loadSettingsStorageTab,
     loadSettingsSubtitleTab,
     loadSettingsVocabularyTab,
     loadSettingsVoiceTypingTab,
@@ -56,6 +57,7 @@ const SettingsVoiceTypingTab = lazy(loadSettingsVoiceTypingTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
+const SettingsStorageTab = lazy(loadSettingsStorageTab);
 const SettingsApiServerTab = lazy(() => import('./settings/settingsLoaders').then(m => m.loadSettingsApiServerTab()));
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
@@ -97,6 +99,8 @@ function renderSettingsPane(
             return <SettingsVocabularyTab />;
         case 'automation':
             return <SettingsAutomationTab />;
+        case 'storage':
+            return <SettingsStorageTab />;
         case 'api_server':
             return <SettingsApiServerTab />;
         case 'llm_service':
@@ -464,6 +468,14 @@ export function Settings({
                             activeTab={renderedTab}
                             setActiveTab={navigateToTab}
                             tabIndex={renderedTab === 'automation' ? 0 : -1}
+                        />
+                        <SettingsTabButton
+                            id="storage"
+                            label={t('settings.storage.title', { defaultValue: 'Storage' })}
+                            Icon={() => <HardDrive size={18} />}
+                            activeTab={renderedTab}
+                            setActiveTab={navigateToTab}
+                            tabIndex={renderedTab === 'storage' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="api_server"

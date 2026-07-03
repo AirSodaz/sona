@@ -62,6 +62,8 @@ export const TauriCommand = {
     saveSummary: 'history_save_summary',
     deleteSummary: 'history_delete_summary',
     resolveAudioPath: 'history_resolve_audio_path',
+    previewAudioCleanup: 'history_preview_audio_cleanup',
+    cleanupAudio: 'history_cleanup_audio',
     queryWorkspace: 'history_query_workspace',
     openFolder: 'history_open_folder',
   },

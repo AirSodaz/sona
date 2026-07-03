@@ -6,6 +6,7 @@ const mockLoadTasks = vi.fn();
 const mockLoadAndStart = vi.fn();
 const mockVoiceTypingInit = vi.fn();
 const mockRunHealthCheck = vi.fn();
+const mockRunHistoryAudioCleanup = vi.fn();
 const mockLoggerError = vi.fn();
 
 vi.mock('../../../stores/recoveryStore', () => ({
@@ -44,6 +45,10 @@ vi.mock('../../healthCheckService', () => ({
   },
 }));
 
+vi.mock('../../historyAudioCleanupService', () => ({
+  runHistoryAudioCleanupForCurrentConfig: (...args: unknown[]) => mockRunHistoryAudioCleanup(...args),
+}));
+
 vi.mock('../../../utils/logger', () => ({
   logger: {
     error: (...args: unknown[]) => mockLoggerError(...args),
@@ -58,6 +63,7 @@ describe('startAppRuntimeServices', () => {
     mockLoadAndStart.mockResolvedValue(undefined);
     mockVoiceTypingInit.mockReturnValue(undefined);
     mockRunHealthCheck.mockResolvedValue(undefined);
+    mockRunHistoryAudioCleanup.mockResolvedValue(undefined);
   });
 
   it('continues later runtime startup tasks when an earlier step fails', async () => {
@@ -70,13 +76,14 @@ describe('startAppRuntimeServices', () => {
     expect(mockLoadAndStart).toHaveBeenCalledTimes(1);
     expect(mockVoiceTypingInit).toHaveBeenCalledTimes(1);
     expect(mockRunHealthCheck).toHaveBeenCalledTimes(1);
+    expect(mockRunHistoryAudioCleanup).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith(
       '[Startup] Failed to load automation runtime:',
       expect.any(Error),
     );
   });
 
-  it('loads the task ledger before recovery state and automation runtime', async () => {
+  it('loads the task ledger before recovery state, automation runtime, health check, and audio cleanup', async () => {
     const callOrder: string[] = [];
     mockLoadTasks.mockImplementation(async () => {
       callOrder.push('task-ledger');
@@ -87,9 +94,15 @@ describe('startAppRuntimeServices', () => {
     mockLoadAndStart.mockImplementation(async () => {
       callOrder.push('automation');
     });
+    mockRunHealthCheck.mockImplementation(async () => {
+      callOrder.push('health-check');
+    });
+    mockRunHistoryAudioCleanup.mockImplementation(async () => {
+      callOrder.push('audio-cleanup');
+    });
 
     await startAppRuntimeServices();
 
-    expect(callOrder).toEqual(['task-ledger', 'recovery', 'automation']);
+    expect(callOrder).toEqual(['task-ledger', 'recovery', 'automation', 'health-check', 'audio-cleanup']);
   });
 });

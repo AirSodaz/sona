@@ -331,6 +331,15 @@ export interface ApiServerConfig {
 }
 
 // ---------------------------------------------------------------------------
+// History storage
+// ---------------------------------------------------------------------------
+
+export interface HistoryStorageConfig {
+  /** Number of days to keep managed history audio files. Null keeps audio forever. Default: null. */
+  historyAudioRetentionDays?: number | null;
+}
+
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -351,4 +360,5 @@ export type AppConfig =
   VocabularyConfig &
   VoiceTypingConfig &
   ApiServerConfig &
-  LlmAssistantConfig;
+  LlmAssistantConfig &
+  HistoryStorageConfig;

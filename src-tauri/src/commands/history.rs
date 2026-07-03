@@ -14,11 +14,12 @@ use crate::repositories::history::backup::{
 };
 use crate::repositories::history::fs_utils::remove_path_if_exists;
 use crate::repositories::history::{
-    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest,
-    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistoryRepositoryState,
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
+    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryAudioCleanupReport,
+    HistoryAudioCleanupRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
+    HistoryItemStatus, HistoryListOptions, HistoryRepositoryState, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
+    HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
     PreparedBackupImport, PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
@@ -471,6 +472,40 @@ pub async fn history_resolve_audio_path<R: Runtime>(
 ) -> Result<Option<String>, String> {
     run_history_task(&app as &dyn PathProvider, state, move |repository| {
         repository.resolve_audio_path(&history_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_preview_audio_cleanup<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    retention_days: Option<u64>,
+    exclude_history_id: Option<String>,
+) -> Result<HistoryAudioCleanupReport, String> {
+    let request = HistoryAudioCleanupRequest {
+        retention_days,
+        exclude_history_id,
+    };
+    run_history_task(&app as &dyn PathProvider, state, move |repository| {
+        repository.preview_audio_cleanup(request)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_cleanup_audio<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    retention_days: Option<u64>,
+    exclude_history_id: Option<String>,
+) -> Result<HistoryAudioCleanupReport, String> {
+    let request = HistoryAudioCleanupRequest {
+        retention_days,
+        exclude_history_id,
+    };
+    run_history_task(&app as &dyn PathProvider, state, move |repository| {
+        repository.cleanup_audio(request)
     })
     .await
 }

@@ -74,7 +74,8 @@
         },
         "history": {
             "missing_files_deleted": "音声ファイルとトランスクリプト ファイルの両方がありません。この記録は削除されます。",
-            "load_failed": "履歴アイテムのロードに失敗しました。"
+            "load_failed": "履歴アイテムのロードに失敗しました。",
+            "audio_cleanup_failed": "履歴音声のクリーンアップに失敗しました。"
         },
         "model": {
             "download_failed": "モデルのダウンロードに失敗しました。",
@@ -1085,6 +1086,36 @@
             "by_provider": "プロバイダー別",
             "by_category": "カテゴリ別",
             "calls_and_tokens": "{{calls}} 呼び出し · {{tokens}} トークン"
+        },
+        "storage": {
+            "title": "ストレージ",
+            "description": "トランスクリプトのテキストを残したまま、履歴音声添付の保持期間を管理します。",
+            "history_audio_title": "履歴音声",
+            "history_audio_description": "クリーンアップは管理対象の音声ファイルだけに影響します。保存済みのトランスクリプト、要約、履歴行は残ります。",
+            "retention_label": "音声の保持期間",
+            "retention_hint": "自動クリーンアップは起動後に実行され、Sona を開いたままの場合は 1 日 1 回まで実行されます。",
+            "retention_forever": "永久に保持",
+            "retention_immediate": "すぐに削除",
+            "retention_7_days": "7 日",
+            "retention_30_days": "30 日",
+            "retention_90_days": "90 日",
+            "retention_180_days": "180 日",
+            "retention_365_days": "365 日",
+            "retention_custom_days": "{{count}} 日",
+            "manual_cleanup_title": "手動クリーンアップ",
+            "manual_cleanup_hint": "対象の音声を先にプレビューし、確認してから削除します。",
+            "manual_cleanup_disabled_hint": "有限の保持期間を選択すると、今すぐ音声をクリーンアップできます。",
+            "clean_now": "今すぐクリーンアップ",
+            "cleaning": "クリーンアップ中...",
+            "cleanup_disabled": "手動クリーンアップを実行する前に保持期間を選択してください。",
+            "cleanup_noop": "クリーンアップが必要な音声ファイルはありません。",
+            "cleanup_confirm_title": "履歴音声をクリーンアップしますか？",
+            "cleanup_confirm_message": "管理対象の履歴音声添付だけを削除します。トランスクリプト、要約、履歴レコードは残ります。",
+            "result_removed": "{{count}} 個のファイルを削除しました",
+            "result_bytes": "{{bytes}} を解放しました",
+            "result_missing": "{{count}} 件を missing にしました",
+            "result_failed": "{{count}} 件失敗",
+            "result_skipped_active": "使用中の音声 {{count}} 件をスキップしました"
         },
         "api_server": {
             "title": "APIサーバー",

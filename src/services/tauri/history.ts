@@ -1,4 +1,4 @@
-import type { HistoryItem } from "../../types/history";
+import type { HistoryAudioCleanupReport, HistoryItem } from "../../types/history";
 import type {
   HistorySummaryPayload,
   TranscriptSegment,
@@ -22,6 +22,9 @@ type HistorySaveRecordingRequest = TauriCommandArgs<
 >;
 type HistorySaveImportedFileRequest = TauriCommandArgs<
   typeof TauriCommand.history.saveImportedFile
+>;
+type HistoryAudioCleanupRequest = TauriCommandArgs<
+  typeof TauriCommand.history.cleanupAudio
 >;
 
 export interface HistoryDraftHandle<TItem = Partial<HistoryItem>> extends Omit<
@@ -230,6 +233,18 @@ export async function historyResolveAudioPath(
   historyId: string,
 ): Promise<string | null> {
   return invokeTauri(TauriCommand.history.resolveAudioPath, { historyId });
+}
+
+export async function historyPreviewAudioCleanup(
+  request: HistoryAudioCleanupRequest,
+): Promise<HistoryAudioCleanupReport> {
+  return invokeTauri(TauriCommand.history.previewAudioCleanup, request);
+}
+
+export async function historyCleanupAudio(
+  request: HistoryAudioCleanupRequest,
+): Promise<HistoryAudioCleanupReport> {
+  return invokeTauri(TauriCommand.history.cleanupAudio, request);
 }
 
 export async function historyQueryWorkspace(

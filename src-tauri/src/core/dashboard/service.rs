@@ -422,12 +422,12 @@ mod tests {
     use crate::integrations::asr::TranscriptSegment;
     use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
     use crate::repositories::history::{
-        HistoryAudioStatus, HistoryBackupSnapshot, HistoryCreateLiveDraftRequest,
-        HistoryDraftSource, HistoryItemKind, HistoryItemStatus, HistoryListOptions,
-        HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceItemCounts,
-        HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceSummary,
-        LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-        TranscriptSnapshotRecord,
+        HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
+        HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
+        HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
+        HistorySaveRecordingRequest, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
+        HistoryWorkspaceQueryResult, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+        TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
     };
     use serde_json::Value;
     use std::collections::BTreeMap;
@@ -725,6 +725,20 @@ mod tests {
 
         fn resolve_audio_path(&self, _history_id: &str) -> Result<Option<String>, DatabaseError> {
             Ok(None)
+        }
+
+        fn preview_audio_cleanup(
+            &self,
+            _request: HistoryAudioCleanupRequest,
+        ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
+            Ok(HistoryAudioCleanupReport::default())
+        }
+
+        fn cleanup_audio(
+            &self,
+            _request: HistoryAudioCleanupRequest,
+        ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
+            Ok(HistoryAudioCleanupReport::default())
         }
 
         fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {

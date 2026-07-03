@@ -1,7 +1,8 @@
 use crate::core::database::DatabaseError;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
-    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
+    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryBackupSnapshot,
+    HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
@@ -106,6 +107,16 @@ pub trait HistoryStore: Send + Sync {
     fn delete_summary(&self, history_id: &str) -> Result<(), DatabaseError>;
 
     fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, DatabaseError>;
+
+    fn preview_audio_cleanup(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, DatabaseError>;
+
+    fn cleanup_audio(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, DatabaseError>;
 
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError>;
 }

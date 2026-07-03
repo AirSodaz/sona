@@ -22,10 +22,12 @@ import {
 } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
+  historyCleanupAudio,
   historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
   historyLoadTranscriptSnapshot,
+  historyPreviewAudioCleanup,
   historyQueryWorkspace,
   historySaveImportedFile,
   historySaveRecording,
@@ -536,6 +538,44 @@ describe('tauri boundary wrappers', () => {
       filterType: 'recording',
       dateFilter: 'week',
       sortOrder: 'title_asc',
+    });
+  });
+
+  it('history audio cleanup wrappers forward retention and active-exclusion args', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({
+        eligibleCount: 2,
+        removedCount: 2,
+        removedBytes: 123,
+        missingMarkedCount: 0,
+        failedCount: 0,
+        skippedActiveCount: 1,
+      })
+      .mockResolvedValueOnce({
+        eligibleCount: 1,
+        removedCount: 1,
+        removedBytes: 64,
+        missingMarkedCount: 0,
+        failedCount: 0,
+        skippedActiveCount: 0,
+      });
+
+    await historyPreviewAudioCleanup({
+      retentionDays: 30,
+      excludeHistoryId: 'history-open',
+    });
+    await historyCleanupAudio({
+      retentionDays: null,
+      excludeHistoryId: null,
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.previewAudioCleanup, {
+      retentionDays: 30,
+      excludeHistoryId: 'history-open',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.cleanupAudio, {
+      retentionDays: null,
+      excludeHistoryId: null,
     });
   });
 

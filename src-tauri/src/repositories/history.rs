@@ -16,15 +16,16 @@ mod workspace_query;
 pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
-    HistoryAudioStatus, HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource,
-    HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryListOptions,
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch,
-    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
-    HistoryWorkspaceSearchRange, HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder,
-    HistoryWorkspaceSummary, LiveRecordingDraftResult, PreparedBackupImport,
-    PreparedBackupImportSnapshot, TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus,
-    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
+    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
+    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSearchRange,
+    HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
+    LiveRecordingDraftResult, PreparedBackupImport, PreparedBackupImportSnapshot,
+    TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
 pub(crate) const HISTORY_DIR_NAME: &str = "history";

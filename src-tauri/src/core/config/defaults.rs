@@ -88,6 +88,7 @@ pub fn default_config() -> Value {
         ("httpServerPort", json!(14200)),
         ("httpServerHost", json!("127.0.0.1")),
         ("httpServerApiKey", json!("")),
+        ("historyAudioRetentionDays", Value::Null),
     ] {
         config.insert(key.to_string(), value);
     }

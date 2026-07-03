@@ -569,3 +569,22 @@
   font-size: 0.85rem;
   border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
 }
+
+.settings-storage-retention-control {
+  width: min(240px, 100%);
+}
+
+.settings-storage-clean-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.settings-storage-result {
+  padding: 14px 24px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}

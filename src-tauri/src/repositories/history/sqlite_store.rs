@@ -6,12 +6,13 @@ use crate::core::database::DatabaseError;
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
-    HistoryAudioStatus, HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource,
-    HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryListOptions,
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
-    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, LiveRecordingDraftResult,
-    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
+    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
+    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+    HistoryWorkspaceScope, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use serde_json::{Map, Value};
 use std::cell::Cell;
@@ -26,6 +27,7 @@ use rusqlite::types::ToSql;
 use uuid::Uuid;
 
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
+const MILLIS_PER_DAY: u64 = 86_400_000;
 
 pub(crate) const HISTORY_COLUMNS: &str = "id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source";
 pub(crate) const HISTORY_INSERT_COLS: &str = "(id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)";
@@ -122,6 +124,12 @@ crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
 struct StagedHistoryAudio {
     staging_path: PathBuf,
     target_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+struct AudioCleanupCandidate {
+    id: String,
+    audio_path: String,
 }
 
 impl StagedHistoryAudio {
@@ -262,6 +270,147 @@ impl SqliteHistoryStore {
             )?;
             Ok(())
         })
+    }
+
+    fn audio_cleanup_cutoff(retention_days: Option<u64>) -> Option<i64> {
+        let retention_days = retention_days?;
+        let retention_millis = retention_days
+            .saturating_mul(MILLIS_PER_DAY)
+            .min(i64::MAX as u64) as i64;
+        Some(chrono::Utc::now().timestamp_millis().saturating_sub(retention_millis))
+    }
+
+    fn audio_cleanup_candidates(
+        &self,
+        cutoff_millis: i64,
+    ) -> Result<Vec<AudioCleanupCandidate>, DatabaseError> {
+        self.get_db()?.with_connection(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT id, audio_path
+                 FROM history_items
+                 WHERE status = 'complete'
+                   AND audio_status = 'available'
+                   AND timestamp <= ?1",
+            )?;
+            let rows = stmt.query_map([cutoff_millis], |row| {
+                Ok(AudioCleanupCandidate {
+                    id: row.get(0)?,
+                    audio_path: row.get(1)?,
+                })
+            })?;
+
+            let mut candidates = Vec::new();
+            for row in rows {
+                candidates.push(row?);
+            }
+            Ok(candidates)
+        })
+    }
+
+    fn run_audio_cleanup(
+        &self,
+        request: HistoryAudioCleanupRequest,
+        apply: bool,
+    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
+        self.ensure_ready()?;
+
+        let Some(cutoff_millis) = Self::audio_cleanup_cutoff(request.retention_days) else {
+            return Ok(HistoryAudioCleanupReport::default());
+        };
+
+        if let Some(history_id) = request.exclude_history_id.as_deref() {
+            validate_id(history_id, "Excluded history ID").map_err(DatabaseError::Internal)?;
+        }
+
+        let history_dir = self.history_dir();
+        let candidates = self.audio_cleanup_candidates(cutoff_millis)?;
+        let mut report = HistoryAudioCleanupReport::default();
+
+        for candidate in candidates {
+            if request.exclude_history_id.as_deref() == Some(candidate.id.as_str()) {
+                report.skipped_active_count += 1;
+                continue;
+            }
+
+            report.eligible_count += 1;
+
+            let Some(audio_path) = optional_history_child_path(&history_dir, &candidate.audio_path)
+            else {
+                report.missing_marked_count += 1;
+                if apply {
+                    self.update_audio_status(&candidate.id, HistoryAudioStatus::Missing)?;
+                }
+                continue;
+            };
+
+            match fs::metadata(&audio_path) {
+                Ok(metadata) if metadata.is_file() && metadata.len() > 0 => {
+                    report.removed_count += 1;
+                    report.removed_bytes = report.removed_bytes.saturating_add(metadata.len());
+                    if apply {
+                        if let Err(error) =
+                            self.update_audio_status(&candidate.id, HistoryAudioStatus::Removed)
+                        {
+                            log::warn!(
+                                "Failed to mark history audio removed before cleanup {}: {}",
+                                audio_path.display(),
+                                error
+                            );
+                            report.removed_count -= 1;
+                            report.removed_bytes =
+                                report.removed_bytes.saturating_sub(metadata.len());
+                            report.failed_count += 1;
+                            continue;
+                        }
+
+                        if let Err(error) =
+                            crate::repositories::storage::remove_path_if_exists(&audio_path)
+                        {
+                            log::warn!(
+                                "Failed to clean history audio {}: {}",
+                                audio_path.display(),
+                                error
+                            );
+                            if let Err(reset_error) =
+                                self.update_audio_status(&candidate.id, HistoryAudioStatus::Available)
+                            {
+                                log::warn!(
+                                    "Failed to restore history audio status after cleanup failure {}: {}",
+                                    candidate.id,
+                                    reset_error
+                                );
+                            }
+                            report.removed_count -= 1;
+                            report.removed_bytes =
+                                report.removed_bytes.saturating_sub(metadata.len());
+                            report.failed_count += 1;
+                        }
+                    }
+                }
+                Ok(_) => {
+                    report.missing_marked_count += 1;
+                    if apply {
+                        self.update_audio_status(&candidate.id, HistoryAudioStatus::Missing)?;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    report.missing_marked_count += 1;
+                    if apply {
+                        self.update_audio_status(&candidate.id, HistoryAudioStatus::Missing)?;
+                    }
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Failed to inspect history audio {}: {}",
+                        audio_path.display(),
+                        error
+                    );
+                    report.failed_count += 1;
+                }
+            }
+        }
+
+        Ok(report)
     }
 
     fn insert_history_item_and_transcript(
@@ -1345,6 +1494,20 @@ impl HistoryStore for SqliteHistoryStore {
         }
     }
 
+    fn preview_audio_cleanup(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
+        self.run_audio_cleanup(request, false)
+    }
+
+    fn cleanup_audio(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
+        self.run_audio_cleanup(request, true)
+    }
+
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare_cached(
@@ -1538,6 +1701,274 @@ mod tests {
             "end": end,
             "isFinal": true
         })
+    }
+
+    fn set_history_timestamp(store: &SqliteHistoryStore, history_id: &str, timestamp: u64) {
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                conn.execute(
+                    "UPDATE history_items SET timestamp = ?1 WHERE id = ?2",
+                    rusqlite::params![timestamp as i64, history_id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    fn saved_audio_path(root: &tempfile::TempDir, item: &HistoryItemRecord) -> PathBuf {
+        root.path().join("history").join(&item.audio_path)
+    }
+
+    #[test]
+    fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let old_item = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-old", "Keep the old transcript", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1, 2, 3, 4]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        let recent_item = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-new", "Keep recent audio", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![5, 6]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+
+        set_history_timestamp(&store, &old_item.id, 1);
+
+        let preview = store
+            .preview_audio_cleanup(HistoryAudioCleanupRequest {
+                retention_days: Some(7),
+                exclude_history_id: None,
+            })
+            .unwrap();
+        assert_eq!(preview.eligible_count, 1);
+        assert_eq!(preview.removed_count, 1);
+        assert_eq!(preview.removed_bytes, 4);
+        assert_eq!(preview.missing_marked_count, 0);
+        assert_eq!(preview.failed_count, 0);
+        assert_eq!(preview.skipped_active_count, 0);
+        assert!(saved_audio_path(&root, &old_item).exists());
+
+        let report = store
+            .cleanup_audio(HistoryAudioCleanupRequest {
+                retention_days: Some(7),
+                exclude_history_id: None,
+            })
+            .unwrap();
+        assert_eq!(report, preview);
+        assert!(!saved_audio_path(&root, &old_item).exists());
+        assert!(saved_audio_path(&root, &recent_item).exists());
+
+        let items = store.list_items().unwrap();
+        let cleaned = items.iter().find(|item| item.id == old_item.id).unwrap();
+        let kept = items.iter().find(|item| item.id == recent_item.id).unwrap();
+        assert_eq!(cleaned.audio_status, HistoryAudioStatus::Removed);
+        assert_eq!(kept.audio_status, HistoryAudioStatus::Available);
+
+        let transcript = store.load_transcript(&old_item.id).unwrap().unwrap();
+        assert_eq!(transcript[0].text, "Keep the old transcript");
+    }
+
+    #[test]
+    fn audio_cleanup_skips_active_history_and_drafts() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let active = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-active", "Active transcript", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        let draft = store
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                id: None,
+                audio_extension: "wav".to_string(),
+                project_id: None,
+                icon: None,
+            })
+            .unwrap()
+            .item;
+        std::fs::write(saved_audio_path(&root, &draft), [9, 9, 9]).unwrap();
+        set_history_timestamp(&store, &active.id, 1);
+        set_history_timestamp(&store, &draft.id, 1);
+
+        let report = store
+            .cleanup_audio(HistoryAudioCleanupRequest {
+                retention_days: Some(0),
+                exclude_history_id: Some(active.id.clone()),
+            })
+            .unwrap();
+
+        assert_eq!(report.eligible_count, 0);
+        assert_eq!(report.removed_count, 0);
+        assert_eq!(report.skipped_active_count, 1);
+        assert!(saved_audio_path(&root, &active).exists());
+        assert!(saved_audio_path(&root, &draft).exists());
+
+        let items = store.list_items().unwrap();
+        assert_eq!(
+            items.iter().find(|item| item.id == active.id).unwrap().audio_status,
+            HistoryAudioStatus::Available
+        );
+        assert_eq!(
+            items.iter().find(|item| item.id == draft.id).unwrap().audio_status,
+            HistoryAudioStatus::Available
+        );
+    }
+
+    #[test]
+    fn audio_cleanup_marks_missing_audio_without_deleting_history() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let missing = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-missing", "Text survives missing audio", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        set_history_timestamp(&store, &missing.id, 1);
+        std::fs::remove_file(saved_audio_path(&root, &missing)).unwrap();
+
+        let report = store
+            .cleanup_audio(HistoryAudioCleanupRequest {
+                retention_days: Some(0),
+                exclude_history_id: None,
+            })
+            .unwrap();
+
+        assert_eq!(report.eligible_count, 1);
+        assert_eq!(report.removed_count, 0);
+        assert_eq!(report.removed_bytes, 0);
+        assert_eq!(report.missing_marked_count, 1);
+        assert_eq!(report.failed_count, 0);
+
+        let item = store
+            .list_items()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.id == missing.id)
+            .unwrap();
+        assert_eq!(item.audio_status, HistoryAudioStatus::Missing);
+        let transcript = store.load_transcript(&missing.id).unwrap().unwrap();
+        assert_eq!(transcript[0].text, "Text survives missing audio");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn audio_cleanup_keeps_available_when_file_deletion_fails() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let item = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-fail", "Text survives delete failure", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1, 2, 3]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        set_history_timestamp(&store, &item.id, 1);
+
+        let audio_path = saved_audio_path(&root, &item);
+        let locked_file = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&audio_path)
+            .unwrap();
+
+        let report = store
+            .cleanup_audio(HistoryAudioCleanupRequest {
+                retention_days: Some(0),
+                exclude_history_id: None,
+            })
+            .unwrap();
+
+        assert_eq!(report.eligible_count, 1);
+        assert_eq!(report.removed_count, 0);
+        assert_eq!(report.removed_bytes, 0);
+        assert_eq!(report.missing_marked_count, 0);
+        assert_eq!(report.failed_count, 1);
+        assert!(audio_path.exists());
+
+        let item = store
+            .list_items()
+            .unwrap()
+            .into_iter()
+            .find(|candidate| candidate.id == item.id)
+            .unwrap();
+        assert_eq!(item.audio_status, HistoryAudioStatus::Available);
+
+        drop(locked_file);
+    }
+
+    #[test]
+    fn audio_cleanup_disabled_when_retention_is_none() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let item = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-keep", "Keep forever", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1, 2]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        set_history_timestamp(&store, &item.id, 1);
+
+        let report = store
+            .cleanup_audio(HistoryAudioCleanupRequest {
+                retention_days: None,
+                exclude_history_id: None,
+            })
+            .unwrap();
+
+        assert_eq!(report, HistoryAudioCleanupReport::default());
+        assert!(saved_audio_path(&root, &item).exists());
+        assert_eq!(
+            store.list_items().unwrap()[0].audio_status,
+            HistoryAudioStatus::Available
+        );
     }
 
     #[test]

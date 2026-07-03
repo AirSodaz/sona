@@ -8,7 +8,7 @@ import type {
   DashboardSnapshot,
   LlmGenerateCommandRequest,
 } from "../../types/dashboard";
-import type { HistoryItem } from "../../types/history";
+import type { HistoryAudioCleanupReport, HistoryItem } from "../../types/history";
 import type {
   AsrRuntimeMetricsSnapshot,
   RuntimeEnvironmentStatus,
@@ -207,6 +207,11 @@ type WorkspaceQueryResult = {
     inbox: number;
     byProjectId: Record<string, number>;
   };
+};
+
+type HistoryAudioCleanupArgs = {
+  retentionDays: number | null;
+  excludeHistoryId: string | null;
 };
 
 type ExportTranscriptFileArgs = {
@@ -564,6 +569,14 @@ export type TauriCommandContractMap = {
   [TauriCommand.history.resolveAudioPath]: {
     args: { historyId: string };
     result: string | null;
+  };
+  [TauriCommand.history.previewAudioCleanup]: {
+    args: HistoryAudioCleanupArgs;
+    result: HistoryAudioCleanupReport;
+  };
+  [TauriCommand.history.cleanupAudio]: {
+    args: HistoryAudioCleanupArgs;
+    result: HistoryAudioCleanupReport;
   };
   [TauriCommand.history.queryWorkspace]: {
     args: WorkspaceQueryArgs;
