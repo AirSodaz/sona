@@ -422,11 +422,12 @@ mod tests {
     use crate::integrations::asr::TranscriptSegment;
     use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
     use crate::repositories::history::{
-        HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-        HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
-        HistorySaveRecordingRequest, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
-        HistoryWorkspaceQueryResult, HistoryWorkspaceSummary, LiveRecordingDraftResult,
-        TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+        HistoryAudioStatus, HistoryBackupSnapshot, HistoryCreateLiveDraftRequest,
+        HistoryDraftSource, HistoryItemKind, HistoryItemStatus, HistoryListOptions,
+        HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceItemCounts,
+        HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceSummary,
+        LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+        TranscriptSnapshotRecord,
     };
     use serde_json::Value;
     use std::collections::BTreeMap;
@@ -498,6 +499,7 @@ mod tests {
                     timestamp: 0,
                     duration: 0.0,
                     audio_path: String::new(),
+                    audio_status: HistoryAudioStatus::Available,
                     transcript_path: String::new(),
                     title: String::new(),
                     preview_text: String::new(),
@@ -523,6 +525,7 @@ mod tests {
                 timestamp: 0,
                 duration: _duration,
                 audio_path: String::new(),
+                audio_status: HistoryAudioStatus::Available,
                 transcript_path: String::new(),
                 title: String::new(),
                 preview_text: String::new(),
@@ -544,6 +547,7 @@ mod tests {
                 timestamp: 0,
                 duration: _request.duration,
                 audio_path: String::new(),
+                audio_status: HistoryAudioStatus::Available,
                 transcript_path: String::new(),
                 title: String::new(),
                 preview_text: String::new(),
@@ -565,6 +569,7 @@ mod tests {
                 timestamp: 0,
                 duration: _request.duration,
                 audio_path: String::new(),
+                audio_status: HistoryAudioStatus::Available,
                 transcript_path: String::new(),
                 title: String::new(),
                 preview_text: String::new(),
@@ -634,6 +639,7 @@ mod tests {
                         timestamp: 0,
                         duration: 0.0,
                         audio_path: String::new(),
+                        audio_status: HistoryAudioStatus::Available,
                         transcript_path: String::new(),
                         title: String::new(),
                         preview_text: String::new(),
@@ -785,6 +791,7 @@ mod tests {
             timestamp: 1_776_668_400_000,
             duration: 60.0,
             audio_path: "".to_string(),
+            audio_status: HistoryAudioStatus::Available,
             transcript_path: format!("{id}.json"),
             title: "".to_string(),
             preview_text: "".to_string(),

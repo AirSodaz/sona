@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use super::fs_utils::{ensure_safe_file_name, read_json_value};
 use super::transcript_payload::normalize_history_transcript_segments;
 use super::{
-    HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, HistoryDraftSource,
-    HistoryItemKind, HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata,
-    TranscriptSnapshotRecord,
+    HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, HistoryAudioStatus,
+    HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
+    TranscriptSnapshotMetadata, TranscriptSnapshotRecord,
 };
 
 /// Reader for the legacy portable history layout used inside backup archives.
@@ -113,6 +113,14 @@ pub(crate) fn normalize_history_item_value(value: &Value) -> HistoryItemRecord {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
+        audio_status: match object
+            .and_then(|map| map.get("audioStatus"))
+            .and_then(Value::as_str)
+        {
+            Some("missing") => HistoryAudioStatus::Missing,
+            Some("removed") => HistoryAudioStatus::Removed,
+            _ => HistoryAudioStatus::Available,
+        },
         transcript_path: object
             .and_then(|map| map.get("transcriptPath"))
             .and_then(Value::as_str)

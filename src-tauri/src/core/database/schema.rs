@@ -65,6 +65,7 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
             timestamp INTEGER NOT NULL,
             duration REAL NOT NULL DEFAULT 0.0,
             audio_path TEXT NOT NULL DEFAULT '',
+            audio_status TEXT NOT NULL DEFAULT 'available',
             transcript_path TEXT NOT NULL DEFAULT '',
             title TEXT NOT NULL DEFAULT '',
             preview_text TEXT NOT NULL DEFAULT '',
@@ -400,6 +401,54 @@ mod tests {
                 |row| row.get(0),
             )?;
             assert!(exists);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_history_items_audio_status_column_defaults_available() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            let mut stmt = conn.prepare("PRAGMA table_info(history_items)")?;
+            let columns = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            })?;
+
+            let mut found = None;
+            for column in columns {
+                let column = column?;
+                if column.0 == "audio_status" {
+                    found = Some(column);
+                    break;
+                }
+            }
+
+            assert_eq!(
+                found,
+                Some((
+                    "audio_status".to_string(),
+                    "TEXT".to_string(),
+                    1,
+                    Some("'available'".to_string()),
+                ))
+            );
+
+            conn.execute(
+                "INSERT INTO history_items (id, timestamp) VALUES ('audio-status-default', 1)",
+                [],
+            )?;
+            let status: String = conn.query_row(
+                "SELECT audio_status FROM history_items WHERE id = 'audio-status-default'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(status, "available");
             Ok(())
         })
         .unwrap();

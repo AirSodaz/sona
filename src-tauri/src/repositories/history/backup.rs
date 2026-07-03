@@ -676,6 +676,7 @@ pub fn apply_prepared_history_import_inner(
         for item in &items {
             let kind_str = item.kind.to_string();
             let status_str = item.status.to_string();
+            let audio_status_str = item.audio_status.to_string();
             let draft_source_str = item.draft_source.map(|s| s.to_string());
 
             tx.execute(
@@ -685,6 +686,7 @@ pub fn apply_prepared_history_import_inner(
                     item.timestamp as i64,
                     item.duration,
                     item.audio_path,
+                    audio_status_str,
                     format!("{}.json", item.id),
                     item.title,
                     item.preview_text,

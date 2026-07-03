@@ -6,26 +6,31 @@ use crate::core::database::DatabaseError;
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
-    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
-    HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryAudioStatus, HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource,
+    HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryListOptions,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
+    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use serde_json::{Map, Value};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use rusqlite::types::ToSql;
+use uuid::Uuid;
 
-pub(crate) const HISTORY_COLUMNS: &str = "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source";
-pub(crate) const HISTORY_INSERT_COLS: &str = "(id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)";
+const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
+
+pub(crate) const HISTORY_COLUMNS: &str = "id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source";
+pub(crate) const HISTORY_INSERT_COLS: &str = "(id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)";
 pub(crate) const HISTORY_INSERT_PARAMS: &str =
-    "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)";
+    "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)";
 
 fn compute_date_threshold_millis(date_filter: HistoryWorkspaceDateFilter) -> Option<i64> {
     use HistoryWorkspaceDateFilter::*;
@@ -114,6 +119,32 @@ pub struct SqliteHistoryStore {
 
 crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
 
+struct StagedHistoryAudio {
+    staging_path: PathBuf,
+    target_path: PathBuf,
+}
+
+impl StagedHistoryAudio {
+    fn promote(&self) -> Result<(), DatabaseError> {
+        if self.target_path.exists() {
+            return Err(DatabaseError::Internal(format!(
+                "History audio target already exists: {}",
+                self.target_path.to_string_lossy()
+            )));
+        }
+        fs::rename(&self.staging_path, &self.target_path)
+            .map_err(|error| DatabaseError::Internal(error.to_string()))
+    }
+
+    fn cleanup_staging(&self) {
+        let _ = crate::repositories::storage::remove_path_if_exists(&self.staging_path);
+    }
+
+    fn cleanup_final(&self) {
+        let _ = crate::repositories::storage::remove_path_if_exists(&self.target_path);
+    }
+}
+
 impl SqliteHistoryStore {
     fn history_dir(&self) -> PathBuf {
         self.app_local_data_dir
@@ -127,6 +158,112 @@ impl SqliteHistoryStore {
         ))
     }
 
+    fn staging_audio_path(target_path: &Path) -> Result<PathBuf, DatabaseError> {
+        let parent = target_path.parent().ok_or_else(|| {
+            DatabaseError::Internal("History audio target has no parent directory.".to_string())
+        })?;
+        let file_name = target_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| {
+                DatabaseError::Internal("History audio target has no file name.".to_string())
+            })?;
+        Ok(parent.join(format!(
+            "{file_name}{STAGED_AUDIO_MARKER}{}",
+            Uuid::new_v4()
+        )))
+    }
+
+    fn stage_audio_bytes(
+        &self,
+        target_path: PathBuf,
+        bytes: &[u8],
+    ) -> Result<StagedHistoryAudio, DatabaseError> {
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+        }
+        let staging_path = Self::staging_audio_path(&target_path)?;
+        let write_result = (|| -> Result<(), DatabaseError> {
+            let file = fs::File::create(&staging_path)
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            let mut writer = BufWriter::new(file);
+            writer
+                .write_all(bytes)
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            writer
+                .flush()
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            Ok(())
+        })();
+        if write_result.is_err() {
+            let _ = crate::repositories::storage::remove_path_if_exists(&staging_path);
+        }
+        write_result?;
+        Ok(StagedHistoryAudio {
+            staging_path,
+            target_path,
+        })
+    }
+
+    fn stage_audio_copy(
+        &self,
+        source_path: &Path,
+        target_path: PathBuf,
+    ) -> Result<StagedHistoryAudio, DatabaseError> {
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+        }
+        let staging_path = Self::staging_audio_path(&target_path)?;
+        let copy_result = fs::copy(source_path, &staging_path)
+            .map(|_| ())
+            .map_err(|error| DatabaseError::Internal(error.to_string()));
+        if copy_result.is_err() {
+            let _ = crate::repositories::storage::remove_path_if_exists(&staging_path);
+        }
+        copy_result?;
+        Ok(StagedHistoryAudio {
+            staging_path,
+            target_path,
+        })
+    }
+
+    fn cleanup_stale_staged_audio_files(&self) -> Result<(), DatabaseError> {
+        let history_dir = self.history_dir();
+        if !history_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in
+            fs::read_dir(&history_dir).map_err(|e| DatabaseError::Internal(e.to_string()))?
+        {
+            let entry = entry.map_err(|e| DatabaseError::Internal(e.to_string()))?;
+            let file_name = entry.file_name();
+            if file_name.to_string_lossy().contains(STAGED_AUDIO_MARKER) {
+                crate::repositories::storage::remove_path_if_exists(&entry.path())
+                    .map_err(DatabaseError::Internal)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_audio_status(
+        &self,
+        history_id: &str,
+        status: HistoryAudioStatus,
+    ) -> Result<(), DatabaseError> {
+        let status_str = status.to_string();
+        self.get_db()?.with_connection(|conn| {
+            conn.execute(
+                "UPDATE history_items SET audio_status = ?1 WHERE id = ?2",
+                rusqlite::params![status_str, history_id],
+            )?;
+            Ok(())
+        })
+    }
+
     fn insert_history_item_and_transcript(
         tx: &rusqlite::Transaction,
         item: &HistoryItemRecord,
@@ -134,6 +271,7 @@ impl SqliteHistoryStore {
     ) -> Result<(), DatabaseError> {
         let kind_str = item.kind.to_string();
         let status_str = item.status.to_string();
+        let audio_status_str = item.audio_status.to_string();
         let draft_source_str = item.draft_source.map(|s| s.to_string());
 
         tx.execute(
@@ -145,6 +283,7 @@ impl SqliteHistoryStore {
                 item.timestamp as i64,
                 item.duration,
                 item.audio_path,
+                audio_status_str,
                 item.transcript_path,
                 item.title,
                 item.preview_text,
@@ -170,14 +309,14 @@ impl SqliteHistoryStore {
         #[allow(clippy::type_complexity)]
         let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
-                "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
+                "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.audio_status, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
                  FROM history_items h
                  LEFT JOIN history_transcripts t ON h.id = t.history_id
                  WHERE h.status = 'draft' AND h.draft_source = 'live_record'"
             )?;
             let rows = stmt.query_map([], |row| {
                 let item = map_row_to_item(row)?;
-                let segments: Option<String> = row.get(13)?;
+                let segments: Option<String> = row.get(14)?;
                 let segments_val = segments
                     .and_then(|s| serde_json::from_str(&s).ok());
                 Ok((item, segments_val))
@@ -257,17 +396,20 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
     let timestamp_val: i64 = row.get(1)?;
     let duration: f64 = row.get(2)?;
     let audio_path: String = row.get(3)?;
-    let transcript_path: String = row.get(4)?;
-    let title: String = row.get(5)?;
-    let preview_text: String = row.get(6)?;
-    let icon: Option<String> = row.get(7)?;
-    let kind_str: String = row.get(8)?;
-    let search_content: String = row.get(9)?;
-    let project_id: Option<String> = row.get(10)?;
-    let status_str: String = row.get(11)?;
-    let draft_source_str: Option<String> = row.get(12)?;
+    let audio_status_str: String = row.get(4)?;
+    let transcript_path: String = row.get(5)?;
+    let title: String = row.get(6)?;
+    let preview_text: String = row.get(7)?;
+    let icon: Option<String> = row.get(8)?;
+    let kind_str: String = row.get(9)?;
+    let search_content: String = row.get(10)?;
+    let project_id: Option<String> = row.get(11)?;
+    let status_str: String = row.get(12)?;
+    let draft_source_str: Option<String> = row.get(13)?;
 
     let kind = HistoryItemKind::from_str(&kind_str).unwrap_or(HistoryItemKind::Recording);
+    let audio_status =
+        HistoryAudioStatus::from_str(&audio_status_str).unwrap_or(HistoryAudioStatus::Available);
     let status = HistoryItemStatus::from_str(&status_str).unwrap_or(HistoryItemStatus::Complete);
     let draft_source = draft_source_str.and_then(|s| HistoryDraftSource::from_str(&s).ok());
 
@@ -276,6 +418,7 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
         timestamp: timestamp_val as u64,
         duration,
         audio_path,
+        audio_status,
         transcript_path,
         title,
         preview_text,
@@ -300,6 +443,10 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
     }
     if let Some(audio_path) = updates.get("audioPath").and_then(Value::as_str) {
         item.audio_path = audio_path.to_string();
+    }
+    if let Some(audio_status) = updates.get("audioStatus").and_then(Value::as_str) {
+        item.audio_status =
+            HistoryAudioStatus::from_str(audio_status).unwrap_or(HistoryAudioStatus::Available);
     }
     if let Some(transcript_path) = updates.get("transcriptPath").and_then(Value::as_str) {
         item.transcript_path = transcript_path.to_string();
@@ -334,7 +481,9 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
 
 impl HistoryStore for SqliteHistoryStore {
     fn ensure_ready(&self) -> Result<(), DatabaseError> {
-        fs::create_dir_all(self.history_dir()).map_err(|e| DatabaseError::Internal(e.to_string()))
+        fs::create_dir_all(self.history_dir())
+            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
+        self.cleanup_stale_staged_audio_files()
     }
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
@@ -466,7 +615,7 @@ impl HistoryStore for SqliteHistoryStore {
             //    FTS results). When FTS was skipped, load the actual column so
             //    in-memory matching works for short queries.
             let column_select = if fts_used {
-                "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source"
+                "id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source"
             } else {
                 HISTORY_COLUMNS
             };
@@ -604,12 +753,9 @@ impl HistoryStore for SqliteHistoryStore {
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
-        match (audio_bytes, native_audio_path) {
-            (Some(bytes), _) => {
-                let target_path = self.audio_path(&item.audio_path)?;
-                crate::repositories::storage::write_binary_atomic(&target_path, &bytes)
-                    .map_err(DatabaseError::Internal)?;
-            }
+        let target_path = self.audio_path(&item.audio_path)?;
+        let staged_audio = match (audio_bytes, native_audio_path) {
+            (Some(bytes), _) => self.stage_audio_bytes(target_path, &bytes)?,
             (None, Some(native_path)) => {
                 let source_path = PathBuf::from(&native_path);
                 if !source_path.is_file() {
@@ -618,15 +764,7 @@ impl HistoryStore for SqliteHistoryStore {
                         source_path.to_string_lossy()
                     )));
                 }
-                let target_path = self.audio_path(&item.audio_path)?;
-                if source_path != target_path {
-                    if let Some(parent) = target_path.parent() {
-                        fs::create_dir_all(parent)
-                            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
-                    }
-                    fs::copy(&source_path, &target_path)
-                        .map_err(|e| DatabaseError::Internal(e.to_string()))?;
-                }
+                self.stage_audio_copy(&source_path, target_path)?
             }
             (None, None) => {
                 return Err(DatabaseError::Internal(
@@ -634,14 +772,26 @@ impl HistoryStore for SqliteHistoryStore {
                         .to_string(),
                 ));
             }
-        }
+        };
 
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        self.get_db()?.with_transaction(|tx| {
+        let promoted = Cell::new(false);
+        let save_result = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
+            staged_audio.promote()?;
+            promoted.set(true);
             Ok(())
-        })?;
+        });
+
+        if let Err(error) = save_result {
+            if promoted.get() {
+                staged_audio.cleanup_final();
+            } else {
+                staged_audio.cleanup_staging();
+            }
+            return Err(error);
+        }
 
         Ok(item)
     }
@@ -683,17 +833,26 @@ impl HistoryStore for SqliteHistoryStore {
         }
 
         let target_path = self.audio_path(&item.audio_path)?;
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| DatabaseError::Internal(e.to_string()))?;
-        }
-        fs::copy(&source, &target_path).map_err(|e| DatabaseError::Internal(e.to_string()))?;
+        let staged_audio = self.stage_audio_copy(&source, target_path)?;
 
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        self.get_db()?.with_transaction(|tx| {
+        let promoted = Cell::new(false);
+        let save_result = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
+            staged_audio.promote()?;
+            promoted.set(true);
             Ok(())
-        })?;
+        });
+
+        if let Err(error) = save_result {
+            if promoted.get() {
+                staged_audio.cleanup_final();
+            } else {
+                staged_audio.cleanup_staging();
+            }
+            return Err(error);
+        }
 
         Ok(item)
     }
@@ -703,10 +862,10 @@ impl HistoryStore for SqliteHistoryStore {
             return Ok(());
         }
 
-        let audio_paths = self.get_db()?.with_connection(|conn| {
+        let audio_paths = self.get_db()?.with_transaction(|tx| {
             let mut audio_paths = Vec::new();
             let mut stmt =
-                conn.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
+                tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
             for id in ids {
                 let mut rows = stmt.query([id])?;
                 if let Some(row) = rows.next()? {
@@ -714,23 +873,25 @@ impl HistoryStore for SqliteHistoryStore {
                     audio_paths.push(audio_path);
                 }
             }
-            Ok(audio_paths)
-        })?;
 
-        for audio_path_str in audio_paths {
-            if let Some(path) = optional_history_child_path(&self.history_dir(), &audio_path_str) {
-                crate::repositories::storage::remove_path_if_exists(&path)
-                    .map_err(DatabaseError::Internal)?;
-            }
-        }
-
-        self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare_cached("DELETE FROM history_items WHERE id = ?1")?;
             for id in ids {
                 stmt.execute([id])?;
             }
-            Ok(())
+            Ok(audio_paths)
         })?;
+
+        for audio_path_str in audio_paths {
+            if let Some(path) = optional_history_child_path(&self.history_dir(), &audio_path_str)
+                && let Err(error) = crate::repositories::storage::remove_path_if_exists(&path)
+            {
+                log::warn!(
+                    "Failed to remove history audio after deleting DB row {}: {}",
+                    path.display(),
+                    error
+                );
+            }
+        }
 
         Ok(())
     }
@@ -1011,17 +1172,19 @@ impl HistoryStore for SqliteHistoryStore {
 
             let kind_str = item.kind.to_string();
             let status_str = item.status.to_string();
+            let audio_status_str = item.audio_status.to_string();
             let draft_source_str = item.draft_source.map(|s| s.to_string());
 
             tx.execute(
                 "UPDATE history_items
-                 SET id = ?1, timestamp = ?2, duration = ?3, audio_path = ?4, transcript_path = ?5, title = ?6, preview_text = ?7, icon = ?8, kind = ?9, search_content = ?10, project_id = ?11, status = ?12, draft_source = ?13
-                 WHERE id = ?14",
+                 SET id = ?1, timestamp = ?2, duration = ?3, audio_path = ?4, audio_status = ?5, transcript_path = ?6, title = ?7, preview_text = ?8, icon = ?9, kind = ?10, search_content = ?11, project_id = ?12, status = ?13, draft_source = ?14
+                 WHERE id = ?15",
                 rusqlite::params![
                     item.id,
                     item.timestamp as i64,
                     item.duration,
                     item.audio_path,
+                    audio_status_str,
                     item.transcript_path,
                     item.title,
                     item.preview_text,
@@ -1124,35 +1287,60 @@ impl HistoryStore for SqliteHistoryStore {
     fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, DatabaseError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        let audio_path_opt: Option<String> = self.get_db()?.with_connection(|conn| {
-            let mut stmt =
-                conn.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
-            let mut rows = stmt.query([history_id])?;
-            if let Some(row) = rows.next()? {
-                let p: String = row.get(0)?;
-                Ok(Some(p))
-            } else {
-                Ok(None)
-            }
-        })?;
+        let audio_record: Option<(String, HistoryAudioStatus)> =
+            self.get_db()?.with_connection(|conn| {
+                let mut stmt = conn.prepare_cached(
+                    "SELECT audio_path, audio_status FROM history_items WHERE id = ?1",
+                )?;
+                let mut rows = stmt.query([history_id])?;
+                if let Some(row) = rows.next()? {
+                    let p: String = row.get(0)?;
+                    let status_str: String = row.get(1)?;
+                    let status = HistoryAudioStatus::from_str(&status_str)
+                        .unwrap_or(HistoryAudioStatus::Available);
+                    Ok(Some((p, status)))
+                } else {
+                    Ok(None)
+                }
+            })?;
 
-        let Some(audio_path_str) = audio_path_opt else {
+        let Some((audio_path_str, audio_status)) = audio_record else {
             return Err(DatabaseError::NotFoundError(format!(
                 "History item not found: {history_id}"
             )));
         };
 
+        if audio_status == HistoryAudioStatus::Removed {
+            return Ok(None);
+        }
+
         let Some(audio_path) = optional_history_child_path(&self.history_dir(), &audio_path_str)
         else {
+            if audio_status == HistoryAudioStatus::Available {
+                self.update_audio_status(history_id, HistoryAudioStatus::Missing)?;
+            }
             return Ok(None);
         };
 
         match fs::metadata(&audio_path) {
             Ok(metadata) if metadata.is_file() && metadata.len() > 0 => {
+                if audio_status == HistoryAudioStatus::Missing {
+                    self.update_audio_status(history_id, HistoryAudioStatus::Available)?;
+                }
                 Ok(Some(audio_path.to_string_lossy().into_owned()))
             }
-            Ok(_) => Ok(None),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Ok(_) => {
+                if audio_status == HistoryAudioStatus::Available {
+                    self.update_audio_status(history_id, HistoryAudioStatus::Missing)?;
+                }
+                Ok(None)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if audio_status == HistoryAudioStatus::Available {
+                    self.update_audio_status(history_id, HistoryAudioStatus::Missing)?;
+                }
+                Ok(None)
+            }
             Err(error) => Err(DatabaseError::Internal(error.to_string())),
         }
     }
@@ -1374,6 +1562,7 @@ mod tests {
         assert_eq!(recording.preview_text, "Hello world...");
         assert_eq!(recording.search_content, "Hello world");
         assert_eq!(recording.project_id.as_deref(), Some("project-1"));
+        assert_eq!(recording.audio_status, HistoryAudioStatus::Available);
 
         // 2. Load transcript
         let transcript = store.load_transcript(&recording.id).unwrap().unwrap();
@@ -1412,6 +1601,128 @@ mod tests {
             .unwrap();
         let items = store.list_items().unwrap();
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn save_imported_file_duplicate_id_does_not_overwrite_existing_audio() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let first_source = root.path().join("first.wav");
+        let second_source = root.path().join("second.wav");
+        std::fs::write(&first_source, [1, 2, 3]).unwrap();
+        std::fs::write(&second_source, [9, 8, 7]).unwrap();
+
+        let item = store
+            .save_imported_file(HistorySaveImportedFileRequest {
+                id: Some("import-1".to_string()),
+                source_path: first_source.to_string_lossy().to_string(),
+                segments: json!([segment_value("seg-1", "Original import", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                converted_source_path: None,
+            })
+            .unwrap();
+        let audio_path = root.path().join("history").join(&item.audio_path);
+        assert_eq!(std::fs::read(&audio_path).unwrap(), vec![1, 2, 3]);
+
+        let duplicate = store.save_imported_file(HistorySaveImportedFileRequest {
+            id: Some("import-1".to_string()),
+            source_path: second_source.to_string_lossy().to_string(),
+            segments: json!([segment_value("seg-2", "Duplicate import", 0.0, 1.0)]),
+            duration: 1.0,
+            project_id: None,
+            converted_source_path: None,
+        });
+
+        assert!(duplicate.is_err());
+        assert_eq!(std::fs::read(&audio_path).unwrap(), vec![1, 2, 3]);
+        assert_eq!(store.list_items().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn resolve_audio_path_marks_available_item_missing_without_deleting_text() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let recording = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-1", "Keep text", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+
+        std::fs::remove_file(root.path().join("history").join(&recording.audio_path)).unwrap();
+
+        assert_eq!(store.resolve_audio_path(&recording.id).unwrap(), None);
+        let item = store
+            .list_items()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.id == recording.id)
+            .unwrap();
+        assert_eq!(item.audio_status, HistoryAudioStatus::Missing);
+        let transcript = store.load_transcript(&recording.id).unwrap().unwrap();
+        assert_eq!(transcript[0].text, "Keep text");
+    }
+
+    #[test]
+    fn resolve_audio_path_preserves_removed_status_when_file_is_missing() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let recording = store
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-1", "Removed audio text", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                audio_bytes: Some(vec![1]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
+            .unwrap();
+        store
+            .update_item_meta(&recording.id, json!({ "audioStatus": "removed" }))
+            .unwrap();
+        std::fs::remove_file(root.path().join("history").join(&recording.audio_path)).unwrap();
+
+        assert_eq!(store.resolve_audio_path(&recording.id).unwrap(), None);
+        let item = store
+            .list_items()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.id == recording.id)
+            .unwrap();
+        assert_eq!(item.audio_status, HistoryAudioStatus::Removed);
+    }
+
+    #[test]
+    fn ensure_ready_removes_stale_staging_files_without_removing_final_audio() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+
+        let history_dir = root.path().join("history");
+        std::fs::create_dir_all(&history_dir).unwrap();
+        let final_audio = history_dir.join("orphan.wav");
+        let staged_audio = history_dir.join("orphan.wav.sona-staging-old");
+        std::fs::write(&final_audio, [1]).unwrap();
+        std::fs::write(&staged_audio, [2]).unwrap();
+
+        store.ensure_ready().unwrap();
+
+        assert!(final_audio.exists());
+        assert!(!staged_audio.exists());
     }
 
     #[test]

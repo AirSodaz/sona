@@ -3,8 +3,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use super::{
-    HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
-    HistoryItemStatus,
+    HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
+    HistoryItemRecord, HistoryItemStatus,
 };
 
 pub(super) fn current_time_millis() -> Result<u64, String> {
@@ -151,6 +151,7 @@ fn build_history_item_record(
         duration: duration.max(0.0),
         title,
         preview_text: String::new(),
+        audio_status: HistoryAudioStatus::Available,
         icon,
         kind,
         search_content: String::new(),

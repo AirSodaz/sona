@@ -36,6 +36,19 @@ pub enum HistoryItemStatus {
 #[derive(
     Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
 )]
+#[serde(rename_all = "lowercase")]
+pub enum HistoryAudioStatus {
+    #[strum(serialize = "available")]
+    Available,
+    #[strum(serialize = "missing")]
+    Missing,
+    #[strum(serialize = "removed")]
+    Removed,
+}
+
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum HistoryDraftSource {
     #[strum(serialize = "live_record")]
@@ -49,6 +62,7 @@ pub struct HistoryItemRecord {
     pub timestamp: u64,
     pub duration: f64,
     pub audio_path: String,
+    pub audio_status: HistoryAudioStatus,
     pub transcript_path: String,
     pub title: String,
     pub preview_text: String,

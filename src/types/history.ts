@@ -1,4 +1,5 @@
 export type HistoryItemStatus = 'draft' | 'complete';
+export type HistoryAudioStatus = 'available' | 'missing' | 'removed';
 export type HistoryDraftSource = 'live_record';
 
 export interface HistoryItem {
@@ -6,6 +7,7 @@ export interface HistoryItem {
     timestamp: number;
     duration: number;
     audioPath: string; // Relative to app data dir or absolute
+    audioStatus?: HistoryAudioStatus;
     transcriptPath: string; // Relative to app data dir or absolute
     title: string;
     previewText: string;

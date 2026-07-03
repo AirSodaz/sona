@@ -5,7 +5,9 @@ use tempfile::tempdir;
 
 use super::backup::build_backup_manifest;
 use super::fs_utils::{create_tar_bz2_archive, write_json_pretty_atomic};
-use super::types::{HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus};
+use super::types::{
+    HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
+};
 use super::{
     ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
     AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME,
@@ -18,6 +20,7 @@ pub(crate) fn sample_history_item(id: &str, status: HistoryItemStatus) -> Histor
         timestamp: 1,
         duration: 2.0,
         audio_path: format!("{id}.wav"),
+        audio_status: HistoryAudioStatus::Available,
         transcript_path: format!("{id}.json"),
         title: format!("Item {id}"),
         preview_text: String::new(),

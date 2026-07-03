@@ -44,6 +44,9 @@ function normalizeHistoryItem(item: Partial<HistoryItem> | null | undefined): Hi
         timestamp: item?.timestamp || 0,
         duration: item?.duration || 0,
         audioPath: item?.audioPath || '',
+        audioStatus: ['available', 'missing', 'removed'].includes(item?.audioStatus || '')
+            ? item?.audioStatus
+            : 'available',
         transcriptPath: item?.transcriptPath || '',
         title: item?.title || '',
         previewText: item?.previewText || '',
