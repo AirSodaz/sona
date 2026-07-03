@@ -38,7 +38,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if migration_result.errors.is_empty() {
-            crate::core::database::legacy_migration::move_legacy_to_backup(&app_local_data_dir)?;
+            crate::core::database::legacy_migration::move_legacy_domains_to_backup(
+                &app_local_data_dir,
+                migration_result.domains,
+            )?;
         }
     }
 

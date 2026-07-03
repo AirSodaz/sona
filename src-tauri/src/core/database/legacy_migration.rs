@@ -10,20 +10,37 @@ use super::DatabaseError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationReport {
     pub migrated: bool,
+    pub domains: LegacyMigrationDomains,
     pub history_count: usize,
     pub project_count: usize,
     pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LegacyMigrationDomains {
+    pub history: bool,
+    pub projects: bool,
+    pub automation: bool,
+    pub task_ledger: bool,
+    pub analytics: bool,
+}
+
+impl LegacyMigrationDomains {
+    fn any(self) -> bool {
+        self.history || self.projects || self.automation || self.task_ledger || self.analytics
+    }
 }
 
 pub fn migrate_legacy_to_sqlite(
     db: &Database,
     app_dir: &Path,
 ) -> Result<MigrationReport, DatabaseError> {
-    let history_index = app_dir.join("history").join("index.json");
+    let domains = detect_legacy_domains(app_dir);
 
-    if !history_index.exists() {
+    if !domains.any() {
         return Ok(MigrationReport {
             migrated: false,
+            domains,
             history_count: 0,
             project_count: 0,
             errors: vec![],
@@ -38,17 +55,27 @@ pub fn migrate_legacy_to_sqlite(
         let mut automation_processed_count: usize = 0;
         let mut task_ledger_count: usize = 0;
 
-        let _ = migrate_history(tx, app_dir, &mut errors, &mut history_count);
-        let _ = migrate_projects(tx, app_dir, &mut errors, &mut project_count);
-        let _ = migrate_automation(
-            tx,
-            app_dir,
-            &mut errors,
-            &mut automation_rule_count,
-            &mut automation_processed_count,
-        );
-        let _ = migrate_task_ledger(tx, app_dir, &mut errors, &mut task_ledger_count);
-        let _ = migrate_llm_usage(tx, app_dir, &mut errors);
+        if domains.history {
+            let _ = migrate_history(tx, app_dir, &mut errors, &mut history_count);
+        }
+        if domains.projects {
+            let _ = migrate_projects(tx, app_dir, &mut errors, &mut project_count);
+        }
+        if domains.automation {
+            let _ = migrate_automation(
+                tx,
+                app_dir,
+                &mut errors,
+                &mut automation_rule_count,
+                &mut automation_processed_count,
+            );
+        }
+        if domains.task_ledger {
+            let _ = migrate_task_ledger(tx, app_dir, &mut errors, &mut task_ledger_count);
+        }
+        if domains.analytics {
+            let _ = migrate_llm_usage(tx, app_dir, &mut errors);
+        }
         let _ = verify_counts(
             tx,
             history_count,
@@ -61,6 +88,7 @@ pub fn migrate_legacy_to_sqlite(
 
         Ok(MigrationReport {
             migrated: true,
+            domains,
             history_count,
             project_count,
             errors,
@@ -68,18 +96,49 @@ pub fn migrate_legacy_to_sqlite(
     })
 }
 
+fn detect_legacy_domains(app_dir: &Path) -> LegacyMigrationDomains {
+    LegacyMigrationDomains {
+        history: app_dir.join("history").join("index.json").exists(),
+        projects: app_dir.join("projects").join("index.json").exists(),
+        automation: app_dir.join("automation").join("rules.json").exists()
+            || app_dir.join("automation").join("processed.json").exists(),
+        task_ledger: app_dir.join("task-ledger").join("tasks.json").exists(),
+        analytics: app_dir.join("analytics").join("llm-usage.json").exists(),
+    }
+}
+
 pub fn move_legacy_to_backup(app_dir: &Path) -> Result<(), DatabaseError> {
+    move_legacy_domains_to_backup(
+        app_dir,
+        LegacyMigrationDomains {
+            history: true,
+            projects: true,
+            automation: true,
+            task_ledger: true,
+            analytics: true,
+        },
+    )
+}
+
+pub fn move_legacy_domains_to_backup(
+    app_dir: &Path,
+    domains: LegacyMigrationDomains,
+) -> Result<(), DatabaseError> {
     let backup_dir = app_dir.join(".legacy-backup");
     fs::create_dir_all(&backup_dir)
         .map_err(|e| DatabaseError::ConnectionError(format!("Failed to create backup dir: {e}")))?;
 
-    for dir_name in &[
-        "history",
-        "projects",
-        "automation",
-        "task-ledger",
-        "analytics",
+    for (should_move, dir_name) in [
+        (domains.history, "history"),
+        (domains.projects, "projects"),
+        (domains.automation, "automation"),
+        (domains.task_ledger, "task-ledger"),
+        (domains.analytics, "analytics"),
     ] {
+        if !should_move {
+            continue;
+        }
+
         let src = app_dir.join(dir_name);
         if src.exists() {
             let dst = backup_dir.join(dir_name);
@@ -1169,6 +1228,91 @@ mod tests {
         .unwrap();
     }
 
+    // ---- test_migrate_non_history_domains_without_history_index ----
+
+    #[test]
+    fn test_migrate_non_history_domains_without_history_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = with_open_db();
+
+        write_json(
+            &dir.path().join("projects").join("index.json"),
+            &json!([{"id": "proj-1", "name": "Work", "createdAt": 1000, "updatedAt": 2000, "defaults": {}}]),
+        );
+        write_json(
+            &dir.path().join("automation").join("rules.json"),
+            &json!([{"id": "rule-1", "name": "Watch", "watchDirectory": "/watch", "projectId": "proj-1"}]),
+        );
+        write_json(
+            &dir.path().join("automation").join("processed.json"),
+            &json!([{"id": "proc-1", "filePath": "/f.txt"}]),
+        );
+        write_json(
+            &dir.path().join("task-ledger").join("tasks.json"),
+            &json!({"version": 1, "updatedAt": 1000, "tasks": [{"id": "task-1", "kind": "llmPolish", "status": "pending", "title": "Task", "progress": 0.0, "createdAt": 1000, "updatedAt": 1000, "retryable": false, "cancelable": true, "recoverable": false}]}),
+        );
+        write_json(
+            &dir.path().join("analytics").join("llm-usage.json"),
+            &json!({"schemaVersion": 1, "startedAt": "2026-01-01T00:00:00Z", "totals": {"callCount": 5, "promptTokens": 100, "completionTokens": 50, "totalTokens": 150}, "byProvider": {"test_provider": {"callCount": 5, "promptTokens": 100, "completionTokens": 50, "totalTokens": 150}}, "byCategory": {}, "daily": {}}),
+        );
+
+        let report = migrate_legacy_to_sqlite(&db, dir.path()).unwrap();
+        assert!(report.migrated);
+        assert_eq!(
+            report.domains,
+            LegacyMigrationDomains {
+                history: false,
+                projects: true,
+                automation: true,
+                task_ledger: true,
+                analytics: true,
+            }
+        );
+        assert_eq!(report.history_count, 0);
+        assert_eq!(report.project_count, 1);
+        assert!(report.errors.is_empty(), "Errors: {:?}", report.errors);
+
+        db.with_connection(|conn| {
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM history_items", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM automation_processed", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM analytics.llm_usage", [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
     // ---- test_migrate_all ----
 
     #[test]
@@ -1432,6 +1576,36 @@ mod tests {
         // No legacy files exist
         move_legacy_to_backup(dir.path()).unwrap();
         assert!(!dir.path().join(".legacy-backup").join("history").exists());
+    }
+
+    #[test]
+    fn test_move_to_backup_only_detected_domains() {
+        let dir = tempfile::tempdir().unwrap();
+
+        write_json(
+            &dir.path().join("projects").join("index.json"),
+            &json!([{"id": "proj-1", "name": "P", "createdAt": 1000, "updatedAt": 2000, "defaults": {}}]),
+        );
+        write_json(
+            &dir.path().join("history").join("orphan.json"),
+            &json!({"not": "migrated without an index"}),
+        );
+
+        move_legacy_domains_to_backup(
+            dir.path(),
+            LegacyMigrationDomains {
+                projects: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert!(dir.path().join("history").exists());
+        assert!(!dir.path().join("projects").exists());
+
+        let backup_dir = dir.path().join(".legacy-backup");
+        assert!(!backup_dir.join("history").exists());
+        assert!(backup_dir.join("projects").exists());
     }
 
     // ---- test_idempotent ----
