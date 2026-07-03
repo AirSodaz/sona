@@ -1,4 +1,4 @@
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use crate::integrations::llm::llm_usage::{
     LlmUsageDashboardStats, LlmUsageStatsFile, UsageBucket, UsageRecord,
 };
@@ -6,7 +6,7 @@ use chrono::{DateTime, Local};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), String> {
+pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseError> {
     let prompt_tokens = record
         .usage
         .as_ref()
@@ -52,7 +52,7 @@ pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), St
     })
 }
 
-pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, String> {
+pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, DatabaseError> {
     let rows: Vec<(String, String, String, i64, i64, i64)> = db.with_connection(|conn| {
         let mut stmt = conn.prepare_cached(
             "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens FROM analytics.llm_usage ORDER BY occurred_at"
@@ -126,7 +126,7 @@ pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, String> {
     })
 }
 
-pub fn read_raw(db: &Database) -> Result<String, String> {
+pub fn read_raw(db: &Database) -> Result<String, DatabaseError> {
     let rows: Vec<Value> = db.with_connection(|conn| {
         let mut stmt = conn.prepare_cached(
             "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens FROM analytics.llm_usage ORDER BY occurred_at"
@@ -154,12 +154,13 @@ pub fn read_raw(db: &Database) -> Result<String, String> {
         Ok(items)
     })?;
 
-    serde_json::to_string(&rows).map_err(|e| e.to_string())
+    Ok(serde_json::to_string(&rows)?)
 }
 
-pub fn replace_raw(db: &Database, content: &str) -> Result<(), String> {
-    let rows: Vec<Value> = serde_json::from_str(content)
-        .map_err(|e| format!("LLM usage content must be a JSON array: {e}"))?;
+pub fn replace_raw(db: &Database, content: &str) -> Result<(), DatabaseError> {
+    let rows: Vec<Value> = serde_json::from_str(content).map_err(|e| {
+        DatabaseError::Internal(format!("LLM usage content must be a JSON array: {e}"))
+    })?;
 
     db.with_transaction(|tx| {
         tx.execute("DELETE FROM analytics.llm_usage", [])?;
@@ -182,7 +183,7 @@ pub fn replace_raw(db: &Database, content: &str) -> Result<(), String> {
     })
 }
 
-pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, String> {
+pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, DatabaseError> {
     let stats = read_stats(db)?;
     Ok(crate::integrations::llm::llm_usage::to_dashboard_stats(
         &stats,

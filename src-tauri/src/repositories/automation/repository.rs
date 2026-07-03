@@ -1,3 +1,4 @@
+use crate::core::database::DatabaseError;
 use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
@@ -313,7 +314,9 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
 pub async fn run_repository_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(crate::repositories::automation::SqliteAutomationRepository) -> Result<T, String>
+    F: FnOnce(
+            crate::repositories::automation::SqliteAutomationRepository,
+        ) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
@@ -323,6 +326,7 @@ where
     })
     .await
     .map_err(|error| error.to_string())?
+    .map_err(|e| e.to_string())
 }
 
 pub async fn run_automation_task<T, F>(
@@ -332,17 +336,22 @@ pub async fn run_automation_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(crate::repositories::automation::SqliteAutomationRepository) -> Result<T, String>
+    F: FnOnce(
+            crate::repositories::automation::SqliteAutomationRepository,
+        ) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
+        let _guard = lock
+            .lock()
+            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
         task(crate::repositories::automation::SqliteAutomationRepository::new(app_local_data_dir))
     })
     .await
     .map_err(|error| error.to_string())?
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

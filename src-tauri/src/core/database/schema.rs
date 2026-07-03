@@ -1,4 +1,4 @@
-use super::Database;
+use super::{Database, DatabaseError};
 
 type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
@@ -12,7 +12,7 @@ const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
 
 /// Runs all pending migrations against the database. Migrations that have
 /// already been applied (tracked in the `schema_version` table) are skipped.
-pub fn run_migrations(db: &Database) -> Result<(), String> {
+pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
     // Ensure the version-tracking table exists (idempotent).
     db.with_connection(|conn| {
         conn.execute_batch(

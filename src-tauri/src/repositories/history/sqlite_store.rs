@@ -2,7 +2,7 @@ use super::fs_utils::{
     ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
 };
 use super::transcript_payload::normalize_history_transcript_segments;
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
@@ -122,7 +122,7 @@ impl SqliteHistoryStore {
         }
     }
 
-    fn get_db(&self) -> Result<&Database, String> {
+    fn get_db(&self) -> Result<&Database, DatabaseError> {
         self.db.get()
     }
 
@@ -131,10 +131,11 @@ impl SqliteHistoryStore {
             .join(crate::repositories::history::HISTORY_DIR_NAME)
     }
 
-    fn audio_path(&self, file_name: &str) -> Result<PathBuf, String> {
-        Ok(self
-            .history_dir()
-            .join(ensure_safe_file_name(file_name, "History audio path")?))
+    fn audio_path(&self, file_name: &str) -> Result<PathBuf, DatabaseError> {
+        Ok(self.history_dir().join(
+            ensure_safe_file_name(file_name, "History audio path")
+                .map_err(DatabaseError::Internal)?,
+        ))
     }
 
     fn enum_to_kind_str(kind: HistoryItemKind) -> &'static str {
@@ -161,7 +162,7 @@ impl SqliteHistoryStore {
         tx: &rusqlite::Transaction,
         item: &HistoryItemRecord,
         segments_str: &str,
-    ) -> Result<(), rusqlite::Error> {
+    ) -> Result<(), DatabaseError> {
         let kind_str = Self::enum_to_kind_str(item.kind);
         let status_str = Self::enum_to_status_str(item.status);
         let draft_source_str = item.draft_source.map(Self::enum_to_draft_source_str);
@@ -194,7 +195,7 @@ impl SqliteHistoryStore {
         Ok(())
     }
 
-    fn reconcile_live_drafts(&self) -> Result<(), String> {
+    fn reconcile_live_drafts(&self) -> Result<(), DatabaseError> {
         let history_dir = self.history_dir();
         #[allow(clippy::type_complexity)]
         let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db()?.with_connection(|conn| {
@@ -250,8 +251,7 @@ impl SqliteHistoryStore {
             item.status = HistoryItemStatus::Complete;
             item.draft_source = None;
 
-            let segments_str = serde_json::to_string(&normalized_transcript.segments)
-                .map_err(|e| e.to_string())?;
+            let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
             verified_updates.push((item, segments_str));
         }
@@ -385,11 +385,11 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
 }
 
 impl HistoryStore for SqliteHistoryStore {
-    fn ensure_ready(&self) -> Result<(), String> {
-        fs::create_dir_all(self.history_dir()).map_err(|error| error.to_string())
+    fn ensure_ready(&self) -> Result<(), DatabaseError> {
+        fs::create_dir_all(self.history_dir()).map_err(|e| DatabaseError::Internal(e.to_string()))
     }
 
-    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
+    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
@@ -405,7 +405,9 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
+    fn list_items_with_reconciled_live_drafts(
+        &self,
+    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.reconcile_live_drafts()?;
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
@@ -425,7 +427,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn list_items_paginated(
         &self,
         opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, String> {
+    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let limit = opts.limit.map(|l| l as i64).unwrap_or(-1);
             let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
@@ -447,7 +449,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn list_items_with_reconciled_live_drafts_paginated(
         &self,
         opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, String> {
+    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.reconcile_live_drafts()?;
         self.list_items_paginated(opts)
     }
@@ -455,7 +457,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
-    ) -> Result<HistoryWorkspaceQueryResult, String> {
+    ) -> Result<HistoryWorkspaceQueryResult, DatabaseError> {
         self.ensure_ready()?;
         self.reconcile_live_drafts()?;
 
@@ -559,9 +561,10 @@ impl HistoryStore for SqliteHistoryStore {
     fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
-    ) -> Result<LiveRecordingDraftResult, String> {
+    ) -> Result<LiveRecordingDraftResult, DatabaseError> {
         self.ensure_ready()?;
-        let item = super::item_factory::create_live_draft_item(request)?;
+        let item = super::item_factory::create_live_draft_item(request)
+            .map_err(DatabaseError::Internal)?;
         let audio_absolute_path = self
             .audio_path(&item.audio_path)?
             .to_string_lossy()
@@ -583,10 +586,10 @@ impl HistoryStore for SqliteHistoryStore {
         history_id: &str,
         segments: Value,
         duration: f64,
-    ) -> Result<HistoryItemRecord, String> {
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
-        let segments_str =
-            serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
+    ) -> Result<HistoryItemRecord, DatabaseError> {
+        let normalized_transcript =
+            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         let exists: bool = self.get_db()?.with_connection(|conn| {
             Ok(conn
@@ -599,7 +602,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         if !exists {
-            return Err(format!("History item not found: {history_id}"));
+            return Err(DatabaseError::NotFoundError(format!(
+                "History item not found: {history_id}"
+            )));
         }
 
         self.get_db()?.with_transaction(|tx| {
@@ -637,7 +642,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn save_recording(
         &self,
         request: HistorySaveRecordingRequest,
-    ) -> Result<HistoryItemRecord, String> {
+    ) -> Result<HistoryItemRecord, DatabaseError> {
         self.ensure_ready()?;
         let HistorySaveRecordingRequest {
             segments,
@@ -648,47 +653,51 @@ impl HistoryStore for SqliteHistoryStore {
             audio_extension,
         } = request;
 
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+        let normalized_transcript =
+            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let mut item = super::item_factory::create_recording_item(
             duration,
             project_id,
             audio_extension.as_deref(),
             native_audio_path.as_deref(),
-        )?;
+        )
+        .map_err(DatabaseError::Internal)?;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
         match (audio_bytes, native_audio_path) {
             (Some(bytes), _) => {
                 let target_path = self.audio_path(&item.audio_path)?;
-                crate::repositories::storage::write_binary_atomic(&target_path, &bytes)?;
+                crate::repositories::storage::write_binary_atomic(&target_path, &bytes)
+                    .map_err(DatabaseError::Internal)?;
             }
             (None, Some(native_path)) => {
                 let source_path = PathBuf::from(&native_path);
                 if !source_path.is_file() {
-                    return Err(format!(
+                    return Err(DatabaseError::Internal(format!(
                         "Native recording source file does not exist: {}",
                         source_path.to_string_lossy()
-                    ));
+                    )));
                 }
                 let target_path = self.audio_path(&item.audio_path)?;
                 if source_path != target_path {
                     if let Some(parent) = target_path.parent() {
-                        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                        fs::create_dir_all(parent)
+                            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
                     }
-                    fs::copy(&source_path, &target_path).map_err(|error| error.to_string())?;
+                    fs::copy(&source_path, &target_path)
+                        .map_err(|e| DatabaseError::Internal(e.to_string()))?;
                 }
             }
             (None, None) => {
-                return Err(
+                return Err(DatabaseError::Internal(
                     "History recording save requires audio bytes or a native audio path."
                         .to_string(),
-                );
+                ));
             }
         }
 
-        let segments_str =
-            serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
+        let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
@@ -701,7 +710,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn save_imported_file(
         &self,
         request: HistorySaveImportedFileRequest,
-    ) -> Result<HistoryItemRecord, String> {
+    ) -> Result<HistoryItemRecord, DatabaseError> {
         self.ensure_ready()?;
         let HistorySaveImportedFileRequest {
             id,
@@ -712,34 +721,35 @@ impl HistoryStore for SqliteHistoryStore {
             converted_source_path,
         } = request;
 
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+        let normalized_transcript =
+            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let imported = super::item_factory::create_imported_file_item(
             id,
             source_path,
             converted_source_path,
             duration,
             project_id,
-        )?;
+        )
+        .map_err(DatabaseError::Internal)?;
         let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
         let source = PathBuf::from(imported.copy_source_path);
         if !source.is_file() {
-            return Err(format!(
+            return Err(DatabaseError::Internal(format!(
                 "Imported source file does not exist: {}",
                 source.to_string_lossy()
-            ));
+            )));
         }
 
         let target_path = self.audio_path(&item.audio_path)?;
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            fs::create_dir_all(parent).map_err(|e| DatabaseError::Internal(e.to_string()))?;
         }
-        fs::copy(&source, &target_path).map_err(|error| error.to_string())?;
+        fs::copy(&source, &target_path).map_err(|e| DatabaseError::Internal(e.to_string()))?;
 
-        let segments_str =
-            serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
+        let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
@@ -749,7 +759,7 @@ impl HistoryStore for SqliteHistoryStore {
         Ok(item)
     }
 
-    fn delete_items(&self, ids: &[String]) -> Result<(), String> {
+    fn delete_items(&self, ids: &[String]) -> Result<(), DatabaseError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -770,7 +780,8 @@ impl HistoryStore for SqliteHistoryStore {
 
         for audio_path_str in audio_paths {
             if let Some(path) = optional_history_child_path(&self.history_dir(), &audio_path_str) {
-                crate::repositories::storage::remove_path_if_exists(&path)?;
+                crate::repositories::storage::remove_path_if_exists(&path)
+                    .map_err(DatabaseError::Internal)?;
             }
         }
 
@@ -785,7 +796,10 @@ impl HistoryStore for SqliteHistoryStore {
         Ok(())
     }
 
-    fn load_transcript(&self, history_id: &str) -> Result<Option<Vec<TranscriptSegment>>, String> {
+    fn load_transcript(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<Vec<TranscriptSegment>>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT t.segments
@@ -796,17 +810,9 @@ impl HistoryStore for SqliteHistoryStore {
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let segments_str: String = row.get(0)?;
-                let parsed_val: Value = serde_json::from_str(&segments_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-                let normalized =
-                    normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
-                    })?;
+                let parsed_val: Value = serde_json::from_str(&segments_str)?;
+                let normalized = normalize_history_transcript_segments(parsed_val)
+                    .map_err(DatabaseError::Internal)?;
                 Ok(Some(normalized.segments))
             } else {
                 let exists: bool = conn.query_row(
@@ -817,8 +823,8 @@ impl HistoryStore for SqliteHistoryStore {
                 if exists {
                     Ok(None)
                 } else {
-                    Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
-                        std::io::Error::other(format!("History item not found: {history_id}")),
+                    Err(DatabaseError::NotFoundError(format!(
+                        "History item not found: {history_id}"
                     )))
                 }
             }
@@ -829,10 +835,10 @@ impl HistoryStore for SqliteHistoryStore {
         &self,
         history_id: &str,
         segments: Value,
-    ) -> Result<HistoryItemRecord, String> {
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
-        let segments_str =
-            serde_json::to_string(&normalized_transcript.segments).map_err(|e| e.to_string())?;
+    ) -> Result<HistoryItemRecord, DatabaseError> {
+        let normalized_transcript =
+            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         let exists: bool = self.get_db()?.with_connection(|conn| {
             Ok(conn
@@ -845,7 +851,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         if !exists {
-            return Err(format!("History item not found: {history_id}"));
+            return Err(DatabaseError::NotFoundError(format!(
+                "History item not found: {history_id}"
+            )));
         }
 
         self.get_db()?.with_transaction(|tx| {
@@ -884,12 +892,14 @@ impl HistoryStore for SqliteHistoryStore {
         history_id: &str,
         reason: TranscriptSnapshotReason,
         segments: Value,
-    ) -> Result<TranscriptSnapshotMetadata, String> {
-        validate_id(history_id, "History ID")?;
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+    ) -> Result<TranscriptSnapshotMetadata, DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
+        let normalized_transcript =
+            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let parsed_segments = normalized_transcript.segments;
 
-        let created_at = super::item_factory::current_time_millis()?;
+        let created_at =
+            super::item_factory::current_time_millis().map_err(DatabaseError::Internal)?;
         let metadata = TranscriptSnapshotMetadata {
             id: format!("{created_at}-{}", uuid::Uuid::new_v4()),
             history_id: history_id.to_string(),
@@ -905,7 +915,7 @@ impl HistoryStore for SqliteHistoryStore {
             TranscriptSnapshotReason::Restore => "restore",
         };
 
-        let segments_str = serde_json::to_string(&parsed_segments).map_err(|e| e.to_string())?;
+        let segments_str = serde_json::to_string(&parsed_segments)?;
 
         self.get_db()?.with_transaction(|tx| {
             let exists: bool = tx.query_row(
@@ -914,9 +924,9 @@ impl HistoryStore for SqliteHistoryStore {
                 |row| row.get(0),
             )?;
             if !exists {
-                return Err(rusqlite::Error::ToSqlConversionFailure(
-                    Box::new(std::io::Error::other(format!("History item not found: {history_id}")))
-                ));
+                return Err(DatabaseError::NotFoundError(format!(
+                    "History item not found: {history_id}"
+                )));
             }
 
             tx.execute(
@@ -953,8 +963,8 @@ impl HistoryStore for SqliteHistoryStore {
     fn list_transcript_snapshots(
         &self,
         history_id: &str,
-    ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
-        validate_id(history_id, "History ID")?;
+    ) -> Result<Vec<TranscriptSnapshotMetadata>, DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, reason, created_at, segment_count
@@ -997,9 +1007,9 @@ impl HistoryStore for SqliteHistoryStore {
         &self,
         history_id: &str,
         snapshot_id: &str,
-    ) -> Result<Option<TranscriptSnapshotRecord>, String> {
-        validate_id(history_id, "History ID")?;
-        validate_id(snapshot_id, "Snapshot ID")?;
+    ) -> Result<Option<TranscriptSnapshotRecord>, DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
+        validate_id(snapshot_id, "Snapshot ID").map_err(DatabaseError::Internal)?;
 
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
@@ -1022,18 +1032,10 @@ impl HistoryStore for SqliteHistoryStore {
                     _ => TranscriptSnapshotReason::Polish,
                 };
 
-                let parsed_val: Value = serde_json::from_str(&segments_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
+                let parsed_val: Value = serde_json::from_str(&segments_str)?;
 
-                let normalized =
-                    normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
-                    })?;
+                let normalized = normalize_history_transcript_segments(parsed_val)
+                    .map_err(DatabaseError::Internal)?;
 
                 let metadata = TranscriptSnapshotMetadata {
                     id: snapshot_id.to_string(),
@@ -1053,10 +1055,10 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), String> {
-        let updates = updates
-            .as_object()
-            .ok_or_else(|| "History item updates must be an object.".to_string())?;
+    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), DatabaseError> {
+        let updates = updates.as_object().ok_or_else(|| {
+            DatabaseError::Internal("History item updates must be an object.".to_string())
+        })?;
 
         self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare_cached(
@@ -1067,7 +1069,7 @@ impl HistoryStore for SqliteHistoryStore {
             let mut item = match stmt.query_row([history_id], map_row_to_item) {
                 Ok(item) => item,
                 Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
-                Err(error) => return Err(error),
+                Err(error) => return Err(DatabaseError::QueryError(error)),
             };
 
             apply_history_item_updates(&mut item, updates);
@@ -1114,7 +1116,7 @@ impl HistoryStore for SqliteHistoryStore {
         &self,
         ids: &[String],
         project_id: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), DatabaseError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -1133,7 +1135,7 @@ impl HistoryStore for SqliteHistoryStore {
         &self,
         current_project_id: String,
         next_project_id: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
@@ -1143,8 +1145,8 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, String> {
-        validate_id(history_id, "History ID")?;
+    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         self.get_db()?.with_connection(|conn| {
             let mut stmt =
@@ -1152,13 +1154,7 @@ impl HistoryStore for SqliteHistoryStore {
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let payload_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&payload_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
+                let val: Value = serde_json::from_str(&payload_str)?;
                 Ok(Some(val))
             } else {
                 Ok(None)
@@ -1166,15 +1162,16 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn save_summary(&self, history_id: &str, summary_payload: Value) -> Result<(), String> {
-        validate_id(history_id, "History ID")?;
+    fn save_summary(&self, history_id: &str, summary_payload: Value) -> Result<(), DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         let summary_payload = crate::repositories::history::fs_utils::ensure_json_object_value(
             summary_payload,
             "History summary payload",
-        )?;
+        )
+        .map_err(DatabaseError::Internal)?;
 
-        let payload_str = serde_json::to_string(&summary_payload).map_err(|e| e.to_string())?;
+        let payload_str = serde_json::to_string(&summary_payload)?;
 
         self.get_db()?.with_connection(|conn| {
             conn.execute(
@@ -1185,8 +1182,8 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn delete_summary(&self, history_id: &str) -> Result<(), String> {
-        validate_id(history_id, "History ID")?;
+    fn delete_summary(&self, history_id: &str) -> Result<(), DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         self.get_db()?.with_connection(|conn| {
             conn.execute(
@@ -1197,8 +1194,8 @@ impl HistoryStore for SqliteHistoryStore {
         })
     }
 
-    fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, String> {
-        validate_id(history_id, "History ID")?;
+    fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, DatabaseError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         let audio_path_opt: Option<String> = self.get_db()?.with_connection(|conn| {
             let mut stmt =
@@ -1213,7 +1210,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         let Some(audio_path_str) = audio_path_opt else {
-            return Err(format!("History item not found: {history_id}"));
+            return Err(DatabaseError::NotFoundError(format!(
+                "History item not found: {history_id}"
+            )));
         };
 
         let Some(audio_path) = optional_history_child_path(&self.history_dir(), &audio_path_str)
@@ -1227,11 +1226,11 @@ impl HistoryStore for SqliteHistoryStore {
             }
             Ok(_) => Ok(None),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.to_string()),
+            Err(error) => Err(DatabaseError::Internal(error.to_string())),
         }
     }
 
-    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
+    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
         let items = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
@@ -1276,7 +1275,7 @@ impl HistoryStore for SqliteHistoryStore {
                     let history_id: String = row.get(0)?;
                     let segments_str: String = row.get(1)?;
                     let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                     Ok((history_id, val))
                 })?;
 
@@ -1292,11 +1291,11 @@ impl HistoryStore for SqliteHistoryStore {
                         Some(val) => ensure_json_array_value(
                             val,
                             &format!("Transcript for history item {}", item.id),
-                        ).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e))))?,
+                        ).map_err(DatabaseError::Internal)?,
                         None => {
-                            return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+                            return Err(DatabaseError::NotFoundError(
                                 format!("History item \"{}\" is missing its transcript file.", item.title),
-                            ))));
+                            ));
                         }
                     };
                     transcript_files.push((format!("{}.json", item.id), transcript_val));
@@ -1315,7 +1314,7 @@ impl HistoryStore for SqliteHistoryStore {
                     let history_id: String = row.get(0)?;
                     let payload_str: String = row.get(1)?;
                     let val: Value = serde_json::from_str(&payload_str)
-                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
                     Ok((history_id, val))
                 })?;
 
@@ -1353,13 +1352,11 @@ impl HistoryStore for SqliteHistoryStore {
                     };
 
                     let parsed_val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
                     let normalized =
                         normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
-                                e,
-                            )))
+                            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
                         })?;
 
                     let metadata = TranscriptSnapshotMetadata {
@@ -1388,14 +1385,12 @@ impl HistoryStore for SqliteHistoryStore {
                         let meta_list: Vec<TranscriptSnapshotMetadata> = records.iter().map(|r| r.metadata.clone()).collect();
                         snapshot_files.push((
                             format!("versions/{}/index.json", item.id),
-                            serde_json::to_value(&meta_list)
-                                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+                            serde_json::to_value(&meta_list)?,
                         ));
                         for rec in records {
                             snapshot_files.push((
                                 format!("versions/{}/{}.json", item.id, rec.metadata.id),
-                                serde_json::to_value(&rec)
-                                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+                                serde_json::to_value(&rec)?,
                             ));
                         }
                     }

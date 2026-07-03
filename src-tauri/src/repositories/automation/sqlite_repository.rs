@@ -1,4 +1,4 @@
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -27,7 +27,7 @@ impl SqliteAutomationRepository {
         }
     }
 
-    fn get_db(&self) -> Result<&Database, String> {
+    fn get_db(&self) -> Result<&Database, DatabaseError> {
         self.db.get()
     }
 
@@ -42,7 +42,7 @@ impl SqliteAutomationRepository {
         }
     }
 
-    pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+    pub fn load_state(&self) -> Result<AutomationRepositoryState, DatabaseError> {
         let rules = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT data FROM automation_rules ORDER BY id")?;
             let rows = stmt.query_map([], |row| {
@@ -90,22 +90,21 @@ impl SqliteAutomationRepository {
         })
     }
 
-    pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), String> {
+    pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_rules", [])?;
             let mut stmt =
                 tx.prepare_cached("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
             for mut rule in rules {
                 let id = Self::ensure_id(&mut rule);
-                let data_str = serde_json::to_string(&rule)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let data_str = serde_json::to_string(&rule)?;
                 stmt.execute(rusqlite::params![id, data_str])?;
             }
             Ok(())
         })
     }
 
-    pub fn persist_processed_entries(&self, entries: Vec<Value>) -> Result<(), String> {
+    pub fn persist_processed_entries(&self, entries: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_processed", [])?;
             let mut stmt =
@@ -120,7 +119,11 @@ impl SqliteAutomationRepository {
         })
     }
 
-    pub fn persist_state(&self, rules: Vec<Value>, entries: Vec<Value>) -> Result<(), String> {
+    pub fn persist_state(
+        &self,
+        rules: Vec<Value>,
+        entries: Vec<Value>,
+    ) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM automation_rules", [])?;
             {

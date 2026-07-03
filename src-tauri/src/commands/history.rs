@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Runtime, State};
 
+use crate::core::database::DatabaseError;
 use crate::core::history_store::HistoryStore;
 use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr::TranscriptSegment;
@@ -29,11 +30,11 @@ async fn run_history_task_inner<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, String> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
-        task(SqliteHistoryStore::new(app_local_data_dir))
+        task(SqliteHistoryStore::new(app_local_data_dir)).map_err(|e| e.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -46,7 +47,7 @@ async fn run_history_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, String> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     run_history_task_inner(app_local_data_dir, state.lock.clone(), task).await
@@ -59,7 +60,7 @@ async fn run_history_task_with_state<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, String> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     run_history_task_inner(app_local_data_dir, state.lock.clone(), task).await
@@ -115,7 +116,7 @@ fn create_llm_transcript_snapshot_record(
     history_id: &str,
     reason: TranscriptSnapshotReason,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<TranscriptSnapshotMetadata>, String> {
+) -> Result<Option<TranscriptSnapshotMetadata>, DatabaseError> {
     if history_id.trim().is_empty() || history_id == "current" || segments.is_empty() {
         return Ok(None);
     }
@@ -130,11 +131,7 @@ fn create_llm_transcript_snapshot_record(
     }
 
     repository
-        .create_transcript_snapshot(
-            history_id,
-            reason,
-            to_value(segments).map_err(|error| error.to_string())?,
-        )
+        .create_transcript_snapshot(history_id, reason, to_value(segments)?)
         .map(Some)
 }
 
@@ -142,16 +139,13 @@ fn update_llm_transcript_segments_record(
     repository: &impl HistoryStore,
     history_id: &str,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<HistoryItemRecord>, String> {
+) -> Result<Option<HistoryItemRecord>, DatabaseError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(None);
     }
 
     repository
-        .update_transcript(
-            history_id,
-            to_value(segments).map_err(|error| error.to_string())?,
-        )
+        .update_transcript(history_id, to_value(segments)?)
         .map(Some)
 }
 
@@ -159,7 +153,7 @@ fn save_llm_summary_payload(
     repository: &impl HistoryStore,
     history_id: &str,
     summary_payload: Value,
-) -> Result<(), String> {
+) -> Result<(), DatabaseError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(());
     }
@@ -489,7 +483,9 @@ pub async fn history_open_folder<R: Runtime>(
     let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
     {
         let _guard = state.lock.lock().map_err(|error| error.to_string())?;
-        SqliteHistoryStore::new(app_local_data_dir.clone()).ensure_ready()?;
+        SqliteHistoryStore::new(app_local_data_dir.clone())
+            .ensure_ready()
+            .map_err(|e| e.to_string())?;
     }
 
     use tauri_plugin_opener::OpenerExt;

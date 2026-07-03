@@ -1,4 +1,4 @@
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 
@@ -27,11 +27,11 @@ impl SqliteProjectRepository {
         }
     }
 
-    fn get_db(&self) -> Result<&Database, String> {
+    fn get_db(&self) -> Result<&Database, DatabaseError> {
         self.db.get()
     }
 
-    pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
+    pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
@@ -47,12 +47,13 @@ impl SqliteProjectRepository {
         })
     }
 
-    pub fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
-        let now = crate::repositories::project::repository::current_time_millis()?;
+    pub fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, DatabaseError> {
+        let now = crate::repositories::project::repository::current_time_millis()
+            .map_err(DatabaseError::Internal)?;
         let id = uuid::Uuid::new_v4().to_string();
 
         let defaults = self.build_defaults(&input)?;
-        let mut settings_val = serde_json::to_value(&defaults).map_err(|e| e.to_string())?;
+        let mut settings_val = serde_json::to_value(&defaults)?;
         if let Some(obj) = settings_val.as_object_mut() {
             obj.insert("description".to_string(), json!(input.description));
         }
@@ -96,7 +97,7 @@ impl SqliteProjectRepository {
         &self,
         project_id: &str,
         updates: Value,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, DatabaseError> {
         let Some(updates_obj) = updates.as_object() else {
             return self.get_by_id(project_id);
         };
@@ -201,8 +202,9 @@ impl SqliteProjectRepository {
             }
         }
 
-        let now = crate::repositories::project::repository::current_time_millis()?;
-        let mut settings_val = serde_json::to_value(&defaults).map_err(|e| e.to_string())?;
+        let now = crate::repositories::project::repository::current_time_millis()
+            .map_err(DatabaseError::Internal)?;
+        let mut settings_val = serde_json::to_value(&defaults)?;
         if let Some(obj) = settings_val.as_object_mut() {
             obj.insert("description".to_string(), json!(description));
         }
@@ -236,7 +238,7 @@ impl SqliteProjectRepository {
         }))
     }
 
-    pub fn delete(&self, project_id: &str) -> Result<(), String> {
+    pub fn delete(&self, project_id: &str) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute(
                 "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
@@ -247,7 +249,7 @@ impl SqliteProjectRepository {
         })
     }
 
-    pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), String> {
+    pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("UPDATE history_items SET project_id = NULL", [])?;
             tx.execute("DELETE FROM projects", [])?;
@@ -304,7 +306,7 @@ impl SqliteProjectRepository {
         })
     }
 
-    pub fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+    pub fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             let mut stmt =
                 tx.prepare_cached("UPDATE projects SET sort_order = ?1 WHERE id = ?2")?;
@@ -317,7 +319,7 @@ impl SqliteProjectRepository {
         self.list(ProjectListOptions::default())
     }
 
-    fn get_by_id(&self, project_id: &str) -> Result<Option<ProjectRecord>, String> {
+    fn get_by_id(&self, project_id: &str) -> Result<Option<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
@@ -332,7 +334,7 @@ impl SqliteProjectRepository {
         })
     }
 
-    fn build_defaults(&self, input: &ProjectCreateInput) -> Result<ProjectDefaults, String> {
+    fn build_defaults(&self, input: &ProjectCreateInput) -> Result<ProjectDefaults, DatabaseError> {
         let d = &input.defaults;
         Ok(ProjectDefaults {
             summary_template_id: d

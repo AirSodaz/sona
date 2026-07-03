@@ -1,3 +1,4 @@
+use crate::core::database::DatabaseError;
 use crate::core::paths::{PathKind, PathProvider};
 use serde_json::{Map, Value};
 use std::sync::Mutex;
@@ -21,7 +22,7 @@ pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, Strin
 pub async fn run_project_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(crate::repositories::project::SqliteProjectRepository) -> Result<T, String>
+    F: FnOnce(crate::repositories::project::SqliteProjectRepository) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
@@ -29,13 +30,14 @@ where
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = PROJECT_REPOSITORY_LOCK
             .lock()
-            .map_err(|error| error.to_string())?;
+            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
         task(crate::repositories::project::SqliteProjectRepository::new(
             app_local_data_dir,
         ))
     })
     .await
     .map_err(|error| error.to_string())?
+    .map_err(|e| e.to_string())
 }
 
 pub(crate) fn normalize_project_value(

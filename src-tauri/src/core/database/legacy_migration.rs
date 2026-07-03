@@ -5,6 +5,7 @@ use rusqlite::Transaction;
 use serde_json::Value;
 
 use super::Database;
+use super::DatabaseError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationReport {
@@ -14,7 +15,10 @@ pub struct MigrationReport {
     pub errors: Vec<String>,
 }
 
-pub fn migrate_legacy_to_sqlite(db: &Database, app_dir: &Path) -> Result<MigrationReport, String> {
+pub fn migrate_legacy_to_sqlite(
+    db: &Database,
+    app_dir: &Path,
+) -> Result<MigrationReport, DatabaseError> {
     let history_index = app_dir.join("history").join("index.json");
 
     if !history_index.exists() {
@@ -64,9 +68,10 @@ pub fn migrate_legacy_to_sqlite(db: &Database, app_dir: &Path) -> Result<Migrati
     })
 }
 
-pub fn move_legacy_to_backup(app_dir: &Path) -> Result<(), String> {
+pub fn move_legacy_to_backup(app_dir: &Path) -> Result<(), DatabaseError> {
     let backup_dir = app_dir.join(".legacy-backup");
-    fs::create_dir_all(&backup_dir).map_err(|e| format!("Failed to create backup dir: {e}"))?;
+    fs::create_dir_all(&backup_dir)
+        .map_err(|e| DatabaseError::ConnectionError(format!("Failed to create backup dir: {e}")))?;
 
     for dir_name in &[
         "history",
@@ -136,7 +141,7 @@ fn migrate_history(
     app_dir: &Path,
     errors: &mut Vec<String>,
     count: &mut usize,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     let index_path = app_dir.join("history").join("index.json");
     let raw = match try_read_json(&index_path) {
         Ok(Some(v)) => v,
@@ -415,7 +420,7 @@ fn migrate_projects(
     app_dir: &Path,
     errors: &mut Vec<String>,
     count: &mut usize,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     let path = app_dir.join("projects").join("index.json");
     let raw = match try_read_json(&path) {
         Ok(Some(v)) => v,
@@ -539,7 +544,7 @@ fn migrate_automation(
     errors: &mut Vec<String>,
     rule_count: &mut usize,
     processed_count: &mut usize,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     // Rules
     let rules_path = app_dir.join("automation").join("rules.json");
     if let Some(rules) = try_read_json_or_skip(&rules_path, "automation/rules.json", errors) {
@@ -614,7 +619,7 @@ fn migrate_task_ledger(
     app_dir: &Path,
     errors: &mut Vec<String>,
     count: &mut usize,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     let path = app_dir.join("task-ledger").join("tasks.json");
     let raw = match try_read_json(&path) {
         Ok(Some(v)) => v,
@@ -673,7 +678,7 @@ fn migrate_llm_usage(
     tx: &Transaction,
     app_dir: &Path,
     errors: &mut Vec<String>,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     let path = app_dir.join("analytics").join("llm-usage.json");
     let raw = match try_read_json(&path) {
         Ok(Some(v)) => v,
@@ -825,7 +830,7 @@ fn verify_counts(
     automation_processed_count: usize,
     task_ledger_count: usize,
     errors: &mut Vec<String>,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), DatabaseError> {
     let mut verify = |table: &str, expected: usize, label: &str| {
         if expected == 0 {
             return;

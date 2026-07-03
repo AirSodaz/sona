@@ -1,4 +1,4 @@
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -25,23 +25,17 @@ impl SqliteConfigStore {
         }
     }
 
-    fn get_db(&self) -> Result<&Database, String> {
+    fn get_db(&self) -> Result<&Database, DatabaseError> {
         self.db.get()
     }
 
-    pub fn load_config(&self) -> Result<Option<Value>, String> {
+    pub fn load_config(&self) -> Result<Option<Value>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
             let mut rows = stmt.query([])?;
             if let Some(row) = rows.next()? {
                 let config_str: String = row.get(0)?;
-                let config: Value = serde_json::from_str(&config_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
+                let config: Value = serde_json::from_str(&config_str)?;
                 Ok(Some(config))
             } else {
                 Ok(None)
@@ -49,8 +43,8 @@ impl SqliteConfigStore {
         })
     }
 
-    pub fn save_config(&self, config: &Value) -> Result<(), String> {
-        let config_str = serde_json::to_string(config).map_err(|e| e.to_string())?;
+    pub fn save_config(&self, config: &Value) -> Result<(), DatabaseError> {
+        let config_str = serde_json::to_string(config)?;
         self.get_db()?.with_connection(|conn| {
             conn.execute(
                 "INSERT INTO app_config (id, config, migrated_version) VALUES (1, ?1, 0)

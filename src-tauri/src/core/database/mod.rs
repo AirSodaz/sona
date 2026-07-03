@@ -1,5 +1,8 @@
+pub mod error;
 pub mod legacy_migration;
 pub mod schema;
+
+pub use error::DatabaseError;
 
 use rusqlite::{Connection, Transaction};
 use std::path::Path;
@@ -34,23 +37,24 @@ impl std::fmt::Debug for Database {
 }
 
 impl Database {
-    pub fn global() -> Result<&'static Database, String> {
+    pub fn global() -> Result<&'static Database, DatabaseError> {
         GLOBAL_DB
             .get()
-            .ok_or_else(|| "Database not initialized".to_string())
+            .ok_or_else(|| DatabaseError::Internal("Database not initialized".to_string()))
     }
 
-    pub fn set_global(db: Database) -> Result<(), String> {
+    pub fn set_global(db: Database) -> Result<(), DatabaseError> {
         GLOBAL_DB
             .set(db)
-            .map_err(|_| "Database already initialized".to_string())
+            .map_err(|_| DatabaseError::Internal("Database already initialized".to_string()))
     }
 
     /// Opens (or creates) the main database at `{app_local_data_dir}/sona.db`,
     /// enables WAL mode and foreign keys, ATTACHes the analytics database,
     /// creates a pool of connections, and runs pending schema migrations.
-    pub fn open(app_local_data_dir: &Path) -> Result<Self, String> {
-        std::fs::create_dir_all(app_local_data_dir).map_err(|e| e.to_string())?;
+    pub fn open(app_local_data_dir: &Path) -> Result<Self, DatabaseError> {
+        std::fs::create_dir_all(app_local_data_dir)
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
 
         let db_path = app_local_data_dir.join("sona.db");
         let analytics_path = app_local_data_dir.join("sona-analytics.db");
@@ -77,12 +81,13 @@ impl Database {
     /// Opens an in-memory database for testing.
     /// Uses a single connection since in-memory databases are per-connection
     /// and cannot be shared across multiple handles.
-    pub fn open_in_memory() -> Result<Self, String> {
-        let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+    pub fn open_in_memory() -> Result<Self, DatabaseError> {
+        let conn = Connection::open_in_memory()
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("ATTACH DATABASE ':memory:' AS analytics;")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
 
         let db = Self {
             pool: vec![Mutex::new(conn)],
@@ -95,32 +100,34 @@ impl Database {
         Ok(db)
     }
 
-    fn open_connection(db_path: &Path) -> Result<Connection, String> {
-        let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    fn open_connection(db_path: &Path) -> Result<Connection, DatabaseError> {
+        let conn =
+            Connection::open(db_path).map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("PRAGMA journal_mode=WAL;")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("PRAGMA busy_timeout=5000;")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         Ok(conn)
     }
 
-    fn attach_analytics(conn: &Connection, analytics_path: &Path) -> Result<(), String> {
+    fn attach_analytics(conn: &Connection, analytics_path: &Path) -> Result<(), DatabaseError> {
         let attach_sql = format!(
             "ATTACH DATABASE '{}' AS analytics",
             analytics_path.to_string_lossy().replace('\'', "''")
         );
-        conn.execute_batch(&attach_sql).map_err(|e| e.to_string())
+        conn.execute_batch(&attach_sql)
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))
     }
 
     /// Acquires a connection from the pool via round-robin with fallback.
     /// Uses try_lock to avoid indefinite blocking; if the selected slot is
     /// busy, scans all other slots for an idle connection. Recovers from
     /// poisoned mutexes by consuming the poison error.
-    fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+    fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, DatabaseError> {
         if self.pool.is_empty() {
-            return Err("connection pool is empty".into());
+            return Err(DatabaseError::PoolBusyError);
         }
         let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
 
@@ -144,19 +151,19 @@ impl Database {
             }
         }
 
-        Err("all database connections are busy".into())
+        Err(DatabaseError::PoolBusyError)
     }
 
     /// Executes a closure with a shared reference to a pooled connection.
     /// The mutex for that specific connection is held for the duration of the
     /// closure, but other connections in the pool remain available.
-    pub fn with_connection<F, T>(&self, f: F) -> Result<T, String>
+    pub fn with_connection<F, T>(&self, f: F) -> Result<T, DatabaseError>
     where
-        F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
+        F: FnOnce(&Connection) -> Result<T, DatabaseError>,
     {
         let conn = self.acquire()?;
         let start = Instant::now();
-        let result = f(&conn).map_err(|e| e.to_string());
+        let result = f(&conn);
         if let Some(elapsed) = self.check_slow(start.elapsed()) {
             log::warn!("slow with_connection ({elapsed:?})");
         }
@@ -189,43 +196,44 @@ impl Database {
 
     /// Runs `PRAGMA optimize;` to let SQLite perform internal maintenance
     /// (analyze, query planner stats, etc.). Safe to call periodically.
-    pub fn run_optimize(&self) -> Result<(), String> {
+    pub fn run_optimize(&self) -> Result<(), DatabaseError> {
         let conn = self
             .acquire()
-            .map_err(|e| format!("acquire for optimize: {e}"))?;
+            .map_err(|e| DatabaseError::Internal(format!("acquire for optimize: {e}")))?;
         conn.execute_batch("PRAGMA optimize;")
-            .map_err(|e| format!("optimize: {e}"))
+            .map_err(DatabaseError::QueryError)
     }
 
     /// Runs `VACUUM` on both the main and analytics databases to reclaim
     /// unused space and defragment. Should be called after large bulk deletes
     /// (e.g., clearing resolved tasks).
-    pub fn vacuum(&self) -> Result<(), String> {
+    pub fn vacuum(&self) -> Result<(), DatabaseError> {
         let conn = self
             .acquire()
-            .map_err(|e| format!("acquire for vacuum: {e}"))?;
+            .map_err(|e| DatabaseError::Internal(format!("acquire for vacuum: {e}")))?;
         conn.execute_batch("VACUUM;")
-            .map_err(|e| format!("vacuum main: {e}"))?;
+            .map_err(DatabaseError::QueryError)?;
         conn.execute_batch("VACUUM analytics;")
-            .map_err(|e| format!("vacuum analytics: {e}"))?;
+            .map_err(DatabaseError::QueryError)?;
         Ok(())
     }
 
     /// Executes a closure inside a transaction. The transaction is committed
     /// if the closure returns `Ok`, rolled back on `Err`.
-    pub fn with_transaction<F, T>(&self, f: F) -> Result<T, String>
+    pub fn with_transaction<F, T>(&self, f: F) -> Result<T, DatabaseError>
     where
-        F: FnOnce(&Transaction) -> Result<T, rusqlite::Error>,
+        F: FnOnce(&Transaction) -> Result<T, DatabaseError>,
     {
         let mut conn = self.acquire()?;
         let start = Instant::now();
-        let tx = conn.transaction().map_err(|e| e.to_string())?;
-        let result = f(&tx).map_err(|e| e.to_string());
+        let tx = conn
+            .transaction()
+            .map_err(DatabaseError::QueryError)?;
+        let result = f(&tx);
         let elapsed = start.elapsed();
-        // On success, commit. On failure, Transaction::Drop rolls back.
         let result = match result {
             Ok(value) => {
-                tx.commit().map_err(|e| e.to_string())?;
+                tx.commit().map_err(DatabaseError::QueryError)?;
                 Ok(value)
             }
             Err(e) => Err(e),
@@ -250,10 +258,10 @@ pub fn time_query<T>(
     label: &str,
     sql: &str,
     threshold: Duration,
-    f: impl FnOnce() -> Result<T, rusqlite::Error>,
-) -> Result<T, String> {
+    f: impl FnOnce() -> Result<T, DatabaseError>,
+) -> Result<T, DatabaseError> {
     let start = Instant::now();
-    let result = f().map_err(|e| e.to_string());
+    let result = f();
     let elapsed = start.elapsed();
     if !threshold.is_zero() && elapsed > threshold {
         log::warn!("slow query [{label}] ({elapsed:?}): {sql}");
@@ -271,7 +279,7 @@ impl DbProvider {
         Self { db }
     }
 
-    pub fn get(&self) -> Result<&Database, String> {
+    pub fn get(&self) -> Result<&Database, DatabaseError> {
         if let Some(ref db) = self.db {
             Ok(db)
         } else {
@@ -357,13 +365,13 @@ mod tests {
     fn test_transaction_rolls_back_on_error() {
         let db = Database::open_in_memory().unwrap();
 
-        let result: Result<(), String> = db.with_transaction(|tx| {
+        let result: Result<(), DatabaseError> = db.with_transaction(|tx| {
             tx.execute(
                 "INSERT INTO app_settings (key, value) VALUES (?1, ?2)",
                 ["rollback_key", "rollback_value"],
             )?;
             // Force an error
-            Err(rusqlite::Error::QueryReturnedNoRows)
+            Err(DatabaseError::NotFoundError("forced rollback".into()))
         });
         assert!(result.is_err());
 

@@ -1,4 +1,4 @@
-use crate::core::database::Database;
+use crate::core::database::{Database, DatabaseError};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -31,7 +31,7 @@ impl SqliteLedgerRepository {
         }
     }
 
-    fn get_db(&self) -> Result<&Database, String> {
+    fn get_db(&self) -> Result<&Database, DatabaseError> {
         self.db.get()
     }
 
@@ -42,7 +42,7 @@ impl SqliteLedgerRepository {
             .as_millis() as u64
     }
 
-    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, DatabaseError> {
         let records = self.get_db()?.with_connection(|conn| {
             let mut stmt =
                 conn.prepare_cached("SELECT data, version FROM task_ledger ORDER BY id")?;
@@ -100,9 +100,9 @@ impl SqliteLedgerRepository {
         })
     }
 
-    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<(), String> {
+    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<(), DatabaseError> {
         let normalized = normalize_record(record);
-        let data_str = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
+        let data_str = serde_json::to_string(&normalized)?;
         let now = Self::now_ms();
 
         self.get_db()?.with_connection(|conn| {
@@ -114,7 +114,7 @@ impl SqliteLedgerRepository {
         })
     }
 
-    pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), String> {
+    pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             let existing: Option<String> = {
                 let mut stmt = tx.prepare_cached("SELECT data FROM task_ledger WHERE id = ?1")?;
@@ -130,34 +130,20 @@ impl SqliteLedgerRepository {
                 return Ok(());
             };
 
-            let mut record: TaskLedgerRecord = serde_json::from_str(&data_str).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    0,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?;
+            let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)?;
 
             if let Some(patch_obj) = patch.as_object() {
-                let mut current = serde_json::to_value(&record)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let mut current = serde_json::to_value(&record)?;
                 if let Some(current_obj) = current.as_object_mut() {
                     for (key, val) in patch_obj {
                         current_obj.insert(key.clone(), val.clone());
                     }
                 }
-                record = serde_json::from_value(current).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
+                record = serde_json::from_value(current)?;
             }
 
             record.updated_at = Self::now_ms();
-            let new_data_str = serde_json::to_string(&record)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            let new_data_str = serde_json::to_string(&record)?;
             let now = record.updated_at.to_string();
 
             tx.execute(
@@ -168,14 +154,14 @@ impl SqliteLedgerRepository {
         })
     }
 
-    pub fn remove_task(&self, id: &str) -> Result<(), String> {
+    pub fn remove_task(&self, id: &str) -> Result<(), DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             conn.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
             Ok(())
         })
     }
 
-    pub fn clear_resolved(&self) -> Result<(), String> {
+    pub fn clear_resolved(&self) -> Result<(), DatabaseError> {
         let deleted_count = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {

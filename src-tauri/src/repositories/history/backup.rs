@@ -348,7 +348,9 @@ pub fn export_backup_archive_inner(
     ensure_json_object_value(analytics_json, "Backup analytics")?;
 
     let store = SqliteHistoryStore::new(app_local_data_dir.to_path_buf());
-    let history = store.history_snapshot_for_backup()?;
+    let history = store
+        .history_snapshot_for_backup()
+        .map_err(|e| e.to_string())?;
     let manifest = build_backup_manifest(
         request.app_version,
         request.projects.len(),
@@ -596,7 +598,7 @@ pub fn apply_prepared_history_import_inner(
         return Err("Prepared backup import is missing the history directory.".to_string());
     }
 
-    let db = crate::core::database::Database::global()?;
+    let db = crate::core::database::Database::global().map_err(|e| e.to_string())?;
 
     let items: Vec<HistoryItemRecord> =
         read_json_value(&extracted_history_dir.join(PROJECTS_INDEX_FILE_NAME))
@@ -722,7 +724,7 @@ pub fn apply_prepared_history_import_inner(
         }
 
         Ok(())
-    })?;
+    }).map_err(|e| e.to_string())?;
 
     Ok(())
 }

@@ -418,6 +418,7 @@ fn format_date_key(date_key: &str) -> String {
 mod tests {
     use super::*;
     use crate::core::dashboard::error::DashboardServiceError;
+    use crate::core::database::DatabaseError;
     use crate::integrations::asr::TranscriptSegment;
     use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
     use crate::repositories::history::{
@@ -436,36 +437,38 @@ mod tests {
     }
 
     impl HistoryStore for MockHistoryRepo {
-        fn ensure_ready(&self) -> Result<(), String> {
+        fn ensure_ready(&self) -> Result<(), DatabaseError> {
             Ok(())
         }
 
-        fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
+        fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
             Ok(self.items.clone())
         }
 
-        fn list_items_with_reconciled_live_drafts(&self) -> Result<Vec<HistoryItemRecord>, String> {
+        fn list_items_with_reconciled_live_drafts(
+            &self,
+        ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
             Ok(self.items.clone())
         }
 
         fn list_items_paginated(
             &self,
             _opts: HistoryListOptions,
-        ) -> Result<Vec<HistoryItemRecord>, String> {
+        ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
             Ok(self.items.clone())
         }
 
         fn list_items_with_reconciled_live_drafts_paginated(
             &self,
             _opts: HistoryListOptions,
-        ) -> Result<Vec<HistoryItemRecord>, String> {
+        ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
             Ok(self.items.clone())
         }
 
         fn query_workspace(
             &self,
             _request: HistoryWorkspaceQueryRequest,
-        ) -> Result<HistoryWorkspaceQueryResult, String> {
+        ) -> Result<HistoryWorkspaceQueryResult, DatabaseError> {
             Ok(HistoryWorkspaceQueryResult {
                 filtered_items: vec![],
                 scoped_items: vec![],
@@ -488,7 +491,7 @@ mod tests {
         fn create_live_draft(
             &self,
             _request: HistoryCreateLiveDraftRequest,
-        ) -> Result<LiveRecordingDraftResult, String> {
+        ) -> Result<LiveRecordingDraftResult, DatabaseError> {
             Ok(LiveRecordingDraftResult {
                 item: HistoryItemRecord {
                     id: String::new(),
@@ -514,7 +517,7 @@ mod tests {
             _history_id: &str,
             _segments: Value,
             _duration: f64,
-        ) -> Result<HistoryItemRecord, String> {
+        ) -> Result<HistoryItemRecord, DatabaseError> {
             Ok(HistoryItemRecord {
                 id: _history_id.to_string(),
                 timestamp: 0,
@@ -535,7 +538,7 @@ mod tests {
         fn save_recording(
             &self,
             _request: HistorySaveRecordingRequest,
-        ) -> Result<HistoryItemRecord, String> {
+        ) -> Result<HistoryItemRecord, DatabaseError> {
             Ok(HistoryItemRecord {
                 id: String::new(),
                 timestamp: 0,
@@ -556,7 +559,7 @@ mod tests {
         fn save_imported_file(
             &self,
             _request: HistorySaveImportedFileRequest,
-        ) -> Result<HistoryItemRecord, String> {
+        ) -> Result<HistoryItemRecord, DatabaseError> {
             Ok(HistoryItemRecord {
                 id: String::new(),
                 timestamp: 0,
@@ -574,14 +577,14 @@ mod tests {
             })
         }
 
-        fn delete_items(&self, _ids: &[String]) -> Result<(), String> {
+        fn delete_items(&self, _ids: &[String]) -> Result<(), DatabaseError> {
             Ok(())
         }
 
         fn load_transcript(
             &self,
             history_id: &str,
-        ) -> Result<Option<Vec<TranscriptSegment>>, String> {
+        ) -> Result<Option<Vec<TranscriptSegment>>, DatabaseError> {
             let parsed = self.segments.get(history_id).cloned().unwrap_or_default();
             Ok(Some(
                 parsed
@@ -619,7 +622,7 @@ mod tests {
             &self,
             history_id: &str,
             _segments: Value,
-        ) -> Result<HistoryItemRecord, String> {
+        ) -> Result<HistoryItemRecord, DatabaseError> {
             Ok(HistoryItemRecord {
                 id: history_id.to_string(),
                 ..self
@@ -649,7 +652,7 @@ mod tests {
             history_id: &str,
             reason: TranscriptSnapshotReason,
             _segments: Value,
-        ) -> Result<TranscriptSnapshotMetadata, String> {
+        ) -> Result<TranscriptSnapshotMetadata, DatabaseError> {
             Ok(TranscriptSnapshotMetadata {
                 id: String::new(),
                 history_id: history_id.to_string(),
@@ -662,7 +665,7 @@ mod tests {
         fn list_transcript_snapshots(
             &self,
             _history_id: &str,
-        ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
+        ) -> Result<Vec<TranscriptSnapshotMetadata>, DatabaseError> {
             Ok(vec![])
         }
 
@@ -670,11 +673,15 @@ mod tests {
             &self,
             _history_id: &str,
             _snapshot_id: &str,
-        ) -> Result<Option<TranscriptSnapshotRecord>, String> {
+        ) -> Result<Option<TranscriptSnapshotRecord>, DatabaseError> {
             Ok(None)
         }
 
-        fn update_item_meta(&self, _history_id: &str, _updates: Value) -> Result<(), String> {
+        fn update_item_meta(
+            &self,
+            _history_id: &str,
+            _updates: Value,
+        ) -> Result<(), DatabaseError> {
             Ok(())
         }
 
@@ -682,7 +689,7 @@ mod tests {
             &self,
             _ids: &[String],
             _project_id: Option<String>,
-        ) -> Result<(), String> {
+        ) -> Result<(), DatabaseError> {
             Ok(())
         }
 
@@ -690,27 +697,31 @@ mod tests {
             &self,
             _current_project_id: String,
             _next_project_id: Option<String>,
-        ) -> Result<(), String> {
+        ) -> Result<(), DatabaseError> {
             Ok(())
         }
 
-        fn load_summary(&self, _history_id: &str) -> Result<Option<Value>, String> {
+        fn load_summary(&self, _history_id: &str) -> Result<Option<Value>, DatabaseError> {
             Ok(None)
         }
 
-        fn save_summary(&self, _history_id: &str, _summary_payload: Value) -> Result<(), String> {
+        fn save_summary(
+            &self,
+            _history_id: &str,
+            _summary_payload: Value,
+        ) -> Result<(), DatabaseError> {
             Ok(())
         }
 
-        fn delete_summary(&self, _history_id: &str) -> Result<(), String> {
+        fn delete_summary(&self, _history_id: &str) -> Result<(), DatabaseError> {
             Ok(())
         }
 
-        fn resolve_audio_path(&self, _history_id: &str) -> Result<Option<String>, String> {
+        fn resolve_audio_path(&self, _history_id: &str) -> Result<Option<String>, DatabaseError> {
             Ok(None)
         }
 
-        fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, String> {
+        fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
             Ok(HistoryBackupSnapshot {
                 items: vec![],
                 transcript_files: vec![],
