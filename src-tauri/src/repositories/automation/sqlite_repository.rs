@@ -1,4 +1,4 @@
-use crate::core::database::{Database, DatabaseError};
+use crate::core::database::DatabaseError;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -11,26 +11,9 @@ pub struct SqliteAutomationRepository {
     db: crate::core::database::DbProvider,
 }
 
+crate::impl_db_repository!(SqliteAutomationRepository);
+
 impl SqliteAutomationRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::default(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-        }
-    }
-
-    fn get_db(&self) -> Result<&Database, DatabaseError> {
-        self.db.get()
-    }
-
     fn ensure_id(data: &mut Value) -> String {
         if let Some(id) = data.get("id").and_then(Value::as_str) {
             id.to_string()
@@ -45,20 +28,12 @@ impl SqliteAutomationRepository {
     pub fn load_state(&self) -> Result<AutomationRepositoryState, DatabaseError> {
         let rules = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT data FROM automation_rules ORDER BY id")?;
-            let rows = stmt.query_map([], |row| {
-                let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-                Ok(val)
-            })?;
+            let mut rows = stmt.query([])?;
             let mut items = Vec::new();
-            for row in rows {
-                items.push(row?);
+            while let Some(row) = rows.next()? {
+                let data_str: String = row.get(0)?;
+                let val: Value = serde_json::from_str(&data_str)?;
+                items.push(val);
             }
             Ok(items)
         })?;
@@ -66,20 +41,12 @@ impl SqliteAutomationRepository {
         let processed_entries = self.get_db()?.with_connection(|conn| {
             let mut stmt =
                 conn.prepare_cached("SELECT data FROM automation_processed ORDER BY id")?;
-            let rows = stmt.query_map([], |row| {
-                let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-                Ok(val)
-            })?;
+            let mut rows = stmt.query([])?;
             let mut items = Vec::new();
-            for row in rows {
-                items.push(row?);
+            while let Some(row) = rows.next()? {
+                let data_str: String = row.get(0)?;
+                let val: Value = serde_json::from_str(&data_str)?;
+                items.push(val);
             }
             Ok(items)
         })?;
@@ -111,8 +78,7 @@ impl SqliteAutomationRepository {
                 tx.prepare_cached("INSERT INTO automation_processed (id, data) VALUES (?1, ?2)")?;
             for mut entry in entries {
                 let id = Self::ensure_id(&mut entry);
-                let data_str = serde_json::to_string(&entry)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                let data_str = serde_json::to_string(&entry)?;
                 stmt.execute(rusqlite::params![id, data_str])?;
             }
             Ok(())
@@ -131,8 +97,7 @@ impl SqliteAutomationRepository {
                     tx.prepare_cached("INSERT INTO automation_rules (id, data) VALUES (?1, ?2)")?;
                 for mut rule in rules {
                     let id = Self::ensure_id(&mut rule);
-                    let data_str = serde_json::to_string(&rule)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                    let data_str = serde_json::to_string(&rule)?;
                     stmt.execute(rusqlite::params![id, data_str])?;
                 }
             }
@@ -143,8 +108,7 @@ impl SqliteAutomationRepository {
                 )?;
                 for mut entry in entries {
                     let id = Self::ensure_id(&mut entry);
-                    let data_str = serde_json::to_string(&entry)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                    let data_str = serde_json::to_string(&entry)?;
                     stmt.execute(rusqlite::params![id, data_str])?;
                 }
             }

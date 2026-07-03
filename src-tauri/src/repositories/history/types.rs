@@ -11,23 +11,34 @@ pub struct PreparedBackupImportSnapshot {
     pub extraction_dir: PathBuf,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum HistoryItemKind {
-    Recording,
+    #[strum(serialize = "batch")]
     Batch,
+    #[strum(serialize = "recording")]
+    Recording,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum HistoryItemStatus {
+    #[strum(serialize = "draft")]
     Draft,
+    #[strum(serialize = "complete")]
     Complete,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum HistoryDraftSource {
+    #[strum(serialize = "live_record")]
     LiveRecord,
 }
 

@@ -1,4 +1,4 @@
-use crate::core::database::{Database, DatabaseError};
+use crate::core::database::DatabaseError;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -15,26 +15,9 @@ pub struct SqliteLedgerRepository {
     db: crate::core::database::DbProvider,
 }
 
+crate::impl_db_repository!(SqliteLedgerRepository);
+
 impl SqliteLedgerRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::default(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-        }
-    }
-
-    fn get_db(&self) -> Result<&Database, DatabaseError> {
-        self.db.get()
-    }
-
     fn now_ms() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -46,17 +29,12 @@ impl SqliteLedgerRepository {
         let records = self.get_db()?.with_connection(|conn| {
             let mut stmt =
                 conn.prepare_cached("SELECT data, version FROM task_ledger ORDER BY id")?;
-            let rows = stmt.query_map([], |row| {
+            let mut rows = stmt.query([])?;
+            let mut records = Vec::new();
+            while let Some(row) = rows.next()? {
                 let data_str: String = row.get(0)?;
                 let _version: i64 = row.get(1)?;
-                let mut record: TaskLedgerRecord =
-                    serde_json::from_str(&data_str).map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            0,
-                            rusqlite::types::Type::Text,
-                            Box::new(e),
-                        )
-                    })?;
+                let mut record: TaskLedgerRecord = serde_json::from_str(&data_str)?;
                 // Auto-assign timestamps if missing
                 if record.created_at == 0 {
                     record.created_at = Self::now_ms();
@@ -81,11 +59,7 @@ impl SqliteLedgerRepository {
                         record.error_message = Some(INTERRUPTED_MESSAGE.to_string());
                     }
                 }
-                Ok(record)
-            })?;
-            let mut records = Vec::new();
-            for row in rows {
-                records.push(row?);
+                records.push(record);
             }
             // Filter to only persisted statuses
             records.retain(|r| is_persisted_status(&r.status));

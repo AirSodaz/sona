@@ -12,17 +12,16 @@ use super::fs_utils::{
     remove_path_if_exists, write_json_pretty_atomic,
 };
 use super::repository::{HistoryRepository, normalize_history_item_value};
-use super::sqlite_store::SqliteHistoryStore;
+use super::sqlite_store::{HISTORY_INSERT_COLS, HISTORY_INSERT_PARAMS, SqliteHistoryStore};
 use super::types::PreparedBackupImportSnapshot;
 use super::{
     ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
     AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, BACKUP_HISTORY_MODE,
     BACKUP_SCHEMA_VERSION, BackupManifest, BackupManifestCounts, BackupManifestScopes,
     CONFIG_DIR_NAME, CONFIG_FILE_NAME, ExportBackupArchiveRequest, HISTORY_DIR_NAME,
-    HISTORY_VERSIONS_DIR_NAME, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
-    HistoryItemStatus, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME, PreparedBackupImport,
-    SUMMARY_FILE_SUFFIX, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    HISTORY_VERSIONS_DIR_NAME, HistoryItemRecord, HistoryItemStatus, PROJECTS_DIR_NAME,
+    PROJECTS_INDEX_FILE_NAME, PreparedBackupImport, SUMMARY_FILE_SUFFIX,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use crate::core::history_store::HistoryStore;
 
@@ -668,21 +667,12 @@ pub fn apply_prepared_history_import_inner(
         tx.execute("DELETE FROM history_items", [])?;
 
         for item in &items {
-            let kind_str = match item.kind {
-                HistoryItemKind::Batch => "batch",
-                HistoryItemKind::Recording => "recording",
-            };
-            let status_str = match item.status {
-                HistoryItemStatus::Draft => "draft",
-                HistoryItemStatus::Complete => "complete",
-            };
-            let draft_source_str = item.draft_source.map(|s| match s {
-                HistoryDraftSource::LiveRecord => "live_record",
-            });
+            let kind_str = item.kind.to_string();
+            let status_str = item.status.to_string();
+            let draft_source_str = item.draft_source.map(|s| s.to_string());
 
             tx.execute(
-                "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                &format!("INSERT INTO history_items {HISTORY_INSERT_COLS} VALUES {HISTORY_INSERT_PARAMS}"),
                 rusqlite::params![
                     item.id,
                     item.timestamp as i64,

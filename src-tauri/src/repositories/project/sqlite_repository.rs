@@ -1,4 +1,4 @@
-use crate::core::database::{Database, DatabaseError};
+use crate::core::database::DatabaseError;
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 
@@ -11,26 +11,9 @@ pub struct SqliteProjectRepository {
     db: crate::core::database::DbProvider,
 }
 
+crate::impl_db_repository!(SqliteProjectRepository);
+
 impl SqliteProjectRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::default(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-        }
-    }
-
-    fn get_db(&self) -> Result<&Database, DatabaseError> {
-        self.db.get()
-    }
-
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(

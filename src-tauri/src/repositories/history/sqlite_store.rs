@@ -2,7 +2,7 @@ use super::fs_utils::{
     ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
 };
 use super::transcript_payload::normalize_history_transcript_segments;
-use crate::core::database::{Database, DatabaseError};
+use crate::core::database::DatabaseError;
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
@@ -17,9 +17,15 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use rusqlite::types::ToSql;
+
+pub(crate) const HISTORY_COLUMNS: &str = "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source";
+pub(crate) const HISTORY_INSERT_COLS: &str = "(id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)";
+pub(crate) const HISTORY_INSERT_PARAMS: &str =
+    "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)";
 
 fn compute_date_threshold_millis(date_filter: HistoryWorkspaceDateFilter) -> Option<i64> {
     use HistoryWorkspaceDateFilter::*;
@@ -106,26 +112,9 @@ pub struct SqliteHistoryStore {
     db: crate::core::database::DbProvider,
 }
 
+crate::impl_db_repository!(SqliteHistoryStore);
+
 impl SqliteHistoryStore {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::default(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: Database) -> Self {
-        Self {
-            app_local_data_dir,
-            db: crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-        }
-    }
-
-    fn get_db(&self) -> Result<&Database, DatabaseError> {
-        self.db.get()
-    }
-
     fn history_dir(&self) -> PathBuf {
         self.app_local_data_dir
             .join(crate::repositories::history::HISTORY_DIR_NAME)
@@ -138,38 +127,19 @@ impl SqliteHistoryStore {
         ))
     }
 
-    fn enum_to_kind_str(kind: HistoryItemKind) -> &'static str {
-        match kind {
-            HistoryItemKind::Batch => "batch",
-            HistoryItemKind::Recording => "recording",
-        }
-    }
-
-    fn enum_to_status_str(status: HistoryItemStatus) -> &'static str {
-        match status {
-            HistoryItemStatus::Draft => "draft",
-            HistoryItemStatus::Complete => "complete",
-        }
-    }
-
-    fn enum_to_draft_source_str(source: HistoryDraftSource) -> &'static str {
-        match source {
-            HistoryDraftSource::LiveRecord => "live_record",
-        }
-    }
-
     fn insert_history_item_and_transcript(
         tx: &rusqlite::Transaction,
         item: &HistoryItemRecord,
         segments_str: &str,
     ) -> Result<(), DatabaseError> {
-        let kind_str = Self::enum_to_kind_str(item.kind);
-        let status_str = Self::enum_to_status_str(item.status);
-        let draft_source_str = item.draft_source.map(Self::enum_to_draft_source_str);
+        let kind_str = item.kind.to_string();
+        let status_str = item.status.to_string();
+        let draft_source_str = item.draft_source.map(|s| s.to_string());
 
         tx.execute(
-            "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            &format!(
+                "INSERT INTO history_items {HISTORY_INSERT_COLS} VALUES {HISTORY_INSERT_PARAMS}"
+            ),
             rusqlite::params![
                 item.id,
                 item.timestamp as i64,
@@ -297,22 +267,9 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
     let status_str: String = row.get(11)?;
     let draft_source_str: Option<String> = row.get(12)?;
 
-    let kind = if kind_str == "batch" {
-        HistoryItemKind::Batch
-    } else {
-        HistoryItemKind::Recording
-    };
-
-    let status = if status_str == "draft" {
-        HistoryItemStatus::Draft
-    } else {
-        HistoryItemStatus::Complete
-    };
-
-    let draft_source = match draft_source_str.as_deref() {
-        Some("live_record") => Some(HistoryDraftSource::LiveRecord),
-        _ => None,
-    };
+    let kind = HistoryItemKind::from_str(&kind_str).unwrap_or(HistoryItemKind::Recording);
+    let status = HistoryItemStatus::from_str(&status_str).unwrap_or(HistoryItemStatus::Complete);
+    let draft_source = draft_source_str.and_then(|s| HistoryDraftSource::from_str(&s).ok());
 
     Ok(HistoryItemRecord {
         id,
@@ -357,11 +314,7 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
         item.icon = icon.as_str().map(ToString::to_string);
     }
     if let Some(kind) = updates.get("type").and_then(Value::as_str) {
-        item.kind = if kind == "batch" {
-            HistoryItemKind::Batch
-        } else {
-            HistoryItemKind::Recording
-        };
+        item.kind = HistoryItemKind::from_str(kind).unwrap_or(HistoryItemKind::Recording);
     }
     if let Some(search_content) = updates.get("searchContent").and_then(Value::as_str) {
         item.search_content = search_content.to_string();
@@ -370,17 +323,12 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
         item.project_id = project_id.as_str().map(ToString::to_string);
     }
     if let Some(status) = updates.get("status").and_then(Value::as_str) {
-        item.status = if status == "draft" {
-            HistoryItemStatus::Draft
-        } else {
-            HistoryItemStatus::Complete
-        };
+        item.status = HistoryItemStatus::from_str(status).unwrap_or(HistoryItemStatus::Complete);
     }
     if let Some(draft_source) = updates.get("draftSource") {
-        item.draft_source = match draft_source.as_str() {
-            Some("live_record") => Some(HistoryDraftSource::LiveRecord),
-            _ => None,
-        };
+        item.draft_source = draft_source
+            .as_str()
+            .and_then(|s| HistoryDraftSource::from_str(s).ok());
     }
 }
 
@@ -391,11 +339,9 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 ORDER BY timestamp DESC"
-            )?;
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC"
+            ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
             for row in rows {
@@ -410,11 +356,9 @@ impl HistoryStore for SqliteHistoryStore {
     ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.reconcile_live_drafts()?;
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 ORDER BY timestamp DESC"
-            )?;
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC"
+            ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
             for row in rows {
@@ -432,10 +376,7 @@ impl HistoryStore for SqliteHistoryStore {
             let limit = opts.limit.map(|l| l as i64).unwrap_or(-1);
             let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
             let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 ORDER BY timestamp DESC
-                 LIMIT ?1 OFFSET ?2"
+                &format!("SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2")
             )?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], map_row_to_item)?;
             let mut items = Vec::new();
@@ -527,7 +468,7 @@ impl HistoryStore for SqliteHistoryStore {
             let column_select = if fts_used {
                 "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source"
             } else {
-                "id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source"
+                HISTORY_COLUMNS
             };
             let where_clause = if conditions.is_empty() {
                 String::new()
@@ -629,11 +570,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 WHERE id = ?1"
-            )?;
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
+            ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
         })
@@ -877,11 +816,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 WHERE id = ?1"
-            )?;
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
+            ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
         })
@@ -1062,9 +999,7 @@ impl HistoryStore for SqliteHistoryStore {
 
         self.get_db()?.with_transaction(|tx| {
             let mut stmt = tx.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 WHERE id = ?1"
+                &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1")
             )?;
             let mut item = match stmt.query_row([history_id], map_row_to_item) {
                 Ok(item) => item,
@@ -1074,17 +1009,9 @@ impl HistoryStore for SqliteHistoryStore {
 
             apply_history_item_updates(&mut item, updates);
 
-            let kind_str = match item.kind {
-                HistoryItemKind::Batch => "batch",
-                HistoryItemKind::Recording => "recording",
-            };
-            let status_str = match item.status {
-                HistoryItemStatus::Draft => "draft",
-                HistoryItemStatus::Complete => "complete",
-            };
-            let draft_source_str = item.draft_source.map(|s| match s {
-                HistoryDraftSource::LiveRecord => "live_record",
-            });
+            let kind_str = item.kind.to_string();
+            let status_str = item.status.to_string();
+            let draft_source_str = item.draft_source.map(|s| s.to_string());
 
             tx.execute(
                 "UPDATE history_items
@@ -1233,10 +1160,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
         let items = self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
-                "SELECT id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 FROM history_items
-                 WHERE status != 'draft'
-                 ORDER BY timestamp DESC"
+                &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
             )?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1271,19 +1195,14 @@ impl HistoryStore for SqliteHistoryStore {
                     placeholders
                 );
                 let mut stmt = conn.prepare_cached(&sql)?;
-                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
-                    let history_id: String = row.get(0)?;
-                    let segments_str: String = row.get(1)?;
-                    let val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                    Ok((history_id, val))
-                })?;
-
+                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
                 let mut transcript_map: std::collections::HashMap<String, Value> =
                     std::collections::HashMap::new();
-                for r in rows {
-                    let (hid, val) = r?;
-                    transcript_map.insert(hid, val);
+                while let Some(row) = rows.next()? {
+                    let history_id: String = row.get(0)?;
+                    let segments_str: String = row.get(1)?;
+                    let val: Value = serde_json::from_str(&segments_str)?;
+                    transcript_map.insert(history_id, val);
                 }
 
                 for item in &items {
@@ -1310,17 +1229,12 @@ impl HistoryStore for SqliteHistoryStore {
                     placeholders
                 );
                 let mut stmt = conn.prepare_cached(&sql)?;
-                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
+                while let Some(row) = rows.next()? {
                     let history_id: String = row.get(0)?;
                     let payload_str: String = row.get(1)?;
-                    let val: Value = serde_json::from_str(&payload_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-                    Ok((history_id, val))
-                })?;
-
-                for r in rows {
-                    let (hid, val) = r?;
-                    summary_files.push((hid, val));
+                    let val: Value = serde_json::from_str(&payload_str)?;
+                    summary_files.push((history_id, val));
                 }
             }
 
@@ -1335,7 +1249,10 @@ impl HistoryStore for SqliteHistoryStore {
                     placeholders
                 );
                 let mut stmt = conn.prepare_cached(&sql)?;
-                let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
+                let mut snapshots_by_item: std::collections::HashMap<String, Vec<TranscriptSnapshotRecord>> =
+                    std::collections::HashMap::new();
+                while let Some(row) = rows.next()? {
                     let snapshot_id: String = row.get(0)?;
                     let history_id: String = row.get(1)?;
                     let reason_str: String = row.get(2)?;
@@ -1351,33 +1268,23 @@ impl HistoryStore for SqliteHistoryStore {
                         _ => TranscriptSnapshotReason::Polish,
                     };
 
-                    let parsed_val: Value = serde_json::from_str(&segments_str)
-                        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                    let parsed_val: Value = serde_json::from_str(&segments_str)?;
 
-                    let normalized =
-                        normalize_history_transcript_segments(parsed_val).map_err(|e| {
-                            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
-                        })?;
+                    let normalized = normalize_history_transcript_segments(parsed_val)
+                        .map_err(DatabaseError::Internal)?;
 
                     let metadata = TranscriptSnapshotMetadata {
-                        id: snapshot_id.clone(),
+                        id: snapshot_id,
                         history_id: history_id.clone(),
                         reason,
                         created_at: created_at as u64,
                         segment_count: segment_count as u64,
                     };
 
-                    Ok((history_id, metadata, normalized.segments))
-                })?;
-
-                let mut snapshots_by_item: std::collections::HashMap<String, Vec<TranscriptSnapshotRecord>> =
-                    std::collections::HashMap::new();
-                for r in rows {
-                    let (hid, metadata, segments) = r?;
                     snapshots_by_item
-                        .entry(hid)
+                        .entry(history_id)
                         .or_default()
-                        .push(TranscriptSnapshotRecord { metadata, segments });
+                        .push(TranscriptSnapshotRecord { metadata, segments: normalized.segments });
                 }
 
                 for item in &items {

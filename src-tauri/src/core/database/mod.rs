@@ -226,9 +226,7 @@ impl Database {
     {
         let mut conn = self.acquire()?;
         let start = Instant::now();
-        let tx = conn
-            .transaction()
-            .map_err(DatabaseError::QueryError)?;
+        let tx = conn.transaction().map_err(DatabaseError::QueryError)?;
         let result = f(&tx);
         let elapsed = start.elapsed();
         let result = match result {
@@ -286,6 +284,41 @@ impl DbProvider {
             Database::global()
         }
     }
+}
+
+/// Generates the standard `new()`, `with_db()` (test-only), and `get_db()` methods
+/// for a SQLite repository struct that has `app_local_data_dir: PathBuf` and
+/// `db: DbProvider` fields.
+#[macro_export]
+macro_rules! impl_db_repository {
+    ($name:ident) => {
+        impl $name {
+            pub fn new(app_local_data_dir: std::path::PathBuf) -> Self {
+                Self {
+                    app_local_data_dir,
+                    db: $crate::core::database::DbProvider::default(),
+                }
+            }
+
+            #[cfg(test)]
+            pub(crate) fn with_db(
+                app_local_data_dir: std::path::PathBuf,
+                db: $crate::core::database::Database,
+            ) -> Self {
+                Self {
+                    app_local_data_dir,
+                    db: $crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
+                }
+            }
+
+            fn get_db(
+                &self,
+            ) -> Result<&$crate::core::database::Database, $crate::core::database::DatabaseError>
+            {
+                self.db.get()
+            }
+        }
+    };
 }
 
 #[cfg(test)]
