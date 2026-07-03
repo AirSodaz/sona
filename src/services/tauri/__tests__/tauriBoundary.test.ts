@@ -67,6 +67,10 @@ import {
   recoverySaveSnapshot,
 } from '../recovery';
 import {
+  storageClearWebviewBrowsingData,
+  storageGetUsageSnapshot,
+} from '../storage';
+import {
   annotateSpeakerSegmentsFromFile,
   applySpeakerProfileToGroup,
   buildSpeakerReviewSnapshot,
@@ -577,6 +581,55 @@ describe('tauri boundary wrappers', () => {
       retentionDays: null,
       excludeHistoryId: null,
     });
+  });
+
+  it('storage wrappers expose usage snapshot and WebView browsing-data cleanup', async () => {
+    const snapshot = {
+      generatedAt: '2026-07-04T00:00:00Z',
+      totalBytes: 123,
+      categories: {
+        audio: {
+          bytes: 10,
+          historyAudioBytes: 6,
+          speakerSampleBytes: 4,
+          fileCount: 2,
+        },
+        database: {
+          bytes: 20,
+          sqlite: {
+            mainDbBytes: 12,
+            mainWalBytes: 0,
+            mainShmBytes: 0,
+            analyticsDbBytes: 8,
+            analyticsWalBytes: 0,
+            analyticsShmBytes: 0,
+            dataBytes: 14,
+            indexBytes: 6,
+            freePageBytes: 0,
+            indexEntries: [],
+            dbstatAvailable: true,
+          },
+        },
+        models: { bytes: 30, fileCount: 1 },
+        temporary: { bytes: 40, fileCount: 1 },
+        webviewCache: { bytes: 5, clearSupported: true, path: 'C:/App/EBWebView' },
+        other: { bytes: 18, fileCount: 1 },
+      },
+    };
+    const clearResult = {
+      beforeBytes: 5,
+      afterBytes: 1,
+      clearRequested: true,
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(clearResult);
+
+    await expect(storageGetUsageSnapshot()).resolves.toEqual(snapshot);
+    await expect(storageClearWebviewBrowsingData()).resolves.toEqual(clearResult);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.storage.getUsageSnapshot);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.storage.clearWebviewBrowsingData);
   });
 
   it('dashboard snapshot wrapper wraps request args under request', async () => {

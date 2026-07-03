@@ -13,6 +13,7 @@ pub mod preset_models;
 pub mod recovery;
 pub mod speaker_correction;
 pub mod speaker_review;
+pub mod storage_usage;
 pub mod task_ledger;
 #[path = "task_ledger/sqlite_repository.rs"]
 pub mod task_ledger_sqlite;
