@@ -12,9 +12,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to get app_local_data_dir");
 
     // Initialize the SQLite database
-    let db = crate::core::database::Database::open(&app_local_data_dir)
-        .expect("Failed to open database");
-    crate::core::database::Database::set_global(db).expect("Database already initialized");
+    let db = crate::core::database::Database::open(&app_local_data_dir)?;
+    crate::core::database::Database::set_global(db)?;
 
     // Migrate legacy JSON data to SQLite
     let migration_result = crate::core::database::legacy_migration::migrate_legacy_to_sqlite(

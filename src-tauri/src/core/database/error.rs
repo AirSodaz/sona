@@ -17,6 +17,9 @@ pub enum DatabaseError {
     #[error("All database connections are busy")]
     PoolBusyError,
 
+    #[error("Unsupported database schema version {found}; this build supports up to {current}")]
+    UnsupportedSchemaVersion { found: i64, current: i64 },
+
     #[error("{0}")]
     Internal(String),
 }

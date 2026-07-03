@@ -1,54 +1,66 @@
 use super::{Database, DatabaseError};
 
 const CURRENT_SCHEMA_VERSION: i64 = 1;
+type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
-/// Ensures the database contains the current v1 schema.
+const MIGRATIONS: &[(i64, &str, MigrationFn)] =
+    &[(1, "Initial complete SQLite schema", migrate_v1)];
+
+/// Runs pending schema migrations in version order.
 ///
 /// Sona's public SQLite baseline starts after the v0.7.4 JSON storage era, so
 /// historical in-development SQLite migrations are intentionally squashed into
-/// this single schema initializer.
+/// v1. Future schema changes must be appended as v2, v3, etc.
 pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
     db.with_transaction(|tx| {
-        let fts_exists: bool = tx.query_row(
-            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'table' AND name = 'history_items_fts'",
-            [],
-            |row| row.get(0),
-        )?;
+        bootstrap_schema_version(tx)?;
+        let applied_version = current_applied_schema_version(tx)?;
 
-        create_current_schema(tx)?;
-
-        if !fts_exists {
-            tx.execute_batch(
-                "INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
-                 SELECT rowid, title, preview_text, search_content FROM history_items;",
-            )?;
+        if applied_version > CURRENT_SCHEMA_VERSION {
+            return Err(DatabaseError::UnsupportedSchemaVersion {
+                found: applied_version,
+                current: CURRENT_SCHEMA_VERSION,
+            });
         }
 
-        tx.execute(
-            "DELETE FROM schema_version WHERE version <> ?1",
-            [CURRENT_SCHEMA_VERSION],
-        )?;
-        tx.execute(
-            "INSERT OR IGNORE INTO schema_version (version) VALUES (?1)",
-            [CURRENT_SCHEMA_VERSION],
-        )?;
+        for &(version, _description, migration) in MIGRATIONS {
+            if version > applied_version {
+                migration(tx)?;
+                tx.execute(
+                    "INSERT INTO schema_version (version) VALUES (?1)",
+                    [version],
+                )?;
+            }
+        }
         Ok(())
     })
+}
+
+fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );",
+    )
+}
+
+fn current_applied_schema_version(tx: &rusqlite::Transaction) -> Result<i64, rusqlite::Error> {
+    tx.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+        [],
+        |row| row.get(0),
+    )
 }
 
 // ---------------------------------------------------------------------------
 // v1: Current schema — all SQLite-backed data domains
 // ---------------------------------------------------------------------------
-fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
         "
-        CREATE TABLE IF NOT EXISTS schema_version (
-            version INTEGER PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-
         -- History Items (replaces history/index.json)
-        CREATE TABLE IF NOT EXISTS history_items (
+        CREATE TABLE history_items (
             id TEXT PRIMARY KEY,
             timestamp INTEGER NOT NULL,
             duration REAL NOT NULL DEFAULT 0.0,
@@ -65,26 +77,26 @@ fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Err
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
-        CREATE INDEX IF NOT EXISTS idx_history_items_timestamp ON history_items(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
-        CREATE INDEX IF NOT EXISTS idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);
-        CREATE INDEX IF NOT EXISTS idx_history_items_kind ON history_items(kind);
-        CREATE INDEX IF NOT EXISTS idx_history_items_status ON history_items(status);
+        CREATE INDEX idx_history_items_timestamp ON history_items(timestamp);
+        CREATE INDEX idx_history_items_project_id ON history_items(project_id);
+        CREATE INDEX idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);
+        CREATE INDEX idx_history_items_kind ON history_items(kind);
+        CREATE INDEX idx_history_items_status ON history_items(status);
 
         -- Transcripts (replaces history/{id}.json files)
-        CREATE TABLE IF NOT EXISTS history_transcripts (
+        CREATE TABLE history_transcripts (
             history_id TEXT PRIMARY KEY REFERENCES history_items(id) ON DELETE CASCADE,
             segments TEXT NOT NULL DEFAULT '[]'
         );
 
         -- Summaries (replaces history/{id}.summary.json files)
-        CREATE TABLE IF NOT EXISTS history_summaries (
+        CREATE TABLE history_summaries (
             history_id TEXT PRIMARY KEY REFERENCES history_items(id) ON DELETE CASCADE,
             payload TEXT NOT NULL DEFAULT '{}'
         );
 
         -- Transcript Snapshots (replaces history/versions/{id}/*.json)
-        CREATE TABLE IF NOT EXISTS transcript_snapshots (
+        CREATE TABLE transcript_snapshots (
             id TEXT NOT NULL,
             history_id TEXT NOT NULL REFERENCES history_items(id) ON DELETE CASCADE,
             reason TEXT NOT NULL,
@@ -94,10 +106,10 @@ fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Err
             PRIMARY KEY (history_id, id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_snapshots_history_id ON transcript_snapshots(history_id);
+        CREATE INDEX idx_snapshots_history_id ON transcript_snapshots(history_id);
 
         -- Projects (replaces projects/index.json)
-        CREATE TABLE IF NOT EXISTS projects (
+        CREATE TABLE projects (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL DEFAULT '',
             icon TEXT,
@@ -112,39 +124,39 @@ fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Err
         );
 
         -- App Settings (replaces settings.json KV pairs except sona-config)
-        CREATE TABLE IF NOT EXISTS app_settings (
+        CREATE TABLE app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
 
         -- App Config (replaces settings.json sona-config)
-        CREATE TABLE IF NOT EXISTS app_config (
+        CREATE TABLE app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             config TEXT NOT NULL DEFAULT '{}',
             migrated_version INTEGER NOT NULL DEFAULT 0
         );
 
         -- Automation Rules (replaces automation/rules.json)
-        CREATE TABLE IF NOT EXISTS automation_rules (
+        CREATE TABLE automation_rules (
             id TEXT PRIMARY KEY,
             data TEXT NOT NULL DEFAULT '{}'
         );
 
         -- Automation Processed Entries (replaces automation/processed.json)
-        CREATE TABLE IF NOT EXISTS automation_processed (
+        CREATE TABLE automation_processed (
             id TEXT PRIMARY KEY,
             data TEXT NOT NULL DEFAULT '{}'
         );
 
         -- Task Ledger (replaces task-ledger/ledger.json)
-        CREATE TABLE IF NOT EXISTS task_ledger (
+        CREATE TABLE task_ledger (
             id TEXT PRIMARY KEY,
             data TEXT NOT NULL DEFAULT '{}',
             version INTEGER NOT NULL DEFAULT 1,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
-        CREATE TABLE IF NOT EXISTS analytics.llm_usage (
+        CREATE TABLE analytics.llm_usage (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             occurred_at TEXT NOT NULL,
             provider TEXT NOT NULL DEFAULT '',
@@ -153,9 +165,9 @@ fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Err
             completion_tokens INTEGER NOT NULL DEFAULT 0,
             total_tokens INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS analytics.idx_llm_usage_occurred_at ON llm_usage(occurred_at);
+        CREATE INDEX analytics.idx_llm_usage_occurred_at ON llm_usage(occurred_at);
 
-        CREATE VIRTUAL TABLE IF NOT EXISTS history_items_fts USING fts5(
+        CREATE VIRTUAL TABLE history_items_fts USING fts5(
             title,
             preview_text,
             search_content,
@@ -164,17 +176,17 @@ fn create_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Err
             tokenize='trigram'
         );
 
-        CREATE TRIGGER IF NOT EXISTS tbl_history_items_ai AFTER INSERT ON history_items BEGIN
+        CREATE TRIGGER tbl_history_items_ai AFTER INSERT ON history_items BEGIN
           INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
           VALUES (new.rowid, new.title, new.preview_text, new.search_content);
         END;
 
-        CREATE TRIGGER IF NOT EXISTS tbl_history_items_ad AFTER DELETE ON history_items BEGIN
+        CREATE TRIGGER tbl_history_items_ad AFTER DELETE ON history_items BEGIN
           INSERT INTO history_items_fts(history_items_fts, rowid, title, preview_text, search_content)
           VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
         END;
 
-        CREATE TRIGGER IF NOT EXISTS tbl_history_items_au AFTER UPDATE OF title, preview_text, search_content ON history_items BEGIN
+        CREATE TRIGGER tbl_history_items_au AFTER UPDATE OF title, preview_text, search_content ON history_items BEGIN
           INSERT INTO history_items_fts(history_items_fts, rowid, title, preview_text, search_content)
           VALUES ('delete', old.rowid, old.title, old.preview_text, old.search_content);
           INSERT INTO history_items_fts(rowid, title, preview_text, search_content)
@@ -189,54 +201,57 @@ mod tests {
     use super::*;
     use crate::core::database::Database;
 
+    fn schema_versions(db: &Database) -> Vec<i64> {
+        db.with_connection(|conn| {
+            let mut stmt = conn.prepare("SELECT version FROM schema_version ORDER BY version")?;
+            stmt.query_map([], |row| row.get::<_, i64>(0))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(DatabaseError::QueryError)
+        })
+        .unwrap()
+    }
+
     #[test]
     fn test_migrations_are_idempotent() {
         let db = Database::open_in_memory().unwrap();
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        db.with_connection(|conn| {
-            let versions = {
-                let mut stmt =
-                    conn.prepare("SELECT version FROM schema_version ORDER BY version")?;
-                stmt.query_map([], |row| row.get::<_, i64>(0))?
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-            assert_eq!(versions, vec![1]);
-            Ok(())
-        })
-        .unwrap();
+        assert_eq!(schema_versions(&db), vec![1]);
     }
 
     #[test]
-    fn test_schema_version_is_normalized_to_current_v1() {
+    fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute(
-                "INSERT OR IGNORE INTO schema_version (version) VALUES (2)",
-                [],
-            )?;
-            conn.execute(
-                "INSERT OR IGNORE INTO schema_version (version) VALUES (3)",
-                [],
-            )?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let err = run_migrations(&db).unwrap_err();
+        assert!(matches!(
+            err,
+            DatabaseError::UnsupportedSchemaVersion {
+                found: 2,
+                current: 1
+            }
+        ));
+        assert_eq!(schema_versions(&db), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_lower_schema_version_records_are_preserved() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            conn.execute("INSERT INTO schema_version (version) VALUES (0)", [])?;
             Ok(())
         })
         .unwrap();
 
         run_migrations(&db).unwrap();
 
-        db.with_connection(|conn| {
-            let versions = {
-                let mut stmt =
-                    conn.prepare("SELECT version FROM schema_version ORDER BY version")?;
-                stmt.query_map([], |row| row.get::<_, i64>(0))?
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-            assert_eq!(versions, vec![1]);
-            Ok(())
-        })
-        .unwrap();
+        assert_eq!(schema_versions(&db), vec![0, 1]);
     }
 
     #[test]
