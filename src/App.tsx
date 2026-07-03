@@ -203,7 +203,7 @@ function App(): React.JSX.Element {
   }, [openSettingsTab]);
 
   const openVoiceTypingSettings = useCallback(() => {
-    openSettingsTab('voice_typing');
+    openSettingsTab('subtitle');
   }, [openSettingsTab]);
 
   const runFirstRunSetupFromDiagnostics = useCallback(() => {

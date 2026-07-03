@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, HardDrive, Type, Server } from 'lucide-react';
+import { BarChart3, HardDrive, Server } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogStore } from '../stores/dialogStore';
@@ -22,7 +22,6 @@ import {
     loadSettingsStorageTab,
     loadSettingsSubtitleTab,
     loadSettingsVocabularyTab,
-    loadSettingsVoiceTypingTab,
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
 import {
@@ -53,7 +52,6 @@ const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
 const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
 const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
 const SettingsSubtitleTab = lazy(loadSettingsSubtitleTab);
-const SettingsVoiceTypingTab = lazy(loadSettingsVoiceTypingTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
@@ -91,8 +89,6 @@ function renderSettingsPane(
             );
         case 'subtitle':
             return <SettingsSubtitleTab />;
-        case 'voice_typing':
-            return <SettingsVoiceTypingTab />;
         case 'models':
             return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
         case 'vocabulary':
@@ -431,19 +427,13 @@ export function Settings({
                         />
                         <SettingsTabButton
                             id="subtitle"
-                            label={t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
+                            label={t('settings.subtitle_voice_typing_title', {
+                                defaultValue: 'Subtitles & Voice Typing',
+                            })}
                             Icon={SubtitleIcon}
                             activeTab={renderedTab}
                             setActiveTab={navigateToTab}
                             tabIndex={renderedTab === 'subtitle' ? 0 : -1}
-                        />
-                        <SettingsTabButton
-                            id="voice_typing"
-                            label={t('settings.voice_typing')}
-                            Icon={() => <Type size={18} />}
-                            activeTab={renderedTab}
-                            setActiveTab={navigateToTab}
-                            tabIndex={renderedTab === 'voice_typing' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="models"

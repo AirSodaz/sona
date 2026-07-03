@@ -184,7 +184,7 @@ function openInputDeviceAction(t: Translate): DiagnosticAction {
 function openVoiceTypingAction(t: Translate): DiagnosticAction {
   return openSettingsAction(
     t,
-    'voice_typing',
+    'subtitle',
     'settings.diagnostics.open_voice_typing',
     'Open Voice Typing',
   );

@@ -1,10 +1,171 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Subtitles, SlidersHorizontal } from 'lucide-react';
+import { Check, Keyboard, Subtitles, SlidersHorizontal, X } from 'lucide-react';
+import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import { SubtitleIcon } from '../Icons';
+import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
-import { useCaptionConfig, useSetConfig } from '../../stores/configStore';
+import { useCaptionConfig, useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
+import { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { SettingsShortcutInput } from './SettingsShortcutInput';
+
+type AvailabilityTone = 'ready' | 'off' | 'missing';
+
+function StatusBadge({
+    tone,
+    label,
+}: {
+    tone: AvailabilityTone;
+    label: string;
+}): React.JSX.Element {
+    const icon = tone === 'ready' ? <Check size={12} /> : <X size={12} />;
+
+    return (
+        <span className={`status-badge ${tone}`}>
+            {icon}
+            {label}
+        </span>
+    );
+}
+
+function getFailureSourceLabel(
+    t: (key: string, options?: Record<string, unknown>) => string,
+    source: VoiceTypingRuntimeErrorSource | null,
+) {
+    switch (source) {
+        case 'shortcut_registration':
+            return t('settings.voice_typing_failure_source_shortcut', {
+                defaultValue: 'Shortcut registration',
+            });
+        case 'warmup':
+            return t('settings.voice_typing_failure_source_warmup', {
+                defaultValue: 'Background warm-up',
+            });
+        case 'microphone':
+            return t('settings.voice_typing_failure_source_microphone', {
+                defaultValue: 'Input device',
+            });
+        case 'session':
+            return t('settings.voice_typing_failure_source_session', {
+                defaultValue: 'Voice Typing session',
+            });
+        default:
+            return null;
+    }
+}
+
+function VoiceTypingSettingsSection(): React.JSX.Element {
+    const { t } = useTranslation();
+    const vtConfig = useVoiceTypingConfig();
+    const updateConfig = useSetConfig();
+    const readiness = useVoiceTypingReadiness();
+    const isAvailable = readiness.state === 'ready';
+    const hasFailureReason = readiness.state === 'failed' && Boolean(readiness.lastErrorMessage);
+    const failureSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
+    const availabilityTone: AvailabilityTone = isAvailable
+        ? 'ready'
+        : hasFailureReason
+            ? 'missing'
+            : 'off';
+
+    return (
+        <SettingsSection
+            title={t('settings.voice_typing', { defaultValue: 'Voice Typing' })}
+            icon={<Keyboard size={20} />}
+        >
+            <SettingsItem
+                title={t('settings.enable_voice_typing', {
+                    defaultValue: 'Enable Voice Typing',
+                })}
+                hint={t('settings.enable_voice_typing_hint', {
+                    defaultValue: 'Type text directly into any application using your voice',
+                })}
+            >
+                <Switch
+                    checked={vtConfig.voiceTypingEnabled ?? false}
+                    onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+                />
+            </SettingsItem>
+
+            <SettingsItem
+                title={t('settings.voice_typing_shortcut', { defaultValue: 'Shortcut' })}
+                hint={t('settings.voice_typing_shortcut_hint', {
+                    defaultValue: 'Global shortcut to activate voice typing',
+                })}
+            >
+                <SettingsShortcutInput
+                    value={vtConfig.voiceTypingShortcut ?? 'Alt+V'}
+                    onChange={(val) => updateConfig({ voiceTypingShortcut: val })}
+                />
+            </SettingsItem>
+
+            <SettingsItem
+                title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
+                hint={t('settings.voice_typing_mode_hint', {
+                    defaultValue: 'How the shortcut triggers listening',
+                })}
+            >
+                <div style={{ width: '180px' }}>
+                    <Dropdown
+                        id="vt-mode-select"
+                        value={vtConfig.voiceTypingMode || 'hold'}
+                        onChange={(val) =>
+                            updateConfig({ voiceTypingMode: val as 'hold' | 'toggle' })
+                        }
+                        options={[
+                            {
+                                value: 'hold',
+                                label: t('settings.voice_typing_mode_hold', {
+                                    defaultValue: 'Push to Talk (Hold)',
+                                }),
+                            },
+                            {
+                                value: 'toggle',
+                                label: t('settings.voice_typing_mode_toggle', {
+                                    defaultValue: 'Toggle (Press once)',
+                                }),
+                            },
+                        ]}
+                    />
+                </div>
+            </SettingsItem>
+
+            <SettingsItem
+                title={t('settings.voice_typing_availability', {
+                    defaultValue: 'Availability',
+                })}
+                hint={(() => {
+                    if (!hasFailureReason) {
+                        return undefined;
+                    }
+
+                    if (failureSourceLabel) {
+                        return t('settings.voice_typing_failure_reason_with_source', {
+                            defaultValue: 'Failure reason: {{source}}: {{message}}',
+                            source: failureSourceLabel,
+                            message: readiness.lastErrorMessage,
+                        });
+                    }
+
+                    return t('settings.voice_typing_failure_reason', {
+                        defaultValue: 'Failure reason: {{message}}',
+                        message: readiness.lastErrorMessage,
+                    });
+                })()}
+            >
+                <StatusBadge
+                    tone={availabilityTone}
+                    label={
+                        isAvailable
+                            ? t('settings.voice_typing_available', { defaultValue: 'Available' })
+                            : t('settings.voice_typing_unavailable', { defaultValue: 'Unavailable' })
+                    }
+                />
+            </SettingsItem>
+        </SettingsSection>
+    );
+}
 
 export function SettingsSubtitleTab(): React.JSX.Element {
     const { t } = useTranslation();
@@ -23,8 +184,12 @@ export function SettingsSubtitleTab(): React.JSX.Element {
         <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
             <SettingsPageHeader
                 icon={<SubtitleIcon width={28} height={28} />}
-                title={t('live.subtitle_settings')}
-                description={t('settings.subtitle_behavior_desc')}
+                title={t('settings.subtitle_voice_typing_title', {
+                    defaultValue: 'Subtitles & Voice Typing',
+                })}
+                description={t('settings.subtitle_voice_typing_desc', {
+                    defaultValue: 'Configure the live caption window and voice typing into other apps.',
+                })}
             />
             <SettingsSection
                 title={t('settings.subtitle_behavior_title')}
@@ -163,6 +328,8 @@ export function SettingsSubtitleTab(): React.JSX.Element {
                     </div>
                 </SettingsItem>
             </SettingsSection>
+
+            <VoiceTypingSettingsSection />
         </SettingsTabContainer>
     );
 }

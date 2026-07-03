@@ -6,7 +6,6 @@ export const SETTINGS_TABS = [
     'dashboard',
     'microphone',
     'subtitle',
-    'voice_typing',
     'models',
     'vocabulary',
     'automation',
@@ -49,11 +48,6 @@ export const loadSettingsMicrophoneTab = memoizeLoader(async () => {
 export const loadSettingsSubtitleTab = memoizeLoader(async () => {
     const module = await import('./SettingsSubtitleTab');
     return { default: module.SettingsSubtitleTab };
-});
-
-export const loadSettingsVoiceTypingTab = memoizeLoader(async () => {
-    const module = await import('./SettingsVoiceTypingTab');
-    return { default: module.SettingsVoiceTypingTab };
 });
 
 export const loadSettingsModelsPane = memoizeLoader(async () => {
@@ -108,7 +102,6 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
     dashboard: () => loadSettingsDashboardTab().then(() => undefined),
     microphone: () => loadSettingsMicrophoneTab().then(() => undefined),
     subtitle: () => loadSettingsSubtitleTab().then(() => undefined),
-    voice_typing: () => loadSettingsVoiceTypingTab().then(() => undefined),
     models: () => loadSettingsModelsPane().then(() => undefined),
     vocabulary: () => loadSettingsVocabularyTab().then(() => undefined),
     automation: () => loadSettingsAutomationTab().then(() => undefined),

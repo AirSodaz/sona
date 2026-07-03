@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { Settings } from '../Settings';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 
@@ -71,28 +71,6 @@ vi.mock('../settings/SettingsMicrophoneTab', () => ({
     SettingsMicrophoneTab: () => <div>Microphone Tab</div>,
 }));
 
-vi.mock('../settings/SettingsVoiceTypingTab', async () => {
-    const { useSettingsNavigation } = await import('../settings/SettingsNavigationContext');
-
-    return {
-        SettingsVoiceTypingTab: () => {
-            const { navigateToTab } = useSettingsNavigation();
-
-            return (
-                <div>
-                    <div>Voice Typing Tab</div>
-                    <button type="button" onClick={() => navigateToTab('models')}>
-                        Open Model Hub
-                    </button>
-                    <button type="button" onClick={() => navigateToTab('microphone')}>
-                        Open Input Device
-                    </button>
-                </div>
-            );
-        },
-    };
-});
-
 describe('Settings voice typing navigation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -103,27 +81,12 @@ describe('Settings voice typing navigation', () => {
         });
     });
 
-    it('switches from the voice typing page to model hub and focuses the target tab button', async () => {
+    it('maps the legacy voice typing initial tab to the combined subtitle page', async () => {
         render(<Settings isOpen={true} onClose={vi.fn()} initialTab="voice_typing" />);
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Open Model Hub' }));
-
-        const modelsTab = await screen.findByRole('tab', { name: 'settings.model_hub' });
-        await waitFor(() => {
-            expect(screen.getByText('Models Tab')).toBeDefined();
-            expect(document.activeElement).toBe(modelsTab);
-        }, { timeout: 5000 });
-    });
-
-    it('switches from the voice typing page to input device and focuses the target tab button', async () => {
-        render(<Settings isOpen={true} onClose={vi.fn()} initialTab="voice_typing" />);
-
-        fireEvent.click(await screen.findByRole('button', { name: 'Open Input Device' }));
-
-        const microphoneTab = await screen.findByRole('tab', { name: 'settings.input_device' });
-        await waitFor(() => {
-            expect(screen.getByText('Microphone Tab')).toBeDefined();
-            expect(document.activeElement).toBe(microphoneTab);
-        }, { timeout: 5000 });
+        const subtitleTab = await screen.findByRole('tab', { name: 'settings.subtitle_voice_typing_title' });
+        expect(subtitleTab.getAttribute('aria-selected')).toBe('true');
+        expect(await screen.findByText('Subtitle Tab')).toBeDefined();
+        expect(screen.queryByRole('tab', { name: 'settings.voice_typing' })).toBeNull();
     });
 });
