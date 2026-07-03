@@ -7,6 +7,7 @@ pub mod export;
 pub mod history;
 pub mod llm;
 pub mod project;
+pub mod storage;
 pub mod system;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
@@ -23,6 +24,8 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::project::project_reorder,
         crate::commands::project::project_get_active_id,
         crate::commands::project::project_set_active_id,
+        crate::commands::storage::storage_get_usage_snapshot,
+        crate::commands::storage::storage_clear_webview_browsing_data,
         crate::commands::automation::automation_load_repository_state,
         crate::commands::automation::automation_persist_rules,
         crate::commands::automation::automation_persist_processed_entries,

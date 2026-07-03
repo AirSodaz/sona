@@ -30,6 +30,10 @@ import type {
   SpeakerProcessingConfig,
 } from "../../types/speaker";
 import type {
+  StorageUsageSnapshot,
+  WebviewBrowsingDataClearResult,
+} from "../../types/storage";
+import type {
   HistorySummaryPayload,
   TranscriptSegment,
 } from "../../types/transcript";
@@ -585,6 +589,14 @@ export type TauriCommandContractMap = {
   [TauriCommand.history.openFolder]: {
     args: undefined;
     result: void;
+  };
+  [TauriCommand.storage.getUsageSnapshot]: {
+    args: undefined;
+    result: StorageUsageSnapshot;
+  };
+  [TauriCommand.storage.clearWebviewBrowsingData]: {
+    args: undefined;
+    result: WebviewBrowsingDataClearResult;
   };
   [TauriCommand.dashboard.getSnapshot]: {
     args: { request: { deep: boolean } };

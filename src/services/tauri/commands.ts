@@ -67,6 +67,10 @@ export const TauriCommand = {
     queryWorkspace: 'history_query_workspace',
     openFolder: 'history_open_folder',
   },
+  storage: {
+    getUsageSnapshot: 'storage_get_usage_snapshot',
+    clearWebviewBrowsingData: 'storage_clear_webview_browsing_data',
+  },
   dashboard: {
     getSnapshot: 'get_dashboard_snapshot',
   },
