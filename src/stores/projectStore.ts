@@ -122,7 +122,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProject: async (id) => {
-    await historyService.updateProjectAssignmentsByCurrentProject(id, null);
     await projectService.delete(id);
 
     const activeProjectId = get().activeProjectId === id ? null : get().activeProjectId;

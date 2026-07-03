@@ -173,7 +173,7 @@ describe('projectStore', () => {
 
     await useProjectStore.getState().deleteProject('project-1');
 
-    expect(historyService.updateProjectAssignmentsByCurrentProject).toHaveBeenCalledWith('project-1', null);
+    expect(historyService.updateProjectAssignmentsByCurrentProject).not.toHaveBeenCalled();
     expect(projectService.delete).toHaveBeenCalledWith('project-1');
     expect(projectService.setActiveProjectId).toHaveBeenCalledWith(null);
     expect(useProjectStore.getState().activeProjectId).toBeNull();

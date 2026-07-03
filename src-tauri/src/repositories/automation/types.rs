@@ -1,17 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRepositoryState {
     pub rules: Vec<Value>,
     pub processed_entries: Vec<Value>,
-}
-
-#[derive(Clone, Default)]
-pub struct AutomationState {
-    pub(crate) lock: Arc<Mutex<()>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]

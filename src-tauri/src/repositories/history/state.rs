@@ -5,7 +5,9 @@ use super::types::PreparedBackupImportSnapshot;
 
 #[derive(Clone, Default)]
 pub struct HistoryRepositoryState {
-    pub(crate) lock: Arc<Mutex<()>>,
+    /// Serializes history operations that combine SQLite state with filesystem
+    /// side effects, such as audio promotion/removal and backup import/export.
+    pub(crate) file_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Clone, Default)]

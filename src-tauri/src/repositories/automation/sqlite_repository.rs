@@ -23,35 +23,32 @@ impl SqliteAutomationRepository {
     }
 
     pub fn load_state(&self) -> Result<AutomationRepositoryState, DatabaseError> {
-        let rules = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached("SELECT data FROM automation_rules ORDER BY id")?;
-            let mut rows = stmt.query([])?;
-            let mut items = Vec::new();
-            while let Some(row) = rows.next()? {
-                let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str)?;
-                items.push(val);
-            }
-            Ok(items)
-        })?;
+        self.get_db()?.with_transaction(|tx| {
+            let rules =
+                Self::load_json_values(tx, "SELECT data FROM automation_rules ORDER BY id")?;
+            let processed_entries =
+                Self::load_json_values(tx, "SELECT data FROM automation_processed ORDER BY id")?;
 
-        let processed_entries = self.get_db()?.with_connection(|conn| {
-            let mut stmt =
-                conn.prepare_cached("SELECT data FROM automation_processed ORDER BY id")?;
-            let mut rows = stmt.query([])?;
-            let mut items = Vec::new();
-            while let Some(row) = rows.next()? {
-                let data_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&data_str)?;
-                items.push(val);
-            }
-            Ok(items)
-        })?;
-
-        Ok(AutomationRepositoryState {
-            rules,
-            processed_entries,
+            Ok(AutomationRepositoryState {
+                rules,
+                processed_entries,
+            })
         })
+    }
+
+    fn load_json_values(
+        conn: &rusqlite::Connection,
+        sql: &str,
+    ) -> Result<Vec<Value>, DatabaseError> {
+        let mut stmt = conn.prepare_cached(sql)?;
+        let mut rows = stmt.query([])?;
+        let mut items = Vec::new();
+        while let Some(row) = rows.next()? {
+            let data_str: String = row.get(0)?;
+            let val: Value = serde_json::from_str(&data_str)?;
+            items.push(val);
+        }
+        Ok(items)
     }
 
     pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), DatabaseError> {
@@ -161,6 +158,29 @@ mod tests {
         let state = repo.load_state().unwrap();
         assert_eq!(state.rules.len(), 1);
         assert_eq!(state.rules[0]["name"], "New Rule");
+    }
+
+    #[test]
+    fn load_state_returns_rules_and_processed_entries_together() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteAutomationRepository::with_db(PathBuf::new(), db);
+
+        repo.persist_state(
+            vec![json!({"id": "rule-1", "name": "Rule", "projectId": "project-1"})],
+            vec![json!({"id": "entry-1", "filePath": "C:\\audio.wav"})],
+        )
+        .unwrap();
+
+        let state = repo.load_state().unwrap();
+
+        assert_eq!(
+            state.rules,
+            vec![json!({"id": "rule-1", "name": "Rule", "projectId": "project-1"})]
+        );
+        assert_eq!(
+            state.processed_entries,
+            vec![json!({"id": "entry-1", "filePath": "C:\\audio.wav"})]
+        );
     }
 
     #[test]

@@ -12,19 +12,7 @@ crate::impl_db_repository!(SqliteProjectRepository);
 
 impl SqliteProjectRepository {
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
-                 FROM projects
-                 ORDER BY sort_order"
-            )?;
-            let rows = stmt.query_map([], map_row_to_project)?;
-            let mut projects = Vec::new();
-            for row in rows {
-                projects.push(row?);
-            }
-            Ok(projects)
-        })
+        self.get_db()?.with_connection(Self::list_projects)
     }
 
     pub fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, DatabaseError> {
@@ -82,116 +70,116 @@ impl SqliteProjectRepository {
             return self.get_by_id(project_id);
         };
 
-        let existing = match self.get_by_id(project_id)? {
-            Some(p) => p,
-            None => return Ok(None),
-        };
+        self.get_db()?.with_rw_transaction(|tx| {
+            let existing = match Self::get_by_id_from_conn(tx, project_id)? {
+                Some(p) => p,
+                None => return Ok(None),
+            };
 
-        let name = updates_obj
-            .get("name")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-            .unwrap_or(existing.name);
-
-        let icon = updates_obj
-            .get("icon")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-            .unwrap_or(existing.icon);
-
-        let description = updates_obj
-            .get("description")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-            .unwrap_or(existing.description);
-
-        let mut defaults = existing.defaults;
-        if let Some(default_updates) = updates_obj.get("defaults").and_then(Value::as_object) {
-            if let Some(v) = default_updates
-                .get("summaryTemplateId")
+            let name = updates_obj
+                .get("name")
                 .and_then(Value::as_str)
-            {
-                defaults.summary_template_id = v.to_string();
-            }
-            if let Some(v) = default_updates
-                .get("translationLanguage")
-                .and_then(Value::as_str)
-            {
-                defaults.translation_language = v.to_string();
-            }
-            if let Some(v) = default_updates
-                .get("polishPresetId")
-                .and_then(Value::as_str)
-            {
-                defaults.polish_preset_id = v.to_string();
-            }
-            if let Some(v) = default_updates
-                .get("polishScenario")
-                .and_then(Value::as_str)
-            {
-                defaults.polish_scenario = Some(v.to_string());
-            }
-            if let Some(v) = default_updates.get("polishContext").and_then(Value::as_str) {
-                defaults.polish_context = Some(v.to_string());
-            }
-            if let Some(v) = default_updates
-                .get("exportFileNamePrefix")
-                .and_then(Value::as_str)
-            {
-                defaults.export_file_name_prefix = v.to_string();
-            }
-            if let Some(v) = default_updates
-                .get("enabledTextReplacementSetIds")
-                .and_then(Value::as_array)
-            {
-                defaults.enabled_text_replacement_set_ids = v
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect();
-            }
-            if let Some(v) = default_updates
-                .get("enabledHotwordSetIds")
-                .and_then(Value::as_array)
-            {
-                defaults.enabled_hotword_set_ids = v
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect();
-            }
-            if let Some(v) = default_updates
-                .get("enabledPolishKeywordSetIds")
-                .and_then(Value::as_array)
-            {
-                defaults.enabled_polish_keyword_set_ids = v
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect();
-            }
-            if let Some(v) = default_updates
-                .get("enabledSpeakerProfileIds")
-                .and_then(Value::as_array)
-            {
-                defaults.enabled_speaker_profile_ids = v
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect();
-            }
-        }
+                .map(|s| s.to_string())
+                .unwrap_or(existing.name);
 
-        let now = crate::repositories::project::repository::current_time_millis()
-            .map_err(DatabaseError::Internal)?;
-        let mut settings_val = serde_json::to_value(&defaults)?;
-        if let Some(obj) = settings_val.as_object_mut() {
-            obj.insert("description".to_string(), json!(description));
-        }
-        let settings_str = settings_val.to_string();
+            let icon = updates_obj
+                .get("icon")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string())
+                .unwrap_or(existing.icon);
 
-        self.get_db()?.with_connection(|conn| {
-            conn.execute(
+            let description = updates_obj
+                .get("description")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string())
+                .unwrap_or(existing.description);
+
+            let mut defaults = existing.defaults;
+            if let Some(default_updates) = updates_obj.get("defaults").and_then(Value::as_object) {
+                if let Some(v) = default_updates
+                    .get("summaryTemplateId")
+                    .and_then(Value::as_str)
+                {
+                    defaults.summary_template_id = v.to_string();
+                }
+                if let Some(v) = default_updates
+                    .get("translationLanguage")
+                    .and_then(Value::as_str)
+                {
+                    defaults.translation_language = v.to_string();
+                }
+                if let Some(v) = default_updates
+                    .get("polishPresetId")
+                    .and_then(Value::as_str)
+                {
+                    defaults.polish_preset_id = v.to_string();
+                }
+                if let Some(v) = default_updates
+                    .get("polishScenario")
+                    .and_then(Value::as_str)
+                {
+                    defaults.polish_scenario = Some(v.to_string());
+                }
+                if let Some(v) = default_updates.get("polishContext").and_then(Value::as_str) {
+                    defaults.polish_context = Some(v.to_string());
+                }
+                if let Some(v) = default_updates
+                    .get("exportFileNamePrefix")
+                    .and_then(Value::as_str)
+                {
+                    defaults.export_file_name_prefix = v.to_string();
+                }
+                if let Some(v) = default_updates
+                    .get("enabledTextReplacementSetIds")
+                    .and_then(Value::as_array)
+                {
+                    defaults.enabled_text_replacement_set_ids = v
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+                if let Some(v) = default_updates
+                    .get("enabledHotwordSetIds")
+                    .and_then(Value::as_array)
+                {
+                    defaults.enabled_hotword_set_ids = v
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+                if let Some(v) = default_updates
+                    .get("enabledPolishKeywordSetIds")
+                    .and_then(Value::as_array)
+                {
+                    defaults.enabled_polish_keyword_set_ids = v
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+                if let Some(v) = default_updates
+                    .get("enabledSpeakerProfileIds")
+                    .and_then(Value::as_array)
+                {
+                    defaults.enabled_speaker_profile_ids = v
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+            }
+
+            let now = crate::repositories::project::repository::current_time_millis()
+                .map_err(DatabaseError::Internal)?;
+            let mut settings_val = serde_json::to_value(&defaults)?;
+            if let Some(obj) = settings_val.as_object_mut() {
+                obj.insert("description".to_string(), json!(description));
+            }
+            let settings_str = settings_val.to_string();
+
+            tx.execute(
                 "UPDATE projects SET name = ?1, icon = ?2, updated_at = ?3, summary_template_id = ?4, translation_language = ?5, polish_preset_id = ?6, settings = ?7 WHERE id = ?8",
                 rusqlite::params![
                     name,
@@ -204,18 +192,17 @@ impl SqliteProjectRepository {
                     project_id,
                 ],
             )?;
-            Ok(())
-        })?;
 
-        Ok(Some(ProjectRecord {
-            id: project_id.to_string(),
-            name,
-            description,
-            icon,
-            created_at: existing.created_at,
-            updated_at: now,
-            defaults,
-        }))
+            Ok(Some(ProjectRecord {
+                id: project_id.to_string(),
+                name,
+                description,
+                icon,
+                created_at: existing.created_at,
+                updated_at: now,
+                defaults,
+            }))
+        })
     }
 
     pub fn delete(&self, project_id: &str) -> Result<(), DatabaseError> {
@@ -299,25 +286,43 @@ impl SqliteProjectRepository {
             for (i, id) in project_ids.iter().enumerate() {
                 stmt.execute(rusqlite::params![i as i64, id])?;
             }
-            Ok(())
-        })?;
-
-        self.list(ProjectListOptions::default())
+            Self::list_projects(tx)
+        })
     }
 
     fn get_by_id(&self, project_id: &str) -> Result<Option<ProjectRecord>, DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
-                 FROM projects WHERE id = ?1"
-            )?;
-            let mut rows = stmt.query([project_id])?;
-            if let Some(row) = rows.next()? {
-                Ok(Some(map_row_to_project(row)?))
-            } else {
-                Ok(None)
-            }
-        })
+        self.get_db()?
+            .with_connection(|conn| Self::get_by_id_from_conn(conn, project_id))
+    }
+
+    fn list_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, DatabaseError> {
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
+             FROM projects
+             ORDER BY sort_order"
+        )?;
+        let rows = stmt.query_map([], map_row_to_project)?;
+        let mut projects = Vec::new();
+        for row in rows {
+            projects.push(row?);
+        }
+        Ok(projects)
+    }
+
+    fn get_by_id_from_conn(
+        conn: &rusqlite::Connection,
+        project_id: &str,
+    ) -> Result<Option<ProjectRecord>, DatabaseError> {
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
+             FROM projects WHERE id = ?1"
+        )?;
+        let mut rows = stmt.query([project_id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(map_row_to_project(row)?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn build_defaults(&self, input: &ProjectCreateInput) -> Result<ProjectDefaults, DatabaseError> {
@@ -509,6 +514,89 @@ mod tests {
 
         let result = repo.update("nonexistent", json!({"name": "Nope"})).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn delete_nulls_history_assignments_and_removes_project() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteProjectRepository::with_db(PathBuf::new(), db);
+
+        repo.get_db()
+            .unwrap()
+            .with_transaction(|tx| {
+                tx.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
+                 VALUES ('project-delete', 'Delete Me', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    [],
+                )?;
+                tx.execute(
+                    "INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status)
+                 VALUES ('item-delete', 1000, 1.0, 'Assigned Item', 'recording', 'project-delete', 'complete')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        repo.delete("project-delete").unwrap();
+
+        repo.get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                let project_count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM projects WHERE id = 'project-delete'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                let history_project_id: Option<String> = conn.query_row(
+                    "SELECT project_id FROM history_items WHERE id = 'item-delete'",
+                    [],
+                    |row| row.get(0),
+                )?;
+
+                assert_eq!(project_count, 0);
+                assert_eq!(history_project_id, None);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn reorder_returns_transaction_consistent_order() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteProjectRepository::with_db(PathBuf::new(), db);
+
+        repo.get_db()
+            .unwrap()
+            .with_transaction(|tx| {
+                for (sort_order, id, name) in [
+                    (0, "project-a", "Alpha"),
+                    (1, "project-b", "Beta"),
+                    (2, "project-c", "Gamma"),
+                ] {
+                    tx.execute(
+                        "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
+                     VALUES (?1, ?2, 'folder', '', ?3, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                        rusqlite::params![id, name, sort_order],
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        let reordered = repo
+            .reorder(vec![
+                "project-c".to_string(),
+                "project-a".to_string(),
+                "project-b".to_string(),
+            ])
+            .unwrap();
+
+        let ids: Vec<&str> = reordered
+            .iter()
+            .map(|project| project.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["project-c", "project-a", "project-b"]);
     }
 
     #[test]

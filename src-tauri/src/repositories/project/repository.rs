@@ -1,7 +1,6 @@
 use crate::core::database::DatabaseError;
 use crate::core::paths::{PathKind, PathProvider};
 use serde_json::{Map, Value};
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::types::{ProjectDefaults, ProjectListOptions, ProjectRecord};
@@ -11,8 +10,6 @@ pub(crate) const ACTIVE_PROJECT_SETTINGS_KEY: &str = "sona-active-project-id";
 pub(crate) const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub(crate) const DEFAULT_TRANSLATION_LANGUAGE: &str = "zh";
 pub(crate) const DEFAULT_POLISH_PRESET_ID: &str = "general";
-
-pub(crate) static PROJECT_REPOSITORY_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, String> {
     let project = normalize_project_value(input, &ProjectListOptions::default());
@@ -28,9 +25,6 @@ where
 {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = PROJECT_REPOSITORY_LOCK
-            .lock()
-            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
         task(crate::repositories::project::SqliteProjectRepository::new(
             app_local_data_dir,
         ))

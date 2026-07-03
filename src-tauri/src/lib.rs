@@ -158,7 +158,6 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())
         .manage(crate::core::automation::AutomationRuntimeState::default())
-        .manage(crate::repositories::automation::AutomationState::default())
         .manage(crate::repositories::history::HistoryRepositoryState::default())
         .manage(crate::repositories::history::PreparedBackupImportState::default())
         .manage(crate::integrations::audio::AudioState::new())

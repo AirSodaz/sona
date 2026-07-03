@@ -4,7 +4,7 @@ use crate::core::automation::{
     create_event_sink, replace_rule_runtimes_with, scan_rule_runtime, start_rule_runtime,
 };
 use crate::repositories::automation::{
-    AutomationRepositoryState, AutomationRule, AutomationRuleValidationResult, AutomationState,
+    AutomationRepositoryState, AutomationRule, AutomationRuleValidationResult,
     repository::run_automation_task, repository::validate_rule_activation_inner,
 };
 use serde_json::Value;
@@ -13,33 +13,24 @@ use tauri::{AppHandle, Runtime, State};
 #[tauri::command]
 pub async fn automation_load_repository_state<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AutomationState>,
 ) -> Result<AutomationRepositoryState, String> {
-    let lock = state.lock.clone();
-    run_automation_task(&app, lock, |repository| repository.load_state()).await
+    run_automation_task(&app, |repository| repository.load_state()).await
 }
 
 #[tauri::command]
 pub async fn automation_persist_rules<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AutomationState>,
     rules: Vec<Value>,
 ) -> Result<(), String> {
-    let lock = state.lock.clone();
-    run_automation_task(&app, lock, move |repository| {
-        repository.persist_rules(rules)
-    })
-    .await
+    run_automation_task(&app, move |repository| repository.persist_rules(rules)).await
 }
 
 #[tauri::command]
 pub async fn automation_persist_processed_entries<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AutomationState>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    let lock = state.lock.clone();
-    run_automation_task(&app, lock, move |repository| {
+    run_automation_task(&app, move |repository| {
         repository.persist_processed_entries(processed_entries)
     })
     .await
@@ -48,12 +39,10 @@ pub async fn automation_persist_processed_entries<R: Runtime>(
 #[tauri::command]
 pub async fn automation_persist_repository_state<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, AutomationState>,
     rules: Vec<Value>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    let lock = state.lock.clone();
-    run_automation_task(&app, lock, move |repository| {
+    run_automation_task(&app, move |repository| {
         repository.persist_state(rules, processed_entries)
     })
     .await

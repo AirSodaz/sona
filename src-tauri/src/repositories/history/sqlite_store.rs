@@ -277,7 +277,11 @@ impl SqliteHistoryStore {
         let retention_millis = retention_days
             .saturating_mul(MILLIS_PER_DAY)
             .min(i64::MAX as u64) as i64;
-        Some(chrono::Utc::now().timestamp_millis().saturating_sub(retention_millis))
+        Some(
+            chrono::Utc::now()
+                .timestamp_millis()
+                .saturating_sub(retention_millis),
+        )
     }
 
     fn audio_cleanup_candidates(
@@ -371,8 +375,8 @@ impl SqliteHistoryStore {
                                 audio_path.display(),
                                 error
                             );
-                            if let Err(reset_error) =
-                                self.update_audio_status(&candidate.id, HistoryAudioStatus::Available)
+                            if let Err(reset_error) = self
+                                .update_audio_status(&candidate.id, HistoryAudioStatus::Available)
                             {
                                 log::warn!(
                                     "Failed to restore history audio status after cleanup failure {}: {}",
@@ -1730,7 +1734,12 @@ mod tests {
 
         let old_item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-old", "Keep the old transcript", 0.0, 1.0)]),
+                segments: json!([segment_value(
+                    "seg-old",
+                    "Keep the old transcript",
+                    0.0,
+                    1.0
+                )]),
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3, 4]),
@@ -1830,11 +1839,19 @@ mod tests {
 
         let items = store.list_items().unwrap();
         assert_eq!(
-            items.iter().find(|item| item.id == active.id).unwrap().audio_status,
+            items
+                .iter()
+                .find(|item| item.id == active.id)
+                .unwrap()
+                .audio_status,
             HistoryAudioStatus::Available
         );
         assert_eq!(
-            items.iter().find(|item| item.id == draft.id).unwrap().audio_status,
+            items
+                .iter()
+                .find(|item| item.id == draft.id)
+                .unwrap()
+                .audio_status,
             HistoryAudioStatus::Available
         );
     }
@@ -1848,7 +1865,12 @@ mod tests {
 
         let missing = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-missing", "Text survives missing audio", 0.0, 1.0)]),
+                segments: json!([segment_value(
+                    "seg-missing",
+                    "Text survives missing audio",
+                    0.0,
+                    1.0
+                )]),
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -1895,7 +1917,12 @@ mod tests {
 
         let item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-fail", "Text survives delete failure", 0.0, 1.0)]),
+                segments: json!([segment_value(
+                    "seg-fail",
+                    "Text survives delete failure",
+                    0.0,
+                    1.0
+                )]),
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),
