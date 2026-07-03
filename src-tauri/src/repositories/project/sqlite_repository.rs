@@ -179,7 +179,7 @@ impl SqliteProjectRepository {
             }
             let settings_str = settings_val.to_string();
 
-            tx.execute(
+            let rows_affected = tx.execute(
                 "UPDATE projects SET name = ?1, icon = ?2, updated_at = ?3, summary_template_id = ?4, translation_language = ?5, polish_preset_id = ?6, settings = ?7 WHERE id = ?8",
                 rusqlite::params![
                     name,
@@ -192,6 +192,9 @@ impl SqliteProjectRepository {
                     project_id,
                 ],
             )?;
+            if rows_affected == 0 {
+                return Ok(None);
+            }
 
             Ok(Some(ProjectRecord {
                 id: project_id.to_string(),

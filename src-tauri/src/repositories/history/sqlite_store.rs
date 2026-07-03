@@ -519,12 +519,15 @@ impl SqliteHistoryStore {
         }
 
         if !verified_updates.is_empty() {
-            self.get_db()?.with_transaction(|tx| {
+            self.get_db()?.with_rw_transaction(|tx| {
                 for (item, segments_str) in &verified_updates {
-                    tx.execute(
+                    let rows_affected = tx.execute(
                         "UPDATE history_items SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL WHERE id = ?4",
                         rusqlite::params![item.preview_text, item.search_content, item.duration, item.id]
                     )?;
+                    if rows_affected == 0 {
+                        continue;
+                    }
 
                     tx.execute(
                         "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
@@ -834,24 +837,8 @@ impl HistoryStore for SqliteHistoryStore {
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        let exists: bool = self.get_db()?.with_connection(|conn| {
-            Ok(conn
-                .query_row(
-                    "SELECT 1 FROM history_items WHERE id = ?1",
-                    [history_id],
-                    |_| Ok(()),
-                )
-                .is_ok())
-        })?;
-
-        if !exists {
-            return Err(DatabaseError::NotFoundError(format!(
-                "History item not found: {history_id}"
-            )));
-        }
-
-        self.get_db()?.with_transaction(|tx| {
-            tx.execute(
+        self.get_db()?.with_rw_transaction(|tx| {
+            let rows_affected = tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL
                  WHERE id = ?4",
@@ -862,17 +849,18 @@ impl HistoryStore for SqliteHistoryStore {
                     history_id,
                 ],
             )?;
+            if rows_affected == 0 {
+                return Err(DatabaseError::NotFoundError(format!(
+                    "History item not found: {history_id}"
+                )));
+            }
 
             tx.execute(
                 "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
                 rusqlite::params![history_id, segments_str],
             )?;
 
-            Ok(())
-        })?;
-
-        self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(&format!(
+            let mut stmt = tx.prepare_cached(&format!(
                 "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
@@ -1015,7 +1003,7 @@ impl HistoryStore for SqliteHistoryStore {
             return Ok(());
         }
 
-        let audio_paths = self.get_db()?.with_transaction(|tx| {
+        let audio_paths = self.get_db()?.with_rw_transaction(|tx| {
             let mut audio_paths = Vec::new();
             let mut stmt =
                 tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
@@ -1093,24 +1081,8 @@ impl HistoryStore for SqliteHistoryStore {
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        let exists: bool = self.get_db()?.with_connection(|conn| {
-            Ok(conn
-                .query_row(
-                    "SELECT 1 FROM history_items WHERE id = ?1",
-                    [history_id],
-                    |_| Ok(()),
-                )
-                .is_ok())
-        })?;
-
-        if !exists {
-            return Err(DatabaseError::NotFoundError(format!(
-                "History item not found: {history_id}"
-            )));
-        }
-
-        self.get_db()?.with_transaction(|tx| {
-            tx.execute(
+        self.get_db()?.with_rw_transaction(|tx| {
+            let rows_affected = tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2
                  WHERE id = ?3",
@@ -1120,17 +1092,18 @@ impl HistoryStore for SqliteHistoryStore {
                     history_id,
                 ],
             )?;
+            if rows_affected == 0 {
+                return Err(DatabaseError::NotFoundError(format!(
+                    "History item not found: {history_id}"
+                )));
+            }
 
             tx.execute(
                 "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
                 rusqlite::params![history_id, segments_str],
             )?;
 
-            Ok(())
-        })?;
-
-        self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(&format!(
+            let mut stmt = tx.prepare_cached(&format!(
                 "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
@@ -1168,21 +1141,11 @@ impl HistoryStore for SqliteHistoryStore {
 
         let segments_str = serde_json::to_string(&parsed_segments)?;
 
-        self.get_db()?.with_transaction(|tx| {
-            let exists: bool = tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM history_items WHERE id = ?1)",
-                [history_id],
-                |row| row.get(0),
-            )?;
-            if !exists {
-                return Err(DatabaseError::NotFoundError(format!(
-                    "History item not found: {history_id}"
-                )));
-            }
-
-            tx.execute(
+        self.get_db()?.with_rw_transaction(|tx| {
+            let rows_affected = tx.execute(
                 "INSERT INTO transcript_snapshots (id, history_id, reason, created_at, segment_count, segments)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6
+                 WHERE EXISTS (SELECT 1 FROM history_items WHERE id = ?2)",
                 rusqlite::params![
                     metadata.id,
                     metadata.history_id,
@@ -1192,6 +1155,11 @@ impl HistoryStore for SqliteHistoryStore {
                     segments_str,
                 ],
             )?;
+            if rows_affected == 0 {
+                return Err(DatabaseError::NotFoundError(format!(
+                    "History item not found: {history_id}"
+                )));
+            }
 
             tx.execute(
                 "DELETE FROM transcript_snapshots
@@ -1311,13 +1279,17 @@ impl HistoryStore for SqliteHistoryStore {
             DatabaseError::Internal("History item updates must be an object.".to_string())
         })?;
 
-        self.get_db()?.with_transaction(|tx| {
+        self.get_db()?.with_rw_transaction(|tx| {
             let mut stmt = tx.prepare_cached(
                 &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1")
             )?;
             let mut item = match stmt.query_row([history_id], map_row_to_item) {
                 Ok(item) => item,
-                Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    return Err(DatabaseError::NotFoundError(format!(
+                        "History item not found: {history_id}"
+                    )));
+                }
                 Err(error) => return Err(DatabaseError::QueryError(error)),
             };
 
@@ -1328,7 +1300,7 @@ impl HistoryStore for SqliteHistoryStore {
             let audio_status_str = item.audio_status.to_string();
             let draft_source_str = item.draft_source.map(|s| s.to_string());
 
-            tx.execute(
+            let rows_affected = tx.execute(
                 "UPDATE history_items
                  SET id = ?1, timestamp = ?2, duration = ?3, audio_path = ?4, audio_status = ?5, transcript_path = ?6, title = ?7, preview_text = ?8, icon = ?9, kind = ?10, search_content = ?11, project_id = ?12, status = ?13, draft_source = ?14
                  WHERE id = ?15",
@@ -1350,6 +1322,11 @@ impl HistoryStore for SqliteHistoryStore {
                     history_id,
                 ],
             )?;
+            if rows_affected == 0 {
+                return Err(DatabaseError::NotFoundError(format!(
+                    "History item not found: {history_id}"
+                )));
+            }
 
             Ok(())
         })
@@ -1725,6 +1702,16 @@ mod tests {
         root.path().join("history").join(&item.audio_path)
     }
 
+    fn assert_not_found<T>(result: Result<T, DatabaseError>, expected_id: &str) {
+        match result {
+            Err(DatabaseError::NotFoundError(message)) => {
+                assert!(message.contains(expected_id));
+            }
+            Ok(_) => panic!("expected NotFoundError for missing history item"),
+            Err(error) => panic!("expected NotFoundError, got {error:?}"),
+        }
+    }
+
     #[test]
     fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
         let root = tempdir().unwrap();
@@ -2059,6 +2046,69 @@ mod tests {
             .unwrap();
         let items = store.list_items().unwrap();
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn update_transcript_missing_history_returns_not_found() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        assert_not_found(
+            store.update_transcript(
+                "missing-history",
+                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+            ),
+            "missing-history",
+        );
+    }
+
+    #[test]
+    fn complete_live_draft_missing_history_returns_not_found() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        assert_not_found(
+            store.complete_live_draft(
+                "missing-history",
+                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+                1.0,
+            ),
+            "missing-history",
+        );
+    }
+
+    #[test]
+    fn update_item_meta_missing_history_returns_not_found() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        assert_not_found(
+            store.update_item_meta("missing-history", json!({ "title": "Missing" })),
+            "missing-history",
+        );
+    }
+
+    #[test]
+    fn create_transcript_snapshot_missing_history_returns_not_found() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        assert_not_found(
+            store.create_transcript_snapshot(
+                "missing-history",
+                TranscriptSnapshotReason::Polish,
+                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+            ),
+            "missing-history",
+        );
     }
 
     #[test]
