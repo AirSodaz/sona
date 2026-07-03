@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { SettingsVoiceTypingTab } from '../SettingsVoiceTypingTab';
-import { SettingsNavigationProvider } from '../SettingsNavigationContext';
+import { SettingsSubtitleTab } from '../SettingsSubtitleTab';
 import { useVoiceTypingRuntimeStore } from '../../../stores/voiceTypingRuntimeStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
 
@@ -63,100 +62,27 @@ vi.mock('../../Switch', () => ({
     ),
 }));
 
-function renderVoiceTypingTab() {
-    return render(
-        <SettingsNavigationProvider
-            value={{
-                activeTab: 'voice_typing',
-                navigateToTab: vi.fn(),
-            }}
-        >
-            <SettingsVoiceTypingTab />
-        </SettingsNavigationProvider>
-    );
+function renderCombinedSettings() {
+    return render(<SettingsSubtitleTab />);
 }
 
-describe('SettingsVoiceTypingTab', () => {
+describe('SettingsSubtitleTab voice typing section', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         setTestConfig();
         useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
     });
 
-    it('shows the off state when voice typing is disabled', () => {
-        renderVoiceTypingTab();
+    it('shows unavailable when voice typing is disabled without dependency diagnostics', () => {
+        renderCombinedSettings();
 
-        expect(
-            screen.getByText('Voice Typing is currently turned off.')
-        ).toBeDefined();
+        expect(screen.getByText('Unavailable')).toBeDefined();
+        expect(screen.queryByText('Readiness And Dependencies')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Open Model Hub' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();
     });
 
-    it('shows the missing shortcut state when enabled without a shortcut', () => {
-        setTestConfig({
-            voiceTypingEnabled: true,
-            voiceTypingShortcut: '   ',
-            streamingModelPath: '/models/streaming-test-model',
-            vadModelPath: '/models/vad.onnx',
-        });
-        useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
-        useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
-
-        renderVoiceTypingTab();
-
-        expect(
-            screen.getByText('Voice Typing needs a shortcut before it can start.')
-        ).toBeDefined();
-    });
-
-    it('shows the missing live model state when enabled without a model', () => {
-        setTestConfig({
-            voiceTypingEnabled: true,
-            voiceTypingShortcut: 'Alt + V',
-            streamingModelPath: '',
-        });
-        useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
-        useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
-
-        renderVoiceTypingTab();
-
-        expect(screen.getByText('Voice Typing needs a Live Record Model.')).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Open Model Hub' })).toBeDefined();
-    });
-
-    it('shows the missing VAD state when the selected model requires VAD', () => {
-        setTestConfig({
-            voiceTypingEnabled: true,
-            voiceTypingShortcut: 'Alt + V',
-            streamingModelPath: '/models/streaming-test-model',
-            vadModelPath: '',
-        });
-        useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
-        useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
-
-        renderVoiceTypingTab();
-
-        expect(
-            screen.getByText('The selected Live Record Model also needs a VAD model.')
-        ).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Open Model Hub' })).toBeDefined();
-    });
-
-    it('shows the preparing state while registration and warm-up are still settling', () => {
-        setTestConfig({
-            voiceTypingEnabled: true,
-            voiceTypingShortcut: 'Alt + V',
-            streamingModelPath: '/models/streaming-test-model',
-            vadModelPath: '/models/vad.onnx',
-        });
-
-        renderVoiceTypingTab();
-
-        expect(
-            screen.getByText('Voice Typing is getting ready in the background.')
-        ).toBeDefined();
-    });
-
-    it('shows the ready state when runtime registration and warm-up are complete', () => {
+    it('shows available when runtime registration and warm-up are complete', () => {
         setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
@@ -166,14 +92,12 @@ describe('SettingsVoiceTypingTab', () => {
         useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
         useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
 
-        renderVoiceTypingTab();
+        renderCombinedSettings();
 
-        expect(
-            screen.getByText('Voice Typing is ready to dictate into other apps.')
-        ).toBeDefined();
+        expect(screen.getByText('Available')).toBeDefined();
     });
 
-    it('shows the failed state with the last observed error and remediation CTA', () => {
+    it('shows only the failed runtime reason when voice typing fails', () => {
         setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
@@ -184,11 +108,12 @@ describe('SettingsVoiceTypingTab', () => {
             .getState()
             .reportRuntimeError('microphone', 'Microphone is unavailable.');
 
-        renderVoiceTypingTab();
+        renderCombinedSettings();
 
-        expect(screen.getByText('Voice Typing hit a runtime problem.')).toBeDefined();
-        expect(screen.getByText('Last error: Microphone is unavailable.')).toBeDefined();
-        expect(screen.getByText('Source: Input device')).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Open Input Device' })).toBeDefined();
+        expect(screen.getByText('Unavailable')).toBeDefined();
+        expect(screen.getByText('Failure reason: Input device: Microphone is unavailable.')).toBeDefined();
+        expect(screen.queryByText('Voice Typing hit a runtime problem.')).toBeNull();
+        expect(screen.queryByText('Source: Input device')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();
     });
 });

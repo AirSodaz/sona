@@ -85,6 +85,12 @@ describe('useSettingsLogic', () => {
         expect(result.current.activeTab).toBe('vocabulary');
     });
 
+    it('maps the legacy voice typing tab to subtitles when opened', () => {
+        const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'voice_typing'));
+
+        expect(result.current.activeTab).toBe('subtitle');
+    });
+
     it('changes i18n to explicit Traditional Chinese and Japanese preferences', async () => {
         mockConfig = {
             ...createMockConfig(),
@@ -121,7 +127,7 @@ describe('useSettingsLogic', () => {
         });
     });
 
-    it('derives the opened initial tab before the sync effect commits state', () => {
+    it('derives the opened initial tab before the sync effect commits state', async () => {
         const initialProps: { isOpen: boolean; initialTab?: SettingsTabInput } = {
             isOpen: false,
             initialTab: undefined,
@@ -133,7 +139,10 @@ describe('useSettingsLogic', () => {
             { initialProps },
         );
 
-        rerender({ isOpen: true, initialTab: 'models' });
+        await act(async () => {
+            rerender({ isOpen: true, initialTab: 'models' });
+            await Promise.resolve();
+        });
 
         expect(result.current.activeTab).toBe('models');
     });

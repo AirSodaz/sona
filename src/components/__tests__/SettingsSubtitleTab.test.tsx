@@ -10,6 +10,37 @@ vi.mock('react-i18next', () => ({
 }));
 
 const mockUpdateConfig = vi.fn();
+const mockReadiness = vi.hoisted(() => ({
+    state: 'ready' as 'ready' | 'failed',
+    lastErrorSource: null as null | 'shortcut_registration' | 'warmup' | 'microphone' | 'session',
+    lastErrorMessage: null as string | null,
+}));
+
+vi.mock('../../hooks/useVoiceTypingReadiness', () => ({
+    useVoiceTypingReadiness: () => mockReadiness,
+}));
+
+vi.mock('../Dropdown', () => ({
+    Dropdown: ({ id, value, onChange, options }: any) => (
+        <select id={id} value={value} onChange={(event) => onChange?.(event.target.value)}>
+            {options?.map((option: any) => (
+                <option key={option.value} value={option.value}>
+                    {option.label}
+                </option>
+            ))}
+        </select>
+    ),
+}));
+
+vi.mock('../settings/SettingsShortcutInput', () => ({
+    SettingsShortcutInput: ({ value, onChange }: any) => (
+        <input
+            aria-label="voice typing shortcut"
+            value={value}
+            onChange={(event) => onChange?.(event.target.value)}
+        />
+    ),
+}));
 
 vi.mock('../../stores/configStore', () => ({
     useCaptionConfig: () => ({
@@ -21,12 +52,20 @@ vi.mock('../../stores/configStore', () => ({
         captionFontColor: '#ffffff',
         captionBackgroundOpacity: 0.6,
     }),
+    useVoiceTypingConfig: () => ({
+        voiceTypingEnabled: false,
+        voiceTypingShortcut: 'Alt+V',
+        voiceTypingMode: 'hold',
+    }),
     useSetConfig: () => mockUpdateConfig,
 }));
 
 describe('SettingsSubtitleTab', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockReadiness.state = 'ready';
+        mockReadiness.lastErrorSource = null;
+        mockReadiness.lastErrorMessage = null;
     });
 
     it('renders all controls', () => {
@@ -38,6 +77,10 @@ describe('SettingsSubtitleTab', () => {
         expect(screen.getByText('live.window_width')).toBeDefined();
         expect(screen.getByText('live.font_size')).toBeDefined();
         expect(screen.getByText('live.font_color')).toBeDefined();
+        expect(screen.getByText('settings.enable_voice_typing')).toBeDefined();
+        expect(screen.getByText('settings.voice_typing_shortcut')).toBeDefined();
+        expect(screen.getByText('settings.voice_typing_mode')).toBeDefined();
+        expect(screen.getByText('settings.voice_typing_availability')).toBeDefined();
     });
 
     it('renders width input with correct values and classes', () => {
@@ -90,5 +133,37 @@ describe('SettingsSubtitleTab', () => {
         expect(textInput.getAttribute('type')).toBe('text');
         expect(textInput.getAttribute('value')).toBe('#ffffff');
         expect(textInput.classList.contains('settings-input')).toBe(true);
+    });
+
+    it('updates voice typing settings from the combined page', () => {
+        render(<SettingsSubtitleTab />);
+
+        const switches = screen.getAllByRole('switch');
+        fireEvent.click(switches[3]);
+        expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingEnabled: true });
+
+        fireEvent.change(screen.getByLabelText('voice typing shortcut'), {
+            target: { value: 'Ctrl+Alt+V' },
+        });
+        expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingShortcut: 'Ctrl+Alt+V' });
+
+        fireEvent.change(document.querySelector('#vt-mode-select') as HTMLSelectElement, {
+            target: { value: 'toggle' },
+        });
+        expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingMode: 'toggle' });
+    });
+
+    it('shows only simplified availability and the runtime failure reason', () => {
+        mockReadiness.state = 'failed';
+        mockReadiness.lastErrorSource = 'microphone';
+        mockReadiness.lastErrorMessage = 'Microphone is unavailable.';
+
+        render(<SettingsSubtitleTab />);
+
+        expect(screen.getByText('settings.voice_typing_unavailable')).toBeDefined();
+        expect(screen.getByText('settings.voice_typing_failure_reason_with_source')).toBeDefined();
+        expect(screen.queryByText('settings.voice_typing_dependencies')).toBeNull();
+        expect(screen.queryByText('settings.voice_typing_open_model_hub')).toBeNull();
+        expect(screen.queryByText('settings.voice_typing_open_input_device')).toBeNull();
     });
 });

@@ -1007,6 +1007,13 @@
         "subtitle_behavior_desc": "控制实时字幕窗口的行为。",
         "subtitle_appearance_title": "外观",
         "subtitle_appearance_desc": "自定义实时字幕的显示效果。",
+        "subtitle_voice_typing_title": "字幕与语音输入",
+        "subtitle_voice_typing_desc": "配置实时字幕窗口，以及向其他应用输入文字的语音输入。",
+        "voice_typing_availability": "是否可用",
+        "voice_typing_available": "可用",
+        "voice_typing_unavailable": "不可用",
+        "voice_typing_failure_reason": "失败原因：{{message}}",
+        "voice_typing_failure_reason_with_source": "失败原因：{{source}}：{{message}}",
         "model_download_status": {
             "download_label": "正在下载",
             "downloading": "{{label}}... {{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",

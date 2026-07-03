@@ -1007,6 +1007,13 @@
         "subtitle_behavior_desc": "Control how the live caption window behaves.",
         "subtitle_appearance_title": "Appearance",
         "subtitle_appearance_desc": "Customize the look of your live captions.",
+        "subtitle_voice_typing_title": "Subtitles & Voice Typing",
+        "subtitle_voice_typing_desc": "Configure the live caption window and voice typing into other apps.",
+        "voice_typing_availability": "Availability",
+        "voice_typing_available": "Available",
+        "voice_typing_unavailable": "Unavailable",
+        "voice_typing_failure_reason": "Failure reason: {{message}}",
+        "voice_typing_failure_reason_with_source": "Failure reason: {{source}}: {{message}}",
         "model_download_status": {
             "download_label": "Downloading",
             "downloading": "{{label}}... {{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",

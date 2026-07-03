@@ -8,7 +8,6 @@ export type SettingsTab =
     | 'dashboard'
     | 'microphone'
     | 'subtitle'
-    | 'voice_typing'
     | 'models'
     | 'shortcuts'
     | 'about'
@@ -16,7 +15,7 @@ export type SettingsTab =
     | 'vocabulary'
     | 'automation'
     | 'api_server';
-export type SettingsTabInput = SettingsTab | 'context';
+export type SettingsTabInput = SettingsTab | 'context' | 'voice_typing';
 
 interface SettingsTabState {
     isOpen: boolean;
@@ -29,7 +28,15 @@ function normalizeInitialSettingsTab(initialTab?: SettingsTabInput): SettingsTab
         return 'general';
     }
 
-    return initialTab === 'context' ? 'vocabulary' : initialTab;
+    if (initialTab === 'context') {
+        return 'vocabulary';
+    }
+
+    if (initialTab === 'voice_typing') {
+        return 'subtitle';
+    }
+
+    return initialTab;
 }
 
 /**

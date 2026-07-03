@@ -76,9 +76,6 @@ vi.mock('../settings/SettingsModelsPane', () => ({
         return <div>Models Tab</div>;
     },
 }));
-vi.mock('../settings/SettingsVoiceTypingTab', () => ({
-    SettingsVoiceTypingTab: () => <div>Voice Typing Tab</div>
-}));
 vi.mock('../settings/SettingsVocabularyTab', () => ({
     SettingsVocabularyTab: () => <div>Vocabulary Tab</div>
 }));
@@ -125,6 +122,7 @@ describe('Settings Focus Trap & Navigation', () => {
     it('traps focus inside the modal', async () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
+        await screen.findByText('General Tab Input');
 
         const modal = screen.getByRole('dialog');
 
@@ -194,11 +192,12 @@ describe('Settings Focus Trap & Navigation', () => {
         expect(setActiveTabMock).toHaveBeenCalledWith('general');
     });
 
-    it('renders the voice typing tab between subtitle settings and model hub', () => {
+    it('renders the combined subtitle and voice typing tab before model hub', () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(screen.getByText('settings.voice_typing')).toBeDefined();
+        expect(screen.getByText('settings.subtitle_voice_typing_title')).toBeDefined();
+        expect(screen.queryByText('settings.voice_typing')).toBeNull();
 
         const tabLabels = screen
             .getAllByRole('tab')
@@ -208,8 +207,7 @@ describe('Settings Focus Trap & Navigation', () => {
             'settings.general',
             'settings.dashboard.title',
             'settings.input_device',
-            'live.subtitle_settings',
-            'settings.voice_typing',
+            'settings.subtitle_voice_typing_title',
             'settings.model_hub',
             'settings.vocabulary',
             'settings.automation',
@@ -220,13 +218,13 @@ describe('Settings Focus Trap & Navigation', () => {
         ]);
     });
 
-    it('renders the dedicated voice typing panel when that tab is active', async () => {
-        mockActiveTab = 'voice_typing';
+    it('renders the combined subtitle panel when that tab is active', async () => {
+        mockActiveTab = 'subtitle';
         const onClose = vi.fn();
 
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(await screen.findByText('Voice Typing Tab')).toBeDefined();
+        expect(await screen.findByText('Subtitle Tab')).toBeDefined();
         expect(screen.getByText('General Tab Input').closest('[hidden]')).not.toBeNull();
     });
 
