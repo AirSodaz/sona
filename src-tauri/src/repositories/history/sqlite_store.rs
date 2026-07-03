@@ -29,10 +29,96 @@ use uuid::Uuid;
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
 const MILLIS_PER_DAY: u64 = 86_400_000;
 
-pub(crate) const HISTORY_COLUMNS: &str = "id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source";
-pub(crate) const HISTORY_INSERT_COLS: &str = "(id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)";
-pub(crate) const HISTORY_INSERT_PARAMS: &str =
-    "(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)";
+pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
+    "id",
+    "timestamp",
+    "duration",
+    "audio_path",
+    "audio_status",
+    "transcript_path",
+    "title",
+    "preview_text",
+    "icon",
+    "kind",
+    "search_content",
+    "project_id",
+    "status",
+    "draft_source",
+];
+
+fn column_list(columns: &[&str]) -> String {
+    columns.join(", ")
+}
+
+fn named_param_list(columns: &[&str]) -> String {
+    columns
+        .iter()
+        .map(|column| format!(":{column}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn history_select_columns(alias: Option<&str>, overrides: &[(&str, &str)]) -> String {
+    HISTORY_ITEM_COLUMNS
+        .iter()
+        .map(|column| {
+            if let Some((_, expression)) = overrides
+                .iter()
+                .find(|(override_column, _)| override_column == column)
+            {
+                return format!("{expression} AS {column}");
+            }
+
+            match alias {
+                Some(alias) => format!("{alias}.{column} AS {column}"),
+                None => (*column).to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn history_insert_sql() -> String {
+    format!(
+        "INSERT INTO history_items ({}) VALUES ({})",
+        column_list(&HISTORY_ITEM_COLUMNS),
+        named_param_list(&HISTORY_ITEM_COLUMNS)
+    )
+}
+
+pub(crate) fn insert_history_item_row(
+    tx: &rusqlite::Transaction<'_>,
+    item: &HistoryItemRecord,
+    transcript_path: &str,
+) -> Result<(), DatabaseError> {
+    let kind_str = item.kind.to_string();
+    let status_str = item.status.to_string();
+    let audio_status_str = item.audio_status.to_string();
+    let draft_source_str = item.draft_source.map(|s| s.to_string());
+    let timestamp = item.timestamp as i64;
+
+    tx.execute(
+        &history_insert_sql(),
+        rusqlite::named_params! {
+            ":id": &item.id,
+            ":timestamp": timestamp,
+            ":duration": item.duration,
+            ":audio_path": &item.audio_path,
+            ":audio_status": audio_status_str,
+            ":transcript_path": transcript_path,
+            ":title": &item.title,
+            ":preview_text": &item.preview_text,
+            ":icon": item.icon.as_deref(),
+            ":kind": kind_str,
+            ":search_content": &item.search_content,
+            ":project_id": item.project_id.as_deref(),
+            ":status": status_str,
+            ":draft_source": draft_source_str.as_deref(),
+        },
+    )?;
+
+    Ok(())
+}
 
 fn compute_date_threshold_millis(date_filter: HistoryWorkspaceDateFilter) -> Option<i64> {
     use HistoryWorkspaceDateFilter::*;
@@ -422,32 +508,7 @@ impl SqliteHistoryStore {
         item: &HistoryItemRecord,
         segments_str: &str,
     ) -> Result<(), DatabaseError> {
-        let kind_str = item.kind.to_string();
-        let status_str = item.status.to_string();
-        let audio_status_str = item.audio_status.to_string();
-        let draft_source_str = item.draft_source.map(|s| s.to_string());
-
-        tx.execute(
-            &format!(
-                "INSERT INTO history_items {HISTORY_INSERT_COLS} VALUES {HISTORY_INSERT_PARAMS}"
-            ),
-            rusqlite::params![
-                item.id,
-                item.timestamp as i64,
-                item.duration,
-                item.audio_path,
-                audio_status_str,
-                item.transcript_path,
-                item.title,
-                item.preview_text,
-                item.icon,
-                kind_str,
-                item.search_content,
-                item.project_id,
-                status_str,
-                draft_source_str,
-            ],
-        )?;
+        insert_history_item_row(tx, item, &item.transcript_path)?;
 
         tx.execute(
             "INSERT INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
@@ -460,26 +521,28 @@ impl SqliteHistoryStore {
     fn reconcile_live_drafts(&self) -> Result<(), DatabaseError> {
         let history_dir = self.history_dir();
         #[allow(clippy::type_complexity)]
-        let draft_items: Vec<(HistoryItemRecord, Option<Value>)> = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
-                "SELECT h.id, h.timestamp, h.duration, h.audio_path, h.audio_status, h.transcript_path, h.title, h.preview_text, h.icon, h.kind, '' AS search_content, h.project_id, h.status, h.draft_source, t.segments
+        let draft_items: Vec<(HistoryItemRecord, Option<Value>)> =
+            self.get_db()?.with_connection(|conn| {
+                let history_columns =
+                    history_select_columns(Some("h"), &[("search_content", "''")]);
+                let mut stmt = conn.prepare_cached(&format!(
+                    "SELECT {history_columns}, t.segments AS segments
                  FROM history_items h
                  LEFT JOIN history_transcripts t ON h.id = t.history_id
                  WHERE h.status = 'draft' AND h.draft_source = 'live_record'"
-            )?;
-            let rows = stmt.query_map([], |row| {
-                let item = map_row_to_item(row)?;
-                let segments: Option<String> = row.get(14)?;
-                let segments_val = segments
-                    .and_then(|s| serde_json::from_str(&s).ok());
-                Ok((item, segments_val))
+                ))?;
+                let rows = stmt.query_map([], |row| {
+                    let item = map_row_to_item(row)?;
+                    let segments: Option<String> = row.get("segments")?;
+                    let segments_val = segments.and_then(|s| serde_json::from_str(&s).ok());
+                    Ok((item, segments_val))
+                })?;
+                let mut items = Vec::new();
+                for row in rows {
+                    items.push(row?);
+                }
+                Ok(items)
             })?;
-            let mut items = Vec::new();
-            for row in rows {
-                items.push(row?);
-            }
-            Ok(items)
-        })?;
 
         let mut verified_updates = Vec::new();
 
@@ -548,20 +611,20 @@ fn validate_id(id: &str, label: &str) -> Result<(), String> {
 }
 
 fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
-    let id: String = row.get(0)?;
-    let timestamp_val: i64 = row.get(1)?;
-    let duration: f64 = row.get(2)?;
-    let audio_path: String = row.get(3)?;
-    let audio_status_str: String = row.get(4)?;
-    let transcript_path: String = row.get(5)?;
-    let title: String = row.get(6)?;
-    let preview_text: String = row.get(7)?;
-    let icon: Option<String> = row.get(8)?;
-    let kind_str: String = row.get(9)?;
-    let search_content: String = row.get(10)?;
-    let project_id: Option<String> = row.get(11)?;
-    let status_str: String = row.get(12)?;
-    let draft_source_str: Option<String> = row.get(13)?;
+    let id: String = row.get("id")?;
+    let timestamp_val: i64 = row.get("timestamp")?;
+    let duration: f64 = row.get("duration")?;
+    let audio_path: String = row.get("audio_path")?;
+    let audio_status_str: String = row.get("audio_status")?;
+    let transcript_path: String = row.get("transcript_path")?;
+    let title: String = row.get("title")?;
+    let preview_text: String = row.get("preview_text")?;
+    let icon: Option<String> = row.get("icon")?;
+    let kind_str: String = row.get("kind")?;
+    let search_content: String = row.get("search_content")?;
+    let project_id: Option<String> = row.get("project_id")?;
+    let status_str: String = row.get("status")?;
+    let draft_source_str: Option<String> = row.get("draft_source")?;
 
     let kind = HistoryItemKind::from_str(&kind_str).unwrap_or(HistoryItemKind::Recording);
     let audio_status =
@@ -644,8 +707,9 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
+            let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC"
+                "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
             ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -661,8 +725,9 @@ impl HistoryStore for SqliteHistoryStore {
     ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
         self.reconcile_live_drafts()?;
         self.get_db()?.with_connection(|conn| {
+            let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC"
+                "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
             ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -680,9 +745,10 @@ impl HistoryStore for SqliteHistoryStore {
         self.get_db()?.with_connection(|conn| {
             let limit = opts.limit.map(|l| l as i64).unwrap_or(-1);
             let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
-            let mut stmt = conn.prepare_cached(
-                &format!("SELECT {HISTORY_COLUMNS} FROM history_items ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2")
-            )?;
+            let columns = history_select_columns(None, &[]);
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {columns} FROM history_items ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2"
+            ))?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], map_row_to_item)?;
             let mut items = Vec::new();
             for row in rows {
@@ -711,7 +777,7 @@ impl HistoryStore for SqliteHistoryStore {
             // 1. Compute item counts via aggregate query (index-only, lightweight)
             let item_counts = {
                 let mut stmt = conn.prepare_cached(
-                    "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id"
+                    "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id",
                 )?;
                 let mut inbox = 0usize;
                 let mut by_project_id = BTreeMap::new();
@@ -724,10 +790,15 @@ impl HistoryStore for SqliteHistoryStore {
                     let (pid, cnt) = row?;
                     match pid {
                         None => inbox = cnt,
-                        Some(id) => { by_project_id.insert(id, cnt); }
+                        Some(id) => {
+                            by_project_id.insert(id, cnt);
+                        }
                     }
                 }
-                HistoryWorkspaceItemCounts { inbox, by_project_id }
+                HistoryWorkspaceItemCounts {
+                    inbox,
+                    by_project_id,
+                }
             };
 
             // 2. Build dynamic WHERE clause + params from request filters
@@ -771,9 +842,9 @@ impl HistoryStore for SqliteHistoryStore {
             //    FTS results). When FTS was skipped, load the actual column so
             //    in-memory matching works for short queries.
             let column_select = if fts_used {
-                "id, timestamp, duration, audio_path, audio_status, transcript_path, title, preview_text, icon, kind, '' AS search_content, project_id, status, draft_source"
+                history_select_columns(None, &[("search_content", "''")])
             } else {
-                HISTORY_COLUMNS
+                history_select_columns(None, &[])
             };
             let where_clause = if conditions.is_empty() {
                 String::new()
@@ -799,7 +870,9 @@ impl HistoryStore for SqliteHistoryStore {
 
             // 5. In-memory text search matching (highlighting/snippets) and sorting
             Ok(super::workspace_query::query_workspace_items_with_counts(
-                items, request, item_counts,
+                items,
+                request,
+                item_counts,
             ))
         })
     }
@@ -860,8 +933,9 @@ impl HistoryStore for SqliteHistoryStore {
                 rusqlite::params![history_id, segments_str],
             )?;
 
+            let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(&format!(
-                "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
+                "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
@@ -1103,8 +1177,9 @@ impl HistoryStore for SqliteHistoryStore {
                 rusqlite::params![history_id, segments_str],
             )?;
 
+            let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(&format!(
-                "SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1"
+                "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
@@ -1280,8 +1355,9 @@ impl HistoryStore for SqliteHistoryStore {
         })?;
 
         self.get_db()?.with_rw_transaction(|tx| {
+            let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
-                &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE id = ?1")
+                &format!("SELECT {columns} FROM history_items WHERE id = ?1")
             )?;
             let mut item = match stmt.query_row([history_id], map_row_to_item) {
                 Ok(item) => item,
@@ -1491,8 +1567,9 @@ impl HistoryStore for SqliteHistoryStore {
 
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
+            let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
-                &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
+                &format!("SELECT {columns} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
             )?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1702,6 +1779,15 @@ mod tests {
         root.path().join("history").join(&item.audio_path)
     }
 
+    fn table_columns(conn: &rusqlite::Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap();
+
+        rows.collect::<Result<Vec<_>, _>>().unwrap()
+    }
+
     fn assert_not_found<T>(result: Result<T, DatabaseError>, expected_id: &str) {
         match result {
             Err(DatabaseError::NotFoundError(message)) => {
@@ -1710,6 +1796,93 @@ mod tests {
             Ok(_) => panic!("expected NotFoundError for missing history item"),
             Err(error) => panic!("expected NotFoundError, got {error:?}"),
         }
+    }
+
+    #[test]
+    fn history_column_shape_matches_schema() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            let mut expected: Vec<String> = HISTORY_ITEM_COLUMNS
+                .iter()
+                .map(|column| (*column).to_string())
+                .collect();
+            expected.push("created_at".to_string());
+
+            assert_eq!(table_columns(conn, "history_items"), expected);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn history_row_mapper_reads_columns_by_name() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO history_items (
+                    id, timestamp, duration, audio_path, audio_status, transcript_path,
+                    title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                )
+                VALUES (
+                    'history-name-map', 1234, 42.5, 'audio.wav', 'removed', 'history-name-map.json',
+                    'Mapped title', 'Mapped preview', 'sparkles', 'batch', 'Mapped search',
+                    'project-name-map', 'draft', 'live_record'
+                )",
+                [],
+            )?;
+
+            let mut stmt = conn.prepare(
+                "SELECT
+                    draft_source AS draft_source,
+                    status AS status,
+                    project_id AS project_id,
+                    search_content AS search_content,
+                    kind AS kind,
+                    icon AS icon,
+                    preview_text AS preview_text,
+                    title AS title,
+                    transcript_path AS transcript_path,
+                    audio_status AS audio_status,
+                    audio_path AS audio_path,
+                    duration AS duration,
+                    timestamp AS timestamp,
+                    id AS id
+                 FROM history_items
+                 WHERE id = 'history-name-map'",
+            )?;
+            let item = stmt.query_row([], map_row_to_item)?;
+
+            assert_eq!(item.id, "history-name-map");
+            assert_eq!(item.timestamp, 1234);
+            assert_eq!(item.duration, 42.5);
+            assert_eq!(item.audio_path, "audio.wav");
+            assert_eq!(item.audio_status, HistoryAudioStatus::Removed);
+            assert_eq!(item.transcript_path, "history-name-map.json");
+            assert_eq!(item.title, "Mapped title");
+            assert_eq!(item.preview_text, "Mapped preview");
+            assert_eq!(item.icon.as_deref(), Some("sparkles"));
+            assert_eq!(item.kind, HistoryItemKind::Batch);
+            assert_eq!(item.search_content, "Mapped search");
+            assert_eq!(item.project_id.as_deref(), Some("project-name-map"));
+            assert_eq!(item.status, HistoryItemStatus::Draft);
+            assert_eq!(item.draft_source, Some(HistoryDraftSource::LiveRecord));
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn history_insert_sql_uses_named_params_for_all_columns() {
+        let sql = history_insert_sql();
+
+        assert!(!sql.contains('?'));
+        for column in HISTORY_ITEM_COLUMNS {
+            assert!(
+                sql.contains(&format!(":{column}")),
+                "missing named param for {column} in {sql}"
+            );
+        }
+        assert_eq!(sql.matches(':').count(), HISTORY_ITEM_COLUMNS.len());
     }
 
     #[test]

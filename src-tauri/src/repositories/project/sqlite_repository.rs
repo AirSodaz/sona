@@ -10,6 +10,63 @@ pub struct SqliteProjectRepository {
 
 crate::impl_db_repository!(SqliteProjectRepository);
 
+const PROJECT_COLUMNS: [&str; 11] = [
+    "id",
+    "name",
+    "icon",
+    "color",
+    "sort_order",
+    "created_at",
+    "updated_at",
+    "summary_template_id",
+    "translation_language",
+    "polish_preset_id",
+    "settings",
+];
+
+const PROJECT_UPDATE_COLUMNS: [&str; 7] = [
+    "name",
+    "icon",
+    "updated_at",
+    "summary_template_id",
+    "translation_language",
+    "polish_preset_id",
+    "settings",
+];
+
+fn project_column_list(columns: &[&str]) -> String {
+    columns.join(", ")
+}
+
+fn project_named_param_list(columns: &[&str]) -> String {
+    columns
+        .iter()
+        .map(|column| format!(":{column}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn project_select_columns() -> String {
+    project_column_list(&PROJECT_COLUMNS)
+}
+
+fn project_insert_sql() -> String {
+    format!(
+        "INSERT INTO projects ({}) VALUES ({})",
+        project_column_list(&PROJECT_COLUMNS),
+        project_named_param_list(&PROJECT_COLUMNS)
+    )
+}
+
+fn project_update_sql() -> String {
+    let assignments = PROJECT_UPDATE_COLUMNS
+        .iter()
+        .map(|column| format!("{column} = :{column}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("UPDATE projects SET {assignments} WHERE id = :id")
+}
+
 impl SqliteProjectRepository {
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_connection(Self::list_projects)
@@ -31,21 +88,20 @@ impl SqliteProjectRepository {
 
         self.get_db()?.with_connection(|conn| {
             conn.execute(
-                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-                rusqlite::params![
-                    id,
-                    &name,
-                    &icon,
-                    "",
-                    0,
-                    now as i64,
-                    now as i64,
-                    defaults.summary_template_id,
-                    defaults.translation_language,
-                    defaults.polish_preset_id,
-                    settings_str,
-                ],
+                &project_insert_sql(),
+                rusqlite::named_params! {
+                    ":id": &id,
+                    ":name": &name,
+                    ":icon": &icon,
+                    ":color": "",
+                    ":sort_order": 0_i64,
+                    ":created_at": now as i64,
+                    ":updated_at": now as i64,
+                    ":summary_template_id": &defaults.summary_template_id,
+                    ":translation_language": &defaults.translation_language,
+                    ":polish_preset_id": &defaults.polish_preset_id,
+                    ":settings": &settings_str,
+                },
             )?;
             Ok(())
         })?;
@@ -180,17 +236,17 @@ impl SqliteProjectRepository {
             let settings_str = settings_val.to_string();
 
             let rows_affected = tx.execute(
-                "UPDATE projects SET name = ?1, icon = ?2, updated_at = ?3, summary_template_id = ?4, translation_language = ?5, polish_preset_id = ?6, settings = ?7 WHERE id = ?8",
-                rusqlite::params![
-                    name,
-                    icon,
-                    now as i64,
-                    defaults.summary_template_id,
-                    defaults.translation_language,
-                    defaults.polish_preset_id,
-                    settings_str,
-                    project_id,
-                ],
+                &project_update_sql(),
+                rusqlite::named_params! {
+                    ":name": &name,
+                    ":icon": &icon,
+                    ":updated_at": now as i64,
+                    ":summary_template_id": &defaults.summary_template_id,
+                    ":translation_language": &defaults.translation_language,
+                    ":polish_preset_id": &defaults.polish_preset_id,
+                    ":settings": &settings_str,
+                    ":id": project_id,
+                },
             )?;
             if rows_affected == 0 {
                 return Ok(None);
@@ -222,16 +278,32 @@ impl SqliteProjectRepository {
     pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             tx.execute("DELETE FROM projects", [])?;
-            let mut stmt = tx.prepare_cached(
-                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"
-            )?;
+            let insert_sql = project_insert_sql();
+            let mut stmt = tx.prepare_cached(&insert_sql)?;
             for (i, project) in projects.iter().enumerate() {
-                let id = project.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-                let name = project.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-                let icon = project.get("icon").and_then(Value::as_str).unwrap_or("").to_string();
-                let created_at = project.get("createdAt").and_then(Value::as_u64).unwrap_or(0) as i64;
-                let updated_at = project.get("updatedAt").and_then(Value::as_u64).unwrap_or(0) as i64;
+                let id = project
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let name = project
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let icon = project
+                    .get("icon")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let created_at = project
+                    .get("createdAt")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as i64;
+                let updated_at = project
+                    .get("updatedAt")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as i64;
 
                 let defaults = project.get("defaults").and_then(Value::as_object);
                 let summary_template_id = defaults
@@ -255,21 +327,36 @@ impl SqliteProjectRepository {
                     settings.insert("description".to_string(), json!(desc));
                 }
                 if let Some(d) = defaults {
-                    for key in &["polishScenario", "polishContext", "exportFileNamePrefix",
-                        "enabledTextReplacementSetIds", "enabledHotwordSetIds",
-                        "enabledPolishKeywordSetIds", "enabledSpeakerProfileIds"]
-                    {
+                    for key in &[
+                        "polishScenario",
+                        "polishContext",
+                        "exportFileNamePrefix",
+                        "enabledTextReplacementSetIds",
+                        "enabledHotwordSetIds",
+                        "enabledPolishKeywordSetIds",
+                        "enabledSpeakerProfileIds",
+                    ] {
                         if let Some(val) = d.get(*key) {
                             settings.insert(key.to_string(), val.clone());
                         }
                     }
                 }
-                let settings_str = serde_json::to_string(&Value::Object(settings)).unwrap_or_else(|_| "{}".to_string());
+                let settings_str = serde_json::to_string(&Value::Object(settings))
+                    .unwrap_or_else(|_| "{}".to_string());
 
-                stmt.execute(rusqlite::params![
-                    id, name, icon, "", i as i64, created_at, updated_at,
-                    summary_template_id, translation_language, polish_preset_id, settings_str,
-                ])?;
+                stmt.execute(rusqlite::named_params! {
+                    ":id": &id,
+                    ":name": &name,
+                    ":icon": &icon,
+                    ":color": "",
+                    ":sort_order": i as i64,
+                    ":created_at": created_at,
+                    ":updated_at": updated_at,
+                    ":summary_template_id": summary_template_id,
+                    ":translation_language": translation_language,
+                    ":polish_preset_id": polish_preset_id,
+                    ":settings": &settings_str,
+                })?;
             }
             tx.execute(
                 "UPDATE history_items
@@ -299,11 +386,10 @@ impl SqliteProjectRepository {
     }
 
     fn list_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, DatabaseError> {
-        let mut stmt = conn.prepare_cached(
-            "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
-             FROM projects
-             ORDER BY sort_order"
-        )?;
+        let columns = project_select_columns();
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT {columns} FROM projects ORDER BY sort_order"
+        ))?;
         let rows = stmt.query_map([], map_row_to_project)?;
         let mut projects = Vec::new();
         for row in rows {
@@ -316,10 +402,9 @@ impl SqliteProjectRepository {
         conn: &rusqlite::Connection,
         project_id: &str,
     ) -> Result<Option<ProjectRecord>, DatabaseError> {
-        let mut stmt = conn.prepare_cached(
-            "SELECT id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings
-             FROM projects WHERE id = ?1"
-        )?;
+        let columns = project_select_columns();
+        let mut stmt =
+            conn.prepare_cached(&format!("SELECT {columns} FROM projects WHERE id = ?1"))?;
         let mut rows = stmt.query([project_id])?;
         if let Some(row) = rows.next()? {
             Ok(Some(map_row_to_project(row)?))
@@ -361,17 +446,17 @@ impl SqliteProjectRepository {
 }
 
 fn map_row_to_project(row: &rusqlite::Row) -> rusqlite::Result<ProjectRecord> {
-    let id: String = row.get(0)?;
-    let name: String = row.get(1)?;
-    let icon: String = row.get(2)?;
-    let _color: String = row.get(3)?;
-    let _sort_order: i64 = row.get(4)?;
-    let created_at: i64 = row.get(5)?;
-    let updated_at: i64 = row.get(6)?;
-    let summary_template_id: String = row.get(7)?;
-    let translation_language: String = row.get(8)?;
-    let polish_preset_id: String = row.get(9)?;
-    let settings_str: String = row.get(10)?;
+    let id: String = row.get("id")?;
+    let name: String = row.get("name")?;
+    let icon: String = row.get("icon")?;
+    let _color: String = row.get("color")?;
+    let _sort_order: i64 = row.get("sort_order")?;
+    let created_at: i64 = row.get("created_at")?;
+    let updated_at: i64 = row.get("updated_at")?;
+    let summary_template_id: String = row.get("summary_template_id")?;
+    let translation_language: String = row.get("translation_language")?;
+    let polish_preset_id: String = row.get("polish_preset_id")?;
+    let settings_str: String = row.get("settings")?;
 
     let settings: Map<String, Value> = serde_json::from_str(&settings_str).unwrap_or_default();
 
@@ -469,6 +554,107 @@ mod tests {
     use crate::core::database::Database;
     use serde_json::json;
     use std::path::PathBuf;
+
+    fn table_columns(conn: &rusqlite::Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap();
+
+        rows.collect::<Result<Vec<_>, _>>().unwrap()
+    }
+
+    #[test]
+    fn project_column_shape_matches_schema() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            let expected: Vec<String> = PROJECT_COLUMNS
+                .iter()
+                .map(|column| (*column).to_string())
+                .collect();
+
+            assert_eq!(table_columns(conn, "projects"), expected);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn project_row_mapper_reads_columns_by_name() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO projects (
+                    id, name, icon, color, sort_order, created_at, updated_at,
+                    summary_template_id, translation_language, polish_preset_id, settings
+                )
+                VALUES (
+                    'project-name-map', 'Mapped project', 'folder', '#fff', 7, 111, 222,
+                    'summary-special', 'en', 'polish-special',
+                    '{\"description\":\"Mapped description\",\"exportFileNamePrefix\":\"map-\"}'
+                )",
+                [],
+            )?;
+
+            let mut stmt = conn.prepare(
+                "SELECT
+                    settings AS settings,
+                    polish_preset_id AS polish_preset_id,
+                    translation_language AS translation_language,
+                    summary_template_id AS summary_template_id,
+                    updated_at AS updated_at,
+                    created_at AS created_at,
+                    sort_order AS sort_order,
+                    color AS color,
+                    icon AS icon,
+                    name AS name,
+                    id AS id
+                 FROM projects
+                 WHERE id = 'project-name-map'",
+            )?;
+            let project = stmt.query_row([], map_row_to_project)?;
+
+            assert_eq!(project.id, "project-name-map");
+            assert_eq!(project.name, "Mapped project");
+            assert_eq!(project.description, "Mapped description");
+            assert_eq!(project.icon, "folder");
+            assert_eq!(project.created_at, 111);
+            assert_eq!(project.updated_at, 222);
+            assert_eq!(project.defaults.summary_template_id, "summary-special");
+            assert_eq!(project.defaults.translation_language, "en");
+            assert_eq!(project.defaults.polish_preset_id, "polish-special");
+            assert_eq!(project.defaults.export_file_name_prefix, "map-");
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn project_insert_and_update_sql_use_named_params_for_expected_columns() {
+        let insert_sql = project_insert_sql();
+        assert!(!insert_sql.contains('?'));
+        for column in PROJECT_COLUMNS {
+            assert!(
+                insert_sql.contains(&format!(":{column}")),
+                "missing insert named param for {column} in {insert_sql}"
+            );
+        }
+        assert_eq!(insert_sql.matches(':').count(), PROJECT_COLUMNS.len());
+
+        let update_sql = project_update_sql();
+        assert!(!update_sql.contains('?'));
+        for column in PROJECT_UPDATE_COLUMNS {
+            assert!(
+                update_sql.contains(&format!("{column} = :{column}")),
+                "missing update assignment for {column} in {update_sql}"
+            );
+        }
+        assert!(update_sql.contains("WHERE id = :id"));
+        assert_eq!(
+            update_sql.matches(':').count(),
+            PROJECT_UPDATE_COLUMNS.len() + 1
+        );
+    }
 
     #[test]
     fn test_project_crud() {

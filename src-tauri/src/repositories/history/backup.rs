@@ -12,7 +12,7 @@ use super::fs_utils::{
     remove_path_if_exists, write_json_pretty_atomic,
 };
 use super::repository::{HistoryRepository, normalize_history_item_value};
-use super::sqlite_store::{HISTORY_INSERT_COLS, HISTORY_INSERT_PARAMS, SqliteHistoryStore};
+use super::sqlite_store::{SqliteHistoryStore, insert_history_item_row};
 use super::types::PreparedBackupImportSnapshot;
 use super::{
     ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
@@ -674,30 +674,8 @@ pub fn apply_prepared_history_import_inner(
         tx.execute("DELETE FROM history_items", [])?;
 
         for item in &items {
-            let kind_str = item.kind.to_string();
-            let status_str = item.status.to_string();
-            let audio_status_str = item.audio_status.to_string();
-            let draft_source_str = item.draft_source.map(|s| s.to_string());
-
-            tx.execute(
-                &format!("INSERT INTO history_items {HISTORY_INSERT_COLS} VALUES {HISTORY_INSERT_PARAMS}"),
-                rusqlite::params![
-                    item.id,
-                    item.timestamp as i64,
-                    item.duration,
-                    item.audio_path,
-                    audio_status_str,
-                    format!("{}.json", item.id),
-                    item.title,
-                    item.preview_text,
-                    item.icon,
-                    kind_str,
-                    item.search_content,
-                    item.project_id,
-                    status_str,
-                    draft_source_str,
-                ],
-            )?;
+            let transcript_path = format!("{}.json", item.id);
+            insert_history_item_row(tx, item, &transcript_path)?;
         }
 
         for (history_id, segments_str) in &transcript_entries {
