@@ -322,6 +322,22 @@ export type TauriCommandContractMap = {
     args: { input: DiagnosticsCoreInput };
     result: DiagnosticsCoreFactsSnapshot;
   };
+  [TauriCommand.app.loadAppConfig]: {
+    args: undefined;
+    result: AppConfig | null;
+  };
+  [TauriCommand.app.saveAppConfig]: {
+    args: { config: AppConfig };
+    result: void;
+  };
+  [TauriCommand.app.getAppSetting]: {
+    args: { key: string };
+    result: unknown | null;
+  };
+  [TauriCommand.app.setAppSetting]: {
+    args: { key: string; value: unknown };
+    result: void;
+  };
   [TauriCommand.app.migrateAppConfig]: {
     args: {
       savedConfig: AppConfig | null;

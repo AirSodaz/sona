@@ -1,11 +1,8 @@
 use crate::core::database::DatabaseError;
 use serde_json::Value;
-use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct SqliteConfigStore {
-    #[allow(dead_code)]
-    app_local_data_dir: PathBuf,
     db: crate::core::database::DbProvider,
 }
 
@@ -33,6 +30,32 @@ impl SqliteConfigStore {
                 "INSERT INTO app_config (id, config, migrated_version) VALUES (1, ?1, 0)
                  ON CONFLICT(id) DO UPDATE SET config = excluded.config",
                 rusqlite::params![config_str],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, DatabaseError> {
+        self.get_db()?.with_connection(|conn| {
+            let mut stmt = conn.prepare_cached("SELECT value FROM app_settings WHERE key = ?1")?;
+            let mut rows = stmt.query([key])?;
+            if let Some(row) = rows.next()? {
+                let value_str: String = row.get(0)?;
+                let value: Value = serde_json::from_str(&value_str)?;
+                Ok(Some(value))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), DatabaseError> {
+        let value_str = serde_json::to_string(value)?;
+        self.get_db()?.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                rusqlite::params![key, value_str],
             )?;
             Ok(())
         })
@@ -75,5 +98,32 @@ mod tests {
 
         let loaded = store.load_config().unwrap().unwrap();
         assert_eq!(loaded["version"], 2);
+    }
+
+    #[test]
+    fn test_app_settings_round_trip_json_values() {
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+
+        assert!(store.get_setting("sona-onboarding").unwrap().is_none());
+
+        store
+            .set_setting(
+                "sona-onboarding",
+                &json!({"version": 1, "status": "completed"}),
+            )
+            .unwrap();
+        store
+            .set_setting("sona-active-project-id", &json!("project-1"))
+            .unwrap();
+
+        assert_eq!(
+            store.get_setting("sona-onboarding").unwrap(),
+            Some(json!({"version": 1, "status": "completed"}))
+        );
+        assert_eq!(
+            store.get_setting("sona-active-project-id").unwrap(),
+            Some(json!("project-1"))
+        );
     }
 }

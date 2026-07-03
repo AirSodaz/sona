@@ -35,7 +35,7 @@ import {
 import { llmUsageReadRaw, llmUsageReplaceRaw } from './tauri/llmUsage';
 import { openDialog, saveDialog } from './tauri/platform/dialog';
 
-const ANALYTICS_FALLBACK_CONTENT = '{}';
+const ANALYTICS_FALLBACK_CONTENT = '[]';
 
 class BackupOperationBlockedError extends Error {
   constructor(public readonly blocker: BackupOperationBlocker, message: string) {

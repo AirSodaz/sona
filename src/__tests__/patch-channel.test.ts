@@ -74,7 +74,7 @@ edition = "2024"
       const patchedTauri = JSON.parse(fs.readFileSync(path.join(tauriDir, 'tauri.conf.json'), 'utf8'));
       expect(patchedTauri.version).toBe('1.0.0-45');
       expect(patchedTauri.identifier).toBe('com.asoda.sona.nightly');
-      expect(patchedTauri.productName).toBe('Sona Nightly');
+      expect(patchedTauri.productName).toBe('Sona-Nightly');
       expect(patchedTauri.plugins.updater.endpoints[0]).toBe('https://github.com/AirSodaz/sona/releases/download/nightly/updater.json');
 
       const patchedTauriWindows = JSON.parse(fs.readFileSync(path.join(tauriDir, 'tauri.windows.conf.json'), 'utf8'));

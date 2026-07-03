@@ -764,7 +764,6 @@ where
             content: request.input.clone(),
         }],
         temperature: request.config.temperature.unwrap_or(0.7),
-        max_tokens: None,
     });
 
     let response = match request.config.strategy {
@@ -961,7 +960,6 @@ pub(crate) async fn generate_with_rig(
             content: request.input,
         }],
         temperature: request.config.temperature.unwrap_or(0.7),
-        max_tokens: None,
     };
 
     let url = LlmApiUrl::parse(&request.config.base_url)?;

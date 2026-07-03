@@ -59,14 +59,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     app.manage(dashboard_service);
 
-    let initial_config = crate::app::server::load_online_asr_config(
-        &app_handle_for_listener as &dyn crate::core::paths::PathProvider,
-    );
-    let config_for_init = controller.online_asr_config.clone();
-    tauri::async_runtime::spawn(async move {
-        *config_for_init.write().await = initial_config;
-    });
-
     let config_for_listener = controller.online_asr_config.clone();
     let listener_app_handle = app_handle_for_listener.clone();
     app.listen_any("asr-config-updated", move |_event| {

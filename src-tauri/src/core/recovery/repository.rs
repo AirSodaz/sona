@@ -66,14 +66,6 @@ impl RecoveryRepository {
         Ok(snapshot)
     }
 
-    #[allow(dead_code)]
-    pub fn persist_queue_snapshot(
-        &self,
-        queue_items: Vec<Value>,
-    ) -> Result<RecoverySnapshot, String> {
-        self.persist_queue_snapshot_with_resolved_ids(queue_items, Vec::new())
-    }
-
     pub fn persist_queue_snapshot_with_resolved_ids(
         &self,
         queue_items: Vec<Value>,

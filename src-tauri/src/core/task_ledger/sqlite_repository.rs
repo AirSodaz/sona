@@ -1,6 +1,5 @@
 use crate::core::database::DatabaseError;
 use serde_json::Value;
-use std::path::PathBuf;
 
 use crate::core::task_ledger::types::{
     TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
@@ -10,8 +9,6 @@ const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
 
 #[derive(Clone)]
 pub struct SqliteLedgerRepository {
-    #[allow(dead_code)]
-    app_local_data_dir: PathBuf,
     db: crate::core::database::DbProvider,
 }
 
@@ -89,7 +86,7 @@ impl SqliteLedgerRepository {
     }
 
     pub fn patch_task(&self, id: &str, patch: Value) -> Result<(), DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
+        self.get_db()?.with_rw_transaction(|tx| {
             let existing: Option<String> = {
                 let mut stmt = tx.prepare_cached("SELECT data FROM task_ledger WHERE id = ?1")?;
                 let mut rows = stmt.query([id])?;
@@ -136,7 +133,7 @@ impl SqliteLedgerRepository {
     }
 
     pub fn clear_resolved(&self) -> Result<(), DatabaseError> {
-        let deleted_count = self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {
                 let id: String = row.get(0)?;
@@ -156,12 +153,8 @@ impl SqliteLedgerRepository {
             for id in &to_delete {
                 stmt.execute([id])?;
             }
-            Ok(to_delete.len())
+            Ok(())
         })?;
-
-        if deleted_count > 0 {
-            self.get_db()?.vacuum()?;
-        }
 
         Ok(())
     }

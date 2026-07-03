@@ -65,6 +65,23 @@ export async function getDiagnosticsCoreSnapshot(
   return invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, { input });
 }
 
+export async function loadAppConfig(): Promise<AppConfig | null> {
+  const config = await invokeTauri(TauriCommand.app.loadAppConfig);
+  return config ? flattenAppConfig(config) : null;
+}
+
+export async function saveAppConfig(config: AppConfig): Promise<void> {
+  await invokeTauri(TauriCommand.app.saveAppConfig, { config });
+}
+
+export async function getAppSetting<T = unknown>(key: string): Promise<T | null> {
+  return invokeTauri(TauriCommand.app.getAppSetting, { key }) as Promise<T | null>;
+}
+
+export async function setAppSetting(key: string, value: unknown): Promise<void> {
+  await invokeTauri(TauriCommand.app.setAppSetting, { key, value });
+}
+
 export async function migrateAppConfig(
   savedConfig: AppConfig | null | undefined,
   legacyConfig: unknown,

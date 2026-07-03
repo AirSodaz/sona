@@ -10,6 +10,10 @@ import {
   getDiagnosticsCoreSnapshot,
   getModelCatalogSnapshot,
   migrateAppConfig,
+  loadAppConfig,
+  saveAppConfig,
+  getAppSetting,
+  setAppSetting,
   openLogFolder,
   resolveEffectiveConfig,
   resolveModelCatalogSelectedIds,
@@ -382,6 +386,40 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.resolveEffectiveConfig, {
       globalConfig,
       project,
+    });
+  });
+
+  it('app wrappers expose SQLite-backed config and setting storage', async () => {
+    const globalConfig = {
+      configVersion: 7,
+      appLanguage: 'auto',
+      language: 'auto',
+      llmSettings: {},
+      translationLanguage: 'zh',
+      polishPresetId: 'general',
+    } as any;
+    const onboarding = { version: 1, status: 'completed' };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(globalConfig)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(onboarding)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(loadAppConfig()).resolves.toEqual(globalConfig);
+    await expect(saveAppConfig(globalConfig)).resolves.toBeUndefined();
+    await expect(getAppSetting<typeof onboarding>('sona-onboarding')).resolves.toEqual(onboarding);
+    await expect(setAppSetting('sona-onboarding', onboarding)).resolves.toBeUndefined();
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.app.loadAppConfig);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.saveAppConfig, {
+      config: globalConfig,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.app.getAppSetting, {
+      key: 'sona-onboarding',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.app.setAppSetting, {
+      key: 'sona-onboarding',
+      value: onboarding,
     });
   });
 

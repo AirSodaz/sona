@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod integrations {
     pub use tauri_appsona_lib::integrations::asr_providers;
 }

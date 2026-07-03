@@ -1,13 +1,10 @@
 use crate::core::database::DatabaseError;
 use serde_json::Value;
-use std::path::PathBuf;
 
 use super::types::AutomationRepositoryState;
 
 #[derive(Clone)]
 pub struct SqliteAutomationRepository {
-    #[allow(dead_code)]
-    app_local_data_dir: PathBuf,
     db: crate::core::database::DbProvider,
 }
 

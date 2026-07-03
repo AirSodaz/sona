@@ -292,6 +292,13 @@ fn object_or_empty<'a>(
     }
 }
 
+fn ensure_backup_analytics_value(value: Value) -> Result<(), String> {
+    match value {
+        Value::Object(_) | Value::Array(_) => Ok(()),
+        _ => Err("Backup analytics must be an object or an array.".to_string()),
+    }
+}
+
 fn string_field(source: &Map<String, Value>, key: &str) -> Option<String> {
     source
         .get(key)
@@ -344,7 +351,7 @@ pub fn export_backup_archive_inner(
     let config = ensure_json_object_value(request.config, "Backup config")?;
     let analytics_json: Value =
         serde_json::from_str(&request.analytics_content).map_err(|error| error.to_string())?;
-    ensure_json_object_value(analytics_json, "Backup analytics")?;
+    ensure_backup_analytics_value(analytics_json)?;
 
     let store = SqliteHistoryStore::new(app_local_data_dir.to_path_buf());
     let history = store
@@ -536,7 +543,7 @@ pub fn prepare_backup_import_inner(
         .map_err(|error| error.to_string())?;
         let analytics_json: Value =
             serde_json::from_str(&analytics_content).map_err(|error| error.to_string())?;
-        ensure_json_object_value(analytics_json, "Backup analytics")?;
+        ensure_backup_analytics_value(analytics_json)?;
 
         if manifest.counts.projects != projects.len() as u64 {
             return Err("Backup project count does not match the manifest.".to_string());
@@ -873,6 +880,40 @@ mod tests {
                 .exists()
         );
         assert!(!exported_versions_dir.join("draft").exists());
+    }
+
+    #[test]
+    fn export_and_prepare_backup_accept_sqlite_llm_usage_rows() {
+        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
+        init_global_db();
+        clear_global_db();
+
+        let root = tempdir().unwrap();
+        let store = SqliteHistoryStore::new(root.path().to_path_buf());
+        store.ensure_ready().unwrap();
+
+        let archive_dir = tempdir().unwrap();
+        let archive_path = archive_dir.path().join("analytics-array-backup.tar.bz2");
+        let analytics_content = r#"[{"occurredAt":"2026-07-03T00:00:00Z","provider":"open_ai","category":"summary","promptTokens":10,"completionTokens":5,"totalTokens":15}]"#;
+
+        export_backup_archive_inner(
+            root.path(),
+            ExportBackupArchiveRequest {
+                archive_path: archive_path.to_string_lossy().into_owned(),
+                app_version: "0.7.5".to_string(),
+                config: json!({ "theme": "auto" }),
+                projects: vec![],
+                automation_rules: vec![],
+                automation_processed_entries: vec![],
+                analytics_content: analytics_content.to_string(),
+            },
+        )
+        .unwrap();
+
+        let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
+
+        assert_eq!(prepared.analytics_content, analytics_content);
+        remove_path_if_exists(&snapshot.extraction_dir).unwrap();
     }
 
     #[test]

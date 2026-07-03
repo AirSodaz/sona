@@ -154,11 +154,6 @@ fn migrate_history(
 
     let items = match raw {
         Value::Array(arr) => arr,
-        Value::Object(ref map) => map
-            .get("items")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
         _ => {
             errors.push("Unexpected format in history/index.json".to_string());
             return Ok(());
@@ -232,14 +227,13 @@ fn migrate_item_transcript(
     item_val: &Value,
     errors: &mut Vec<String>,
 ) {
-    // Try transcriptPath from item, then {id}/transcript.json, then {id}.json
+    // v0.7.4 stores transcripts as history/{transcriptPath}, normally {id}.json.
     let paths = [
         try_resolve_path(
             app_dir,
             "history",
             &string_field(item_val, "transcriptPath").unwrap_or_default(),
         ),
-        Some(app_dir.join("history").join(id).join("transcript.json")),
         Some(app_dir.join("history").join(format!("{id}.json"))),
     ];
 
@@ -269,16 +263,8 @@ fn migrate_item_transcript(
 }
 
 fn migrate_item_summary(tx: &Transaction, app_dir: &Path, id: &str, errors: &mut Vec<String>) {
-    // Try {id}/summary.json then {id}.summary.json
-    let paths = [
-        Some(app_dir.join("history").join(id).join("summary.json")),
-        Some(app_dir.join("history").join(format!("{id}.summary.json"))),
-    ];
-
-    let summary_val = paths
-        .iter()
-        .flatten()
-        .find_map(|p| try_read_json_or_skip(p, &format!("Summary for {id}"), errors));
+    let summary_path = app_dir.join("history").join(format!("{id}.summary.json"));
+    let summary_val = try_read_json_or_skip(&summary_path, &format!("Summary for {id}"), errors);
 
     let Some(summary_val) = summary_val else {
         return;
@@ -301,28 +287,12 @@ fn migrate_item_summary(tx: &Transaction, app_dir: &Path, id: &str, errors: &mut
 }
 
 fn migrate_item_snapshots(tx: &Transaction, app_dir: &Path, id: &str, errors: &mut Vec<String>) {
-    // Try versions/{id}/index.json then {id}/versions/index.json
-    let index_paths = [
-        Some(
-            app_dir
-                .join("history")
-                .join("versions")
-                .join(id)
-                .join("index.json"),
-        ),
-        Some(
-            app_dir
-                .join("history")
-                .join(id)
-                .join("versions")
-                .join("index.json"),
-        ),
-    ];
-
-    let index_val = index_paths
-        .iter()
-        .flatten()
-        .find_map(|p| try_read_json_or_skip(p, &format!("Snapshot index for {id}"), errors));
+    let snapshot_dir = app_dir.join("history").join("versions").join(id);
+    let index_val = try_read_json_or_skip(
+        &snapshot_dir.join("index.json"),
+        &format!("Snapshot index for {id}"),
+        errors,
+    );
 
     let Some(index_val) = index_val else { return };
 
@@ -343,38 +313,17 @@ fn migrate_item_snapshots(tx: &Transaction, app_dir: &Path, id: &str, errors: &m
         let created_at = u64_field(meta, "created_at") as i64;
         let segment_count = u64_field(meta, "segment_count") as i64;
 
-        // Try both path formats for snapshot data
-        let data_paths = [
-            Some(
-                app_dir
-                    .join("history")
-                    .join("versions")
-                    .join(id)
-                    .join(format!("{snapshot_id}.json")),
-            ),
-            Some(
-                app_dir
-                    .join("history")
-                    .join(id)
-                    .join("versions")
-                    .join(format!("{snapshot_id}.json")),
-            ),
-        ];
-
-        let segments_str = data_paths
-            .iter()
-            .flatten()
-            .find_map(|p| {
-                let val = try_read_json_or_skip(
-                    p,
-                    &format!("Snapshot data for {id}/{snapshot_id}"),
-                    errors,
-                )?;
-                let record_obj = val.as_object()?;
-                let segs = record_obj.get("segments")?;
-                serde_json::to_string(segs).ok()
-            })
-            .unwrap_or_else(|| "[]".to_string());
+        let segments_str = try_read_json_or_skip(
+            &snapshot_dir.join(format!("{snapshot_id}.json")),
+            &format!("Snapshot data for {id}/{snapshot_id}"),
+            errors,
+        )
+        .and_then(|val| {
+            let record_obj = val.as_object()?;
+            let segs = record_obj.get("segments")?;
+            serde_json::to_string(segs).ok()
+        })
+        .unwrap_or_else(|| "[]".to_string());
 
         if let Err(e) = tx.execute(
             "INSERT OR IGNORE INTO transcript_snapshots (id, history_id, reason, created_at, segment_count, segments)
@@ -398,15 +347,8 @@ fn try_resolve_path(app_dir: &Path, parent: &str, file_name: &str) -> Option<std
 }
 
 fn extract_segments_string(value: &Value) -> Result<String, String> {
-    // The transcript can be either a direct array, or an object with a "segments" key
-    let segments = match value {
-        Value::Array(arr) => arr.clone(),
-        Value::Object(map) => map
-            .get("segments")
-            .and_then(Value::as_array)
-            .cloned()
-            .ok_or_else(|| "Transcript object missing 'segments' key".to_string())?,
-        _ => return Err("Transcript is neither array nor object".to_string()),
+    let Value::Array(segments) = value else {
+        return Err("Transcript is not an array".to_string());
     };
     serde_json::to_string(&segments).map_err(|e| e.to_string())
 }
@@ -1381,14 +1323,13 @@ mod tests {
         .unwrap();
     }
 
-    // ---- test_migrate_history_with_items_wrapped_in_object ----
+    // ---- test_migrate_history_rejects_items_wrapped_in_object ----
 
     #[test]
-    fn test_migrate_history_items_wrapped() {
+    fn test_migrate_history_rejects_items_wrapped_in_object() {
         let dir = tempfile::tempdir().unwrap();
         let db = with_open_db();
 
-        // Object with items key
         write_json(
             &dir.path().join("history").join("index.json"),
             &json!({
@@ -1400,8 +1341,44 @@ mod tests {
 
         let report = migrate_legacy_to_sqlite(&db, dir.path()).unwrap();
         assert!(report.migrated);
+        assert_eq!(report.history_count, 0);
+        assert_eq!(
+            report.errors,
+            vec!["Unexpected format in history/index.json".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_migrate_history_ignores_pre_v0_7_4_nested_transcript_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = with_open_db();
+
+        write_json(
+            &dir.path().join("history").join("index.json"),
+            &json!([
+                {"id": "hist-1", "timestamp": 1000, "duration": 1.0, "audioPath": "hist-1.wav", "transcriptPath": "", "title": "Nested", "previewText": "", "type": "recording", "searchContent": "", "status": "complete"}
+            ]),
+        );
+        write_json(
+            &dir.path()
+                .join("history")
+                .join("hist-1")
+                .join("transcript.json"),
+            &json!([{"id": "seg-1", "text": "Nested", "start": 0.0, "end": 1.0, "isFinal": true}]),
+        );
+
+        let report = migrate_legacy_to_sqlite(&db, dir.path()).unwrap();
+        assert!(report.migrated);
         assert_eq!(report.history_count, 1);
         assert!(report.errors.is_empty(), "Errors: {:?}", report.errors);
+
+        db.with_connection(|conn| {
+            let transcript_count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM history_transcripts", [], |r| r.get(0))?;
+            assert_eq!(transcript_count, 0);
+            Ok(())
+        })
+        .unwrap();
     }
 
     // ---- test_migrate_errors_do_not_abort ----

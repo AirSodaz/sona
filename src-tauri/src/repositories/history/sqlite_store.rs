@@ -112,7 +112,7 @@ pub struct SqliteHistoryStore {
     db: crate::core::database::DbProvider,
 }
 
-crate::impl_db_repository!(SqliteHistoryStore);
+crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
 
 impl SqliteHistoryStore {
     fn history_dir(&self) -> PathBuf {
@@ -1158,8 +1158,8 @@ impl HistoryStore for SqliteHistoryStore {
     }
 
     fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
-        let items = self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached(
+        self.get_db()?.with_transaction(|tx| {
+            let mut stmt = tx.prepare_cached(
                 &format!("SELECT {HISTORY_COLUMNS} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
             )?;
             let rows = stmt.query_map([], map_row_to_item)?;
@@ -1170,22 +1170,18 @@ impl HistoryStore for SqliteHistoryStore {
                 item.draft_source = None;
                 items.push(item);
             }
-            Ok(items)
-        })?;
+            if items.is_empty() {
+                return Ok(HistoryBackupSnapshot {
+                    items,
+                    transcript_files: vec![],
+                    summary_files: vec![],
+                    snapshot_files: vec![],
+                });
+            }
 
-        if items.is_empty() {
-            return Ok(HistoryBackupSnapshot {
-                items,
-                transcript_files: vec![],
-                summary_files: vec![],
-                snapshot_files: vec![],
-            });
-        }
+            let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+            let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-        let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-        let (transcript_files, summary_files, snapshot_files) = self.get_db()?.with_connection(|conn| {
             // Bulk fetch transcripts
             let mut transcript_files: Vec<(String, Value)> = Vec::with_capacity(items.len());
 
@@ -1194,7 +1190,7 @@ impl HistoryStore for SqliteHistoryStore {
                     "SELECT history_id, segments FROM history_transcripts WHERE history_id IN ({})",
                     placeholders
                 );
-                let mut stmt = conn.prepare_cached(&sql)?;
+                let mut stmt = tx.prepare_cached(&sql)?;
                 let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
                 let mut transcript_map: std::collections::HashMap<String, Value> =
                     std::collections::HashMap::new();
@@ -1228,7 +1224,7 @@ impl HistoryStore for SqliteHistoryStore {
                     "SELECT history_id, payload FROM history_summaries WHERE history_id IN ({})",
                     placeholders
                 );
-                let mut stmt = conn.prepare_cached(&sql)?;
+                let mut stmt = tx.prepare_cached(&sql)?;
                 let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
                 while let Some(row) = rows.next()? {
                     let history_id: String = row.get(0)?;
@@ -1248,7 +1244,7 @@ impl HistoryStore for SqliteHistoryStore {
                      ORDER BY created_at DESC, id DESC",
                     placeholders
                 );
-                let mut stmt = conn.prepare_cached(&sql)?;
+                let mut stmt = tx.prepare_cached(&sql)?;
                 let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
                 let mut snapshots_by_item: std::collections::HashMap<String, Vec<TranscriptSnapshotRecord>> =
                     std::collections::HashMap::new();
@@ -1304,14 +1300,12 @@ impl HistoryStore for SqliteHistoryStore {
                 }
             }
 
-            Ok((transcript_files, summary_files, snapshot_files))
-        })?;
-
-        Ok(HistoryBackupSnapshot {
-            items,
-            transcript_files,
-            summary_files,
-            snapshot_files,
+            Ok(HistoryBackupSnapshot {
+                items,
+                transcript_files,
+                summary_files,
+                snapshot_files,
+            })
         })
     }
 }
@@ -1344,6 +1338,7 @@ fn build_fts_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::database::Database;
     use serde_json::json;
     use tempfile::tempdir;
 

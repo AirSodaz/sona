@@ -2,12 +2,30 @@ use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
+use crate::core::paths::{PathKind, PathProvider};
 use crate::repositories::project::repository::{
     ACTIVE_PROJECT_SETTINGS_KEY, SETTINGS_FILE_NAME, run_project_task,
 };
 use crate::repositories::project::{
     ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRecord,
 };
+
+fn sqlite_config_store<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
+    let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
+        app_local_data_dir,
+    ))
+}
+
+fn active_project_id_from_value(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(str::trim)
+        .map(ToOwned::to_owned)
+        .filter(|value| !value.is_empty())
+}
 
 #[tauri::command]
 pub async fn project_list<R: Runtime>(
@@ -85,13 +103,31 @@ pub async fn project_reorder<R: Runtime>(
 pub async fn project_get_active_id<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Option<String>, String> {
-    let store = app
+    let sqlite_store = sqlite_config_store(&app)?;
+    if let Some(value) = sqlite_store
+        .get_setting(ACTIVE_PROJECT_SETTINGS_KEY)
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(active_project_id_from_value(&value));
+    }
+
+    let legacy_store = app
         .store(SETTINGS_FILE_NAME)
         .map_err(|error| error.to_string())?;
-    Ok(store
+    let active_project_id = legacy_store
         .get(ACTIVE_PROJECT_SETTINGS_KEY)
-        .and_then(|value| value.as_str().map(str::trim).map(ToOwned::to_owned))
-        .filter(|value| !value.is_empty()))
+        .and_then(|value| active_project_id_from_value(&value));
+
+    if let Some(project_id) = &active_project_id {
+        sqlite_store
+            .set_setting(
+                ACTIVE_PROJECT_SETTINGS_KEY,
+                &Value::String(project_id.clone()),
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(active_project_id)
 }
 
 #[tauri::command]
@@ -99,12 +135,10 @@ pub async fn project_set_active_id<R: Runtime>(
     app: AppHandle<R>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    let store = app
-        .store(SETTINGS_FILE_NAME)
-        .map_err(|error| error.to_string())?;
-    store.set(
-        ACTIVE_PROJECT_SETTINGS_KEY,
-        project_id.map(Value::String).unwrap_or(Value::Null),
-    );
-    store.save().map_err(|error| error.to_string())
+    sqlite_config_store(&app)?
+        .set_setting(
+            ACTIVE_PROJECT_SETTINGS_KEY,
+            &project_id.map(Value::String).unwrap_or(Value::Null),
+        )
+        .map_err(|error| error.to_string())
 }

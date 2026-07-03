@@ -608,15 +608,19 @@ describe('TranscriptSpeakerReviewPanel', () => {
       fireEvent.keyDown(window, { key: 'ArrowDown' });
     });
 
-    expectGroupActive(firstGroup, false);
-    expectGroupActive(secondGroup);
+    await waitFor(() => {
+      expectGroupActive(firstGroup, false);
+      expectGroupActive(secondGroup);
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'ArrowUp' });
     });
 
-    expectGroupActive(firstGroup);
-    expectGroupActive(secondGroup, false);
+    await waitFor(() => {
+      expectGroupActive(firstGroup);
+      expectGroupActive(secondGroup, false);
+    });
   });
 
   it('confirms the active group with Enter and advances to the next pending group', async () => {

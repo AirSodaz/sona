@@ -3,11 +3,10 @@
 //!
 //! File location: src-tauri/tests/dynamic_linking_tests.rs
 
-#![allow(dead_code)]
-
 use std::env;
 use std::path::PathBuf;
 
+#[cfg(target_os = "windows")]
 static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Tier 3.1: Verify that the workspace directory `resources/shared_libs` exists and is populated

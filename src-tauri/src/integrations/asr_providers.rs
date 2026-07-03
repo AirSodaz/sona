@@ -22,17 +22,14 @@ struct OnlineAsrProviderManifest {
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProvider {
     pub id: String,
-    #[allow(dead_code)]
     pub profile_id: String,
     pub defaults: Value,
-    #[allow(dead_code)]
     pub streaming: OnlineAsrCapability,
     pub batch: OnlineAsrBatchCapability,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub struct OnlineAsrCapability {
     pub supported: Option<bool>,
     pub requires_api_key: bool,
@@ -41,7 +38,6 @@ pub struct OnlineAsrCapability {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub struct OnlineAsrBatchCapability {
     pub requires_api_key: bool,
     pub required_config_fields: Vec<String>,
@@ -50,7 +46,6 @@ pub struct OnlineAsrBatchCapability {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 pub struct OnlineAsrLocalFileBatchMode {
     pub supported: bool,
     pub endpoint: String,
@@ -75,8 +70,61 @@ fn manifest() -> &'static OnlineAsrProviderManifest {
                 .any(|provider| provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID),
             "shared online ASR providers JSON should include Volcengine Doubao"
         );
+        for provider in &manifest.providers {
+            assert!(
+                !provider.profile_id.trim().is_empty(),
+                "online ASR provider profile id should not be empty"
+            );
+            validate_capability_config_fields(
+                &provider.id,
+                "streaming",
+                &provider.streaming.required_config_fields,
+            );
+            validate_capability_config_fields(
+                &provider.id,
+                "batch",
+                &provider.batch.required_config_fields,
+            );
+            if provider.streaming.requires_api_key || provider.batch.requires_api_key {
+                assert!(
+                    provider.defaults.get("apiKey").is_some()
+                        || provider
+                            .streaming
+                            .required_config_fields
+                            .iter()
+                            .chain(provider.batch.required_config_fields.iter())
+                            .any(|field| field == "apiKey"),
+                    "online ASR provider requiring an API key should declare apiKey"
+                );
+            }
+            if provider.batch.local_file_mode.supported {
+                assert!(
+                    !provider.batch.local_file_mode.endpoint.trim().is_empty(),
+                    "online ASR local file mode endpoint should not be empty"
+                );
+            } else {
+                assert!(
+                    !provider
+                        .batch
+                        .local_file_mode
+                        .unsupported_message
+                        .trim()
+                        .is_empty(),
+                    "online ASR local file mode unsupported message should not be empty"
+                );
+            }
+        }
         manifest
     })
+}
+
+fn validate_capability_config_fields(provider_id: &str, label: &str, fields: &[String]) {
+    for field in fields {
+        assert!(
+            !field.trim().is_empty(),
+            "online ASR provider {provider_id} {label} config field should not be empty"
+        );
+    }
 }
 
 pub fn online_asr_providers() -> &'static [OnlineAsrProvider] {

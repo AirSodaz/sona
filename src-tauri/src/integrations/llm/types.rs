@@ -234,8 +234,6 @@ pub struct StandardMessage {
 pub struct StandardLlmRequest {
     pub messages: Vec<StandardMessage>,
     pub temperature: f32,
-    #[allow(dead_code)]
-    pub max_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

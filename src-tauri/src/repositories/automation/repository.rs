@@ -311,24 +311,6 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-pub async fn run_repository_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(
-            crate::repositories::automation::SqliteAutomationRepository,
-        ) -> Result<T, DatabaseError>
-        + Send
-        + 'static,
-{
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        task(crate::repositories::automation::SqliteAutomationRepository::new(app_local_data_dir))
-    })
-    .await
-    .map_err(|error| error.to_string())?
-    .map_err(|e| e.to_string())
-}
-
 pub async fn run_automation_task<T, F>(
     provider: &dyn PathProvider,
     lock: std::sync::Arc<std::sync::Mutex<()>>,

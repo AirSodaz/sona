@@ -4,7 +4,7 @@ pub mod schema;
 
 pub use error::DatabaseError;
 
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::Path;
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, TryLockError};
@@ -14,6 +14,8 @@ use std::time::{Duration, Instant};
 /// proceed concurrently through separate connections, and writers are
 /// serialized by SQLite's internal locking (handled via `busy_timeout`).
 const POOL_SIZE: usize = 4;
+const POOL_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
+const POOL_ACQUIRE_RETRY_DELAY_MS: u64 = 5;
 
 static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 
@@ -121,37 +123,48 @@ impl Database {
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))
     }
 
-    /// Acquires a connection from the pool via round-robin with fallback.
-    /// Uses try_lock to avoid indefinite blocking; if the selected slot is
-    /// busy, scans all other slots for an idle connection. Recovers from
-    /// poisoned mutexes by consuming the poison error.
+    fn try_acquire_slot(
+        &self,
+        idx: usize,
+    ) -> Result<Option<std::sync::MutexGuard<'_, Connection>>, DatabaseError> {
+        match self.pool[idx].try_lock() {
+            Ok(guard) => Ok(Some(guard)),
+            Err(TryLockError::Poisoned(poisoned)) => Ok(Some(poisoned.into_inner())),
+            Err(TryLockError::WouldBlock) => Ok(None),
+        }
+    }
+
+    /// Acquires a connection from the pool via round-robin with bounded retry.
+    /// If all slots are momentarily busy, waits briefly before returning a
+    /// PoolBusyError so normal bursts do not fail immediately.
     fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, DatabaseError> {
         if self.pool.is_empty() {
             return Err(DatabaseError::PoolBusyError);
         }
-        let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
 
-        match self.pool[idx].try_lock() {
-            Ok(guard) => return Ok(guard),
-            Err(TryLockError::Poisoned(poisoned)) => {
-                return Ok(poisoned.into_inner());
+        let timeout = Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS);
+        let retry_delay = Duration::from_millis(POOL_ACQUIRE_RETRY_DELAY_MS);
+        let start = Instant::now();
+
+        loop {
+            let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
+            if let Some(guard) = self.try_acquire_slot(idx)? {
+                return Ok(guard);
             }
-            Err(TryLockError::WouldBlock) => {}
-        }
 
-        for i in 0..self.pool.len() {
-            if i != idx {
-                match self.pool[i].try_lock() {
-                    Ok(guard) => return Ok(guard),
-                    Err(TryLockError::Poisoned(poisoned)) => {
-                        return Ok(poisoned.into_inner());
-                    }
-                    Err(TryLockError::WouldBlock) => {}
+            for i in 0..self.pool.len() {
+                if i != idx
+                    && let Some(guard) = self.try_acquire_slot(i)?
+                {
+                    return Ok(guard);
                 }
             }
-        }
 
-        Err(DatabaseError::PoolBusyError)
+            if start.elapsed() >= timeout {
+                return Err(DatabaseError::PoolBusyError);
+            }
+            std::thread::sleep(retry_delay);
+        }
     }
 
     /// Executes a closure with a shared reference to a pooled connection.
@@ -218,15 +231,20 @@ impl Database {
         Ok(())
     }
 
-    /// Executes a closure inside a transaction. The transaction is committed
-    /// if the closure returns `Ok`, rolled back on `Err`.
-    pub fn with_transaction<F, T>(&self, f: F) -> Result<T, DatabaseError>
+    fn with_transaction_behavior<F, T>(
+        &self,
+        behavior: TransactionBehavior,
+        label: &str,
+        f: F,
+    ) -> Result<T, DatabaseError>
     where
         F: FnOnce(&Transaction) -> Result<T, DatabaseError>,
     {
         let mut conn = self.acquire()?;
         let start = Instant::now();
-        let tx = conn.transaction().map_err(DatabaseError::QueryError)?;
+        let tx = conn
+            .transaction_with_behavior(behavior)
+            .map_err(DatabaseError::QueryError)?;
         let result = f(&tx);
         let elapsed = start.elapsed();
         let result = match result {
@@ -237,9 +255,29 @@ impl Database {
             Err(e) => Err(e),
         };
         if let Some(_elapsed) = self.check_slow(elapsed) {
-            log::warn!("slow with_transaction ({elapsed:?})");
+            log::warn!("slow {label} ({elapsed:?})");
         }
         result
+    }
+
+    /// Executes a closure inside a deferred transaction. The transaction is
+    /// committed if the closure returns `Ok`, rolled back on `Err`.
+    pub fn with_transaction<F, T>(&self, f: F) -> Result<T, DatabaseError>
+    where
+        F: FnOnce(&Transaction) -> Result<T, DatabaseError>,
+    {
+        self.with_transaction_behavior(TransactionBehavior::Deferred, "with_transaction", f)
+    }
+
+    /// Executes a read-then-write closure inside `BEGIN IMMEDIATE`.
+    ///
+    /// This avoids stale WAL snapshot failures for read-modify-write flows by
+    /// acquiring the write reservation before the first read.
+    pub fn with_rw_transaction<F, T>(&self, f: F) -> Result<T, DatabaseError>
+    where
+        F: FnOnce(&Transaction) -> Result<T, DatabaseError>,
+    {
+        self.with_transaction_behavior(TransactionBehavior::Immediate, "with_rw_transaction", f)
     }
 }
 
@@ -287,11 +325,36 @@ impl DbProvider {
 }
 
 /// Generates the standard `new()`, `with_db()` (test-only), and `get_db()` methods
-/// for a SQLite repository struct that has `app_local_data_dir: PathBuf` and
-/// `db: DbProvider` fields.
+/// for a SQLite repository struct with a `db: DbProvider` field.
 #[macro_export]
 macro_rules! impl_db_repository {
     ($name:ident) => {
+        impl $name {
+            pub fn new(_app_local_data_dir: std::path::PathBuf) -> Self {
+                Self {
+                    db: $crate::core::database::DbProvider::default(),
+                }
+            }
+
+            #[cfg(test)]
+            pub(crate) fn with_db(
+                _app_local_data_dir: std::path::PathBuf,
+                db: $crate::core::database::Database,
+            ) -> Self {
+                Self {
+                    db: $crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
+                }
+            }
+
+            fn get_db(
+                &self,
+            ) -> Result<&$crate::core::database::Database, $crate::core::database::DatabaseError>
+            {
+                self.db.get()
+            }
+        }
+    };
+    ($name:ident, app_local_data_dir) => {
         impl $name {
             pub fn new(app_local_data_dir: std::path::PathBuf) -> Self {
                 Self {
@@ -558,6 +621,113 @@ mod tests {
                 .expect("reader thread panicked")
                 .expect("reader query failed");
         }
+    }
+
+    #[test]
+    fn test_pool_acquire_waits_for_an_available_connection() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Arc::new(Database::open(tmp.path()).unwrap());
+        let ready = Arc::new(std::sync::Barrier::new(POOL_SIZE + 1));
+        let release = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        let holders: Vec<_> = (0..POOL_SIZE)
+            .map(|_| {
+                let db = Arc::clone(&db);
+                let ready = Arc::clone(&ready);
+                let release = Arc::clone(&release);
+                std::thread::spawn(move || {
+                    db.with_connection(|_| {
+                        ready.wait();
+                        while !release.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+
+        ready.wait();
+        let release_after_delay = {
+            let release = Arc::clone(&release);
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                release.store(true, Ordering::SeqCst);
+            })
+        };
+
+        db.with_connection(|conn| {
+            conn.execute_batch("SELECT 1")?;
+            Ok(())
+        })
+        .expect("connection acquisition should wait for a pooled connection to free up");
+
+        release_after_delay.join().unwrap();
+        for holder in holders {
+            holder
+                .join()
+                .expect("holder thread panicked")
+                .expect("holder query failed");
+        }
+    }
+
+    #[test]
+    fn test_rw_transaction_prevents_busy_snapshot_on_read_modify_write() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Arc::new(Database::open(tmp.path()).unwrap());
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('race', 'initial')",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let read_started = Arc::new(std::sync::Barrier::new(2));
+        let first_writer = {
+            let db = Arc::clone(&db);
+            let read_started = Arc::clone(&read_started);
+            std::thread::spawn(move || {
+                db.with_rw_transaction(|tx| {
+                    let _: String = tx.query_row(
+                        "SELECT value FROM app_settings WHERE key = 'race'",
+                        [],
+                        |row| row.get(0),
+                    )?;
+                    read_started.wait();
+                    std::thread::sleep(Duration::from_millis(100));
+                    tx.execute(
+                        "UPDATE app_settings SET value = 'first' WHERE key = 'race'",
+                        [],
+                    )?;
+                    Ok(())
+                })
+            })
+        };
+
+        read_started.wait();
+        let second_writer = {
+            let db = Arc::clone(&db);
+            std::thread::spawn(move || {
+                db.with_connection(|conn| {
+                    conn.execute(
+                        "UPDATE app_settings SET value = 'second' WHERE key = 'race'",
+                        [],
+                    )?;
+                    Ok(())
+                })
+            })
+        };
+
+        first_writer
+            .join()
+            .expect("first writer panicked")
+            .expect("read-modify-write transaction should commit");
+        second_writer
+            .join()
+            .expect("second writer panicked")
+            .expect("concurrent writer should wait and then commit");
     }
 }
 

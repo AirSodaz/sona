@@ -1,13 +1,10 @@
 use crate::core::database::DatabaseError;
 use serde_json::{Map, Value, json};
-use std::path::PathBuf;
 
 use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
 
 #[derive(Clone)]
 pub struct SqliteProjectRepository {
-    #[allow(dead_code)]
-    app_local_data_dir: PathBuf,
     db: crate::core::database::DbProvider,
 }
 
@@ -234,7 +231,6 @@ impl SqliteProjectRepository {
 
     pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
-            tx.execute("UPDATE history_items SET project_id = NULL", [])?;
             tx.execute("DELETE FROM projects", [])?;
             let mut stmt = tx.prepare_cached(
                 "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
@@ -285,6 +281,13 @@ impl SqliteProjectRepository {
                     summary_template_id, translation_language, polish_preset_id, settings_str,
                 ])?;
             }
+            tx.execute(
+                "UPDATE history_items
+                 SET project_id = NULL
+                 WHERE project_id IS NOT NULL
+                   AND project_id NOT IN (SELECT id FROM projects)",
+                [],
+            )?;
             Ok(())
         })
     }
@@ -457,6 +460,7 @@ mod tests {
     use super::*;
     use crate::core::database::Database;
     use serde_json::json;
+    use std::path::PathBuf;
 
     #[test]
     fn test_project_crud() {
@@ -505,5 +509,68 @@ mod tests {
 
         let result = repo.update("nonexistent", json!({"name": "Nope"})).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn save_all_values_preserves_surviving_project_assignments() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteProjectRepository::with_db(PathBuf::new(), db);
+
+        repo.get_db()
+            .unwrap()
+            .with_transaction(|tx| {
+                tx.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
+                 VALUES ('project-kept', 'Kept', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    [],
+                )?;
+                tx.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
+                 VALUES ('project-removed', 'Removed', 'folder', '', 1, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    [],
+                )?;
+                tx.execute(
+                    "INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status)
+                 VALUES ('item-kept', 1000, 1.0, 'Kept Item', 'recording', 'project-kept', 'complete')",
+                    [],
+                )?;
+                tx.execute(
+                    "INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status)
+                 VALUES ('item-orphaned', 1001, 1.0, 'Orphaned Item', 'recording', 'project-removed', 'complete')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        repo.save_all_values(vec![json!({
+            "id": "project-kept",
+            "name": "Kept",
+            "icon": "folder",
+            "createdAt": 1000,
+            "updatedAt": 2000,
+            "defaults": {}
+        })])
+        .unwrap();
+
+        repo.get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                let kept_project_id: Option<String> = conn.query_row(
+                    "SELECT project_id FROM history_items WHERE id = 'item-kept'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                let orphaned_project_id: Option<String> = conn.query_row(
+                    "SELECT project_id FROM history_items WHERE id = 'item-orphaned'",
+                    [],
+                    |row| row.get(0),
+                )?;
+
+                assert_eq!(kept_project_id.as_deref(), Some("project-kept"));
+                assert_eq!(orphaned_project_id, None);
+                Ok(())
+            })
+            .unwrap();
     }
 }

@@ -450,6 +450,51 @@ pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String
 
 // Wrapped config commands
 
+fn sqlite_config_store<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
+    let app_local_data_dir =
+        (app as &dyn PathProvider).resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
+        app_local_data_dir,
+    ))
+}
+
+#[tauri::command]
+pub fn load_app_config<R: Runtime>(app: AppHandle<R>) -> Result<Option<Value>, String> {
+    sqlite_config_store(&app)?
+        .load_config()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_app_config<R: Runtime>(app: AppHandle<R>, config: Value) -> Result<(), String> {
+    sqlite_config_store(&app)?
+        .save_config(&config)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_app_setting<R: Runtime>(
+    app: AppHandle<R>,
+    key: String,
+) -> Result<Option<Value>, String> {
+    sqlite_config_store(&app)?
+        .get_setting(&key)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_app_setting<R: Runtime>(
+    app: AppHandle<R>,
+    key: String,
+    value: Value,
+) -> Result<(), String> {
+    sqlite_config_store(&app)?
+        .set_setting(&key, &value)
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn migrate_app_config(
     saved_config: Option<Value>,

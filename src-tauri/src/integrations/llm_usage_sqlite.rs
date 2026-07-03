@@ -158,9 +158,17 @@ pub fn read_raw(db: &Database) -> Result<String, DatabaseError> {
 }
 
 pub fn replace_raw(db: &Database, content: &str) -> Result<(), DatabaseError> {
-    let rows: Vec<Value> = serde_json::from_str(content).map_err(|e| {
-        DatabaseError::Internal(format!("LLM usage content must be a JSON array: {e}"))
-    })?;
+    let value: Value = serde_json::from_str(content)
+        .map_err(|e| DatabaseError::Internal(format!("Invalid LLM usage content: {e}")))?;
+    let rows = match value {
+        Value::Array(rows) => rows,
+        Value::Object(object) => legacy_stats_object_to_rows(&object),
+        _ => {
+            return Err(DatabaseError::Internal(
+                "LLM usage content must be a JSON array or object.".to_string(),
+            ));
+        }
+    };
 
     db.with_transaction(|tx| {
         tx.execute("DELETE FROM analytics.llm_usage", [])?;
@@ -181,6 +189,156 @@ pub fn replace_raw(db: &Database, content: &str) -> Result<(), DatabaseError> {
         }
         Ok(())
     })
+}
+
+fn legacy_stats_object_to_rows(object: &serde_json::Map<String, Value>) -> Vec<Value> {
+    let fallback_occurred_at = object
+        .get("lastUpdatedAt")
+        .or_else(|| object.get("startedAt"))
+        .and_then(Value::as_str)
+        .unwrap_or("1970-01-01T00:00:00Z");
+
+    if let Some(rows) = rows_from_bucket_map(
+        object.get("byProvider"),
+        fallback_occurred_at,
+        |key| key.to_string(),
+        |_| "migrated".to_string(),
+    ) {
+        return rows;
+    }
+
+    if let Some(rows) = rows_from_bucket_map(
+        object.get("byCategory"),
+        fallback_occurred_at,
+        |_| "migrated".to_string(),
+        |key| key.to_string(),
+    ) {
+        return rows;
+    }
+
+    if let Some(rows) = rows_from_bucket_map(
+        object.get("daily"),
+        fallback_occurred_at,
+        |_| "migrated".to_string(),
+        |_| "migrated".to_string(),
+    ) {
+        return rows;
+    }
+
+    object
+        .get("totals")
+        .and_then(Value::as_object)
+        .map(|bucket| rows_from_bucket(fallback_occurred_at, "total", "migrated", bucket))
+        .unwrap_or_default()
+}
+
+fn rows_from_bucket_map(
+    value: Option<&Value>,
+    fallback_occurred_at: &str,
+    provider_for_key: impl Fn(&str) -> String,
+    category_for_key: impl Fn(&str) -> String,
+) -> Option<Vec<Value>> {
+    let buckets = value.and_then(Value::as_object)?;
+    let mut rows = Vec::new();
+    for (key, bucket) in buckets {
+        let Some(bucket) = bucket.as_object() else {
+            continue;
+        };
+        let occurred_at = if is_date_key(key) {
+            format!("{key}T00:00:00Z")
+        } else {
+            fallback_occurred_at.to_string()
+        };
+        rows.extend(rows_from_bucket(
+            &occurred_at,
+            &provider_for_key(key),
+            &category_for_key(key),
+            bucket,
+        ));
+    }
+    if rows.is_empty() { None } else { Some(rows) }
+}
+
+fn rows_from_bucket(
+    occurred_at: &str,
+    provider: &str,
+    category: &str,
+    bucket: &serde_json::Map<String, Value>,
+) -> Vec<Value> {
+    let prompt_tokens = u64_field(bucket, "promptTokens");
+    let completion_tokens = u64_field(bucket, "completionTokens");
+    let total_tokens = u64_field(bucket, "totalTokens").max(prompt_tokens + completion_tokens);
+    let calls_with_usage = u64_field(bucket, "callsWithUsage");
+    let calls_without_usage = u64_field(bucket, "callsWithoutUsage");
+    let explicit_call_count = u64_field(bucket, "callCount");
+    let inferred_call_count = calls_with_usage
+        .saturating_add(calls_without_usage)
+        .max(if total_tokens > 0 { 1 } else { 0 });
+    let call_count = explicit_call_count.max(inferred_call_count);
+
+    if call_count == 0 {
+        return Vec::new();
+    }
+
+    let usage_row_count = if calls_with_usage > 0 {
+        calls_with_usage.min(call_count)
+    } else if total_tokens > 0 {
+        call_count
+    } else {
+        0
+    };
+    let empty_row_count = call_count.saturating_sub(usage_row_count);
+    let mut rows = Vec::new();
+
+    for index in 0..usage_row_count {
+        rows.push(serde_json::json!({
+            "occurredAt": occurred_at,
+            "provider": provider,
+            "category": category,
+            "promptTokens": split_u64(prompt_tokens, usage_row_count, index),
+            "completionTokens": split_u64(completion_tokens, usage_row_count, index),
+            "totalTokens": split_u64(total_tokens, usage_row_count, index),
+        }));
+    }
+
+    for _ in 0..empty_row_count {
+        rows.push(serde_json::json!({
+            "occurredAt": occurred_at,
+            "provider": provider,
+            "category": category,
+            "promptTokens": 0,
+            "completionTokens": 0,
+            "totalTokens": 0,
+        }));
+    }
+
+    rows
+}
+
+fn split_u64(total: u64, parts: u64, index: u64) -> u64 {
+    if parts == 0 {
+        return 0;
+    }
+    let base = total / parts;
+    if index < total % parts {
+        base + 1
+    } else {
+        base
+    }
+}
+
+fn u64_field(source: &serde_json::Map<String, Value>, key: &str) -> u64 {
+    source.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn is_date_key(value: &str) -> bool {
+    value.len() == 10
+        && value.as_bytes()[4] == b'-'
+        && value.as_bytes()[7] == b'-'
+        && value
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
 }
 
 pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, DatabaseError> {
@@ -316,6 +474,28 @@ mod tests {
         assert_eq!(stats.totals.call_count, 2);
         assert_eq!(stats.totals.calls_with_usage, 1);
         assert_eq!(stats.totals.calls_without_usage, 1);
+    }
+
+    #[test]
+    fn test_llm_usage_replace_raw_accepts_legacy_stats_object() {
+        let db = Database::open_in_memory().unwrap();
+
+        replace_raw(
+            &db,
+            r#"{"schemaVersion":1,"totals":{"callCount":2,"totalTokens":42},"byProvider":{"open_ai":{"callCount":2,"totalTokens":42}}}"#,
+        )
+        .unwrap();
+
+        let stats = read_stats(&db).unwrap();
+        assert_eq!(stats.totals.call_count, 2);
+        assert_eq!(stats.totals.total_tokens, 42);
+        assert_eq!(
+            stats
+                .by_provider
+                .get("open_ai")
+                .map(|bucket| bucket.total_tokens),
+            Some(42)
+        );
     }
 
     #[test]

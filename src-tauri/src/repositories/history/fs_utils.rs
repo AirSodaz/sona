@@ -5,10 +5,8 @@ use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
-use walkdir::WalkDir;
 
 pub(crate) use crate::repositories::storage::remove_path_if_exists;
-pub(crate) use crate::repositories::storage::write_binary_atomic;
 pub(crate) use crate::repositories::storage::write_json_pretty_atomic;
 
 pub(crate) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
@@ -54,41 +52,6 @@ pub(crate) fn ensure_json_object_value(value: Value, label: &str) -> Result<Valu
 pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&content).map_err(|error| error.to_string())
-}
-
-#[allow(dead_code)]
-pub(crate) fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
-    if !source.is_dir() {
-        return Err(format!(
-            "Source directory does not exist: {}",
-            source.to_string_lossy()
-        ));
-    }
-
-    fs::create_dir_all(target).map_err(|error| error.to_string())?;
-    for entry in WalkDir::new(source) {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let path = entry.path();
-        let relative = path
-            .strip_prefix(source)
-            .map_err(|error| error.to_string())?;
-        if relative.as_os_str().is_empty() {
-            continue;
-        }
-
-        let destination = target.join(relative);
-        if entry.file_type().is_dir() {
-            fs::create_dir_all(&destination).map_err(|error| error.to_string())?;
-            continue;
-        }
-
-        if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        }
-        fs::copy(path, &destination).map_err(|error| error.to_string())?;
-    }
-
-    Ok(())
 }
 
 pub(crate) fn create_temp_directory(prefix: &str) -> Result<PathBuf, String> {
