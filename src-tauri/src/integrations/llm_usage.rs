@@ -1,3 +1,6 @@
+pub use crate::core::dashboard::models::{
+    DashboardUsageBucket, LlmUsageDashboardStats, UsageBreakdown, UsageTrendPoint,
+};
 use crate::integrations::llm::{LlmUsageCategory, TokenUsage};
 use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
@@ -28,63 +31,6 @@ pub(crate) struct LlmUsageStatsFile {
     pub(crate) by_provider: BTreeMap<String, UsageBucket>,
     pub(crate) by_category: BTreeMap<String, UsageBucket>,
     pub(crate) daily: BTreeMap<String, UsageBucket>,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DashboardUsageBucket {
-    pub(crate) call_count: u64,
-    pub(crate) call_count_display: String,
-    pub(crate) calls_with_usage: u64,
-    pub(crate) calls_with_usage_display: String,
-    pub(crate) calls_without_usage: u64,
-    pub(crate) calls_without_usage_display: String,
-    pub(crate) prompt_tokens: u64,
-    pub(crate) prompt_tokens_display: String,
-    pub(crate) completion_tokens: u64,
-    pub(crate) completion_tokens_display: String,
-    pub(crate) total_tokens: u64,
-    pub(crate) total_tokens_display: String,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UsageBreakdown {
-    pub(crate) key: String,
-    pub(crate) label: String,
-    pub(crate) stats: DashboardUsageBucket,
-    pub(crate) value: u64,
-    pub(crate) value_display: String,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UsageTrendPoint {
-    pub(crate) date: String,
-    pub(crate) date_label: String,
-    #[serde(flatten)]
-    pub(crate) stats: DashboardUsageBucket,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmUsageDashboardStats {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) started_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) last_updated_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) tracking_since_display: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) last_updated_display: Option<String>,
-    pub(crate) totals: DashboardUsageBucket,
-    pub(crate) by_provider: Vec<UsageBreakdown>,
-    pub(crate) by_provider_top_rows: Vec<UsageBreakdown>,
-    pub(crate) by_provider_max_value: u64,
-    pub(crate) by_category: Vec<UsageBreakdown>,
-    pub(crate) by_category_top_rows: Vec<UsageBreakdown>,
-    pub(crate) by_category_max_value: u64,
-    pub(crate) recent_daily: Vec<UsageTrendPoint>,
 }
 
 #[derive(Clone, Debug)]

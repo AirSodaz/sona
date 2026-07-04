@@ -1,3 +1,8 @@
+pub mod core {
+    #[path = "../../src/core/file_utils.rs"]
+    pub mod file_utils;
+}
+
 #[path = "../src/core/recovery/mod.rs"]
 mod recovery;
 

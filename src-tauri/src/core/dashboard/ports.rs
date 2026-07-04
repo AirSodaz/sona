@@ -11,5 +11,5 @@ pub trait AnalyticsRepository: Send + Sync {
     /// Reads the dashboard stats for LLM usage
     async fn read_dashboard_stats(
         &self,
-    ) -> Result<crate::integrations::llm::llm_usage::LlmUsageDashboardStats, DashboardServiceError>;
+    ) -> Result<crate::core::dashboard::models::LlmUsageDashboardStats, DashboardServiceError>;
 }

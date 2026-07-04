@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::repositories::storage::write_json_pretty_atomic;
+use crate::core::file_utils::write_json_pretty_atomic;
 
 use super::normalization::{
     empty_snapshot, now_ms, recovered_item_from_queue_value, recovered_item_from_saved_value,

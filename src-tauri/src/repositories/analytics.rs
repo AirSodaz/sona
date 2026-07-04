@@ -15,7 +15,7 @@ impl crate::core::dashboard::ports::AnalyticsRepository for AnalyticsRepositoryI
     async fn read_dashboard_stats(
         &self,
     ) -> Result<
-        crate::integrations::llm::llm_usage::LlmUsageDashboardStats,
+        crate::core::dashboard::models::LlmUsageDashboardStats,
         crate::core::dashboard::error::DashboardServiceError,
     > {
         let stats = crate::integrations::llm_usage_sqlite::read_dashboard_stats(self.db.as_ref())

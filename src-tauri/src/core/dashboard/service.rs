@@ -418,9 +418,9 @@ fn format_date_key(date_key: &str) -> String {
 mod tests {
     use super::*;
     use crate::core::dashboard::error::DashboardServiceError;
+    use crate::core::dashboard::models::{DashboardUsageBucket, LlmUsageDashboardStats};
     use crate::core::database::DatabaseError;
-    use crate::integrations::asr::TranscriptSegment;
-    use crate::integrations::llm::llm_usage::LlmUsageDashboardStats;
+    use crate::core::transcript::TranscriptSegment;
     use crate::repositories::history::{
         HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
         HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
@@ -774,7 +774,7 @@ mod tests {
                 last_updated_at: None,
                 tracking_since_display: None,
                 last_updated_display: None,
-                totals: crate::integrations::llm::llm_usage::DashboardUsageBucket {
+                totals: DashboardUsageBucket {
                     call_count: 0,
                     call_count_display: "0".to_string(),
                     calls_with_usage: 0,

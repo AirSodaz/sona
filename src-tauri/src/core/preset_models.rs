@@ -1,5 +1,5 @@
+use crate::core::model_config::ModelFileConfig;
 use crate::core::paths::{PathKind, PathProvider};
-use crate::integrations::asr::ModelFileConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;

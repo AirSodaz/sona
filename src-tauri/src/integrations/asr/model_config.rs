@@ -1,25 +1,10 @@
+pub use crate::core::model_config::ModelFileConfig;
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
 };
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelFileConfig {
-    pub encoder: Option<String>,
-    pub decoder: Option<String>,
-    pub model: Option<String>,
-    pub joiner: Option<String>,
-    pub tokens: Option<String>,
-    pub conv_frontend: Option<String>,
-    pub encoder_adaptor: Option<String>,
-    pub llm: Option<String>,
-    pub embedding: Option<String>,
-    pub tokenizer: Option<String>,
-}
 
 #[derive(Debug, Clone)]
 pub enum ModelType {

@@ -1,5 +1,62 @@
 use serde::Serialize;
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardUsageBucket {
+    pub call_count: u64,
+    pub call_count_display: String,
+    pub calls_with_usage: u64,
+    pub calls_with_usage_display: String,
+    pub calls_without_usage: u64,
+    pub calls_without_usage_display: String,
+    pub prompt_tokens: u64,
+    pub prompt_tokens_display: String,
+    pub completion_tokens: u64,
+    pub completion_tokens_display: String,
+    pub total_tokens: u64,
+    pub total_tokens_display: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageBreakdown {
+    pub key: String,
+    pub label: String,
+    pub stats: DashboardUsageBucket,
+    pub value: u64,
+    pub value_display: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageTrendPoint {
+    pub date: String,
+    pub date_label: String,
+    #[serde(flatten)]
+    pub stats: DashboardUsageBucket,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmUsageDashboardStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracking_since_display: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated_display: Option<String>,
+    pub totals: DashboardUsageBucket,
+    pub by_provider: Vec<UsageBreakdown>,
+    pub by_provider_top_rows: Vec<UsageBreakdown>,
+    pub by_provider_max_value: u64,
+    pub by_category: Vec<UsageBreakdown>,
+    pub by_category_top_rows: Vec<UsageBreakdown>,
+    pub by_category_max_value: u64,
+    pub recent_daily: Vec<UsageTrendPoint>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ParsedTranscriptSegment {
     pub text: String,
@@ -111,6 +168,6 @@ pub struct ContentStats {
 #[serde(rename_all = "camelCase")]
 pub struct DashboardSnapshotDomainModel {
     pub content: ContentStats,
-    pub llm_usage: crate::integrations::llm::llm_usage::LlmUsageDashboardStats,
+    pub llm_usage: LlmUsageDashboardStats,
     pub generated_at: String,
 }

@@ -23,12 +23,14 @@ fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
+pub use crate::core::asr_metrics::{
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+};
+pub use crate::core::model_config::ModelFileConfig;
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
 pub(crate) use batch::transcribe_batch_with_progress_and_fallback_notice;
 pub use error::SherpaError;
-pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
-pub use model_config::ModelFileConfig;
 pub use model_config::Recognizer;
 pub(crate) use model_config::{
     RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, load_vad,

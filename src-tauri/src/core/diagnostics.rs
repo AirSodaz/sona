@@ -1,9 +1,10 @@
+use crate::core::asr_metrics::AsrRuntimeMetricsSnapshot;
 use crate::core::paths::{PathKind, PathProvider};
 use crate::core::preset_models::{
     ModelCatalogModel, ModelRules as PresetModelRules, ModelSelectionPaths,
     build_model_catalog_snapshot, resolve_model_catalog_selected_ids,
 };
-use crate::integrations::asr::{AsrRuntimeMetricsSnapshot, AsrState};
+use crate::integrations::asr::AsrState;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -291,7 +292,7 @@ fn default_microphone_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::asr::{AsrInferenceMetric, AsrModelLoadMetric};
+    use crate::core::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 
     fn base_input() -> DiagnosticsCoreInput {
         DiagnosticsCoreInput {
