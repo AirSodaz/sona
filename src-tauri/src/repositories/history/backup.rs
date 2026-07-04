@@ -2,6 +2,7 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::{Map, Number, Value};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::repositories::project::normalize_project_record_for_import;
@@ -346,6 +347,7 @@ fn js_truthy(value: Option<&Value>) -> bool {
 
 pub fn export_backup_archive_inner(
     app_local_data_dir: &Path,
+    db: Arc<crate::core::database::Database>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
     let config = ensure_json_object_value(request.config, "Backup config")?;
@@ -353,7 +355,7 @@ pub fn export_backup_archive_inner(
         serde_json::from_str(&request.analytics_content).map_err(|error| error.to_string())?;
     ensure_backup_analytics_value(analytics_json)?;
 
-    let store = SqliteHistoryStore::new(app_local_data_dir.to_path_buf());
+    let store = SqliteHistoryStore::new(app_local_data_dir.to_path_buf(), db);
     let history = store
         .history_snapshot_for_backup()
         .map_err(|e| e.to_string())?;
@@ -596,6 +598,7 @@ pub fn prepare_backup_import_inner(
 
 pub fn apply_prepared_history_import_inner(
     _app_local_data_dir: &Path,
+    db: Arc<crate::core::database::Database>,
     _import_id: &str,
     extraction_dir: &Path,
 ) -> Result<(), String> {
@@ -603,8 +606,6 @@ pub fn apply_prepared_history_import_inner(
     if !extracted_history_dir.is_dir() {
         return Err("Prepared backup import is missing the history directory.".to_string());
     }
-
-    let db = crate::core::database::Database::global().map_err(|e| e.to_string())?;
 
     let items: Vec<HistoryItemRecord> =
         read_json_value(&extracted_history_dir.join(PROJECTS_INDEX_FILE_NAME))
@@ -726,37 +727,28 @@ mod tests {
     };
     use serde_json::{Value, json};
     use std::fs;
-    use std::sync::{Mutex, Once};
+    use std::sync::Arc;
     use tempfile::tempdir;
 
-    static BACKUP_TEST_LOCK: Mutex<()> = Mutex::new(());
-    static INIT_GLOBAL_DB: Once = Once::new();
-
-    fn init_global_db() {
-        INIT_GLOBAL_DB.call_once(|| {
-            let db = Database::open_in_memory().unwrap();
-            Database::set_global(db).unwrap();
-        });
+    fn test_db() -> Arc<Database> {
+        Arc::new(Database::open_in_memory().unwrap())
     }
 
-    fn clear_global_db() {
-        Database::global()
-            .unwrap()
-            .with_transaction(|tx| {
-                tx.execute("DELETE FROM history_items", [])?;
-                Ok(())
-            })
-            .unwrap();
+    fn clear_db(db: &Database) {
+        db.with_transaction(|tx| {
+            tx.execute("DELETE FROM history_items", [])?;
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn export_backup_archive_skips_draft_items_and_preserves_manifest() {
-        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
-        init_global_db();
-        clear_global_db();
+        let db = test_db();
+        clear_db(db.as_ref());
 
         let root = tempdir().unwrap();
-        let store = SqliteHistoryStore::new(root.path().to_path_buf());
+        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
         store.ensure_ready().unwrap();
 
         let keep_item = store
@@ -776,8 +768,7 @@ mod tests {
             })
             .unwrap();
 
-        Database::global().unwrap()
-            .with_transaction(|tx| {
+        db.with_transaction(|tx| {
                 tx.execute(
                     "INSERT INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, kind, status, draft_source)
                      VALUES ('draft', 1, 2.0, 'draft.wav', 'draft.json', 'Item draft', 'recording', 'draft', 'live_record')",
@@ -788,8 +779,8 @@ mod tests {
                     [],
                 )?;
                 Ok(())
-            })
-            .unwrap();
+        })
+        .unwrap();
 
         store
             .save_summary(&keep_item.id, json!({ "activeTemplateId": "general" }))
@@ -815,6 +806,7 @@ mod tests {
         let archive_path = archive_dir.path().join("backup.tar.bz2");
         let manifest = export_backup_archive_inner(
             root.path(),
+            Arc::clone(&db),
             ExportBackupArchiveRequest {
                 archive_path: archive_path.to_string_lossy().into_owned(),
                 app_version: "0.6.4".to_string(),
@@ -864,12 +856,11 @@ mod tests {
 
     #[test]
     fn export_and_prepare_backup_accept_sqlite_llm_usage_rows() {
-        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
-        init_global_db();
-        clear_global_db();
+        let db = test_db();
+        clear_db(db.as_ref());
 
         let root = tempdir().unwrap();
-        let store = SqliteHistoryStore::new(root.path().to_path_buf());
+        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
         store.ensure_ready().unwrap();
 
         let archive_dir = tempdir().unwrap();
@@ -878,6 +869,7 @@ mod tests {
 
         export_backup_archive_inner(
             root.path(),
+            Arc::clone(&db),
             ExportBackupArchiveRequest {
                 archive_path: archive_path.to_string_lossy().into_owned(),
                 app_version: "0.7.5".to_string(),
@@ -1168,9 +1160,8 @@ mod tests {
 
     #[test]
     fn apply_prepared_history_import_replaces_history_and_dispose_cleans_snapshot() {
-        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
-        init_global_db();
-        clear_global_db();
+        let db = test_db();
+        clear_db(db.as_ref());
 
         let app_data_dir = tempdir().unwrap();
 
@@ -1186,12 +1177,13 @@ mod tests {
 
         apply_prepared_history_import_inner(
             app_data_dir.path(),
+            Arc::clone(&db),
             &prepared.import_id,
             &snapshot.extraction_dir,
         )
         .unwrap();
 
-        let store = SqliteHistoryStore::new(app_data_dir.path().to_path_buf());
+        let store = SqliteHistoryStore::new(app_data_dir.path().to_path_buf(), Arc::clone(&db));
         let items = store.list_items().unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].id, "history-1");
@@ -1210,12 +1202,12 @@ mod tests {
 
     #[test]
     fn export_and_import_round_trip_restores_transcript_snapshots() {
-        let _guard = BACKUP_TEST_LOCK.lock().unwrap();
-        init_global_db();
-        clear_global_db();
+        let db = test_db();
+        clear_db(db.as_ref());
 
         let source_dir = tempdir().unwrap();
-        let source_store = SqliteHistoryStore::new(source_dir.path().to_path_buf());
+        let source_store =
+            SqliteHistoryStore::new(source_dir.path().to_path_buf(), Arc::clone(&db));
         source_store.ensure_ready().unwrap();
 
         let item = source_store
@@ -1256,6 +1248,7 @@ mod tests {
         let archive_path = archive_dir.path().join("snapshot-round-trip.tar.bz2");
         export_backup_archive_inner(
             source_dir.path(),
+            Arc::clone(&db),
             ExportBackupArchiveRequest {
                 archive_path: archive_path.to_string_lossy().into_owned(),
                 app_version: "0.6.4".to_string(),
@@ -1268,24 +1261,19 @@ mod tests {
         )
         .unwrap();
 
-        Database::global()
-            .unwrap()
-            .with_transaction(|tx| {
-                tx.execute("DELETE FROM history_items", [])?;
-                Ok(())
-            })
-            .unwrap();
+        clear_db(db.as_ref());
 
         let restore_dir = tempdir().unwrap();
         let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
         apply_prepared_history_import_inner(
             restore_dir.path(),
+            Arc::clone(&db),
             &prepared.import_id,
             &snapshot.extraction_dir,
         )
         .unwrap();
 
-        let restored_store = SqliteHistoryStore::new(restore_dir.path().to_path_buf());
+        let restored_store = SqliteHistoryStore::new(restore_dir.path().to_path_buf(), db);
         let snapshots = restored_store.list_transcript_snapshots(&item.id).unwrap();
         assert_eq!(snapshots.len(), 2);
         assert_eq!(snapshots[0].id, second.id);

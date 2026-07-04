@@ -3,6 +3,11 @@ use super::postprocess::TranscriptPostprocessor;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use crate::core::transcript::{
+    TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
+    TranscriptTimingUnit, TranscriptUpdate,
+};
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AsrEngine {
@@ -163,36 +168,6 @@ pub struct BatchTranscriptionRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum TranscriptTimingLevel {
-    Token,
-    Segment,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum TranscriptTimingSource {
-    Model,
-    Derived,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptTimingUnit {
-    pub text: String,
-    pub start: f64,
-    pub end: f64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptTiming {
-    pub level: TranscriptTimingLevel,
-    pub source: TranscriptTimingSource,
-    pub units: Vec<TranscriptTimingUnit>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[derive(Default)]
 pub struct TranscriptNormalizationOptions {
@@ -239,37 +214,4 @@ impl Default for TranscriptPostprocessOptions {
             drop_final_dot_segments: default_drop_final_dot_segments(),
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptUpdate {
-    pub remove_ids: Vec<String>,
-    pub upsert_segments: Vec<TranscriptSegment>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptSegment {
-    pub id: String,
-    pub text: String,
-    pub start: f64,
-    pub end: f64,
-    pub is_final: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timing: Option<TranscriptTiming>,
-    // Legacy raw fields are still written for compatibility with older
-    // persisted transcript records and upgrade paths.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tokens: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timestamps: Option<Vec<f32>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub durations: Option<Vec<f32>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub translation: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub speaker: Option<crate::integrations::speaker::SpeakerTag>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub speaker_attribution: Option<crate::integrations::speaker::SpeakerAttribution>,
 }

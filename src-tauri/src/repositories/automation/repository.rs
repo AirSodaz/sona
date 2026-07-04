@@ -1,11 +1,12 @@
 use crate::core::database::DatabaseError;
-use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr_providers::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager, Runtime};
 
 use super::types::*;
 
@@ -311,8 +312,9 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-pub async fn run_automation_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
+pub async fn run_automation_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
+    R: Runtime,
     T: Send + 'static,
     F: FnOnce(
             crate::repositories::automation::SqliteAutomationRepository,
@@ -320,9 +322,9 @@ where
         + Send
         + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
-        task(crate::repositories::automation::SqliteAutomationRepository::new(app_local_data_dir))
+        task(crate::repositories::automation::SqliteAutomationRepository::new(db))
     })
     .await
     .map_err(|error| error.to_string())?

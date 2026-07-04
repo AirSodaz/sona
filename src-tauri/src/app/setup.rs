@@ -12,12 +12,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to get app_local_data_dir");
 
     // Initialize the SQLite database
-    let db = crate::core::database::Database::open(&app_local_data_dir)?;
-    crate::core::database::Database::set_global(db)?;
+    let db = Arc::new(crate::core::database::Database::open(&app_local_data_dir)?);
+    crate::core::database::Database::set_global(Arc::clone(&db))?;
 
     // Migrate legacy JSON data to SQLite
     let migration_result = crate::core::database::legacy_migration::migrate_legacy_to_sqlite(
-        crate::core::database::Database::global()?,
+        db.as_ref(),
         &app_local_data_dir,
     )?;
     if migration_result.migrated {
@@ -47,11 +47,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let history_repo = Arc::new(crate::repositories::history::SqliteHistoryStore::new(
         app_local_data_dir.clone(),
+        Arc::clone(&db),
     ));
     let project_repo = Arc::new(crate::repositories::project::SqliteProjectRepository::new(
-        app_local_data_dir.clone(),
+        Arc::clone(&db),
     ));
-    let analytics_repo = Arc::new(crate::repositories::analytics::AnalyticsRepositoryImpl::new());
+    let analytics_repo =
+        Arc::new(crate::repositories::analytics::AnalyticsRepositoryImpl::new(Arc::clone(&db)));
 
     let dashboard_service = Arc::new(crate::app::dashboard::AppDashboardService::new(
         history_repo,
@@ -60,6 +62,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     app.manage(dashboard_service);
+    app.manage(db);
 
     let config_for_listener = controller.online_asr_config.clone();
     let listener_app_handle = app_handle_for_listener.clone();

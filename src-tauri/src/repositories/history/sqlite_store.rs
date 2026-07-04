@@ -3,6 +3,7 @@ use super::fs_utils::{
 };
 use super::transcript_payload::normalize_history_transcript_segments;
 use crate::core::database::DatabaseError;
+use crate::core::database::ports::Database as DatabasePort;
 use crate::core::history_store::HistoryStore;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
@@ -21,6 +22,7 @@ use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use rusqlite::types::ToSql;
@@ -200,9 +202,12 @@ fn add_workspace_query_conditions(
 }
 
 #[derive(Clone)]
-pub struct SqliteHistoryStore {
+pub struct SqliteHistoryStore<D = crate::core::database::Database>
+where
+    D: DatabasePort,
+{
     app_local_data_dir: PathBuf,
-    db: crate::core::database::DbProvider,
+    db: Arc<D>,
 }
 
 crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
@@ -239,7 +244,10 @@ impl StagedHistoryAudio {
     }
 }
 
-impl SqliteHistoryStore {
+impl<D> SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
     fn history_dir(&self) -> PathBuf {
         self.app_local_data_dir
             .join(crate::repositories::history::HISTORY_DIR_NAME)
@@ -698,7 +706,10 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
     }
 }
 
-impl HistoryStore for SqliteHistoryStore {
+impl<D> HistoryStore for SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
     fn ensure_ready(&self) -> Result<(), DatabaseError> {
         fs::create_dir_all(self.history_dir())
             .map_err(|e| DatabaseError::Internal(e.to_string()))?;
@@ -1788,6 +1799,7 @@ mod tests {
     use super::*;
     use crate::core::database::Database;
     use serde_json::json;
+    use std::sync::Arc;
     use tempfile::tempdir;
 
     fn segment_value(id: &str, text: &str, start: f64, end: f64) -> Value {
@@ -1932,8 +1944,8 @@ mod tests {
     #[test]
     fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
         let root = tempdir().unwrap();
-        let db = Database::open_in_memory().unwrap();
-        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
         store.ensure_ready().unwrap();
 
         let old_item = store

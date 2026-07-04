@@ -1,6 +1,5 @@
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::database::Database;
 use crate::core::paths::{PathKind, PathProvider};
 use crate::core::storage_usage::{
     StorageUsageSnapshot, WebviewBrowsingDataClearResult, build_webview_clear_result,
@@ -12,10 +11,13 @@ pub async fn storage_get_usage_snapshot<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<StorageUsageSnapshot, String> {
     let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
-    let db = Database::global().map_err(|error| error.to_string())?;
+    let db = std::sync::Arc::clone(
+        app.state::<std::sync::Arc<crate::core::database::Database>>()
+            .inner(),
+    );
 
     tauri::async_runtime::spawn_blocking(move || {
-        collect_storage_usage_snapshot(&app_local_data_dir, db)
+        collect_storage_usage_snapshot(&app_local_data_dir, db.as_ref())
     })
     .await
     .map_err(|error| error.to_string())?

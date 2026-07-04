@@ -1,12 +1,12 @@
 use crate::core::database::DatabaseError;
-use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::history::{
+use crate::core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryBackupSnapshot,
     HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use crate::core::transcript::TranscriptSegment;
 use serde_json::Value;
 
 pub trait HistoryStore: Send + Sync {

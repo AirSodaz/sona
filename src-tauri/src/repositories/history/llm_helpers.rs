@@ -1,38 +1,46 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde_json::{Value, to_value};
+use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::database::DatabaseError;
+use crate::core::database::{Database, DatabaseError};
 use crate::core::history_store::HistoryStore;
-use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::sqlite_store::SqliteHistoryStore;
 use crate::repositories::history::{
     HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
 
-pub(crate) async fn run_llm_db_task<T, F>(app_local_data_dir: PathBuf, task: F) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(move || {
-        task(SqliteHistoryStore::new(app_local_data_dir)).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
-pub(crate) async fn run_llm_db_task_with_provider<T, F>(
-    provider: &dyn PathProvider,
+pub(crate) async fn run_llm_db_task<T, F>(
+    app_local_data_dir: PathBuf,
+    db: Arc<Database>,
     task: F,
 ) -> Result<T, String>
 where
     T: Send + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
-    run_llm_db_task(app_local_data_dir, task).await
+    tauri::async_runtime::spawn_blocking(move || {
+        task(SqliteHistoryStore::new(app_local_data_dir, db)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub(crate) async fn run_llm_db_task_with_app<R, T, F>(
+    app: &AppHandle<R>,
+    task: F,
+) -> Result<T, String>
+where
+    R: Runtime,
+    T: Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+{
+    let app_local_data_dir = (app as &dyn crate::core::paths::PathProvider)
+        .resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    run_llm_db_task(app_local_data_dir, db, task).await
 }
 
 pub(crate) fn create_llm_transcript_snapshot_record(

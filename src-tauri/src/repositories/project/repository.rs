@@ -1,7 +1,8 @@
 use crate::core::database::DatabaseError;
-use crate::core::paths::{PathKind, PathProvider};
 use serde_json::{Map, Value};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Manager, Runtime};
 
 use super::types::{ProjectDefaults, ProjectListOptions, ProjectRecord};
 
@@ -16,17 +17,18 @@ pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, Strin
     serde_json::to_value(project).map_err(|error| error.to_string())
 }
 
-pub async fn run_project_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
+pub async fn run_project_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
+    R: Runtime,
     T: Send + 'static,
     F: FnOnce(crate::repositories::project::SqliteProjectRepository) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
         task(crate::repositories::project::SqliteProjectRepository::new(
-            app_local_data_dir,
+            db,
         ))
     })
     .await

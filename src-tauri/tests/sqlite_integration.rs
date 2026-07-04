@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
-use std::sync::{Mutex, Once};
+use std::sync::Arc;
 
 use tauri_appsona_lib::core::database::Database;
 use tauri_appsona_lib::core::database::legacy_migration::migrate_legacy_to_sqlite;
@@ -14,37 +14,28 @@ use tauri_appsona_lib::repositories::history::{
     ExportBackupArchiveRequest, HistorySaveRecordingRequest, TranscriptSnapshotReason,
 };
 
-// Serializes tests that use set_global() (OnceLock can only be set once).
-static INTEGRATION_TEST_LOCK: Mutex<()> = Mutex::new(());
-static INIT_GLOBAL_DB: Once = Once::new();
-
-fn init_global_db() {
-    INIT_GLOBAL_DB.call_once(|| {
-        let db = Database::open_in_memory().unwrap();
-        Database::set_global(db).unwrap();
-    });
+fn test_db() -> Arc<Database> {
+    Arc::new(Database::open_in_memory().unwrap())
 }
 
-fn clear_global_db() {
-    Database::global()
-        .unwrap()
-        .with_transaction(|tx| {
-            for table in &[
-                "transcript_snapshots",
-                "history_summaries",
-                "history_transcripts",
-                "history_items",
-                "projects",
-                "automation_rules",
-                "automation_processed",
-                "task_ledger",
-            ] {
-                tx.execute(&format!("DELETE FROM {table}"), []).ok();
-            }
-            tx.execute("DELETE FROM analytics.llm_usage", []).ok();
-            Ok(())
-        })
-        .unwrap();
+fn clear_db(db: &Database) {
+    db.with_transaction(|tx| {
+        for table in &[
+            "transcript_snapshots",
+            "history_summaries",
+            "history_transcripts",
+            "history_items",
+            "projects",
+            "automation_rules",
+            "automation_processed",
+            "task_ledger",
+        ] {
+            tx.execute(&format!("DELETE FROM {table}"), []).ok();
+        }
+        tx.execute("DELETE FROM analytics.llm_usage", []).ok();
+        Ok(())
+    })
+    .unwrap();
 }
 
 fn write_json(path: &Path, value: &Value) {
@@ -219,20 +210,18 @@ fn segment_value(id: &str, text: &str, start: f64, end: f64) -> Value {
 }
 
 // =========================================================================
-// Test 1: Legacy migration + store CRUD (uses global DB, serial via lock)
+// Test 1: Legacy migration + store CRUD
 // =========================================================================
 
 #[test]
 fn test_migration_and_crud() {
-    let _guard = INTEGRATION_TEST_LOCK.lock().unwrap();
-    init_global_db();
-    clear_global_db();
+    let db = test_db();
+    clear_db(db.as_ref());
 
     let root = tempfile::TempDir::new().unwrap();
     setup_legacy_data(root.path());
 
-    // Run legacy migration on the global DB
-    let report = migrate_legacy_to_sqlite(Database::global().unwrap(), root.path()).unwrap();
+    let report = migrate_legacy_to_sqlite(db.as_ref(), root.path()).unwrap();
     assert!(report.migrated, "Migration should have found legacy data");
     assert_eq!(report.history_count, 2);
     assert_eq!(report.project_count, 2);
@@ -242,194 +231,190 @@ fn test_migration_and_crud() {
         report.errors
     );
 
-    // Verify all tables via global DB connection
-    Database::global()
-        .unwrap()
-        .with_connection(|conn| {
-            let h: i64 = conn
-                .query_row("SELECT COUNT(*) FROM history_items", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(h, 2, "history_items count");
-            let p: i64 = conn
-                .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(p, 2, "projects count");
-            let ar: i64 = conn
-                .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(ar, 2, "automation_rules count");
-            let ap: i64 = conn
-                .query_row("SELECT COUNT(*) FROM automation_processed", [], |r| {
-                    r.get(0)
-                })
-                .unwrap();
-            assert_eq!(ap, 2, "automation_processed count");
-            let tl: i64 = conn
-                .query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(tl, 1, "task_ledger count");
-            let llm: i64 = conn
-                .query_row("SELECT COUNT(*) FROM analytics.llm_usage", [], |r| r.get(0))
-                .unwrap();
-            assert_eq!(llm, 1, "llm_usage count");
+    db.with_connection(|conn| {
+        let h: i64 = conn
+            .query_row("SELECT COUNT(*) FROM history_items", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(h, 2, "history_items count");
+        let p: i64 = conn
+            .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(p, 2, "projects count");
+        let ar: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ar, 2, "automation_rules count");
+        let ap: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation_processed", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(ap, 2, "automation_processed count");
+        let tl: i64 = conn
+            .query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(tl, 1, "task_ledger count");
+        let llm: i64 = conn
+            .query_row("SELECT COUNT(*) FROM analytics.llm_usage", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(llm, 1, "llm_usage count");
 
-            let project = conn
-                .query_row(
-                    "SELECT description, summary_template_id, translation_language,
+        let project = conn
+            .query_row(
+                "SELECT description, summary_template_id, translation_language,
                             polish_preset_id, polish_scenario, polish_context,
                             export_file_name_prefix
                      FROM projects WHERE id = 'proj-1'",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, String>(3)?,
-                            r.get::<_, Option<String>>(4)?,
-                            r.get::<_, Option<String>>(5)?,
-                            r.get::<_, String>(6)?,
-                        ))
-                    },
-                )
-                .unwrap();
-            assert_eq!(project.0, "Work project");
-            assert_eq!(project.1, "detailed");
-            assert_eq!(project.2, "en");
-            assert_eq!(project.3, "formal");
-            assert_eq!(project.4.as_deref(), Some("meeting"));
-            assert_eq!(project.5.as_deref(), Some("weekly sync"));
-            assert_eq!(project.6, "work-");
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, Option<String>>(4)?,
+                        r.get::<_, Option<String>>(5)?,
+                        r.get::<_, String>(6)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(project.0, "Work project");
+        assert_eq!(project.1, "detailed");
+        assert_eq!(project.2, "en");
+        assert_eq!(project.3, "formal");
+        assert_eq!(project.4.as_deref(), Some("meeting"));
+        assert_eq!(project.5.as_deref(), Some("weekly sync"));
+        assert_eq!(project.6, "work-");
 
-            let link_count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM project_default_links WHERE project_id = 'proj-1'",
-                    [],
-                    |r| r.get(0),
-                )
-                .unwrap();
-            assert_eq!(link_count, 4, "project_default_links count");
+        let link_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM project_default_links WHERE project_id = 'proj-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(link_count, 4, "project_default_links count");
 
-            let rule = conn
-                .query_row(
-                    "SELECT project_id, preset_id, recursive, enabled, stage_auto_polish,
+        let rule = conn
+            .query_row(
+                "SELECT project_id, preset_id, recursive, enabled, stage_auto_polish,
                             stage_polish_preset_id, stage_auto_translate,
                             stage_translation_language, stage_export_enabled,
                             export_directory, export_format, export_mode, export_prefix,
                             created_at, updated_at
                      FROM automation_rules WHERE id = 'rule-1'",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, i64>(2)?,
-                            r.get::<_, i64>(3)?,
-                            r.get::<_, i64>(4)?,
-                            r.get::<_, String>(5)?,
-                            r.get::<_, i64>(6)?,
-                            r.get::<_, String>(7)?,
-                            r.get::<_, i64>(8)?,
-                            r.get::<_, String>(9)?,
-                            r.get::<_, String>(10)?,
-                            r.get::<_, String>(11)?,
-                            r.get::<_, String>(12)?,
-                            r.get::<_, i64>(13)?,
-                            r.get::<_, i64>(14)?,
-                        ))
-                    },
-                )
-                .unwrap();
-            assert_eq!(rule.0, "proj-1");
-            assert_eq!(rule.1, "preset-1");
-            assert_eq!(rule.2, 1);
-            assert_eq!(rule.3, 1);
-            assert_eq!(rule.4, 1);
-            assert_eq!(rule.5, "formal");
-            assert_eq!(rule.6, 1);
-            assert_eq!(rule.7, "ja");
-            assert_eq!(rule.8, 1);
-            assert_eq!(rule.9, "/exports");
-            assert_eq!(rule.10, "md");
-            assert_eq!(rule.11, "translated");
-            assert_eq!(rule.12, "auto-");
-            assert_eq!(rule.13, 1000);
-            assert_eq!(rule.14, 2000);
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                        r.get::<_, i64>(3)?,
+                        r.get::<_, i64>(4)?,
+                        r.get::<_, String>(5)?,
+                        r.get::<_, i64>(6)?,
+                        r.get::<_, String>(7)?,
+                        r.get::<_, i64>(8)?,
+                        r.get::<_, String>(9)?,
+                        r.get::<_, String>(10)?,
+                        r.get::<_, String>(11)?,
+                        r.get::<_, String>(12)?,
+                        r.get::<_, i64>(13)?,
+                        r.get::<_, i64>(14)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(rule.0, "proj-1");
+        assert_eq!(rule.1, "preset-1");
+        assert_eq!(rule.2, 1);
+        assert_eq!(rule.3, 1);
+        assert_eq!(rule.4, 1);
+        assert_eq!(rule.5, "formal");
+        assert_eq!(rule.6, 1);
+        assert_eq!(rule.7, "ja");
+        assert_eq!(rule.8, 1);
+        assert_eq!(rule.9, "/exports");
+        assert_eq!(rule.10, "md");
+        assert_eq!(rule.11, "translated");
+        assert_eq!(rule.12, "auto-");
+        assert_eq!(rule.13, 1000);
+        assert_eq!(rule.14, 2000);
 
-            let processed = conn
-                .query_row(
-                    "SELECT rule_id, file_path, source_fingerprint, size, mtime_ms,
+        let processed = conn
+            .query_row(
+                "SELECT rule_id, file_path, source_fingerprint, size, mtime_ms,
                             processed_at, history_id, export_path
                      FROM automation_processed WHERE id = 'proc-1'",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, i64>(3)?,
-                            r.get::<_, i64>(4)?,
-                            r.get::<_, i64>(5)?,
-                            r.get::<_, Option<String>>(6)?,
-                            r.get::<_, Option<String>>(7)?,
-                        ))
-                    },
-                )
-                .unwrap();
-            assert_eq!(processed.0, "rule-1");
-            assert_eq!(processed.1, "/docs/file.txt");
-            assert_eq!(processed.2, "fp-1");
-            assert_eq!(processed.3, 123);
-            assert_eq!(processed.4, 456);
-            assert_eq!(processed.5, 789);
-            assert_eq!(processed.6.as_deref(), Some("hist-1"));
-            assert_eq!(processed.7.as_deref(), Some("/exports/file.md"));
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
+                        r.get::<_, i64>(4)?,
+                        r.get::<_, i64>(5)?,
+                        r.get::<_, Option<String>>(6)?,
+                        r.get::<_, Option<String>>(7)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(processed.0, "rule-1");
+        assert_eq!(processed.1, "/docs/file.txt");
+        assert_eq!(processed.2, "fp-1");
+        assert_eq!(processed.3, 123);
+        assert_eq!(processed.4, 456);
+        assert_eq!(processed.5, 789);
+        assert_eq!(processed.6.as_deref(), Some("hist-1"));
+        assert_eq!(processed.7.as_deref(), Some("/exports/file.md"));
 
-            let task = conn
-                .query_row(
-                    "SELECT kind, status, title, progress, retryable, cancelable, stage,
+        let task = conn
+            .query_row(
+                "SELECT kind, status, title, progress, retryable, cancelable, stage,
                             history_id, project_id, automation_rule_id, source_fingerprint,
                             template_id, target_language
                      FROM task_ledger WHERE id = 'task-1'",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, f64>(3)?,
-                            r.get::<_, i64>(4)?,
-                            r.get::<_, i64>(5)?,
-                            r.get::<_, Option<String>>(6)?,
-                            r.get::<_, Option<String>>(7)?,
-                            r.get::<_, Option<String>>(8)?,
-                            r.get::<_, Option<String>>(9)?,
-                            r.get::<_, Option<String>>(10)?,
-                            r.get::<_, Option<String>>(11)?,
-                            r.get::<_, Option<String>>(12)?,
-                        ))
-                    },
-                )
-                .unwrap();
-            assert_eq!(task.0, "llmPolish");
-            assert_eq!(task.1, "pending");
-            assert_eq!(task.2, "Polish task");
-            assert_eq!(task.3, 25.0);
-            assert_eq!(task.4, 1);
-            assert_eq!(task.5, 1);
-            assert_eq!(task.6.as_deref(), Some("polish"));
-            assert_eq!(task.7.as_deref(), Some("hist-1"));
-            assert_eq!(task.8.as_deref(), Some("proj-1"));
-            assert_eq!(task.9.as_deref(), Some("rule-1"));
-            assert_eq!(task.10.as_deref(), Some("fp-1"));
-            assert_eq!(task.11.as_deref(), Some("tmpl-1"));
-            assert_eq!(task.12.as_deref(), Some("ja"));
-            Ok(())
-        })
-        .unwrap();
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, f64>(3)?,
+                        r.get::<_, i64>(4)?,
+                        r.get::<_, i64>(5)?,
+                        r.get::<_, Option<String>>(6)?,
+                        r.get::<_, Option<String>>(7)?,
+                        r.get::<_, Option<String>>(8)?,
+                        r.get::<_, Option<String>>(9)?,
+                        r.get::<_, Option<String>>(10)?,
+                        r.get::<_, Option<String>>(11)?,
+                        r.get::<_, Option<String>>(12)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(task.0, "llmPolish");
+        assert_eq!(task.1, "pending");
+        assert_eq!(task.2, "Polish task");
+        assert_eq!(task.3, 25.0);
+        assert_eq!(task.4, 1);
+        assert_eq!(task.5, 1);
+        assert_eq!(task.6.as_deref(), Some("polish"));
+        assert_eq!(task.7.as_deref(), Some("hist-1"));
+        assert_eq!(task.8.as_deref(), Some("proj-1"));
+        assert_eq!(task.9.as_deref(), Some("rule-1"));
+        assert_eq!(task.10.as_deref(), Some("fp-1"));
+        assert_eq!(task.11.as_deref(), Some("tmpl-1"));
+        assert_eq!(task.12.as_deref(), Some("ja"));
+        Ok(())
+    })
+    .unwrap();
 
-    // Test history store API (uses Database::global() implicitly)
-    let store = SqliteHistoryStore::new(root.path().to_path_buf());
+    let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
     store.ensure_ready().unwrap();
 
     let items = store.list_items().unwrap();
@@ -499,18 +484,17 @@ fn test_migration_and_crud() {
 }
 
 // =========================================================================
-// Test 2: Backup export/import roundtrip (uses global DB, serial via lock)
+// Test 2: Backup export/import roundtrip
 // =========================================================================
 
 #[test]
 fn test_backup_roundtrip() {
-    let _guard = INTEGRATION_TEST_LOCK.lock().unwrap();
-    init_global_db();
-    clear_global_db();
+    let db = test_db();
+    clear_db(db.as_ref());
 
     // --- Setup data ---
     let root = tempfile::TempDir::new().unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf());
+    let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
     store.ensure_ready().unwrap();
 
     let item = store
@@ -541,6 +525,7 @@ fn test_backup_roundtrip() {
     let archive_path = archive_dir.path().join("backup.tar.bz2");
     let manifest = export_backup_archive_inner(
         root.path(),
+        Arc::clone(&db),
         ExportBackupArchiveRequest {
             archive_path: archive_path.to_string_lossy().into_owned(),
             app_version: "0.7.5".to_string(),
@@ -561,19 +546,20 @@ fn test_backup_roundtrip() {
     assert_eq!(manifest.counts.summary_files, 1);
 
     // --- Clear DB and import ---
-    clear_global_db();
+    clear_db(db.as_ref());
     let restore_root = tempfile::TempDir::new().unwrap();
 
     let (prepared, backup_snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
     apply_prepared_history_import_inner(
         restore_root.path(),
+        Arc::clone(&db),
         &prepared.import_id,
         &backup_snapshot.extraction_dir,
     )
     .unwrap();
 
     // --- Verify imported data ---
-    let restored_store = SqliteHistoryStore::new(restore_root.path().to_path_buf());
+    let restored_store = SqliteHistoryStore::new(restore_root.path().to_path_buf(), db);
     let items = restored_store.list_items().unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].id, item.id);

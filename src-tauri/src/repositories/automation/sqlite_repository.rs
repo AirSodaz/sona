@@ -1,27 +1,24 @@
 use crate::core::database::DatabaseError;
+use crate::core::database::ports::Database as DatabasePort;
 use serde_json::{Map, Value, json};
+use std::sync::Arc;
 
 use super::types::AutomationRepositoryState;
 
 #[derive(Clone)]
-pub struct SqliteAutomationRepository {
-    db: crate::core::database::DbProvider,
+pub struct SqliteAutomationRepository<D = crate::core::database::Database>
+where
+    D: DatabasePort,
+{
+    db: Arc<D>,
 }
 
 crate::impl_db_repository!(SqliteAutomationRepository);
 
-impl SqliteAutomationRepository {
-    fn ensure_id(data: &mut Value) -> String {
-        if let Some(id) = data.get("id").and_then(Value::as_str) {
-            id.to_string()
-        } else {
-            let id = uuid::Uuid::new_v4().to_string();
-            data.as_object_mut()
-                .map(|obj| obj.insert("id".to_string(), Value::String(id.clone())));
-            id
-        }
-    }
-
+impl<D> SqliteAutomationRepository<D>
+where
+    D: DatabasePort,
+{
     pub fn load_state(&self) -> Result<AutomationRepositoryState, DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
             let rules = Self::load_rules(tx)?;
@@ -92,6 +89,17 @@ impl SqliteAutomationRepository {
     }
 }
 
+fn ensure_id(data: &mut Value) -> String {
+    if let Some(id) = data.get("id").and_then(Value::as_str) {
+        id.to_string()
+    } else {
+        let id = uuid::Uuid::new_v4().to_string();
+        data.as_object_mut()
+            .map(|obj| obj.insert("id".to_string(), Value::String(id.clone())));
+        id
+    }
+}
+
 fn persist_rule_values(tx: &rusqlite::Transaction, rules: Vec<Value>) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_rules (
@@ -104,7 +112,7 @@ fn persist_rule_values(tx: &rusqlite::Transaction, rules: Vec<Value>) -> Result<
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
     )?;
     for mut rule in rules {
-        let id = SqliteAutomationRepository::ensure_id(&mut rule);
+        let id = ensure_id(&mut rule);
         let stage = rule.get("stageConfig");
         let export = rule.get("exportConfig");
         stmt.execute(rusqlite::params![
@@ -143,7 +151,7 @@ fn persist_processed_values(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     )?;
     for mut entry in entries {
-        let id = SqliteAutomationRepository::ensure_id(&mut entry);
+        let id = ensure_id(&mut entry);
         stmt.execute(rusqlite::params![
             id,
             string_field(&entry, "ruleId", ""),
@@ -274,11 +282,12 @@ mod tests {
     use crate::core::database::Database;
     use serde_json::json;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     #[test]
     fn test_automation_persist_and_load() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteAutomationRepository::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let repo = SqliteAutomationRepository::new(Arc::clone(&db));
 
         let rules = vec![
             json!({"name": "Rule 1", "watchDirectory": "/watch", "projectId": "proj-1"}),

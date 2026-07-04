@@ -74,11 +74,14 @@ impl UsageRecorder {
 
     fn record(&self, response: &StandardLlmResponse) {
         let occurred_at = chrono::Utc::now().to_rfc3339();
-        let Ok(db) = crate::core::database::Database::global() else {
-            return;
-        };
+        use tauri::Manager;
+        let db = std::sync::Arc::clone(
+            self.app
+                .state::<std::sync::Arc<crate::core::database::Database>>()
+                .inner(),
+        );
         if let Err(error) = crate::integrations::llm_usage_sqlite::record_usage(
-            db,
+            db.as_ref(),
             &crate::integrations::llm::llm_usage::UsageRecord {
                 occurred_at: occurred_at.clone(),
                 provider: self.config.provider.as_str(),

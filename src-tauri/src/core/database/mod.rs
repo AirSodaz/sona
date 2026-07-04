@@ -1,5 +1,6 @@
 pub mod error;
 pub mod legacy_migration;
+pub mod ports;
 pub mod schema;
 
 pub use error::DatabaseError;
@@ -18,7 +19,7 @@ const POOL_SIZE: usize = 4;
 const WRITE_POOL_SIZE: usize = 1;
 const POOL_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
 
-static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
+static GLOBAL_DB: OnceLock<Arc<Database>> = OnceLock::new();
 
 #[derive(Clone)]
 struct ConnectionPool {
@@ -159,10 +160,11 @@ impl Database {
     pub fn global() -> Result<&'static Database, DatabaseError> {
         GLOBAL_DB
             .get()
+            .map(Arc::as_ref)
             .ok_or_else(|| DatabaseError::Internal("Database not initialized".to_string()))
     }
 
-    pub fn set_global(db: Database) -> Result<(), DatabaseError> {
+    pub fn set_global(db: Arc<Database>) -> Result<(), DatabaseError> {
         GLOBAL_DB
             .set(db)
             .map_err(|_| DatabaseError::Internal("Database already initialized".to_string()))
@@ -413,80 +415,58 @@ pub fn time_query<T>(
     result
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct DbProvider {
-    db: Option<Arc<Database>>,
-}
-
-impl DbProvider {
-    pub fn new(db: Option<Arc<Database>>) -> Self {
-        Self { db }
-    }
-
-    pub fn get(&self) -> Result<&Database, DatabaseError> {
-        if let Some(ref db) = self.db {
-            Ok(db)
-        } else {
-            Database::global()
-        }
-    }
-}
-
 /// Generates the standard `new()`, `with_db()` (test-only), and `get_db()` methods
-/// for a SQLite repository struct with a `db: DbProvider` field.
+/// for a SQLite repository struct with an injected `Arc<D>` database field.
 #[macro_export]
 macro_rules! impl_db_repository {
     ($name:ident) => {
-        impl $name {
-            pub fn new(_app_local_data_dir: std::path::PathBuf) -> Self {
-                Self {
-                    db: $crate::core::database::DbProvider::default(),
-                }
+        impl<D> $name<D>
+        where
+            D: $crate::core::database::ports::Database,
+        {
+            pub fn new(db: std::sync::Arc<D>) -> Self {
+                Self { db }
             }
 
+            fn get_db(&self) -> Result<&D, $crate::core::database::DatabaseError> {
+                Ok(self.db.as_ref())
+            }
+        }
+
+        impl $name<$crate::core::database::Database> {
             #[cfg(test)]
             pub(crate) fn with_db(
                 _app_local_data_dir: std::path::PathBuf,
                 db: $crate::core::database::Database,
             ) -> Self {
-                Self {
-                    db: $crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-                }
-            }
-
-            fn get_db(
-                &self,
-            ) -> Result<&$crate::core::database::Database, $crate::core::database::DatabaseError>
-            {
-                self.db.get()
+                Self::new(std::sync::Arc::new(db))
             }
         }
     };
     ($name:ident, app_local_data_dir) => {
-        impl $name {
-            pub fn new(app_local_data_dir: std::path::PathBuf) -> Self {
+        impl<D> $name<D>
+        where
+            D: $crate::core::database::ports::Database,
+        {
+            pub fn new(app_local_data_dir: std::path::PathBuf, db: std::sync::Arc<D>) -> Self {
                 Self {
                     app_local_data_dir,
-                    db: $crate::core::database::DbProvider::default(),
+                    db,
                 }
             }
 
+            fn get_db(&self) -> Result<&D, $crate::core::database::DatabaseError> {
+                Ok(self.db.as_ref())
+            }
+        }
+
+        impl $name<$crate::core::database::Database> {
             #[cfg(test)]
             pub(crate) fn with_db(
                 app_local_data_dir: std::path::PathBuf,
                 db: $crate::core::database::Database,
             ) -> Self {
-                Self {
-                    app_local_data_dir,
-                    db: $crate::core::database::DbProvider::new(Some(std::sync::Arc::new(db))),
-                }
-            }
-
-            fn get_db(
-                &self,
-            ) -> Result<&$crate::core::database::Database, $crate::core::database::DatabaseError>
-            {
-                self.db.get()
+                Self::new(app_local_data_dir, std::sync::Arc::new(db))
             }
         }
     };
@@ -952,20 +932,18 @@ mod tests {
             .expect("second writer panicked")
             .expect("concurrent writer should wait and then commit");
     }
-}
-
-#[cfg(test)]
-mod tests_provider {
-    use super::*;
-    use std::sync::Arc;
 
     #[test]
-    fn test_db_provider_fallback() {
-        let provider = DbProvider::default();
-        assert!(provider.get().is_err());
+    fn set_global_accepts_shared_database_handle() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let _ = Database::set_global(Arc::clone(&db));
 
-        let local_db = Database::open_in_memory().unwrap();
-        let provider_with_db = DbProvider::new(Some(Arc::new(local_db)));
-        assert!(provider_with_db.get().is_ok());
+        let global = Database::global().expect("global database should be initialized");
+        global
+            .with_connection(|conn| {
+                conn.execute_batch("SELECT 1")?;
+                Ok(())
+            })
+            .unwrap();
     }
 }

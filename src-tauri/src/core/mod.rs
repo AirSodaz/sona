@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod domain;
 pub mod downloads;
 pub mod event;
+pub mod history;
 pub mod history_store;
 pub mod paths;
 pub mod pipeline;
@@ -18,3 +19,4 @@ pub mod task_ledger;
 #[path = "task_ledger/sqlite_repository.rs"]
 pub mod task_ledger_sqlite;
 pub mod text_alignment;
+pub mod transcript;

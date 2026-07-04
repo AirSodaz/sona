@@ -2,6 +2,8 @@ use crate::integrations::asr::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
 
+pub use crate::core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
+
 use crate::core::paths::{PathKind, PathProvider};
 use crate::core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use log::{debug, info};
@@ -29,35 +31,6 @@ const PROFILE_SAMPLE_MIN_DURATION_SECONDS: f32 = 4.0;
 const PROFILE_LIMITED_MIN_TOTAL_DURATION_SECONDS: f32 = 8.0;
 const PROFILE_READY_MIN_TOTAL_DURATION_SECONDS: f32 = 20.0;
 const PROFILE_READY_MIN_SAMPLE_COUNT: usize = 2;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SpeakerTag {
-    pub id: String,
-    pub label: String,
-    pub kind: String,
-    pub score: Option<f32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SpeakerCandidate {
-    pub profile_id: String,
-    pub profile_name: String,
-    pub score: f32,
-    pub rank: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SpeakerAttribution {
-    pub group_id: String,
-    pub anonymous_label: String,
-    pub state: String,
-    pub source: String,
-    pub confidence: String,
-    pub candidates: Vec<SpeakerCandidate>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

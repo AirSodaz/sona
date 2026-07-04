@@ -1,11 +1,16 @@
 use crate::core::database::DatabaseError;
+use crate::core::database::ports::Database as DatabasePort;
 use serde_json::Value;
+use std::sync::Arc;
 
 use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
 
 #[derive(Clone)]
-pub struct SqliteProjectRepository {
-    db: crate::core::database::DbProvider,
+pub struct SqliteProjectRepository<D = crate::core::database::Database>
+where
+    D: DatabasePort,
+{
+    db: Arc<D>,
 }
 
 crate::impl_db_repository!(SqliteProjectRepository);
@@ -93,7 +98,10 @@ fn project_update_sql() -> String {
     format!("UPDATE projects SET {assignments} WHERE id = :id")
 }
 
-impl SqliteProjectRepository {
+impl<D> SqliteProjectRepository<D>
+where
+    D: DatabasePort,
+{
     pub fn list(&self, _options: ProjectListOptions) -> Result<Vec<ProjectRecord>, DatabaseError> {
         self.get_db()?.with_connection(Self::list_projects)
     }
@@ -595,7 +603,10 @@ fn hydrate_project_default_links(
 }
 
 #[async_trait::async_trait]
-impl crate::core::dashboard::ports::ProjectRepository for SqliteProjectRepository {
+impl<D> crate::core::dashboard::ports::ProjectRepository for SqliteProjectRepository<D>
+where
+    D: DatabasePort,
+{
     async fn count_projects(
         &self,
     ) -> Result<u64, crate::core::dashboard::error::DashboardServiceError> {
@@ -613,6 +624,7 @@ mod tests {
     use crate::repositories::project::types::ProjectDefaultsInput;
     use serde_json::json;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn table_columns(conn: &rusqlite::Connection, table: &str) -> Vec<String> {
         let mut stmt = conn
@@ -723,8 +735,8 @@ mod tests {
 
     #[test]
     fn test_project_crud() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteProjectRepository::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let repo = SqliteProjectRepository::new(Arc::clone(&db));
 
         // Create
         let created = repo

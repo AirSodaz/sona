@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::core::database::DatabaseError;
 use crate::core::paths::PathProvider;
@@ -11,17 +11,15 @@ use crate::core::task_ledger::types::{
 };
 use crate::core::task_ledger_sqlite::SqliteLedgerRepository;
 
-async fn run_task_ledger_repository_task<T, F>(
-    provider: &dyn PathProvider,
-    task: F,
-) -> Result<T, String>
+async fn run_task_ledger_repository_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
+    R: Runtime,
     T: Send + 'static,
     F: FnOnce(SqliteLedgerRepository) -> Result<T, DatabaseError> + Send + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
-        task(SqliteLedgerRepository::new(app_local_data_dir)).map_err(|e| e.to_string())
+        task(SqliteLedgerRepository::new(db)).map_err(|e| e.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -239,10 +237,7 @@ pub async fn get_diagnostics_core_snapshot(
 
 #[tauri::command]
 pub async fn task_ledger_load_snapshot(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
-        repository.load_snapshot()
-    })
-    .await
+    run_task_ledger_repository_task(&app, |repository| repository.load_snapshot()).await
 }
 
 #[tauri::command]
@@ -250,7 +245,7 @@ pub async fn task_ledger_upsert_task(
     app: AppHandle,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+    run_task_ledger_repository_task(&app, move |repository| {
         repository.upsert_task(record)?;
         repository.load_snapshot()
     })
@@ -266,7 +261,7 @@ pub async fn task_ledger_patch_task(
     id: String,
     patch: Value,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+    run_task_ledger_repository_task(&app, move |repository| {
         repository.patch_task(&id, patch)?;
         repository.load_snapshot()
     })
@@ -281,7 +276,7 @@ pub async fn task_ledger_remove_task(
     app: AppHandle,
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app as &dyn PathProvider, move |repository| {
+    run_task_ledger_repository_task(&app, move |repository| {
         repository.remove_task(&id)?;
         repository.load_snapshot()
     })
@@ -293,7 +288,7 @@ pub async fn task_ledger_remove_task(
 
 #[tauri::command]
 pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app as &dyn PathProvider, |repository| {
+    run_task_ledger_repository_task(&app, |repository| {
         repository.clear_resolved()?;
         repository.load_snapshot()
     })
@@ -453,10 +448,9 @@ pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String
 fn sqlite_config_store<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
-    let app_local_data_dir =
-        (app as &dyn PathProvider).resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
     Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
-        app_local_data_dir,
+        db,
     ))
 }
 

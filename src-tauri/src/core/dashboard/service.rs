@@ -6,8 +6,8 @@ use chrono::{Duration, Local, NaiveDate, TimeZone};
 use super::error::DashboardServiceError;
 use super::models::*;
 use super::ports::{AnalyticsRepository, ProjectRepository};
+use crate::core::history::{HistoryItemKind, HistoryItemRecord};
 use crate::core::history_store::HistoryStore;
-use crate::repositories::history::{HistoryItemKind, HistoryItemRecord};
 
 const RECENT_DAILY_WINDOW: i64 = 30;
 

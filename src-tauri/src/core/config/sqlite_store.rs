@@ -1,14 +1,22 @@
 use crate::core::database::DatabaseError;
+use crate::core::database::ports::Database as DatabasePort;
 use serde_json::Value;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct SqliteConfigStore {
-    db: crate::core::database::DbProvider,
+pub struct SqliteConfigStore<D = crate::core::database::Database>
+where
+    D: DatabasePort,
+{
+    db: Arc<D>,
 }
 
 crate::impl_db_repository!(SqliteConfigStore);
 
-impl SqliteConfigStore {
+impl<D> SqliteConfigStore<D>
+where
+    D: DatabasePort,
+{
     pub fn load_config(&self) -> Result<Option<Value>, DatabaseError> {
         self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
@@ -165,12 +173,12 @@ mod tests {
     use super::*;
     use crate::core::database::Database;
     use serde_json::json;
-    use std::path::PathBuf;
+    use std::sync::Arc;
 
     #[test]
     fn test_config_load_save() {
-        let db = Database::open_in_memory().unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
 
         // Initially empty
         let config = store.load_config().unwrap();
@@ -188,8 +196,8 @@ mod tests {
 
     #[test]
     fn test_config_overwrite() {
-        let db = Database::open_in_memory().unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
 
         store.save_config(&json!({"version": 1})).unwrap();
         store.save_config(&json!({"version": 2})).unwrap();
@@ -200,8 +208,8 @@ mod tests {
 
     #[test]
     fn test_save_config_projects_startup_columns() {
-        let db = Database::open_in_memory().unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
 
         store
             .save_config(&json!({
@@ -228,49 +236,46 @@ mod tests {
             }))
             .unwrap();
 
-        store
-            .get_db()
-            .unwrap()
-            .with_connection(|conn| {
-                let projected = conn.query_row(
-                    "SELECT http_server_enabled, http_server_host, http_server_port,
+        db.with_connection(|conn| {
+            let projected = conn.query_row(
+                "SELECT http_server_enabled, http_server_host, http_server_port,
                             http_server_api_key, http_server_max_concurrent,
                             http_server_max_queue_size, http_server_max_upload_size_mb,
                             http_server_job_ttl_minutes, http_server_max_streaming,
                             http_server_ip_whitelist, gpu_acceleration
                      FROM app_config WHERE id = 1",
-                    [],
-                    |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, i64>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, i64>(4)?,
-                            row.get::<_, i64>(5)?,
-                            row.get::<_, i64>(6)?,
-                            row.get::<_, i64>(7)?,
-                            row.get::<_, i64>(8)?,
-                            row.get::<_, String>(9)?,
-                            row.get::<_, String>(10)?,
-                        ))
-                    },
-                )?;
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, i64>(5)?,
+                        row.get::<_, i64>(6)?,
+                        row.get::<_, i64>(7)?,
+                        row.get::<_, i64>(8)?,
+                        row.get::<_, String>(9)?,
+                        row.get::<_, String>(10)?,
+                    ))
+                },
+            )?;
 
-                assert_eq!(projected.0, 1);
-                assert_eq!(projected.1, "0.0.0.0");
-                assert_eq!(projected.2, 15555);
-                assert_eq!(projected.3, "secret");
-                assert_eq!(projected.4, 4);
-                assert_eq!(projected.5, 32);
-                assert_eq!(projected.6, 128);
-                assert_eq!(projected.7, 15);
-                assert_eq!(projected.8, 6);
-                assert_eq!(projected.9, "127.0.0.1/32");
-                assert_eq!(projected.10, "cpu");
-                Ok(())
-            })
-            .unwrap();
+            assert_eq!(projected.0, 1);
+            assert_eq!(projected.1, "0.0.0.0");
+            assert_eq!(projected.2, 15555);
+            assert_eq!(projected.3, "secret");
+            assert_eq!(projected.4, 4);
+            assert_eq!(projected.5, 32);
+            assert_eq!(projected.6, 128);
+            assert_eq!(projected.7, 15);
+            assert_eq!(projected.8, 6);
+            assert_eq!(projected.9, "127.0.0.1/32");
+            assert_eq!(projected.10, "cpu");
+            Ok(())
+        })
+        .unwrap();
 
         let loaded = store.load_config().unwrap().unwrap();
         assert_eq!(
@@ -281,8 +286,8 @@ mod tests {
 
     #[test]
     fn test_app_settings_round_trip_json_values() {
-        let db = Database::open_in_memory().unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
 
         assert!(store.get_setting("sona-onboarding").unwrap().is_none());
 

@@ -6,7 +6,6 @@ use serde_json::to_value;
 use tauri::{AppHandle, Emitter, State};
 
 use super::*;
-use crate::core::paths::PathProvider;
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::llm_helpers;
 use crate::repositories::history::{HistoryRepositoryState, TranscriptSnapshotReason};
@@ -143,7 +142,7 @@ async fn create_transcript_job_snapshot(
     if let Some(history_id) = history_id {
         let history_id = history_id.to_string();
         let segments = segments.to_vec();
-        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
             llm_helpers::create_llm_transcript_snapshot_record(
                 &store,
                 &history_id,
@@ -216,7 +215,7 @@ where
         .clone();
     let fs_for_update = final_segments.clone();
     let history_item = if let Some(history_id) = history_id.clone() {
-        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
             llm_helpers::update_llm_transcript_segments_record(&store, &history_id, fs_for_update)
         })
         .await?
@@ -329,7 +328,7 @@ async fn run_summary_job(
 
     if let Some(hid) = history_id.clone() {
         let summary_value = to_value(&summary).map_err(|error| error.to_string())?;
-        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+        llm_helpers::run_llm_db_task_with_app(&app, move |store| {
             llm_helpers::save_llm_summary_payload(&store, &hid, summary_value)
         })
         .await?;

@@ -4,7 +4,8 @@ use crate::integrations::llm::{
     TranscriptSummaryResult, TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::repositories::history::HistoryRepositoryState;
-use tauri::{AppHandle, State};
+use std::sync::Arc;
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn generate_llm_text(
@@ -58,18 +59,14 @@ pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn llm_usage_read_raw(_app: AppHandle) -> Result<String, String> {
-    crate::integrations::llm_usage_sqlite::read_raw(
-        crate::core::database::Database::global().map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    crate::integrations::llm_usage_sqlite::read_raw(db.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn llm_usage_replace_raw(_app: AppHandle, content: String) -> Result<(), String> {
-    crate::integrations::llm_usage_sqlite::replace_raw(
-        crate::core::database::Database::global().map_err(|e| e.to_string())?,
-        &content,
-    )
-    .map_err(|e| e.to_string())
+pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    crate::integrations::llm_usage_sqlite::replace_raw(db.as_ref(), &content)
+        .map_err(|e| e.to_string())
 }

@@ -1,8 +1,8 @@
 use serde_json::Value;
-use tauri::{AppHandle, Runtime};
+use std::sync::Arc;
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
-use crate::core::paths::{PathKind, PathProvider};
 use crate::repositories::project::repository::{
     ACTIVE_PROJECT_SETTINGS_KEY, SETTINGS_FILE_NAME, run_project_task,
 };
@@ -13,9 +13,9 @@ use crate::repositories::project::{
 fn sqlite_config_store<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
-    let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
     Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
-        app_local_data_dir,
+        db,
     ))
 }
 

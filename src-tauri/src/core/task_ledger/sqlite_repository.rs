@@ -1,6 +1,8 @@
 use crate::core::database::DatabaseError;
+use crate::core::database::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::core::task_ledger::types::{
     TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
@@ -17,20 +19,19 @@ const UPSERT_TASK_SQL: &str = "INSERT OR REPLACE INTO task_ledger (
 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)";
 
 #[derive(Clone)]
-pub struct SqliteLedgerRepository {
-    db: crate::core::database::DbProvider,
+pub struct SqliteLedgerRepository<D = crate::core::database::Database>
+where
+    D: DatabasePort,
+{
+    db: Arc<D>,
 }
 
 crate::impl_db_repository!(SqliteLedgerRepository);
 
-impl SqliteLedgerRepository {
-    fn now_ms() -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
-    }
-
+impl<D> SqliteLedgerRepository<D>
+where
+    D: DatabasePort,
+{
     pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, DatabaseError> {
         let records = self.get_db()?.with_connection(|conn| {
             let sql = format!("SELECT {TASK_LEDGER_COLUMNS} FROM task_ledger ORDER BY id");
@@ -90,7 +91,7 @@ impl SqliteLedgerRepository {
             }
 
             record.id = id.to_string();
-            record.updated_at = Self::now_ms();
+            record.updated_at = now_ms();
             let normalized = normalize_record(record);
             let mut stmt = tx.prepare_cached(UPSERT_TASK_SQL)?;
             execute_upsert_task(&mut stmt, &normalized)?;
@@ -131,6 +132,13 @@ impl SqliteLedgerRepository {
 
         Ok(())
     }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn map_row_to_record(row: &rusqlite::Row) -> Result<TaskLedgerRecord, DatabaseError> {
@@ -238,7 +246,7 @@ fn normalize_record(mut record: TaskLedgerRecord) -> TaskLedgerRecord {
     } else {
         0.0
     };
-    let now = SqliteLedgerRepository::now_ms();
+    let now = now_ms();
     if record.created_at == 0 {
         record.created_at = now;
     }
@@ -250,7 +258,7 @@ fn normalize_record(mut record: TaskLedgerRecord) -> TaskLedgerRecord {
 
 fn normalize_loaded_record(mut record: TaskLedgerRecord) -> TaskLedgerRecord {
     if record.created_at == 0 {
-        record.created_at = SqliteLedgerRepository::now_ms();
+        record.created_at = now_ms();
     }
     if record.updated_at == 0 {
         record.updated_at = record.created_at;
@@ -281,6 +289,7 @@ mod tests {
     use crate::core::task_ledger::types::TaskLedgerKind;
     use serde_json::json;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn make_record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
         TaskLedgerRecord {
@@ -308,8 +317,8 @@ mod tests {
 
     #[test]
     fn test_ledger_upsert_and_load() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let repo = SqliteLedgerRepository::new(Arc::clone(&db));
 
         let record = make_record("task-1", TaskLedgerStatus::Running);
         repo.upsert_task(record).unwrap();
