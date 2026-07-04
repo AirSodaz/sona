@@ -327,29 +327,33 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 return (
                   <div className="onboarding-model-card" role="listitem" key={model.id}>
                     <div className="onboarding-model-meta">
-                      <div>
+                      <div className="onboarding-model-name-row">
                         <strong>{model.name}</strong>
-                        <span>{t(model.description)}</span>
+                        <div className="onboarding-model-badges">
+                          <span className="model-tag">{model.size}</span>
+                          {model.language && <span className="model-tag">{model.language.toUpperCase()}</span>}
+                        </div>
                       </div>
-                      <div className="onboarding-model-badges">
-                        <span className="model-tag">{model.size}</span>
-                        {model.language && <span className="model-tag">{model.language.toUpperCase()}</span>}
-                      </div>
+                      <span>{t(model.description)}</span>
                     </div>
 
                     {downloadState && (
-                      <div className="onboarding-progress-block" aria-live="polite">
-                        <div className="onboarding-progress-row">
-                          <span>{downloadState.status}</span>
+                      <div className="progress-container-mini">
+                        <div className="progress-info-mini" aria-live="polite">
+                          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{downloadState.status}</span>
                           <span className={isDone ? 'success-text' : ''}>
-                            {isDone ? t('first_run.models.ready') : `${downloadState.percentage}%`}
+                            {isDone ? t('first_run.models.ready') : `${Math.round(downloadState.percentage)}%`}
                           </span>
                         </div>
-                        <div className="progress-bar-mini">
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${downloadState.percentage}%` }}
-                          />
+                        <div
+                          className="progress-bar-mini"
+                          role="progressbar"
+                          aria-valuenow={Math.round(downloadState.percentage)}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${t('common.download')} ${model.name}`}
+                        >
+                          <div className="progress-fill" style={{ width: `${downloadState.percentage}%` }} />
                         </div>
                       </div>
                     )}
