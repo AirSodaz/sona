@@ -1,5 +1,5 @@
 use crate::core::database::DatabaseError;
-use serde_json::{Map, Value, json};
+use serde_json::Value;
 
 use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
 
@@ -10,9 +10,10 @@ pub struct SqliteProjectRepository {
 
 crate::impl_db_repository!(SqliteProjectRepository);
 
-const PROJECT_COLUMNS: [&str; 11] = [
+const PROJECT_COLUMNS: [&str; 14] = [
     "id",
     "name",
+    "description",
     "icon",
     "color",
     "sort_order",
@@ -21,18 +22,28 @@ const PROJECT_COLUMNS: [&str; 11] = [
     "summary_template_id",
     "translation_language",
     "polish_preset_id",
-    "settings",
+    "polish_scenario",
+    "polish_context",
+    "export_file_name_prefix",
 ];
 
-const PROJECT_UPDATE_COLUMNS: [&str; 7] = [
+const PROJECT_UPDATE_COLUMNS: [&str; 10] = [
     "name",
     "icon",
+    "description",
     "updated_at",
     "summary_template_id",
     "translation_language",
     "polish_preset_id",
-    "settings",
+    "polish_scenario",
+    "polish_context",
+    "export_file_name_prefix",
 ];
+
+const LINK_KIND_TEXT_REPLACEMENT: &str = "text_replacement";
+const LINK_KIND_HOTWORD: &str = "hotword";
+const LINK_KIND_POLISH_KEYWORD: &str = "polish_keyword";
+const LINK_KIND_SPEAKER_PROFILE: &str = "speaker_profile";
 
 fn project_column_list(columns: &[&str]) -> String {
     columns.join(", ")
@@ -93,20 +104,17 @@ impl SqliteProjectRepository {
         let id = uuid::Uuid::new_v4().to_string();
 
         let defaults = self.build_defaults(&input)?;
-        let mut settings_val = serde_json::to_value(&defaults)?;
-        if let Some(obj) = settings_val.as_object_mut() {
-            obj.insert("description".to_string(), json!(input.description));
-        }
-        let settings_str = settings_val.to_string();
+        let description = input.description.clone().unwrap_or_default();
         let icon = input.icon.clone().unwrap_or_default();
         let name = input.name.clone();
 
-        self.get_db()?.with_write_connection(|conn| {
-            conn.execute(
+        self.get_db()?.with_transaction(|tx| {
+            tx.execute(
                 &project_insert_sql(),
                 rusqlite::named_params! {
                     ":id": &id,
                     ":name": &name,
+                    ":description": &description,
                     ":icon": &icon,
                     ":color": "",
                     ":sort_order": 0_i64,
@@ -115,16 +123,19 @@ impl SqliteProjectRepository {
                     ":summary_template_id": &defaults.summary_template_id,
                     ":translation_language": &defaults.translation_language,
                     ":polish_preset_id": &defaults.polish_preset_id,
-                    ":settings": &settings_str,
+                    ":polish_scenario": &defaults.polish_scenario,
+                    ":polish_context": &defaults.polish_context,
+                    ":export_file_name_prefix": &defaults.export_file_name_prefix,
                 },
             )?;
+            replace_project_default_links(tx, &id, &defaults)?;
             Ok(())
         })?;
 
         Ok(ProjectRecord {
             id,
             name,
-            description: input.description.unwrap_or_default(),
+            description,
             icon,
             created_at: now,
             updated_at: now,
@@ -244,28 +255,27 @@ impl SqliteProjectRepository {
 
             let now = crate::repositories::project::repository::current_time_millis()
                 .map_err(DatabaseError::Internal)?;
-            let mut settings_val = serde_json::to_value(&defaults)?;
-            if let Some(obj) = settings_val.as_object_mut() {
-                obj.insert("description".to_string(), json!(description));
-            }
-            let settings_str = settings_val.to_string();
 
             let rows_affected = tx.execute(
                 &project_update_sql(),
                 rusqlite::named_params! {
                     ":name": &name,
                     ":icon": &icon,
+                    ":description": &description,
                     ":updated_at": now as i64,
                     ":summary_template_id": &defaults.summary_template_id,
                     ":translation_language": &defaults.translation_language,
                     ":polish_preset_id": &defaults.polish_preset_id,
-                    ":settings": &settings_str,
+                    ":polish_scenario": &defaults.polish_scenario,
+                    ":polish_context": &defaults.polish_context,
+                    ":export_file_name_prefix": &defaults.export_file_name_prefix,
                     ":id": project_id,
                 },
             )?;
             if rows_affected == 0 {
                 return Ok(None);
             }
+            replace_project_default_links(tx, project_id, &defaults)?;
 
             Ok(Some(ProjectRecord {
                 id: project_id.to_string(),
@@ -334,6 +344,11 @@ impl SqliteProjectRepository {
                     .and_then(Value::as_str)
                     .unwrap_or("")
                     .to_string();
+                let description = project
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 let created_at = project
                     .get("createdAt")
                     .and_then(Value::as_u64)
@@ -344,57 +359,28 @@ impl SqliteProjectRepository {
                     .unwrap_or(0) as i64;
 
                 let defaults = project.get("defaults").and_then(Value::as_object);
-                let summary_template_id = defaults
-                    .and_then(|d| d.get("summaryTemplateId"))
-                    .or_else(|| defaults.and_then(|d| d.get("summaryTemplate")))
-                    .and_then(Value::as_str)
-                    .unwrap_or("general");
-                let translation_language = defaults
-                    .and_then(|d| d.get("translationLanguage"))
-                    .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("zh");
-                let polish_preset_id = defaults
-                    .and_then(|d| d.get("polishPresetId"))
-                    .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("general");
-
-                let mut settings = serde_json::Map::new();
-                if let Some(desc) = project.get("description").and_then(Value::as_str) {
-                    settings.insert("description".to_string(), json!(desc));
-                }
-                if let Some(d) = defaults {
-                    for key in &[
-                        "polishScenario",
-                        "polishContext",
-                        "exportFileNamePrefix",
-                        "enabledTextReplacementSetIds",
-                        "enabledHotwordSetIds",
-                        "enabledPolishKeywordSetIds",
-                        "enabledSpeakerProfileIds",
-                    ] {
-                        if let Some(val) = d.get(*key) {
-                            settings.insert(key.to_string(), val.clone());
-                        }
-                    }
-                }
-                let settings_str = serde_json::to_string(&Value::Object(settings))
-                    .unwrap_or_else(|_| "{}".to_string());
+                let defaults = crate::repositories::project::repository::normalize_defaults(
+                    defaults,
+                    &ProjectListOptions::default(),
+                );
 
                 stmt.execute(rusqlite::named_params! {
                     ":id": &id,
                     ":name": &name,
+                    ":description": &description,
                     ":icon": &icon,
                     ":color": "",
                     ":sort_order": i as i64,
                     ":created_at": created_at,
                     ":updated_at": updated_at,
-                    ":summary_template_id": summary_template_id,
-                    ":translation_language": translation_language,
-                    ":polish_preset_id": polish_preset_id,
-                    ":settings": &settings_str,
+                    ":summary_template_id": &defaults.summary_template_id,
+                    ":translation_language": &defaults.translation_language,
+                    ":polish_preset_id": &defaults.polish_preset_id,
+                    ":polish_scenario": &defaults.polish_scenario,
+                    ":polish_context": &defaults.polish_context,
+                    ":export_file_name_prefix": &defaults.export_file_name_prefix,
                 })?;
+                replace_project_default_links(tx, &id, &defaults)?;
             }
             Ok(())
         })
@@ -424,7 +410,9 @@ impl SqliteProjectRepository {
         let rows = stmt.query_map([], map_row_to_project)?;
         let mut projects = Vec::new();
         for row in rows {
-            projects.push(row?);
+            let mut project = row?;
+            hydrate_project_default_links(conn, &mut project)?;
+            projects.push(project);
         }
         Ok(projects)
     }
@@ -438,7 +426,9 @@ impl SqliteProjectRepository {
             conn.prepare_cached(&format!("SELECT {columns} FROM projects WHERE id = ?1"))?;
         let mut rows = stmt.query([project_id])?;
         if let Some(row) = rows.next()? {
-            Ok(Some(map_row_to_project(row)?))
+            let mut project = map_row_to_project(row)?;
+            hydrate_project_default_links(conn, &mut project)?;
+            Ok(Some(project))
         } else {
             Ok(None)
         }
@@ -479,6 +469,7 @@ impl SqliteProjectRepository {
 fn map_row_to_project(row: &rusqlite::Row) -> rusqlite::Result<ProjectRecord> {
     let id: String = row.get("id")?;
     let name: String = row.get("name")?;
+    let description: String = row.get("description")?;
     let icon: String = row.get("icon")?;
     let _color: String = row.get("color")?;
     let _sort_order: i64 = row.get("sort_order")?;
@@ -487,73 +478,21 @@ fn map_row_to_project(row: &rusqlite::Row) -> rusqlite::Result<ProjectRecord> {
     let summary_template_id: String = row.get("summary_template_id")?;
     let translation_language: String = row.get("translation_language")?;
     let polish_preset_id: String = row.get("polish_preset_id")?;
-    let settings_str: String = row.get("settings")?;
-
-    let settings: Map<String, Value> = serde_json::from_str(&settings_str).unwrap_or_default();
-
-    let description = settings
-        .get("description")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+    let polish_scenario: Option<String> = row.get("polish_scenario")?;
+    let polish_context: Option<String> = row.get("polish_context")?;
+    let export_file_name_prefix: String = row.get("export_file_name_prefix")?;
 
     let defaults = ProjectDefaults {
         summary_template_id,
         translation_language,
         polish_preset_id,
-        polish_scenario: settings
-            .get("polishScenario")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string()),
-        polish_context: settings
-            .get("polishContext")
-            .and_then(Value::as_str)
-            .map(|s| s.to_string()),
-        export_file_name_prefix: settings
-            .get("exportFileNamePrefix")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string(),
-        enabled_text_replacement_set_ids: settings
-            .get("enabledTextReplacementSetIds")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default(),
-        enabled_hotword_set_ids: settings
-            .get("enabledHotwordSetIds")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default(),
-        enabled_polish_keyword_set_ids: settings
-            .get("enabledPolishKeywordSetIds")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default(),
-        enabled_speaker_profile_ids: settings
-            .get("enabledSpeakerProfileIds")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(Value::as_str)
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default(),
+        polish_scenario,
+        polish_context,
+        export_file_name_prefix,
+        enabled_text_replacement_set_ids: Vec::new(),
+        enabled_hotword_set_ids: Vec::new(),
+        enabled_polish_keyword_set_ids: Vec::new(),
+        enabled_speaker_profile_ids: Vec::new(),
     };
 
     Ok(ProjectRecord {
@@ -565,6 +504,94 @@ fn map_row_to_project(row: &rusqlite::Row) -> rusqlite::Result<ProjectRecord> {
         updated_at: updated_at as u64,
         defaults,
     })
+}
+
+fn replace_project_default_links(
+    tx: &rusqlite::Transaction,
+    project_id: &str,
+    defaults: &ProjectDefaults,
+) -> Result<(), rusqlite::Error> {
+    tx.execute(
+        "DELETE FROM project_default_links WHERE project_id = ?1",
+        [project_id],
+    )?;
+    insert_project_links_for_kind(
+        tx,
+        project_id,
+        LINK_KIND_TEXT_REPLACEMENT,
+        &defaults.enabled_text_replacement_set_ids,
+    )?;
+    insert_project_links_for_kind(
+        tx,
+        project_id,
+        LINK_KIND_HOTWORD,
+        &defaults.enabled_hotword_set_ids,
+    )?;
+    insert_project_links_for_kind(
+        tx,
+        project_id,
+        LINK_KIND_POLISH_KEYWORD,
+        &defaults.enabled_polish_keyword_set_ids,
+    )?;
+    insert_project_links_for_kind(
+        tx,
+        project_id,
+        LINK_KIND_SPEAKER_PROFILE,
+        &defaults.enabled_speaker_profile_ids,
+    )
+}
+
+fn insert_project_links_for_kind(
+    tx: &rusqlite::Transaction,
+    project_id: &str,
+    kind: &str,
+    target_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let mut stmt = tx.prepare_cached(
+        "INSERT OR REPLACE INTO project_default_links (project_id, kind, target_id, sort_order)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    for (sort_order, target_id) in target_ids.iter().enumerate() {
+        stmt.execute(rusqlite::params![
+            project_id,
+            kind,
+            target_id,
+            sort_order as i64
+        ])?;
+    }
+    Ok(())
+}
+
+fn hydrate_project_default_links(
+    conn: &rusqlite::Connection,
+    project: &mut ProjectRecord,
+) -> Result<(), DatabaseError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT kind, target_id FROM project_default_links
+         WHERE project_id = ?1
+         ORDER BY kind, sort_order, target_id",
+    )?;
+    let mut rows = stmt.query([project.id.as_str()])?;
+    while let Some(row) = rows.next()? {
+        let kind: String = row.get(0)?;
+        let target_id: String = row.get(1)?;
+        match kind.as_str() {
+            LINK_KIND_TEXT_REPLACEMENT => project
+                .defaults
+                .enabled_text_replacement_set_ids
+                .push(target_id),
+            LINK_KIND_HOTWORD => project.defaults.enabled_hotword_set_ids.push(target_id),
+            LINK_KIND_POLISH_KEYWORD => project
+                .defaults
+                .enabled_polish_keyword_set_ids
+                .push(target_id),
+            LINK_KIND_SPEAKER_PROFILE => {
+                project.defaults.enabled_speaker_profile_ids.push(target_id)
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 #[async_trait::async_trait]
@@ -583,6 +610,7 @@ impl crate::core::dashboard::ports::ProjectRepository for SqliteProjectRepositor
 mod tests {
     use super::*;
     use crate::core::database::Database;
+    use crate::repositories::project::types::ProjectDefaultsInput;
     use serde_json::json;
     use std::path::PathBuf;
 
@@ -616,20 +644,23 @@ mod tests {
         db.with_connection(|conn| {
             conn.execute(
                 "INSERT INTO projects (
-                    id, name, icon, color, sort_order, created_at, updated_at,
-                    summary_template_id, translation_language, polish_preset_id, settings
+                    id, name, description, icon, color, sort_order, created_at, updated_at,
+                    summary_template_id, translation_language, polish_preset_id,
+                    polish_scenario, polish_context, export_file_name_prefix
                 )
                 VALUES (
-                    'project-name-map', 'Mapped project', 'folder', '#fff', 7, 111, 222,
+                    'project-name-map', 'Mapped project', 'Mapped description', 'folder', '#fff', 7, 111, 222,
                     'summary-special', 'en', 'polish-special',
-                    '{\"description\":\"Mapped description\",\"exportFileNamePrefix\":\"map-\"}'
+                    'scenario', 'context', 'map-'
                 )",
                 [],
             )?;
 
             let mut stmt = conn.prepare(
                 "SELECT
-                    settings AS settings,
+                    export_file_name_prefix AS export_file_name_prefix,
+                    polish_context AS polish_context,
+                    polish_scenario AS polish_scenario,
                     polish_preset_id AS polish_preset_id,
                     translation_language AS translation_language,
                     summary_template_id AS summary_template_id,
@@ -638,6 +669,7 @@ mod tests {
                     sort_order AS sort_order,
                     color AS color,
                     icon AS icon,
+                    description AS description,
                     name AS name,
                     id AS id
                  FROM projects
@@ -654,6 +686,8 @@ mod tests {
             assert_eq!(project.defaults.summary_template_id, "summary-special");
             assert_eq!(project.defaults.translation_language, "en");
             assert_eq!(project.defaults.polish_preset_id, "polish-special");
+            assert_eq!(project.defaults.polish_scenario.as_deref(), Some("scenario"));
+            assert_eq!(project.defaults.polish_context.as_deref(), Some("context"));
             assert_eq!(project.defaults.export_file_name_prefix, "map-");
             Ok(())
         })
@@ -698,7 +732,13 @@ mod tests {
                 name: "Test Project".to_string(),
                 description: Some("A test".to_string()),
                 icon: Some("folder".to_string()),
-                defaults: Default::default(),
+                defaults: ProjectDefaultsInput {
+                    enabled_text_replacement_set_ids: Some(vec!["replace-1".to_string()]),
+                    enabled_hotword_set_ids: Some(vec!["hotword-1".to_string()]),
+                    enabled_polish_keyword_set_ids: Some(vec!["keyword-1".to_string()]),
+                    enabled_speaker_profile_ids: Some(vec!["speaker-1".to_string()]),
+                    ..Default::default()
+                },
             })
             .unwrap();
         assert_eq!(created.name, "Test Project");
@@ -709,13 +749,45 @@ mod tests {
         let projects = repo.list(ProjectListOptions::default()).unwrap();
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].id, created.id);
+        assert_eq!(
+            projects[0].defaults.enabled_text_replacement_set_ids,
+            vec!["replace-1"]
+        );
+        assert_eq!(
+            projects[0].defaults.enabled_hotword_set_ids,
+            vec!["hotword-1"]
+        );
+        assert_eq!(
+            projects[0].defaults.enabled_polish_keyword_set_ids,
+            vec!["keyword-1"]
+        );
+        assert_eq!(
+            projects[0].defaults.enabled_speaker_profile_ids,
+            vec!["speaker-1"]
+        );
 
         // Update
         let updated = repo
-            .update(&created.id, json!({"name": "Updated"}))
+            .update(
+                &created.id,
+                json!({
+                    "name": "Updated",
+                    "defaults": {
+                        "enabledTextReplacementSetIds": ["replace-2"],
+                        "enabledHotwordSetIds": [],
+                        "enabledPolishKeywordSetIds": ["keyword-2", "keyword-3"],
+                        "enabledSpeakerProfileIds": ["speaker-2"]
+                    }
+                }),
+            )
             .unwrap();
         assert!(updated.is_some());
-        assert_eq!(updated.unwrap().name, "Updated");
+        let updated = updated.unwrap();
+        assert_eq!(updated.name, "Updated");
+        assert_eq!(
+            updated.defaults.enabled_polish_keyword_set_ids,
+            vec!["keyword-2", "keyword-3"]
+        );
 
         // Reorder
         let reordered = repo.reorder(vec![created.id.clone()]).unwrap();
@@ -745,8 +817,8 @@ mod tests {
             .unwrap()
             .with_transaction(|tx| {
                 tx.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                 VALUES ('project-delete', 'Delete Me', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id)
+                 VALUES ('project-delete', 'Delete Me', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general')",
                     [],
                 )?;
                 tx.execute(
@@ -795,8 +867,8 @@ mod tests {
                     (2, "project-c", "Gamma"),
                 ] {
                     tx.execute(
-                        "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                     VALUES (?1, ?2, 'folder', '', ?3, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                        "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id)
+                     VALUES (?1, ?2, 'folder', '', ?3, 1000, 1000, 'general', 'zh', 'general')",
                         rusqlite::params![id, name, sort_order],
                     )?;
                 }
@@ -828,13 +900,13 @@ mod tests {
             .unwrap()
             .with_transaction(|tx| {
                 tx.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                 VALUES ('project-kept', 'Kept', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id)
+                 VALUES ('project-kept', 'Kept', 'folder', '', 0, 1000, 1000, 'general', 'zh', 'general')",
                     [],
                 )?;
                 tx.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-                 VALUES ('project-removed', 'Removed', 'folder', '', 1, 1000, 1000, 'general', 'zh', 'general', '{}')",
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id)
+                 VALUES ('project-removed', 'Removed', 'folder', '', 1, 1000, 1000, 'general', 'zh', 'general')",
                     [],
                 )?;
                 tx.execute(

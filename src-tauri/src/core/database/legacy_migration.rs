@@ -187,8 +187,42 @@ fn u64_field(obj: &Value, key: &str) -> u64 {
     obj.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
+fn i64_field(obj: &Value, key: &str) -> i64 {
+    obj.get(key)
+        .and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+                .or_else(|| value.as_f64().map(|n| n.round() as i64))
+        })
+        .unwrap_or(0)
+}
+
 fn f64_field(obj: &Value, key: &str) -> f64 {
     obj.get(key).and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
+}
+
+fn bool_field(obj: &Value, key: &str) -> bool {
+    obj.get(key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn optional_string_field(obj: &Value, key: &str) -> Option<String> {
+    obj.get(key).and_then(Value::as_str).map(ToOwned::to_owned)
+}
+
+fn nested_string_field(obj: &Value, parent: &str, key: &str, default: &str) -> String {
+    obj.get(parent)
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_str)
+        .unwrap_or(default)
+        .to_string()
+}
+
+fn nested_bool_field(obj: &Value, parent: &str, key: &str) -> bool {
+    obj.get(parent)
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -460,52 +494,52 @@ fn migrate_projects(
     };
 
     for (i, project_val) in projects.iter().enumerate() {
-        let id = string_field(project_val, "id").unwrap_or_else(|| format!("_migrated_{i}"));
-
+        let mut project = crate::repositories::project::repository::normalize_project_value(
+            project_val,
+            &crate::repositories::project::types::ProjectListOptions::default(),
+        );
+        if project.id.is_empty() {
+            project.id = format!("_migrated_{i}");
+        }
         let defaults_obj = project_val.get("defaults").and_then(Value::as_object);
-
-        let summary_template_id = defaults_obj
-            .and_then(|d| d.get("summaryTemplateId"))
-            .or_else(|| defaults_obj.and_then(|d| d.get("summaryTemplate")))
-            .and_then(Value::as_str)
-            .unwrap_or("general")
-            .to_string();
-
-        let translation_language = defaults_obj
-            .and_then(|d| d.get("translationLanguage"))
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("zh")
-            .to_string();
-
-        let polish_preset_id = defaults_obj
-            .and_then(|d| d.get("polishPresetId"))
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("general")
-            .to_string();
-
-        // Build settings blob from remaining defaults fields
-        let settings = build_project_settings(project_val, defaults_obj);
+        if project.description.is_empty()
+            && let Some(description) = defaults_obj
+                .and_then(|d| d.get("description"))
+                .and_then(Value::as_str)
+        {
+            project.description = description.to_string();
+        }
+        let id = project.id.clone();
 
         if let Err(e) = tx.execute(
-            "INSERT OR IGNORE INTO projects (id, name, icon, color, sort_order, created_at, updated_at, summary_template_id, translation_language, polish_preset_id, settings)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT OR IGNORE INTO projects (
+                id, name, description, icon, color, sort_order, created_at, updated_at,
+                summary_template_id, translation_language, polish_preset_id,
+                polish_scenario, polish_context, export_file_name_prefix
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 &id,
-                string_field(project_val, "name").unwrap_or_default(),
-                string_field(project_val, "icon").unwrap_or_default(),
+                &project.name,
+                &project.description,
+                &project.icon,
                 string_field(project_val, "color").unwrap_or_default(),
                 u64_field(project_val, "sortOrder") as i64,
-                u64_field(project_val, "createdAt") as i64,
-                u64_field(project_val, "updatedAt") as i64,
-                &summary_template_id,
-                &translation_language,
-                &polish_preset_id,
-                &settings,
+                project.created_at as i64,
+                project.updated_at as i64,
+                &project.defaults.summary_template_id,
+                &project.defaults.translation_language,
+                &project.defaults.polish_preset_id,
+                &project.defaults.polish_scenario,
+                &project.defaults.polish_context,
+                &project.defaults.export_file_name_prefix,
             ],
         ) {
             errors.push(format!("Failed to insert project {id}: {e}"));
+            continue;
+        }
+        if let Err(e) = insert_project_default_links(tx, &id, &project.defaults) {
+            errors.push(format!("Failed to insert project defaults for {id}: {e}"));
             continue;
         }
 
@@ -515,43 +549,51 @@ fn migrate_projects(
     Ok(())
 }
 
-fn build_project_settings(
-    project: &Value,
-    defaults: Option<&serde_json::Map<String, Value>>,
-) -> String {
-    use serde_json::json;
+fn insert_project_default_links(
+    tx: &Transaction,
+    project_id: &str,
+    defaults: &crate::repositories::project::types::ProjectDefaults,
+) -> Result<(), rusqlite::Error> {
+    insert_project_default_link_kind(
+        tx,
+        project_id,
+        "text_replacement",
+        &defaults.enabled_text_replacement_set_ids,
+    )?;
+    insert_project_default_link_kind(tx, project_id, "hotword", &defaults.enabled_hotword_set_ids)?;
+    insert_project_default_link_kind(
+        tx,
+        project_id,
+        "polish_keyword",
+        &defaults.enabled_polish_keyword_set_ids,
+    )?;
+    insert_project_default_link_kind(
+        tx,
+        project_id,
+        "speaker_profile",
+        &defaults.enabled_speaker_profile_ids,
+    )
+}
 
-    let mut settings = serde_json::Map::new();
-
-    // Description can be at top level or inside defaults
-    let desc = string_field(project, "description").or_else(|| {
-        defaults
-            .and_then(|d| d.get("description"))
-            .and_then(Value::as_str)
-            .map(|s| s.to_string())
-    });
-    if let Some(desc) = desc {
-        settings.insert("description".to_string(), json!(desc));
+fn insert_project_default_link_kind(
+    tx: &Transaction,
+    project_id: &str,
+    kind: &str,
+    target_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let mut stmt = tx.prepare_cached(
+        "INSERT OR IGNORE INTO project_default_links (project_id, kind, target_id, sort_order)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    for (sort_order, target_id) in target_ids.iter().enumerate() {
+        stmt.execute(rusqlite::params![
+            project_id,
+            kind,
+            target_id,
+            sort_order as i64
+        ])?;
     }
-
-    if let Some(d) = defaults {
-        let remaining_keys = [
-            "polishScenario",
-            "polishContext",
-            "exportFileNamePrefix",
-            "enabledTextReplacementSetIds",
-            "enabledHotwordSetIds",
-            "enabledPolishKeywordSetIds",
-            "enabledSpeakerProfileIds",
-        ];
-        for key in &remaining_keys {
-            if let Some(val) = d.get(*key) {
-                settings.insert(key.to_string(), val.clone());
-            }
-        }
-    }
-
-    serde_json::to_string(&Value::Object(settings)).unwrap_or_else(|_| "{}".to_string())
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -580,10 +622,35 @@ fn migrate_automation(
                 } else {
                     id
                 };
-                let data_str = serde_json::to_string(&rule).unwrap_or_else(|_| "{}".to_string());
                 if let Err(e) = tx.execute(
-                    "INSERT OR IGNORE INTO automation_rules (id, data) VALUES (?1, ?2)",
-                    rusqlite::params![&id, &data_str],
+                    "INSERT OR IGNORE INTO automation_rules (
+                        id, name, project_id, preset_id, watch_directory, recursive, enabled,
+                        stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
+                        stage_translation_language, stage_export_enabled,
+                        export_directory, export_format, export_mode, export_prefix,
+                        created_at, updated_at
+                    )
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                    rusqlite::params![
+                        &id,
+                        string_field(&rule, "name").unwrap_or_default(),
+                        string_field(&rule, "projectId").unwrap_or_default(),
+                        string_field(&rule, "presetId").unwrap_or_else(|| "custom".to_string()),
+                        string_field(&rule, "watchDirectory").unwrap_or_default(),
+                        bool_field(&rule, "recursive") as i64,
+                        bool_field(&rule, "enabled") as i64,
+                        nested_bool_field(&rule, "stageConfig", "autoPolish") as i64,
+                        nested_string_field(&rule, "stageConfig", "polishPresetId", "general"),
+                        nested_bool_field(&rule, "stageConfig", "autoTranslate") as i64,
+                        nested_string_field(&rule, "stageConfig", "translationLanguage", "en"),
+                        nested_bool_field(&rule, "stageConfig", "exportEnabled") as i64,
+                        nested_string_field(&rule, "exportConfig", "directory", ""),
+                        nested_string_field(&rule, "exportConfig", "format", "txt"),
+                        nested_string_field(&rule, "exportConfig", "mode", "original"),
+                        nested_string_field(&rule, "exportConfig", "prefix", ""),
+                        i64_field(&rule, "createdAt"),
+                        i64_field(&rule, "updatedAt"),
+                    ],
                 ) {
                     errors.push(format!("Failed to insert automation rule: {e}"));
                     continue;
@@ -612,10 +679,25 @@ fn migrate_automation(
                 } else {
                     id
                 };
-                let data_str = serde_json::to_string(&entry).unwrap_or_else(|_| "{}".to_string());
                 if let Err(e) = tx.execute(
-                    "INSERT OR IGNORE INTO automation_processed (id, data) VALUES (?1, ?2)",
-                    rusqlite::params![&id, &data_str],
+                    "INSERT OR IGNORE INTO automation_processed (
+                        id, rule_id, file_path, source_fingerprint, size, mtime_ms,
+                        status, processed_at, history_id, export_path, error_message
+                    )
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    rusqlite::params![
+                        &id,
+                        string_field(&entry, "ruleId").unwrap_or_default(),
+                        string_field(&entry, "filePath").unwrap_or_default(),
+                        string_field(&entry, "sourceFingerprint").unwrap_or_default(),
+                        i64_field(&entry, "size"),
+                        i64_field(&entry, "mtimeMs"),
+                        string_field(&entry, "status").unwrap_or_else(|| "complete".to_string()),
+                        i64_field(&entry, "processedAt"),
+                        optional_string_field(&entry, "historyId"),
+                        optional_string_field(&entry, "exportPath"),
+                        optional_string_field(&entry, "errorMessage"),
+                    ],
                 ) {
                     errors.push(format!("Failed to insert automation processed: {e}"));
                     continue;
@@ -670,16 +752,37 @@ fn migrate_task_ledger(
 
     for task in tasks {
         let id = string_field(task, "id").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let data_str = serde_json::to_string(task).unwrap_or_else(|_| "{}".to_string());
-        let updated_at = task
-            .get("updatedAt")
-            .and_then(Value::as_u64)
-            .unwrap_or(0)
-            .to_string();
 
         if let Err(e) = tx.execute(
-            "INSERT OR IGNORE INTO task_ledger (id, data, version, updated_at) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![&id, &data_str, version, &updated_at],
+            "INSERT OR IGNORE INTO task_ledger (
+                id, kind, status, title, progress, created_at, updated_at,
+                retryable, cancelable, recoverable, stage, history_id, project_id,
+                file_path, automation_rule_id, source_fingerprint, error_message,
+                template_id, target_language, version
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            rusqlite::params![
+                &id,
+                string_field(task, "kind").unwrap_or_else(|| "llmPolish".to_string()),
+                string_field(task, "status").unwrap_or_else(|| "pending".to_string()),
+                string_field(task, "title").unwrap_or_else(|| "Task".to_string()),
+                f64_field(task, "progress").clamp(0.0, 100.0),
+                i64_field(task, "createdAt"),
+                i64_field(task, "updatedAt"),
+                bool_field(task, "retryable") as i64,
+                bool_field(task, "cancelable") as i64,
+                bool_field(task, "recoverable") as i64,
+                optional_string_field(task, "stage"),
+                optional_string_field(task, "historyId"),
+                optional_string_field(task, "projectId"),
+                optional_string_field(task, "filePath"),
+                optional_string_field(task, "automationRuleId"),
+                optional_string_field(task, "sourceFingerprint"),
+                optional_string_field(task, "errorMessage"),
+                optional_string_field(task, "templateId"),
+                optional_string_field(task, "targetLanguage"),
+                version,
+            ],
         ) {
             errors.push(format!("Failed to insert task {id}: {e}"));
             continue;
@@ -1067,7 +1170,13 @@ mod tests {
                     "translationLanguage": "en",
                     "polishPresetId": "formal",
                     "polishScenario": "scenario1",
-                    "description": "A work project"
+                    "polishContext": "context1",
+                    "exportFileNamePrefix": "work-",
+                    "description": "A work project",
+                    "enabledTextReplacementSetIds": ["tr-1", "tr-2"],
+                    "enabledHotwordSetIds": ["hw-1"],
+                    "enabledPolishKeywordSetIds": ["kw-1"],
+                    "enabledSpeakerProfileIds": ["sp-1"]
                 }
             },
             {
@@ -1100,16 +1209,55 @@ mod tests {
                 .unwrap();
             assert_eq!(count, 2);
 
-            // Check proj-1 settings has description
-            let settings: String = conn
+            let project = conn
                 .query_row(
-                    "SELECT settings FROM projects WHERE id = 'proj-1'",
+                    "SELECT description, summary_template_id, translation_language,
+                            polish_preset_id, polish_scenario, polish_context,
+                            export_file_name_prefix
+                     FROM projects WHERE id = 'proj-1'",
                     [],
-                    |r| r.get(0),
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, String>(3)?,
+                            r.get::<_, Option<String>>(4)?,
+                            r.get::<_, Option<String>>(5)?,
+                            r.get::<_, String>(6)?,
+                        ))
+                    },
                 )
                 .unwrap();
-            assert!(settings.contains("description"));
-            assert!(settings.contains("polishScenario"));
+            assert_eq!(project.0, "A work project");
+            assert_eq!(project.1, "detailed");
+            assert_eq!(project.2, "en");
+            assert_eq!(project.3, "formal");
+            assert_eq!(project.4.as_deref(), Some("scenario1"));
+            assert_eq!(project.5.as_deref(), Some("context1"));
+            assert_eq!(project.6, "work-");
+
+            let links: Vec<(String, String)> = conn
+                .prepare(
+                    "SELECT kind, target_id FROM project_default_links
+                     WHERE project_id = 'proj-1'
+                     ORDER BY kind, sort_order",
+                )
+                .unwrap()
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            assert_eq!(
+                links,
+                vec![
+                    ("hotword".to_string(), "hw-1".to_string()),
+                    ("polish_keyword".to_string(), "kw-1".to_string()),
+                    ("speaker_profile".to_string(), "sp-1".to_string()),
+                    ("text_replacement".to_string(), "tr-1".to_string()),
+                    ("text_replacement".to_string(), "tr-2".to_string()),
+                ]
+            );
 
             // Check proj-2 defaults
             let tmpl: String = conn
@@ -1136,14 +1284,49 @@ mod tests {
         write_json(
             &dir.path().join("automation").join("rules.json"),
             &json!([
-                {"id": "rule-1", "name": "Watch Docs", "watchDirectory": "/docs", "projectId": "proj-1"},
+                {
+                    "id": "rule-1",
+                    "name": "Watch Docs",
+                    "watchDirectory": "/docs",
+                    "projectId": "proj-1",
+                    "presetId": "preset-1",
+                    "recursive": true,
+                    "enabled": true,
+                    "stageConfig": {
+                        "autoPolish": true,
+                        "polishPresetId": "formal",
+                        "autoTranslate": true,
+                        "translationLanguage": "ja",
+                        "exportEnabled": true
+                    },
+                    "exportConfig": {
+                        "directory": "/exports",
+                        "format": "md",
+                        "mode": "translated",
+                        "prefix": "auto-"
+                    },
+                    "createdAt": 1000,
+                    "updatedAt": 2000
+                },
                 {"name": "No ID Rule", "watchDirectory": "/tmp", "projectId": "proj-2"}
             ]),
         );
         write_json(
             &dir.path().join("automation").join("processed.json"),
             &json!([
-                {"id": "proc-1", "filePath": "/docs/file.txt", "processedAt": "2026-01-01"}
+                {
+                    "id": "proc-1",
+                    "ruleId": "rule-1",
+                    "filePath": "/docs/file.txt",
+                    "sourceFingerprint": "fp-1",
+                    "size": 123,
+                    "mtimeMs": 456,
+                    "status": "failed",
+                    "processedAt": 789,
+                    "historyId": "hist-1",
+                    "exportPath": "/exports/file.md",
+                    "errorMessage": "boom"
+                }
             ]),
         );
         write_json(&dir.path().join("history").join("index.json"), &json!([]));
@@ -1165,6 +1348,89 @@ mod tests {
                 .unwrap();
             assert_eq!(p_count, 1);
 
+            let rule = conn
+                .query_row(
+                    "SELECT name, project_id, preset_id, watch_directory, recursive, enabled,
+                            stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
+                            stage_translation_language, stage_export_enabled,
+                            export_directory, export_format, export_mode, export_prefix,
+                            created_at, updated_at
+                     FROM automation_rules WHERE id = 'rule-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, String>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, i64>(5)?,
+                            r.get::<_, i64>(6)?,
+                            r.get::<_, String>(7)?,
+                            r.get::<_, i64>(8)?,
+                            r.get::<_, String>(9)?,
+                            r.get::<_, i64>(10)?,
+                            r.get::<_, String>(11)?,
+                            r.get::<_, String>(12)?,
+                            r.get::<_, String>(13)?,
+                            r.get::<_, String>(14)?,
+                            r.get::<_, i64>(15)?,
+                            r.get::<_, i64>(16)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(rule.0, "Watch Docs");
+            assert_eq!(rule.1, "proj-1");
+            assert_eq!(rule.2, "preset-1");
+            assert_eq!(rule.3, "/docs");
+            assert_eq!(rule.4, 1);
+            assert_eq!(rule.5, 1);
+            assert_eq!(rule.6, 1);
+            assert_eq!(rule.7, "formal");
+            assert_eq!(rule.8, 1);
+            assert_eq!(rule.9, "ja");
+            assert_eq!(rule.10, 1);
+            assert_eq!(rule.11, "/exports");
+            assert_eq!(rule.12, "md");
+            assert_eq!(rule.13, "translated");
+            assert_eq!(rule.14, "auto-");
+            assert_eq!(rule.15, 1000);
+            assert_eq!(rule.16, 2000);
+
+            let processed = conn
+                .query_row(
+                    "SELECT rule_id, file_path, source_fingerprint, size, mtime_ms, status,
+                            processed_at, history_id, export_path, error_message
+                     FROM automation_processed WHERE id = 'proc-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, i64>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, String>(5)?,
+                            r.get::<_, i64>(6)?,
+                            r.get::<_, Option<String>>(7)?,
+                            r.get::<_, Option<String>>(8)?,
+                            r.get::<_, Option<String>>(9)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(processed.0, "rule-1");
+            assert_eq!(processed.1, "/docs/file.txt");
+            assert_eq!(processed.2, "fp-1");
+            assert_eq!(processed.3, 123);
+            assert_eq!(processed.4, 456);
+            assert_eq!(processed.5, "failed");
+            assert_eq!(processed.6, 789);
+            assert_eq!(processed.7.as_deref(), Some("hist-1"));
+            assert_eq!(processed.8.as_deref(), Some("/exports/file.md"));
+            assert_eq!(processed.9.as_deref(), Some("boom"));
+
             Ok(())
         })
         .unwrap();
@@ -1183,7 +1449,7 @@ mod tests {
                 "version": 1,
                 "updatedAt": 5000,
                 "tasks": [
-                    {"id": "task-1", "kind": "llmPolish", "status": "pending", "title": "Polish task", "progress": 0.0, "createdAt": 1000, "updatedAt": 1000, "retryable": false, "cancelable": true, "recoverable": false},
+                    {"id": "task-1", "kind": "llmPolish", "status": "pending", "title": "Polish task", "progress": 25.0, "createdAt": 1000, "updatedAt": 1000, "retryable": true, "cancelable": true, "recoverable": false, "stage": "polish", "historyId": "hist-1", "projectId": "proj-1", "filePath": "/docs/file.txt", "automationRuleId": "rule-1", "sourceFingerprint": "fp-1", "errorMessage": "retryable", "templateId": "tmpl-1", "targetLanguage": "ja"},
                     {"id": "task-2", "kind": "llmTranslate", "status": "succeeded", "title": "Translate task", "progress": 100.0, "createdAt": 2000, "updatedAt": 3000, "retryable": false, "cancelable": false, "recoverable": false}
                 ]
             }),
@@ -1199,6 +1465,59 @@ mod tests {
                 .query_row("SELECT COUNT(*) FROM task_ledger", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(count, 2);
+
+            let task = conn
+                .query_row(
+                    "SELECT kind, status, title, progress, created_at, updated_at,
+                            retryable, cancelable, recoverable, stage, history_id, project_id,
+                            file_path, automation_rule_id, source_fingerprint, error_message,
+                            template_id, target_language, version
+                     FROM task_ledger WHERE id = 'task-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, f64>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, i64>(5)?,
+                            r.get::<_, i64>(6)?,
+                            r.get::<_, i64>(7)?,
+                            r.get::<_, i64>(8)?,
+                            r.get::<_, Option<String>>(9)?,
+                            r.get::<_, Option<String>>(10)?,
+                            r.get::<_, Option<String>>(11)?,
+                            r.get::<_, Option<String>>(12)?,
+                            r.get::<_, Option<String>>(13)?,
+                            r.get::<_, Option<String>>(14)?,
+                            r.get::<_, Option<String>>(15)?,
+                            r.get::<_, Option<String>>(16)?,
+                            r.get::<_, Option<String>>(17)?,
+                            r.get::<_, i64>(18)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(task.0, "llmPolish");
+            assert_eq!(task.1, "pending");
+            assert_eq!(task.2, "Polish task");
+            assert_eq!(task.3, 25.0);
+            assert_eq!(task.4, 1000);
+            assert_eq!(task.5, 1000);
+            assert_eq!(task.6, 1);
+            assert_eq!(task.7, 1);
+            assert_eq!(task.8, 0);
+            assert_eq!(task.9.as_deref(), Some("polish"));
+            assert_eq!(task.10.as_deref(), Some("hist-1"));
+            assert_eq!(task.11.as_deref(), Some("proj-1"));
+            assert_eq!(task.12.as_deref(), Some("/docs/file.txt"));
+            assert_eq!(task.13.as_deref(), Some("rule-1"));
+            assert_eq!(task.14.as_deref(), Some("fp-1"));
+            assert_eq!(task.15.as_deref(), Some("retryable"));
+            assert_eq!(task.16.as_deref(), Some("tmpl-1"));
+            assert_eq!(task.17.as_deref(), Some("ja"));
+            assert_eq!(task.18, 1);
 
             Ok(())
         })

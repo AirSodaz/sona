@@ -63,6 +63,7 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
         CREATE TABLE projects (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
             icon TEXT,
             color TEXT,
             sort_order INTEGER NOT NULL DEFAULT 0,
@@ -71,8 +72,21 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
             summary_template_id TEXT DEFAULT 'general',
             translation_language TEXT DEFAULT 'zh',
             polish_preset_id TEXT DEFAULT 'general',
-            settings TEXT DEFAULT '{}'
+            polish_scenario TEXT,
+            polish_context TEXT,
+            export_file_name_prefix TEXT NOT NULL DEFAULT ''
         );
+
+        CREATE TABLE project_default_links (
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (project_id, kind, target_id)
+        );
+
+        CREATE INDEX idx_project_default_links_kind_target
+            ON project_default_links(kind, target_id);
 
         -- History Items (replaces history/index.json)
         CREATE TABLE history_items (
@@ -134,28 +148,84 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
         CREATE TABLE app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             config TEXT NOT NULL DEFAULT '{}',
-            migrated_version INTEGER NOT NULL DEFAULT 0
+            migrated_version INTEGER NOT NULL DEFAULT 0,
+            http_server_enabled INTEGER NOT NULL DEFAULT 0,
+            http_server_host TEXT NOT NULL DEFAULT '127.0.0.1',
+            http_server_port INTEGER NOT NULL DEFAULT 14200,
+            http_server_api_key TEXT NOT NULL DEFAULT '',
+            http_server_max_concurrent INTEGER NOT NULL DEFAULT 2,
+            http_server_max_queue_size INTEGER NOT NULL DEFAULT 100,
+            http_server_max_upload_size_mb INTEGER NOT NULL DEFAULT 50,
+            http_server_job_ttl_minutes INTEGER NOT NULL DEFAULT 60,
+            http_server_max_streaming INTEGER NOT NULL DEFAULT 2,
+            http_server_ip_whitelist TEXT NOT NULL DEFAULT 'localhost',
+            gpu_acceleration TEXT NOT NULL DEFAULT 'auto'
         );
 
         -- Automation Rules (replaces automation/rules.json)
         CREATE TABLE automation_rules (
             id TEXT PRIMARY KEY,
-            data TEXT NOT NULL DEFAULT '{}'
+            name TEXT NOT NULL DEFAULT '',
+            project_id TEXT NOT NULL DEFAULT '',
+            preset_id TEXT NOT NULL DEFAULT 'custom',
+            watch_directory TEXT NOT NULL DEFAULT '',
+            recursive INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            stage_auto_polish INTEGER NOT NULL DEFAULT 0,
+            stage_polish_preset_id TEXT NOT NULL DEFAULT 'general',
+            stage_auto_translate INTEGER NOT NULL DEFAULT 0,
+            stage_translation_language TEXT NOT NULL DEFAULT 'en',
+            stage_export_enabled INTEGER NOT NULL DEFAULT 0,
+            export_directory TEXT NOT NULL DEFAULT '',
+            export_format TEXT NOT NULL DEFAULT 'txt',
+            export_mode TEXT NOT NULL DEFAULT 'original',
+            export_prefix TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
         );
 
         -- Automation Processed Entries (replaces automation/processed.json)
         CREATE TABLE automation_processed (
             id TEXT PRIMARY KEY,
-            data TEXT NOT NULL DEFAULT '{}'
+            rule_id TEXT NOT NULL DEFAULT '',
+            file_path TEXT NOT NULL DEFAULT '',
+            source_fingerprint TEXT NOT NULL DEFAULT '',
+            size INTEGER NOT NULL DEFAULT 0,
+            mtime_ms INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'complete',
+            processed_at INTEGER NOT NULL DEFAULT 0,
+            history_id TEXT,
+            export_path TEXT,
+            error_message TEXT
         );
+        CREATE INDEX idx_automation_processed_rule_id ON automation_processed(rule_id);
+        CREATE INDEX idx_automation_processed_file_path ON automation_processed(file_path);
 
         -- Task Ledger (replaces task-ledger/ledger.json)
         CREATE TABLE task_ledger (
             id TEXT PRIMARY KEY,
-            data TEXT NOT NULL DEFAULT '{}',
-            version INTEGER NOT NULL DEFAULT 1,
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            kind TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            progress REAL NOT NULL DEFAULT 0.0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            retryable INTEGER NOT NULL DEFAULT 0,
+            cancelable INTEGER NOT NULL DEFAULT 0,
+            recoverable INTEGER NOT NULL DEFAULT 0,
+            stage TEXT,
+            history_id TEXT,
+            project_id TEXT,
+            file_path TEXT,
+            automation_rule_id TEXT,
+            source_fingerprint TEXT,
+            error_message TEXT,
+            template_id TEXT,
+            target_language TEXT,
+            version INTEGER NOT NULL DEFAULT 1
         );
+        CREATE INDEX idx_task_ledger_status ON task_ledger(status);
+        CREATE INDEX idx_task_ledger_updated_at ON task_ledger(updated_at);
 
         CREATE TABLE analytics.llm_usage (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,6 +282,14 @@ mod tests {
         .unwrap()
     }
 
+    fn table_columns(conn: &rusqlite::Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap();
+        rows.collect::<Result<Vec<_>, _>>().unwrap()
+    }
+
     #[test]
     fn test_migrations_are_idempotent() {
         let db = Database::open_in_memory().unwrap();
@@ -265,6 +343,7 @@ mod tests {
             "history_summaries",
             "transcript_snapshots",
             "projects",
+            "project_default_links",
             "app_settings",
             "app_config",
             "automation_rules",
@@ -287,6 +366,145 @@ mod tests {
                     row.get(0)
                 })?;
             assert_eq!(count, 0);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_structured_tables_do_not_keep_file_era_json_blobs() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            assert_eq!(
+                table_columns(conn, "projects"),
+                vec![
+                    "id",
+                    "name",
+                    "description",
+                    "icon",
+                    "color",
+                    "sort_order",
+                    "created_at",
+                    "updated_at",
+                    "summary_template_id",
+                    "translation_language",
+                    "polish_preset_id",
+                    "polish_scenario",
+                    "polish_context",
+                    "export_file_name_prefix",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "project_default_links"),
+                vec!["project_id", "kind", "target_id", "sort_order"]
+            );
+            assert_eq!(
+                table_columns(conn, "automation_rules"),
+                vec![
+                    "id",
+                    "name",
+                    "project_id",
+                    "preset_id",
+                    "watch_directory",
+                    "recursive",
+                    "enabled",
+                    "stage_auto_polish",
+                    "stage_polish_preset_id",
+                    "stage_auto_translate",
+                    "stage_translation_language",
+                    "stage_export_enabled",
+                    "export_directory",
+                    "export_format",
+                    "export_mode",
+                    "export_prefix",
+                    "created_at",
+                    "updated_at",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "automation_processed"),
+                vec![
+                    "id",
+                    "rule_id",
+                    "file_path",
+                    "source_fingerprint",
+                    "size",
+                    "mtime_ms",
+                    "status",
+                    "processed_at",
+                    "history_id",
+                    "export_path",
+                    "error_message",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "task_ledger"),
+                vec![
+                    "id",
+                    "kind",
+                    "status",
+                    "title",
+                    "progress",
+                    "created_at",
+                    "updated_at",
+                    "retryable",
+                    "cancelable",
+                    "recoverable",
+                    "stage",
+                    "history_id",
+                    "project_id",
+                    "file_path",
+                    "automation_rule_id",
+                    "source_fingerprint",
+                    "error_message",
+                    "template_id",
+                    "target_language",
+                    "version",
+                ]
+            );
+
+            for (table, removed_column) in [
+                ("projects", "settings"),
+                ("automation_rules", "data"),
+                ("automation_processed", "data"),
+                ("task_ledger", "data"),
+            ] {
+                assert!(
+                    !table_columns(conn, table)
+                        .iter()
+                        .any(|column| column == removed_column),
+                    "{table}.{removed_column} should not remain in the v1 baseline"
+                );
+            }
+
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_app_config_projects_startup_fields_as_columns() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            assert_eq!(
+                table_columns(conn, "app_config"),
+                vec![
+                    "id",
+                    "config",
+                    "migrated_version",
+                    "http_server_enabled",
+                    "http_server_host",
+                    "http_server_port",
+                    "http_server_api_key",
+                    "http_server_max_concurrent",
+                    "http_server_max_queue_size",
+                    "http_server_max_upload_size_mb",
+                    "http_server_job_ttl_minutes",
+                    "http_server_max_streaming",
+                    "http_server_ip_whitelist",
+                    "gpu_acceleration",
+                ]
+            );
             Ok(())
         })
         .unwrap();

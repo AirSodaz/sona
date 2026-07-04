@@ -107,6 +107,7 @@ fn setup_legacy_data(dir: &Path) {
             {
                 "id": "proj-1",
                 "name": "Work",
+                "description": "Work project",
                 "icon": "folder",
                 "color": "#ff0000",
                 "sortOrder": 0,
@@ -115,7 +116,14 @@ fn setup_legacy_data(dir: &Path) {
                 "defaults": {
                     "summaryTemplateId": "detailed",
                     "translationLanguage": "en",
-                    "polishPresetId": "formal"
+                    "polishPresetId": "formal",
+                    "polishScenario": "meeting",
+                    "polishContext": "weekly sync",
+                    "exportFileNamePrefix": "work-",
+                    "enabledTextReplacementSetIds": ["tr-1"],
+                    "enabledHotwordSetIds": ["hw-1"],
+                    "enabledPolishKeywordSetIds": ["kw-1"],
+                    "enabledSpeakerProfileIds": ["sp-1"]
                 }
             },
             {
@@ -134,14 +142,37 @@ fn setup_legacy_data(dir: &Path) {
     write_json(
         &dir.join("automation").join("rules.json"),
         &json!([
-            {"id": "rule-1", "name": "Watch Docs", "watchDirectory": "/docs", "projectId": "proj-1"},
+            {
+                "id": "rule-1",
+                "name": "Watch Docs",
+                "watchDirectory": "/docs",
+                "projectId": "proj-1",
+                "presetId": "preset-1",
+                "recursive": true,
+                "enabled": true,
+                "stageConfig": {
+                    "autoPolish": true,
+                    "polishPresetId": "formal",
+                    "autoTranslate": true,
+                    "translationLanguage": "ja",
+                    "exportEnabled": true
+                },
+                "exportConfig": {
+                    "directory": "/exports",
+                    "format": "md",
+                    "mode": "translated",
+                    "prefix": "auto-"
+                },
+                "createdAt": 1000,
+                "updatedAt": 2000
+            },
             {"id": "rule-2", "name": "Watch Tmp", "watchDirectory": "/tmp", "projectId": "proj-2"}
         ]),
     );
     write_json(
         &dir.join("automation").join("processed.json"),
         &json!([
-            {"id": "proc-1", "filePath": "/docs/file.txt", "processedAt": "2026-01-01"},
+            {"id": "proc-1", "ruleId": "rule-1", "filePath": "/docs/file.txt", "sourceFingerprint": "fp-1", "size": 123, "mtimeMs": 456, "status": "complete", "processedAt": 789, "historyId": "hist-1", "exportPath": "/exports/file.md"},
             {"id": "proc-2", "filePath": "/tmp/data.txt", "processedAt": "2026-01-02"}
         ]),
     );
@@ -152,7 +183,7 @@ fn setup_legacy_data(dir: &Path) {
             "version": 1,
             "updatedAt": 5000,
             "tasks": [
-                {"id": "task-1", "kind": "llmPolish", "status": "pending", "title": "Polish task", "progress": 0.0, "createdAt": 1000, "updatedAt": 1000, "retryable": false, "cancelable": true, "recoverable": false}
+                {"id": "task-1", "kind": "llmPolish", "status": "pending", "title": "Polish task", "progress": 25.0, "createdAt": 1000, "updatedAt": 1000, "retryable": true, "cancelable": true, "recoverable": false, "stage": "polish", "historyId": "hist-1", "projectId": "proj-1", "filePath": "/docs/file.txt", "automationRuleId": "rule-1", "sourceFingerprint": "fp-1", "templateId": "tmpl-1", "targetLanguage": "ja"}
             ]
         }),
     );
@@ -241,6 +272,158 @@ fn test_migration_and_crud() {
                 .query_row("SELECT COUNT(*) FROM analytics.llm_usage", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(llm, 1, "llm_usage count");
+
+            let project = conn
+                .query_row(
+                    "SELECT description, summary_template_id, translation_language,
+                            polish_preset_id, polish_scenario, polish_context,
+                            export_file_name_prefix
+                     FROM projects WHERE id = 'proj-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, String>(3)?,
+                            r.get::<_, Option<String>>(4)?,
+                            r.get::<_, Option<String>>(5)?,
+                            r.get::<_, String>(6)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(project.0, "Work project");
+            assert_eq!(project.1, "detailed");
+            assert_eq!(project.2, "en");
+            assert_eq!(project.3, "formal");
+            assert_eq!(project.4.as_deref(), Some("meeting"));
+            assert_eq!(project.5.as_deref(), Some("weekly sync"));
+            assert_eq!(project.6, "work-");
+
+            let link_count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM project_default_links WHERE project_id = 'proj-1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(link_count, 4, "project_default_links count");
+
+            let rule = conn
+                .query_row(
+                    "SELECT project_id, preset_id, recursive, enabled, stage_auto_polish,
+                            stage_polish_preset_id, stage_auto_translate,
+                            stage_translation_language, stage_export_enabled,
+                            export_directory, export_format, export_mode, export_prefix,
+                            created_at, updated_at
+                     FROM automation_rules WHERE id = 'rule-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, i64>(2)?,
+                            r.get::<_, i64>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, String>(5)?,
+                            r.get::<_, i64>(6)?,
+                            r.get::<_, String>(7)?,
+                            r.get::<_, i64>(8)?,
+                            r.get::<_, String>(9)?,
+                            r.get::<_, String>(10)?,
+                            r.get::<_, String>(11)?,
+                            r.get::<_, String>(12)?,
+                            r.get::<_, i64>(13)?,
+                            r.get::<_, i64>(14)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(rule.0, "proj-1");
+            assert_eq!(rule.1, "preset-1");
+            assert_eq!(rule.2, 1);
+            assert_eq!(rule.3, 1);
+            assert_eq!(rule.4, 1);
+            assert_eq!(rule.5, "formal");
+            assert_eq!(rule.6, 1);
+            assert_eq!(rule.7, "ja");
+            assert_eq!(rule.8, 1);
+            assert_eq!(rule.9, "/exports");
+            assert_eq!(rule.10, "md");
+            assert_eq!(rule.11, "translated");
+            assert_eq!(rule.12, "auto-");
+            assert_eq!(rule.13, 1000);
+            assert_eq!(rule.14, 2000);
+
+            let processed = conn
+                .query_row(
+                    "SELECT rule_id, file_path, source_fingerprint, size, mtime_ms,
+                            processed_at, history_id, export_path
+                     FROM automation_processed WHERE id = 'proc-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, i64>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, i64>(5)?,
+                            r.get::<_, Option<String>>(6)?,
+                            r.get::<_, Option<String>>(7)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(processed.0, "rule-1");
+            assert_eq!(processed.1, "/docs/file.txt");
+            assert_eq!(processed.2, "fp-1");
+            assert_eq!(processed.3, 123);
+            assert_eq!(processed.4, 456);
+            assert_eq!(processed.5, 789);
+            assert_eq!(processed.6.as_deref(), Some("hist-1"));
+            assert_eq!(processed.7.as_deref(), Some("/exports/file.md"));
+
+            let task = conn
+                .query_row(
+                    "SELECT kind, status, title, progress, retryable, cancelable, stage,
+                            history_id, project_id, automation_rule_id, source_fingerprint,
+                            template_id, target_language
+                     FROM task_ledger WHERE id = 'task-1'",
+                    [],
+                    |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, f64>(3)?,
+                            r.get::<_, i64>(4)?,
+                            r.get::<_, i64>(5)?,
+                            r.get::<_, Option<String>>(6)?,
+                            r.get::<_, Option<String>>(7)?,
+                            r.get::<_, Option<String>>(8)?,
+                            r.get::<_, Option<String>>(9)?,
+                            r.get::<_, Option<String>>(10)?,
+                            r.get::<_, Option<String>>(11)?,
+                            r.get::<_, Option<String>>(12)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(task.0, "llmPolish");
+            assert_eq!(task.1, "pending");
+            assert_eq!(task.2, "Polish task");
+            assert_eq!(task.3, 25.0);
+            assert_eq!(task.4, 1);
+            assert_eq!(task.5, 1);
+            assert_eq!(task.6.as_deref(), Some("polish"));
+            assert_eq!(task.7.as_deref(), Some("hist-1"));
+            assert_eq!(task.8.as_deref(), Some("proj-1"));
+            assert_eq!(task.9.as_deref(), Some("rule-1"));
+            assert_eq!(task.10.as_deref(), Some("fp-1"));
+            assert_eq!(task.11.as_deref(), Some("tmpl-1"));
+            assert_eq!(task.12.as_deref(), Some("ja"));
             Ok(())
         })
         .unwrap();

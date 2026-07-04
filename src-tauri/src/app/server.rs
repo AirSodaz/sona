@@ -141,6 +141,45 @@ fn read_sqlite_app_config(db: &Database) -> Result<Option<serde_json::Value>, Da
     })
 }
 
+fn read_sqlite_api_server_startup_settings(
+    db: &Database,
+) -> Result<Option<ApiServerStartupSettings>, DatabaseError> {
+    db.with_connection(|conn| {
+        let mut stmt = conn.prepare_cached(
+            "SELECT http_server_enabled, http_server_host, http_server_port,
+                    http_server_api_key, http_server_max_concurrent,
+                    http_server_max_queue_size, http_server_max_upload_size_mb,
+                    http_server_job_ttl_minutes, http_server_max_streaming,
+                    http_server_ip_whitelist, gpu_acceleration
+             FROM app_config WHERE id = 1",
+        )?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let defaults = ApiServerStartupSettings::default();
+            Ok(Some(ApiServerStartupSettings {
+                http_server_enabled: row.get::<_, i64>(0)? != 0,
+                host: row.get(1)?,
+                port: u16::try_from(row.get::<_, i64>(2)?).unwrap_or(defaults.port),
+                api_key: row.get(3)?,
+                max_concurrent: usize::try_from(row.get::<_, i64>(4)?)
+                    .unwrap_or(defaults.max_concurrent),
+                max_queue_size: usize::try_from(row.get::<_, i64>(5)?)
+                    .unwrap_or(defaults.max_queue_size),
+                max_upload_size_mb: usize::try_from(row.get::<_, i64>(6)?)
+                    .unwrap_or(defaults.max_upload_size_mb),
+                job_ttl_minutes: u64::try_from(row.get::<_, i64>(7)?)
+                    .unwrap_or(defaults.job_ttl_minutes),
+                max_streaming: usize::try_from(row.get::<_, i64>(8)?)
+                    .unwrap_or(defaults.max_streaming),
+                ip_whitelist: row.get(9)?,
+                gpu_acceleration: row.get(10)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
 fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
     if let Ok(db) = Database::global()
@@ -166,6 +205,39 @@ fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Val
     read_sqlite_app_config(&db)
         .map_err(|error| {
             log::warn!("[API Server] Failed to load SQLite app config: {error}");
+            error
+        })
+        .ok()
+        .flatten()
+}
+
+fn load_sqlite_api_server_startup_settings(
+    provider: &dyn PathProvider,
+) -> Option<ApiServerStartupSettings> {
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
+    if let Ok(db) = Database::global()
+        && db.is_for_app_local_data_dir(&app_local_data_dir)
+    {
+        return read_sqlite_api_server_startup_settings(db)
+            .map_err(|error| {
+                log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
+                error
+            })
+            .ok()
+            .flatten();
+    }
+
+    let db = match Database::open(&app_local_data_dir) {
+        Ok(db) => db,
+        Err(error) => {
+            log::warn!("[API Server] Failed to open SQLite config store: {error}");
+            return None;
+        }
+    };
+
+    read_sqlite_api_server_startup_settings(&db)
+        .map_err(|error| {
+            log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
             error
         })
         .ok()
@@ -225,10 +297,18 @@ pub async fn refresh_online_asr_config(
 }
 
 fn load_api_server_startup_settings(provider: &dyn PathProvider) -> ApiServerStartupSettings {
-    let mut settings = ApiServerStartupSettings::default();
-    let Some(config) = load_app_config_for_server(provider) else {
+    if let Some(settings) = load_sqlite_api_server_startup_settings(provider) {
         return settings;
+    }
+
+    let Some(config) = load_legacy_settings_config(provider) else {
+        return ApiServerStartupSettings::default();
     };
+    startup_settings_from_config(&config)
+}
+
+fn startup_settings_from_config(config: &serde_json::Value) -> ApiServerStartupSettings {
+    let mut settings = ApiServerStartupSettings::default();
 
     if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool()) {
         settings.http_server_enabled = enabled;
@@ -1761,6 +1841,43 @@ mod tests {
         assert_eq!(settings.max_streaming, 4);
         assert_eq!(settings.ip_whitelist, "127.0.0.1/32");
         assert_eq!(settings.gpu_acceleration, "cpu");
+    }
+
+    #[test]
+    fn load_api_server_startup_settings_reads_sqlite_projection_columns() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data = tempfile::tempdir().unwrap();
+        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
+        let db = Database::open(app_local_data.path()).unwrap();
+        db.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_config (
+                    id, config, migrated_version, http_server_enabled, http_server_host,
+                    http_server_port, http_server_api_key, http_server_max_concurrent,
+                    http_server_max_queue_size, http_server_max_upload_size_mb,
+                    http_server_job_ttl_minutes, http_server_max_streaming,
+                    http_server_ip_whitelist, gpu_acceleration
+                )
+                VALUES (1, '{}', 0, 1, '0.0.0.0', 16666, 'column-secret', 5, 44, 256, 9, 7, '10.0.0.0/8', 'cuda')",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let settings = load_api_server_startup_settings(&provider);
+
+        assert!(settings.http_server_enabled);
+        assert_eq!(settings.host, "0.0.0.0");
+        assert_eq!(settings.port, 16666);
+        assert_eq!(settings.api_key, "column-secret");
+        assert_eq!(settings.max_concurrent, 5);
+        assert_eq!(settings.max_queue_size, 44);
+        assert_eq!(settings.max_upload_size_mb, 256);
+        assert_eq!(settings.job_ttl_minutes, 9);
+        assert_eq!(settings.max_streaming, 7);
+        assert_eq!(settings.ip_whitelist, "10.0.0.0/8");
+        assert_eq!(settings.gpu_acceleration, "cuda");
     }
 
     static TEST_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<Vec<String>>>> =
