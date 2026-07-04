@@ -6,11 +6,9 @@ use serde_json::to_value;
 use tauri::{AppHandle, Emitter, State};
 
 use super::*;
-use crate::commands::history::{
-    history_create_llm_transcript_snapshot, history_save_llm_summary,
-    history_update_llm_transcript_segments,
-};
+use crate::core::paths::PathProvider;
 use crate::integrations::asr::TranscriptSegment;
+use crate::repositories::history::llm_helpers;
 use crate::repositories::history::{HistoryRepositoryState, TranscriptSnapshotReason};
 
 fn normalized_job_history_id(job_history_id: Option<&str>) -> Option<String> {
@@ -138,19 +136,21 @@ fn emit_transcript_job_update(
 
 async fn create_transcript_job_snapshot(
     app: AppHandle,
-    state: HistoryRepositoryState,
     history_id: Option<&str>,
     reason: TranscriptSnapshotReason,
     segments: &[TranscriptSegment],
 ) -> Result<(), String> {
     if let Some(history_id) = history_id {
-        history_create_llm_transcript_snapshot(
-            app,
-            state,
-            history_id.to_string(),
-            reason,
-            segments.to_vec(),
-        )
+        let history_id = history_id.to_string();
+        let segments = segments.to_vec();
+        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+            llm_helpers::create_llm_transcript_snapshot_record(
+                &store,
+                &history_id,
+                reason,
+                segments,
+            )
+        })
         .await?;
     }
     Ok(())
@@ -158,7 +158,6 @@ async fn create_transcript_job_snapshot(
 
 async fn run_segment_rewrite_job<F, Fut, TItem>(
     app: AppHandle,
-    history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
     task_type: LlmTaskType,
     snapshot_reason: TranscriptSnapshotReason,
@@ -177,7 +176,6 @@ where
     let history_id = normalized_job_history_id(request.job_history_id.as_deref());
     create_transcript_job_snapshot(
         app.clone(),
-        history_state.clone(),
         history_id.as_deref(),
         snapshot_reason,
         &request.segments,
@@ -216,13 +214,11 @@ where
         .lock()
         .map_err(|error| error.to_string())?
         .clone();
+    let fs_for_update = final_segments.clone();
     let history_item = if let Some(history_id) = history_id.clone() {
-        history_update_llm_transcript_segments(
-            app.clone(),
-            history_state,
-            history_id,
-            final_segments.clone(),
-        )
+        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+            llm_helpers::update_llm_transcript_segments_record(&store, &history_id, fs_for_update)
+        })
         .await?
     } else {
         None
@@ -250,12 +246,10 @@ where
 
 async fn run_translate_job(
     app: AppHandle,
-    history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     run_segment_rewrite_job(
         app,
-        history_state,
         request,
         LlmTaskType::Translate,
         TranscriptSnapshotReason::Translate,
@@ -280,12 +274,10 @@ async fn run_translate_job(
 
 async fn run_polish_job(
     app: AppHandle,
-    history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     run_segment_rewrite_job(
         app,
-        history_state,
         request,
         LlmTaskType::Polish,
         TranscriptSnapshotReason::Polish,
@@ -310,7 +302,6 @@ async fn run_polish_job(
 
 async fn run_summary_job(
     app: AppHandle,
-    history_state: HistoryRepositoryState,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     let history_id = normalized_job_history_id(request.job_history_id.as_deref());
@@ -336,13 +327,11 @@ async fn run_summary_job(
         }),
     };
 
-    if let Some(history_id) = history_id.clone() {
-        history_save_llm_summary(
-            app.clone(),
-            history_state,
-            history_id,
-            to_value(&summary).map_err(|error| error.to_string())?,
-        )
+    if let Some(hid) = history_id.clone() {
+        let summary_value = to_value(&summary).map_err(|error| error.to_string())?;
+        llm_helpers::run_llm_db_task_with_provider(&app as &dyn PathProvider, move |store| {
+            llm_helpers::save_llm_summary_payload(&store, &hid, summary_value)
+        })
         .await?;
     }
 
@@ -368,13 +357,12 @@ async fn run_summary_job(
 
 pub(crate) async fn run_transcript_llm_job_command(
     app: AppHandle,
-    state: State<'_, HistoryRepositoryState>,
+    _state: State<'_, HistoryRepositoryState>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
-    let history_state = state.inner().clone();
     match request.task_type {
-        LlmTaskType::Translate => run_translate_job(app, history_state, request).await,
-        LlmTaskType::Polish => run_polish_job(app, history_state, request).await,
-        LlmTaskType::Summary => run_summary_job(app, history_state, request).await,
+        LlmTaskType::Translate => run_translate_job(app.clone(), request).await,
+        LlmTaskType::Polish => run_polish_job(app.clone(), request).await,
+        LlmTaskType::Summary => run_summary_job(app, request).await,
     }
 }

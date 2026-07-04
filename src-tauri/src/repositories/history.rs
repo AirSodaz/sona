@@ -1,6 +1,7 @@
 pub mod backup;
 pub(crate) mod fs_utils;
 mod item_factory;
+pub(crate) mod llm_helpers;
 pub(crate) mod repository;
 pub mod sqlite_store;
 mod state;
