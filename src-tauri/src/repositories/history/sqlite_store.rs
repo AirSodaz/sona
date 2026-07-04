@@ -11,8 +11,8 @@ use crate::repositories::history::{
     HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryWorkspaceScope, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use serde_json::{Map, Value};
 use std::cell::Cell;
@@ -806,74 +806,107 @@ impl HistoryStore for SqliteHistoryStore {
             let mut params: Vec<Box<dyn ToSql>> = Vec::new();
             add_workspace_query_conditions(&request, &mut conditions, &mut params);
 
-            // 3. Perform FTS pre-filtering if query exists
+            // 3. Determine if FTS is used
             let trimmed_query = request.query.trim();
-            let mut search_contents = std::collections::HashMap::new();
             let mut fts_used = false;
+            let mut fts_expr = String::new();
 
             if !trimmed_query.is_empty() {
-                let fts_expr = build_fts_query(trimmed_query);
+                fts_expr = build_fts_query(trimmed_query);
                 if !fts_expr.is_empty() {
-                    let mut fts_conditions = vec!["history_items_fts MATCH ?".to_string()];
-                    let mut fts_params: Vec<Box<dyn ToSql>> = vec![Box::new(fts_expr)];
-                    add_workspace_query_conditions(&request, &mut fts_conditions, &mut fts_params);
-
-                    let fts_sql = format!(
-                        "SELECT h.id, h.search_content FROM history_items h
-                         JOIN history_items_fts f ON h.rowid = f.rowid
-                         WHERE {}",
-                        fts_conditions.join(" AND ")
-                    );
-                    let mut stmt = conn.prepare_cached(&fts_sql)?;
-                    let fts_param_refs: Vec<&dyn ToSql> =
-                        fts_params.iter().map(|p| p.as_ref()).collect();
-                    let mut rows = stmt.query(fts_param_refs.as_slice())?;
-                    while let Some(row) = rows.next()? {
-                        let id: String = row.get(0)?;
-                        let content: String = row.get(1)?;
-                        search_contents.insert(id, content);
-                    }
                     fts_used = true;
                 }
             }
 
-            // 4. Load workspace items with SQL-level filtering
-            //    When FTS was used, load empty search_content (populated from
-            //    FTS results). When FTS was skipped, load the actual column so
-            //    in-memory matching works for short queries.
-            let column_select = if fts_used {
-                history_select_columns(None, &[("search_content", "''")])
-            } else {
-                history_select_columns(None, &[])
-            };
-            let where_clause = if conditions.is_empty() {
-                String::new()
-            } else {
-                format!("WHERE {}", conditions.join(" AND "))
-            };
-            let sql = format!(
-                "SELECT {} FROM history_items {} ORDER BY timestamp DESC",
-                column_select, where_clause
-            );
-            let mut stmt = conn.prepare_cached(&sql)?;
-            let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
+            let (items, summary) = if fts_used {
+                // 3a. Compute summary via aggregate SQL query
+                let where_clause = if conditions.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {}", conditions.join(" AND "))
+                };
+                let summary_sql = format!(
+                    "SELECT COUNT(*), COALESCE(SUM(duration), 0.0), MAX(timestamp), \
+                     SUM(CASE WHEN kind = 'recording' THEN 1 ELSE 0 END), \
+                     SUM(CASE WHEN kind = 'batch' THEN 1 ELSE 0 END) \
+                     FROM history_items {}",
+                    where_clause
+                );
+                let mut summary_stmt = conn.prepare_cached(&summary_sql)?;
+                let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
+                let summary = summary_stmt.query_row(param_refs.as_slice(), |row| {
+                    let total_items: i64 = row.get(0)?;
+                    let total_duration: f64 = row.get(1)?;
+                    let latest_timestamp: Option<i64> = row.get(2)?;
+                    let recording_count: Option<i64> = row.get(3)?;
+                    let batch_count: Option<i64> = row.get(4)?;
+                    Ok(HistoryWorkspaceSummary {
+                        total_items: total_items as usize,
+                        total_duration,
+                        latest_timestamp: latest_timestamp.map(|t| t as u64),
+                        recording_count: recording_count.unwrap_or(0) as usize,
+                        batch_count: batch_count.unwrap_or(0) as usize,
+                    })
+                })?;
 
-            let rows = stmt.query_map(param_refs.as_slice(), map_row_to_item)?;
-            let mut items = Vec::new();
-            for row in rows {
-                let mut item = row?;
-                if let Some(content) = search_contents.remove(&item.id) {
-                    item.search_content = content;
+                // 3b. Load ONLY matching items via JOIN with FTS table
+                let mut join_conditions = vec!["f.history_items_fts MATCH ?".to_string()];
+                let mut join_params: Vec<Box<dyn ToSql>> = vec![Box::new(fts_expr)];
+                add_workspace_query_conditions(&request, &mut join_conditions, &mut join_params);
+
+                let join_where = format!("WHERE {}", join_conditions.join(" AND "));
+                let sql = format!(
+                    "SELECT {} FROM history_items h \
+                     JOIN history_items_fts f ON h.rowid = f.rowid \
+                     {} ORDER BY h.timestamp DESC",
+                    history_select_columns(Some("h"), &[]),
+                    join_where
+                );
+                let mut stmt = conn.prepare_cached(&sql)?;
+                let join_param_refs: Vec<&dyn ToSql> =
+                    join_params.iter().map(|p| p.as_ref()).collect();
+                let rows = stmt.query_map(join_param_refs.as_slice(), map_row_to_item)?;
+                let mut items = Vec::new();
+                for row in rows {
+                    items.push(row?);
                 }
-                items.push(item);
-            }
 
-            // 5. In-memory text search matching (highlighting/snippets) and sorting
-            Ok(super::workspace_query::query_workspace_items_with_counts(
+                (items, Some(summary))
+            } else {
+                // 4. Load all scoped items and compute summary in memory (fallback behavior)
+                let where_clause = if conditions.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {}", conditions.join(" AND "))
+                };
+                let sql = format!(
+                    "SELECT {} FROM history_items {} ORDER BY timestamp DESC",
+                    history_select_columns(None, &[]),
+                    where_clause
+                );
+                let mut stmt = conn.prepare_cached(&sql)?;
+                let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
+                let rows = stmt.query_map(param_refs.as_slice(), map_row_to_item)?;
+                let mut items = Vec::new();
+                for row in rows {
+                    items.push(row?);
+                }
+                (items, None)
+            };
+
+            // 5. In-memory text search matching and sorting
+            let mut result = super::workspace_query::query_workspace_items_with_counts(
                 items,
                 request,
                 item_counts,
-            ))
+            );
+
+            // If we already computed the summary in SQL, override the in-memory computed summary
+            if let Some(sql_summary) = summary {
+                result.summary = sql_summary;
+            }
+
+            Ok(result)
         })
     }
 
@@ -1727,10 +1760,10 @@ fn build_fts_query(query: &str) -> String {
         .filter(|s| !s.is_empty())
         .collect();
 
-    // FTS5 trigram tokenizer operates at the byte level and needs at least 3
-    // bytes per term to form a trigram. Shorter terms would silently match
+    // FTS5 trigram tokenizer operates at the character level and needs at least 3
+    // characters per term to form a trigram. Shorter terms would silently match
     // nothing, causing the entire AND query to return zero results.
-    if terms.iter().any(|t| t.len() < 3) {
+    if terms.iter().any(|t| t.chars().count() < 3) {
         return String::new();
     }
 
@@ -2762,6 +2795,9 @@ mod tests {
         let res_zh = store.query_workspace(req_zh).unwrap();
         assert_eq!(res_zh.filtered_items.len(), 1);
         assert_eq!(res_zh.filtered_items[0].id, item.id);
+        // New assertions verifying optimized behavior:
+        assert_eq!(res_zh.scoped_items.len(), 1); // Scoped items only contains matched items
+        assert_eq!(res_zh.summary.total_items, 2); // Summary correctly counts all items in the scope
 
         // 2. Test fuzzy/substring match
         let req_fuzzy = HistoryWorkspaceQueryRequest {

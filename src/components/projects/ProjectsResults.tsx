@@ -267,7 +267,7 @@ export function ProjectsResults({
 
   return (
     <>
-      {!isHistoryLoading && scopedItems.length === 0 && (
+      {!isHistoryLoading && scopedItems.length === 0 && !searchQuery && (
         renderScrollableState(<div className="projects-overview-card">
           <PlusCircleIcon />
           <h4>{t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}</h4>
@@ -287,7 +287,7 @@ export function ProjectsResults({
         </div>)
       )}
 
-      {!isHistoryLoading && scopedItems.length > 0 && filteredAndSortedItems.length === 0 && (
+      {!isHistoryLoading && (scopedItems.length > 0 || searchQuery) && filteredAndSortedItems.length === 0 && (
         renderScrollableState(<div className="projects-overview-card">
           <Search size={28} />
           <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
