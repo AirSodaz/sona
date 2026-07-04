@@ -25,7 +25,7 @@ impl SqliteConfigStore {
 
     pub fn save_config(&self, config: &Value) -> Result<(), DatabaseError> {
         let config_str = serde_json::to_string(config)?;
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "INSERT INTO app_config (id, config, migrated_version) VALUES (1, ?1, 0)
                  ON CONFLICT(id) DO UPDATE SET config = excluded.config",
@@ -51,7 +51,7 @@ impl SqliteConfigStore {
 
     pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), DatabaseError> {
         let value_str = serde_json::to_string(value)?;
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",

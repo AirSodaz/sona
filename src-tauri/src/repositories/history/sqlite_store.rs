@@ -349,7 +349,7 @@ impl SqliteHistoryStore {
         status: HistoryAudioStatus,
     ) -> Result<(), DatabaseError> {
         let status_str = status.to_string();
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET audio_status = ?1 WHERE id = ?2",
                 rusqlite::params![status_str, history_id],
@@ -1025,6 +1025,9 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         let promoted = Cell::new(false);
+        // The large write/copy into a staging file has already completed.
+        // Keep only SQL plus the same-directory rename in this transaction so
+        // the final audio path is visible before the DB row commits.
         let save_result = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             staged_audio.promote()?;
@@ -1086,6 +1089,9 @@ impl HistoryStore for SqliteHistoryStore {
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         let promoted = Cell::new(false);
+        // The large write/copy into a staging file has already completed.
+        // Keep only SQL plus the same-directory rename in this transaction so
+        // the final audio path is visible before the DB row commits.
         let save_result = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             staged_audio.promote()?;
@@ -1465,7 +1471,7 @@ impl HistoryStore for SqliteHistoryStore {
         current_project_id: String,
         next_project_id: Option<String>,
     ) -> Result<(), DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
                 rusqlite::params![next_project_id, current_project_id],
@@ -1502,7 +1508,7 @@ impl HistoryStore for SqliteHistoryStore {
 
         let payload_str = serde_json::to_string(&summary_payload)?;
 
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
                 rusqlite::params![history_id, payload_str],
@@ -1514,7 +1520,7 @@ impl HistoryStore for SqliteHistoryStore {
     fn delete_summary(&self, history_id: &str) -> Result<(), DatabaseError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "DELETE FROM history_summaries WHERE history_id = ?1",
                 [history_id],
@@ -2194,6 +2200,45 @@ mod tests {
             store.list_items().unwrap()[0].audio_status,
             HistoryAudioStatus::Available
         );
+    }
+
+    #[test]
+    fn save_imported_file_rolls_back_db_and_cleans_staging_when_promote_fails() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        let source_path = root.path().join("source.wav");
+        std::fs::write(&source_path, [1, 2, 3]).unwrap();
+        let target_path = root.path().join("history").join("promote-fail.wav");
+        std::fs::write(&target_path, [9, 9, 9]).unwrap();
+
+        let result = store.save_imported_file(HistorySaveImportedFileRequest {
+            id: Some("promote-fail".to_string()),
+            source_path: source_path.to_string_lossy().to_string(),
+            converted_source_path: None,
+            segments: json!([segment_value("seg-promote", "Promote failure", 0.0, 1.0)]),
+            duration: 1.0,
+            project_id: None,
+        });
+
+        assert!(
+            matches!(result, Err(DatabaseError::Internal(message)) if message.contains("History audio target already exists"))
+        );
+        assert_not_found(store.load_transcript("promote-fail"), "promote-fail");
+        assert_eq!(std::fs::read(&target_path).unwrap(), vec![9, 9, 9]);
+        let staged_entries = std::fs::read_dir(root.path().join("history"))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(STAGED_AUDIO_MARKER)
+            })
+            .count();
+        assert_eq!(staged_entries, 0);
     }
 
     #[test]

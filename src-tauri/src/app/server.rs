@@ -25,6 +25,7 @@ type HmacSha256 = Hmac<Sha256>;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::core::database::{Database, DatabaseError};
 use crate::core::paths::{PathKind, PathProvider};
 
 pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
@@ -126,16 +127,7 @@ fn extract_app_config_value(value: serde_json::Value) -> serde_json::Value {
         .unwrap_or(value)
 }
 
-fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    let db = match crate::core::database::Database::open(&app_local_data_dir) {
-        Ok(db) => db,
-        Err(error) => {
-            log::warn!("[API Server] Failed to open SQLite config store: {error}");
-            return None;
-        }
-    };
-
+fn read_sqlite_app_config(db: &Database) -> Result<Option<serde_json::Value>, DatabaseError> {
     db.with_connection(|conn| {
         let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
         let mut rows = stmt.query([])?;
@@ -147,12 +139,37 @@ fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Val
             Ok(None)
         }
     })
-    .map_err(|error| {
-        log::warn!("[API Server] Failed to load SQLite app config: {error}");
-        error
-    })
-    .ok()
-    .flatten()
+}
+
+fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
+    if let Ok(db) = Database::global()
+        && db.is_for_app_local_data_dir(&app_local_data_dir)
+    {
+        return read_sqlite_app_config(db)
+            .map_err(|error| {
+                log::warn!("[API Server] Failed to load SQLite app config: {error}");
+                error
+            })
+            .ok()
+            .flatten();
+    }
+
+    let db = match Database::open(&app_local_data_dir) {
+        Ok(db) => db,
+        Err(error) => {
+            log::warn!("[API Server] Failed to open SQLite config store: {error}");
+            return None;
+        }
+    };
+
+    read_sqlite_app_config(&db)
+        .map_err(|error| {
+            log::warn!("[API Server] Failed to load SQLite app config: {error}");
+            error
+        })
+        .ok()
+        .flatten()
 }
 
 fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {

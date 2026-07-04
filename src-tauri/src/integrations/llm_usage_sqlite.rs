@@ -35,7 +35,7 @@ pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), Da
         .trim_matches('"')
         .to_string();
 
-    db.with_connection(|conn| {
+    db.with_write_connection(|conn| {
         conn.execute(
             "INSERT INTO analytics.llm_usage (occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",

@@ -101,7 +101,7 @@ impl SqliteProjectRepository {
         let icon = input.icon.clone().unwrap_or_default();
         let name = input.name.clone();
 
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 &project_insert_sql(),
                 rusqlite::named_params! {

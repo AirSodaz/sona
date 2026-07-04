@@ -5,19 +5,133 @@ pub mod schema;
 pub use error::DatabaseError;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
-use std::path::Path;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, TryLockError};
+use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-/// Number of connections in the pool. With WAL mode, multiple readers can
+/// Number of read connections in the pool. With WAL mode, multiple readers can
 /// proceed concurrently through separate connections, and writers are
 /// serialized by SQLite's internal locking (handled via `busy_timeout`).
 const POOL_SIZE: usize = 4;
+const WRITE_POOL_SIZE: usize = 1;
 const POOL_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
-const POOL_ACQUIRE_RETRY_DELAY_MS: u64 = 5;
 
 static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
+
+#[derive(Clone)]
+struct ConnectionPool {
+    inner: Arc<ConnectionPoolInner>,
+}
+
+struct ConnectionPoolInner {
+    available: Mutex<Vec<Connection>>,
+    available_changed: Condvar,
+    capacity: usize,
+}
+
+struct PooledConnection {
+    conn: Option<Connection>,
+    pool: Arc<ConnectionPoolInner>,
+}
+
+impl ConnectionPool {
+    fn new(connections: Vec<Connection>) -> Self {
+        Self {
+            inner: Arc::new(ConnectionPoolInner {
+                capacity: connections.len(),
+                available: Mutex::new(connections),
+                available_changed: Condvar::new(),
+            }),
+        }
+    }
+
+    fn capacity(&self) -> usize {
+        self.inner.capacity
+    }
+
+    fn acquire(&self) -> Result<PooledConnection, DatabaseError> {
+        if self.inner.capacity == 0 {
+            return Err(DatabaseError::PoolBusyError);
+        }
+
+        let timeout = Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS);
+        let start = Instant::now();
+        let mut available = self.lock_available();
+
+        loop {
+            if let Some(conn) = available.pop() {
+                return Ok(PooledConnection {
+                    conn: Some(conn),
+                    pool: Arc::clone(&self.inner),
+                });
+            }
+
+            let elapsed = start.elapsed();
+            if elapsed >= timeout {
+                return Err(DatabaseError::PoolBusyError);
+            }
+            let remaining = timeout.saturating_sub(elapsed);
+            match self
+                .inner
+                .available_changed
+                .wait_timeout(available, remaining)
+            {
+                Ok((guard, wait_result)) => {
+                    available = guard;
+                    if wait_result.timed_out() && available.is_empty() {
+                        return Err(DatabaseError::PoolBusyError);
+                    }
+                }
+                Err(poisoned) => {
+                    let (guard, wait_result) = poisoned.into_inner();
+                    available = guard;
+                    if wait_result.timed_out() && available.is_empty() {
+                        return Err(DatabaseError::PoolBusyError);
+                    }
+                }
+            }
+        }
+    }
+
+    fn lock_available(&self) -> MutexGuard<'_, Vec<Connection>> {
+        self.inner
+            .available
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+impl Drop for PooledConnection {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            {
+                let mut available = self
+                    .pool
+                    .available
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                available.push(conn);
+            }
+            self.pool.available_changed.notify_one();
+        }
+    }
+}
+
+impl Deref for PooledConnection {
+    type Target = Connection;
+
+    fn deref(&self) -> &Self::Target {
+        self.conn.as_ref().expect("pooled connection missing")
+    }
+}
+
+impl DerefMut for PooledConnection {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.conn.as_mut().expect("pooled connection missing")
+    }
+}
 
 /// Central database handle backed by a pool of SQLite connections.
 ///
@@ -25,15 +139,18 @@ static GLOBAL_DB: OnceLock<Database> = OnceLock::new();
 /// without blocking each other — each read acquires an idle connection and
 /// proceeds in parallel.
 pub struct Database {
-    pool: Vec<Mutex<Connection>>,
-    next: AtomicUsize,
+    read_pool: ConnectionPool,
+    write_pool: ConnectionPool,
+    app_local_data_dir: Option<PathBuf>,
     slow_query_threshold_us: AtomicI64,
 }
 
 impl std::fmt::Debug for Database {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Database")
-            .field("pool_size", &self.pool.len())
+            .field("read_pool_size", &self.read_pool.capacity())
+            .field("write_pool_size", &self.write_pool.capacity())
+            .field("app_local_data_dir", &self.app_local_data_dir)
             .finish()
     }
 }
@@ -61,16 +178,24 @@ impl Database {
         let db_path = app_local_data_dir.join("sona.db");
         let analytics_path = app_local_data_dir.join("sona-analytics.db");
 
-        let mut pool = Vec::with_capacity(POOL_SIZE);
+        let mut read_connections = Vec::with_capacity(POOL_SIZE);
         for _ in 0..POOL_SIZE {
             let conn = Self::open_connection(&db_path)?;
             Self::attach_analytics(&conn, &analytics_path)?;
-            pool.push(Mutex::new(conn));
+            read_connections.push(conn);
+        }
+
+        let mut write_connections = Vec::with_capacity(WRITE_POOL_SIZE);
+        for _ in 0..WRITE_POOL_SIZE {
+            let conn = Self::open_connection(&db_path)?;
+            Self::attach_analytics(&conn, &analytics_path)?;
+            write_connections.push(conn);
         }
 
         let db = Self {
-            pool,
-            next: AtomicUsize::new(0),
+            read_pool: ConnectionPool::new(read_connections),
+            write_pool: ConnectionPool::new(write_connections),
+            app_local_data_dir: Some(app_local_data_dir.to_path_buf()),
             slow_query_threshold_us: AtomicI64::new(0),
         };
 
@@ -91,15 +216,21 @@ impl Database {
         conn.execute_batch("ATTACH DATABASE ':memory:' AS analytics;")
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
 
+        let shared_pool = ConnectionPool::new(vec![conn]);
         let db = Self {
-            pool: vec![Mutex::new(conn)],
-            next: AtomicUsize::new(0),
+            read_pool: shared_pool.clone(),
+            write_pool: shared_pool,
+            app_local_data_dir: None,
             slow_query_threshold_us: AtomicI64::new(0),
         };
 
         schema::run_migrations(&db)?;
 
         Ok(db)
+    }
+
+    pub(crate) fn is_for_app_local_data_dir(&self, app_local_data_dir: &Path) -> bool {
+        self.app_local_data_dir.as_deref() == Some(app_local_data_dir)
     }
 
     fn open_connection(db_path: &Path) -> Result<Connection, DatabaseError> {
@@ -123,62 +254,37 @@ impl Database {
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))
     }
 
-    fn try_acquire_slot(
-        &self,
-        idx: usize,
-    ) -> Result<Option<std::sync::MutexGuard<'_, Connection>>, DatabaseError> {
-        match self.pool[idx].try_lock() {
-            Ok(guard) => Ok(Some(guard)),
-            Err(TryLockError::Poisoned(poisoned)) => Ok(Some(poisoned.into_inner())),
-            Err(TryLockError::WouldBlock) => Ok(None),
-        }
-    }
-
-    /// Acquires a connection from the pool via round-robin with bounded retry.
-    /// If all slots are momentarily busy, waits briefly before returning a
-    /// PoolBusyError so normal bursts do not fail immediately.
-    fn acquire(&self) -> Result<std::sync::MutexGuard<'_, Connection>, DatabaseError> {
-        if self.pool.is_empty() {
-            return Err(DatabaseError::PoolBusyError);
-        }
-
-        let timeout = Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS);
-        let retry_delay = Duration::from_millis(POOL_ACQUIRE_RETRY_DELAY_MS);
-        let start = Instant::now();
-
-        loop {
-            let idx = self.next.fetch_add(1, Ordering::Relaxed) % self.pool.len();
-            if let Some(guard) = self.try_acquire_slot(idx)? {
-                return Ok(guard);
-            }
-
-            for i in 0..self.pool.len() {
-                if i != idx
-                    && let Some(guard) = self.try_acquire_slot(i)?
-                {
-                    return Ok(guard);
-                }
-            }
-
-            if start.elapsed() >= timeout {
-                return Err(DatabaseError::PoolBusyError);
-            }
-            std::thread::sleep(retry_delay);
-        }
-    }
-
-    /// Executes a closure with a shared reference to a pooled connection.
-    /// The mutex for that specific connection is held for the duration of the
-    /// closure, but other connections in the pool remain available.
+    /// Executes a closure against a pooled read connection.
+    /// Prefer `with_write_connection` or a transaction helper for writes.
     pub fn with_connection<F, T>(&self, f: F) -> Result<T, DatabaseError>
     where
         F: FnOnce(&Connection) -> Result<T, DatabaseError>,
     {
-        let conn = self.acquire()?;
+        self.with_read_connection(f)
+    }
+
+    pub fn with_read_connection<F, T>(&self, f: F) -> Result<T, DatabaseError>
+    where
+        F: FnOnce(&Connection) -> Result<T, DatabaseError>,
+    {
+        let conn = self.read_pool.acquire()?;
         let start = Instant::now();
         let result = f(&conn);
         if let Some(elapsed) = self.check_slow(start.elapsed()) {
-            log::warn!("slow with_connection ({elapsed:?})");
+            log::warn!("slow with_read_connection ({elapsed:?})");
+        }
+        result
+    }
+
+    pub fn with_write_connection<F, T>(&self, f: F) -> Result<T, DatabaseError>
+    where
+        F: FnOnce(&Connection) -> Result<T, DatabaseError>,
+    {
+        let conn = self.write_pool.acquire()?;
+        let start = Instant::now();
+        let result = f(&conn);
+        if let Some(elapsed) = self.check_slow(start.elapsed()) {
+            log::warn!("slow with_write_connection ({elapsed:?})");
         }
         result
     }
@@ -211,6 +317,7 @@ impl Database {
     /// (analyze, query planner stats, etc.). Safe to call periodically.
     pub fn run_optimize(&self) -> Result<(), DatabaseError> {
         let conn = self
+            .write_pool
             .acquire()
             .map_err(|e| DatabaseError::Internal(format!("acquire for optimize: {e}")))?;
         conn.execute_batch("PRAGMA optimize;")
@@ -222,6 +329,7 @@ impl Database {
     /// (e.g., clearing resolved tasks).
     pub fn vacuum(&self) -> Result<(), DatabaseError> {
         let conn = self
+            .write_pool
             .acquire()
             .map_err(|e| DatabaseError::Internal(format!("acquire for vacuum: {e}")))?;
         conn.execute_batch("VACUUM;")
@@ -240,7 +348,7 @@ impl Database {
     where
         F: FnOnce(&Transaction) -> Result<T, DatabaseError>,
     {
-        let mut conn = self.acquire()?;
+        let mut conn = self.write_pool.acquire()?;
         let start = Instant::now();
         let tx = conn
             .transaction_with_behavior(behavior)
@@ -505,7 +613,7 @@ mod tests {
         .unwrap();
 
         // Delete the parent row
-        db.with_connection(|conn| {
+        db.with_write_connection(|conn| {
             conn.execute("DELETE FROM history_items WHERE id = 'test-1'", [])?;
             Ok(())
         })
@@ -555,7 +663,7 @@ mod tests {
     #[test]
     fn test_analytics_database_is_attached() {
         let db = Database::open_in_memory().unwrap();
-        db.with_connection(|conn| {
+        db.with_write_connection(|conn| {
             conn.execute_batch("CREATE TABLE analytics.test_table (id INTEGER PRIMARY KEY);")?;
             Ok(())
         })
@@ -572,7 +680,7 @@ mod tests {
     fn test_vacuum() {
         let db = Database::open_in_memory().unwrap();
         // Insert some data then delete it to create free pages
-        db.with_connection(|conn| {
+        db.with_write_connection(|conn| {
             conn.execute_batch(
                 "INSERT INTO app_settings (key, value) VALUES ('k1', 'v1'), ('k2', 'v2'), ('k3', 'v3')",
             )?;
@@ -590,7 +698,7 @@ mod tests {
         let db = Arc::new(Database::open(tmp.path()).unwrap());
 
         // Populate some test data
-        db.with_connection(|conn| {
+        db.with_write_connection(|conn| {
             conn.execute_batch(
                 "INSERT INTO app_settings (key, value) VALUES ('c1', 'v1'), ('c2', 'v2'), ('c3', 'v3')",
             )?;
@@ -672,10 +780,125 @@ mod tests {
     }
 
     #[test]
+    fn write_connection_is_available_when_read_pool_is_exhausted() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Arc::new(Database::open(tmp.path()).unwrap());
+        let ready = Arc::new(std::sync::Barrier::new(POOL_SIZE + 1));
+        let release = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        let readers: Vec<_> = (0..POOL_SIZE)
+            .map(|_| {
+                let db = Arc::clone(&db);
+                let ready = Arc::clone(&ready);
+                let release = Arc::clone(&release);
+                std::thread::spawn(move || {
+                    db.with_read_connection(|_| {
+                        ready.wait();
+                        while !release.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+
+        ready.wait();
+        db.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('write-while-readers-held', 'ok')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("write pool should not wait for read slots to free up");
+        release.store(true, Ordering::SeqCst);
+
+        for reader in readers {
+            reader
+                .join()
+                .expect("reader thread panicked")
+                .expect("reader query failed");
+        }
+    }
+
+    #[test]
+    fn read_pool_is_available_while_write_connection_is_checked_out() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Arc::new(Database::open(tmp.path()).unwrap());
+        db.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES ('read-while-writer-held', 'ok')",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let write_ready = Arc::new(std::sync::Barrier::new(2));
+        let release_write = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let writer = {
+            let db = Arc::clone(&db);
+            let write_ready = Arc::clone(&write_ready);
+            let release_write = Arc::clone(&release_write);
+            std::thread::spawn(move || {
+                db.with_write_connection(|_| {
+                    write_ready.wait();
+                    while !release_write.load(Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Ok(())
+                })
+            })
+        };
+
+        write_ready.wait();
+        db.with_read_connection(|conn| {
+            let value: String = conn.query_row(
+                "SELECT value FROM app_settings WHERE key = 'read-while-writer-held'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(value, "ok");
+            Ok(())
+        })
+        .expect("read pool should remain available while write slot is checked out");
+        release_write.store(true, Ordering::SeqCst);
+        writer
+            .join()
+            .expect("writer thread panicked")
+            .expect("writer task failed");
+    }
+
+    #[test]
+    fn open_in_memory_shares_one_connection_for_reads_and_writes() {
+        let db = Database::open_in_memory().unwrap();
+
+        db.with_write_connection(|conn| {
+            conn.execute_batch(
+                "CREATE TABLE in_memory_pool_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO in_memory_pool_probe (value) VALUES ('shared');",
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        db.with_read_connection(|conn| {
+            let value: String =
+                conn.query_row("SELECT value FROM in_memory_pool_probe", [], |row| {
+                    row.get(0)
+                })?;
+            assert_eq!(value, "shared");
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn test_rw_transaction_prevents_busy_snapshot_on_read_modify_write() {
         let tmp = tempfile::TempDir::new().unwrap();
         let db = Arc::new(Database::open(tmp.path()).unwrap());
-        db.with_connection(|conn| {
+        db.with_write_connection(|conn| {
             conn.execute(
                 "INSERT INTO app_settings (key, value) VALUES ('race', 'initial')",
                 [],
@@ -710,7 +933,7 @@ mod tests {
         let second_writer = {
             let db = Arc::clone(&db);
             std::thread::spawn(move || {
-                db.with_connection(|conn| {
+                db.with_write_connection(|conn| {
                     conn.execute(
                         "UPDATE app_settings SET value = 'second' WHERE key = 'race'",
                         [],

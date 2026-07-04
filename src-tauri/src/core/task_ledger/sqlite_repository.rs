@@ -76,7 +76,7 @@ impl SqliteLedgerRepository {
         let data_str = serde_json::to_string(&normalized)?;
         let now = Self::now_ms();
 
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO task_ledger (id, data, version, updated_at) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![normalized.id, data_str, TASK_LEDGER_VERSION, now.to_string()],
@@ -126,15 +126,15 @@ impl SqliteLedgerRepository {
     }
 
     pub fn remove_task(&self, id: &str) -> Result<(), DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
+        self.get_db()?.with_write_connection(|conn| {
             conn.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
             Ok(())
         })
     }
 
     pub fn clear_resolved(&self) -> Result<(), DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
-            let mut stmt = conn.prepare_cached("SELECT id, data FROM task_ledger")?;
+        self.get_db()?.with_rw_transaction(|tx| {
+            let mut stmt = tx.prepare_cached("SELECT id, data FROM task_ledger")?;
             let rows = stmt.query_map([], |row| {
                 let id: String = row.get(0)?;
                 let data_str: String = row.get(1)?;
@@ -149,7 +149,7 @@ impl SqliteLedgerRepository {
                     to_delete.push(id);
                 }
             }
-            let mut stmt = conn.prepare_cached("DELETE FROM task_ledger WHERE id = ?1")?;
+            let mut stmt = tx.prepare_cached("DELETE FROM task_ledger WHERE id = ?1")?;
             for id in &to_delete {
                 stmt.execute([id])?;
             }
