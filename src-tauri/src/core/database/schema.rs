@@ -59,6 +59,21 @@ fn current_applied_schema_version(tx: &rusqlite::Transaction) -> Result<i64, rus
 fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
         "
+        -- Projects (replaces projects/index.json)
+        CREATE TABLE projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            icon TEXT,
+            color TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            summary_template_id TEXT DEFAULT 'general',
+            translation_language TEXT DEFAULT 'zh',
+            polish_preset_id TEXT DEFAULT 'general',
+            settings TEXT DEFAULT '{}'
+        );
+
         -- History Items (replaces history/index.json)
         CREATE TABLE history_items (
             id TEXT PRIMARY KEY,
@@ -72,7 +87,7 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
             icon TEXT,
             kind TEXT NOT NULL DEFAULT 'recording',
             search_content TEXT NOT NULL DEFAULT '',
-            project_id TEXT,
+            project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
             status TEXT NOT NULL DEFAULT 'complete',
             draft_source TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -108,21 +123,6 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
         );
 
         CREATE INDEX idx_snapshots_history_id ON transcript_snapshots(history_id);
-
-        -- Projects (replaces projects/index.json)
-        CREATE TABLE projects (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL DEFAULT '',
-            icon TEXT,
-            color TEXT,
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            summary_template_id TEXT DEFAULT 'general',
-            translation_language TEXT DEFAULT 'zh',
-            polish_preset_id TEXT DEFAULT 'general',
-            settings TEXT DEFAULT '{}'
-        );
 
         -- App Settings (replaces settings.json KV pairs except sona-config)
         CREATE TABLE app_settings (

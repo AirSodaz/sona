@@ -55,11 +55,11 @@ pub fn migrate_legacy_to_sqlite(
         let mut automation_processed_count: usize = 0;
         let mut task_ledger_count: usize = 0;
 
-        if domains.history {
-            let _ = migrate_history(tx, app_dir, &mut errors, &mut history_count);
-        }
         if domains.projects {
             let _ = migrate_projects(tx, app_dir, &mut errors, &mut project_count);
+        }
+        if domains.history {
+            let _ = migrate_history(tx, app_dir, &mut errors, &mut history_count);
         }
         if domains.automation {
             let _ = migrate_automation(
@@ -219,6 +219,14 @@ fn migrate_history(
         }
     };
 
+    let mut existing_projects = std::collections::HashSet::new();
+    let mut projects_stmt = tx.prepare("SELECT id FROM projects")?;
+    let mut project_rows = projects_stmt.query([])?;
+    while let Some(row) = project_rows.next()? {
+        let p_id: String = row.get(0)?;
+        existing_projects.insert(p_id);
+    }
+
     for item_val in items {
         if !item_val.is_object() {
             errors.push("History item is not an object".to_string());
@@ -249,7 +257,18 @@ fn migrate_history(
                     _ => "recording",
                 },
                 string_field(&item_val, "searchContent").unwrap_or_default(),
-                string_field(&item_val, "projectId"),
+                {
+                    let pid = string_field(&item_val, "projectId");
+                    if let Some(ref p_id) = pid {
+                        if existing_projects.contains(p_id) {
+                            Some(p_id.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                },
                 match string_field(&item_val, "status").as_deref() {
                     Some("draft") => "draft",
                     _ => "complete",
@@ -937,6 +956,22 @@ mod tests {
         ]);
 
         write_json(&dir.path().join("history").join("index.json"), &items);
+
+        std::fs::create_dir_all(dir.path().join("projects")).unwrap();
+        write_json(
+            &dir.path().join("projects").join("index.json"),
+            &json!([
+                {
+                    "id": "proj-1",
+                    "name": "Project 1",
+                    "icon": "folder",
+                    "color": "",
+                    "sortOrder": 0,
+                    "createdAt": 1000,
+                    "updatedAt": 1000
+                }
+            ]),
+        );
         // Transcripts
         write_json(
             &dir.path().join("history").join("hist-1.json"),

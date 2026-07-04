@@ -58,6 +58,21 @@ fn project_insert_sql() -> String {
     )
 }
 
+fn project_upsert_sql() -> String {
+    let update_assignments = PROJECT_COLUMNS
+        .iter()
+        .filter(|&&col| col != "id")
+        .map(|col| format!("{col} = excluded.{col}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "INSERT INTO projects ({}) VALUES ({}) ON CONFLICT(id) DO UPDATE SET {}",
+        project_column_list(&PROJECT_COLUMNS),
+        project_named_param_list(&PROJECT_COLUMNS),
+        update_assignments
+    )
+}
+
 fn project_update_sql() -> String {
     let assignments = PROJECT_UPDATE_COLUMNS
         .iter()
@@ -266,10 +281,6 @@ impl SqliteProjectRepository {
 
     pub fn delete(&self, project_id: &str) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
-            tx.execute(
-                "UPDATE history_items SET project_id = NULL WHERE project_id = ?1",
-                [project_id],
-            )?;
             tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
             Ok(())
         })
@@ -277,9 +288,36 @@ impl SqliteProjectRepository {
 
     pub fn save_all_values(&self, projects: Vec<Value>) -> Result<(), DatabaseError> {
         self.get_db()?.with_transaction(|tx| {
-            tx.execute("DELETE FROM projects", [])?;
-            let insert_sql = project_insert_sql();
-            let mut stmt = tx.prepare_cached(&insert_sql)?;
+            let ids: Vec<String> = projects
+                .iter()
+                .map(|p| {
+                    p.get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string()
+                })
+                .filter(|id| !id.is_empty())
+                .collect();
+
+            tx.execute(
+                "CREATE TEMPORARY TABLE keep_projects (id TEXT PRIMARY KEY)",
+                [],
+            )?;
+            {
+                let mut insert_keep =
+                    tx.prepare_cached("INSERT INTO keep_projects (id) VALUES (?1)")?;
+                for id in &ids {
+                    insert_keep.execute([id])?;
+                }
+            }
+            tx.execute(
+                "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
+                [],
+            )?;
+            tx.execute("DROP TABLE keep_projects", [])?;
+
+            let upsert_sql = project_upsert_sql();
+            let mut stmt = tx.prepare_cached(&upsert_sql)?;
             for (i, project) in projects.iter().enumerate() {
                 let id = project
                     .get("id")
@@ -358,13 +396,6 @@ impl SqliteProjectRepository {
                     ":settings": &settings_str,
                 })?;
             }
-            tx.execute(
-                "UPDATE history_items
-                 SET project_id = NULL
-                 WHERE project_id IS NOT NULL
-                   AND project_id NOT IN (SELECT id FROM projects)",
-                [],
-            )?;
             Ok(())
         })
     }

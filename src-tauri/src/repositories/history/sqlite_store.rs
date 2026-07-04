@@ -1819,6 +1819,11 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
             conn.execute(
+                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                 VALUES ('project-name-map', 'Mapped Project', 'folder', '', 0, 1000, 1000)",
+                [],
+            )?;
+            conn.execute(
                 "INSERT INTO history_items (
                     id, timestamp, duration, audio_path, audio_status, transcript_path,
                     title, preview_text, icon, kind, search_content, project_id, status, draft_source
@@ -2165,6 +2170,20 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
+        // Insert referenced project first to satisfy foreign key constraint
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                     VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
         // 1. Save recording
         let recording = store
             .save_recording(HistorySaveRecordingRequest {
@@ -2503,6 +2522,20 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
+        // Insert referenced project first to satisfy foreign key constraint
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                     VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
         // Create alpha item
         let _alpha = store
             .save_recording(HistorySaveRecordingRequest {
@@ -2585,6 +2618,20 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
+
+        // Insert referenced project first to satisfy foreign key constraint
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                     VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
 
         // 1. Create a live draft item
         let draft_res = store
