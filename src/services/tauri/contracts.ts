@@ -726,6 +726,7 @@ export type TauriCommandContractMap = {
       saveToPath: string | null;
       speakerProcessing: SpeakerProcessingConfig | null;
       asrRequest: AsrTranscriptionRequest;
+      instanceId?: string;
     };
     result: TranscriptSegment[];
   };

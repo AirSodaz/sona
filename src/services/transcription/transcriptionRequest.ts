@@ -25,6 +25,7 @@ interface BatchRequestOptions {
   modelPathOverride?: string;
   language: string;
   enableItn: boolean;
+  instanceId?: string;
 }
 
 interface ResolvedRecognizerInitRequest {
@@ -107,6 +108,7 @@ export function buildBatchTranscriptionRequest({
   modelPathOverride,
   language,
   enableItn,
+  instanceId,
 }: BatchRequestOptions): ResolvedBatchTranscriptionRequest {
   const resolvedBatchRequest = resolveAsrTranscriptionRequest(appConfig, 'batch', { language });
   const asrRequest = applyRuntimeOptions(resolvedBatchRequest, modelPathOverride, enableItn);
@@ -118,6 +120,7 @@ export function buildBatchTranscriptionRequest({
       saveToPath: saveToPath || null,
       speakerProcessing: speakerService.buildProcessingConfig(appConfig),
       asrRequest,
+      ...(instanceId ? { instanceId } : {}),
     },
   };
 }

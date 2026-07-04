@@ -689,6 +689,7 @@ async fn start_worker_loop(
                             None,
                             None,
                             request,
+                            None,
                         )
                         .await
                         {

@@ -101,6 +101,7 @@ pub async fn process_batch_file(
     save_to_path: Option<String>,
     speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
     asr_request: AsrTranscriptionRequest,
+    instance_id: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let adapter = ensure_adapter(&asr_request)?;
     let processor = adapter
@@ -120,6 +121,7 @@ pub async fn process_batch_file(
             save_to_path.map(Into::into),
             asr_request,
             speaker_processing,
+            instance_id,
         )
         .await
 }

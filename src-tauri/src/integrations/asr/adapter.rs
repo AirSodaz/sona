@@ -99,6 +99,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
         save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
         speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+        instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
         let config = match request.engine_config.clone() {
             crate::integrations::asr::types::AsrEngineConfig::LocalSherpa {
@@ -113,6 +114,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
                 gpu_acceleration,
                 ..
             } => BatchTranscriptionRequest {
+                instance_id,
                 file_path,
                 save_to_path,
                 model_path,

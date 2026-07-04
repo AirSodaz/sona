@@ -1,5 +1,6 @@
 pub mod dashboard;
 pub mod hardware;
+pub mod paths;
 pub mod runtime_status;
 pub mod server;
 pub mod settings;

@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, Runtime};
 
 /// Path kinds supported by PathProvider.
 /// Add variants here as needed; match arms in impls will guide you.
@@ -20,18 +19,6 @@ pub trait PathProvider: Send + Sync {
 impl<T: PathProvider + ?Sized> PathProvider for Arc<T> {
     fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
         (**self).resolve_path(kind)
-    }
-}
-
-// --- Tauri (desktop) implementation ---
-
-impl<R: Runtime> PathProvider for AppHandle<R> {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
-        match kind {
-            PathKind::AppData => self.path().app_data_dir().map_err(|e| e.to_string()),
-            PathKind::AppLocalData => self.path().app_local_data_dir().map_err(|e| e.to_string()),
-            PathKind::AppLogData => self.path().app_log_dir().map_err(|e| e.to_string()),
-        }
     }
 }
 

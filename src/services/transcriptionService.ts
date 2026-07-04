@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { logger } from "../utils/logger";
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
@@ -19,6 +20,8 @@ import {
     buildStreamingAsrRequest,
     isTranscriptionRequestConfigured,
 } from './transcription/transcriptionRequest';
+import { buildRecognizerOutputEvent } from './tauri/events';
+import { listen, type UnlistenFn } from './tauri/platform/events';
 
 /** Callback for receiving a normalized streaming transcript update. */
 export type TranscriptionUpdateCallback = (update: TranscriptUpdate) => void;
@@ -278,6 +281,7 @@ export class TranscriptionService {
         configOverride?: AppConfig,
     ): Promise<TranscriptSegment[]> {
         const appConfig = configOverride || this.ports.getEffectiveConfigSnapshot();
+        const instanceId = `batch-${uuidv4()}`;
         const { request: batchRequest, asrRequest } = buildBatchTranscriptionRequest({
             appConfig,
             filePath,
@@ -285,18 +289,34 @@ export class TranscriptionService {
             modelPathOverride: this.modelPath,
             language: language || this.language || 'auto',
             enableItn: this.enableITN,
+            instanceId,
         });
         if (!isTranscriptionRequestConfigured(asrRequest)) {
             throw new Error('ASR is not configured');
         }
 
-        const segments = await this.ports.processBatchFile(batchRequest);
+        let unlisten: UnlistenFn | undefined;
+        if (onSegment) {
+            unlisten = await listen<TranscriptUpdate>(
+                buildRecognizerOutputEvent(instanceId),
+                (event) => {
+                    for (const segment of event.payload.upsertSegments) {
+                        onSegment(segment);
+                    }
+                },
+            );
+        }
 
-        const processedSegments = normalizeTranscriptSegments(segments);
+        try {
+            const segments = await this.ports.processBatchFile(batchRequest);
 
-        if (onProgress) onProgress(100);
-        if (onSegment) processedSegments.forEach(seg => onSegment(seg));
-        return processedSegments;
+            const processedSegments = normalizeTranscriptSegments(segments);
+
+            if (onProgress) onProgress(100);
+            return processedSegments;
+        } finally {
+            unlisten?.();
+        }
     }
 }
 

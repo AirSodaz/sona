@@ -337,6 +337,7 @@ fn resolve_transcribe_options_with_install_checker(
         output_target,
         quiet: cli.quiet || config.quiet.unwrap_or(false),
         request: BatchTranscriptionRequest {
+            instance_id: None,
             file_path: cli.input.clone(),
             save_to_path: cli.save_wav.clone(),
             model_path,

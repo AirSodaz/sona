@@ -9,8 +9,14 @@ use super::model_config::{
     SafeStream, build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
 };
 use super::state::AsrState;
-use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
-use super::types::{BatchSegmentationMode, BatchTranscriptionRequest, TranscriptSegment};
+use super::transcript::{
+    apply_timeline_normalization, build_transcript_update, emit_transcript_update,
+    format_transcript, synthesize_durations,
+};
+use super::types::{
+    BatchSegmentationMode, BatchTranscriptionRequest, TranscriptNormalizationOptions,
+    TranscriptSegment,
+};
 use log::debug;
 use std::path::Path;
 use std::sync::Arc;
@@ -32,6 +38,7 @@ pub async fn process_batch_request_impl(
             );
         },
         Some(state.metrics.clone()),
+        Some(emitter.as_ref()),
     )
     .await
 }
@@ -43,8 +50,15 @@ pub async fn transcribe_batch_with_progress<F>(
 where
     F: FnMut(f32),
 {
-    transcribe_batch_with_progress_and_metrics_inner(request, None, &mut on_progress, None, |_| {})
-        .await
+    transcribe_batch_with_progress_and_metrics_inner(
+        request,
+        None,
+        &mut on_progress,
+        None,
+        |_| {},
+        None,
+    )
+    .await
 }
 
 pub(crate) async fn transcribe_batch_with_progress_and_fallback_notice<F, N>(
@@ -63,6 +77,7 @@ where
         &mut on_progress,
         None,
         &mut on_fallback,
+        None,
     )
     .await
 }
@@ -71,6 +86,7 @@ pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
     request: &BatchTranscriptionRequest,
     mut on_progress: F,
     metrics_store: Option<AsrMetricsStore>,
+    emitter: Option<&dyn crate::core::event::EventEmitter>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -81,6 +97,7 @@ where
         &mut on_progress,
         metrics_store,
         |_| {},
+        emitter,
     )
     .await
 }
@@ -91,6 +108,7 @@ async fn transcribe_batch_with_progress_and_metrics_inner<F, N>(
     mut on_progress: F,
     metrics_store: Option<AsrMetricsStore>,
     mut on_fallback: N,
+    emitter: Option<&dyn crate::core::event::EventEmitter>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -165,6 +183,8 @@ where
 
     let punctuation = load_punctuation(request.punctuation_model.clone());
 
+    let instance_id = request.instance_id.as_deref();
+
     let decode_started = Instant::now();
     let segments = match &recognizer.inner {
         RecognizerInner::Offline(r) => {
@@ -176,11 +196,23 @@ where
                 request.batch_segmentation_mode,
                 punctuation.as_ref(),
                 &mut on_progress,
+                request.normalization_options,
+                emitter,
+                instance_id,
             )
             .await?
         }
         RecognizerInner::Online(r) => {
-            process_batch_online(r, &samples, punctuation.as_ref(), &mut on_progress).await?
+            process_batch_online(
+                r,
+                &samples,
+                punctuation.as_ref(),
+                &mut on_progress,
+                request.normalization_options,
+                emitter,
+                instance_id,
+            )
+            .await?
         }
     };
     let decode_ms = duration_to_ms(decode_started.elapsed());
@@ -228,6 +260,9 @@ async fn process_batch_offline<F>(
     batch_segmentation_mode: BatchSegmentationMode,
     punctuation: Option<&Punctuation>,
     on_progress: &mut F,
+    normalization_options: TranscriptNormalizationOptions,
+    emitter: Option<&dyn crate::core::event::EventEmitter>,
+    instance_id: Option<&str>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -261,7 +296,7 @@ where
                     .as_ref()
                     .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
 
-                results.push(TranscriptSegment {
+                let segment = TranscriptSegment {
                     id: uuid::Uuid::new_v4().to_string(),
                     text,
                     start: seg.start_time as f64,
@@ -274,7 +309,14 @@ where
                     translation: None,
                     speaker: None,
                     speaker_attribution: None,
-                });
+                };
+
+                if let (Some(emitter), Some(id)) = (emitter, instance_id) {
+                    let update = build_transcript_update(segment.clone(), normalization_options);
+                    emit_transcript_update(emitter, id, &update, "batch-offline", None);
+                }
+
+                results.push(segment);
             }
         }
         let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
@@ -327,6 +369,9 @@ async fn process_batch_online<F>(
     samples: &[f32],
     punctuation: Option<&Punctuation>,
     on_progress: &mut F,
+    normalization_options: TranscriptNormalizationOptions,
+    emitter: Option<&dyn crate::core::event::EventEmitter>,
+    instance_id: Option<&str>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -364,7 +409,7 @@ where
                     .as_ref()
                     .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                segments.push(TranscriptSegment {
+                let segment = TranscriptSegment {
                     id: uuid::Uuid::new_v4().to_string(),
                     text,
                     start: segment_start,
@@ -377,7 +422,14 @@ where
                     translation: None,
                     speaker: None,
                     speaker_attribution: None,
-                });
+                };
+
+                if let (Some(emitter), Some(id)) = (emitter, instance_id) {
+                    let update = build_transcript_update(segment.clone(), normalization_options);
+                    emit_transcript_update(emitter, id, &update, "batch-online", None);
+                }
+
+                segments.push(segment);
             }
             r.0.reset(&stream.0);
             segment_start = current_time;
@@ -407,7 +459,7 @@ where
             .as_ref()
             .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-        segments.push(TranscriptSegment {
+        let segment = TranscriptSegment {
             id: uuid::Uuid::new_v4().to_string(),
             text,
             start: segment_start,
@@ -420,7 +472,14 @@ where
             translation: None,
             speaker: None,
             speaker_attribution: None,
-        });
+        };
+
+        if let (Some(emitter), Some(id)) = (emitter, instance_id) {
+            let update = build_transcript_update(segment.clone(), normalization_options);
+            emit_transcript_update(emitter, id, &update, "batch-online-tail", None);
+        }
+
+        segments.push(segment);
     }
     on_progress(100.0);
     Ok(segments)
