@@ -3,11 +3,11 @@ use std::path::Path;
 const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # Generated keys are commented out by default. Uncomment the settings you want
 # before using this file with Sona commands.
-# `sona transcribe` requires model_id to be enabled.
-# `sona serve` falls back to runtime defaults for omitted keys.
+# `sona-cli transcribe` requires model_id to be enabled.
+# `sona-cli serve` falls back to runtime defaults for omitted keys.
 # Save as sona-cli.toml, then pass it with:
-#   sona transcribe ./sample.wav -c ./sona-cli.toml
-#   sona serve -c ./sona-cli.toml
+#   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
+#   sona-cli serve -c ./sona-cli.toml
 #
 # Top-level keys are shared defaults for both commands.
 # Uncomment the same key inside [transcribe] or [serve] to override it per command.

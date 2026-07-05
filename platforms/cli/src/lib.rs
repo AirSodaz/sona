@@ -1,6 +1,7 @@
 mod desktop_paths;
 mod init_config;
 mod models;
+mod transcribe;
 
 use clap::{Parser, Subcommand};
 use std::ffi::OsString;
@@ -85,6 +86,8 @@ enum Commands {
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
+    /// Transcribes a local audio or video file using offline ASR.
+    Transcribe(transcribe::TranscribeArgs),
 }
 
 pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
@@ -98,6 +101,7 @@ where
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
+        Commands::Transcribe(args) => transcribe::run_transcribe(args),
     }
 }
 
