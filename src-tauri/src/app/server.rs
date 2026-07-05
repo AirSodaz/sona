@@ -25,6 +25,8 @@ type HmacSha256 = Hmac<Sha256>;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
+use sona_core::cli_runtime::{DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
+
 use crate::core::database::{Database, DatabaseError};
 use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 
@@ -40,7 +42,7 @@ pub struct ApiServerTranscriptionDefaults {
 impl Default for ApiServerTranscriptionDefaults {
     fn default() -> Self {
         Self {
-            gpu_acceleration: Some(crate::cli::DEFAULT_GPU_ACCELERATION.to_string()),
+            gpu_acceleration: Some(DEFAULT_GPU_ACCELERATION.to_string()),
             vad_model_id: Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
             punctuation_model_id: Some(
                 crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
@@ -113,7 +115,7 @@ impl Default for ApiServerStartupSettings {
             job_ttl_minutes: 60,
             max_streaming: 2,
             ip_whitelist: "localhost".to_string(),
-            gpu_acceleration: crate::cli::DEFAULT_GPU_ACCELERATION.to_string(),
+            gpu_acceleration: DEFAULT_GPU_ACCELERATION.to_string(),
         }
     }
 }
@@ -385,7 +387,7 @@ pub async fn start_api_server(
         .join(",");
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
     let transcription_defaults = ApiServerTranscriptionDefaults {
-        gpu_acceleration: crate::cli::resolve_cli_gpu_acceleration(Some(gpu_acceleration))
+        gpu_acceleration: resolve_cli_gpu_acceleration(Some(gpu_acceleration))
             .map_err(|e| e.to_string())?,
         ..Default::default()
     };
@@ -483,7 +485,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             };
             let parsed_arc = std::sync::Arc::new(parsed_whitelist);
             let transcription_defaults =
-                match crate::cli::resolve_cli_gpu_acceleration(Some(settings.gpu_acceleration)) {
+                match resolve_cli_gpu_acceleration(Some(settings.gpu_acceleration)) {
                     Ok(gpu_acceleration) => ApiServerTranscriptionDefaults {
                         gpu_acceleration,
                         ..Default::default()
