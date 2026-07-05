@@ -24,8 +24,10 @@ futures-util = "0.3"
 hex = "0.4"
 reqwest = { version = "0.13", default-features = false, features = ["stream"] }
 sha2 = "0.11"
-tokio = { version = "1", features = ["fs", "io-util", "sync", "macros"] }
+tokio = { version = "1", features = ["fs", "io-util", "sync", "macros", "signal"] }
 fs3 = "0.5"
+bzip2 = "0.4"
+tar = "0.4"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros"] }

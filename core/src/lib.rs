@@ -10,6 +10,7 @@ pub mod file_utils;
 pub mod history;
 pub mod history_store;
 pub mod model_config;
+pub mod model_downloads;
 pub mod paths;
 pub mod ports;
 pub mod preset_models;

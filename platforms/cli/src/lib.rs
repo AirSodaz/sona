@@ -38,6 +38,14 @@ pub enum CliError {
     Serialize(String),
     #[error("{0}")]
     Io(String),
+    #[error("{0}")]
+    Network(String),
+    #[error("{0}")]
+    Model(String),
+    #[error("{0}")]
+    Other(String),
+    #[error("Cancelled: {0}")]
+    Cancelled(String),
 }
 
 impl CliError {
@@ -47,6 +55,10 @@ impl CliError {
             CliError::Validation(_) => 2,
             CliError::Serialize(_) => 1,
             CliError::Io(_) => 5,
+            CliError::Network(_) => 4,
+            CliError::Model(_) => 3,
+            CliError::Other(_) => 1,
+            CliError::Cancelled(_) => 130,
         }
     }
 }
