@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "adapters/local_asr",
     "adapters/ts_bind",
     "adapters/uniffi_bind",
     "core",

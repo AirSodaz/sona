@@ -1,0 +1,12 @@
+[package]
+name = "sona-local-asr"
+version.workspace = true
+description = "Reusable local offline ASR adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+sona-core = { path = "../../core" }
+tokio = { version = "1", features = ["process", "rt", "macros"] }
+
+[dev-dependencies]
