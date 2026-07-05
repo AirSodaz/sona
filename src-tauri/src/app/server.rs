@@ -26,11 +26,15 @@ use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
 use sona_core::cli_runtime::{DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
+use sona_core::preset_models::is_preset_model_installed_at;
+use sona_core::transcribe_runtime::{
+    OfflineTranscribeCliOptions, resolve_offline_transcribe_plan_with_install_checker,
+};
 
 use crate::core::database::{Database, DatabaseError};
 use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 
-pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
+pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona-cli serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiServerTranscriptionDefaults {
@@ -532,7 +536,6 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     });
 }
 
-use crate::cli::{TranscribeCliOptions, resolve_transcribe_options};
 use crate::integrations::asr::transcribe_batch_with_progress;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -787,16 +790,12 @@ async fn start_worker_loop(
                     JobStatus::Failed("Missing online provider ID".to_string())
                 }
             } else {
-                let options = build_local_transcribe_options(&job, &models_dir, &defaults);
-
-                match resolve_transcribe_options(options, None) {
-                    Ok(resolved) => {
-                        match transcribe_batch_with_progress(&resolved.request, |_| {}).await {
-                            Ok(segments) => JobStatus::Completed(segments),
-                            Err(e) => JobStatus::Failed(e),
-                        }
-                    }
-                    Err(e) => JobStatus::Failed(e.to_string()),
+                match build_local_batch_request(&job, &models_dir, &defaults) {
+                    Ok(request) => match transcribe_batch_with_progress(&request, |_| {}).await {
+                        Ok(segments) => JobStatus::Completed(segments),
+                        Err(e) => JobStatus::Failed(e),
+                    },
+                    Err(e) => JobStatus::Failed(e),
                 }
             };
 
@@ -822,10 +821,10 @@ pub(crate) fn build_local_transcribe_options(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> TranscribeCliOptions {
+) -> OfflineTranscribeCliOptions {
     let (vad_model_id, punctuation_model_id) =
         companion_defaults_for_model(&job.model_id, defaults);
-    TranscribeCliOptions {
+    OfflineTranscribeCliOptions {
         input: job.file_path.clone(),
         output: None,
         format: None,
@@ -847,6 +846,20 @@ pub(crate) fn build_local_transcribe_options(
         quiet: true,
         force: true,
     }
+}
+
+pub(crate) fn build_local_batch_request(
+    job: &TranscriptionJob,
+    models_dir: &StdPath,
+    defaults: &ApiServerTranscriptionDefaults,
+) -> Result<crate::integrations::asr::BatchTranscriptionRequest, String> {
+    let options = build_local_transcribe_options(job, models_dir, defaults);
+    let plan = resolve_offline_transcribe_plan_with_install_checker(
+        options,
+        None,
+        is_preset_model_installed_at,
+    )?;
+    crate::integrations::asr::LocalSherpaAdapter::offline_plan_to_batch_request(plan)
 }
 
 fn companion_defaults_for_model(
@@ -1434,7 +1447,17 @@ mod tests {
         http::{Request, StatusCode},
     };
     use std::collections::HashMap as StdHashMap;
+    use std::fs;
     use tower::ServiceExt;
+
+    fn install_preset_model(models_dir: &StdPath, model_id: &str) {
+        let model = sona_core::preset_models::find_preset_model(model_id).unwrap();
+        let install_path = model.resolve_install_path(models_dir);
+        if let Some(parent) = install_path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(install_path, b"installed").unwrap();
+    }
 
     #[tokio::test]
     async fn test_clean_expired_jobs() {
@@ -1650,8 +1673,14 @@ mod tests {
     }
 
     #[test]
-    fn local_transcribe_options_use_server_defaults() {
-        let models_dir = PathBuf::from("C:/models");
+    fn local_transcribe_request_uses_server_gpu_and_vad_defaults() {
+        let temp = tempfile::tempdir().unwrap();
+        let models_dir = temp.path().to_path_buf();
+        install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
+        install_preset_model(
+            &models_dir,
+            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+        );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
             file_path: PathBuf::from("sample.wav"),
@@ -1666,23 +1695,45 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults {
             gpu_acceleration: Some("cuda".to_string()),
-            vad_model_id: Some("silero-vad".to_string()),
-            punctuation_model_id: Some("punct-model".to_string()),
+            vad_model_id: Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            punctuation_model_id: None,
         };
 
-        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
 
-        assert_eq!(options.gpu_acceleration.as_deref(), Some("cuda"));
-        assert_eq!(options.vad_model_id.as_deref(), Some("silero-vad"));
-        assert_eq!(options.punctuation_model_id.as_deref(), Some("punct-model"));
-        assert_eq!(options.models_dir.as_deref(), Some(models_dir.as_path()));
-        assert!(options.language.is_none());
-        assert_eq!(options.hotwords.as_deref(), Some("Sona"));
+        assert_eq!(request.gpu_acceleration.as_deref(), Some("cuda"));
+        assert_eq!(
+            request.vad_model.as_deref(),
+            Some(
+                models_dir
+                    .join("silero_vad.onnx")
+                    .display()
+                    .to_string()
+                    .as_str()
+            )
+        );
+        assert!(request.punctuation_model.is_none());
+        assert_eq!(request.file_path, PathBuf::from("sample.wav"));
+        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
+        assert_eq!(
+            request.model_path,
+            models_dir
+                .join("sherpa-onnx-whisper-turbo")
+                .display()
+                .to_string()
+        );
+        assert_eq!(request.language, "auto");
     }
 
     #[test]
-    fn local_transcribe_options_skip_builtin_punctuation_default_when_model_does_not_require_it() {
-        let models_dir = PathBuf::from("C:/models");
+    fn local_transcribe_request_skips_builtin_punctuation_default_when_model_does_not_require_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let models_dir = temp.path().to_path_buf();
+        install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
+        install_preset_model(
+            &models_dir,
+            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+        );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
             file_path: PathBuf::from("sample.wav"),
@@ -1697,15 +1748,34 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults::default();
 
-        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
 
-        assert_eq!(options.vad_model_id.as_deref(), Some("silero-vad"));
-        assert!(options.punctuation_model_id.is_none());
+        assert_eq!(
+            request.vad_model.as_deref(),
+            Some(
+                models_dir
+                    .join("silero_vad.onnx")
+                    .display()
+                    .to_string()
+                    .as_str()
+            )
+        );
+        assert!(request.punctuation_model.is_none());
     }
 
     #[test]
-    fn local_transcribe_options_apply_builtin_punctuation_default_when_model_requires_it() {
-        let models_dir = PathBuf::from("C:/models");
+    fn local_transcribe_request_applies_builtin_punctuation_default_when_model_requires_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let models_dir = temp.path().to_path_buf();
+        install_preset_model(&models_dir, "sherpa-onnx-funasr-nano-int8-2025-12-30");
+        install_preset_model(
+            &models_dir,
+            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+        );
+        install_preset_model(
+            &models_dir,
+            crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID,
+        );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
             file_path: PathBuf::from("sample.wav"),
@@ -1720,11 +1790,17 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults::default();
 
-        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
 
         assert_eq!(
-            options.punctuation_model_id.as_deref(),
-            Some(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
+            request.punctuation_model.as_deref(),
+            Some(
+                models_dir
+                    .join(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
+                    .display()
+                    .to_string()
+                    .as_str()
+            )
         );
     }
 
