@@ -12,8 +12,7 @@ use super::{
 
 const DEFAULT_SNIPPET_LENGTH: usize = 72;
 
-#[cfg(test)]
-pub(super) fn query_workspace_items(
+pub fn query_workspace_items(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
 ) -> HistoryWorkspaceQueryResult {
@@ -21,7 +20,7 @@ pub(super) fn query_workspace_items(
     query_workspace_items_impl(items, request, item_counts)
 }
 
-pub(super) fn query_workspace_items_with_counts(
+pub fn query_workspace_items_with_counts(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
     item_counts: HistoryWorkspaceItemCounts,
@@ -219,7 +218,6 @@ fn summarize_items(items: &[HistoryItemRecord]) -> HistoryWorkspaceSummary {
     }
 }
 
-#[cfg(test)]
 fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
     let mut inbox = 0;
     let mut by_project_id = BTreeMap::new();
@@ -240,17 +238,17 @@ fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCo
 }
 
 #[derive(Clone)]
-pub(super) struct NormalizedSearchText {
-    pub(super) text: String,
-    pub(super) raw_segments: Vec<NormalizedRawSegment>,
+pub struct NormalizedSearchText {
+    pub text: String,
+    pub raw_segments: Vec<NormalizedRawSegment>,
 }
 
 #[derive(Clone)]
-pub(super) struct NormalizedRawSegment {
-    pub(super) byte_start: usize,
-    pub(super) byte_end: usize,
-    pub(super) utf16_start: usize,
-    pub(super) utf16_end: usize,
+pub struct NormalizedRawSegment {
+    pub byte_start: usize,
+    pub byte_end: usize,
+    pub utf16_start: usize,
+    pub utf16_end: usize,
 }
 
 #[derive(Clone)]
@@ -260,7 +258,7 @@ struct WorkspaceMatchRange {
     display_range: HistoryWorkspaceSearchRange,
 }
 
-pub(super) fn normalize_workspace_search_text(value: &str) -> NormalizedSearchText {
+pub fn normalize_workspace_search_text(value: &str) -> NormalizedSearchText {
     let mut normalized = String::new();
     let mut raw_segments: Vec<NormalizedRawSegment> = Vec::new();
     let mut raw_utf16_offset = 0;
@@ -486,11 +484,33 @@ fn match_workspace_item(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::history::test_support::sample_history_item;
-    use crate::repositories::history::{
-        HistoryItemStatus, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
-        HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    use crate::history::{
+        HistoryAudioStatus, HistoryDraftSource, HistoryItemStatus, HistoryWorkspaceDateFilter,
+        HistoryWorkspaceFilterType, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
     };
+
+    fn sample_history_item(id: &str, status: HistoryItemStatus) -> HistoryItemRecord {
+        HistoryItemRecord {
+            id: id.to_string(),
+            timestamp: 1,
+            duration: 2.0,
+            audio_path: format!("{id}.wav"),
+            audio_status: HistoryAudioStatus::Available,
+            transcript_path: format!("{id}.json"),
+            title: format!("Item {id}"),
+            preview_text: String::new(),
+            icon: None,
+            kind: HistoryItemKind::Recording,
+            search_content: String::new(),
+            project_id: None,
+            status,
+            draft_source: if status == HistoryItemStatus::Draft {
+                Some(HistoryDraftSource::LiveRecord)
+            } else {
+                None
+            },
+        }
+    }
 
     fn base_request(query: &str) -> HistoryWorkspaceQueryRequest {
         HistoryWorkspaceQueryRequest {

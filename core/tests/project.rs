@@ -64,3 +64,77 @@ fn project_create_input_accepts_partial_defaults() {
         }
     );
 }
+
+#[test]
+fn test_project_normalization_logic() {
+    use serde_json::json;
+    use sona_core::project::{
+        ProjectListOptions, non_empty_trimmed_string, normalize_project_value, positive_millis,
+        string_array, string_value,
+    };
+
+    // Test helper functions
+    assert_eq!(
+        string_value(Some(&json!("hello"))),
+        Some("hello".to_string())
+    );
+    assert_eq!(string_value(None), None);
+
+    assert_eq!(
+        non_empty_trimmed_string(Some(&json!("  hello  "))),
+        Some("hello".to_string())
+    );
+    assert_eq!(non_empty_trimmed_string(Some(&json!("   "))), None);
+
+    assert_eq!(positive_millis(Some(&json!(123.4))), Some(123));
+    assert_eq!(positive_millis(Some(&json!(-10.0))), None);
+
+    assert_eq!(
+        string_array(Some(&json!(["a", "b"]))),
+        Some(vec!["a".to_string(), "b".to_string()])
+    );
+
+    // Test project normalization
+    let input = json!({
+        "id": "p1",
+        "name": "  My Project  ",
+        "description": "desc",
+        "createdAt": 1000,
+        "updatedAt": 2000,
+        "defaults": {
+            "summaryTemplate": "general_template",
+            "translationLanguage": "ja",
+            "polishScenario": "writing",
+            "enabledTextReplacementSetIds": ["r1"],
+        }
+    });
+
+    let options = ProjectListOptions {
+        fallback_enabled_polish_keyword_set_ids: vec!["fallback_keyword".to_string()],
+        fallback_enabled_speaker_profile_ids: vec!["fallback_speaker".to_string()],
+    };
+
+    let record = normalize_project_value(&input, &options);
+
+    assert_eq!(record.id, "p1");
+    assert_eq!(record.name, "My Project");
+    assert_eq!(record.description, "desc");
+    assert_eq!(record.created_at, 1000);
+    assert_eq!(record.updated_at, 2000);
+    assert_eq!(record.defaults.summary_template_id, "general_template");
+    assert_eq!(record.defaults.translation_language, "ja");
+    assert_eq!(record.defaults.polish_preset_id, ""); // empty because polishScenario is present
+    assert_eq!(record.defaults.polish_scenario, Some("writing".to_string()));
+    assert_eq!(
+        record.defaults.enabled_text_replacement_set_ids,
+        vec!["r1".to_string()]
+    );
+    assert_eq!(
+        record.defaults.enabled_polish_keyword_set_ids,
+        vec!["fallback_keyword".to_string()]
+    );
+    assert_eq!(
+        record.defaults.enabled_speaker_profile_ids,
+        vec!["fallback_speaker".to_string()]
+    );
+}

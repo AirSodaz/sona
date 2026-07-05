@@ -1,6 +1,5 @@
 pub mod backup;
 pub(crate) mod fs_utils;
-mod item_factory;
 pub(crate) mod llm_helpers;
 pub(crate) mod repository;
 pub mod sqlite_store;
@@ -9,10 +8,10 @@ pub use repository::HistoryRepository;
 pub use sqlite_store::SqliteHistoryStore;
 #[cfg(test)]
 pub(crate) mod test_support;
-pub(crate) mod transcript_diff;
-mod transcript_payload;
 mod types;
-mod workspace_query;
+
+// Re-exports from sona-core history submodules
+pub use sona_core::history::{item_factory, transcript_diff, transcript_payload, workspace_query};
 
 pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{

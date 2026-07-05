@@ -1,20 +1,14 @@
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 use uuid::Uuid;
 
 use super::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus,
 };
+use crate::file_utils::current_time_millis;
 
-pub(super) fn current_time_millis() -> Result<u64, String> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .map_err(|error| error.to_string())
-}
-
-pub(super) fn create_live_draft_item(
+pub fn create_live_draft_item(
     request: HistoryCreateLiveDraftRequest,
 ) -> Result<HistoryItemRecord, String> {
     let id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -35,7 +29,7 @@ pub(super) fn create_live_draft_item(
     Ok(item)
 }
 
-pub(super) fn create_recording_item(
+pub fn create_recording_item(
     duration: f64,
     project_id: Option<String>,
     audio_extension: Option<&str>,
@@ -60,12 +54,12 @@ pub(super) fn create_recording_item(
     ))
 }
 
-pub(super) struct ImportedFileItem {
-    pub(super) item: HistoryItemRecord,
-    pub(super) copy_source_path: String,
+pub struct ImportedFileItem {
+    pub item: HistoryItemRecord,
+    pub copy_source_path: String,
 }
 
-pub(super) fn create_imported_file_item(
+pub fn create_imported_file_item(
     id: Option<String>,
     source_path: String,
     converted_source_path: Option<String>,
@@ -87,7 +81,6 @@ pub(super) fn create_imported_file_item(
         project_id,
         None,
     );
-
     Ok(ImportedFileItem {
         item,
         copy_source_path,

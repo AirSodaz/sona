@@ -1249,7 +1249,7 @@ where
         let parsed_segments = normalized_transcript.segments;
 
         let created_at =
-            super::item_factory::current_time_millis().map_err(DatabaseError::Internal)?;
+            sona_core::file_utils::current_time_millis().map_err(DatabaseError::Internal)?;
         let metadata = TranscriptSnapshotMetadata {
             id: format!("{created_at}-{}", uuid::Uuid::new_v4()),
             history_id: history_id.to_string(),

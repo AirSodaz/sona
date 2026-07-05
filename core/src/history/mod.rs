@@ -353,3 +353,8 @@ pub struct HistoryBackupSnapshot {
     pub summary_files: Vec<(String, Value)>,
     pub snapshot_files: Vec<(String, Value)>,
 }
+
+pub mod item_factory;
+pub mod transcript_diff;
+pub mod transcript_payload;
+pub mod workspace_query;

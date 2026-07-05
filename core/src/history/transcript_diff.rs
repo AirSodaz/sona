@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::integrations::asr::{TranscriptSegment, ensure_transcript_segment_timing};
+use crate::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
 use super::{TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus};
 
@@ -160,22 +160,26 @@ fn match_remaining_segments_by_order(
     matches: &mut HashMap<usize, usize>,
     used_current_indexes: &mut HashSet<usize>,
 ) {
-    let unmatched_snapshot_indexes = (0..snapshot_segments.len())
-        .filter(|index| !matches.contains_key(index))
-        .collect::<Vec<_>>();
-    let unmatched_current_indexes = (0..current_segments.len())
-        .filter(|index| !used_current_indexes.contains(index))
-        .collect::<Vec<_>>();
-    let order_match_count = unmatched_snapshot_indexes
-        .len()
-        .min(unmatched_current_indexes.len());
+    let mut next_unmatched_current_index = 0;
 
-    for index in 0..order_match_count {
-        matches.insert(
-            unmatched_snapshot_indexes[index],
-            unmatched_current_indexes[index],
-        );
-        used_current_indexes.insert(unmatched_current_indexes[index]);
+    for snapshot_index in 0..snapshot_segments.len() {
+        if matches.contains_key(&snapshot_index) {
+            continue;
+        }
+
+        while next_unmatched_current_index < current_segments.len()
+            && used_current_indexes.contains(&next_unmatched_current_index)
+        {
+            next_unmatched_current_index += 1;
+        }
+
+        if next_unmatched_current_index >= current_segments.len() {
+            break;
+        }
+
+        matches.insert(snapshot_index, next_unmatched_current_index);
+        used_current_indexes.insert(next_unmatched_current_index);
+        next_unmatched_current_index += 1;
     }
 }
 
@@ -185,15 +189,18 @@ fn build_diff_rows(
     matches: &HashMap<usize, usize>,
 ) -> Vec<TranscriptDiffRow> {
     let mut rows = Vec::new();
-    let mut final_matched_current_indexes = HashSet::<usize>::new();
+    let mut final_matched_current_indexes = HashSet::new();
 
     for (snapshot_index, snapshot_segment) in snapshot_segments.iter().enumerate() {
-        let Some(current_index) = matches.get(&snapshot_index).copied() else {
+        let current_index = matches.get(&snapshot_index);
+
+        let Some(&current_index) = current_index else {
             rows.push(removed_row(snapshot_index, snapshot_segment));
             continue;
         };
 
         final_matched_current_indexes.insert(current_index);
+
         rows.push(matched_row(
             snapshot_index,
             snapshot_segment,
@@ -211,16 +218,21 @@ fn build_diff_rows(
     }
 
     rows.sort_by(|left, right| {
-        let left_index = left
-            .current_index
-            .or(left.snapshot_index)
-            .unwrap_or_default();
-        let right_index = right
-            .current_index
-            .or(right.snapshot_index)
-            .unwrap_or_default();
-        left_index
-            .cmp(&right_index)
+        let left_time = left
+            .current_segment
+            .as_ref()
+            .or(left.snapshot_segment.as_ref())
+            .map(|s| s.start)
+            .unwrap_or(0.0);
+        let right_time = right
+            .current_segment
+            .as_ref()
+            .or(right.snapshot_segment.as_ref())
+            .map(|s| s.start)
+            .unwrap_or(0.0);
+        left_time
+            .partial_cmp(&right_time)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
     rows
@@ -276,7 +288,7 @@ fn changed_row_count(rows: &[TranscriptDiffRow]) -> usize {
         .count()
 }
 
-pub(crate) fn build_transcript_diff(
+pub fn build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> TranscriptDiffResult {
@@ -292,7 +304,7 @@ pub(crate) fn build_transcript_diff(
     }
 }
 
-pub(crate) fn restore_transcript_diff_rows(
+pub fn restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Vec<TranscriptSegment> {
@@ -448,5 +460,23 @@ mod tests {
 
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].text, "snapshot");
+    }
+
+    #[test]
+    fn transcript_diff_out_of_order_matching_sorts_correctly() {
+        let result = build_transcript_diff(
+            vec![
+                segment("A", "A_snap", 0.0, 1.0),
+                segment("B", "B_snap", 2.0, 3.0),
+            ],
+            vec![
+                segment("B", "B_curr", 2.0, 3.0),
+                segment("A", "A_curr", 0.0, 1.0),
+            ],
+        );
+
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0].id, "diff-0-1"); // A's row: snapshot_index 0, current_index 1 (starts at 0.0)
+        assert_eq!(result.rows[1].id, "diff-1-0"); // B's row: snapshot_index 1, current_index 0 (starts at 2.0)
     }
 }

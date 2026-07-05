@@ -1,15 +1,15 @@
 use serde_json::{Map, Value, from_value};
 
-use super::fs_utils::ensure_json_array_value;
-use crate::integrations::asr::{TranscriptSegment, ensure_transcript_segment_timing};
+use crate::file_utils::ensure_json_array_value;
+use crate::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
-pub(super) struct NormalizedHistoryTranscript {
-    pub(super) segments: Vec<TranscriptSegment>,
-    pub(super) preview_text: String,
-    pub(super) search_content: String,
+pub struct NormalizedHistoryTranscript {
+    pub segments: Vec<TranscriptSegment>,
+    pub preview_text: String,
+    pub search_content: String,
 }
 
-pub(super) fn normalize_history_transcript_segments(
+pub fn normalize_history_transcript_segments(
     segments: Value,
 ) -> Result<NormalizedHistoryTranscript, String> {
     let segments = ensure_json_array_value(segments, "History transcript segments")?;

@@ -1,14 +1,13 @@
 use super::model_config::Punctuation;
 use super::recognizer_output_event;
 use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
-use super::types::{
-    TranscriptNormalizationOptions, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
-    TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
-};
-use crate::core::text_alignment::{align_text_units_to_tokens, is_cjk_char};
+use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
+use crate::core::text_alignment::is_cjk_char;
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+
+pub(crate) use sona_core::transcript::ensure_transcript_segment_timing;
 
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;
 const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
@@ -33,156 +32,6 @@ struct SplitterState {
     effective_char_index: usize,
     last_token_index: usize,
     next_token_slice_start: usize,
-}
-
-fn normalize_timing_units(
-    units: Vec<TranscriptTimingUnit>,
-    segment_start: f64,
-    segment_end: f64,
-) -> Vec<TranscriptTimingUnit> {
-    let safe_start = segment_start.max(0.0);
-    let safe_end = segment_end.max(safe_start);
-
-    let unit_count = units.len();
-
-    units
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, unit)| {
-            if unit.text.is_empty() {
-                return None;
-            }
-
-            let start = unit.start.max(safe_start).min(safe_end);
-            let fallback_end = if index + 1 == unit_count {
-                safe_end
-            } else {
-                start
-            };
-            let end = unit.end.max(fallback_end).min(safe_end).max(start);
-
-            Some(TranscriptTimingUnit {
-                text: unit.text,
-                start,
-                end,
-            })
-        })
-        .collect()
-}
-
-fn build_segment_level_timing(
-    segment: &TranscriptSegment,
-    source: TranscriptTimingSource,
-) -> TranscriptTiming {
-    TranscriptTiming {
-        level: TranscriptTimingLevel::Segment,
-        source,
-        units: vec![TranscriptTimingUnit {
-            text: segment.text.clone(),
-            start: segment.start,
-            end: segment.end,
-        }],
-    }
-}
-
-fn build_token_windows(
-    timestamps: &[f32],
-    durations: Option<&[f32]>,
-    segment_end: f64,
-) -> Vec<(f64, f64)> {
-    timestamps
-        .iter()
-        .enumerate()
-        .map(|(index, timestamp)| {
-            let start = *timestamp as f64;
-            let explicit_end = durations
-                .and_then(|values| values.get(index))
-                .map(|value| start + (*value as f64).max(0.0));
-            let next_start = timestamps.get(index + 1).map(|value| *value as f64);
-            let end = explicit_end
-                .or(next_start)
-                .unwrap_or(segment_end)
-                .max(start);
-            (start, end)
-        })
-        .collect()
-}
-
-fn build_aligned_timing_units(
-    text: &str,
-    tokens: &[String],
-    timestamps: &[f32],
-    durations: Option<&[f32]>,
-    segment_end: f64,
-) -> Option<Vec<TranscriptTimingUnit>> {
-    if tokens.is_empty() || tokens.len() != timestamps.len() {
-        return None;
-    }
-
-    let windows = build_token_windows(timestamps, durations, segment_end);
-    let aligned_units = align_text_units_to_tokens(text, tokens)?;
-
-    Some(
-        aligned_units
-            .into_iter()
-            .map(|unit| {
-                let (start, end) = windows
-                    .get(unit.token_index)
-                    .copied()
-                    .unwrap_or((segment_end, segment_end));
-                TranscriptTimingUnit {
-                    text: unit.text,
-                    start,
-                    end,
-                }
-            })
-            .collect(),
-    )
-}
-
-fn build_timing_from_legacy(segment: &TranscriptSegment) -> Option<TranscriptTiming> {
-    let tokens = segment.tokens.as_ref()?;
-    let timestamps = segment.timestamps.as_ref()?;
-    if tokens.is_empty() || tokens.len() != timestamps.len() {
-        return None;
-    }
-
-    let durations = segment
-        .durations
-        .as_ref()
-        .filter(|values| values.len() == tokens.len())
-        .map(|values| values.as_slice());
-    let units =
-        build_aligned_timing_units(&segment.text, tokens, timestamps, durations, segment.end)?;
-    let units = normalize_timing_units(units, segment.start, segment.end);
-    if units.is_empty() {
-        return None;
-    }
-
-    Some(TranscriptTiming {
-        level: TranscriptTimingLevel::Token,
-        source: TranscriptTimingSource::Model,
-        units,
-    })
-}
-
-pub(crate) fn ensure_transcript_segment_timing(segment: &mut TranscriptSegment) {
-    segment.start = segment.start.max(0.0);
-    segment.end = segment.end.max(segment.start);
-
-    let timing = segment
-        .timing
-        .clone()
-        .map(|timing| TranscriptTiming {
-            level: timing.level,
-            source: timing.source,
-            units: normalize_timing_units(timing.units, segment.start, segment.end),
-        })
-        .filter(|timing| !timing.units.is_empty())
-        .or_else(|| build_timing_from_legacy(segment))
-        .unwrap_or_else(|| build_segment_level_timing(segment, TranscriptTimingSource::Derived));
-
-    segment.timing = Some(timing);
 }
 
 fn normalize_transcript_segments(mut segments: Vec<TranscriptSegment>) -> Vec<TranscriptSegment> {
@@ -856,6 +705,9 @@ pub(crate) fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<
 #[allow(clippy::too_many_arguments)]
 #[cfg(test)]
 mod tests {
+    use super::super::types::{
+        TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
+    };
     use super::*;
 
     #[test]
