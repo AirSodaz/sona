@@ -1,9 +1,16 @@
-use crate::cli_runtime::TranscribeConfigSection;
+use crate::cli_runtime::{TranscribeConfigSection, resolve_cli_models_dir};
 use crate::export::ExportFormat;
+use crate::preset_models::{
+    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
+    is_preset_model_installed_at,
+};
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
 pub const DEFAULT_BATCH_JOBS: usize = 1;
+pub const DEFAULT_THREADS: i32 = 4;
+pub const DEFAULT_LANGUAGE: &str = "auto";
+pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
 const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
     "wav", "mp3", "m4a", "aiff", "flac", "ogg", "wma", "aac", "opus", "amr", "mp4", "webm", "mov",
     "mkv", "avi", "wmv", "flv", "3gp",
@@ -27,6 +34,46 @@ pub struct BatchInputSource {
     pub inputs: Vec<PathBuf>,
     pub base_dir: PathBuf,
     pub preserve_relative_paths: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfflineTranscribeCliOptions {
+    pub input: PathBuf,
+    pub output: Option<PathBuf>,
+    pub format: Option<String>,
+    pub language: Option<String>,
+    pub model_id: Option<String>,
+    pub models_dir: Option<PathBuf>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+    pub threads: Option<i32>,
+    pub enable_itn: Option<bool>,
+    pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
+    pub vad_buffer: Option<f32>,
+    pub save_wav: Option<PathBuf>,
+    pub quiet: bool,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfflineTranscribePlan {
+    pub input_path: PathBuf,
+    pub save_to_path: Option<PathBuf>,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub model_type: String,
+    pub file_config: Option<crate::model_config::ModelFileConfig>,
+    pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
+    pub export_format: ExportFormat,
+    pub output_target: OutputTarget,
+    pub quiet: bool,
 }
 
 pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {
@@ -65,6 +112,13 @@ pub fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
     } else {
         Ok(jobs)
     }
+}
+
+pub fn resolve_offline_transcribe_plan(
+    cli: OfflineTranscribeCliOptions,
+    config: Option<TranscribeConfigSection>,
+) -> Result<OfflineTranscribePlan, String> {
+    resolve_offline_transcribe_plan_with_install_checker(cli, config, is_preset_model_installed_at)
 }
 
 pub fn should_run_path_batch(inputs: &[PathBuf]) -> bool {
@@ -226,6 +280,17 @@ fn ensure_input_file_exists(input: &Path) -> Result<(), String> {
     }
 }
 
+fn ensure_output_can_be_written(target: &OutputTarget, force: bool) -> Result<(), String> {
+    match target {
+        OutputTarget::Stdout => Ok(()),
+        OutputTarget::File(path) if force || !path.exists() => Ok(()),
+        OutputTarget::File(path) => Err(format!(
+            "Output file already exists: {}. Use --force to overwrite.",
+            path.display()
+        )),
+    }
+}
+
 fn export_format_name(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Json => "json",
@@ -299,4 +364,149 @@ fn batch_relative_output_path(
     let mut output = PathBuf::from(stem);
     output.set_extension(extension);
     Ok(output)
+}
+
+pub fn resolve_offline_transcribe_plan_with_install_checker(
+    cli: OfflineTranscribeCliOptions,
+    config: Option<TranscribeConfigSection>,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<OfflineTranscribePlan, String> {
+    let config = config.unwrap_or_default();
+    let output_target = resolve_output_target(cli.output.clone());
+    let export_format = resolve_export_format(
+        cli.format.as_deref().or(config.format.as_deref()),
+        match &output_target {
+            OutputTarget::Stdout => None,
+            OutputTarget::File(path) => Some(path.as_path()),
+        },
+    )?;
+    let gpu_acceleration = crate::cli_runtime::resolve_cli_gpu_acceleration(
+        cli.gpu_acceleration.or(config.gpu_acceleration),
+    )?;
+
+    ensure_input_file_exists(&cli.input)?;
+    ensure_output_can_be_written(&output_target, cli.force)?;
+    let models_dir = resolve_cli_models_dir(cli.models_dir.or(config.models_dir))?;
+    let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
+        "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
+    })?;
+    let model = resolve_offline_model(&model_id)?;
+    let rules = model.resolved_rules();
+
+    let vad_model_id = cli.vad_model_id.or(config.vad_model_id);
+    let punctuation_model_id = cli.punctuation_model_id.or(config.punctuation_model_id);
+
+    let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
+    let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
+    if threads <= 0 {
+        return Err("threads must be greater than 0".to_string());
+    }
+
+    let vad_buffer = cli
+        .vad_buffer
+        .or(config.vad_buffer_size)
+        .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
+    if vad_buffer <= 0.0 {
+        return Err("vad_buffer must be greater than 0".to_string());
+    }
+
+    let language = cli
+        .language
+        .or(config.language)
+        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
+    let model_path = require_installed_model(model, &models_dir, is_installed)?;
+    let vad_model = if rules.requires_vad {
+        let companion_id = vad_model_id.unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
+    } else {
+        optional_installed_companion(vad_model_id.as_deref(), &models_dir, is_installed)?
+    };
+    let punctuation_model = if rules.requires_punctuation {
+        let companion_id =
+            punctuation_model_id.unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
+    } else {
+        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir, is_installed)?
+    };
+
+    Ok(OfflineTranscribePlan {
+        input_path: cli.input,
+        save_to_path: cli.save_wav,
+        model_path,
+        num_threads: threads,
+        enable_itn,
+        language,
+        punctuation_model,
+        vad_model,
+        vad_buffer,
+        model_type: model.model_type.clone(),
+        file_config: model.file_config.clone(),
+        hotwords: cli.hotwords.or(config.hotwords),
+        gpu_acceleration,
+        export_format,
+        output_target,
+        quiet: cli.quiet || config.quiet.unwrap_or(false),
+    })
+}
+
+fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
+    let model =
+        find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
+    if !model.supports_mode("offline") {
+        return Err(format!(
+            "Model '{model_id}' does not support offline transcription."
+        ));
+    }
+    Ok(model)
+}
+
+fn require_installed_model(
+    model: &PresetModel,
+    models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<String, String> {
+    let path = model.resolve_install_path(models_dir);
+    if !is_installed(model, models_dir) {
+        return Err(format!(
+            "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+            model.id,
+            path.display()
+        ));
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn require_installed_companion(
+    model_id: &str,
+    models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<String, String> {
+    let model = find_preset_model(model_id)
+        .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
+    let path = model.resolve_install_path(models_dir);
+    if !is_installed(model, models_dir) {
+        return Err(format!(
+            "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+            path.display()
+        ));
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn optional_installed_companion(
+    model_id: Option<&str>,
+    models_dir: &Path,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<Option<String>, String> {
+    model_id
+        .map(|id| require_installed_companion(id, models_dir, is_installed))
+        .transpose()
 }

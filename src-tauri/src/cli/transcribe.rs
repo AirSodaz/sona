@@ -1,9 +1,5 @@
-use crate::cli::models::resolve_models_dir;
 use crate::cli::{CliError, CliResult};
-use crate::core::preset_models::{
-    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
-    is_preset_model_installed_at,
-};
+use crate::core::preset_models::{PresetModel, find_preset_model, is_preset_model_installed_at};
 use crate::integrations::asr::{
     BatchTranscriptionRequest, Recognizer, transcribe_batch_with_progress_and_fallback_notice,
 };
@@ -11,8 +7,9 @@ use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
 use futures_util::stream::{self, StreamExt};
 use sona_core::transcribe_runtime::{
-    OutputTarget, load_transcribe_config_file, plan_batch_output_files, resolve_batch_input_source,
-    resolve_batch_jobs, resolve_export_format, resolve_output_target, should_run_path_batch,
+    OfflineTranscribeCliOptions, OutputTarget, load_transcribe_config_file,
+    plan_batch_output_files, resolve_batch_input_source, resolve_batch_jobs, resolve_export_format,
+    resolve_offline_transcribe_plan_with_install_checker, should_run_path_batch,
 };
 use std::fs;
 use std::io::{self, IsTerminal, Write};
@@ -237,98 +234,49 @@ fn resolve_transcribe_options_with_install_checker(
     config: Option<crate::cli::config::TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
 ) -> Result<ResolvedTranscribeOptions, CliError> {
-    let config = config.unwrap_or_default();
-    let output_target = resolve_output_target(cli.output.clone());
-    let export_format = resolve_export_format(
-        cli.format.as_deref().or(config.format.as_deref()),
-        match &output_target {
-            OutputTarget::Stdout => None,
-            OutputTarget::File(path) => Some(path.as_path()),
+    let plan = resolve_offline_transcribe_plan_with_install_checker(
+        OfflineTranscribeCliOptions {
+            input: cli.input,
+            output: cli.output,
+            format: cli.format,
+            language: cli.language,
+            model_id: cli.model_id,
+            models_dir: cli.models_dir,
+            vad_model_id: cli.vad_model_id,
+            punctuation_model_id: cli.punctuation_model_id,
+            threads: cli.threads,
+            enable_itn: cli.enable_itn,
+            hotwords: cli.hotwords,
+            gpu_acceleration: cli.gpu_acceleration,
+            vad_buffer: cli.vad_buffer,
+            save_wav: cli.save_wav,
+            quiet: cli.quiet,
+            force: cli.force,
         },
+        config,
+        is_installed,
     )
-    .map_err(CliError::Validation)?;
-    let gpu_acceleration =
-        resolve_cli_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
-
-    ensure_input_file_exists(&cli.input)?;
-    ensure_output_can_be_written(&output_target, cli.force)?;
-    let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
-    let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
-        CliError::Validation(
-            "Missing required offline model. Pass --model-id or set model_id in --config."
-                .to_string(),
-        )
-    })?;
-    let model = resolve_offline_model(&model_id)?;
-    let rules = model.resolved_rules();
-
-    let vad_model_id = cli.vad_model_id.or(config.vad_model_id);
-    let punctuation_model_id = cli.punctuation_model_id.or(config.punctuation_model_id);
-
-    let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
-    let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
-    if threads <= 0 {
-        return Err(CliError::Validation(
-            "threads must be greater than 0".to_string(),
-        ));
-    }
-
-    let vad_buffer = cli
-        .vad_buffer
-        .or(config.vad_buffer_size)
-        .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
-    if vad_buffer <= 0.0 {
-        return Err(CliError::Validation(
-            "vad_buffer must be greater than 0".to_string(),
-        ));
-    }
-
-    let language = cli
-        .language
-        .or(config.language)
-        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
-    let model_path = require_installed_model(model, &models_dir, is_installed)?;
-    let vad_model = if rules.requires_vad {
-        let companion_id = vad_model_id.unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
-        Some(require_installed_companion(
-            &companion_id,
-            &models_dir,
-            is_installed,
-        )?)
-    } else {
-        optional_installed_companion(vad_model_id.as_deref(), &models_dir, is_installed)?
-    };
-    let punctuation_model = if rules.requires_punctuation {
-        let companion_id =
-            punctuation_model_id.unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
-        Some(require_installed_companion(
-            &companion_id,
-            &models_dir,
-            is_installed,
-        )?)
-    } else {
-        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir, is_installed)?
-    };
+    .map_err(map_transcribe_plan_error)?;
 
     Ok(ResolvedTranscribeOptions {
-        export_format,
-        output_target,
-        quiet: cli.quiet || config.quiet.unwrap_or(false),
+        export_format: plan.export_format,
+        output_target: plan.output_target,
+        quiet: plan.quiet,
         request: BatchTranscriptionRequest {
             instance_id: None,
-            file_path: cli.input.clone(),
-            save_to_path: cli.save_wav.clone(),
-            model_path,
-            num_threads: threads,
-            enable_itn,
-            language,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
+            file_path: plan.input_path,
+            save_to_path: plan.save_to_path,
+            model_path: plan.model_path,
+            num_threads: plan.num_threads,
+            enable_itn: plan.enable_itn,
+            language: plan.language,
+            punctuation_model: plan.punctuation_model,
+            vad_model: plan.vad_model,
+            vad_buffer: plan.vad_buffer,
             batch_segmentation_mode: crate::integrations::asr::BatchSegmentationMode::Vad,
-            model_type: model.model_type.clone(),
-            file_config: model.file_config.clone(),
-            hotwords: cli.hotwords.or(config.hotwords),
+            model_type: plan.model_type,
+            file_config: plan.file_config,
+            hotwords: plan.hotwords,
             speaker_processing: None,
             normalization_options:
                 crate::integrations::asr::TranscriptNormalizationOptions::default(),
@@ -336,9 +284,36 @@ fn resolve_transcribe_options_with_install_checker(
                 crate::integrations::asr::TranscriptPostprocessOptions::default(),
             )
             .map_err(|e| CliError::Other(e.to_string()))?,
-            gpu_acceleration,
+            gpu_acceleration: plan.gpu_acceleration,
         },
     })
+}
+
+fn map_transcribe_plan_error(error: String) -> CliError {
+    if error.contains("Unknown model id")
+        || error.contains("does not support offline transcription")
+        || error.contains("Unknown companion model id")
+        || error.contains("Companion model '")
+        || error.contains("Model '")
+    {
+        CliError::Model(error)
+    } else if error.contains("Output file already exists")
+        || error.contains("Invalid glob pattern")
+        || error.contains("Failed to read glob match")
+        || error.contains("Failed to read config file")
+        || error.contains("Failed to parse config file")
+        || error.contains("Input file must be an existing file")
+        || error.contains("Missing required offline model")
+        || error.contains("threads must be greater than 0")
+        || error.contains("vad_buffer must be greater than 0")
+        || error.contains("gpu_acceleration must be one of")
+        || error.contains("Unable to infer export format")
+        || error.contains("Unsupported export format")
+    {
+        CliError::Validation(error)
+    } else {
+        CliError::Other(error)
+    }
 }
 
 pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<()> {
