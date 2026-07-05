@@ -10,7 +10,10 @@ use crate::integrations::asr::{
 use crate::repositories::export::{ExportFormat, export_segments};
 use clap::Args;
 use futures_util::stream::{self, StreamExt};
-use std::collections::HashSet;
+use sona_core::transcribe_runtime::{
+    OutputTarget, load_transcribe_config_file, plan_batch_output_files, resolve_batch_input_source,
+    resolve_batch_jobs, resolve_export_format, resolve_output_target, should_run_path_batch,
+};
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -21,12 +24,6 @@ pub const DEFAULT_LANGUAGE: &str = "auto";
 pub const DEFAULT_VAD_BUFFER_SIZE: f32 = 5.0;
 pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
 pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
-pub const DEFAULT_BATCH_JOBS: usize = 1;
-const SUPPORTED_BATCH_MEDIA_EXTENSIONS: &[&str] = &[
-    "wav", "mp3", "m4a", "aiff", "flac", "ogg", "wma", "aac", "opus", "amr", "mp4", "webm", "mov",
-    "mkv", "avi", "wmv", "flv", "3gp",
-];
-const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
 
 #[derive(Debug, Args)]
 #[command(
@@ -192,13 +189,6 @@ pub struct TranscribeCliOptions {
     pub force: bool,
 }
 
-/// Output target resolved from CLI arguments and config.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OutputTarget {
-    Stdout,
-    File(PathBuf),
-}
-
 /// Fully resolved transcription settings ready for batch execution.
 #[derive(Debug, Clone)]
 pub struct ResolvedTranscribeOptions {
@@ -208,24 +198,11 @@ pub struct ResolvedTranscribeOptions {
     pub request: BatchTranscriptionRequest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct BatchOutputPlan {
-    input_path: PathBuf,
-    output_path: PathBuf,
-}
-
 #[derive(Debug, Clone)]
 struct BatchTranscribePlan {
     input_path: PathBuf,
     output_path: PathBuf,
     resolved: ResolvedTranscribeOptions,
-}
-
-#[derive(Debug, Clone)]
-struct BatchInputSource {
-    inputs: Vec<PathBuf>,
-    base_dir: PathBuf,
-    preserve_relative_paths: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -366,7 +343,7 @@ fn resolve_transcribe_options_with_install_checker(
 
 pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<()> {
     let config = match args.config.as_deref() {
-        Some(path) => Some(load_config_file(path)?),
+        Some(path) => Some(load_transcribe_config_file(path).map_err(CliError::Validation)?),
         None => None,
     };
 
@@ -448,9 +425,11 @@ async fn run_batch_transcribe(
         )
     })?;
     let config = config.unwrap_or_default();
-    let jobs = resolve_batch_jobs(args.jobs.or(config.jobs))?;
+    let jobs = resolve_batch_jobs(args.jobs.or(config.jobs)).map_err(CliError::Validation)?;
     let quiet = args.quiet || config.quiet.unwrap_or(false);
-    let input_source = resolve_batch_input_source(&args)?;
+    let input_source =
+        resolve_batch_input_source(args.input_dir.as_deref(), &args.input, args.recursive)
+            .map_err(CliError::Validation)?;
     let export_format =
         resolve_export_format(args.format.as_deref().or(config.format.as_deref()), None)
             .map_err(CliError::Validation)?;
@@ -470,7 +449,8 @@ async fn run_batch_transcribe(
         export_format,
         input_source.preserve_relative_paths,
         args.force,
-    )?;
+    )
+    .map_err(CliError::Io)?;
     let mut plans = Vec::with_capacity(output_plans.len());
     let format = Some(export_format_name(export_format).to_string());
     let enable_itn = resolve_enable_itn(&args);
@@ -534,130 +514,6 @@ fn retarget_resolved_transcribe_options(
     retargeted.output_target = OutputTarget::File(output_path);
     retargeted.request.file_path = input_path.clone();
     retargeted
-}
-
-fn should_run_path_batch(inputs: &[PathBuf]) -> bool {
-    inputs.len() > 1
-        || inputs
-            .iter()
-            .any(|input| path_contains_glob_pattern(input.as_path()))
-}
-
-fn resolve_batch_input_source(args: &TranscribeArgs) -> Result<BatchInputSource, CliError> {
-    if let Some(input_dir) = args.input_dir.as_deref() {
-        return Ok(BatchInputSource {
-            inputs: collect_batch_input_files(input_dir, args.recursive)?,
-            base_dir: input_dir.to_path_buf(),
-            preserve_relative_paths: args.recursive,
-        });
-    }
-
-    let inputs = expand_input_patterns(&args.input)?;
-    let base_dir = common_input_parent(&inputs)?;
-    Ok(BatchInputSource {
-        inputs,
-        base_dir,
-        preserve_relative_paths: false,
-    })
-}
-
-fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, CliError> {
-    let mut expanded = Vec::new();
-
-    for input in inputs {
-        if path_contains_glob_pattern(input) {
-            let pattern = input.to_string_lossy().to_string();
-            let mut matches = glob::glob(&pattern)
-                .map_err(|error| {
-                    CliError::Io(format!("Invalid glob pattern {}: {error}", input.display()))
-                })?
-                .map(|entry| {
-                    entry.map_err(|error| {
-                        CliError::Io(format!(
-                            "Failed to read glob match for {}: {error}",
-                            input.display()
-                        ))
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            matches.retain(|path| path.is_file());
-            matches.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
-            if matches.is_empty() {
-                return Err(CliError::Validation(format!(
-                    "No input files matched glob pattern: {}",
-                    input.display()
-                )));
-            }
-            expanded.extend(matches);
-        } else {
-            ensure_input_file_exists(input)?;
-            expanded.push(input.clone());
-        }
-    }
-
-    expanded.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
-    expanded.dedup_by(|left, right| {
-        left.to_string_lossy()
-            .eq_ignore_ascii_case(&right.to_string_lossy())
-    });
-    Ok(expanded)
-}
-
-fn path_contains_glob_pattern(path: &Path) -> bool {
-    path.to_string_lossy()
-        .chars()
-        .any(|character| GLOB_PATTERN_CHARS.contains(&character))
-}
-
-fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, CliError> {
-    use std::path::Component;
-
-    if inputs.is_empty() {
-        return Err(CliError::Validation("Missing input file path.".to_string()));
-    }
-
-    // Start with the parent of the first path as our candidate directory, stripping leading `./`
-    let mut common = match inputs[0].parent() {
-        Some(p) => p
-            .components()
-            .filter(|c| !matches!(c, Component::CurDir))
-            .collect::<PathBuf>(),
-        None => {
-            return Err(CliError::Validation(
-                "Input path has no parent directory.".to_string(),
-            ));
-        }
-    };
-
-    // Compare with subsequent paths' parent directories
-    for path in &inputs[1..] {
-        let parent = match path.parent() {
-            Some(p) => p,
-            None => {
-                return Err(CliError::Validation(
-                    "Input path has no parent directory.".to_string(),
-                ));
-            }
-        };
-
-        let mut new_common = PathBuf::new();
-        let mut common_comps = common.components();
-        // Strip leading `./` from the compared parent path components
-        let mut parent_comps = parent
-            .components()
-            .filter(|c| !matches!(c, Component::CurDir));
-
-        while let (Some(c1), Some(c2)) = (common_comps.next(), parent_comps.next()) {
-            if c1 == c2 {
-                new_common.push(c1);
-            } else {
-                break;
-            }
-        }
-        common = new_common;
-    }
-
-    Ok(common)
 }
 
 async fn run_batch_transcribe_plans(plans: Vec<BatchTranscribePlan>, jobs: usize) -> CliResult<()> {
@@ -1007,27 +863,6 @@ fn ensure_output_parent(path: &Path) -> CliResult<()> {
     Ok(())
 }
 
-fn resolve_export_format(
-    format: Option<&str>,
-    output: Option<&Path>,
-) -> Result<ExportFormat, String> {
-    if let Some(value) = format {
-        return ExportFormat::parse(value);
-    }
-
-    match output {
-        Some(path) => ExportFormat::from_output_path(path),
-        None => Ok(ExportFormat::Json),
-    }
-}
-
-fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
-    match output {
-        Some(path) => OutputTarget::File(path),
-        None => OutputTarget::Stdout,
-    }
-}
-
 fn ensure_input_file_exists(input: &Path) -> CliResult<()> {
     if input.is_file() {
         Ok(())
@@ -1046,123 +881,6 @@ fn export_format_name(format: ExportFormat) -> &'static str {
         ExportFormat::Srt => "srt",
         ExportFormat::Vtt => "vtt",
         ExportFormat::Md => "md",
-    }
-}
-
-fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, CliError> {
-    if !input_dir.is_dir() {
-        return Err(CliError::Validation(format!(
-            "--input-dir must be an existing directory: {}",
-            input_dir.display()
-        )));
-    }
-
-    let walker = walkdir::WalkDir::new(input_dir)
-        .min_depth(1)
-        .max_depth(if recursive { usize::MAX } else { 1 });
-    let mut files = Vec::new();
-
-    for entry in walker {
-        let entry = entry.map_err(|error| {
-            CliError::Io(format!("Failed to read {}: {error}", input_dir.display()))
-        })?;
-        if entry.file_type().is_file() && is_supported_batch_media_path(entry.path()) {
-            files.push(entry.path().to_path_buf());
-        }
-    }
-
-    files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
-    Ok(files)
-}
-
-fn is_supported_batch_media_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| {
-            let normalized = extension.trim_start_matches('.').to_ascii_lowercase();
-            SUPPORTED_BATCH_MEDIA_EXTENSIONS.contains(&normalized.as_str())
-        })
-        .unwrap_or(false)
-}
-
-fn plan_batch_output_files(
-    inputs: &[PathBuf],
-    input_dir: &Path,
-    output_dir: &Path,
-    format: ExportFormat,
-    preserve_relative_paths: bool,
-    force: bool,
-) -> Result<Vec<BatchOutputPlan>, CliError> {
-    let extension = export_format_name(format);
-    let mut seen_outputs = HashSet::new();
-    let mut plans = Vec::with_capacity(inputs.len());
-
-    for input_path in inputs {
-        let relative_output =
-            batch_relative_output_path(input_path, input_dir, extension, preserve_relative_paths)
-                .map_err(CliError::Validation)?;
-        let output_path = output_dir.join(relative_output);
-        let output_key = output_path.to_string_lossy().to_ascii_lowercase();
-        if !seen_outputs.insert(output_key) {
-            return Err(CliError::Io(format!(
-                "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
-                output_path.display()
-            )));
-        }
-        if !force && output_path.exists() {
-            return Err(CliError::Io(format!(
-                "Output file already exists: {}. Use --force to overwrite.",
-                output_path.display()
-            )));
-        }
-
-        plans.push(BatchOutputPlan {
-            input_path: input_path.clone(),
-            output_path,
-        });
-    }
-
-    Ok(plans)
-}
-
-fn batch_relative_output_path(
-    input_path: &Path,
-    input_dir: &Path,
-    extension: &str,
-    preserve_relative_paths: bool,
-) -> Result<PathBuf, String> {
-    if preserve_relative_paths {
-        let relative = input_path.strip_prefix(input_dir).map_err(|_| {
-            format!(
-                "Input file {} is not inside --input-dir {}.",
-                input_path.display(),
-                input_dir.display()
-            )
-        })?;
-        let mut output = relative.to_path_buf();
-        output.set_extension(extension);
-        return Ok(output);
-    }
-
-    let stem = input_path.file_stem().ok_or_else(|| {
-        format!(
-            "Unable to derive output file name from {}.",
-            input_path.display()
-        )
-    })?;
-    let mut output = PathBuf::from(stem);
-    output.set_extension(extension);
-    Ok(output)
-}
-
-fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, CliError> {
-    let jobs = value.unwrap_or(DEFAULT_BATCH_JOBS);
-    if jobs == 0 {
-        Err(CliError::Validation(
-            "--jobs must be greater than 0.".to_string(),
-        ))
-    } else {
-        Ok(jobs)
     }
 }
 
@@ -1234,30 +952,13 @@ fn optional_installed_companion(
         .transpose()
 }
 
-/// File-backed CLI configuration loaded from TOML.
-/// Loads a TOML configuration file for the CLI.
-pub fn load_config_file(
-    path: &Path,
-) -> Result<crate::cli::config::TranscribeConfigSection, CliError> {
-    let contents = fs::read_to_string(path).map_err(|error| {
-        CliError::Io(format!(
-            "Failed to read config file {}: {error}",
-            path.display()
-        ))
-    })?;
-    let unified: crate::cli::config::UnifiedConfigFile =
-        toml::from_str(&contents).map_err(|error| {
-            CliError::Validation(format!(
-                "Failed to parse config file {}: {error}",
-                path.display()
-            ))
-        })?;
-    Ok(unified.into_transcribe_config())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sona_core::transcribe_runtime::{
+        load_transcribe_config_file, plan_batch_output_files, resolve_batch_jobs,
+        resolve_export_format, resolve_output_target,
+    };
 
     #[test]
     fn test_batch_failure_differentiation() {
@@ -1365,7 +1066,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = load_config_file(&path).unwrap();
+        let config = load_transcribe_config_file(&path).unwrap();
         assert_eq!(config.model_id.as_deref(), Some("silero-vad"));
         assert_eq!(config.threads, Some(3));
         assert_eq!(config.enable_itn, Some(true));
@@ -1508,9 +1209,11 @@ mod tests {
         cli.models_dir = Some(models_dir);
         cli.vad_model_id = Some("silero-vad".to_string());
 
-        let resolved =
-            resolve_test_transcribe_options(cli, Some(load_config_file(&config_path).unwrap()))
-                .unwrap();
+        let resolved = resolve_test_transcribe_options(
+            cli,
+            Some(load_transcribe_config_file(&config_path).unwrap()),
+        )
+        .unwrap();
 
         assert_eq!(resolved.request.gpu_acceleration.as_deref(), Some("cpu"));
     }
@@ -1611,45 +1314,6 @@ mod tests {
 
         let resolved = resolve_test_transcribe_options(cli, None).unwrap();
         assert_eq!(resolved.export_format, ExportFormat::Json);
-    }
-
-    #[test]
-    fn batch_input_collection_defaults_to_top_level_supported_media_files() {
-        let dir = tempdir().unwrap();
-        fs::write(dir.path().join("meeting.wav"), "").unwrap();
-        fs::write(dir.path().join("clip.MP4"), "").unwrap();
-        fs::write(dir.path().join("notes.txt"), "").unwrap();
-        fs::create_dir_all(dir.path().join("nested")).unwrap();
-        fs::write(dir.path().join("nested").join("hidden.wav"), "").unwrap();
-
-        let inputs = collect_batch_input_files(dir.path(), false).unwrap();
-        let names = inputs
-            .iter()
-            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
-            .collect::<Vec<_>>();
-
-        assert_eq!(names, vec!["clip.MP4", "meeting.wav"]);
-    }
-
-    #[test]
-    fn batch_input_collection_can_recurse_supported_media_files() {
-        let dir = tempdir().unwrap();
-        fs::write(dir.path().join("meeting.wav"), "").unwrap();
-        fs::create_dir_all(dir.path().join("nested")).unwrap();
-        fs::write(dir.path().join("nested").join("call.mp3"), "").unwrap();
-
-        let inputs = collect_batch_input_files(dir.path(), true).unwrap();
-        let names = inputs
-            .iter()
-            .map(|path| {
-                path.strip_prefix(dir.path())
-                    .unwrap()
-                    .to_string_lossy()
-                    .replace('\\', "/")
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(names, vec!["meeting.wav", "nested/call.mp3"]);
     }
 
     #[test]
@@ -1764,43 +1428,10 @@ mod tests {
     }
 
     #[test]
-    fn glob_input_expansion_errors_when_pattern_matches_nothing() {
-        let dir = tempdir().unwrap();
-        let pattern = dir.path().join("*.wav");
-
-        let error = expand_input_patterns(&[pattern]).unwrap_err();
-
-        assert!(
-            error
-                .to_string()
-                .contains("No input files matched glob pattern")
-        );
-    }
-
-    #[test]
-    fn glob_input_expansion_sorts_matches() {
-        let dir = tempdir().unwrap();
-        let first = dir.path().join("a.wav");
-        let second = dir.path().join("b.wav");
-        fs::write(&second, "").unwrap();
-        fs::write(&first, "").unwrap();
-        let pattern = dir.path().join("*.wav");
-
-        let inputs = expand_input_patterns(&[pattern]).unwrap();
-
-        assert_eq!(inputs, vec![first, second]);
-    }
-
-    #[test]
     fn batch_jobs_default_to_one_and_must_be_positive() {
         assert_eq!(resolve_batch_jobs(None).unwrap(), 1);
         assert_eq!(resolve_batch_jobs(Some(2)).unwrap(), 2);
-        assert!(
-            resolve_batch_jobs(Some(0))
-                .unwrap_err()
-                .to_string()
-                .contains("--jobs")
-        );
+        assert!(resolve_batch_jobs(Some(0)).unwrap_err().contains("--jobs"));
     }
 
     #[test]
@@ -1912,50 +1543,5 @@ mod tests {
             Some("\r[2/3] demo.wav: 100%".to_string())
         );
         assert_eq!(reporter.finish(), Some("\n".to_string()));
-    }
-
-    #[test]
-    fn test_common_input_parent_empty() {
-        let inputs: Vec<PathBuf> = vec![];
-        let err = common_input_parent(&inputs).unwrap_err();
-        assert!(err.to_string().contains("Missing input file path"));
-    }
-
-    #[test]
-    fn test_common_input_parent_single() {
-        let inputs = vec![PathBuf::from("a/file1.wav")];
-        let parent = common_input_parent(&inputs).unwrap();
-        assert_eq!(parent, PathBuf::from("a"));
-    }
-
-    #[test]
-    fn test_common_input_parent_multiple_same_dir() {
-        let inputs = vec![PathBuf::from("a/file1.wav"), PathBuf::from("a/file2.wav")];
-        let parent = common_input_parent(&inputs).unwrap();
-        assert_eq!(parent, PathBuf::from("a"));
-    }
-
-    #[test]
-    fn test_common_input_parent_multiple_nested_dir() {
-        let inputs = vec![
-            PathBuf::from("a/b/file1.wav"),
-            PathBuf::from("a/c/file2.wav"),
-        ];
-        let parent = common_input_parent(&inputs).unwrap();
-        assert_eq!(parent, PathBuf::from("a"));
-    }
-
-    #[test]
-    fn test_common_input_parent_no_common_dir() {
-        let inputs = vec![PathBuf::from("a/file1.wav"), PathBuf::from("b/file2.wav")];
-        let parent = common_input_parent(&inputs).unwrap();
-        assert_eq!(parent, PathBuf::from(""));
-    }
-
-    #[test]
-    fn test_common_input_parent_mixed_relative_prefix() {
-        let inputs = vec![PathBuf::from("./a/file1.wav"), PathBuf::from("a/file2.wav")];
-        let parent = common_input_parent(&inputs).unwrap();
-        assert_eq!(parent, PathBuf::from("a"));
     }
 }

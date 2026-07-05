@@ -23,4 +23,5 @@ pub mod speaker_correction;
 pub mod speaker_review;
 pub mod task_ledger;
 pub mod text_alignment;
+pub mod transcribe_runtime;
 pub mod transcript;

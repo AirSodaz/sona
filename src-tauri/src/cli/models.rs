@@ -1,10 +1,11 @@
-use crate::cli::transcribe::{OutputTarget, write_output};
+use crate::cli::transcribe::write_output;
 use crate::cli::{CliError, CliResult};
 use crate::core::downloads::sha256_file;
 use crate::core::preset_models::{
     PresetModel, find_preset_model, is_preset_model_installed_at, preset_models,
 };
 use clap::{Args, Subcommand};
+use sona_core::transcribe_runtime::OutputTarget;
 
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
