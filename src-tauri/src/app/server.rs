@@ -1852,13 +1852,13 @@ mod tests {
         db.with_write_connection(|conn| {
             conn.execute(
                 "INSERT INTO app_config (
-                    id, config, migrated_version, http_server_enabled, http_server_host,
+                    id, config, config_version, updated_at, http_server_enabled, http_server_host,
                     http_server_port, http_server_api_key, http_server_max_concurrent,
                     http_server_max_queue_size, http_server_max_upload_size_mb,
                     http_server_job_ttl_minutes, http_server_max_streaming,
                     http_server_ip_whitelist, gpu_acceleration
                 )
-                VALUES (1, '{}', 0, 1, '0.0.0.0', 16666, 'column-secret', 5, 44, 256, 9, 7, '10.0.0.0/8', 'cuda')",
+                VALUES (1, '{}', 7, 0, 1, '0.0.0.0', 16666, 'column-secret', 5, 44, 256, 9, 7, '10.0.0.0/8', 'cuda')",
                 [],
             )?;
             Ok(())

@@ -148,7 +148,8 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
         CREATE TABLE app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             config TEXT NOT NULL DEFAULT '{}',
-            migrated_version INTEGER NOT NULL DEFAULT 0,
+            config_version INTEGER NOT NULL DEFAULT 7,
+            updated_at INTEGER NOT NULL DEFAULT 0,
             http_server_enabled INTEGER NOT NULL DEFAULT 0,
             http_server_host TEXT NOT NULL DEFAULT '127.0.0.1',
             http_server_port INTEGER NOT NULL DEFAULT 14200,
@@ -160,6 +161,70 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
             http_server_max_streaming INTEGER NOT NULL DEFAULT 2,
             http_server_ip_whitelist TEXT NOT NULL DEFAULT 'localhost',
             gpu_acceleration TEXT NOT NULL DEFAULT 'auto'
+        );
+
+        CREATE TABLE summary_templates (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            instructions TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE polish_presets (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            context TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE vocabulary_sets (
+            id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('text_replacement', 'hotword', 'polish_keyword')),
+            name TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            ignore_case INTEGER NOT NULL DEFAULT 0,
+            keywords TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (kind, id)
+        );
+
+        CREATE TABLE vocabulary_rules (
+            id TEXT NOT NULL,
+            set_kind TEXT NOT NULL,
+            set_id TEXT NOT NULL,
+            from_text TEXT NOT NULL DEFAULT '',
+            to_text TEXT NOT NULL DEFAULT '',
+            text TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (set_kind, set_id, id),
+            FOREIGN KEY (set_kind, set_id)
+                REFERENCES vocabulary_sets(kind, id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE speaker_profiles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE speaker_profile_samples (
+            id TEXT NOT NULL,
+            profile_id TEXT NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+            file_path TEXT NOT NULL DEFAULT '',
+            source_name TEXT NOT NULL DEFAULT '',
+            duration_seconds REAL NOT NULL DEFAULT 0.0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (profile_id, id)
         );
 
         -- Automation Rules (replaces automation/rules.json)
@@ -290,6 +355,52 @@ mod tests {
         rows.collect::<Result<Vec<_>, _>>().unwrap()
     }
 
+    fn has_composite_primary_key(
+        conn: &rusqlite::Connection,
+        table: &str,
+        columns: &[&str],
+    ) -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
+            })
+            .unwrap();
+        let mut keyed_columns = rows
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .filter(|(_, pk_order)| *pk_order > 0)
+            .collect::<Vec<_>>();
+        keyed_columns.sort_by_key(|(_, pk_order)| *pk_order);
+        keyed_columns
+            .into_iter()
+            .map(|(column, _)| column)
+            .collect::<Vec<_>>()
+            == columns
+    }
+
+    fn foreign_key_cascades_to(
+        conn: &rusqlite::Connection,
+        table: &str,
+        referenced_table: &str,
+    ) -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA foreign_key_list({table})"))
+            .unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(2)?, row.get::<_, String>(6)?))
+            })
+            .unwrap();
+        rows.collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .any(|(table, on_delete)| table == referenced_table && on_delete == "CASCADE")
+    }
+
     #[test]
     fn test_migrations_are_idempotent() {
         let db = Database::open_in_memory().unwrap();
@@ -346,6 +457,12 @@ mod tests {
             "project_default_links",
             "app_settings",
             "app_config",
+            "summary_templates",
+            "polish_presets",
+            "vocabulary_sets",
+            "vocabulary_rules",
+            "speaker_profiles",
+            "speaker_profile_samples",
             "automation_rules",
             "automation_processed",
             "task_ledger",
@@ -491,7 +608,8 @@ mod tests {
                 vec![
                     "id",
                     "config",
-                    "migrated_version",
+                    "config_version",
+                    "updated_at",
                     "http_server_enabled",
                     "http_server_host",
                     "http_server_port",
@@ -505,6 +623,118 @@ mod tests {
                     "gpu_acceleration",
                 ]
             );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_app_config_library_tables_have_structured_shape() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            assert_eq!(
+                table_columns(conn, "summary_templates"),
+                vec![
+                    "id",
+                    "name",
+                    "instructions",
+                    "sort_order",
+                    "created_at",
+                    "updated_at",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "polish_presets"),
+                vec![
+                    "id",
+                    "name",
+                    "context",
+                    "sort_order",
+                    "created_at",
+                    "updated_at",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "vocabulary_sets"),
+                vec![
+                    "id",
+                    "kind",
+                    "name",
+                    "enabled",
+                    "ignore_case",
+                    "keywords",
+                    "sort_order",
+                    "created_at",
+                    "updated_at",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "vocabulary_rules"),
+                vec![
+                    "id",
+                    "set_kind",
+                    "set_id",
+                    "from_text",
+                    "to_text",
+                    "text",
+                    "sort_order",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "speaker_profiles"),
+                vec![
+                    "id",
+                    "name",
+                    "enabled",
+                    "sort_order",
+                    "created_at",
+                    "updated_at",
+                ]
+            );
+            assert_eq!(
+                table_columns(conn, "speaker_profile_samples"),
+                vec![
+                    "id",
+                    "profile_id",
+                    "file_path",
+                    "source_name",
+                    "duration_seconds",
+                    "sort_order",
+                ]
+            );
+
+            assert!(has_composite_primary_key(
+                conn,
+                "vocabulary_sets",
+                &["kind", "id"]
+            ));
+            assert!(has_composite_primary_key(
+                conn,
+                "vocabulary_rules",
+                &["set_kind", "set_id", "id"]
+            ));
+            assert!(has_composite_primary_key(
+                conn,
+                "speaker_profile_samples",
+                &["profile_id", "id"]
+            ));
+
+            assert!(foreign_key_cascades_to(
+                conn,
+                "vocabulary_rules",
+                "vocabulary_sets"
+            ));
+            assert!(foreign_key_cascades_to(
+                conn,
+                "speaker_profile_samples",
+                "speaker_profiles"
+            ));
+
+            let invalid_kind = conn.execute(
+                "INSERT INTO vocabulary_sets (kind, id) VALUES ('invalid', 'bad')",
+                [],
+            );
+            assert!(invalid_kind.is_err());
             Ok(())
         })
         .unwrap();
