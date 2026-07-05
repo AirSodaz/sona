@@ -102,3 +102,18 @@ test('verify-cli-bundle requires the installer, CLI sidecar, and shared sherpa l
   assert.match(result.stdout, /Verified packaged CLI sidecar/);
   assert.match(result.stdout, /Verified shared libraries/);
 });
+
+test('desktop tauri crate relies on the standalone sona-cli sidecar instead of an embedded cli module', () => {
+  const libRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const cargoToml = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(libRs, /\bmod cli;/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'cli')), false);
+  assert.doesNotMatch(cargoToml, /^clap\s*=/mu);
+  assert.doesNotMatch(cargoToml, /^clap_complete\s*=/mu);
+  assert.doesNotMatch(prWorkflow, /cli::transcribe::tests/u);
+});

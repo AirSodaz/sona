@@ -15,13 +15,8 @@ Navigate to **Settings -> API Server** (or **API 服务** in Chinese) and config
 - **Port**: TCP port for the server (default: `14200`).
 - **API Key**: Optional Bearer token to protect endpoints. Click **Generate** to create a secure key, and **Copy** to write it to your clipboard.
 
-### 2. Headless CLI Mode
-You can also launch Sona in pure headless CLI server mode from the terminal:
-```bash
-sona serve --host 127.0.0.1 --port 14200 --api-key your_secure_key --ip-whitelist localhost --max-streaming 2 --gpu-acceleration auto
-```
-
-GPU acceleration is configured as a server-level default through GUI model settings or `sona serve --gpu-acceleration`. On Windows, `auto` tries CUDA first, then DirectML when the bundled runtime supports it, then CPU. Batch and streaming API requests do not accept a per-request GPU override.
+### 2. Standalone CLI Migration Status
+The desktop app still exposes this HTTP API server, but the standalone `sona-cli` server command is not part of the currently shipped CLI surface yet. For now, start the API server from the GUI client when you need headless HTTP access.
 
 ---
 

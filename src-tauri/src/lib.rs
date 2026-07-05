@@ -4,8 +4,6 @@ pub mod core;
 pub mod integrations;
 pub mod repositories;
 
-mod cli;
-
 #[cfg(all(test, target_os = "windows", target_env = "msvc"))]
 #[link(name = "windows-test-manifest")]
 unsafe extern "C" {}

@@ -24,12 +24,13 @@ fn fix_console(show_new_console: bool) {
 
         let mut has_console = false;
 
-        // Try to attach to parent console first (for CLI usage in terminal)
+        // Try to attach to parent console first when the desktop binary is
+        // launched from a terminal and we want logs to remain visible there.
         if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
             has_console = true;
         } else if show_new_console {
-            // Allocate a console to natively initialize stdout/stderr handles in the C runtime
-            // only if we explicitly want to show a console (CLI mode launched without parent console)
+            // Allocate a console to initialize stdout/stderr handles in the C runtime
+            // only if we explicitly want to show one without a parent console.
             if AllocConsole() != 0 {
                 has_console = true;
             }
@@ -186,8 +187,8 @@ async fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("Tauri startup failure: {err}");
-            // CLI mode returns above, so this branch is always GUI mode;
-            // show the dialog directly.
+            // The early test exit above is the only non-GUI path here, so show
+            // the startup error dialog directly for real desktop launches.
             show_error_dialog(&err.to_string());
             ExitCode::FAILURE
         }

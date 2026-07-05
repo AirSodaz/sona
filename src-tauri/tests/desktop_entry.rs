@@ -7,7 +7,7 @@ fn desktop_command() -> Command {
 }
 
 #[test]
-fn desktop_binary_ignores_legacy_cli_force_flag() {
+fn desktop_binary_ignores_standalone_cli_force_flag() {
     let output = desktop_command()
         .env("SONA_FORCE_CLI", "1")
         .args(["transcribe", "--help"])
@@ -22,7 +22,7 @@ fn desktop_binary_ignores_legacy_cli_force_flag() {
 }
 
 #[test]
-fn desktop_binary_ignores_legacy_cli_subcommands() {
+fn desktop_binary_ignores_standalone_cli_subcommands() {
     let output = desktop_command().args(["models", "list"]).output().unwrap();
 
     assert!(output.status.success());

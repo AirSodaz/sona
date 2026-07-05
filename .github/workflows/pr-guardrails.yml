@@ -108,8 +108,5 @@ jobs:
       - name: Run preset model tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::preset_models::tests
 
-      - name: Run transcribe option tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib cli::transcribe::tests
-
       - name: Run API server tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib app::server::tests
