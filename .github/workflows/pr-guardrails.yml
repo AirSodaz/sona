@@ -68,8 +68,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            src-tauri -> target
+          workspaces: ". -> target"
           cache-on-failure: true
 
       - name: Enable Corepack

@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
-const srcTauriDir = path.resolve(repoRoot, 'src-tauri');
 const args = process.argv.slice(2);
 
 function main() {
@@ -59,8 +58,8 @@ function readFlagValue(commandArgs, flagName) {
 
 function resolveBundleRoots(target) {
   const candidateDirectories = [
-    path.resolve(srcTauriDir, 'target', 'release', 'bundle'),
-    path.resolve(srcTauriDir, 'target', target, 'release', 'bundle'),
+    path.resolve(repoRoot, 'target', 'release', 'bundle'),
+    path.resolve(repoRoot, 'target', target, 'release', 'bundle'),
   ];
 
   return [...new Set(candidateDirectories)].filter((directoryPath) =>
