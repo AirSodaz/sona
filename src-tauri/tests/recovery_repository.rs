@@ -1,18 +1,11 @@
-pub mod core {
-    #[path = "../../src/core/file_utils.rs"]
-    pub mod file_utils;
-}
+#[path = "../src/repositories/recovery.rs"]
+mod recovery_adapter;
+#[path = "../src/repositories/storage.rs"]
+pub mod storage;
 
-#[path = "../src/core/recovery/mod.rs"]
-mod recovery;
-
-pub mod repositories {
-    #[path = "../../src/repositories/storage.rs"]
-    pub mod storage;
-}
-
-use recovery::repository::RecoveryRepository;
+use recovery_adapter::FsRecoveryRepository;
 use serde_json::{Value, json};
+use sona_core::recovery::repository::RecoveryRepository;
 use std::fs::{self, File};
 use std::path::Path;
 use tempfile::tempdir;
@@ -28,7 +21,7 @@ fn read_recovery_json(root: &Path) -> Value {
 #[test]
 fn load_snapshot_creates_compatible_queue_recovery_file() {
     let dir = tempdir().unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
 
     let snapshot = repository.load_snapshot().unwrap();
 
@@ -50,7 +43,7 @@ fn persist_queue_snapshot_resolved_ids_clear_recovery_when_queue_is_empty() {
     let dir = tempdir().unwrap();
     let source = dir.path().join("discarded.wav");
     File::create(&source).unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
 
     repository
         .save_snapshot(vec![json!({
@@ -144,7 +137,7 @@ fn load_snapshot_recomputes_source_file_status_and_resume_guard() {
         .unwrap(),
     )
     .unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
 
     let snapshot = repository.load_snapshot().unwrap();
 
@@ -206,7 +199,7 @@ fn load_snapshot_keeps_valid_items_when_one_recovery_item_is_unreadable() {
         .unwrap(),
     )
     .unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
 
     let snapshot = repository.load_snapshot().unwrap();
 
@@ -264,7 +257,7 @@ fn load_snapshot_keeps_valid_segments_when_one_segment_is_unreadable() {
         .unwrap(),
     )
     .unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
 
     let snapshot = repository.load_snapshot().unwrap();
 
@@ -279,7 +272,7 @@ fn save_snapshot_filters_non_pending_items_and_defaults_legacy_fields() {
     let dir = tempdir().unwrap();
     let source_file = dir.path().join("automation.wav");
     File::create(&source_file).unwrap();
-    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+    let repository = FsRecoveryRepository::new(dir.path().to_path_buf());
     let items = vec![
         json!({
             "id": "automation-1",

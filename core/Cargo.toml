@@ -18,6 +18,16 @@ serde_with = { version = "3", features = ["macros"] }
 specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
 strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0.18"
+uuid = { version = "1", features = ["v4"] }
+futures-util = "0.3"
+hex = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["stream"] }
+sha2 = "0.11"
+tokio = { version = "1", features = ["fs", "io-util", "sync"] }
+fs3 = "0.5"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
+axum = { version = "0.8", features = ["macros"] }
+reqwest = { version = "0.13", features = ["rustls"] }
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "sync"] }

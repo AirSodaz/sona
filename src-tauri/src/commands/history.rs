@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::core::database::{Database, DatabaseError};
-use crate::core::history_store::HistoryStore;
+use crate::core::database::Database;
+use crate::core::history_store::{HistoryStore, HistoryStoreError};
 use crate::core::paths::{PathKind, PathProvider};
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::SqliteHistoryStore;
@@ -31,7 +31,7 @@ async fn run_history_file_task_inner<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
@@ -45,7 +45,7 @@ async fn run_history_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, 
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
     let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
@@ -60,7 +60,7 @@ async fn run_history_file_task<R, T, F>(
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
     let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());

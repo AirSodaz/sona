@@ -4,8 +4,8 @@ use std::sync::Arc;
 use serde_json::{Value, to_value};
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::database::{Database, DatabaseError};
-use crate::core::history_store::HistoryStore;
+use crate::core::database::Database;
+use crate::core::history_store::{HistoryStore, HistoryStoreError};
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::sqlite_store::SqliteHistoryStore;
 use crate::repositories::history::{
@@ -19,7 +19,7 @@ pub(crate) async fn run_llm_db_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
         task(SqliteHistoryStore::new(app_local_data_dir, db)).map_err(|e| e.to_string())
@@ -35,7 +35,7 @@ pub(crate) async fn run_llm_db_task_with_app<R, T, F>(
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, DatabaseError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
     let app_local_data_dir = (app as &dyn crate::core::paths::PathProvider)
         .resolve_path(crate::core::paths::PathKind::AppLocalData)?;
@@ -48,7 +48,7 @@ pub(crate) fn create_llm_transcript_snapshot_record(
     history_id: &str,
     reason: TranscriptSnapshotReason,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<TranscriptSnapshotMetadata>, DatabaseError> {
+) -> Result<Option<TranscriptSnapshotMetadata>, HistoryStoreError> {
     if history_id.trim().is_empty() || history_id == "current" || segments.is_empty() {
         return Ok(None);
     }
@@ -62,8 +62,10 @@ pub(crate) fn create_llm_transcript_snapshot_record(
         return Ok(None);
     }
 
+    let segments_value =
+        to_value(segments).map_err(|e| HistoryStoreError::Internal(e.to_string()))?;
     repository
-        .create_transcript_snapshot(history_id, reason, to_value(segments)?)
+        .create_transcript_snapshot(history_id, reason, segments_value)
         .map(Some)
 }
 
@@ -71,13 +73,15 @@ pub(crate) fn update_llm_transcript_segments_record(
     repository: &impl HistoryStore,
     history_id: &str,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<HistoryItemRecord>, DatabaseError> {
+) -> Result<Option<HistoryItemRecord>, HistoryStoreError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(None);
     }
 
+    let segments_value =
+        to_value(segments).map_err(|e| HistoryStoreError::Internal(e.to_string()))?;
     repository
-        .update_transcript(history_id, to_value(segments)?)
+        .update_transcript(history_id, segments_value)
         .map(Some)
 }
 
@@ -85,7 +89,7 @@ pub(crate) fn save_llm_summary_payload(
     repository: &impl HistoryStore,
     history_id: &str,
     summary_payload: Value,
-) -> Result<(), DatabaseError> {
+) -> Result<(), HistoryStoreError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(());
     }

@@ -34,8 +34,9 @@ fn emit_task_ledger_snapshot<R: Runtime>(
 }
 
 // recovery helper functions (copied from core/recovery/commands.rs)
-use crate::core::recovery::repository::RecoveryRepository;
-use crate::core::recovery::types::RecoverySnapshot;
+use crate::repositories::recovery::FsRecoveryRepository;
+use sona_core::recovery::repository::RecoveryRepository;
+use sona_core::recovery::types::RecoverySnapshot;
 
 async fn run_recovery_repository_task<T, F>(
     provider: &dyn PathProvider,
@@ -43,12 +44,14 @@ async fn run_recovery_repository_task<T, F>(
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(RecoveryRepository) -> Result<T, String> + Send + 'static,
+    F: FnOnce(FsRecoveryRepository) -> Result<T, String> + Send + 'static,
 {
     let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
-    tauri::async_runtime::spawn_blocking(move || task(RecoveryRepository::new(app_local_data_dir)))
-        .await
-        .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        task(FsRecoveryRepository::new(app_local_data_dir))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 // Command wrappers & implementations

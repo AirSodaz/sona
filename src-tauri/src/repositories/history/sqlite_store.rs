@@ -4,7 +4,7 @@ use super::fs_utils::{
 use super::transcript_payload::normalize_history_transcript_segments;
 use crate::core::database::DatabaseError;
 use crate::core::database::ports::Database as DatabasePort;
-use crate::core::history_store::HistoryStore;
+use crate::core::history_store::{HistoryStore, HistoryStoreError};
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
@@ -410,7 +410,8 @@ where
         request: HistoryAudioCleanupRequest,
         apply: bool,
     ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
-        self.ensure_ready()?;
+        self.ensure_ready()
+            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
 
         let Some(cutoff_millis) = Self::audio_cleanup_cutoff(request.retention_days) else {
             return Ok(HistoryAudioCleanupReport::default());
@@ -710,14 +711,14 @@ impl<D> HistoryStore for SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
-    fn ensure_ready(&self) -> Result<(), DatabaseError> {
+    fn ensure_ready(&self) -> Result<(), HistoryStoreError> {
         fs::create_dir_all(self.history_dir())
             .map_err(|e| DatabaseError::Internal(e.to_string()))?;
-        self.cleanup_stale_staged_audio_files()
+        Ok(self.cleanup_stale_staged_audio_files()?)
     }
 
-    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
+    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        Ok(self.get_db()?.with_connection(|conn| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
                 "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
@@ -728,14 +729,14 @@ where
                 items.push(row?);
             }
             Ok(items)
-        })
+        })?)
     }
 
     fn list_items_with_reconciled_live_drafts(
         &self,
-    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
         self.reconcile_live_drafts()?;
-        self.get_db()?.with_connection(|conn| {
+        Ok(self.get_db()?.with_connection(|conn| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
                 "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
@@ -746,14 +747,14 @@ where
                 items.push(row?);
             }
             Ok(items)
-        })
+        })?)
     }
 
     fn list_items_paginated(
         &self,
         opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        Ok(self.get_db()?.with_connection(|conn| {
             let limit = opts.limit.map(|l| l as i64).unwrap_or(-1);
             let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
             let columns = history_select_columns(None, &[]);
@@ -766,13 +767,13 @@ where
                 items.push(row?);
             }
             Ok(items)
-        })
+        })?)
     }
 
     fn list_items_with_reconciled_live_drafts_paginated(
         &self,
         opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, DatabaseError> {
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
         self.reconcile_live_drafts()?;
         self.list_items_paginated(opts)
     }
@@ -780,11 +781,11 @@ where
     fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
-    ) -> Result<HistoryWorkspaceQueryResult, DatabaseError> {
+    ) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
         self.ensure_ready()?;
         self.reconcile_live_drafts()?;
 
-        self.get_db()?.with_connection(|conn| {
+        Ok(self.get_db()?.with_connection(|conn| {
             // 1. Compute item counts via aggregate query (index-only, lightweight)
             let item_counts = {
                 let mut stmt = conn.prepare_cached(
@@ -918,13 +919,13 @@ where
             }
 
             Ok(result)
-        })
+        })?)
     }
 
     fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
-    ) -> Result<LiveRecordingDraftResult, DatabaseError> {
+    ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
         self.ensure_ready()?;
         let item = super::item_factory::create_live_draft_item(request)
             .map_err(DatabaseError::Internal)?;
@@ -949,12 +950,12 @@ where
         history_id: &str,
         segments: Value,
         duration: f64,
-    ) -> Result<HistoryItemRecord, DatabaseError> {
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        self.get_db()?.with_rw_transaction(|tx| {
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
             let rows_affected = tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2, duration = ?3, status = 'complete', draft_source = NULL
@@ -983,13 +984,13 @@ where
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
-        })
+        })?)
     }
 
     fn save_recording(
         &self,
         request: HistorySaveRecordingRequest,
-    ) -> Result<HistoryItemRecord, DatabaseError> {
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
         self.ensure_ready()?;
         let HistorySaveRecordingRequest {
             segments,
@@ -1018,7 +1019,7 @@ where
             (None, Some(native_path)) => {
                 let source_path = PathBuf::from(&native_path);
                 if !source_path.is_file() {
-                    return Err(DatabaseError::Internal(format!(
+                    return Err(HistoryStoreError::Internal(format!(
                         "Native recording source file does not exist: {}",
                         source_path.to_string_lossy()
                     )));
@@ -1026,7 +1027,7 @@ where
                 self.stage_audio_copy(&source_path, target_path)?
             }
             (None, None) => {
-                return Err(DatabaseError::Internal(
+                return Err(HistoryStoreError::Internal(
                     "History recording save requires audio bytes or a native audio path."
                         .to_string(),
                 ));
@@ -1039,7 +1040,7 @@ where
         // The large write/copy into a staging file has already completed.
         // Keep only SQL plus the same-directory rename in this transaction so
         // the final audio path is visible before the DB row commits.
-        let save_result = self.get_db()?.with_transaction(|tx| {
+        let save_result: Result<(), DatabaseError> = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             staged_audio.promote()?;
             promoted.set(true);
@@ -1052,7 +1053,7 @@ where
             } else {
                 staged_audio.cleanup_staging();
             }
-            return Err(error);
+            return Err(error.into());
         }
 
         Ok(item)
@@ -1061,7 +1062,7 @@ where
     fn save_imported_file(
         &self,
         request: HistorySaveImportedFileRequest,
-    ) -> Result<HistoryItemRecord, DatabaseError> {
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
         self.ensure_ready()?;
         let HistorySaveImportedFileRequest {
             id,
@@ -1088,7 +1089,7 @@ where
 
         let source = PathBuf::from(imported.copy_source_path);
         if !source.is_file() {
-            return Err(DatabaseError::Internal(format!(
+            return Err(HistoryStoreError::Internal(format!(
                 "Imported source file does not exist: {}",
                 source.to_string_lossy()
             )));
@@ -1103,7 +1104,7 @@ where
         // The large write/copy into a staging file has already completed.
         // Keep only SQL plus the same-directory rename in this transaction so
         // the final audio path is visible before the DB row commits.
-        let save_result = self.get_db()?.with_transaction(|tx| {
+        let save_result: Result<(), DatabaseError> = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
             staged_audio.promote()?;
             promoted.set(true);
@@ -1116,13 +1117,13 @@ where
             } else {
                 staged_audio.cleanup_staging();
             }
-            return Err(error);
+            return Err(error.into());
         }
 
         Ok(item)
     }
 
-    fn delete_items(&self, ids: &[String]) -> Result<(), DatabaseError> {
+    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryStoreError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -1164,8 +1165,8 @@ where
     fn load_transcript(
         &self,
         history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, DatabaseError> {
-        self.get_db()?.with_connection(|conn| {
+    ) -> Result<Option<Vec<TranscriptSegment>>, HistoryStoreError> {
+        Ok(self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT t.segments
                  FROM history_items i
@@ -1193,19 +1194,19 @@ where
                     )))
                 }
             }
-        })
+        })?)
     }
 
     fn update_transcript(
         &self,
         history_id: &str,
         segments: Value,
-    ) -> Result<HistoryItemRecord, DatabaseError> {
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
-        self.get_db()?.with_rw_transaction(|tx| {
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
             let rows_affected = tx.execute(
                 "UPDATE history_items
                  SET preview_text = ?1, search_content = ?2
@@ -1233,7 +1234,7 @@ where
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
             Ok(item)
-        })
+        })?)
     }
 
     fn create_transcript_snapshot(
@@ -1241,7 +1242,7 @@ where
         history_id: &str,
         reason: TranscriptSnapshotReason,
         segments: Value,
-    ) -> Result<TranscriptSnapshotMetadata, DatabaseError> {
+    ) -> Result<TranscriptSnapshotMetadata, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
@@ -1266,7 +1267,7 @@ where
 
         let segments_str = serde_json::to_string(&parsed_segments)?;
 
-        self.get_db()?.with_rw_transaction(|tx| {
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
             let rows_affected = tx.execute(
                 "INSERT INTO transcript_snapshots (id, history_id, reason, created_at, segment_count, segments)
                  SELECT ?1, ?2, ?3, ?4, ?5, ?6
@@ -1301,15 +1302,15 @@ where
             )?;
 
             Ok(metadata.clone())
-        })
+        })?)
     }
 
     fn list_transcript_snapshots(
         &self,
         history_id: &str,
-    ) -> Result<Vec<TranscriptSnapshotMetadata>, DatabaseError> {
+    ) -> Result<Vec<TranscriptSnapshotMetadata>, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
-        self.get_db()?.with_connection(|conn| {
+        Ok(self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT id, reason, created_at, segment_count
                  FROM transcript_snapshots
@@ -1344,18 +1345,18 @@ where
                 list.push(r?);
             }
             Ok(list)
-        })
+        })?)
     }
 
     fn load_transcript_snapshot(
         &self,
         history_id: &str,
         snapshot_id: &str,
-    ) -> Result<Option<TranscriptSnapshotRecord>, DatabaseError> {
+    ) -> Result<Option<TranscriptSnapshotRecord>, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         validate_id(snapshot_id, "Snapshot ID").map_err(DatabaseError::Internal)?;
 
-        self.get_db()?.with_connection(|conn| {
+        Ok(self.get_db()?.with_connection(|conn| {
             let mut stmt = conn.prepare_cached(
                 "SELECT reason, created_at, segment_count, segments
                  FROM transcript_snapshots
@@ -1396,15 +1397,15 @@ where
             } else {
                 Ok(None)
             }
-        })
+        })?)
     }
 
-    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), DatabaseError> {
+    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), HistoryStoreError> {
         let updates = updates.as_object().ok_or_else(|| {
             DatabaseError::Internal("History item updates must be an object.".to_string())
         })?;
 
-        self.get_db()?.with_rw_transaction(|tx| {
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
                 &format!("SELECT {columns} FROM history_items WHERE id = ?1")
@@ -1455,46 +1456,46 @@ where
             }
 
             Ok(())
-        })
+        })?)
     }
 
     fn update_project_assignments(
         &self,
         ids: &[String],
         project_id: Option<String>,
-    ) -> Result<(), DatabaseError> {
+    ) -> Result<(), HistoryStoreError> {
         if ids.is_empty() {
             return Ok(());
         }
 
-        self.get_db()?.with_transaction(|tx| {
+        Ok(self.get_db()?.with_transaction(|tx| {
             let mut stmt =
                 tx.prepare_cached("UPDATE history_items SET project_id = ?1 WHERE id = ?2")?;
             for id in ids {
                 stmt.execute(rusqlite::params![project_id, id])?;
             }
             Ok(())
-        })
+        })?)
     }
 
     fn reassign_project(
         &self,
         current_project_id: String,
         next_project_id: Option<String>,
-    ) -> Result<(), DatabaseError> {
-        self.get_db()?.with_write_connection(|conn| {
+    ) -> Result<(), HistoryStoreError> {
+        Ok(self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
                 rusqlite::params![next_project_id, current_project_id],
             )?;
             Ok(())
-        })
+        })?)
     }
 
-    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, DatabaseError> {
+    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        self.get_db()?.with_connection(|conn| {
+        Ok(self.get_db()?.with_connection(|conn| {
             let mut stmt =
                 conn.prepare_cached("SELECT payload FROM history_summaries WHERE history_id = ?1")?;
             let mut rows = stmt.query([history_id])?;
@@ -1505,10 +1506,14 @@ where
             } else {
                 Ok(None)
             }
-        })
+        })?)
     }
 
-    fn save_summary(&self, history_id: &str, summary_payload: Value) -> Result<(), DatabaseError> {
+    fn save_summary(
+        &self,
+        history_id: &str,
+        summary_payload: Value,
+    ) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         let summary_payload = crate::repositories::history::fs_utils::ensure_json_object_value(
@@ -1519,28 +1524,28 @@ where
 
         let payload_str = serde_json::to_string(&summary_payload)?;
 
-        self.get_db()?.with_write_connection(|conn| {
+        Ok(self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "INSERT OR REPLACE INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
                 rusqlite::params![history_id, payload_str],
             )?;
             Ok(())
-        })
+        })?)
     }
 
-    fn delete_summary(&self, history_id: &str) -> Result<(), DatabaseError> {
+    fn delete_summary(&self, history_id: &str) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        self.get_db()?.with_write_connection(|conn| {
+        Ok(self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "DELETE FROM history_summaries WHERE history_id = ?1",
                 [history_id],
             )?;
             Ok(())
-        })
+        })?)
     }
 
-    fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, DatabaseError> {
+    fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         let audio_record: Option<(String, HistoryAudioStatus)> =
@@ -1563,7 +1568,8 @@ where
         let Some((audio_path_str, audio_status)) = audio_record else {
             return Err(DatabaseError::NotFoundError(format!(
                 "History item not found: {history_id}"
-            )));
+            ))
+            .into());
         };
 
         if audio_status == HistoryAudioStatus::Removed {
@@ -1597,26 +1603,26 @@ where
                 }
                 Ok(None)
             }
-            Err(error) => Err(DatabaseError::Internal(error.to_string())),
+            Err(error) => Err(HistoryStoreError::Internal(error.to_string())),
         }
     }
 
     fn preview_audio_cleanup(
         &self,
         request: HistoryAudioCleanupRequest,
-    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
-        self.run_audio_cleanup(request, false)
+    ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
+        Ok(self.run_audio_cleanup(request, false)?)
     }
 
     fn cleanup_audio(
         &self,
         request: HistoryAudioCleanupRequest,
-    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
-        self.run_audio_cleanup(request, true)
+    ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
+        Ok(self.run_audio_cleanup(request, true)?)
     }
 
-    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
+    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
+        Ok(self.get_db()?.with_transaction(|tx| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
                 &format!("SELECT {columns} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
@@ -1765,7 +1771,7 @@ where
                 summary_files,
                 snapshot_files,
             })
-        })
+        })?)
     }
 }
 
@@ -1867,9 +1873,9 @@ mod tests {
         rows.collect::<Result<Vec<_>, _>>().unwrap()
     }
 
-    fn assert_not_found<T>(result: Result<T, DatabaseError>, expected_id: &str) {
+    fn assert_not_found<T>(result: Result<T, HistoryStoreError>, expected_id: &str) {
         match result {
-            Err(DatabaseError::NotFoundError(message)) => {
+            Err(HistoryStoreError::Database(message)) => {
                 assert!(message.contains(expected_id));
             }
             Ok(_) => panic!("expected NotFoundError for missing history item"),
@@ -2264,7 +2270,7 @@ mod tests {
         });
 
         assert!(
-            matches!(result, Err(DatabaseError::Internal(message)) if message.contains("History audio target already exists"))
+            matches!(result, Err(HistoryStoreError::Database(message)) if message.contains("History audio target already exists"))
         );
         assert_not_found(store.load_transcript("promote-fail"), "promote-fail");
         assert_eq!(std::fs::read(&target_path).unwrap(), vec![9, 9, 9]);

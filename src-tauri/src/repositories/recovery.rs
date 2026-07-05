@@ -3,22 +3,22 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::core::file_utils::write_json_pretty_atomic;
-
-use super::normalization::{
+use sona_core::file_utils::write_json_pretty_atomic;
+use sona_core::recovery::normalization::{
     FsSourcePathStatusProvider, empty_snapshot, now_ms,
     recovered_item_from_queue_value_with_source_paths,
     recovered_item_from_saved_value_with_source_paths, snapshot_from_items,
     snapshot_from_value_with_source_paths,
 };
-use super::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
+use sona_core::recovery::repository::RecoveryRepository;
+use sona_core::recovery::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
 
 #[derive(Clone, Debug)]
-pub struct RecoveryRepository {
+pub struct FsRecoveryRepository {
     app_local_data_dir: PathBuf,
 }
 
-impl RecoveryRepository {
+impl FsRecoveryRepository {
     pub fn new(app_local_data_dir: PathBuf) -> Self {
         Self { app_local_data_dir }
     }
@@ -30,8 +30,10 @@ impl RecoveryRepository {
     fn queue_recovery_path(&self) -> PathBuf {
         self.recovery_dir().join(QUEUE_RECOVERY_FILE_NAME)
     }
+}
 
-    pub fn ensure_ready(&self) -> Result<(), String> {
+impl RecoveryRepository for FsRecoveryRepository {
+    fn ensure_ready(&self) -> Result<(), String> {
         fs::create_dir_all(self.recovery_dir()).map_err(|error| error.to_string())?;
         let recovery_path = self.queue_recovery_path();
         if !recovery_path.exists() {
@@ -40,7 +42,7 @@ impl RecoveryRepository {
         Ok(())
     }
 
-    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, String> {
+    fn load_snapshot(&self) -> Result<RecoverySnapshot, String> {
         self.ensure_ready()?;
         let content =
             fs::read_to_string(self.queue_recovery_path()).map_err(|error| error.to_string())?;
@@ -51,7 +53,6 @@ impl RecoveryRepository {
                 return Ok(empty_snapshot());
             }
         };
-
         Ok(snapshot_from_value_with_source_paths(
             value,
             false,
@@ -59,7 +60,7 @@ impl RecoveryRepository {
         ))
     }
 
-    pub fn save_snapshot(&self, items: Vec<Value>) -> Result<RecoverySnapshot, String> {
+    fn save_snapshot(&self, items: Vec<Value>) -> Result<RecoverySnapshot, String> {
         self.ensure_ready()?;
         let now = now_ms();
         let normalized_items = items
@@ -78,7 +79,7 @@ impl RecoveryRepository {
         Ok(snapshot)
     }
 
-    pub fn persist_queue_snapshot_with_resolved_ids(
+    fn persist_queue_snapshot_with_resolved_ids(
         &self,
         queue_items: Vec<Value>,
         resolved_ids: Vec<String>,
@@ -110,7 +111,6 @@ impl RecoveryRepository {
             .collect::<HashSet<_>>();
         observed_item_ids.extend(current_item_ids);
         let existing_items = self.load_snapshot()?.items;
-
         items.extend(
             existing_items.into_iter().filter(|item| {
                 item.resolution == "pending" && !observed_item_ids.contains(&item.id)
@@ -126,7 +126,6 @@ fn collect_queue_recovery_ids(value: &Value) -> Vec<String> {
     let Some(object) = value.as_object() else {
         return Vec::new();
     };
-
     ["id", "recoveryId"]
         .iter()
         .filter_map(|key| object.get(*key).and_then(Value::as_str))
