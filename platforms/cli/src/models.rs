@@ -189,7 +189,7 @@ fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
     let path = if let Some(path) = configured {
         path
     } else {
-        crate::desktop_paths::default_models_dir().ok_or_else(|| {
+        sona_core::paths::default_desktop_models_dir().ok_or_else(|| {
             CliError::Validation(
                 "Unable to infer the desktop models directory. Pass --models-dir explicitly."
                     .to_string(),

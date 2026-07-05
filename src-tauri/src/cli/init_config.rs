@@ -6,56 +6,6 @@ use crate::cli::{CliError, CliResult};
 
 const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
-pub const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
-# Generated keys are commented out by default. Uncomment the settings you want
-# before using this file with Sona commands.
-# `sona transcribe` requires model_id to be enabled.
-# `sona serve` falls back to runtime defaults for omitted keys.
-# Save as sona-cli.toml, then pass it with:
-#   sona transcribe ./sample.wav -c ./sona-cli.toml
-#   sona serve -c ./sona-cli.toml
-#
-# Top-level keys are shared defaults for both commands.
-# Uncomment the same key inside [transcribe] or [serve] to override it per command.
-
-# Shared model location. If omitted, Sona tries the desktop app models directory.
-{models_dir_line}
-
-# gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-
-[transcribe]
-# models_dir = "..."
-# gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-# model_id = "sherpa-onnx-whisper-turbo"
-# language = "auto"
-# threads = 4
-# enable_itn = false
-# vad_buffer_size = 5.0
-# hotwords = "Sona,offline ASR"
-# format = "srt"
-# quiet = false
-# jobs = 1
-
-[serve]
-# models_dir = "..."
-# gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-# host = "127.0.0.1"
-# port = 14200
-# api_key = ""
-# ip_whitelist = "localhost"
-# max_streaming = 2
-# max_concurrent = 2
-# max_queue_size = 100
-# max_upload_size_mb = 50
-# job_ttl_minutes = 60
-"#;
-
 #[derive(Debug, Args)]
 #[command(
     about = "Create a commented TOML starter template",
@@ -83,29 +33,9 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<()> {
 }
 
 fn generate_config_content() -> String {
-    generate_config_content_inner(crate::cli::models::default_models_dir())
-}
-
-fn generate_config_content_inner(models_dir: Option<PathBuf>) -> String {
-    let models_dir_line = if let Some(path) = models_dir {
-        // Format path with forward slashes even on Windows for TOML compatibility
-        let path_str = path.to_string_lossy().replace('\\', "/");
-        format!("# models_dir = \"{}\"", path_str)
-    } else {
-        // Fallback placeholder based on target OS
-        #[cfg(target_os = "windows")]
-        let default_path = "C:/Users/you/AppData/Local/com.asoda.sona/models";
-        #[cfg(target_os = "macos")]
-        let default_path = "/Users/you/Library/Application Support/com.asoda.sona/models";
-        #[cfg(target_os = "linux")]
-        let default_path = "/home/you/.local/share/com.asoda.sona/models";
-        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-        let default_path = "/path/to/com.asoda.sona/models";
-
-        format!("# models_dir = \"{}\"", default_path)
-    };
-
-    CONFIG_TEMPLATE.replace("{models_dir_line}", &models_dir_line)
+    sona_core::cli_config::render_cli_config_template(
+        crate::core::paths::default_desktop_models_dir().as_deref(),
+    )
 }
 
 fn write_config_template(path: &Path, force: bool) -> CliResult<()> {
@@ -181,10 +111,10 @@ mod tests {
     #[test]
     fn generated_config_has_correct_os_path_format() {
         let test_path = PathBuf::from("C:\\Users\\test\\models");
-        let content = generate_config_content_inner(Some(test_path));
+        let content = sona_core::cli_config::render_cli_config_template(Some(test_path.as_path()));
         assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
 
-        let content_fallback = generate_config_content_inner(None);
+        let content_fallback = sona_core::cli_config::render_cli_config_template(None);
         let models_line = content_fallback
             .lines()
             .find(|l| l.contains("models_dir"))

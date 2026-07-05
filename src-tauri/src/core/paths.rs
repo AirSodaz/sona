@@ -1,3 +1,7 @@
+pub use sona_core::paths::{
+    default_desktop_app_data_roots, default_desktop_models_dir,
+    select_desktop_models_dir_from_app_roots,
+};
 pub use sona_core::ports::path::{PathKind, PathProvider};
 
 use tauri::{AppHandle, Manager, Runtime};
