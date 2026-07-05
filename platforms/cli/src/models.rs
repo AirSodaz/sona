@@ -1,8 +1,11 @@
 use clap::{Args, Subcommand};
-use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
+use sona_core::cli_models::{
+    CliModelSummary, ModelListEntry, ModelListFilter, list_cli_models, remove_model_install_path,
+    render_cli_model_table, select_cli_models,
+};
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -82,31 +85,6 @@ pub struct ModelDeleteArgs {
     yes: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CliModelSummary {
-    pub id: String,
-    pub name: String,
-    pub model_type: String,
-    pub language: String,
-    pub size: String,
-    pub modes: Vec<String>,
-    pub installed: bool,
-    pub install_path: PathBuf,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ModelListEntry {
-    id: String,
-    name: String,
-    #[serde(rename = "type")]
-    model_type: String,
-    language: String,
-    size: String,
-    modes: Vec<String>,
-    installed: bool,
-    install_path: String,
-}
-
 pub fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
@@ -115,7 +93,15 @@ pub fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
 }
 
 fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
-    let models = filter_models(list_models(args.models_dir.clone())?, &args);
+    let models = select_cli_models(
+        list_models(args.models_dir.clone())?,
+        &ModelListFilter {
+            mode: args.mode.clone(),
+            model_type: args.model_type.clone(),
+            language: args.language.clone(),
+            installed_only: args.installed,
+        },
+    );
     let output = if args.json {
         serde_json::to_string_pretty(
             &models
@@ -125,7 +111,7 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         )
         .map_err(|error| CliError::Serialize(format!("Failed to serialize model list: {error}")))?
     } else {
-        render_model_table(&models)
+        render_cli_model_table(&models)
     };
 
     Ok(CliOutput::stdout(output))
@@ -153,7 +139,7 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
         )));
     }
 
-    remove_model_install_path(&install_path)?;
+    remove_model_install_path(&install_path).map_err(CliError::Io)?;
 
     Ok(CliOutput::stderr(format!(
         "Deleted {} from {}",
@@ -164,25 +150,7 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
 
 fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<CliModelSummary>> {
     let models_dir = resolve_models_dir(models_dir)?;
-    Ok(sona_core::preset_models::preset_models()
-        .iter()
-        .map(|model| {
-            let install_path = model.resolve_install_path(&models_dir);
-            CliModelSummary {
-                id: model.id.clone(),
-                name: model.name.clone(),
-                model_type: model.model_type.clone(),
-                language: model.language.clone(),
-                size: model.size.clone(),
-                modes: model.modes.clone().unwrap_or_default(),
-                installed: sona_core::preset_models::is_preset_model_installed_at(
-                    model,
-                    &models_dir,
-                ),
-                install_path,
-            }
-        })
-        .collect())
+    Ok(list_cli_models(&models_dir))
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
@@ -210,141 +178,6 @@ fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
     Ok(path)
 }
 
-fn filter_models(models: Vec<CliModelSummary>, args: &ModelListArgs) -> Vec<CliModelSummary> {
-    let language_filter = args.language.as_deref().map(str::to_lowercase);
-    models
-        .into_iter()
-        .filter(|model| {
-            args.mode
-                .as_deref()
-                .map(|mode| model.modes.iter().any(|item| item == mode))
-                .unwrap_or(true)
-        })
-        .filter(|model| {
-            args.model_type
-                .as_deref()
-                .map(|model_type| model.model_type == model_type)
-                .unwrap_or(true)
-        })
-        .filter(|model| {
-            language_filter
-                .as_deref()
-                .map(|language| {
-                    model
-                        .language
-                        .split(',')
-                        .any(|item| item.trim().eq_ignore_ascii_case(language))
-                })
-                .unwrap_or(true)
-        })
-        .filter(|model| !args.installed || model.installed)
-        .collect()
-}
-
-impl From<CliModelSummary> for ModelListEntry {
-    fn from(model: CliModelSummary) -> Self {
-        Self {
-            id: model.id,
-            name: model.name,
-            model_type: model.model_type,
-            language: model.language,
-            size: model.size,
-            modes: model.modes,
-            installed: model.installed,
-            install_path: model.install_path.to_string_lossy().to_string(),
-        }
-    }
-}
-
-fn render_model_table(models: &[CliModelSummary]) -> String {
-    let rows = models
-        .iter()
-        .map(|model| {
-            [
-                model.id.clone(),
-                model.model_type.clone(),
-                model.language.clone(),
-                model.size.clone(),
-                if model.installed { "yes" } else { "no" }.to_string(),
-                model.modes.join(","),
-            ]
-        })
-        .collect::<Vec<_>>();
-    let headers = ["ID", "Type", "Language", "Size", "Installed", "Modes"];
-    let mut widths = headers.map(str::len);
-
-    for row in &rows {
-        for (index, value) in row.iter().enumerate() {
-            widths[index] = widths[index].max(value.len());
-        }
-    }
-
-    let mut output = String::new();
-    append_table_row(&mut output, &headers, &widths);
-    append_table_separator(&mut output, &widths);
-    for row in rows {
-        let refs = [
-            row[0].as_str(),
-            row[1].as_str(),
-            row[2].as_str(),
-            row[3].as_str(),
-            row[4].as_str(),
-            row[5].as_str(),
-        ];
-        append_table_row(&mut output, &refs, &widths);
-    }
-    output
-}
-
-fn remove_model_install_path(install_path: &Path) -> CliResult<()> {
-    let metadata = match std::fs::symlink_metadata(install_path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(CliError::Io(format!(
-                "Failed to inspect model path {}: {error}",
-                install_path.display()
-            )));
-        }
-    };
-
-    if metadata.file_type().is_dir() {
-        std::fs::remove_dir_all(install_path).map_err(|error| {
-            CliError::Io(format!(
-                "Failed to delete model directory {}: {error}",
-                install_path.display()
-            ))
-        })
-    } else {
-        std::fs::remove_file(install_path).map_err(|error| {
-            CliError::Io(format!(
-                "Failed to delete model file {}: {error}",
-                install_path.display()
-            ))
-        })
-    }
-}
-
-fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&format!("{value:<width$}", width = widths[index]));
-    }
-    output.push('\n');
-}
-
-fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
-    for (index, width) in widths.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&"-".repeat(*width));
-    }
-    output.push('\n');
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,7 +202,7 @@ mod tests {
 
     #[test]
     fn renders_model_list_as_table_with_headers() {
-        let table = render_model_table(&[
+        let table = render_cli_model_table(&[
             model_summary("short", "vad", "all", true),
             model_summary("longer-model-id", "whisper", "zh,en", false),
         ]);
