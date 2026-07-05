@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, de};
+#[cfg(feature = "specta")]
 use specta::Type;
 
 /// A macro to implement backward-compatible deserialization for an enum
@@ -56,7 +57,8 @@ macro_rules! impl_fallback_deserialize {
 // Polish Preset
 // -----------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinPolishPresetId {
     General,
@@ -67,7 +69,8 @@ pub enum BuiltinPolishPresetId {
     Podcast,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub enum PolishPresetId {
     Builtin(BuiltinPolishPresetId),
     Custom(String),
@@ -79,7 +82,8 @@ impl_fallback_deserialize!(PolishPresetId, BuiltinPolishPresetId);
 // Summary Template
 // -----------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinSummaryTemplateId {
     General,
@@ -87,7 +91,8 @@ pub enum BuiltinSummaryTemplateId {
     Lecture,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub enum SummaryTemplateId {
     Builtin(BuiltinSummaryTemplateId),
     Custom(String),
@@ -99,7 +104,8 @@ impl_fallback_deserialize!(SummaryTemplateId, BuiltinSummaryTemplateId);
 // LLM Provider
 // -----------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinLlmProvider {
     GoogleTranslate,
@@ -178,7 +184,8 @@ impl BuiltinLlmProvider {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub enum LlmProvider {
     Builtin(BuiltinLlmProvider),
     Custom(String),
@@ -224,15 +231,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn export_bindings() {
-        tauri_specta::Builder::<tauri::Wry>::new()
-            .typ::<LlmProvider>()
-            .typ::<PolishPresetId>()
-            .typ::<SummaryTemplateId>()
-            .export(
-                specta_typescript::Typescript::default(),
-                "../src/bindings.ts",
-            )
-            .unwrap();
+    fn builtin_provider_keeps_transport_string() {
+        assert_eq!(
+            LlmProvider::Builtin(BuiltinLlmProvider::OpenAi).as_str(),
+            "open_ai"
+        );
+    }
+
+    #[test]
+    fn provider_deserializes_custom_flat_string() {
+        let provider: LlmProvider = serde_json::from_str("\"private-gateway\"").unwrap();
+
+        assert_eq!(provider, LlmProvider::Custom("private-gateway".to_string()));
     }
 }

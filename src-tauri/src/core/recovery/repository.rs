@@ -6,8 +6,10 @@ use std::path::PathBuf;
 use crate::core::file_utils::write_json_pretty_atomic;
 
 use super::normalization::{
-    empty_snapshot, now_ms, recovered_item_from_queue_value, recovered_item_from_saved_value,
-    snapshot_from_items, snapshot_from_value,
+    FsSourcePathStatusProvider, empty_snapshot, now_ms,
+    recovered_item_from_queue_value_with_source_paths,
+    recovered_item_from_saved_value_with_source_paths, snapshot_from_items,
+    snapshot_from_value_with_source_paths,
 };
 use super::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
 
@@ -50,7 +52,11 @@ impl RecoveryRepository {
             }
         };
 
-        Ok(snapshot_from_value(value, false))
+        Ok(snapshot_from_value_with_source_paths(
+            value,
+            false,
+            &FsSourcePathStatusProvider,
+        ))
     }
 
     pub fn save_snapshot(&self, items: Vec<Value>) -> Result<RecoverySnapshot, String> {
@@ -58,7 +64,13 @@ impl RecoveryRepository {
         let now = now_ms();
         let normalized_items = items
             .into_iter()
-            .filter_map(|item| recovered_item_from_saved_value(item, now))
+            .filter_map(|item| {
+                recovered_item_from_saved_value_with_source_paths(
+                    item,
+                    now,
+                    &FsSourcePathStatusProvider,
+                )
+            })
             .filter(|item| item.resolution == "pending")
             .collect::<Vec<_>>();
         let snapshot = snapshot_from_items(normalized_items);
@@ -85,7 +97,11 @@ impl RecoveryRepository {
                     .for_each(|id| {
                         observed_item_ids.insert(id);
                     });
-                recovered_item_from_queue_value(item, now)
+                recovered_item_from_queue_value_with_source_paths(
+                    item,
+                    now,
+                    &FsSourcePathStatusProvider,
+                )
             })
             .collect::<Vec<_>>();
         let current_item_ids = items

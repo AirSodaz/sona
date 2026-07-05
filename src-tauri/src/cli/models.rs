@@ -1,7 +1,9 @@
 use crate::cli::transcribe::{OutputTarget, write_output};
 use crate::cli::{CliError, CliResult};
 use crate::core::downloads::sha256_file;
-use crate::core::preset_models::{PresetModel, find_preset_model, preset_models};
+use crate::core::preset_models::{
+    PresetModel, find_preset_model, is_preset_model_installed_at, preset_models,
+};
 use clap::{Args, Subcommand};
 
 use std::io::{self, IsTerminal, Write};
@@ -310,7 +312,9 @@ async fn run_model_download(args: ModelDownloadArgs) -> CliResult<()> {
 fn run_model_delete(args: ModelDeleteArgs) -> CliResult<()> {
     let resolved = resolve_model_download(&args.model_id, args.models_dir)?;
 
-    if !resolved.model.is_installed_at(&resolved.models_dir) && !resolved.install_path.exists() {
+    if !is_preset_model_installed_at(&resolved.model, &resolved.models_dir)
+        && !resolved.install_path.exists()
+    {
         eprintln!(
             "Model {} is not installed at {}",
             resolved.model.id,
@@ -468,7 +472,7 @@ pub fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<CliModelSummary
                 language: model.language.clone(),
                 size: model.size.clone(),
                 modes: model.modes.clone().unwrap_or_default(),
-                installed: model.is_installed_at(&models_dir),
+                installed: is_preset_model_installed_at(model, &models_dir),
                 install_path,
             }
         })
@@ -504,7 +508,7 @@ pub async fn download_model<F>(
 where
     F: FnMut(u64, u64) + Send + 'static,
 {
-    if resolved.model.is_installed_at(&resolved.models_dir) {
+    if is_preset_model_installed_at(&resolved.model, &resolved.models_dir) {
         let is_valid = if resolved.model.is_archive() {
             true
         } else {

@@ -1,26 +1,20 @@
-pub mod asr_metrics;
 pub mod automation;
 pub mod config;
-pub mod dashboard;
 pub mod database;
 pub mod diagnostics;
-pub mod domain;
 pub mod downloads;
 pub mod event;
 pub mod file_utils;
-pub mod history;
 pub mod history_store;
-pub mod model_config;
 pub mod paths;
 pub mod pipeline;
 pub mod preset_models;
 pub mod recovery;
-pub mod speaker;
-pub mod speaker_correction;
-pub mod speaker_review;
 pub mod storage_usage;
-pub mod task_ledger;
 #[path = "task_ledger/sqlite_repository.rs"]
 pub mod task_ledger_sqlite;
-pub mod text_alignment;
-pub mod transcript;
+
+pub use sona_core::{
+    asr_metrics, dashboard, domain, history, model_config, project, speaker, speaker_correction,
+    speaker_review, task_ledger, text_alignment, transcript,
+};

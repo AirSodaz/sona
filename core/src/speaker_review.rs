@@ -1,6 +1,4 @@
-use crate::core::transcript::{
-    SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment,
-};
+use crate::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -494,9 +492,7 @@ fn compare_f64(left: f64, right: f64) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::transcript::{
-        SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment,
-    };
+    use crate::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment};
 
     fn segment(
         id: &str,

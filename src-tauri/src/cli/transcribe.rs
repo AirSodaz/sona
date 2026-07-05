@@ -2,6 +2,7 @@ use crate::cli::models::resolve_models_dir;
 use crate::cli::{CliError, CliResult};
 use crate::core::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
+    is_preset_model_installed_at,
 };
 use crate::integrations::asr::{
     BatchTranscriptionRequest, Recognizer, transcribe_batch_with_progress_and_fallback_notice,
@@ -251,7 +252,7 @@ pub fn resolve_transcribe_options(
     cli: TranscribeCliOptions,
     config: Option<crate::cli::config::TranscribeConfigSection>,
 ) -> Result<ResolvedTranscribeOptions, CliError> {
-    resolve_transcribe_options_with_install_checker(cli, config, PresetModel::is_installed_at)
+    resolve_transcribe_options_with_install_checker(cli, config, is_preset_model_installed_at)
 }
 
 fn resolve_transcribe_options_with_install_checker(

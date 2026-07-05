@@ -5298,9 +5298,9 @@ dependencies = [
  "serde_with",
  "sha2 0.11.0",
  "sherpa-onnx",
+ "sona-core",
  "specta",
  "specta-typescript",
- "strum",
  "sysinfo",
  "tar",
  "tauri",
@@ -5331,6 +5331,21 @@ dependencies = [
  "uuid",
  "walkdir",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "sona-core"
+version = "0.7.5"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "specta",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

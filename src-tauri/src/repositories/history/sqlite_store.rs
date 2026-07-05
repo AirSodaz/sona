@@ -1769,6 +1769,34 @@ where
     }
 }
 
+#[async_trait::async_trait]
+impl<D> crate::core::dashboard::ports::HistoryRepository for SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
+    async fn list_items(
+        &self,
+    ) -> Result<Vec<HistoryItemRecord>, crate::core::dashboard::error::DashboardServiceError> {
+        HistoryStore::list_items(self).map_err(|error| {
+            crate::core::dashboard::error::DashboardServiceError::HistoryRepository(
+                error.to_string(),
+            )
+        })
+    }
+
+    async fn load_transcript(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<Vec<TranscriptSegment>>, crate::core::dashboard::error::DashboardServiceError>
+    {
+        HistoryStore::load_transcript(self, history_id).map_err(|error| {
+            crate::core::dashboard::error::DashboardServiceError::HistoryRepository(
+                error.to_string(),
+            )
+        })
+    }
+}
+
 fn build_fts_query(query: &str) -> String {
     let normalized = super::workspace_query::normalize_workspace_search_text(query);
     let terms: Vec<&str> = normalized

@@ -42,6 +42,7 @@ docs/superpowers
 .superpowers
 
 .env
+target/
 target_*
 temp_*
 .placeholder

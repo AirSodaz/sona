@@ -1,5 +1,5 @@
-use crate::core::speaker::SpeakerProfile;
-use crate::core::transcript::{SpeakerAttribution, SpeakerTag, TranscriptSegment};
+use crate::speaker::SpeakerProfile;
+use crate::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -73,7 +73,7 @@ fn confirmed_anonymous_label(segment: &TranscriptSegment) -> String {
         .unwrap_or_else(|| "Speaker".to_string())
 }
 
-fn candidates(segment: &TranscriptSegment) -> Vec<crate::integrations::speaker::SpeakerCandidate> {
+fn candidates(segment: &TranscriptSegment) -> Vec<SpeakerCandidate> {
     segment
         .speaker_attribution
         .as_ref()
@@ -279,7 +279,7 @@ mod tests {
             state: state.to_string(),
             source: "auto".to_string(),
             confidence: "medium".to_string(),
-            candidates: vec![crate::integrations::speaker::SpeakerCandidate {
+            candidates: vec![SpeakerCandidate {
                 profile_id: "speaker-2".to_string(),
                 profile_name: "Bob".to_string(),
                 score: 0.88,

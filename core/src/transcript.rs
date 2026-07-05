@@ -91,3 +91,31 @@ pub struct TranscriptUpdate {
     pub remove_ids: Vec<String>,
     pub upsert_segments: Vec<TranscriptSegment>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transcript_segment_keeps_camel_case_transport_shape() {
+        let segment = TranscriptSegment {
+            id: "seg-1".to_string(),
+            text: "hello".to_string(),
+            start: 0.0,
+            end: 1.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+
+        let value = serde_json::to_value(segment).unwrap();
+
+        assert_eq!(value["isFinal"], true);
+        assert!(value.get("is_final").is_none());
+    }
+}

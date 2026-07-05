@@ -1,20 +1,32 @@
 use serde::Deserialize;
 use serde_json::Value;
 use serde_with::{DefaultOnError, serde_as};
-use std::fs;
-use std::io::ErrorKind;
 use std::time::SystemTime;
 
-use super::types::{
+use crate::recovery::types::{
     RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
     RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoverySnapshot,
 };
 
-enum SourcePathStatus {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourcePathStatus {
     File,
     Directory,
     Missing,
     Unknown,
+}
+
+pub trait SourcePathStatusProvider {
+    fn status_for_path(&self, path: &str) -> SourcePathStatus;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnknownSourcePathStatusProvider;
+
+impl SourcePathStatusProvider for UnknownSourcePathStatusProvider {
+    fn status_for_path(&self, _path: &str) -> SourcePathStatus {
+        SourcePathStatus::Unknown
+    }
 }
 
 #[serde_as]
@@ -111,7 +123,11 @@ impl RawRecoveredQueueItem {
         serde_json::from_value(value).ok()
     }
 
-    fn normalize_recovered(self, now: u64) -> Option<RecoveredQueueItem> {
+    fn normalize_recovered(
+        self,
+        now: u64,
+        source_paths: &impl SourcePathStatusProvider,
+    ) -> Option<RecoveredQueueItem> {
         let id = non_empty_string(self.id)?;
         let file_path = self.file_path.unwrap_or_default();
         let automation_rule_id = self.automation_rule_id;
@@ -125,6 +141,7 @@ impl RawRecoveredQueueItem {
             &resolution,
             saved_has_source_file,
             saved_can_resume,
+            source_paths,
         );
 
         Some(RecoveredQueueItem {
@@ -154,7 +171,11 @@ impl RawRecoveredQueueItem {
         })
     }
 
-    fn normalize_queue(self, now: u64) -> Option<RecoveredQueueItem> {
+    fn normalize_queue(
+        self,
+        now: u64,
+        source_paths: &impl SourcePathStatusProvider,
+    ) -> Option<RecoveredQueueItem> {
         let status = self.status.as_deref()?;
         if status != "pending" && status != "processing" {
             return None;
@@ -172,7 +193,7 @@ impl RawRecoveredQueueItem {
             .to_string();
         let resolution = "pending".to_string();
         let (has_source_file, can_resume) =
-            resolve_source_flags(&file_path, &resolution, true, true);
+            resolve_source_flags(&file_path, &resolution, true, true, source_paths);
 
         Some(RecoveredQueueItem {
             id,
@@ -226,13 +247,25 @@ pub fn snapshot_from_items(items: Vec<RecoveredQueueItem>) -> RecoverySnapshot {
 }
 
 pub fn snapshot_from_value(value: Value, include_only_pending: bool) -> RecoverySnapshot {
+    snapshot_from_value_with_source_paths(
+        value,
+        include_only_pending,
+        &UnknownSourcePathStatusProvider,
+    )
+}
+
+pub fn snapshot_from_value_with_source_paths(
+    value: Value,
+    include_only_pending: bool,
+    source_paths: &impl SourcePathStatusProvider,
+) -> RecoverySnapshot {
     let now = now_ms();
     let raw = serde_json::from_value::<RawRecoverySnapshot>(value).unwrap_or_default();
     let items = raw
         .items
         .into_iter()
         .filter_map(RawRecoveredQueueItem::from_value)
-        .filter_map(|item| item.normalize_recovered(now))
+        .filter_map(|item| item.normalize_recovered(now, source_paths))
         .filter(|item| !include_only_pending || item.resolution == "pending")
         .collect::<Vec<_>>();
 
@@ -244,11 +277,27 @@ pub fn snapshot_from_value(value: Value, include_only_pending: bool) -> Recovery
 }
 
 pub fn recovered_item_from_queue_value(value: Value, now: u64) -> Option<RecoveredQueueItem> {
-    RawRecoveredQueueItem::from_value(value)?.normalize_queue(now)
+    recovered_item_from_queue_value_with_source_paths(value, now, &UnknownSourcePathStatusProvider)
+}
+
+pub fn recovered_item_from_queue_value_with_source_paths(
+    value: Value,
+    now: u64,
+    source_paths: &impl SourcePathStatusProvider,
+) -> Option<RecoveredQueueItem> {
+    RawRecoveredQueueItem::from_value(value)?.normalize_queue(now, source_paths)
 }
 
 pub fn recovered_item_from_saved_value(value: Value, now: u64) -> Option<RecoveredQueueItem> {
-    RawRecoveredQueueItem::from_value(value)?.normalize_recovered(now)
+    recovered_item_from_saved_value_with_source_paths(value, now, &UnknownSourcePathStatusProvider)
+}
+
+pub fn recovered_item_from_saved_value_with_source_paths(
+    value: Value,
+    now: u64,
+    source_paths: &impl SourcePathStatusProvider,
+) -> Option<RecoveredQueueItem> {
+    RawRecoveredQueueItem::from_value(value)?.normalize_recovered(now, source_paths)
 }
 
 fn normalize_segments(segments: Vec<Value>) -> Vec<RecoveredTranscriptSegment> {
@@ -424,25 +473,18 @@ fn resolve_source_flags(
     resolution: &str,
     default_has_source_file: bool,
     default_can_resume: bool,
+    source_paths: &impl SourcePathStatusProvider,
 ) -> (bool, bool) {
-    match resolve_source_path_status(file_path) {
+    let status = if file_path.trim().is_empty() {
+        SourcePathStatus::Unknown
+    } else {
+        source_paths.status_for_path(file_path)
+    };
+
+    match status {
         SourcePathStatus::File => (true, resolution == "pending"),
         SourcePathStatus::Directory | SourcePathStatus::Missing => (false, false),
         SourcePathStatus::Unknown => (default_has_source_file, default_can_resume),
-    }
-}
-
-fn resolve_source_path_status(path: &str) -> SourcePathStatus {
-    if path.trim().is_empty() {
-        return SourcePathStatus::Unknown;
-    }
-
-    match fs::metadata(path) {
-        Ok(metadata) if metadata.is_file() => SourcePathStatus::File,
-        Ok(metadata) if metadata.is_dir() => SourcePathStatus::Directory,
-        Ok(_) => SourcePathStatus::Unknown,
-        Err(error) if error.kind() == ErrorKind::NotFound => SourcePathStatus::Missing,
-        Err(_) => SourcePathStatus::Unknown,
     }
 }
 

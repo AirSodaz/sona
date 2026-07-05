@@ -19,9 +19,11 @@ impl crate::core::dashboard::ports::AnalyticsRepository for AnalyticsRepositoryI
         crate::core::dashboard::error::DashboardServiceError,
     > {
         let stats = crate::integrations::llm_usage_sqlite::read_dashboard_stats(self.db.as_ref())
-            .map_err(
-            crate::core::dashboard::error::DashboardServiceError::AnalyticsRepository,
-        )?;
+            .map_err(|error| {
+            crate::core::dashboard::error::DashboardServiceError::AnalyticsRepository(
+                error.to_string(),
+            )
+        })?;
         Ok(stats)
     }
 }

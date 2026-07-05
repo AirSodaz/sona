@@ -1,19 +1,16 @@
 #[derive(Clone, Debug)]
-pub(crate) struct TextUnit {
-    pub(crate) text: String,
-    pub(crate) normalized: String,
+pub struct TextUnit {
+    pub text: String,
+    pub normalized: String,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct AlignedTextUnit {
-    pub(crate) text: String,
-    pub(crate) token_index: usize,
+pub struct AlignedTextUnit {
+    pub text: String,
+    pub token_index: usize,
 }
 
-pub(crate) fn align_text_units_to_tokens(
-    text: &str,
-    tokens: &[String],
-) -> Option<Vec<AlignedTextUnit>> {
+pub fn align_text_units_to_tokens(text: &str, tokens: &[String]) -> Option<Vec<AlignedTextUnit>> {
     if tokens.is_empty() {
         return None;
     }
@@ -99,7 +96,7 @@ fn find_subsequence(haystack: &[char], needle: &[char]) -> Option<usize> {
         .position(|window| window == needle)
 }
 
-pub(crate) fn lex_text_units(text: &str) -> Vec<TextUnit> {
+pub fn lex_text_units(text: &str) -> Vec<TextUnit> {
     let mut units = Vec::new();
     let chars = text.chars().collect::<Vec<_>>();
     let mut index = 0usize;
@@ -160,7 +157,7 @@ fn normalize_search_text(text: &str) -> String {
         .collect()
 }
 
-pub(crate) fn is_cjk_char(ch: char) -> bool {
+pub fn is_cjk_char(ch: char) -> bool {
     matches!(
         ch,
         '\u{3400}'..='\u{4DBF}'
@@ -169,4 +166,23 @@ pub(crate) fn is_cjk_char(ch: char) -> bool {
             | '\u{30A0}'..='\u{30FF}'
             | '\u{AC00}'..='\u{D7AF}'
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aligns_mixed_cjk_and_latin_units_to_tokens() {
+        let tokens = vec!["hello".to_string(), "世".to_string(), "界".to_string()];
+
+        let aligned = align_text_units_to_tokens("hello 世界", &tokens).unwrap();
+
+        assert_eq!(aligned[0].text, "hello");
+        assert_eq!(aligned[0].token_index, 0);
+        assert_eq!(aligned[2].text, "世");
+        assert_eq!(aligned[2].token_index, 1);
+        assert_eq!(aligned[3].text, "界");
+        assert_eq!(aligned[3].token_index, 2);
+    }
 }

@@ -610,9 +610,11 @@ where
     async fn count_projects(
         &self,
     ) -> Result<u64, crate::core::dashboard::error::DashboardServiceError> {
-        let projects = self
-            .list(ProjectListOptions::default())
-            .map_err(crate::core::dashboard::error::DashboardServiceError::ProjectRepository)?;
+        let projects = self.list(ProjectListOptions::default()).map_err(|error| {
+            crate::core::dashboard::error::DashboardServiceError::ProjectRepository(
+                error.to_string(),
+            )
+        })?;
         Ok(projects.len() as u64)
     }
 }
