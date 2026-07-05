@@ -99,8 +99,8 @@ jobs:
       - name: Compile Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-run
 
-      - name: Run CLI integration tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test cli
+      - name: Run desktop entry tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test desktop_entry
 
       - name: Run pipeline tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::pipeline::tests

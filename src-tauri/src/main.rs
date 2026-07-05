@@ -149,9 +149,7 @@ fn show_error_dialog(message: &str) {
     }
 }
 
-fn setup_panic_hook(is_cli: bool) {
-    // `move` captures `is_cli` by value so the closure can suppress the
-    // dialog when running in CLI mode.
+fn setup_panic_hook() {
     std::panic::set_hook(Box::new(move |info| {
         let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
             *s
@@ -168,31 +166,18 @@ fn setup_panic_hook(is_cli: bool) {
 
         eprintln!("Application panicked: {error_msg}");
 
-        if !is_cli {
-            show_error_dialog(&error_msg);
-        }
+        show_error_dialog(&error_msg);
     }));
 }
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let args: Vec<_> = std::env::args_os().collect();
-    let is_cli = tauri_appsona_lib::cli::should_run_cli(args.get(1..).unwrap_or(&[]));
-
-    setup_panic_hook(is_cli);
-
-    if is_cli {
-        #[cfg(target_os = "windows")]
-        fix_console(true);
-
-        return match tauri_appsona_lib::cli::run_cli_from_args(args).await {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("{error}");
-                ExitCode::from(error.exit_code())
-            }
-        };
+    if std::env::var_os("SONA_TEST_EXIT_BEFORE_APP").is_some() {
+        println!("desktop-entry");
+        return ExitCode::SUCCESS;
     }
+
+    setup_panic_hook();
 
     #[cfg(target_os = "windows")]
     fix_console(false);

@@ -4,7 +4,7 @@ pub mod core;
 pub mod integrations;
 pub mod repositories;
 
-pub mod cli;
+mod cli;
 
 #[cfg(all(test, target_os = "windows", target_env = "msvc"))]
 #[link(name = "windows-test-manifest")]
