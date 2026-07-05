@@ -2,8 +2,8 @@ use sona_core::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeM
 use sona_core::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
-    RuntimeEnvironmentStatus, RuntimePathStatus, SelectedModelsInput, VoiceTypingReadinessInput,
-    build_diagnostics_core_snapshot,
+    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
+    VoiceTypingReadinessInput, build_diagnostics_core_snapshot,
 };
 
 fn base_input() -> DiagnosticsCoreInput {
@@ -36,9 +36,12 @@ fn base_input() -> DiagnosticsCoreInput {
             }),
         },
         path_statuses: PathStatusesInput {
-            live_model: Some(path_status("C:\\models\\live", "directory")),
-            offline_model: Some(path_status("C:\\models\\offline", "directory")),
-            vad: Some(path_status("C:\\models\\vad.onnx", "file")),
+            live_model: Some(path_status("C:\\models\\live", RuntimePathKind::Directory)),
+            offline_model: Some(path_status(
+                "C:\\models\\offline",
+                RuntimePathKind::Directory,
+            )),
+            vad: Some(path_status("C:\\models\\vad.onnx", RuntimePathKind::File)),
             punctuation: None,
         },
         permission_state: "granted".to_string(),
@@ -70,10 +73,10 @@ fn base_input() -> DiagnosticsCoreInput {
     }
 }
 
-fn path_status(path: &str, kind: &str) -> RuntimePathStatus {
+fn path_status(path: &str, kind: RuntimePathKind) -> RuntimePathStatus {
     RuntimePathStatus {
         path: path.to_string(),
-        kind: kind.to_string(),
+        kind,
         error: None,
     }
 }
@@ -101,8 +104,12 @@ fn core_snapshot_preserves_fact_fields_for_frontend_ui_builder() {
     let mut input = base_input();
     input.permission_state = "prompt".to_string();
     input.runtime_environment.ffmpeg_exists = false;
-    input.path_statuses.live_model = Some(path_status("C:\\models\\live", "unknown"));
-    input.path_statuses.punctuation = Some(path_status("C:\\models\\punct.onnx", "unknown"));
+    input.path_statuses.live_model =
+        Some(path_status("C:\\models\\live", RuntimePathKind::Unknown));
+    input.path_statuses.punctuation = Some(path_status(
+        "C:\\models\\punct.onnx",
+        RuntimePathKind::Unknown,
+    ));
     input.config.punctuation_model_path = "C:\\models\\punct.onnx".to_string();
     input.punctuation_required = true;
 
@@ -113,7 +120,7 @@ fn core_snapshot_preserves_fact_fields_for_frontend_ui_builder() {
     assert!(snapshot.punctuation_required);
     assert_eq!(
         snapshot.path_statuses.live_model.as_ref().unwrap().kind,
-        "unknown"
+        RuntimePathKind::Unknown
     );
     assert_eq!(
         snapshot.path_statuses.punctuation.as_ref().unwrap().path,

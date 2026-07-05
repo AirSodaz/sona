@@ -1,9 +1,9 @@
 [package]
 name = "sona-core"
-version = "0.8.0"
+version.workspace = true
 description = "Pure Rust core domain types and logic for Sona"
-authors = ["AirSodaz"]
-edition = "2024"
+authors.workspace = true
+edition.workspace = true
 
 [features]
 default = []

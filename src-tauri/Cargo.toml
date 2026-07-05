@@ -1,9 +1,9 @@
 [package]
 name = "sona"
-version = "0.8.0"
+version.workspace = true
 description = "Sona - A privacy-first, offline transcript editor"
-authors = ["AirSodaz"]
-edition = "2024"
+authors.workspace = true
+edition.workspace = true
 default-run = "sona"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

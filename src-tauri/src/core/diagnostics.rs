@@ -116,25 +116,11 @@ fn resolve_core_path_status(path: &str) -> Option<RuntimePathStatus> {
 fn runtime_path_status_input(
     status: crate::app::runtime_status::RuntimePathStatus,
 ) -> RuntimePathStatus {
-    RuntimePathStatus {
-        path: status.path,
-        kind: match status.kind {
-            crate::app::runtime_status::RuntimePathKind::File => "file",
-            crate::app::runtime_status::RuntimePathKind::Directory => "directory",
-            crate::app::runtime_status::RuntimePathKind::Missing => "missing",
-            crate::app::runtime_status::RuntimePathKind::Unknown => "unknown",
-        }
-        .to_string(),
-        error: status.error,
-    }
+    status
 }
 
 fn runtime_environment_input(
     status: crate::app::runtime_status::RuntimeEnvironmentStatus,
 ) -> RuntimeEnvironmentStatus {
-    RuntimeEnvironmentStatus {
-        ffmpeg_path: status.ffmpeg_path,
-        ffmpeg_exists: status.ffmpeg_exists,
-        log_dir_path: status.log_dir_path,
-    }
+    status
 }

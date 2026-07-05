@@ -1,5 +1,12 @@
 [package]
 name = "sona-ts-bind"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+description = "TypeScript binding metadata for Sona core"
+authors.workspace = true
+edition.workspace = true
+
 [dependencies]
+sona-core = { path = "../../core", features = ["specta"] }
+
+[dev-dependencies]
+specta = { version = "=2.0.0-rc.25" }

@@ -1,10 +1,12 @@
 use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use sona_core::preset_models::{
     DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID,
     ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
-    build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
+    build_model_catalog_snapshot, build_model_catalog_snapshot_with_installed_ids,
+    find_preset_model, is_preset_model_installed_at, preset_models,
 };
 
 #[test]
@@ -124,6 +126,82 @@ fn builds_catalog_snapshot_from_injected_install_status() {
             is_installed: true,
         }]
     );
+}
+
+#[test]
+fn build_model_catalog_snapshot_uses_filesystem_install_status() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    fs::create_dir_all(models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"))
+        .unwrap();
+    fs::write(
+        models_dir.join("silero_vad.onnx"),
+        b"not the expected model",
+    )
+    .unwrap();
+
+    let snapshot = build_model_catalog_snapshot(&models_dir);
+    let int8_path = snapshot
+        .model_path_by_id
+        .get("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+        .unwrap()
+        .clone();
+    let silero_path = snapshot
+        .model_path_by_id
+        .get(DEFAULT_SILERO_VAD_MODEL_ID)
+        .unwrap()
+        .clone();
+
+    assert_eq!(
+        snapshot.models_dir,
+        models_dir.to_string_lossy().to_string()
+    );
+    assert!(snapshot.models.iter().any(|model| {
+        model.id == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17" && model.is_installed
+    }));
+    assert!(
+        snapshot
+            .models
+            .iter()
+            .any(|model| model.id == DEFAULT_SILERO_VAD_MODEL_ID && model.is_installed)
+    );
+    assert_eq!(
+        snapshot.restore_defaults.streaming_model_path,
+        Some(int8_path.clone())
+    );
+    assert_eq!(
+        snapshot.restore_defaults.offline_model_path,
+        Some(int8_path)
+    );
+    assert_eq!(snapshot.restore_defaults.vad_model_path, Some(silero_path));
+}
+
+#[test]
+fn non_archive_install_status_requires_non_empty_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path();
+    let empty_path = models_dir.join("silero_vad.onnx");
+    fs::write(&empty_path, []).unwrap();
+    let model = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
+
+    assert!(!is_preset_model_installed_at(model, models_dir));
+
+    fs::write(&empty_path, b"model bytes").unwrap();
+    assert!(is_preset_model_installed_at(model, models_dir));
+
+    fs::remove_file(&empty_path).unwrap();
+    fs::create_dir_all(&empty_path).unwrap();
+    assert!(!is_preset_model_installed_at(model, models_dir));
+}
+
+#[test]
+fn archive_install_status_accepts_existing_install_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let model = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
+    fs::create_dir_all(model.resolve_install_path(&models_dir)).unwrap();
+
+    assert!(is_preset_model_installed_at(model, &models_dir));
 }
 
 #[test]

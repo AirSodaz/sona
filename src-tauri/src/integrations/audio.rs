@@ -1,4 +1,4 @@
-use crate::core::paths::{PathKind, PathProvider};
+use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
@@ -614,6 +614,7 @@ fn start_shared_capture(
 ) -> Result<(), String> {
     let _start_guard = kind.start_guard(state).lock().map_err(|e| e.to_string())?;
     let requested_device = requested_device_label(&device_name);
+    let path_provider = TauriPathProvider::from_app(&app);
 
     {
         let mut capture = kind.capture(state).lock().map_err(|e| e.to_string())?;
@@ -631,7 +632,7 @@ fn start_shared_capture(
             );
             drop(capture);
             queue_recording_start(
-                &app as &dyn PathProvider,
+                &path_provider,
                 recorder_tx.as_ref(),
                 kind.should_record(&instance_id),
                 kind.label(),
@@ -693,7 +694,7 @@ fn start_shared_capture(
     }
 
     queue_recording_start(
-        &app as &dyn PathProvider,
+        &path_provider,
         Some(&recorder_tx),
         kind.should_record(&instance_id),
         kind.label(),

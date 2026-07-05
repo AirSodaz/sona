@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::asr_metrics::AsrRuntimeMetricsSnapshot;
+pub use crate::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,14 +77,6 @@ pub struct PathStatusesInput {
     pub punctuation: Option<RuntimePathStatus>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimePathStatus {
-    pub path: String,
-    pub kind: String,
-    pub error: Option<String>,
-}
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceProbeInput {
@@ -103,14 +96,6 @@ pub struct DeviceOptionInput {
 pub struct VoiceTypingReadinessInput {
     pub state: String,
     pub last_error_message: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeEnvironmentStatus {
-    pub ffmpeg_path: String,
-    pub ffmpeg_exists: bool,
-    pub log_dir_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

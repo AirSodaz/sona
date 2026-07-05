@@ -26,7 +26,7 @@ use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::core::database::{Database, DatabaseError};
-use crate::core::paths::{PathKind, PathProvider};
+use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 
 pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
@@ -403,11 +403,12 @@ pub async fn start_api_server(
 
     let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
 
-    let app_local_data_dir = app.resolve_path(PathKind::AppLocalData)?;
+    let path_provider = TauriPathProvider::from_app(&app);
+    let app_local_data_dir = path_provider.resolve_path(PathKind::AppLocalData)?;
     let temp_dir = app_local_data_dir.join("api_temp");
     let models_dir = app_local_data_dir.join("models");
 
-    refresh_online_asr_config(&controller, &app).await;
+    refresh_online_asr_config(&controller, &path_provider).await;
     let online_asr_config = controller.online_asr_config.clone();
 
     tauri::async_runtime::spawn(async move {
@@ -456,10 +457,11 @@ pub async fn stop_api_server(
 pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let settings = load_api_server_startup_settings(&app_handle as &dyn PathProvider);
+        let path_provider = TauriPathProvider::from_app(&app_handle);
+        let settings = load_api_server_startup_settings(&path_provider);
 
         if settings.http_server_enabled {
-            let app_local_data_dir = match app_handle.resolve_path(PathKind::AppLocalData) {
+            let app_local_data_dir = match path_provider.resolve_path(PathKind::AppLocalData) {
                 Ok(dir) => dir,
                 Err(e) => {
                     log::error!("Failed to get app_local_data_dir: {}", e);
@@ -499,7 +501,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let controller = app_handle.state::<ApiServerController>();
             *controller.shutdown_sender.lock().await = Some(tx);
 
-            refresh_online_asr_config(&controller, &app_handle).await;
+            refresh_online_asr_config(&controller, &path_provider).await;
             let online_asr_config = controller.online_asr_config.clone();
 
             if let Err(e) = run_server(ApiServerRuntimeConfig {

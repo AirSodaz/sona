@@ -5,7 +5,7 @@ use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::core::database::Database;
 use crate::core::history_store::{HistoryStore, HistoryStoreError};
-use crate::core::paths::{PathKind, PathProvider};
+use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 use crate::integrations::asr::TranscriptSegment;
 use crate::repositories::history::SqliteHistoryStore;
 use crate::repositories::history::backup::{
@@ -47,7 +47,8 @@ where
     T: Send + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     crate::repositories::history::llm_helpers::run_llm_db_task(app_local_data_dir, db, task).await
 }
@@ -62,7 +63,8 @@ where
     T: Send + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir = (app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     run_history_file_task_inner(app_local_data_dir, db, state.file_lock.clone(), task).await
 }
@@ -402,7 +404,8 @@ pub async fn history_open_folder<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
 ) -> Result<(), String> {
-    let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     {
         let _guard = state.file_lock.lock().map_err(|error| error.to_string())?;
@@ -426,7 +429,8 @@ pub async fn export_backup_archive<R: Runtime>(
     history_state: State<'_, HistoryRepositoryState>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     let lock = history_state.file_lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -464,7 +468,8 @@ pub async fn apply_prepared_history_import<R: Runtime>(
         return Err(format!("Prepared backup import not found: {import_id}"));
     };
 
-    let app_local_data_dir = (&app as &dyn PathProvider).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     let lock = history_state.file_lock.clone();
     tauri::async_runtime::spawn_blocking(move || {

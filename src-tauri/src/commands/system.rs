@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::core::database::DatabaseError;
-use crate::core::paths::PathProvider;
+use crate::core::paths::{PathProvider, TauriPathProvider};
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use crate::core::task_ledger::types::{
@@ -211,7 +211,8 @@ pub async fn webdav_download_backup(
 pub async fn get_model_catalog_snapshot(
     app: AppHandle,
 ) -> Result<crate::core::preset_models::ModelCatalogSnapshot, String> {
-    crate::core::preset_models::get_model_catalog_snapshot(&app as &dyn PathProvider).await
+    let path_provider = TauriPathProvider::from_app(&app);
+    crate::core::preset_models::get_model_catalog_snapshot(&path_provider).await
 }
 
 #[tauri::command(rename = "resolve_model_catalog_selected_ids")]
@@ -219,11 +220,9 @@ pub async fn resolve_model_catalog_selected_ids_command(
     app: AppHandle,
     paths: crate::core::preset_models::ModelSelectionPaths,
 ) -> Result<crate::core::preset_models::ModelCatalogSelectedIds, String> {
-    crate::core::preset_models::resolve_model_catalog_selected_ids_command(
-        &app as &dyn PathProvider,
-        paths,
-    )
-    .await
+    let path_provider = TauriPathProvider::from_app(&app);
+    crate::core::preset_models::resolve_model_catalog_selected_ids_command(&path_provider, paths)
+        .await
 }
 
 #[tauri::command]
@@ -232,8 +231,8 @@ pub async fn get_diagnostics_core_snapshot(
     state: State<'_, crate::integrations::asr::AsrState>,
     input: crate::core::diagnostics::DiagnosticsCoreInput,
 ) -> Result<crate::core::diagnostics::DiagnosticsCoreSnapshot, String> {
-    crate::core::diagnostics::get_diagnostics_core_snapshot(&app as &dyn PathProvider, state, input)
-        .await
+    let path_provider = TauriPathProvider::from_app(&app);
+    crate::core::diagnostics::get_diagnostics_core_snapshot(&path_provider, state, input).await
 }
 
 // Relocated task_ledger commands
@@ -305,10 +304,8 @@ pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnap
 
 #[tauri::command]
 pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, String> {
-    run_recovery_repository_task(&app as &dyn PathProvider, |repository| {
-        repository.load_snapshot()
-    })
-    .await
+    let path_provider = TauriPathProvider::from_app(&app);
+    run_recovery_repository_task(&path_provider, |repository| repository.load_snapshot()).await
 }
 
 #[tauri::command]
@@ -316,7 +313,8 @@ pub async fn recovery_save_snapshot(
     app: AppHandle,
     items: Vec<Value>,
 ) -> Result<RecoverySnapshot, String> {
-    run_recovery_repository_task(&app as &dyn PathProvider, move |repository| {
+    let path_provider = TauriPathProvider::from_app(&app);
+    run_recovery_repository_task(&path_provider, move |repository| {
         repository.save_snapshot(items)
     })
     .await
@@ -328,7 +326,8 @@ pub async fn recovery_persist_queue_snapshot(
     queue_items: Vec<Value>,
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
-    run_recovery_repository_task(&app as &dyn PathProvider, move |repository| {
+    let path_provider = TauriPathProvider::from_app(&app);
+    run_recovery_repository_task(&path_provider, move |repository| {
         repository
             .persist_queue_snapshot_with_resolved_ids(queue_items, resolved_ids.unwrap_or_default())
             .map(|_| ())
@@ -359,8 +358,9 @@ pub async fn import_speaker_profile_sample(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<crate::integrations::speaker::SpeakerProfileSample, String> {
+    let path_provider = TauriPathProvider::from_app(&app);
     crate::integrations::speaker::import_speaker_profile_sample(
-        &app as &dyn PathProvider,
+        &path_provider,
         profile_id,
         source_path,
         source_name,

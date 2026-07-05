@@ -1,14 +1,15 @@
 [package]
 name = "sona-uniffi-bind"
-version = "0.7.5"
+version.workspace = true
 description = "UniFFI-facing facade for Sona core"
-authors = ["AirSodaz"]
-edition = "2024"
+authors.workspace = true
+edition.workspace = true
 
 [lib]
 name = "sona_uniffi_bind"
-crate-type = ["rlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 sona-core = { path = "../../core" }
 thiserror = "2.0.18"
+uniffi = "0.29"
