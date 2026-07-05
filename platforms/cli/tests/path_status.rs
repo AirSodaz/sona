@@ -9,8 +9,9 @@ fn path_status_command_renders_core_runtime_status_as_json() {
         dir.path().to_string_lossy().as_ref(),
     ])
     .unwrap();
-    let value: Value = serde_json::from_str(&output).unwrap();
+    let value: Value = serde_json::from_str(&output.stdout).unwrap();
 
+    assert_eq!(output.stderr, "");
     assert_eq!(value["kind"], "directory");
     assert_eq!(value["path"], dir.path().to_string_lossy().as_ref());
     assert_eq!(value["error"], Value::Null);
@@ -26,8 +27,9 @@ fn path_status_command_reports_missing_path_using_core_contract() {
         missing_path.to_string_lossy().as_ref(),
     ])
     .unwrap();
-    let value: Value = serde_json::from_str(&output).unwrap();
+    let value: Value = serde_json::from_str(&output.stdout).unwrap();
 
+    assert_eq!(output.stderr, "");
     assert_eq!(value["kind"], "missing");
     assert_eq!(value["path"], missing_path.to_string_lossy().as_ref());
     assert_eq!(value["error"], Value::Null);

@@ -51,3 +51,6 @@ temp_*
 src-tauri/resources/shared_libs/*.dll
 src-tauri/resources/shared_libs/*.dylib
 src-tauri/resources/shared_libs/*.so
+
+# Standalone CLI sidecars copied for Tauri packaging
+src-tauri/binaries/sona-cli-*

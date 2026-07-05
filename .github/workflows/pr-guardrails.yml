@@ -44,6 +44,9 @@ jobs:
       - name: Run tests
         run: pnpm run test:ci
 
+      - name: Run script tests
+        run: pnpm run test:scripts
+
       - name: Run build
         run: pnpm run build:ci
 
@@ -86,6 +89,12 @@ jobs:
 
       - name: Prepare ffmpeg sidecar
         run: node scripts/setup-ffmpeg.js
+
+      - name: Prepare standalone CLI sidecar
+        run: node scripts/prepare-cli-sidecar.js
+
+      - name: Run core, bindings, and standalone CLI tests
+        run: cargo test -p sona-core -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
 
       - name: Compile Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-run

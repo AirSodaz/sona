@@ -5447,6 +5447,7 @@ name = "sona-cli"
 version = "0.8.0"
 dependencies = [
  "clap",
+ "serde",
  "serde_json",
  "sona-core",
  "tempfile",

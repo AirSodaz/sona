@@ -1,20 +1,52 @@
+mod desktop_paths;
+mod init_config;
+mod models;
+
 use clap::{Parser, Subcommand};
 use std::ffi::OsString;
 use thiserror::Error;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CliOutput {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl CliOutput {
+    pub fn stdout(value: String) -> Self {
+        Self {
+            stdout: value,
+            stderr: String::new(),
+        }
+    }
+
+    pub fn stderr(value: String) -> Self {
+        Self {
+            stdout: String::new(),
+            stderr: value,
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum CliError {
     #[error("{0}")]
     Usage(String),
     #[error("{0}")]
+    Validation(String),
+    #[error("{0}")]
     Serialize(String),
+    #[error("{0}")]
+    Io(String),
 }
 
 impl CliError {
     pub fn exit_code(&self) -> u8 {
         match self {
             CliError::Usage(_) => 2,
+            CliError::Validation(_) => 2,
             CliError::Serialize(_) => 1,
+            CliError::Io(_) => 5,
         }
     }
 }
@@ -37,9 +69,13 @@ struct Cli {
 enum Commands {
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
+    /// Creates a commented TOML starter template.
+    InitConfig(init_config::InitConfigArgs),
+    /// Lists and manages preset models.
+    Models(models::ModelsArgs),
 }
 
-pub fn run_cli_from_args<I, T>(args: I) -> CliResult<String>
+pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -47,7 +83,9 @@ where
     let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
 
     match cli.command {
-        Commands::PathStatus { path } => render_path_status_json(&path),
+        Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
+        Commands::InitConfig(args) => init_config::run_init_config(args),
+        Commands::Models(args) => models::run_models(args),
     }
 }
 

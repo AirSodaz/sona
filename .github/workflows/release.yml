@@ -105,6 +105,9 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
         run: node scripts/tauri.js build ${{ matrix.args }}
 
+      - name: Verify CLI sidecar and shared libraries are staged for packaging
+        run: node scripts/verify-cli-bundle.js ${{ matrix.args }}
+
       # 3. Handle macOS architecture renaming (Solve 422 Already Exists)
       - name: Rename macOS assets for architecture
         if: matrix.platform == 'macos-latest'

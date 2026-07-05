@@ -39,7 +39,8 @@
       "resources/shared_libs/*"
     ],
     "externalBin": [
-      "binaries/ffmpeg"
+      "binaries/ffmpeg",
+      "binaries/sona-cli"
     ],
     "targets": [
       "app",

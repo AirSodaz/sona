@@ -4,15 +4,15 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 
 function main() {
+  const repoRoot = path.resolve(readFlagValue(args, '--repo-root') ?? path.resolve(__dirname, '..'));
   const target = resolveBuildTarget(args);
-  const bundleRoots = resolveBundleRoots(target);
+  const bundleRoots = resolveBundleRoots(repoRoot, target, args);
 
   if (bundleRoots.length === 0) {
-    throw new Error('No build bundle output was found under src-tauri/target/**/release/bundle.');
+    throw new Error('No build bundle output was found under target/**/release/bundle.');
   }
 
   const bundledFiles = bundleRoots.flatMap((bundleRoot) => walkFiles(bundleRoot));
@@ -21,8 +21,12 @@ function main() {
   );
 
   if (opaqueArtifacts.length === 0) {
-    throw new Error('No packaged installer or bundle artifact was found under src-tauri/target/**/release/bundle.');
+    throw new Error('No packaged installer or bundle artifact was found under target/**/release/bundle.');
   }
+
+  verifyTauriBundleConfig(repoRoot);
+  verifyCliSidecar(repoRoot, target);
+  verifySharedLibraries(repoRoot, target);
 
   console.log(`[bundle] Verified packaged artifacts for ${target}`);
   console.log(`[bundle] Artifacts: ${opaqueArtifacts.map((filePath) => path.relative(repoRoot, filePath)).join(', ')}`);
@@ -56,7 +60,14 @@ function readFlagValue(commandArgs, flagName) {
   return null;
 }
 
-function resolveBundleRoots(target) {
+function resolveBundleRoots(repoRoot, target, commandArgs) {
+  const explicitBundleRoot = readFlagValue(commandArgs, '--bundle-root');
+  if (explicitBundleRoot) {
+    return [path.resolve(repoRoot, explicitBundleRoot)].filter((directoryPath) =>
+      fs.existsSync(directoryPath)
+    );
+  }
+
   const candidateDirectories = [
     path.resolve(repoRoot, 'target', 'release', 'bundle'),
     path.resolve(repoRoot, 'target', target, 'release', 'bundle'),
@@ -65,6 +76,68 @@ function resolveBundleRoots(target) {
   return [...new Set(candidateDirectories)].filter((directoryPath) =>
     fs.existsSync(directoryPath)
   );
+}
+
+function verifyTauriBundleConfig(repoRoot) {
+  const configPath = path.resolve(repoRoot, 'src-tauri', 'tauri.conf.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const externalBins = config.bundle?.externalBin ?? [];
+  if (!externalBins.some((entry) => normalizeConfigPath(entry) === 'binaries/sona-cli')) {
+    throw new Error('src-tauri/tauri.conf.json must include bundle.externalBin entry "binaries/sona-cli".');
+  }
+
+  const resources = config.bundle?.resources ?? [];
+  const resourceEntries = Array.isArray(resources)
+    ? resources
+    : Object.entries(resources).flatMap(([source, target]) => [source, target]);
+  if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/shared_libs'))) {
+    throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/shared_libs.');
+  }
+}
+
+function verifyCliSidecar(repoRoot, target) {
+  const sidecarPath = path.resolve(repoRoot, 'src-tauri', 'binaries', targetSpecificCliName(target));
+  if (!fs.existsSync(sidecarPath)) {
+    throw new Error(`Missing packaged sona-cli sidecar for ${target}: ${path.relative(repoRoot, sidecarPath)}`);
+  }
+
+  console.log(`[bundle] Verified packaged CLI sidecar: ${path.relative(repoRoot, sidecarPath)}`);
+}
+
+function verifySharedLibraries(repoRoot, target) {
+  const sharedLibsDir = path.resolve(repoRoot, 'src-tauri', 'resources', 'shared_libs');
+  const entries = fs.existsSync(sharedLibsDir) ? fs.readdirSync(sharedLibsDir) : [];
+  const missingLibraries = requiredSharedLibraries(target).filter((library) =>
+    typeof library === 'string'
+      ? !entries.includes(library)
+      : !entries.some((entry) => library.test(entry))
+  );
+
+  if (missingLibraries.length > 0) {
+    throw new Error(
+      `Missing shared libraries for ${target}: ${missingLibraries.map(String).join(', ')}. Found: ${entries.join(', ')}`
+    );
+  }
+
+  console.log(`[bundle] Verified shared libraries: ${entries.join(', ')}`);
+}
+
+function requiredSharedLibraries(target) {
+  if (target.includes('windows')) {
+    return ['sherpa-onnx-c-api.dll', 'onnxruntime.dll'];
+  }
+  if (target.includes('apple')) {
+    return ['libsherpa-onnx-c-api.dylib', 'libonnxruntime.dylib'];
+  }
+  return [/^libsherpa-onnx-c-api\.so/, /^libonnxruntime\.so/];
+}
+
+function targetSpecificCliName(target) {
+  return `sona-cli-${target}${target.includes('windows') ? '.exe' : ''}`;
+}
+
+function normalizeConfigPath(value) {
+  return String(value).replaceAll('\\', '/').replace(/^\.\//u, '');
 }
 
 function walkFiles(directoryPath) {

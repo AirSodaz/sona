@@ -16,8 +16,11 @@
     "test": "vitest",
     "test:ci": "vitest --run",
     "tauri": "node scripts/tauri.js",
+    "build:cli": "cargo build -p sona-cli --release",
+    "prepare:cli-sidecar": "node scripts/prepare-cli-sidecar.js",
     "build:ci": "pnpm run build",
-    "ci:pr": "pnpm run lint:ci && pnpm run test:ci && pnpm run build:ci",
+    "test:scripts": "node --test scripts/*.test.js",
+    "ci:pr": "pnpm run lint:ci && pnpm run test:ci && pnpm run test:scripts && pnpm run build:ci",
     "verify:cli-bundle": "node scripts/verify-cli-bundle.js",
     "commitlint": "commitlint --edit",
     "check:staged": "node scripts/check-staged.js"
