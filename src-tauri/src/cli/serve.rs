@@ -1,20 +1,12 @@
-use crate::cli::models::resolve_models_dir;
-use crate::cli::{CliError, CliResult, resolve_cli_gpu_acceleration};
+use crate::cli::{CliError, CliResult};
 use clap::Args;
+use sona_core::cli_runtime::{
+    ResolvedServeRuntimeOptions, ServeRuntimeArgs, load_serve_config_file,
+    resolve_serve_runtime_options,
+};
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-const DEFAULT_SERVE_PORT: u16 = 14200;
-const DEFAULT_SERVE_HOST: &str = "127.0.0.1";
-const DEFAULT_SERVE_IP_WHITELIST: &str = "localhost";
-const DEFAULT_MAX_CONCURRENT: usize = 2;
-const DEFAULT_MAX_QUEUE_SIZE: usize = 100;
-const DEFAULT_MAX_UPLOAD_SIZE_MB: usize = 50;
-const DEFAULT_JOB_TTL_MINUTES: u64 = 60;
-const DEFAULT_MAX_STREAMING: usize = 2;
 
 #[derive(Debug, Args)]
 pub struct ServeArgs {
@@ -74,7 +66,7 @@ pub struct ServeArgs {
 
 pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
     let config = match args.config.as_deref() {
-        Some(path) => Some(load_serve_config_file(path)?),
+        Some(path) => Some(load_serve_config_file(path).map_err(CliError::Validation)?),
         None => None,
     };
     let resolved = resolve_serve_options(args, config)?;
@@ -165,7 +157,11 @@ pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
         max_streaming: resolved.max_streaming,
         ip_whitelist: parsed_arc,
         online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-        transcription_defaults: resolved.transcription_defaults,
+        transcription_defaults: crate::app::server::ApiServerTranscriptionDefaults {
+            gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
+            vad_model_id: resolved.transcription_defaults.vad_model_id,
+            punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
+        },
         shutdown_rx: rx,
         bind_tx: None,
     })
@@ -175,91 +171,29 @@ pub async fn run_serve(args: ServeArgs) -> CliResult<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone)]
-pub struct ResolvedServeOptions {
-    pub host: String,
-    pub port: u16,
-    pub api_key: String,
-    pub models_dir: PathBuf,
-    pub ip_whitelist: String,
-    pub max_streaming: usize,
-    pub max_concurrent: usize,
-    pub max_queue_size: usize,
-    pub max_upload_size_mb: usize,
-    pub job_ttl_minutes: u64,
-    pub transcription_defaults: crate::app::server::ApiServerTranscriptionDefaults,
-}
-
 pub fn resolve_serve_options(
     args: ServeArgs,
     config: Option<crate::cli::config::ServeConfigSection>,
-) -> CliResult<ResolvedServeOptions> {
-    let config = config.unwrap_or_default();
-    let gpu_acceleration =
-        resolve_cli_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
-
-    Ok(ResolvedServeOptions {
-        host: args
-            .host
-            .or(config.host)
-            .unwrap_or_else(|| DEFAULT_SERVE_HOST.to_string()),
-        port: args.port.or(config.port).unwrap_or(DEFAULT_SERVE_PORT),
-        api_key: args.api_key.or(config.api_key).unwrap_or_default(),
-        models_dir: resolve_models_dir(args.models_dir.or(config.models_dir))?,
-        ip_whitelist: args
-            .ip_whitelist
-            .or(config.ip_whitelist)
-            .unwrap_or_else(|| DEFAULT_SERVE_IP_WHITELIST.to_string()),
-        max_streaming: args
-            .max_streaming
-            .or(config.max_streaming)
-            .unwrap_or(DEFAULT_MAX_STREAMING),
-        max_concurrent: args
-            .max_concurrent
-            .or(config.max_concurrent)
-            .unwrap_or(DEFAULT_MAX_CONCURRENT),
-        max_queue_size: args
-            .max_queue_size
-            .or(config.max_queue_size)
-            .unwrap_or(DEFAULT_MAX_QUEUE_SIZE),
-        max_upload_size_mb: args
-            .max_upload_size_mb
-            .or(config.max_upload_size_mb)
-            .unwrap_or(DEFAULT_MAX_UPLOAD_SIZE_MB),
-        job_ttl_minutes: args
-            .job_ttl_minutes
-            .or(config.job_ttl_minutes)
-            .unwrap_or(DEFAULT_JOB_TTL_MINUTES),
-        transcription_defaults: crate::app::server::ApiServerTranscriptionDefaults {
-            gpu_acceleration,
-            vad_model_id: args.vad_model_id.or(config.vad_model_id).or_else(|| {
-                Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string())
-            }),
-            punctuation_model_id: args
-                .punctuation_model_id
-                .or(config.punctuation_model_id)
-                .or_else(|| {
-                    Some(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string())
-                }),
+) -> CliResult<ResolvedServeRuntimeOptions> {
+    resolve_serve_runtime_options(
+        ServeRuntimeArgs {
+            host: args.host,
+            port: args.port,
+            api_key: args.api_key,
+            models_dir: args.models_dir,
+            ip_whitelist: args.ip_whitelist,
+            max_streaming: args.max_streaming,
+            max_concurrent: args.max_concurrent,
+            max_queue_size: args.max_queue_size,
+            max_upload_size_mb: args.max_upload_size_mb,
+            job_ttl_minutes: args.job_ttl_minutes,
+            gpu_acceleration: args.gpu_acceleration,
+            vad_model_id: args.vad_model_id,
+            punctuation_model_id: args.punctuation_model_id,
         },
-    })
-}
-
-pub fn load_serve_config_file(path: &Path) -> CliResult<crate::cli::config::ServeConfigSection> {
-    let contents = fs::read_to_string(path).map_err(|error| {
-        CliError::Io(format!(
-            "Failed to read config file {}: {error}",
-            path.display()
-        ))
-    })?;
-    let unified: crate::cli::config::UnifiedConfigFile =
-        toml::from_str(&contents).map_err(|error| {
-            CliError::Validation(format!(
-                "Failed to parse config file {}: {error}",
-                path.display()
-            ))
-        })?;
-    Ok(unified.into_serve_config())
+        config,
+    )
+    .map_err(CliError::Validation)
 }
 
 #[cfg(test)]

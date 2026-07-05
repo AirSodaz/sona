@@ -5,12 +5,9 @@ pub mod serve;
 pub mod transcribe;
 
 pub use self::init_config::InitConfigArgs;
-pub use self::models::{ModelsArgs, resolve_models_dir};
+pub use self::models::ModelsArgs;
 pub use self::serve::ServeArgs;
-pub use self::transcribe::{
-    DEFAULT_GPU_ACCELERATION, TranscribeArgs, TranscribeCliOptions, resolve_cli_gpu_acceleration,
-    resolve_transcribe_options,
-};
+pub use self::transcribe::{TranscribeArgs, TranscribeCliOptions, resolve_transcribe_options};
 
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};

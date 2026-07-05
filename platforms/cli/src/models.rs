@@ -7,6 +7,7 @@ use sona_core::cli_models::{
     CliModelSummary, ModelListEntry, ModelListFilter, list_cli_models, remove_model_install_path,
     render_cli_model_table, select_cli_models,
 };
+use sona_core::cli_runtime::resolve_cli_models_dir;
 use sona_core::model_downloads::{
     ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
     resolve_model_download,
@@ -304,28 +305,7 @@ fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<CliModelSummary>> {
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
-    let path = if let Some(path) = configured {
-        path
-    } else {
-        sona_core::paths::default_desktop_models_dir().ok_or_else(|| {
-            CliError::Validation(
-                "Unable to infer the desktop models directory. Pass --models-dir explicitly."
-                    .to_string(),
-            )
-        })?
-    };
-
-    if std::fs::metadata(&path)
-        .map(|metadata| !metadata.is_dir())
-        .unwrap_or(false)
-    {
-        return Err(CliError::Validation(format!(
-            "Models directory '{}' exists but is not a directory.",
-            path.display()
-        )));
-    }
-
-    Ok(path)
+    resolve_cli_models_dir(configured).map_err(CliError::Validation)
 }
 
 fn map_download_error(error: String) -> CliError {

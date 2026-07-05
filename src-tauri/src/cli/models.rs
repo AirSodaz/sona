@@ -666,28 +666,7 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> CliR
 }
 
 pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, CliError> {
-    let path = if let Some(path) = configured {
-        path
-    } else {
-        crate::core::paths::default_desktop_models_dir().ok_or_else(|| {
-            CliError::Validation(
-                "Unable to infer the desktop models directory. Pass --models-dir explicitly."
-                    .to_string(),
-            )
-        })?
-    };
-
-    if std::fs::metadata(&path)
-        .map(|meta| !meta.is_dir())
-        .unwrap_or(false)
-    {
-        return Err(CliError::Validation(format!(
-            "Models directory '{}' exists but is not a directory.",
-            path.display()
-        )));
-    }
-
-    Ok(path)
+    sona_core::cli_runtime::resolve_cli_models_dir(configured).map_err(CliError::Validation)
 }
 
 #[cfg(test)]
