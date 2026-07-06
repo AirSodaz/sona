@@ -1,19 +1,25 @@
-use crate::core::database::DatabaseError;
-use crate::core::database::ports::Database as DatabasePort;
+use crate::DatabaseError;
+use crate::ports::Database as DatabasePort;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 
-use super::types::AutomationRepositoryState;
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRepositoryState {
+    pub rules: Vec<Value>,
+    pub processed_entries: Vec<Value>,
+}
 
 #[derive(Clone)]
-pub struct SqliteAutomationRepository<D = crate::core::database::Database>
+pub struct SqliteAutomationRepository<D = crate::Database>
 where
     D: DatabasePort,
 {
     db: Arc<D>,
 }
 
-sona_sqlite::impl_db_repository!(SqliteAutomationRepository);
+crate::impl_db_repository!(SqliteAutomationRepository);
 
 impl<D> SqliteAutomationRepository<D>
 where
@@ -279,7 +285,7 @@ fn nested_bool_field(value: Option<&Value>, key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
+    use crate::Database;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;

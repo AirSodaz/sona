@@ -356,6 +356,25 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
 });
 
+test('SQLite automation repository is owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopAutomation = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs'), 'utf8');
+  const desktopAutomationTypes = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'types.rs'),
+    'utf8',
+  );
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'automation.rs')));
+  assert.match(sqliteLib, /^pub mod automation;/mu);
+  assert.match(sqliteLib, /^pub use automation::\{AutomationRepositoryState, SqliteAutomationRepository\};/mu);
+  assert.match(desktopAutomation, /pub use sona_sqlite::automation as sqlite_repository;/u);
+  assert.match(desktopAutomationTypes, /pub use sona_sqlite::automation::AutomationRepositoryState;/u);
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'sqlite_repository.rs')),
+    false,
+  );
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

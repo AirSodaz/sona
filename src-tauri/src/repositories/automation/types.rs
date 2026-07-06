@@ -1,12 +1,6 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRepositoryState {
-    pub rules: Vec<Value>,
-    pub processed_entries: Vec<Value>,
-}
+pub use sona_sqlite::automation::AutomationRepositoryState;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
