@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::cli_runtime::TranscribeConfigSection;
+use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
     OfflineTranscribeOptions, OutputTarget, resolve_offline_transcribe_plan,
 };

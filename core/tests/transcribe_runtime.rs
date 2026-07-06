@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use sona_core::export::ExportFormat;
 use sona_core::preset_models::PresetModel;
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
     BatchInputSource, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
     DEFAULT_VAD_BUFFER_SIZE, OfflineTranscribeOptions, OutputTarget, load_transcribe_config_file,
@@ -243,7 +244,7 @@ fn offline_plan_cli_values_override_config_file_values() {
 
     let resolved = resolve_offline_transcribe_plan_with_install_checker(
         cli,
-        Some(sona_core::cli_runtime::TranscribeConfigSection {
+        Some(TranscribeConfigSection {
             threads: Some(2),
             enable_itn: Some(false),
             hotwords: Some("config-term".to_string()),
@@ -328,7 +329,7 @@ fn offline_plan_config_can_override_required_companion_default() {
 
     let error = resolve_offline_transcribe_plan_with_install_checker(
         cli,
-        Some(sona_core::cli_runtime::TranscribeConfigSection {
+        Some(TranscribeConfigSection {
             vad_model_id: Some("custom-vad".to_string()),
             ..Default::default()
         }),
@@ -352,7 +353,7 @@ fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
 
     let resolved = resolve_offline_transcribe_plan_with_install_checker(
         cli,
-        Some(sona_core::cli_runtime::TranscribeConfigSection {
+        Some(TranscribeConfigSection {
             gpu_acceleration: Some("cpu".to_string()),
             hotwords: Some("config-hotword".to_string()),
             ..Default::default()
@@ -378,7 +379,7 @@ fn offline_plan_cli_gpu_overrides_config_file() {
 
     let resolved = resolve_offline_transcribe_plan_with_install_checker(
         cli,
-        Some(sona_core::cli_runtime::TranscribeConfigSection {
+        Some(TranscribeConfigSection {
             gpu_acceleration: Some("cpu".to_string()),
             ..Default::default()
         }),

@@ -1,9 +1,9 @@
-use crate::cli_runtime::TranscribeConfigSection;
 use crate::export::ExportFormat;
 use crate::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
     is_preset_model_installed_at,
 };
+use crate::runtime_config::TranscribeConfigSection;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
@@ -77,11 +77,7 @@ pub struct OfflineTranscribePlan {
 }
 
 pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {
-    let contents = std::fs::read_to_string(path)
-        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    let unified: crate::cli_runtime::UnifiedConfigFile = toml::from_str(&contents)
-        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))?;
-    Ok(unified.into_transcribe_config())
+    crate::runtime_config::load_transcribe_config_file(path)
 }
 
 pub fn resolve_export_format(

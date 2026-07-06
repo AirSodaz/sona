@@ -20,6 +20,7 @@ pub mod preset_models;
 pub mod project;
 pub mod recovery;
 pub mod runtime;
+pub mod runtime_config;
 pub mod speaker;
 pub mod speaker_correction;
 pub mod speaker_review;
