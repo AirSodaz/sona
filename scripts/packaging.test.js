@@ -237,6 +237,46 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
 });
 
+test('online ASR provider manifest is owned by core and re-exported by desktop', () => {
+  const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
+  const coreManifestPath = path.join(repoRoot, 'core', 'src', 'ports', 'online-asr-providers.json');
+  const legacySharedManifestPath = path.join(repoRoot, 'src', 'shared', 'online-asr-providers.json');
+  const desktopProviders = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr_providers.rs'),
+    'utf8',
+  );
+  const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
+  const onlineProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'onlineAsrProviders.ts'), 'utf8');
+  const asrConfigServiceTest = fs.readFileSync(
+    path.join(repoRoot, 'src', 'services', '__tests__', 'asrConfigService.test.ts'),
+    'utf8',
+  );
+
+  assert.ok(fs.existsSync(coreManifestPath));
+  assert.equal(fs.existsSync(legacySharedManifestPath), false);
+  assert.match(coreAsr, /ONLINE_ASR_PROVIDERS_JSON/u);
+  assert.match(coreAsr, /include_str!\("online-asr-providers\.json"\)/u);
+  assert.doesNotMatch(coreAsr, /src\/shared\/online-asr-providers\.json/u);
+  assert.match(coreAsr, /pub const VOLCENGINE_DOUBAO_PROVIDER_ID/u);
+  assert.match(coreAsr, /pub fn online_asr_providers\(\)/u);
+  assert.match(coreAsr, /pub fn find_online_asr_provider/u);
+  assert.match(coreAsr, /pub struct OnlineAsrProvider/u);
+  assert.match(coreAsr, /pub struct OnlineAsrBatchCapability/u);
+  assert.match(coreAsr, /pub fn provider_id\(&self\) -> &str/u);
+
+  assert.match(desktopProviders, /pub use sona_core::ports::asr::\{/u);
+  assert.doesNotMatch(desktopProviders, /include_str!/u);
+  assert.doesNotMatch(desktopProviders, /struct OnlineAsrProviderManifest/u);
+  assert.doesNotMatch(desktopProviders, /static ONLINE_ASR_PROVIDER_MANIFEST/u);
+
+  assert.match(tsBindLib, /OnlineAsrProvider/u);
+  assert.match(tsBindLib, /OnlineAsrCapability/u);
+  assert.match(tsBindLib, /OnlineAsrBatchCapability/u);
+  assert.match(tsBindLib, /OnlineAsrLocalFileBatchMode/u);
+  assert.match(onlineProvidersTs, /\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
+  assert.match(asrConfigServiceTest, /\.\.\/\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

@@ -9,6 +9,7 @@ pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
 pub use sona_core::model_config::ModelFileConfig;
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
+    OnlineAsrBatchCapability, OnlineAsrCapability, OnlineAsrLocalFileBatchMode, OnlineAsrProvider,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
 };
@@ -38,6 +39,10 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "AsrTranscriptionRequest",
     "AsrEngineConfig",
     "OnlineAsrProviderRequest",
+    "OnlineAsrProvider",
+    "OnlineAsrCapability",
+    "OnlineAsrBatchCapability",
+    "OnlineAsrLocalFileBatchMode",
     "VolcengineDoubaoAsrConfig",
 ];
 
@@ -80,6 +85,10 @@ mod tests {
         assert_specta_type::<AsrTranscriptionRequest>();
         assert_specta_type::<AsrEngineConfig>();
         assert_specta_type::<OnlineAsrProviderRequest>();
+        assert_specta_type::<OnlineAsrProvider>();
+        assert_specta_type::<OnlineAsrCapability>();
+        assert_specta_type::<OnlineAsrBatchCapability>();
+        assert_specta_type::<OnlineAsrLocalFileBatchMode>();
         assert_specta_type::<VolcengineDoubaoAsrConfig>();
     }
 }

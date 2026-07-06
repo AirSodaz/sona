@@ -68,10 +68,7 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
 }
 
 pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
-    match &request.engine_config {
-        AsrEngineConfig::LocalSherpa { .. } => Ok("local_sherpa"),
-        AsrEngineConfig::Online { provider } => Ok(provider.provider_id.as_str()),
-    }
+    Ok(request.provider_id())
 }
 
 pub(crate) fn ensure_adapter(

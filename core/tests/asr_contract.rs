@@ -1,6 +1,7 @@
 use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
-    OnlineAsrProviderRequest,
+    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
+    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider, online_asr_providers,
 };
 use sona_core::transcript_postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -85,4 +86,76 @@ fn online_asr_request_roundtrips_through_json() {
     let decoded: AsrTranscriptionRequest = serde_json::from_value(json).unwrap();
     assert_eq!(decoded.engine(), AsrEngine::Online);
     assert_eq!(decoded.language, "auto");
+}
+
+#[test]
+fn online_asr_provider_manifest_is_owned_by_core_contract() {
+    let providers = online_asr_providers();
+
+    assert!(
+        providers
+            .iter()
+            .any(|provider| provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID)
+    );
+    assert!(
+        providers
+            .iter()
+            .any(|provider| provider.id == GROQ_WHISPER_PROVIDER_ID)
+    );
+    assert!(
+        providers
+            .iter()
+            .any(|provider| provider.id == MISTRAL_VOXTRAL_PROVIDER_ID)
+    );
+
+    let volcengine = find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID).unwrap();
+    assert_eq!(volcengine.profile_id, "volcengine-doubao-default");
+    assert_eq!(
+        volcengine
+            .defaults
+            .get("batchEndpoint")
+            .and_then(serde_json::Value::as_str),
+        Some("https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash")
+    );
+    assert!(volcengine.batch.local_file_mode.supported);
+}
+
+#[test]
+fn asr_request_provider_id_is_derived_from_core_engine_config() {
+    let local = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Offline,
+        "/models/sherpa".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        None,
+        None,
+        5.0,
+        "whisper".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let online = AsrTranscriptionRequest {
+        mode: AsrMode::Offline,
+        language: "auto".to_string(),
+        enable_itn: false,
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        hotwords: None,
+        speaker_processing: None,
+        engine_config: AsrEngineConfig::Online {
+            provider: OnlineAsrProviderRequest {
+                provider_id: GROQ_WHISPER_PROVIDER_ID.to_string(),
+                profile_id: "groq-whisper-default".to_string(),
+                config: serde_json::json!({}),
+            },
+        },
+    };
+
+    assert_eq!(local.provider_id(), "local_sherpa");
+    assert_eq!(online.provider_id(), GROQ_WHISPER_PROVIDER_ID);
 }
