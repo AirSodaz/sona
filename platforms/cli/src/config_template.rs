@@ -49,7 +49,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # job_ttl_minutes = 60
 "#;
 
-pub fn render_cli_config_template(models_dir: Option<&Path>) -> String {
+pub fn render_config_template(models_dir: Option<&Path>) -> String {
     let models_dir_line = if let Some(path) = models_dir {
         let path_str = path.to_string_lossy().replace('\\', "/");
         format!("# models_dir = \"{}\"", path_str)
@@ -76,5 +76,45 @@ fn default_models_dir_placeholder() -> &'static str {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         "/path/to/com.asoda.sona/models"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn renders_models_dir_with_forward_slashes() {
+        let content = render_config_template(Some(Path::new(r"C:\Users\test\models")));
+
+        assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
+        assert!(content.contains("[transcribe]"));
+        assert!(content.contains("[serve]"));
+        assert!(content.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
+        assert!(content.contains("# api_key = \"\""));
+    }
+
+    #[test]
+    fn uses_platform_placeholder_without_models_dir() {
+        let content = render_config_template(None);
+        let models_line = content
+            .lines()
+            .find(|line| line.contains("models_dir"))
+            .expect("template should include a models_dir comment");
+
+        assert!(models_line.starts_with("# models_dir = \""));
+        assert!(!models_line.contains('\\'));
+
+        #[cfg(target_os = "windows")]
+        assert!(models_line.contains("C:/Users/you/AppData/Local/com.asoda.sona/models"));
+
+        #[cfg(target_os = "macos")]
+        assert!(
+            models_line.contains("/Users/you/Library/Application Support/com.asoda.sona/models")
+        );
+
+        #[cfg(target_os = "linux")]
+        assert!(models_line.contains("/home/you/.local/share/com.asoda.sona/models"));
     }
 }

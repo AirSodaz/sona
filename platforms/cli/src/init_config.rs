@@ -35,7 +35,7 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {
 }
 
 fn generate_config_content() -> String {
-    sona_core::cli_config::render_cli_config_template(
+    crate::config_template::render_config_template(
         crate::desktop_paths::default_models_dir().as_deref(),
     )
 }
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn template_contains_shared_transcribe_and_serve_keys() {
-        let content = sona_core::cli_config::render_cli_config_template(None);
+        let content = crate::config_template::render_config_template(None);
         for key in [
             "model_id",
             "vad_model_id",
@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn generated_config_uses_forward_slashes_for_model_path() {
         let path = PathBuf::from("C:\\Users\\test\\models");
-        let content = sona_core::cli_config::render_cli_config_template(Some(path.as_path()));
+        let content = crate::config_template::render_config_template(Some(path.as_path()));
 
         assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
     }

@@ -118,3 +118,11 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
 
   assert.deepEqual(desktopCliCoreReferences, []);
 });
+
+test('core crate does not keep sona-cli config template surface', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+
+  assert.doesNotMatch(coreLib, /^pub mod cli_config;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'cli_config.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_config.rs')), false);
+});

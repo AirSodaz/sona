@@ -1,5 +1,4 @@
 pub mod asr_metrics;
-pub mod cli_config;
 pub mod cli_runtime;
 pub mod dashboard;
 pub mod diagnostics;

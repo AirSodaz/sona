@@ -1,3 +1,4 @@
+mod config_template;
 mod desktop_paths;
 mod init_config;
 mod models;
