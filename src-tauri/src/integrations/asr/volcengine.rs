@@ -193,72 +193,36 @@ fn config_from_request(
     validate_config(&provider.config, mode)
 }
 
-pub fn build_full_client_request_frame(
-    enable_itn: bool,
-    enable_punc: bool,
-    language: &str,
-    hotwords: Option<&str>,
-) -> Result<Vec<u8>, SherpaError> {
-    let mut request = json!({
-        "user": {
-            "uid": "sona"
-        },
-        "audio": {
-            "format": "pcm",
-            "codec": "raw",
-            "rate": 16000,
-            "bits": 16,
-            "channel": 1
-        },
-        "request": {
-            "model_name": "bigmodel",
-            "enable_itn": enable_itn,
-            "enable_punc": enable_punc,
-            "show_utterances": true,
-            "result_type": "full"
+fn map_server_frame_error(error: sona_online_asr::VolcengineServerFrameError) -> SherpaError {
+    match error {
+        sona_online_asr::VolcengineServerFrameError::FrameTooShort => {
+            SherpaError::VolcengineFrameTooShort
         }
-    });
-
-    if language != "auto" {
-        request["audio"]["language"] = json!(language);
+        sona_online_asr::VolcengineServerFrameError::ErrorFrame => {
+            SherpaError::VolcengineErrorFrame
+        }
+        sona_online_asr::VolcengineServerFrameError::ErrorCodeParseFailed => {
+            SherpaError::VolcengineErrorCodeParseFailed
+        }
+        sona_online_asr::VolcengineServerFrameError::ErrorLengthParseFailed => {
+            SherpaError::VolcengineErrorLengthParseFailed
+        }
+        sona_online_asr::VolcengineServerFrameError::ApiError { code, message } => {
+            SherpaError::VolcengineApiError { code, message }
+        }
+        sona_online_asr::VolcengineServerFrameError::PayloadLengthMissing => {
+            SherpaError::VolcenginePayloadLengthMissing
+        }
+        sona_online_asr::VolcengineServerFrameError::PayloadLengthParseFailed => {
+            SherpaError::VolcenginePayloadLengthParseFailed
+        }
+        sona_online_asr::VolcengineServerFrameError::PayloadIncomplete => {
+            SherpaError::VolcenginePayloadIncomplete
+        }
+        sona_online_asr::VolcengineServerFrameError::ResponseParseFailed { error } => {
+            SherpaError::VolcengineResponseParseFailed { error }
+        }
     }
-    if let Some(hotwords) = hotwords.filter(|value| !value.trim().is_empty()) {
-        request["request"]["corpus"] = json!({
-            "context": serde_json::to_string(&json!({
-                "hotwords": hotwords
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|word| !word.is_empty())
-                    .map(|word| json!({ "word": word }))
-                    .collect::<Vec<_>>()
-            })).unwrap_or_default()
-        });
-    }
-
-    let payload = serde_json::to_vec(&request).map_err(|e| SherpaError::Generic(e.to_string()))?;
-    Ok(build_frame(0x10, 0x10, &payload))
-}
-
-pub fn build_audio_frame(samples: &[u8], is_final: bool) -> Vec<u8> {
-    let flags = if is_final { 0x22 } else { 0x20 };
-    build_frame(flags, 0x00, samples)
-}
-
-fn build_frame(
-    message_type_and_flags: u8,
-    serialization_and_compression: u8,
-    payload: &[u8],
-) -> Vec<u8> {
-    let mut frame = Vec::with_capacity(8 + payload.len());
-    frame.extend_from_slice(&[
-        0x11,
-        message_type_and_flags,
-        serialization_and_compression,
-        0x00,
-    ]);
-    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
-    frame.extend_from_slice(payload);
-    frame
 }
 
 fn build_flash_batch_request_body(
@@ -275,59 +239,6 @@ fn build_flash_batch_request_body(
             "enable_itn": request.enable_itn,
             "enable_punc": true,
             "show_utterances": true
-        }
-    })
-}
-
-fn parse_server_response_frame(frame: &[u8]) -> Result<Option<Value>, SherpaError> {
-    if frame.len() < 8 {
-        return Err(SherpaError::VolcengineFrameTooShort);
-    }
-    let message_type = frame[1] >> 4;
-    if message_type == 0x0f {
-        if frame.len() < 12 {
-            return Err(SherpaError::VolcengineErrorFrame);
-        }
-        let code = u32::from_be_bytes(
-            frame[4..8]
-                .try_into()
-                .map_err(|_| SherpaError::VolcengineErrorCodeParseFailed)?,
-        );
-        let size = u32::from_be_bytes(
-            frame[8..12]
-                .try_into()
-                .map_err(|_| SherpaError::VolcengineErrorLengthParseFailed)?,
-        ) as usize;
-        let message = frame
-            .get(12..12 + size)
-            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .unwrap_or("未知错误");
-        return Err(SherpaError::VolcengineApiError {
-            code,
-            message: message.to_string(),
-        });
-    }
-    if message_type != 0x09 {
-        return Ok(None);
-    }
-
-    let header_size = ((frame[0] & 0x0f) as usize) * 4;
-    let offset = header_size + 4;
-    if frame.len() < offset + 4 {
-        return Err(SherpaError::VolcenginePayloadLengthMissing);
-    }
-    let payload_size = u32::from_be_bytes(
-        frame[offset..offset + 4]
-            .try_into()
-            .map_err(|_| SherpaError::VolcenginePayloadLengthParseFailed)?,
-    ) as usize;
-    let payload_start = offset + 4;
-    let Some(payload) = frame.get(payload_start..payload_start + payload_size) else {
-        return Err(SherpaError::VolcenginePayloadIncomplete);
-    };
-    serde_json::from_slice(payload).map(Some).map_err(|error| {
-        SherpaError::VolcengineResponseParseFailed {
-            error: error.to_string(),
         }
     })
 }
@@ -381,13 +292,6 @@ pub fn segments_from_response_value(
         speaker: None,
         speaker_attribution: None,
     }])
-}
-
-fn segments_from_streaming_response_value(
-    response: &Value,
-    flush_final: bool,
-) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    segments_from_response_value(response, flush_final, "volc-live")
 }
 
 fn segment_from_utterance(
@@ -611,12 +515,13 @@ async fn start_streaming_recognizer_impl(
     }
 
     let (mut writer, mut reader) = ws.split();
-    let init_frame = build_full_client_request_frame(
+    let init_frame = sona_online_asr::build_volcengine_full_client_request_frame(
         session.request.enable_itn,
         true,
         &session.request.language,
         session.request.hotwords.as_deref(),
-    )?;
+    )
+    .map_err(SherpaError::Generic)?;
     writer
         .send(Message::Binary(init_frame))
         .await
@@ -641,14 +546,20 @@ async fn start_streaming_recognizer_impl(
             match message {
                 Ok(Message::Binary(frame)) => {
                     let flush_final = flushing.load(Ordering::SeqCst);
-                    match parse_server_response_frame(&frame).and_then(|value| {
-                        value
-                            .map(|value| {
-                                segments_from_streaming_response_value(&value, flush_final)
-                            })
-                            .transpose()
-                            .map(|value| value.unwrap_or_default())
-                    }) {
+                    match sona_online_asr::parse_volcengine_server_response_frame(&frame)
+                        .map_err(map_server_frame_error)
+                        .and_then(|value| {
+                            value
+                                .map(|value| {
+                                    sona_online_asr::volcengine_streaming_segments_from_response(
+                                        &value,
+                                        flush_final,
+                                    )
+                                    .map_err(SherpaError::Generic)
+                                })
+                                .transpose()
+                                .map(|value| value.unwrap_or_default())
+                        }) {
                         Ok(segments) if !segments.is_empty() => {
                             let normalized =
                                 apply_timeline_normalization(segments, normalization_options);
@@ -713,7 +624,9 @@ async fn feed_audio_chunk_impl(
         return Err(SherpaError::VolcengineWebSocketNotConnected);
     };
     writer
-        .send(Message::Binary(build_audio_frame(&samples, false)))
+        .send(Message::Binary(
+            sona_online_asr::build_volcengine_audio_frame(&samples, false),
+        ))
         .await
         .map_err(|error| SherpaError::VolcengineAudioSendFailed {
             error: error.to_string(),
@@ -734,24 +647,16 @@ async fn feed_audio_samples_impl(
         // be in the "preparing" phase before start_recognizer connects.
         return Ok(());
     };
-    let pcm_bytes = f32_samples_to_i16_pcm_bytes(samples);
+    let pcm_bytes = sona_online_asr::f32_samples_to_i16_pcm_bytes(samples);
     writer
-        .send(Message::Binary(build_audio_frame(&pcm_bytes, false)))
+        .send(Message::Binary(
+            sona_online_asr::build_volcengine_audio_frame(&pcm_bytes, false),
+        ))
         .await
         .map_err(|error| SherpaError::VolcengineAudioSendFailed {
             error: error.to_string(),
         })?;
     Ok(())
-}
-
-fn f32_samples_to_i16_pcm_bytes(samples: &[f32]) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(samples.len() * 2);
-    for &sample in samples {
-        let clamped = sample.clamp(-1.0, 1.0);
-        let value = (clamped * i16::MAX as f32) as i16;
-        bytes.extend_from_slice(&value.to_le_bytes());
-    }
-    bytes
 }
 
 async fn flush_streaming_recognizer_impl(
@@ -761,7 +666,9 @@ async fn flush_streaming_recognizer_impl(
     if let Some(writer) = writer.as_mut() {
         session.flushing.store(true, Ordering::SeqCst);
         writer
-            .send(Message::Binary(build_audio_frame(&[], true)))
+            .send(Message::Binary(
+                sona_online_asr::build_volcengine_audio_frame(&[], true),
+            ))
             .await
             .map_err(|error| SherpaError::VolcengineEndFrameSendFailed {
                 error: error.to_string(),
@@ -920,9 +827,10 @@ mod tests {
     #[test]
     fn volcengine_streaming_frame_builders_use_expected_binary_header() {
         let request_frame =
-            build_full_client_request_frame(true, true, "auto", None).expect("request frame");
-        let audio_frame = build_audio_frame(&[1, 2, 3, 4], false);
-        let final_audio_frame = build_audio_frame(&[], true);
+            sona_online_asr::build_volcengine_full_client_request_frame(true, true, "auto", None)
+                .expect("request frame");
+        let audio_frame = sona_online_asr::build_volcengine_audio_frame(&[1, 2, 3, 4], false);
+        let final_audio_frame = sona_online_asr::build_volcengine_audio_frame(&[], true);
 
         assert_eq!(&request_frame[0..4], &[0x11, 0x10, 0x10, 0x00]);
         assert_eq!(
@@ -1003,8 +911,9 @@ mod tests {
             }
         });
 
-        let segments = segments_from_streaming_response_value(&response, true)
-            .expect("final streaming frame should map");
+        let segments =
+            sona_online_asr::volcengine_streaming_segments_from_response(&response, true)
+                .expect("final streaming frame should map");
 
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].text, "尾句保存。");
@@ -1045,9 +954,9 @@ mod tests {
     }
 
     #[test]
-    fn f32_samples_to_i16_pcm_bytes_converts_correctly() {
+    fn adapter_pcm_bytes_convert_f32_samples_correctly() {
         let samples = [0.0_f32, 1.0, -1.0, 0.5];
-        let bytes = f32_samples_to_i16_pcm_bytes(&samples);
+        let bytes = sona_online_asr::f32_samples_to_i16_pcm_bytes(&samples);
 
         assert_eq!(bytes.len(), 8); // 4 samples × 2 bytes each
         let value_0 = i16::from_le_bytes([bytes[0], bytes[1]]);
@@ -1062,9 +971,9 @@ mod tests {
     }
 
     #[test]
-    fn f32_samples_to_i16_pcm_bytes_clamps_out_of_range() {
+    fn adapter_pcm_bytes_clamp_out_of_range_samples() {
         let samples = [2.0_f32, -3.0];
-        let bytes = f32_samples_to_i16_pcm_bytes(&samples);
+        let bytes = sona_online_asr::f32_samples_to_i16_pcm_bytes(&samples);
 
         let value_0 = i16::from_le_bytes([bytes[0], bytes[1]]);
         let value_1 = i16::from_le_bytes([bytes[2], bytes[3]]);

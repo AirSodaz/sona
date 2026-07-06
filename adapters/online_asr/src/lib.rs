@@ -11,6 +11,7 @@ use sona_core::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
     TranscriptTimingUnit,
 };
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WhisperCompatibleProvider {
@@ -608,6 +609,187 @@ pub fn detect_audio_format(file_path: &std::path::Path) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VolcengineServerFrameError {
+    FrameTooShort,
+    ErrorFrame,
+    ErrorCodeParseFailed,
+    ErrorLengthParseFailed,
+    ApiError { code: u32, message: String },
+    PayloadLengthMissing,
+    PayloadLengthParseFailed,
+    PayloadIncomplete,
+    ResponseParseFailed { error: String },
+}
+
+impl fmt::Display for VolcengineServerFrameError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FrameTooShort => write!(f, "Volcengine ASR response frame is too short."),
+            Self::ErrorFrame => write!(f, "Volcengine ASR returned an invalid error frame."),
+            Self::ErrorCodeParseFailed => write!(f, "Volcengine ASR error code parse failed."),
+            Self::ErrorLengthParseFailed => {
+                write!(f, "Volcengine ASR error length parse failed.")
+            }
+            Self::ApiError { code, message } => {
+                write!(f, "Volcengine ASR returned API error {code}: {message}")
+            }
+            Self::PayloadLengthMissing => {
+                write!(f, "Volcengine ASR response payload length is missing.")
+            }
+            Self::PayloadLengthParseFailed => {
+                write!(f, "Volcengine ASR response payload length parse failed.")
+            }
+            Self::PayloadIncomplete => write!(f, "Volcengine ASR response payload is incomplete."),
+            Self::ResponseParseFailed { error } => {
+                write!(f, "Volcengine ASR response parse failed: {error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for VolcengineServerFrameError {}
+
+pub fn build_volcengine_full_client_request_frame(
+    enable_itn: bool,
+    enable_punc: bool,
+    language: &str,
+    hotwords: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let mut request = serde_json::json!({
+        "user": {
+            "uid": "sona"
+        },
+        "audio": {
+            "format": "pcm",
+            "codec": "raw",
+            "rate": 16000,
+            "bits": 16,
+            "channel": 1
+        },
+        "request": {
+            "model_name": "bigmodel",
+            "enable_itn": enable_itn,
+            "enable_punc": enable_punc,
+            "show_utterances": true,
+            "result_type": "full"
+        }
+    });
+
+    if language != "auto" {
+        request["audio"]["language"] = serde_json::json!(language);
+    }
+    if let Some(hotwords) = hotwords.filter(|value| !value.trim().is_empty()) {
+        request["request"]["corpus"] = serde_json::json!({
+            "context": serde_json::to_string(&serde_json::json!({
+                "hotwords": hotwords
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|word| !word.is_empty())
+                    .map(|word| serde_json::json!({ "word": word }))
+                    .collect::<Vec<_>>()
+            })).unwrap_or_default()
+        });
+    }
+
+    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+    Ok(build_volcengine_frame(0x10, 0x10, &payload))
+}
+
+pub fn build_volcengine_audio_frame(samples: &[u8], is_final: bool) -> Vec<u8> {
+    let flags = if is_final { 0x22 } else { 0x20 };
+    build_volcengine_frame(flags, 0x00, samples)
+}
+
+fn build_volcengine_frame(
+    message_type_and_flags: u8,
+    serialization_and_compression: u8,
+    payload: &[u8],
+) -> Vec<u8> {
+    let mut frame = Vec::with_capacity(8 + payload.len());
+    frame.extend_from_slice(&[
+        0x11,
+        message_type_and_flags,
+        serialization_and_compression,
+        0x00,
+    ]);
+    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    frame.extend_from_slice(payload);
+    frame
+}
+
+pub fn parse_volcengine_server_response_frame(
+    frame: &[u8],
+) -> Result<Option<Value>, VolcengineServerFrameError> {
+    if frame.len() < 8 {
+        return Err(VolcengineServerFrameError::FrameTooShort);
+    }
+    let message_type = frame[1] >> 4;
+    if message_type == 0x0f {
+        if frame.len() < 12 {
+            return Err(VolcengineServerFrameError::ErrorFrame);
+        }
+        let code = u32::from_be_bytes(
+            frame[4..8]
+                .try_into()
+                .map_err(|_| VolcengineServerFrameError::ErrorCodeParseFailed)?,
+        );
+        let size = u32::from_be_bytes(
+            frame[8..12]
+                .try_into()
+                .map_err(|_| VolcengineServerFrameError::ErrorLengthParseFailed)?,
+        ) as usize;
+        let message = frame
+            .get(12..12 + size)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .unwrap_or("unknown error");
+        return Err(VolcengineServerFrameError::ApiError {
+            code,
+            message: message.to_string(),
+        });
+    }
+    if message_type != 0x09 {
+        return Ok(None);
+    }
+
+    let header_size = ((frame[0] & 0x0f) as usize) * 4;
+    let offset = header_size + 4;
+    if frame.len() < offset + 4 {
+        return Err(VolcengineServerFrameError::PayloadLengthMissing);
+    }
+    let payload_size = u32::from_be_bytes(
+        frame[offset..offset + 4]
+            .try_into()
+            .map_err(|_| VolcengineServerFrameError::PayloadLengthParseFailed)?,
+    ) as usize;
+    let payload_start = offset + 4;
+    let Some(payload) = frame.get(payload_start..payload_start + payload_size) else {
+        return Err(VolcengineServerFrameError::PayloadIncomplete);
+    };
+    serde_json::from_slice(payload).map(Some).map_err(|error| {
+        VolcengineServerFrameError::ResponseParseFailed {
+            error: error.to_string(),
+        }
+    })
+}
+
+pub fn volcengine_streaming_segments_from_response(
+    response: &Value,
+    flush_final: bool,
+) -> Result<Vec<TranscriptSegment>, String> {
+    segments_from_volcengine_response(response, flush_final, "volc-live")
+}
+
+pub fn f32_samples_to_i16_pcm_bytes(samples: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(samples.len() * 2);
+    for &sample in samples {
+        let clamped = sample.clamp(-1.0, 1.0);
+        let value = (clamped * i16::MAX as f32) as i16;
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes
+}
+
 pub fn segments_from_volcengine_response(
     response: &Value,
     default_final: bool,
@@ -761,9 +943,11 @@ mod tests {
     };
 
     use crate::{
-        VolcengineMode, WhisperCompatibleProvider, build_volcengine_flash_batch_request_body,
+        VolcengineMode, WhisperCompatibleProvider, build_volcengine_audio_frame,
+        build_volcengine_flash_batch_request_body, build_volcengine_full_client_request_frame,
+        f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
         resolve_volcengine_config, resolve_whisper_config, segments_from_volcengine_response,
-        segments_from_whisper_response,
+        segments_from_whisper_response, volcengine_streaming_segments_from_response,
     };
 
     fn online_request(provider_id: &str, config: serde_json::Value) -> AsrTranscriptionRequest {
@@ -923,5 +1107,67 @@ mod tests {
         assert_eq!(segments[0].tokens.as_ref().unwrap(), &vec!["hel", "lo"]);
         assert_eq!(segments[0].timestamps.as_ref().unwrap(), &vec![0.45, 0.77]);
         assert_eq!(segments[0].durations.as_ref().unwrap(), &vec![0.32, 0.76]);
+    }
+
+    #[test]
+    fn builds_volcengine_streaming_frames_with_expected_headers() {
+        let request_frame = build_volcengine_full_client_request_frame(true, true, "auto", None)
+            .expect("request frame");
+        let audio_frame = build_volcengine_audio_frame(&[1, 2, 3, 4], false);
+        let final_audio_frame = build_volcengine_audio_frame(&[], true);
+
+        assert_eq!(&request_frame[0..4], &[0x11, 0x10, 0x10, 0x00]);
+        assert_eq!(
+            u32::from_be_bytes(request_frame[4..8].try_into().unwrap()) as usize,
+            request_frame.len() - 8
+        );
+        assert!(
+            String::from_utf8_lossy(&request_frame[8..]).contains("\"model_name\":\"bigmodel\"")
+        );
+        assert_eq!(&audio_frame[0..4], &[0x11, 0x20, 0x00, 0x00]);
+        assert_eq!(u32::from_be_bytes(audio_frame[4..8].try_into().unwrap()), 4);
+        assert_eq!(&audio_frame[8..], &[1, 2, 3, 4]);
+        assert_eq!(&final_audio_frame[0..4], &[0x11, 0x22, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn parses_volcengine_streaming_server_response_frame() {
+        let payload = serde_json::to_vec(&json!({
+            "result": {
+                "utterances": [
+                    { "start_time": 0, "end_time": 500, "text": "hello", "definite": true }
+                ]
+            }
+        }))
+        .unwrap();
+        let mut frame = vec![0x11, 0x90, 0x10, 0x00];
+        frame.extend_from_slice(&[0, 0, 0, 1]);
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&payload);
+
+        let parsed = parse_volcengine_server_response_frame(&frame)
+            .expect("frame should parse")
+            .expect("payload should be present");
+        let segments =
+            volcengine_streaming_segments_from_response(&parsed, true).expect("segments");
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].id, "volc-live-0");
+        assert_eq!(segments[0].text, "hello");
+        assert!(segments[0].is_final);
+    }
+
+    #[test]
+    fn converts_f32_samples_to_i16_pcm_bytes() {
+        let bytes = f32_samples_to_i16_pcm_bytes(&[0.0_f32, 1.0, -1.0, 0.5]);
+
+        assert_eq!(bytes.len(), 8);
+        assert_eq!(i16::from_le_bytes([bytes[0], bytes[1]]), 0);
+        assert_eq!(i16::from_le_bytes([bytes[2], bytes[3]]), i16::MAX);
+        assert_eq!(i16::from_le_bytes([bytes[4], bytes[5]]), -i16::MAX);
+        assert_eq!(
+            i16::from_le_bytes([bytes[6], bytes[7]]),
+            (0.5 * i16::MAX as f32) as i16
+        );
     }
 }

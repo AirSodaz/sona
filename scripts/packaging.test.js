@@ -352,6 +352,28 @@ test('desktop Volcengine batch provider delegates HTTP work to online ASR adapte
   assert.doesNotMatch(volcengineRs, /base64::engine::general_purpose::STANDARD\.encode/u);
 });
 
+test('desktop Volcengine streaming protocol helpers are owned by online ASR adapter', () => {
+  const onlineAsrLib = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs'),
+    'utf8',
+  );
+  const volcengineRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    'utf8',
+  );
+
+  assert.match(onlineAsrLib, /build_volcengine_full_client_request_frame/u);
+  assert.match(onlineAsrLib, /build_volcengine_audio_frame/u);
+  assert.match(onlineAsrLib, /parse_volcengine_server_response_frame/u);
+  assert.match(onlineAsrLib, /volcengine_streaming_segments_from_response/u);
+  assert.match(onlineAsrLib, /f32_samples_to_i16_pcm_bytes/u);
+  assert.match(volcengineRs, /sona_online_asr::build_volcengine_full_client_request_frame/u);
+  assert.match(volcengineRs, /sona_online_asr::parse_volcengine_server_response_frame/u);
+  assert.doesNotMatch(volcengineRs, /pub fn build_audio_frame/u);
+  assert.doesNotMatch(volcengineRs, /fn parse_server_response_frame/u);
+  assert.doesNotMatch(volcengineRs, /fn f32_samples_to_i16_pcm_bytes/u);
+});
+
 test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
 
