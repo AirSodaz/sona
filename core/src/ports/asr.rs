@@ -1,8 +1,11 @@
 use crate::model_config::ModelFileConfig;
+use crate::transcribe_runtime::OfflineTranscribePlan;
+use crate::transcript::TranscriptSegment;
 pub use crate::transcript_postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
     TranscriptTextReplacementRuleSet,
 };
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(feature = "specta")]
@@ -31,6 +34,14 @@ pub enum BatchSegmentationMode {
     #[default]
     Vad,
     Whole,
+}
+
+#[async_trait]
+pub trait OfflineTranscriber: Send + Sync {
+    async fn transcribe(
+        &self,
+        plan: OfflineTranscribePlan,
+    ) -> Result<Vec<TranscriptSegment>, String>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

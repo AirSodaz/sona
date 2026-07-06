@@ -8,8 +8,10 @@ use crate::recognizer::{
     SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
     decode_offline_samples,
 };
+use async_trait::async_trait;
 use sherpa_onnx::VadModelConfig;
 use sona_core::model_config::ModelFileConfig;
+use sona_core::ports::asr::OfflineTranscriber;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
 use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 use std::path::{Path, PathBuf};
@@ -17,12 +19,25 @@ use std::path::{Path, PathBuf};
 pub async fn run_offline_transcription(
     plan: OfflineTranscribePlan,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let adapter = LocalOfflineTranscriber::from_plan(plan)?;
-    adapter.transcribe().await
+    LocalOfflineAsrAdapter.transcribe(plan).await
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LocalOfflineAsrAdapter;
+
+#[async_trait]
+impl OfflineTranscriber for LocalOfflineAsrAdapter {
+    async fn transcribe(
+        &self,
+        plan: OfflineTranscribePlan,
+    ) -> Result<Vec<TranscriptSegment>, String> {
+        let job = OfflineTranscriptionJob::from_plan(plan)?;
+        job.transcribe().await
+    }
 }
 
 #[derive(Debug, Clone)]
-struct LocalOfflineTranscriber {
+struct OfflineTranscriptionJob {
     input_path: PathBuf,
     save_to_path: Option<PathBuf>,
     model_path: PathBuf,
@@ -39,7 +54,7 @@ struct LocalOfflineTranscriber {
     quiet: bool,
 }
 
-impl LocalOfflineTranscriber {
+impl OfflineTranscriptionJob {
     fn from_plan(plan: OfflineTranscribePlan) -> Result<Self, String> {
         if !plan.input_path.is_file() {
             return Err(format!(

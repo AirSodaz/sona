@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
+use sona_core::ports::asr::OfflineTranscriber;
 use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
     OfflineTranscribeOptions, OutputTarget, resolve_offline_transcribe_plan,
@@ -95,8 +96,9 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         .enable_all()
         .build()
         .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
+    let transcriber = sona_local_asr::offline::LocalOfflineAsrAdapter;
     let segments = runtime
-        .block_on(sona_local_asr::offline::run_offline_transcription(plan))
+        .block_on(transcriber.transcribe(plan))
         .map_err(CliError::Other)?;
 
     let output = sona_core::export::export_segments_with_mode(

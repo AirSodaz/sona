@@ -204,6 +204,18 @@ test('pr guardrails run local ASR adapter tests with core bindings and standalon
   );
 });
 
+test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
+  const cliTranscribeRs = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),
+    'utf8',
+  );
+
+  assert.match(cliTranscribeRs, /use sona_core::ports::asr::OfflineTranscriber;/u);
+  assert.match(cliTranscribeRs, /sona_local_asr::offline::LocalOfflineAsrAdapter/u);
+  assert.match(cliTranscribeRs, /\.transcribe\(plan\)/u);
+  assert.doesNotMatch(cliTranscribeRs, /run_offline_transcription/u);
+});
+
 test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
 
