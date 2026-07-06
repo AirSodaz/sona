@@ -228,3 +228,14 @@ test('desktop audio pipeline reuses local ASR adapter media helpers', () => {
   assert.doesNotMatch(pipelineRs, /VoiceActivityDetector/u);
   assert.doesNotMatch(pipelineRs, /VadModelConfig/u);
 });
+
+test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
+  const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
+
+  assert.match(batchRs, /sona_local_asr::audio::segment_batch_audio/u);
+  assert.doesNotMatch(batchRs, /sherpa_onnx::SileroVadModelConfig/u);
+  assert.doesNotMatch(batchRs, /sherpa_onnx::VadModelConfig/u);
+  assert.doesNotMatch(batchRs, /crate::core::pipeline::vad_segment_audio/u);
+  assert.doesNotMatch(batchRs, /crate::core::pipeline::fixed_chunk_audio/u);
+  assert.doesNotMatch(batchRs, /crate::core::pipeline::whole_audio_segment/u);
+});
