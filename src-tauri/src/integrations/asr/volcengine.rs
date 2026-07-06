@@ -933,6 +933,7 @@ mod tests {
             normalization_options: TranscriptNormalizationOptions::default(),
             postprocess_options: TranscriptPostprocessOptions::default(),
             hotwords: None,
+            speaker_processing: None,
             engine_config: crate::integrations::asr::types::AsrEngineConfig::Online {
                 provider: crate::integrations::asr::types::OnlineAsrProviderRequest {
                     provider_id: crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID

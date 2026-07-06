@@ -762,6 +762,7 @@ async fn start_worker_loop(
                             job.language.clone()
                         },
                         hotwords: job.hotwords.clone(),
+                        speaker_processing: None,
                         normalization_options: Default::default(),
                         postprocess_options: Default::default(),
                     };

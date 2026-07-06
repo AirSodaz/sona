@@ -2,7 +2,7 @@ use crate::integrations::asr::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
 
-pub use crate::core::speaker::{SpeakerProfile, SpeakerProfileSample};
+pub use crate::core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
 pub use crate::core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 
 use crate::core::paths::{PathKind, PathProvider};
@@ -32,14 +32,6 @@ const PROFILE_SAMPLE_MIN_DURATION_SECONDS: f32 = 4.0;
 const PROFILE_LIMITED_MIN_TOTAL_DURATION_SECONDS: f32 = 8.0;
 const PROFILE_READY_MIN_TOTAL_DURATION_SECONDS: f32 = 20.0;
 const PROFILE_READY_MIN_SAMPLE_COUNT: usize = 2;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SpeakerProcessingConfig {
-    pub speaker_segmentation_model_path: Option<String>,
-    pub speaker_embedding_model_path: Option<String>,
-    pub speaker_profiles: Option<Vec<SpeakerProfile>>,
-}
 
 #[derive(Debug, Clone)]
 struct SpeakerSpan {

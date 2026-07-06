@@ -196,6 +196,7 @@ async fn handle_online_streaming_socket(
             language
         },
         hotwords,
+        speaker_processing: None,
         normalization_options: Default::default(),
         postprocess_options: Default::default(),
     };

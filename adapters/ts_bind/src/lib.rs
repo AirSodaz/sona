@@ -6,6 +6,7 @@
 //! same pure Rust types without reaching into the desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
+pub use sona_core::ports::asr::{AsrEngine, AsrMode, BatchSegmentationMode};
 pub use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
@@ -18,6 +19,9 @@ pub fn exported_core_type_names() -> &'static [&'static str] {
         "RuntimeEnvironmentStatus",
         "RuntimePathKind",
         "RuntimePathStatus",
+        "AsrEngine",
+        "AsrMode",
+        "BatchSegmentationMode",
     ]
 }
 
@@ -36,6 +40,9 @@ mod tests {
                 "RuntimeEnvironmentStatus",
                 "RuntimePathKind",
                 "RuntimePathStatus",
+                "AsrEngine",
+                "AsrMode",
+                "BatchSegmentationMode",
             ]
         );
     }
@@ -52,5 +59,8 @@ mod tests {
         assert_specta_type::<sona_core::runtime::RuntimeEnvironmentStatus>();
         assert_specta_type::<sona_core::runtime::RuntimePathKind>();
         assert_specta_type::<sona_core::runtime::RuntimePathStatus>();
+        assert_specta_type::<sona_core::ports::asr::AsrEngine>();
+        assert_specta_type::<sona_core::ports::asr::AsrMode>();
+        assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();
     }
 }

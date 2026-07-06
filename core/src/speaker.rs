@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct SpeakerProcessingConfig {
+    pub speaker_segmentation_model_path: Option<String>,
+    pub speaker_embedding_model_path: Option<String>,
+    pub speaker_profiles: Option<Vec<SpeakerProfile>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SpeakerProfileSample {
     pub id: String,
     pub file_path: String,
