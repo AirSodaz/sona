@@ -412,6 +412,19 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs')), false);
 });
 
+test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
+  const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'storage_usage.rs')));
+  assert.match(sqliteLib, /^pub mod storage_usage;/mu);
+  assert.match(desktopCore, /pub use sona_sqlite::storage_usage;/u);
+  assert.match(desktopStorageCommand, /crate::core::storage_usage::\{/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'storage_usage.rs')), false);
+  assert.doesNotMatch(desktopCore, /^pub mod storage_usage;/mu);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

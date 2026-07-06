@@ -1,4 +1,4 @@
-use crate::core::database::{Database, DatabaseError};
+use crate::{Database, DatabaseError};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
@@ -483,7 +483,7 @@ fn is_excluded_path(path: &Path, excluded_paths: &[PathBuf]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
+    use crate::Database;
     use std::fs;
     use tempfile::tempdir;
 

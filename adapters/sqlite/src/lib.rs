@@ -5,6 +5,7 @@ pub mod llm_usage;
 pub mod ports;
 pub mod project;
 pub mod schema;
+pub mod storage_usage;
 pub mod task_ledger;
 
 pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
