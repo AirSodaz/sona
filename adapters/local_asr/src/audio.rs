@@ -4,6 +4,40 @@ use sona_core::ports::asr::BatchSegmentationMode;
 use std::path::{Path, PathBuf};
 
 pub type VadConfig = VadModelConfig;
+pub type VadDetector = VoiceActivityDetector;
+
+#[derive(Debug, Clone, Copy)]
+pub struct VadDetectorOptions {
+    pub threshold: f32,
+    pub min_silence_duration: f32,
+    pub min_speech_duration: f32,
+    pub window_size: i32,
+    pub sample_rate: i32,
+    pub num_threads: i32,
+}
+
+impl Default for VadDetectorOptions {
+    fn default() -> Self {
+        Self {
+            threshold: 0.30,
+            min_silence_duration: 0.5,
+            min_speech_duration: 0.25,
+            window_size: 512,
+            sample_rate: 16000,
+            num_threads: 1,
+        }
+    }
+}
+
+impl VadDetectorOptions {
+    pub fn batch_segmentation() -> Self {
+        Self {
+            threshold: 0.35,
+            min_silence_duration: 1.0,
+            ..Self::default()
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AudioSegment {
@@ -35,6 +69,24 @@ pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, String> {
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("Failed to get current executable path: {error}"))?;
     resolve_ffmpeg_sidecar_path_from_exe(&exe_path)
+}
+
+pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, String> {
+    if !path.exists() {
+        return Err(format!("Model path does not exist: {}", path.display()));
+    }
+
+    if path.is_file() {
+        return Ok(path.to_path_buf());
+    }
+
+    let entries = std::fs::read_dir(path)
+        .map_err(|error| format!("Failed to read model directory {}: {error}", path.display()))?;
+    entries
+        .flatten()
+        .find(|entry| entry.path().extension().is_some_and(|ext| ext == "onnx"))
+        .map(|entry| entry.path())
+        .ok_or_else(|| format!("No .onnx file found in model directory {}", path.display()))
 }
 
 pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
@@ -162,24 +214,48 @@ pub fn segment_batch_audio(
         return fixed_chunk_audio(samples, 16000, 30.0);
     }
 
-    let silero_vad = SileroVadModelConfig {
-        model: Some(vad_model.to_string_lossy().to_string()),
-        threshold: 0.35,
-        min_silence_duration: 1.0,
-        min_speech_duration: 0.25,
-        window_size: 512,
-        ..Default::default()
-    };
-
-    let vad_config = VadConfig {
-        silero_vad,
-        sample_rate: 16000,
-        num_threads: 1,
-        ..Default::default()
+    let vad_config = match create_vad_config(vad_model, VadDetectorOptions::batch_segmentation()) {
+        Ok(config) => config,
+        Err(_) => return fixed_chunk_audio(samples, 16000, 30.0),
     };
 
     vad_segment_audio(samples, 16000, &vad_config, vad_buffer)
         .unwrap_or_else(|_| fixed_chunk_audio(samples, 16000, 30.0))
+}
+
+pub fn create_vad_config(
+    vad_model: &Path,
+    options: VadDetectorOptions,
+) -> Result<VadConfig, String> {
+    let model_path = resolve_model_onnx_path(vad_model)?;
+    let silero_vad = SileroVadModelConfig {
+        model: Some(model_path.to_string_lossy().to_string()),
+        threshold: options.threshold,
+        min_silence_duration: options.min_silence_duration,
+        min_speech_duration: options.min_speech_duration,
+        window_size: options.window_size,
+        ..Default::default()
+    };
+    Ok(VadConfig {
+        silero_vad,
+        sample_rate: options.sample_rate,
+        num_threads: options.num_threads,
+        ..Default::default()
+    })
+}
+
+pub fn create_vad_detector(
+    vad_model: &Path,
+    detector_capacity_seconds: f32,
+) -> Result<VadDetector, String> {
+    let vad_config = create_vad_config(vad_model, VadDetectorOptions::default())?;
+    let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
+        detector_capacity_seconds
+    } else {
+        60.0
+    };
+    VoiceActivityDetector::create(&vad_config, detector_capacity_seconds)
+        .ok_or("Failed to create VoiceActivityDetector".to_string())
 }
 
 pub fn vad_segment_audio(
@@ -259,9 +335,12 @@ fn extract_vad_segments(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_ffmpeg_sidecar_path_from_exe, segment_batch_audio};
+    use super::{
+        resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path, segment_batch_audio,
+    };
     use crate::audio::pcm_i16_to_f32;
     use sona_core::ports::asr::BatchSegmentationMode;
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -307,5 +386,30 @@ mod tests {
         assert_eq!(segments[1].duration, 30.0);
         assert_eq!(segments[2].start_time, 60.0);
         assert_eq!(segments[2].duration, 5.0);
+    }
+
+    #[test]
+    fn resolves_model_onnx_path_from_file_or_directory() {
+        let root = std::env::temp_dir().join(format!("sona-model-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let onnx_path = root.join("model.onnx");
+        fs::write(&onnx_path, "onnx").unwrap();
+
+        assert_eq!(resolve_model_onnx_path(&onnx_path).unwrap(), onnx_path);
+        assert_eq!(
+            resolve_model_onnx_path(&root).unwrap(),
+            root.join("model.onnx")
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn resolves_model_onnx_path_rejects_missing_path() {
+        let missing = std::env::temp_dir().join(format!("sona-missing-{}", uuid::Uuid::new_v4()));
+
+        let error = resolve_model_onnx_path(&missing).unwrap_err();
+
+        assert!(error.contains("Model path does not exist"));
     }
 }

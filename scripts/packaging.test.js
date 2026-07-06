@@ -255,3 +255,16 @@ test('desktop batch ASR delegates audio segmentation to local ASR adapter', () =
   assert.doesNotMatch(batchRs, /crate::core::pipeline::fixed_chunk_audio/u);
   assert.doesNotMatch(batchRs, /crate::core::pipeline::whole_audio_segment/u);
 });
+
+test('desktop live VAD creation is delegated to local ASR adapter', () => {
+  const modelConfigRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+    'utf8',
+  );
+
+  assert.match(modelConfigRs, /sona_local_asr::audio::create_vad_detector/u);
+  assert.match(modelConfigRs, /SafeVad\(pub sona_local_asr::audio::VadDetector\)/u);
+  assert.doesNotMatch(modelConfigRs, /SileroVadModelConfig/u);
+  assert.doesNotMatch(modelConfigRs, /VadModelConfig/u);
+  assert.doesNotMatch(modelConfigRs, /VoiceActivityDetector/u);
+});

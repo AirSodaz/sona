@@ -1,10 +1,11 @@
 use crate::audio::{
-    extract_and_resample_audio, fixed_chunk_audio, save_wav_file, vad_segment_audio,
+    VadDetectorOptions, create_vad_config, extract_and_resample_audio, fixed_chunk_audio,
+    resolve_model_onnx_path, save_wav_file, vad_segment_audio,
 };
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use sherpa_onnx::{
     OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig, OfflineRecognizer,
-    OfflineRecognizerConfig, SileroVadModelConfig, VadModelConfig,
+    OfflineRecognizerConfig, VadModelConfig,
 };
 use sona_core::model_config::ModelFileConfig;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
@@ -354,7 +355,7 @@ fn load_punctuation(punctuation_model: Option<&Path>) -> Result<Option<Punctuati
         return Ok(None);
     };
 
-    let model_path = resolve_model_file_path(path)?;
+    let model_path = resolve_model_onnx_path(path)?;
     Punctuation::new(&model_path.to_string_lossy(), 1).map(Some)
 }
 
@@ -363,39 +364,7 @@ fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, S
         return Ok(None);
     };
 
-    let model_path = resolve_model_file_path(path)?;
-    let silero_vad = SileroVadModelConfig {
-        model: Some(model_path.to_string_lossy().to_string()),
-        threshold: 0.30,
-        min_silence_duration: 0.5,
-        min_speech_duration: 0.25,
-        window_size: 512,
-        ..Default::default()
-    };
-    Ok(Some(VadModelConfig {
-        silero_vad,
-        sample_rate: 16000,
-        num_threads: 1,
-        ..Default::default()
-    }))
-}
-
-fn resolve_model_file_path(path: &Path) -> Result<PathBuf, String> {
-    if !path.exists() {
-        return Err(format!("Model path does not exist: {}", path.display()));
-    }
-
-    if path.is_file() {
-        return Ok(path.to_path_buf());
-    }
-
-    let entries = std::fs::read_dir(path)
-        .map_err(|error| format!("Failed to read model directory {}: {error}", path.display()))?;
-    entries
-        .flatten()
-        .find(|entry| entry.path().extension().is_some_and(|ext| ext == "onnx"))
-        .map(|entry| entry.path())
-        .ok_or_else(|| format!("No .onnx file found in model directory {}", path.display()))
+    create_vad_config(path, VadDetectorOptions::default()).map(Some)
 }
 
 fn transcribe_samples(

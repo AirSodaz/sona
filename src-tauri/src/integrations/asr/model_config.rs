@@ -2,7 +2,6 @@ pub use crate::core::model_config::ModelFileConfig;
 use log::{debug, info};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
-    SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
 };
 use std::path::{Path, PathBuf};
 
@@ -526,7 +525,7 @@ pub struct SafeStream(pub sherpa_onnx::OnlineStream);
 unsafe impl Send for SafeStream {}
 unsafe impl Sync for SafeStream {}
 
-pub struct SafeVad(pub sherpa_onnx::VoiceActivityDetector);
+pub struct SafeVad(pub sona_local_asr::audio::VadDetector);
 unsafe impl Send for SafeVad {}
 unsafe impl Sync for SafeVad {}
 
@@ -582,7 +581,7 @@ pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation
 pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
     let v_path = vad_model?;
 
-    if v_path.is_empty() || !Path::new(&v_path).exists() {
+    if v_path.is_empty() {
         println!(
             "[Sherpa] load_vad: Path is empty or does not exist: {}",
             v_path
@@ -590,61 +589,16 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
         return None;
     }
 
-    let model_file_path = if Path::new(&v_path).is_file() {
-        v_path
-    } else {
-        let entries = match std::fs::read_dir(&v_path) {
-            Ok(e) => e,
-            Err(err) => {
-                println!("[Sherpa] load_vad: Failed to read dir {}: {}", v_path, err);
-                return None;
-            }
-        };
-
-        let onnx_file = entries
-            .flatten()
-            .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"));
-
-        match onnx_file {
-            Some(file) => file.path().to_string_lossy().into_owned(),
-            None => {
-                println!(
-                    "[Sherpa] load_vad: No .onnx file found in directory {}",
-                    v_path
-                );
-                return None;
-            }
+    match sona_local_asr::audio::create_vad_detector(Path::new(&v_path), 60.0) {
+        Ok(vad) => {
+            println!("[Sherpa] load_vad: VAD successfully created!");
+            Some(SafeVad(vad))
         }
-    };
-
-    println!(
-        "[Sherpa] load_vad: Found VAD model file: {}",
-        model_file_path
-    );
-
-    let silero_vad = SileroVadModelConfig {
-        model: Some(model_file_path),
-        threshold: 0.30,
-        min_silence_duration: 0.5,
-        min_speech_duration: 0.25,
-        window_size: 512,
-        ..Default::default()
-    };
-
-    let vad_config = VadModelConfig {
-        silero_vad,
-        sample_rate: 16000,
-        num_threads: 1,
-        ..Default::default()
-    };
-
-    let result = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
-    if result.is_none() {
-        println!("[Sherpa] load_vad: VoiceActivityDetector::create FAILED!");
-    } else {
-        println!("[Sherpa] load_vad: VAD successfully created!");
+        Err(error) => {
+            println!("[Sherpa] load_vad: {error}");
+            None
+        }
     }
-    result
 }
 
 #[cfg(test)]
