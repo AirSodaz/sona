@@ -525,7 +525,7 @@ pub fn create_offline_recognizer(
     model_type: ModelType,
     num_threads: i32,
     provider: Option<&str>,
-) -> Result<OfflineRecognizer, String> {
+) -> Result<SafeOfflineRecognizer, String> {
     if !model_type.is_offline() {
         return Err(format!(
             "Unsupported offline model type: {}",
@@ -540,7 +540,7 @@ pub fn create_offline_recognizer(
     )?
     .inner
     {
-        RecognizerInner::Offline(recognizer) => Ok(recognizer.0),
+        RecognizerInner::Offline(recognizer) => Ok(recognizer),
         RecognizerInner::Online(_) => Err("Unsupported offline model type".to_string()),
     }
 }

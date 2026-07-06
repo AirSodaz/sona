@@ -4,8 +4,11 @@ use crate::audio::{
 };
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use crate::punctuation::{Punctuation, load_punctuation_from_path};
-use crate::recognizer::{build_offline_model_config, create_offline_recognizer};
-use sherpa_onnx::{OfflineRecognizer, VadModelConfig};
+use crate::recognizer::{
+    SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
+    decode_offline_samples,
+};
+use sherpa_onnx::VadModelConfig;
 use sona_core::model_config::ModelFileConfig;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
 use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
@@ -139,7 +142,7 @@ fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, S
 
 fn transcribe_samples(
     samples: &[f32],
-    recognizer: &OfflineRecognizer,
+    recognizer: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
     vad_config: Option<&VadModelConfig>,
     vad_buffer: f32,
@@ -153,11 +156,7 @@ fn transcribe_samples(
 
     let mut results = Vec::new();
     for segment in audio_segments {
-        let stream = recognizer.create_stream();
-        stream.accept_waveform(16000, &segment.samples);
-        recognizer.decode(&stream);
-
-        if let Some(result) = stream.get_result() {
+        if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
                 continue;

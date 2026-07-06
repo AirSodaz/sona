@@ -318,10 +318,18 @@ test('local offline transcription reuses local ASR recognizer model construction
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'offline.rs'),
     'utf8',
   );
+  const recognizerRs = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'),
+    'utf8',
+  );
 
   assert.match(offlineRs, /use crate::recognizer::\{[^}]*build_offline_model_config/u);
+  assert.match(offlineRs, /decode_offline_samples/u);
   assert.match(offlineRs, /create_offline_recognizer/u);
+  assert.match(recognizerRs, /pub fn create_offline_recognizer\([\s\S]*\) -> Result<SafeOfflineRecognizer, String>/u);
   assert.doesNotMatch(offlineRs, /enum ModelType/u);
+  assert.doesNotMatch(offlineRs, /use sherpa_onnx::OfflineRecognizer/u);
+  assert.doesNotMatch(recognizerRs, /\) -> Result<OfflineRecognizer, String>/u);
   assert.doesNotMatch(offlineRs, /OfflineRecognizerConfig/u);
   assert.doesNotMatch(offlineRs, /fn build_model_config/u);
   assert.doesNotMatch(offlineRs, /fn create_recognizer/u);
