@@ -6,11 +6,10 @@ use sona_core::preset_models::PresetModel;
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use sona_core::transcribe_runtime::{
     BatchInputSource, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
-    DEFAULT_VAD_BUFFER_SIZE, OfflineTranscribeCliOptions, OutputTarget,
-    load_transcribe_config_file, plan_batch_output_files, resolve_batch_input_source,
-    resolve_batch_jobs, resolve_export_format, resolve_offline_transcribe_plan,
-    resolve_offline_transcribe_plan_with_install_checker, resolve_output_target,
-    should_run_path_batch,
+    DEFAULT_VAD_BUFFER_SIZE, OfflineTranscribeOptions, OutputTarget, load_transcribe_config_file,
+    plan_batch_output_files, resolve_batch_input_source, resolve_batch_jobs, resolve_export_format,
+    resolve_offline_transcribe_plan, resolve_offline_transcribe_plan_with_install_checker,
+    resolve_output_target, should_run_path_batch,
 };
 use tempfile::tempdir;
 
@@ -180,8 +179,8 @@ fn batch_output_plans_reject_duplicate_outputs_without_recursive_structure() {
     assert!(error.contains("demo.json"));
 }
 
-fn temp_cli_options() -> OfflineTranscribeCliOptions {
-    OfflineTranscribeCliOptions {
+fn temp_transcribe_options() -> OfflineTranscribeOptions {
+    OfflineTranscribeOptions {
         input: PathBuf::from("sample.wav"),
         output: None,
         format: None,
@@ -233,7 +232,7 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
 fn offline_plan_cli_values_override_config_file_values() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir.clone());
@@ -271,7 +270,7 @@ fn offline_plan_cli_values_override_config_file_values() {
 fn offline_plan_defaults_gpu_language_threads_and_vad_buffer() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir);
@@ -290,7 +289,7 @@ fn offline_plan_defaults_gpu_language_threads_and_vad_buffer() {
 fn offline_plan_defaults_required_companions_when_omitted() {
     let (_dir, input_path, models_dir) = installed_funasr_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
     cli.models_dir = Some(models_dir.clone());
@@ -322,7 +321,7 @@ fn offline_plan_defaults_required_companions_when_omitted() {
 fn offline_plan_config_can_override_required_companion_default() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir);
@@ -345,7 +344,7 @@ fn offline_plan_config_can_override_required_companion_default() {
 fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir);
@@ -370,7 +369,7 @@ fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
 fn offline_plan_cli_gpu_overrides_config_file() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir);
@@ -392,7 +391,7 @@ fn offline_plan_cli_gpu_overrides_config_file() {
 
 #[test]
 fn offline_plan_invalid_gpu_fails_before_model_resolution() {
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.model_id = Some("not-a-real-model".to_string());
     cli.gpu_acceleration = Some("vulkan".to_string());
 
@@ -408,7 +407,7 @@ fn offline_plan_invalid_gpu_fails_before_model_resolution() {
 fn offline_plan_infers_export_format_from_output_path() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.output = Some(PathBuf::from("out.srt"));
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
@@ -424,7 +423,7 @@ fn offline_plan_infers_export_format_from_output_path() {
 fn offline_plan_format_flag_overrides_output_extension() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.output = Some(PathBuf::from("out.txt"));
     cli.format = Some("json".to_string());
@@ -441,7 +440,7 @@ fn offline_plan_format_flag_overrides_output_extension() {
 fn offline_plan_defaults_required_punctuation_constant_when_needed() {
     let (_dir, input_path, models_dir) = installed_funasr_fixture();
 
-    let mut cli = temp_cli_options();
+    let mut cli = temp_transcribe_options();
     cli.input = input_path;
     cli.model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
     cli.models_dir = Some(models_dir);

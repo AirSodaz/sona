@@ -37,7 +37,7 @@ pub struct BatchInputSource {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct OfflineTranscribeCliOptions {
+pub struct OfflineTranscribeOptions {
     pub input: PathBuf,
     pub output: Option<PathBuf>,
     pub format: Option<String>,
@@ -115,10 +115,14 @@ pub fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
 }
 
 pub fn resolve_offline_transcribe_plan(
-    cli: OfflineTranscribeCliOptions,
+    options: OfflineTranscribeOptions,
     config: Option<TranscribeConfigSection>,
 ) -> Result<OfflineTranscribePlan, String> {
-    resolve_offline_transcribe_plan_with_install_checker(cli, config, is_preset_model_installed_at)
+    resolve_offline_transcribe_plan_with_install_checker(
+        options,
+        config,
+        is_preset_model_installed_at,
+    )
 }
 
 pub fn should_run_path_batch(inputs: &[PathBuf]) -> bool {
@@ -367,41 +371,44 @@ fn batch_relative_output_path(
 }
 
 pub fn resolve_offline_transcribe_plan_with_install_checker(
-    cli: OfflineTranscribeCliOptions,
+    options: OfflineTranscribeOptions,
     config: Option<TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
 ) -> Result<OfflineTranscribePlan, String> {
     let config = config.unwrap_or_default();
-    let output_target = resolve_output_target(cli.output.clone());
+    let output_target = resolve_output_target(options.output.clone());
     let export_format = resolve_export_format(
-        cli.format.as_deref().or(config.format.as_deref()),
+        options.format.as_deref().or(config.format.as_deref()),
         match &output_target {
             OutputTarget::Stdout => None,
             OutputTarget::File(path) => Some(path.as_path()),
         },
     )?;
     let gpu_acceleration =
-        crate::gpu::resolve_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
+        crate::gpu::resolve_gpu_acceleration(options.gpu_acceleration.or(config.gpu_acceleration))?;
 
-    ensure_input_file_exists(&cli.input)?;
-    ensure_output_can_be_written(&output_target, cli.force)?;
-    let models_dir = resolve_cli_models_dir(cli.models_dir.or(config.models_dir))?;
-    let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
+    ensure_input_file_exists(&options.input)?;
+    ensure_output_can_be_written(&output_target, options.force)?;
+    let models_dir = resolve_cli_models_dir(options.models_dir.or(config.models_dir))?;
+    let model_id = options.model_id.or(config.model_id).ok_or_else(|| {
         "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
     })?;
     let model = resolve_offline_model(&model_id)?;
     let rules = model.resolved_rules();
 
-    let vad_model_id = cli.vad_model_id.or(config.vad_model_id);
-    let punctuation_model_id = cli.punctuation_model_id.or(config.punctuation_model_id);
+    let vad_model_id = options.vad_model_id.or(config.vad_model_id);
+    let punctuation_model_id = options.punctuation_model_id.or(config.punctuation_model_id);
 
-    let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
-    let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
+    let enable_itn = options.enable_itn.or(config.enable_itn).unwrap_or(false);
+    let threads = options
+        .threads
+        .or(config.threads)
+        .unwrap_or(DEFAULT_THREADS);
     if threads <= 0 {
         return Err("threads must be greater than 0".to_string());
     }
 
-    let vad_buffer = cli
+    let vad_buffer = options
         .vad_buffer
         .or(config.vad_buffer_size)
         .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
@@ -409,7 +416,7 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
         return Err("vad_buffer must be greater than 0".to_string());
     }
 
-    let language = cli
+    let language = options
         .language
         .or(config.language)
         .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
@@ -437,8 +444,8 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
     };
 
     Ok(OfflineTranscribePlan {
-        input_path: cli.input,
-        save_to_path: cli.save_wav,
+        input_path: options.input,
+        save_to_path: options.save_wav,
         model_path,
         num_threads: threads,
         enable_itn,
@@ -448,11 +455,11 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
         vad_buffer,
         model_type: model.model_type.clone(),
         file_config: model.file_config.clone(),
-        hotwords: cli.hotwords.or(config.hotwords),
+        hotwords: options.hotwords.or(config.hotwords),
         gpu_acceleration,
         export_format,
         output_target,
-        quiet: cli.quiet || config.quiet.unwrap_or(false),
+        quiet: options.quiet || config.quiet.unwrap_or(false),
     })
 }
 

@@ -113,7 +113,7 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
     }))
-    .filter(({ content }) => /sona_core::cli_/u.test(content))
+    .filter(({ content }) => /sona_core::cli_|OfflineTranscribeCliOptions/u.test(content))
     .map(({ filePath }) => path.relative(repoRoot, filePath));
 
   assert.deepEqual(desktopCliCoreReferences, []);

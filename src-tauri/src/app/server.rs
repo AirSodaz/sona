@@ -28,7 +28,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
-    OfflineTranscribeCliOptions, resolve_offline_transcribe_plan_with_install_checker,
+    OfflineTranscribeOptions, resolve_offline_transcribe_plan_with_install_checker,
 };
 
 use crate::core::database::{Database, DatabaseError};
@@ -822,10 +822,10 @@ pub(crate) fn build_local_transcribe_options(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> OfflineTranscribeCliOptions {
+) -> OfflineTranscribeOptions {
     let (vad_model_id, punctuation_model_id) =
         companion_defaults_for_model(&job.model_id, defaults);
-    OfflineTranscribeCliOptions {
+    OfflineTranscribeOptions {
         input: job.file_path.clone(),
         output: None,
         format: None,

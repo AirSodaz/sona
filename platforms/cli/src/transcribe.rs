@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use crate::{CliError, CliOutput, CliResult};
 use sona_core::cli_runtime::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
-    OfflineTranscribeCliOptions, OutputTarget, resolve_offline_transcribe_plan,
+    OfflineTranscribeOptions, OutputTarget, resolve_offline_transcribe_plan,
 };
 
 #[derive(Debug, Args)]
@@ -69,7 +69,7 @@ pub struct TranscribeArgs {
 
 pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let config = load_config(args.config.as_ref())?;
-    let cli = OfflineTranscribeCliOptions {
+    let options = OfflineTranscribeOptions {
         input: args.input,
         output: args.output,
         format: args.format,
@@ -88,7 +88,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         force: args.force,
     };
 
-    let plan = resolve_offline_transcribe_plan(cli, config).map_err(CliError::Validation)?;
+    let plan = resolve_offline_transcribe_plan(options, config).map_err(CliError::Validation)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
