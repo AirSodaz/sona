@@ -9,12 +9,7 @@ use crate::core::paths::{PathKind, PathProvider};
 use crate::core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use sherpa_onnx::{
-    FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig,
-    OfflineSpeakerDiarizationSegment, OfflineSpeakerSegmentationModelConfig,
-    OfflineSpeakerSegmentationPyannoteModelConfig, SpeakerEmbeddingExtractor,
-    SpeakerEmbeddingExtractorConfig, SpeakerEmbeddingManager,
-};
+use sona_local_asr::speaker::SpeakerDiarizationSegment;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -370,40 +365,11 @@ fn run_diarization(
     samples: &[f32],
     segmentation_model: &Path,
     embedding_model: &Path,
-) -> Result<Vec<OfflineSpeakerDiarizationSegment>, String> {
-    let diarization_config = OfflineSpeakerDiarizationConfig {
-        segmentation: OfflineSpeakerSegmentationModelConfig {
-            pyannote: OfflineSpeakerSegmentationPyannoteModelConfig {
-                model: Some(segmentation_model.to_string_lossy().into_owned()),
-            },
-            num_threads: 1,
-            debug: false,
-            provider: Some("cpu".to_string()),
-        },
-        embedding: SpeakerEmbeddingExtractorConfig {
-            model: Some(embedding_model.to_string_lossy().into_owned()),
-            num_threads: 1,
-            debug: false,
-            provider: Some("cpu".to_string()),
-        },
-        clustering: FastClusteringConfig {
-            num_clusters: -1,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let diarizer = OfflineSpeakerDiarization::create(&diarization_config)
-        .ok_or_else(|| "Failed to create offline speaker diarizer".to_string())?;
-    let result = diarizer
-        .process(samples)
-        .ok_or_else(|| "Speaker diarization returned no result".to_string())?;
-    Ok(result.sort_by_start_time())
+) -> Result<Vec<SpeakerDiarizationSegment>, String> {
+    sona_local_asr::speaker::run_speaker_diarization(samples, segmentation_model, embedding_model)
 }
 
-fn build_cluster_infos(
-    diarization_segments: &[OfflineSpeakerDiarizationSegment],
-) -> Vec<ClusterInfo> {
+fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Vec<ClusterInfo> {
     let mut spans_by_speaker: BTreeMap<i32, Vec<SpeakerSpan>> = BTreeMap::new();
 
     for segment in diarization_segments {
@@ -484,16 +450,7 @@ fn build_cluster_speaker_assignments(
         return Ok(default_assignments);
     }
 
-    let extractor = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig {
-        model: Some(embedding_model.to_string_lossy().into_owned()),
-        num_threads: 1,
-        debug: false,
-        provider: Some("cpu".to_string()),
-    })
-    .ok_or_else(|| "Failed to create speaker embedding extractor".to_string())?;
-
-    let manager = SpeakerEmbeddingManager::create(extractor.dim())
-        .ok_or_else(|| "Failed to create speaker embedding manager".to_string())?;
+    let embedding_index = sona_local_asr::speaker::SpeakerEmbeddingIndex::new(embedding_model)?;
 
     let mut loaded_profile_names = HashMap::new();
     let mut profile_readiness = HashMap::new();
@@ -509,7 +466,9 @@ fn build_cluster_speaker_assignments(
             if sample.duration_seconds < PROFILE_SAMPLE_MIN_DURATION_SECONDS {
                 continue;
             }
-            if let Some(embedding) = compute_embedding_for_file(&extractor, &sample.file_path)? {
+            if let Some(embedding) =
+                embedding_index.compute_embedding_for_wav_file(&sample.file_path)?
+            {
                 embeddings.push(embedding);
             }
         }
@@ -519,9 +478,7 @@ fn build_cluster_speaker_assignments(
             continue;
         }
 
-        if !manager.add_list(&profile.id, &embeddings) {
-            return Err(format!("Failed to index speaker profile {}", profile.name));
-        }
+        embedding_index.add_profile_embeddings(&profile.id, &profile.name, &embeddings)?;
 
         match readiness {
             SpeakerProfileReadinessState::Ready => index_summary.ready_profiles += 1,
@@ -543,13 +500,8 @@ fn build_cluster_speaker_assignments(
     let matching_started = Instant::now();
     let mut candidates = HashMap::new();
     for cluster in clusters {
-        let cluster_candidates = identify_cluster_candidates(
-            samples,
-            cluster,
-            &extractor,
-            &manager,
-            &loaded_profile_names,
-        )?;
+        let cluster_candidates =
+            identify_cluster_candidates(samples, cluster, &embedding_index, &loaded_profile_names)?;
         if !cluster_candidates.is_empty() {
             candidates.insert(cluster.raw_speaker, cluster_candidates);
         }
@@ -566,40 +518,10 @@ fn build_cluster_speaker_assignments(
     Ok(assignments)
 }
 
-fn compute_embedding_for_file(
-    extractor: &SpeakerEmbeddingExtractor,
-    file_path: &str,
-) -> Result<Option<Vec<f32>>, String> {
-    let samples = load_profile_sample_wav(file_path)?;
-    compute_embedding_for_samples(extractor, &samples)
-}
-
-fn compute_embedding_for_samples(
-    extractor: &SpeakerEmbeddingExtractor,
-    samples: &[f32],
-) -> Result<Option<Vec<f32>>, String> {
-    if samples.is_empty() {
-        return Ok(None);
-    }
-
-    let stream = extractor
-        .create_stream()
-        .ok_or_else(|| "Failed to create speaker embedding stream".to_string())?;
-    stream.accept_waveform(SAMPLE_RATE, samples);
-    stream.input_finished();
-
-    if !extractor.is_ready(&stream) {
-        return Ok(None);
-    }
-
-    Ok(extractor.compute(&stream))
-}
-
 fn identify_cluster_candidates(
     samples: &[f32],
     cluster: &ClusterInfo,
-    extractor: &SpeakerEmbeddingExtractor,
-    manager: &SpeakerEmbeddingManager,
+    embedding_index: &sona_local_asr::speaker::SpeakerEmbeddingIndex,
     profile_names: &HashMap<String, String>,
 ) -> Result<Vec<ClusterCandidate>, String> {
     let mut candidate_spans = cluster
@@ -626,10 +548,12 @@ fn identify_cluster_candidates(
     let mut score_sums: HashMap<String, f32> = HashMap::new();
 
     for span in candidate_spans {
-        let Some(embedding) = compute_embedding_for_span(extractor, samples, &span)? else {
+        let Some(embedding) =
+            embedding_index.compute_embedding_for_span(samples, span.start, span.end)?
+        else {
             continue;
         };
-        for best_match in manager.get_best_matches(
+        for best_match in embedding_index.best_matches(
             &embedding,
             CANDIDATE_DISPLAY_THRESHOLD,
             IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER as i32,
@@ -658,57 +582,6 @@ fn identify_cluster_candidates(
     sort_cluster_candidates(&mut candidates);
     candidates.truncate(IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER);
     Ok(candidates)
-}
-
-fn compute_embedding_for_span(
-    extractor: &SpeakerEmbeddingExtractor,
-    samples: &[f32],
-    span: &SpeakerSpan,
-) -> Result<Option<Vec<f32>>, String> {
-    let start_index = ((span.start.max(0.0)) * SAMPLE_RATE as f32).floor() as usize;
-    let end_index = ((span.end.max(span.start)) * SAMPLE_RATE as f32).ceil() as usize;
-    if start_index >= samples.len() || end_index <= start_index {
-        return Ok(None);
-    }
-
-    let bounded_end = end_index.min(samples.len());
-    compute_embedding_for_samples(extractor, &samples[start_index..bounded_end])
-}
-
-fn load_profile_sample_wav(file_path: &str) -> Result<Vec<f32>, String> {
-    let mut reader = hound::WavReader::open(file_path).map_err(|e| e.to_string())?;
-    let spec = reader.spec();
-    if spec.channels != 1 {
-        return Err(format!("Speaker sample must be mono wav: {file_path}"));
-    }
-    if spec.sample_rate != SAMPLE_RATE as u32 {
-        return Err(format!(
-            "Speaker sample must be 16k wav but got {} Hz: {file_path}",
-            spec.sample_rate
-        ));
-    }
-
-    match spec.sample_format {
-        hound::SampleFormat::Int => {
-            if spec.bits_per_sample != 16 {
-                return Err(format!(
-                    "Speaker sample must be 16-bit PCM wav: {file_path}"
-                ));
-            }
-            reader
-                .samples::<i16>()
-                .map(|sample| {
-                    sample
-                        .map(|value| value as f32 / i16::MAX as f32)
-                        .map_err(|e| e.to_string())
-                })
-                .collect()
-        }
-        hound::SampleFormat::Float => reader
-            .samples::<f32>()
-            .map(|sample| sample.map_err(|e| e.to_string()))
-            .collect(),
-    }
 }
 
 fn sort_cluster_candidates(candidates: &mut [ClusterCandidate]) {
@@ -1388,12 +1261,12 @@ mod tests {
     #[test]
     fn build_cluster_infos_orders_anonymous_labels_by_first_start_time() {
         let diarization_segments = vec![
-            OfflineSpeakerDiarizationSegment {
+            SpeakerDiarizationSegment {
                 start: 6.0,
                 end: 8.0,
                 speaker: 10,
             },
-            OfflineSpeakerDiarizationSegment {
+            SpeakerDiarizationSegment {
                 start: 0.5,
                 end: 2.0,
                 speaker: 42,

@@ -51,7 +51,6 @@ rubato = "0.16"
 ringbuf = "0.4"
 tauri-plugin-process = "2"
 hound = "3.5.1"
-sherpa-onnx = { version = "1.13.3", default-features = false, features = ["shared"] }
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 tauri-plugin-log = "2"
 log = "0.4.22"
