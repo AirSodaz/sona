@@ -120,6 +120,52 @@ pub struct VolcengineDoubaoConfigFields {
     pub batch_resource_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VolcengineConfigError {
+    ProviderConfigMissing,
+    UnsupportedProvider { provider_id: String },
+    ManifestMissing,
+    ManifestDefaultsInvalid,
+    ApiKeyMissing,
+    StreamingConfigMissing,
+    BatchConfigMissing,
+    LocalFileBatchUnsupported,
+}
+
+impl fmt::Display for VolcengineConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ProviderConfigMissing => {
+                write!(f, "Volcengine ASR provider config is missing.")
+            }
+            Self::UnsupportedProvider { provider_id } => {
+                write!(f, "Unsupported Volcengine ASR provider: {provider_id}")
+            }
+            Self::ManifestMissing => write!(f, "Volcengine Doubao provider not found in manifest"),
+            Self::ManifestDefaultsInvalid => {
+                write!(f, "Volcengine Doubao provider defaults should be an object")
+            }
+            Self::ApiKeyMissing => write!(f, "Volcengine API Key is not configured."),
+            Self::StreamingConfigMissing => write!(
+                f,
+                "Volcengine streaming endpoint or resource id is not configured."
+            ),
+            Self::BatchConfigMissing => {
+                write!(
+                    f,
+                    "Volcengine batch endpoint or resource id is not configured."
+                )
+            }
+            Self::LocalFileBatchUnsupported => write!(
+                f,
+                "Volcengine local file batch supports only recognize/flash endpoints."
+            ),
+        }
+    }
+}
+
+impl std::error::Error for VolcengineConfigError {}
+
 #[derive(Clone)]
 pub struct VolcengineDoubaoBatchTranscriber {
     client: reqwest::Client,
@@ -453,32 +499,46 @@ pub fn resolve_volcengine_config(
     request: &sona_core::ports::asr::AsrTranscriptionRequest,
     mode: VolcengineMode,
 ) -> Result<VolcengineDoubaoConfigFields, String> {
+    resolve_volcengine_config_checked(request, mode).map_err(|error| error.to_string())
+}
+
+pub fn resolve_volcengine_config_checked(
+    request: &sona_core::ports::asr::AsrTranscriptionRequest,
+    mode: VolcengineMode,
+) -> Result<VolcengineDoubaoConfigFields, VolcengineConfigError> {
     let provider_request = if let AsrEngineConfig::Online { provider } = &request.engine_config {
         provider
     } else {
-        return Err("Volcengine ASR provider config is missing.".to_string());
+        return Err(VolcengineConfigError::ProviderConfigMissing);
     };
 
     if provider_request.provider_id != VOLCENGINE_DOUBAO_PROVIDER_ID {
-        return Err(format!(
-            "Unsupported Volcengine ASR provider: {}",
-            provider_request.provider_id
-        ));
+        return Err(VolcengineConfigError::UnsupportedProvider {
+            provider_id: provider_request.provider_id.clone(),
+        });
     }
 
-    resolve_volcengine_config_from_value(&provider_request.config, mode)
+    resolve_volcengine_config_from_value_checked(&provider_request.config, mode)
 }
 
 pub fn resolve_volcengine_config_from_value(
     request_config: &Value,
     mode: VolcengineMode,
 ) -> Result<VolcengineDoubaoConfigFields, String> {
+    resolve_volcengine_config_from_value_checked(request_config, mode)
+        .map_err(|error| error.to_string())
+}
+
+pub fn resolve_volcengine_config_from_value_checked(
+    request_config: &Value,
+    mode: VolcengineMode,
+) -> Result<VolcengineDoubaoConfigFields, VolcengineConfigError> {
     let manifest = find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID)
-        .ok_or_else(|| "Volcengine Doubao provider not found in manifest".to_string())?;
+        .ok_or(VolcengineConfigError::ManifestMissing)?;
     let defaults = manifest
         .defaults
         .as_object()
-        .ok_or_else(|| "Volcengine Doubao provider defaults should be an object".to_string())?;
+        .ok_or(VolcengineConfigError::ManifestDefaultsInvalid)?;
 
     let fields = VolcengineDoubaoConfigFields {
         api_key: get_json_string(
@@ -521,37 +581,27 @@ pub fn resolve_volcengine_config_from_value(
     };
 
     if fields.api_key.is_empty() {
-        return Err("Volcengine API Key is not configured.".to_string());
+        return Err(VolcengineConfigError::ApiKeyMissing);
     }
     match mode {
         VolcengineMode::Streaming => {
             if fields.streaming_endpoint.is_empty() || fields.streaming_resource_id.is_empty() {
-                return Err(
-                    "Volcengine streaming endpoint or resource id is not configured.".to_string(),
-                );
+                return Err(VolcengineConfigError::StreamingConfigMissing);
             }
         }
         VolcengineMode::Batch => {
             if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
-                return Err(
-                    "Volcengine batch endpoint or resource id is not configured.".to_string(),
-                );
+                return Err(VolcengineConfigError::BatchConfigMissing);
             }
             if !fields.batch_endpoint.starts_with("https://")
                 && !fields.batch_endpoint.starts_with("http://")
             {
-                return Err(
-                    "Volcengine local file batch supports only recognize/flash endpoints."
-                        .to_string(),
-                );
+                return Err(VolcengineConfigError::LocalFileBatchUnsupported);
             }
             if fields.batch_endpoint.contains("idle/submit")
                 || fields.batch_endpoint.ends_with("/submit")
             {
-                return Err(
-                    "Volcengine local file batch supports only recognize/flash endpoints."
-                        .to_string(),
-                );
+                return Err(VolcengineConfigError::LocalFileBatchUnsupported);
             }
         }
     }
@@ -943,11 +993,13 @@ mod tests {
     };
 
     use crate::{
-        VolcengineMode, WhisperCompatibleProvider, build_volcengine_audio_frame,
-        build_volcengine_flash_batch_request_body, build_volcengine_full_client_request_frame,
+        VolcengineConfigError, VolcengineMode, WhisperCompatibleProvider,
+        build_volcengine_audio_frame, build_volcengine_flash_batch_request_body,
+        build_volcengine_full_client_request_frame, detect_audio_format,
         f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
-        resolve_volcengine_config, resolve_whisper_config, segments_from_volcengine_response,
-        segments_from_whisper_response, volcengine_streaming_segments_from_response,
+        resolve_volcengine_config, resolve_volcengine_config_checked, resolve_whisper_config,
+        segments_from_volcengine_response, segments_from_whisper_response,
+        volcengine_streaming_segments_from_response,
     };
 
     fn online_request(provider_id: &str, config: serde_json::Value) -> AsrTranscriptionRequest {
@@ -1053,6 +1105,48 @@ mod tests {
     }
 
     #[test]
+    fn resolves_volcengine_config_with_typed_errors() {
+        let missing_key = online_request(
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            json!({
+                "apiKey": "  "
+            }),
+        );
+        let error =
+            resolve_volcengine_config_checked(&missing_key, VolcengineMode::Batch).unwrap_err();
+        assert_eq!(error, VolcengineConfigError::ApiKeyMissing);
+
+        let unsupported_provider = online_request(
+            "other-volcengine",
+            json!({
+                "apiKey": "volc-key"
+            }),
+        );
+        let error =
+            resolve_volcengine_config_checked(&unsupported_provider, VolcengineMode::Streaming)
+                .unwrap_err();
+        assert_eq!(
+            error,
+            VolcengineConfigError::UnsupportedProvider {
+                provider_id: "other-volcengine".to_string()
+            }
+        );
+
+        let async_endpoint = online_request(
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            json!({
+                "apiKey": "volc-key",
+                "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit",
+                "batchResourceId": "volc.seedasr.auc"
+            }),
+        );
+        let error =
+            resolve_volcengine_config_checked(&async_endpoint, VolcengineMode::Batch).unwrap_err();
+        assert_eq!(error, VolcengineConfigError::LocalFileBatchUnsupported);
+        assert!(error.to_string().contains("recognize/flash"));
+    }
+
+    #[test]
     fn builds_volcengine_flash_batch_request_body_with_local_audio_data() {
         let request = online_request(
             VOLCENGINE_DOUBAO_PROVIDER_ID,
@@ -1073,6 +1167,71 @@ mod tests {
         assert_eq!(body["request"]["enable_itn"], false);
         assert_eq!(body["request"]["enable_punc"], true);
         assert_eq!(body["request"]["show_utterances"], true);
+    }
+
+    #[test]
+    fn detects_volcengine_audio_format_from_extension() {
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.mp3")),
+            "mp3"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.MP3")),
+            "mp3"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.wav")),
+            "wav"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.flac")),
+            "flac"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.m4a")),
+            "m4a"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.ogg")),
+            "ogg"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.oga")),
+            "ogg"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.aac")),
+            "aac"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.opus")),
+            "opus"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.webm")),
+            "webm"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.pcm")),
+            "pcm"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.amr")),
+            "amr"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.wma")),
+            "wma"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording.xyz")),
+            "wav"
+        );
+        assert_eq!(
+            detect_audio_format(std::path::Path::new("recording")),
+            "wav"
+        );
+        assert_eq!(detect_audio_format(std::path::Path::new("")), "wav");
     }
 
     #[test]

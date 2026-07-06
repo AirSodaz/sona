@@ -8,15 +8,11 @@ use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
-use super::types::{
-    AsrMode, AsrTranscriptionRequest, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
-    TranscriptTimingSource, TranscriptTimingUnit,
-};
+use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
 use crate::integrations::asr::postprocess::TranscriptPostprocessor;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
-use serde_json::{Value, json};
 use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
 use std::sync::{
     Arc,
@@ -27,12 +23,6 @@ use tokio::sync::{Mutex, Notify};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VolcengineMode {
-    Streaming,
-    Batch,
-}
 
 #[derive(Clone)]
 pub struct VolcengineStreamingSession {
@@ -47,150 +37,40 @@ type VolcengineWriter = futures_util::stream::SplitSink<
     Message,
 >;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VolcengineDoubaoConfigFields {
-    pub api_key: String,
-    pub streaming_endpoint: String,
-    pub streaming_resource_id: String,
-    pub batch_endpoint: String,
-    pub batch_resource_id: String,
-}
-
-fn get_string(config: &Value, key: &str, default_val: &str) -> String {
-    config
-        .get(key)
-        .and_then(|v| v.as_str())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| default_val.to_string())
-}
-
-fn config_fields(request_config: &Value) -> VolcengineDoubaoConfigFields {
-    let manifest = crate::integrations::asr_providers::find_online_asr_provider(
-        crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID,
-    )
-    .expect("Volcengine Doubao provider not found in manifest");
-    let defaults = manifest.defaults.as_object().unwrap();
-
-    VolcengineDoubaoConfigFields {
-        api_key: get_string(
-            request_config,
-            "apiKey",
-            defaults.get("apiKey").and_then(Value::as_str).unwrap_or(""),
-        ),
-        streaming_endpoint: get_string(
-            request_config,
-            "streamingEndpoint",
-            defaults
-                .get("streamingEndpoint")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ),
-        streaming_resource_id: get_string(
-            request_config,
-            "streamingResourceId",
-            defaults
-                .get("streamingResourceId")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ),
-        batch_endpoint: get_string(
-            request_config,
-            "batchEndpoint",
-            defaults
-                .get("batchEndpoint")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ),
-        batch_resource_id: get_string(
-            request_config,
-            "batchResourceId",
-            defaults
-                .get("batchResourceId")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ),
-    }
-}
-
-fn detect_audio_format(file_path: &std::path::Path) -> &'static str {
-    match file_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("mp3") => "mp3",
-        Some("wav") => "wav",
-        Some("pcm") => "pcm",
-        Some("ogg") | Some("oga") => "ogg",
-        Some("m4a") => "m4a",
-        Some("aac") => "aac",
-        Some("flac") => "flac",
-        Some("wma") => "wma",
-        Some("amr") => "amr",
-        Some("opus") => "opus",
-        Some("webm") => "webm",
-        // Default to wav for unknown extensions; the API will attempt
-        // auto-detection from the file header bytes.
-        _ => "wav",
-    }
-}
-
-pub fn validate_config(
-    request_config: &Value,
-    mode: VolcengineMode,
-) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
-    let fields = config_fields(request_config);
-    if fields.api_key.is_empty() {
-        return Err(SherpaError::VolcengineApiKeyMissing);
-    }
-    match mode {
-        VolcengineMode::Streaming => {
-            if fields.streaming_endpoint.is_empty() || fields.streaming_resource_id.is_empty() {
-                return Err(SherpaError::VolcengineStreamingConfigMissing);
-            }
-        }
-        VolcengineMode::Batch => {
-            if fields.batch_endpoint.is_empty() || fields.batch_resource_id.is_empty() {
-                return Err(SherpaError::VolcengineBatchConfigMissing);
-            }
-            if !fields.batch_endpoint.starts_with("https://")
-                && !fields.batch_endpoint.starts_with("http://")
-            {
-                return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
-                    message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
-                });
-            }
-            if fields.batch_endpoint.contains("idle/submit")
-                || fields.batch_endpoint.ends_with("/submit")
-            {
-                return Err(SherpaError::VolcengineLocalFileBatchUnsupported {
-                    message: "火山本地批量导入仅支持极速版 recognize/flash；标准/闲时异步接口需要公网音频 URL，当前不可用于本地文件导入。".to_string(),
-                });
-            }
-        }
-    }
-    Ok(fields)
-}
-
 fn config_from_request(
     request: &AsrTranscriptionRequest,
-    mode: VolcengineMode,
-) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
-    let provider = if let crate::integrations::asr::types::AsrEngineConfig::Online { provider } =
-        &request.engine_config
-    {
-        provider
-    } else {
-        return Err(SherpaError::VolcengineProviderConfigMissing);
-    };
-    if provider.provider_id != crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID {
-        return Err(SherpaError::UnsupportedVolcengineProvider {
-            provider_id: provider.provider_id.clone(),
-        });
+    mode: sona_online_asr::VolcengineMode,
+) -> Result<sona_online_asr::VolcengineDoubaoConfigFields, SherpaError> {
+    sona_online_asr::resolve_volcengine_config_checked(request, mode).map_err(map_config_error)
+}
+
+fn map_config_error(error: sona_online_asr::VolcengineConfigError) -> SherpaError {
+    match error {
+        sona_online_asr::VolcengineConfigError::ProviderConfigMissing => {
+            SherpaError::VolcengineProviderConfigMissing
+        }
+        sona_online_asr::VolcengineConfigError::UnsupportedProvider { provider_id } => {
+            SherpaError::UnsupportedVolcengineProvider { provider_id }
+        }
+        sona_online_asr::VolcengineConfigError::ApiKeyMissing => {
+            SherpaError::VolcengineApiKeyMissing
+        }
+        sona_online_asr::VolcengineConfigError::StreamingConfigMissing => {
+            SherpaError::VolcengineStreamingConfigMissing
+        }
+        sona_online_asr::VolcengineConfigError::BatchConfigMissing => {
+            SherpaError::VolcengineBatchConfigMissing
+        }
+        sona_online_asr::VolcengineConfigError::LocalFileBatchUnsupported => {
+            SherpaError::VolcengineLocalFileBatchUnsupported {
+                message: error.to_string(),
+            }
+        }
+        sona_online_asr::VolcengineConfigError::ManifestMissing
+        | sona_online_asr::VolcengineConfigError::ManifestDefaultsInvalid => {
+            SherpaError::Generic(error.to_string())
+        }
     }
-    validate_config(&provider.config, mode)
 }
 
 fn map_server_frame_error(error: sona_online_asr::VolcengineServerFrameError) -> SherpaError {
@@ -225,159 +105,6 @@ fn map_server_frame_error(error: sona_online_asr::VolcengineServerFrameError) ->
     }
 }
 
-fn build_flash_batch_request_body(
-    file_path: &std::path::Path,
-    audio_data: String,
-    request: &AsrTranscriptionRequest,
-) -> Value {
-    let audio_format = detect_audio_format(file_path);
-    json!({
-        "user": { "uid": "sona" },
-        "audio": { "format": audio_format, "data": audio_data },
-        "request": {
-            "model_name": "bigmodel",
-            "enable_itn": request.enable_itn,
-            "enable_punc": true,
-            "show_utterances": true
-        }
-    })
-}
-
-pub fn segments_from_response_value(
-    response: &Value,
-    default_final: bool,
-    id_prefix: &str,
-) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    let result = response.get("result").unwrap_or(response);
-    let utterances = result.get("utterances").and_then(Value::as_array);
-    if let Some(utterances) = utterances {
-        let mut segments = Vec::new();
-        for (index, utterance) in utterances.iter().enumerate() {
-            if let Some(segment) =
-                segment_from_utterance(utterance, index, default_final, id_prefix)
-            {
-                segments.push(segment);
-            }
-        }
-        if !segments.is_empty() {
-            return Ok(segments);
-        }
-    }
-
-    let text = result
-        .get("text")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim();
-    if text.is_empty() {
-        return Ok(Vec::new());
-    }
-    let duration = response
-        .get("audio_info")
-        .and_then(|value| value.get("duration"))
-        .and_then(Value::as_f64)
-        .unwrap_or(0.0)
-        / 1000.0;
-    Ok(vec![TranscriptSegment {
-        id: format!("{id_prefix}-0"),
-        text: text.to_string(),
-        start: 0.0,
-        end: duration.max(0.0),
-        is_final: default_final,
-        timing: None,
-        tokens: None,
-        timestamps: None,
-        durations: None,
-        translation: None,
-        speaker: None,
-        speaker_attribution: None,
-    }])
-}
-
-fn segment_from_utterance(
-    utterance: &Value,
-    index: usize,
-    default_final: bool,
-    id_prefix: &str,
-) -> Option<TranscriptSegment> {
-    let text = utterance.get("text").and_then(Value::as_str)?.trim();
-    if text.is_empty() {
-        return None;
-    }
-    let start = ms_value(utterance.get("start_time")).unwrap_or(0.0);
-    let end = ms_value(utterance.get("end_time")).unwrap_or(start);
-    let is_final = utterance
-        .get("definite")
-        .and_then(Value::as_bool)
-        .unwrap_or(default_final);
-
-    let words = utterance.get("words").and_then(Value::as_array);
-    let mut tokens = Vec::new();
-    let mut timestamps = Vec::new();
-    let mut durations = Vec::new();
-    let mut timing_units = Vec::new();
-    if let Some(words) = words {
-        for word in words {
-            let word_text = word.get("text").and_then(Value::as_str).unwrap_or_default();
-            if word_text.is_empty() {
-                continue;
-            }
-            let word_start = ms_value(word.get("start_time")).unwrap_or(start);
-            let word_end = ms_value(word.get("end_time"))
-                .unwrap_or(word_start)
-                .max(word_start);
-            tokens.push(word_text.to_string());
-            timestamps.push(word_start as f32);
-            durations.push((word_end - word_start) as f32);
-            timing_units.push(TranscriptTimingUnit {
-                text: word_text.to_string(),
-                start: word_start,
-                end: word_end,
-            });
-        }
-    }
-
-    Some(TranscriptSegment {
-        id: format!("{id_prefix}-{index}"),
-        text: text.to_string(),
-        start,
-        end: end.max(start),
-        is_final,
-        timing: (!timing_units.is_empty()).then_some(TranscriptTiming {
-            level: TranscriptTimingLevel::Token,
-            source: TranscriptTimingSource::Model,
-            units: timing_units,
-        }),
-        tokens: (!tokens.is_empty()).then_some(tokens),
-        timestamps: (!timestamps.is_empty()).then_some(timestamps),
-        durations: (!durations.is_empty()).then_some(durations),
-        translation: None,
-        speaker: None,
-        speaker_attribution: None,
-    })
-}
-
-fn ms_value(value: Option<&Value>) -> Option<f64> {
-    value.and_then(Value::as_f64).map(|value| value / 1000.0)
-}
-
-pub fn map_status_error(status: u16, api_code: Option<&str>, api_message: Option<&str>) -> String {
-    let code = api_code.unwrap_or_default();
-    let message = api_message.unwrap_or_default();
-    let category = match (status, code) {
-        (401 | 403, _) => "鉴权失败",
-        (429, _) | (_, "55000031") => "配额或限流",
-        (400, _) | (_, "45000001" | "45000002" | "45000151") => "请求配置错误",
-        (500..=599, _) => "火山服务错误",
-        _ => "火山 ASR 请求失败",
-    };
-    if code.is_empty() && message.is_empty() {
-        format!("{category}（HTTP {status}）")
-    } else {
-        format!("{category}（HTTP {status}, code {code}: {message}）")
-    }
-}
-
 pub struct VolcengineAdapter;
 
 #[async_trait]
@@ -402,7 +129,7 @@ impl AsrProviderAdapter for VolcengineAdapter {
         if request.mode != AsrMode::Streaming {
             return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
         }
-        config_from_request(request, VolcengineMode::Streaming)?;
+        config_from_request(request, sona_online_asr::VolcengineMode::Streaming)?;
         Ok(Some(std::sync::Arc::new(VolcengineStreamingSession {
             request: request.clone(),
             writer: Arc::new(Mutex::new(None)),
@@ -480,7 +207,7 @@ async fn start_streaming_recognizer_impl(
     session: &VolcengineStreamingSession,
     instance_id: &str,
 ) -> Result<(), SherpaError> {
-    let config = config_from_request(&session.request, VolcengineMode::Streaming)?;
+    let config = config_from_request(&session.request, sona_online_asr::VolcengineMode::Streaming)?;
     let mut client_request = config
         .streaming_endpoint
         .as_str()
@@ -704,7 +431,7 @@ pub async fn process_batch_file_impl(
     if request.mode != AsrMode::Offline {
         return Err(SherpaError::VolcengineBatchOnlyForOffline);
     }
-    config_from_request(&request, VolcengineMode::Batch)?;
+    config_from_request(&request, sona_online_asr::VolcengineMode::Batch)?;
     let started = Instant::now();
     let output = sona_online_asr::VolcengineDoubaoBatchTranscriber::default()
         .transcribe(OnlineBatchTranscriptionRequest {
@@ -748,9 +475,8 @@ pub async fn process_batch_file_impl(
 mod tests {
     use super::super::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
     use super::*;
-    use std::path::Path;
 
-    fn config(api_key: &str) -> Value {
+    fn config(api_key: &str) -> serde_json::Value {
         serde_json::json!({
             "apiKey": api_key.to_string(),
             "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel".to_string(),
@@ -760,39 +486,8 @@ mod tests {
         })
     }
 
-    #[test]
-    fn volcengine_config_requires_api_key() {
-        let error = validate_config(&config("  "), VolcengineMode::Batch)
-            .expect_err("missing API key should fail before network access");
-
-        assert!(error.to_string().contains("API Key"));
-    }
-
-    #[test]
-    fn volcengine_local_batch_rejects_async_recording_file_endpoints() {
-        let mut standard = config("volc-test-key");
-        standard["batchEndpoint"] =
-            serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit");
-        standard["batchResourceId"] = serde_json::json!("volc.seedasr.auc");
-
-        let mut offpeak = config("volc-test-key");
-        offpeak["batchEndpoint"] =
-            serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/idle/submit");
-        offpeak["batchResourceId"] = serde_json::json!("volc.bigasr.auc_idle");
-
-        let standard_error = validate_config(&standard, VolcengineMode::Batch)
-            .expect_err("standard async endpoint requires a public audio URL");
-        let offpeak_error = validate_config(&offpeak, VolcengineMode::Batch)
-            .expect_err("off-peak async endpoint requires a public audio URL");
-
-        assert!(standard_error.to_string().contains("本地批量导入"));
-        assert!(standard_error.to_string().contains("极速版"));
-        assert!(offpeak_error.to_string().contains("公网音频 URL"));
-    }
-
-    #[test]
-    fn volcengine_flash_batch_request_body_uses_local_audio_data_and_existing_options() {
-        let request = AsrTranscriptionRequest {
+    fn online_request(config: serde_json::Value) -> AsrTranscriptionRequest {
+        AsrTranscriptionRequest {
             mode: AsrMode::Offline,
             language: "auto".to_string(),
             enable_itn: true,
@@ -805,23 +500,33 @@ mod tests {
                     provider_id: crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
                         .to_string(),
                     profile_id: "volcengine-doubao-default".to_string(),
-                    config: serde_json::to_value(config("volc-test-key")).expect("config json"),
+                    config,
                 },
             },
-        };
+        }
+    }
 
-        let body = build_flash_batch_request_body(
-            Path::new("C:/recordings/meeting.mp3"),
-            "bG9jYWwtYXVkaW8=".to_string(),
-            &request,
-        );
+    #[test]
+    fn volcengine_config_errors_map_to_sherpa_errors() {
+        let missing_key = online_request(config("  "));
+        let error = config_from_request(&missing_key, sona_online_asr::VolcengineMode::Batch)
+            .expect_err("missing API key should fail before network access");
+        assert!(matches!(error, SherpaError::VolcengineApiKeyMissing));
 
-        assert_eq!(body["audio"]["format"], "mp3");
-        assert_eq!(body["audio"]["data"], "bG9jYWwtYXVkaW8=");
-        assert!(body["audio"].get("url").is_none());
-        assert_eq!(body["request"]["enable_itn"], true);
-        assert_eq!(body["request"]["enable_punc"], true);
-        assert_eq!(body["request"]["show_utterances"], true);
+        let mut async_endpoint = config("volc-test-key");
+        async_endpoint["batchEndpoint"] =
+            serde_json::json!("https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit");
+        async_endpoint["batchResourceId"] = serde_json::json!("volc.seedasr.auc");
+        let error = config_from_request(
+            &online_request(async_endpoint),
+            sona_online_asr::VolcengineMode::Batch,
+        )
+        .expect_err("standard async endpoint requires a public audio URL");
+        assert!(matches!(
+            error,
+            SherpaError::VolcengineLocalFileBatchUnsupported { .. }
+        ));
+        assert!(error.to_string().contains("recognize/flash"));
     }
 
     #[test]
@@ -847,65 +552,15 @@ mod tests {
     }
 
     #[test]
-    fn volcengine_response_maps_utterances_and_words_to_transcript_segments() {
-        let response = serde_json::json!({
-            "audio_info": { "duration": 2499 },
-            "result": {
-                "text": "关闭透传。",
-                "utterances": [
-                    {
-                        "end_time": 1530,
-                        "start_time": 450,
-                        "text": "关闭透传。",
-                        "definite": true,
-                        "words": [
-                            { "confidence": 0, "end_time": 770, "start_time": 450, "text": "关" },
-                            { "confidence": 0, "end_time": 970, "start_time": 770, "text": "闭" },
-                            { "confidence": 0, "end_time": 1210, "start_time": 1130, "text": "透" },
-                            { "confidence": 0, "end_time": 1530, "start_time": 1490, "text": "传" }
-                        ]
-                    }
-                ]
-            }
-        });
-
-        let segments =
-            segments_from_response_value(&response, true, "volc").expect("segments should map");
-
-        assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].id, "volc-0");
-        assert_eq!(segments[0].text, "关闭透传。");
-        assert_eq!(segments[0].start, 0.45);
-        assert_eq!(segments[0].end, 1.53);
-        assert!(segments[0].is_final);
-        assert_eq!(
-            segments[0].tokens.as_ref().unwrap(),
-            &vec!["关", "闭", "透", "传"]
-        );
-        assert_eq!(
-            segments[0].timestamps.as_ref().unwrap(),
-            &vec![0.45, 0.77, 1.13, 1.49]
-        );
-        assert_eq!(
-            segments[0].durations.as_ref().unwrap(),
-            &vec![0.32, 0.2, 0.08, 0.04]
-        );
-        let timing = segments[0].timing.as_ref().unwrap();
-        assert_eq!(timing.level, TranscriptTimingLevel::Token);
-        assert_eq!(timing.source, TranscriptTimingSource::Model);
-        assert_eq!(timing.units[0].text, "关");
-    }
-
-    #[test]
     fn volcengine_streaming_final_frame_defaults_missing_definite_to_final() {
         let response = serde_json::json!({
             "result": {
-                "text": "尾句保存。",
+                "text": "tail sentence",
                 "utterances": [
                     {
                         "end_time": 2400,
                         "start_time": 1200,
-                        "text": "尾句保存。"
+                        "text": "tail sentence"
                     }
                 ]
             }
@@ -916,41 +571,8 @@ mod tests {
                 .expect("final streaming frame should map");
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].text, "尾句保存。");
+        assert_eq!(segments[0].text, "tail sentence");
         assert!(segments[0].is_final);
-    }
-
-    #[test]
-    fn volcengine_error_codes_are_mapped_to_user_readable_messages() {
-        let auth = map_status_error(401, Some("45000001"), Some("auth failed"));
-        let quota = map_status_error(429, Some("55000031"), Some("busy"));
-
-        assert!(auth.contains("鉴权"));
-        assert!(quota.contains("限流"));
-    }
-
-    #[test]
-    fn detect_audio_format_maps_known_extensions() {
-        assert_eq!(detect_audio_format(Path::new("recording.mp3")), "mp3");
-        assert_eq!(detect_audio_format(Path::new("recording.MP3")), "mp3");
-        assert_eq!(detect_audio_format(Path::new("recording.wav")), "wav");
-        assert_eq!(detect_audio_format(Path::new("recording.flac")), "flac");
-        assert_eq!(detect_audio_format(Path::new("recording.m4a")), "m4a");
-        assert_eq!(detect_audio_format(Path::new("recording.ogg")), "ogg");
-        assert_eq!(detect_audio_format(Path::new("recording.oga")), "ogg");
-        assert_eq!(detect_audio_format(Path::new("recording.aac")), "aac");
-        assert_eq!(detect_audio_format(Path::new("recording.opus")), "opus");
-        assert_eq!(detect_audio_format(Path::new("recording.webm")), "webm");
-        assert_eq!(detect_audio_format(Path::new("recording.pcm")), "pcm");
-        assert_eq!(detect_audio_format(Path::new("recording.amr")), "amr");
-        assert_eq!(detect_audio_format(Path::new("recording.wma")), "wma");
-    }
-
-    #[test]
-    fn detect_audio_format_defaults_to_wav_for_unknown() {
-        assert_eq!(detect_audio_format(Path::new("recording.xyz")), "wav");
-        assert_eq!(detect_audio_format(Path::new("recording")), "wav");
-        assert_eq!(detect_audio_format(Path::new("")), "wav");
     }
 
     #[test]
@@ -958,7 +580,7 @@ mod tests {
         let samples = [0.0_f32, 1.0, -1.0, 0.5];
         let bytes = sona_online_asr::f32_samples_to_i16_pcm_bytes(&samples);
 
-        assert_eq!(bytes.len(), 8); // 4 samples × 2 bytes each
+        assert_eq!(bytes.len(), 8);
         let value_0 = i16::from_le_bytes([bytes[0], bytes[1]]);
         let value_1 = i16::from_le_bytes([bytes[2], bytes[3]]);
         let value_2 = i16::from_le_bytes([bytes[4], bytes[5]]);

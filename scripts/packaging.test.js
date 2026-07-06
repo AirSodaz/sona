@@ -374,6 +374,35 @@ test('desktop Volcengine streaming protocol helpers are owned by online ASR adap
   assert.doesNotMatch(volcengineRs, /fn f32_samples_to_i16_pcm_bytes/u);
 });
 
+test('desktop Volcengine config and response helpers are owned by online ASR adapter', () => {
+  const onlineAsrLib = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs'),
+    'utf8',
+  );
+  const volcengineRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    'utf8',
+  );
+
+  assert.match(onlineAsrLib, /VolcengineConfigError/u);
+  assert.match(onlineAsrLib, /resolve_volcengine_config_checked/u);
+  assert.match(onlineAsrLib, /resolve_volcengine_config_from_value_checked/u);
+  assert.match(onlineAsrLib, /build_volcengine_flash_batch_request_body/u);
+  assert.match(onlineAsrLib, /segments_from_volcengine_response/u);
+  assert.match(onlineAsrLib, /map_volcengine_status_error/u);
+  assert.match(volcengineRs, /sona_online_asr::resolve_volcengine_config_checked/u);
+  assert.doesNotMatch(volcengineRs, /pub enum VolcengineMode/u);
+  assert.doesNotMatch(volcengineRs, /pub struct VolcengineDoubaoConfigFields/u);
+  assert.doesNotMatch(volcengineRs, /fn config_fields/u);
+  assert.doesNotMatch(volcengineRs, /pub fn validate_config/u);
+  assert.doesNotMatch(volcengineRs, /fn detect_audio_format/u);
+  assert.doesNotMatch(volcengineRs, /fn build_flash_batch_request_body/u);
+  assert.doesNotMatch(volcengineRs, /pub fn segments_from_response_value/u);
+  assert.doesNotMatch(volcengineRs, /fn segment_from_utterance/u);
+  assert.doesNotMatch(volcengineRs, /fn ms_value/u);
+  assert.doesNotMatch(volcengineRs, /pub fn map_status_error/u);
+});
+
 test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
 
