@@ -1,40 +1,15 @@
 use std::fs;
-use std::path::PathBuf;
 
-use sona_core::cli_runtime::{
-    DEFAULT_GPU_ACCELERATION, DEFAULT_SERVE_HOST, DEFAULT_SERVE_IP_WHITELIST, DEFAULT_SERVE_PORT,
-    GPU_ACCELERATION_VALUES, ServeRuntimeArgs, resolve_cli_gpu_acceleration,
-    resolve_serve_runtime_options,
-};
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use sona_core::runtime_config::ServeConfigSection;
+use sona_core::serve_runtime::{
+    DEFAULT_SERVE_HOST, DEFAULT_SERVE_IP_WHITELIST, DEFAULT_SERVE_PORT, ServeRuntimeArgs,
+    resolve_serve_runtime_options,
+};
 use tempfile::tempdir;
 
 #[test]
-fn gpu_acceleration_defaults_and_normalizes() {
-    assert_eq!(DEFAULT_GPU_ACCELERATION, "auto");
-    assert!(GPU_ACCELERATION_VALUES.contains(&"auto"));
-    assert!(GPU_ACCELERATION_VALUES.contains(&"cpu"));
-    assert_eq!(
-        resolve_cli_gpu_acceleration(None).unwrap().as_deref(),
-        Some("auto")
-    );
-    assert_eq!(
-        resolve_cli_gpu_acceleration(Some(" CUDA ".to_string()))
-            .unwrap()
-            .as_deref(),
-        Some("cuda")
-    );
-}
-
-#[test]
-fn gpu_acceleration_rejects_unknown_values() {
-    let error = resolve_cli_gpu_acceleration(Some("metal".to_string())).unwrap_err();
-    assert!(error.contains("gpu_acceleration must be one of"));
-}
-
-#[test]
-fn resolve_serve_runtime_options_merges_cli_config_and_defaults() {
+fn resolve_serve_runtime_options_merges_args_config_and_defaults() {
     let dir = tempdir().unwrap();
     let models_dir = dir.path().join("models");
     fs::create_dir_all(&models_dir).unwrap();

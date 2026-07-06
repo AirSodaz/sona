@@ -126,3 +126,12 @@ test('core crate does not keep sona-cli config template surface', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'cli_config.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_config.rs')), false);
 });
+
+test('core crate exposes serve runtime without cli runtime surface', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(coreLib, /^pub mod serve_runtime;/mu);
+  assert.doesNotMatch(coreLib, /^pub mod cli_runtime;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'cli_runtime.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_runtime.rs')), false);
+});

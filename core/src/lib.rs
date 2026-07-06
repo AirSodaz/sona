@@ -1,5 +1,4 @@
 pub mod asr_metrics;
-pub mod cli_runtime;
 pub mod dashboard;
 pub mod diagnostics;
 pub mod domain;
@@ -20,6 +19,7 @@ pub mod project;
 pub mod recovery;
 pub mod runtime;
 pub mod runtime_config;
+pub mod serve_runtime;
 pub mod speaker;
 pub mod speaker_correction;
 pub mod speaker_review;

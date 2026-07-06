@@ -1,11 +1,8 @@
+use crate::gpu::resolve_gpu_acceleration;
 use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use crate::runtime_config::ServeConfigSection;
 use std::path::PathBuf;
 
-pub use crate::gpu::{
-    DEFAULT_GPU_ACCELERATION, GPU_ACCELERATION_VALUES,
-    resolve_gpu_acceleration as resolve_cli_gpu_acceleration,
-};
 pub const DEFAULT_SERVE_PORT: u16 = 14200;
 pub const DEFAULT_SERVE_HOST: &str = "127.0.0.1";
 pub const DEFAULT_SERVE_IP_WHITELIST: &str = "localhost";
@@ -60,7 +57,7 @@ pub fn resolve_serve_runtime_options(
 ) -> Result<ResolvedServeRuntimeOptions, String> {
     let config = config.unwrap_or_default();
     let gpu_acceleration =
-        resolve_cli_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
+        resolve_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
 
     Ok(ResolvedServeRuntimeOptions {
         host: args
