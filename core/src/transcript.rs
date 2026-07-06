@@ -111,6 +111,37 @@ pub fn ensure_transcript_segment_timing(segment: &mut TranscriptSegment) {
     segment.timing = Some(timing);
 }
 
+pub fn normalize_recognizer_text(text: &str) -> String {
+    let mut result = text.trim();
+
+    while result.starts_with("<|") && result.contains("|>") {
+        let Some(tag_end) = result.find("|>") else {
+            break;
+        };
+        result = result[tag_end + 2..].trim();
+    }
+
+    result.trim().to_string()
+}
+
+pub fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
+    if timestamps.is_empty() {
+        return None;
+    }
+
+    let mut durations = Vec::with_capacity(timestamps.len());
+    for index in 0..timestamps.len() {
+        let next_time = if index + 1 < timestamps.len() {
+            timestamps[index + 1]
+        } else {
+            end_time
+        };
+        durations.push(next_time - timestamps[index]);
+    }
+
+    Some(durations)
+}
+
 fn normalize_timing_units(
     units: Vec<TranscriptTimingUnit>,
     segment_start: f64,
@@ -333,5 +364,21 @@ mod tests {
                 end: 3.0,
             }]
         );
+    }
+
+    #[test]
+    fn normalize_recognizer_text_strips_leading_model_tags() {
+        assert_eq!(
+            normalize_recognizer_text("  <|zh|><|withitn|><|noise|> 123. "),
+            "123."
+        );
+    }
+
+    #[test]
+    fn synthesize_durations_uses_next_timestamp_and_segment_end() {
+        let durations = synthesize_durations(&[0.0, 0.25, 0.75], 1.25).unwrap();
+
+        assert_eq!(durations, vec![0.25, 0.5, 0.5]);
+        assert_eq!(synthesize_durations(&[], 1.25), None);
     }
 }

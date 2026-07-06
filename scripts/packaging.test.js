@@ -302,6 +302,33 @@ test('standalone CLI invokes local offline ASR through the core transcriber port
   assert.doesNotMatch(cliTranscribeRs, /run_offline_transcription/u);
 });
 
+test('recognizer transcript utilities are owned by core and reused by adapters', () => {
+  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
+  const tauriTranscript = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    'utf8',
+  );
+  const localOffline = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'offline.rs'),
+    'utf8',
+  );
+
+  assert.match(coreTranscript, /pub fn normalize_recognizer_text\(/u);
+  assert.match(coreTranscript, /pub fn synthesize_durations\(/u);
+  assert.match(
+    tauriTranscript,
+    /pub\(crate\) use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
+  );
+  assert.match(
+    localOffline,
+    /use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
+  );
+  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn normalize_recognizer_text/u);
+  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn synthesize_durations/u);
+  assert.doesNotMatch(localOffline, /^fn normalize_recognizer_text/mu);
+  assert.doesNotMatch(localOffline, /^fn synthesize_durations/mu);
+});
+
 test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR adapter', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');

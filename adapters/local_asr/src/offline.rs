@@ -13,7 +13,10 @@ use sherpa_onnx::VadModelConfig;
 use sona_core::model_config::ModelFileConfig;
 use sona_core::ports::asr::OfflineTranscriber;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
-use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
+use sona_core::transcript::{
+    TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
+    synthesize_durations,
+};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -209,19 +212,6 @@ fn transcribe_samples(
     Ok(results)
 }
 
-fn normalize_recognizer_text(text: &str) -> String {
-    let mut result = text.trim();
-
-    while result.starts_with("<|") && result.contains("|>") {
-        let Some(tag_end) = result.find("|>") else {
-            break;
-        };
-        result = result[tag_end + 2..].trim();
-    }
-
-    result.trim().to_string()
-}
-
 fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation>) -> String {
     let mut result = cleaned_text.trim().to_string();
     if result.is_empty() {
@@ -233,24 +223,6 @@ fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation
     }
 
     result
-}
-
-fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
-    if timestamps.is_empty() {
-        return None;
-    }
-
-    let mut durations = Vec::with_capacity(timestamps.len());
-    for index in 0..timestamps.len() {
-        let next_time = if index + 1 < timestamps.len() {
-            timestamps[index + 1]
-        } else {
-            end_time
-        };
-        durations.push(next_time - timestamps[index]);
-    }
-
-    Some(durations)
 }
 
 #[cfg(test)]

@@ -7,7 +7,9 @@ use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-pub(crate) use sona_core::transcript::ensure_transcript_segment_timing;
+pub(crate) use sona_core::transcript::{
+    ensure_transcript_segment_timing, normalize_recognizer_text, synthesize_durations,
+};
 
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;
 const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
@@ -516,19 +518,6 @@ pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -
     result
 }
 
-pub(crate) fn normalize_recognizer_text(text: &str) -> String {
-    let mut result = text.trim();
-
-    while result.starts_with("<|") && result.contains("|>") {
-        let Some(tag_end) = result.find("|>") else {
-            break;
-        };
-        result = result[tag_end + 2..].trim();
-    }
-
-    result.trim().to_string()
-}
-
 fn is_meaningful_text_char(ch: char) -> bool {
     ch.is_alphanumeric()
 }
@@ -684,22 +673,6 @@ pub(crate) fn log_text_transform_diagnostics(
         preview_text_for_log(cleaned_text),
         preview_text_for_log(final_text)
     );
-}
-
-pub(crate) fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
-    if timestamps.is_empty() {
-        return None;
-    }
-    let mut durations = Vec::with_capacity(timestamps.len());
-    for i in 0..timestamps.len() {
-        let next_time = if i + 1 < timestamps.len() {
-            timestamps[i + 1]
-        } else {
-            end_time
-        };
-        durations.push(next_time - timestamps[i]);
-    }
-    Some(durations)
 }
 
 #[allow(clippy::too_many_arguments)]
