@@ -6,10 +6,9 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-pub(crate) use crate::repositories::storage::remove_path_if_exists;
-pub(crate) use crate::repositories::storage::write_json_pretty_atomic;
+pub use crate::file_utils::{remove_path_if_exists, write_json_pretty_atomic};
 
-pub(crate) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
+pub fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty()
         || trimmed.contains("..")
@@ -21,7 +20,7 @@ pub(crate) fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, 
     Ok(trimmed.to_string())
 }
 
-pub(crate) fn optional_history_child_path(root: &Path, file_name: &str) -> Option<PathBuf> {
+pub fn optional_history_child_path(root: &Path, file_name: &str) -> Option<PathBuf> {
     let trimmed = file_name.trim();
     if trimmed.is_empty()
         || trimmed.contains("..")
@@ -33,7 +32,7 @@ pub(crate) fn optional_history_child_path(root: &Path, file_name: &str) -> Optio
     Some(root.join(trimmed))
 }
 
-pub(crate) fn ensure_json_array_value(value: Value, label: &str) -> Result<Value, String> {
+pub fn ensure_json_array_value(value: Value, label: &str) -> Result<Value, String> {
     if value.is_array() {
         Ok(value)
     } else {
@@ -41,7 +40,7 @@ pub(crate) fn ensure_json_array_value(value: Value, label: &str) -> Result<Value
     }
 }
 
-pub(crate) fn ensure_json_object_value(value: Value, label: &str) -> Result<Value, String> {
+pub fn ensure_json_object_value(value: Value, label: &str) -> Result<Value, String> {
     if value.is_object() {
         Ok(value)
     } else {
@@ -49,18 +48,18 @@ pub(crate) fn ensure_json_object_value(value: Value, label: &str) -> Result<Valu
     }
 }
 
-pub(crate) fn read_json_value(path: &Path) -> Result<Value, String> {
+pub fn read_json_value(path: &Path) -> Result<Value, String> {
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&content).map_err(|error| error.to_string())
 }
 
-pub(crate) fn create_temp_directory(prefix: &str) -> Result<PathBuf, String> {
+pub fn create_temp_directory(prefix: &str) -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("sona-{prefix}-{}", Uuid::new_v4()));
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     Ok(dir)
 }
 
-pub(crate) fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> Result<(), String> {
+pub fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> Result<(), String> {
     fn append_directory_contents(
         builder: &mut tar::Builder<BzEncoder<BufWriter<File>>>,
         root: &Path,
@@ -111,10 +110,7 @@ pub(crate) fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> 
     Ok(())
 }
 
-pub(crate) fn extract_tar_bz2_archive(
-    archive_path: &Path,
-    target_dir: &Path,
-) -> Result<(), String> {
+pub fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Result<(), String> {
     let file = File::open(archive_path).map_err(|error| error.to_string())?;
     let buffered = BufReader::new(file);
     let tar = BzDecoder::new(buffered);
