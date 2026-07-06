@@ -14,6 +14,7 @@ const node = process.execPath;
 function makeTempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-packaging-'));
   fs.mkdirSync(path.join(root, 'src-tauri', 'binaries'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'cli'), { recursive: true });
   fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'shared_libs'), { recursive: true });
   return root;
 }
@@ -24,7 +25,7 @@ function writeTauriConfig(root) {
     JSON.stringify(
       {
         bundle: {
-          resources: ['resources/shared_libs/*'],
+          resources: ['resources/shared_libs/*', 'resources/cli/*'],
           externalBin: ['binaries/ffmpeg'],
         },
       },
@@ -62,6 +63,7 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
     path.join(root, 'src-tauri', 'resources', 'shared_libs', 'onnxruntime.dll'),
     'onnxruntime',
   );
+  fs.writeFileSync(path.join(root, 'src-tauri', 'resources', 'cli', 'sona-cli.exe'), 'cli');
   writeTauriConfig(root);
   const bundleRoot = path.join(root, 'target', target, 'release', 'bundle', 'nsis');
   fs.mkdirSync(bundleRoot, { recursive: true });
@@ -83,6 +85,7 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Verified packaged ffmpeg sidecar/);
+  assert.match(result.stdout, /Verified standalone CLI resource/);
   assert.match(result.stdout, /Verified shared libraries/);
 });
 
@@ -95,7 +98,6 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
     'utf8',
   );
   const tauriScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'tauri.js'), 'utf8');
-  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'), 'utf8');
   const oldCliSidecarScript = ['prepare', 'cli', 'sidecar'].join('-');
   const oldCliBundleScript = ['verify', 'cli', 'bundle'].join('-');
 
@@ -105,7 +107,6 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   assert.doesNotMatch(cargoToml, /^clap_complete\s*=/mu);
   assert.doesNotMatch(tauriConfig, /binaries\/sona-cli/u);
   assert.doesNotMatch(tauriScript, new RegExp(oldCliSidecarScript, 'u'));
-  assert.doesNotMatch(verifyScript, /sona-cli/u);
   assert.doesNotMatch(prWorkflow, new RegExp(`${oldCliSidecarScript}|${oldCliBundleScript}`, 'u'));
 
   const desktopCliCoreReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
@@ -119,49 +120,45 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   assert.deepEqual(desktopCliCoreReferences, []);
 });
 
-test('standalone CLI package includes sona-cli binary and shared libraries', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-cli-package-'));
+test('standalone CLI resource staging copies the sona-cli binary into the desktop bundle resources', () => {
+  const root = makeTempRepo();
   const target = 'x86_64-pc-windows-msvc';
   const releaseDir = path.join(root, 'target', target, 'release');
-  const libDir = path.join(root, 'sherpa-onnx-libs');
   fs.mkdirSync(releaseDir, { recursive: true });
-  fs.mkdirSync(libDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
-  fs.writeFileSync(path.join(libDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
-  fs.writeFileSync(path.join(libDir, 'onnxruntime.dll'), 'onnxruntime');
 
   const result = spawnSync(
     node,
     [
-      path.join(repoRoot, 'scripts', 'package-sona-cli.js'),
+      path.join(repoRoot, 'scripts', 'setup-sona-cli-resource.js'),
       '--repo-root',
       root,
       '--target',
       target,
-      '--lib-dir',
-      libDir,
     ],
     { cwd: repoRoot, encoding: 'utf8' },
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Packaged standalone CLI/);
+  assert.match(result.stdout, /Staged standalone CLI resource/);
 
-  const packageDir = path.join(releaseDir, 'sona-cli-package', `sona-cli-${target}`);
-  assert.equal(fs.existsSync(path.join(packageDir, 'sona-cli.exe')), true);
-  assert.equal(fs.existsSync(path.join(packageDir, 'sherpa-onnx-c-api.dll')), true);
-  assert.equal(fs.existsSync(path.join(packageDir, 'onnxruntime.dll')), true);
-  assert.equal(fs.existsSync(path.join(releaseDir, `sona-cli-${target}.tar.gz`)), true);
+  const resourceDir = path.join(root, 'src-tauri', 'resources', 'cli');
+  assert.equal(fs.existsSync(path.join(resourceDir, 'sona-cli.exe')), true);
+  assert.equal(fs.existsSync(path.join(resourceDir, 'sherpa-onnx-c-api.dll')), false);
+  assert.equal(fs.existsSync(path.join(resourceDir, 'onnxruntime.dll')), false);
 });
 
-test('release workflows package standalone CLI artifacts with shared libraries', () => {
+test('release workflows stage standalone CLI into the same-platform desktop installer resources', () => {
+  assert.equal(fs.existsSync(path.join(repoRoot, 'scripts', 'package-sona-cli.js')), false);
+
   for (const workflowName of ['release.yml', 'nightly.yml']) {
     const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflowName), 'utf8');
 
     assert.match(workflow, /cargo build -p sona-cli --release \$\{\{ matrix\.args \}\}/u);
-    assert.match(workflow, /node scripts\/package-sona-cli\.js \$\{\{ matrix\.args \}\}/u);
+    assert.match(workflow, /node scripts\/setup-sona-cli-resource\.js \$\{\{ matrix\.args \}\}/u);
     assert.match(workflow, /matrix\.args != '--target universal-apple-darwin'/u);
-    assert.match(workflow, /target\/\*\*\/release\/sona-cli-\*\.tar\.gz/u);
+    assert.doesNotMatch(workflow, /node scripts\/package-sona-cli\.js/u);
+    assert.doesNotMatch(workflow, /target\/\*\*\/release\/sona-cli-\*\.tar\.gz/u);
   }
 });
 

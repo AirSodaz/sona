@@ -167,9 +167,9 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
         run: cargo build -p sona-cli --release ${{ matrix.args }}
 
-      - name: Package standalone CLI
+      - name: Stage standalone CLI resource
         if: ${{ matrix.args != '--target universal-apple-darwin' }}
-        run: node scripts/package-sona-cli.js ${{ matrix.args }}
+        run: node scripts/setup-sona-cli-resource.js ${{ matrix.args }}
 
       - name: Build the app
         env:
@@ -211,8 +211,6 @@ jobs:
         with:
           name: nightly-assets-${{ matrix.platform }}-${{ strategy.job-index }}
           path: |
-            target/release/sona-cli-*.tar.gz
-            target/**/release/sona-cli-*.tar.gz
             target/**/release/bundle/dmg/*.dmg
             target/**/release/bundle/deb/*.deb
             target/**/release/bundle/appimage/*.AppImage

@@ -26,6 +26,7 @@ function main() {
 
   verifyTauriBundleConfig(repoRoot);
   verifyFfmpegSidecar(repoRoot, target);
+  verifyStandaloneCliResource(repoRoot, target);
   verifySharedLibraries(repoRoot, target);
 
   console.log(`[bundle] Verified packaged artifacts for ${target}`);
@@ -94,6 +95,9 @@ function verifyTauriBundleConfig(repoRoot) {
   if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/shared_libs'))) {
     throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/shared_libs.');
   }
+  if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/cli'))) {
+    throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/cli.');
+  }
 }
 
 function verifyFfmpegSidecar(repoRoot, target) {
@@ -109,6 +113,22 @@ function verifyFfmpegSidecar(repoRoot, target) {
   }
 
   console.log(`[bundle] Verified packaged ffmpeg sidecar: ${path.relative(repoRoot, sidecarPath)}`);
+}
+
+function verifyStandaloneCliResource(repoRoot, target) {
+  if (target === 'universal-apple-darwin') {
+    console.log('[bundle] Skipping standalone CLI resource check for universal Apple bundle');
+    return;
+  }
+
+  const binaryName = target.includes('windows') ? 'sona-cli.exe' : 'sona-cli';
+  const cliPath = path.resolve(repoRoot, 'src-tauri', 'resources', 'cli', binaryName);
+
+  if (!fs.existsSync(cliPath)) {
+    throw new Error(`Missing standalone CLI resource for ${target}: ${path.relative(repoRoot, cliPath)}`);
+  }
+
+  console.log(`[bundle] Verified standalone CLI resource: ${path.relative(repoRoot, cliPath)}`);
 }
 
 function verifySharedLibraries(repoRoot, target) {
