@@ -110,9 +110,15 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         OutputTarget::Stdout => Ok(CliOutput::stdout(output)),
         OutputTarget::File(path) => {
             fs::write(&path, output).map_err(|error| {
-                CliError::Io(format!("Failed to write transcript {}: {error}", path.display()))
+                CliError::Io(format!(
+                    "Failed to write transcript {}: {error}",
+                    path.display()
+                ))
             })?;
-            Ok(CliOutput::stderr(format!("Wrote transcript to {}", path.display())))
+            Ok(CliOutput::stderr(format!(
+                "Wrote transcript to {}",
+                path.display()
+            )))
         }
     }
 }

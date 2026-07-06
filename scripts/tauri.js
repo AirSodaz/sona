@@ -28,19 +28,6 @@ if (command === 'build' || command === 'bundle') {
   if (setupFfmpegResult.status !== 0) {
     process.exit(setupFfmpegResult.status ?? 1);
   }
-
-  const prepareCliResult = spawnSync(
-    process.execPath,
-    [path.resolve(__dirname, 'prepare-cli-sidecar.js'), ...args],
-    {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    }
-  );
-
-  if (prepareCliResult.status !== 0) {
-    process.exit(prepareCliResult.status ?? 1);
-  }
 }
 
 const tauriResult = spawnSync(tauriBinary, args, {

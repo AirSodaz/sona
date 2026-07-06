@@ -61,27 +61,6 @@ where
     .await
 }
 
-pub(crate) async fn transcribe_batch_with_progress_and_fallback_notice<F, N>(
-    request: &BatchTranscriptionRequest,
-    preloaded_recognizer: Option<Arc<Recognizer>>,
-    mut on_progress: F,
-    mut on_fallback: N,
-) -> Result<Vec<TranscriptSegment>, String>
-where
-    F: FnMut(f32),
-    N: FnMut(&crate::app::hardware::GpuFallbackNotice),
-{
-    transcribe_batch_with_progress_and_metrics_inner(
-        request,
-        preloaded_recognizer,
-        &mut on_progress,
-        None,
-        &mut on_fallback,
-        None,
-    )
-    .await
-}
-
 pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
     request: &BatchTranscriptionRequest,
     mut on_progress: F,

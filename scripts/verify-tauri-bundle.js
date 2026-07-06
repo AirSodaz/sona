@@ -25,7 +25,7 @@ function main() {
   }
 
   verifyTauriBundleConfig(repoRoot);
-  verifyCliSidecar(repoRoot, target);
+  verifyFfmpegSidecar(repoRoot, target);
   verifySharedLibraries(repoRoot, target);
 
   console.log(`[bundle] Verified packaged artifacts for ${target}`);
@@ -82,26 +82,33 @@ function verifyTauriBundleConfig(repoRoot) {
   const configPath = path.resolve(repoRoot, 'src-tauri', 'tauri.conf.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const externalBins = config.bundle?.externalBin ?? [];
-  if (!externalBins.some((entry) => normalizeConfigPath(entry) === 'binaries/sona-cli')) {
-    throw new Error('src-tauri/tauri.conf.json must include bundle.externalBin entry "binaries/sona-cli".');
+  if (!externalBins.some((entry) => normalizeConfigPath(entry) === 'binaries/ffmpeg')) {
+    throw new Error('src-tauri/tauri.conf.json must include bundle.externalBin entry "binaries/ffmpeg".');
   }
 
   const resources = config.bundle?.resources ?? [];
   const resourceEntries = Array.isArray(resources)
     ? resources
     : Object.entries(resources).flatMap(([source, target]) => [source, target]);
+
   if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/shared_libs'))) {
     throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/shared_libs.');
   }
 }
 
-function verifyCliSidecar(repoRoot, target) {
-  const sidecarPath = path.resolve(repoRoot, 'src-tauri', 'binaries', targetSpecificCliName(target));
+function verifyFfmpegSidecar(repoRoot, target) {
+  const sidecarPath = path.resolve(
+    repoRoot,
+    'src-tauri',
+    'binaries',
+    `ffmpeg-${target}${target.includes('windows') ? '.exe' : ''}`,
+  );
+
   if (!fs.existsSync(sidecarPath)) {
-    throw new Error(`Missing packaged sona-cli sidecar for ${target}: ${path.relative(repoRoot, sidecarPath)}`);
+    throw new Error(`Missing packaged ffmpeg sidecar for ${target}: ${path.relative(repoRoot, sidecarPath)}`);
   }
 
-  console.log(`[bundle] Verified packaged CLI sidecar: ${path.relative(repoRoot, sidecarPath)}`);
+  console.log(`[bundle] Verified packaged ffmpeg sidecar: ${path.relative(repoRoot, sidecarPath)}`);
 }
 
 function verifySharedLibraries(repoRoot, target) {
@@ -130,10 +137,6 @@ function requiredSharedLibraries(target) {
     return ['libsherpa-onnx-c-api.dylib', 'libonnxruntime.dylib'];
   }
   return [/^libsherpa-onnx-c-api\.so/, /^libonnxruntime\.so/];
-}
-
-function targetSpecificCliName(target) {
-  return `sona-cli-${target}${target.includes('windows') ? '.exe' : ''}`;
 }
 
 function normalizeConfigPath(value) {

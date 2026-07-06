@@ -25,7 +25,7 @@ function writeTauriConfig(root) {
       {
         bundle: {
           resources: ['resources/shared_libs/*'],
-          externalBin: ['binaries/ffmpeg', 'binaries/sona-cli'],
+          externalBin: ['binaries/ffmpeg'],
         },
       },
       null,
@@ -34,45 +34,14 @@ function writeTauriConfig(root) {
   );
 }
 
-test('prepare-cli-sidecar copies a target-suffixed standalone CLI binary for Tauri', () => {
+test('tauri bundle verification requires ffmpeg sidecar and shared libraries', () => {
   const root = makeTempRepo();
   const target = 'x86_64-pc-windows-msvc';
-  const sourceDir = path.join(root, 'target', target, 'release');
-  fs.mkdirSync(sourceDir, { recursive: true });
-  fs.writeFileSync(path.join(sourceDir, 'sona-cli.exe'), 'fake cli binary');
-
-  const result = spawnSync(
-    node,
-    [
-      path.join(repoRoot, 'scripts', 'prepare-cli-sidecar.js'),
-      '--repo-root',
-      root,
-      '--target',
-      target,
-      '--skip-build',
-    ],
-    { cwd: repoRoot, encoding: 'utf8' },
-  );
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(
-    fs.readFileSync(
-      path.join(root, 'src-tauri', 'binaries', 'sona-cli-x86_64-pc-windows-msvc.exe'),
-      'utf8',
-    ),
-    'fake cli binary',
-  );
-});
-
-test('verify-cli-bundle requires the installer, CLI sidecar, and shared sherpa libraries', () => {
-  const root = makeTempRepo();
-  const target = 'x86_64-pc-windows-msvc';
-  const bundleRoot = path.join(root, 'target', target, 'release', 'bundle', 'nsis');
-  fs.mkdirSync(bundleRoot, { recursive: true });
-  fs.writeFileSync(path.join(bundleRoot, 'Sona_0.8.0_x64-setup.exe'), 'installer');
+  fs.mkdirSync(path.join(root, 'src-tauri', 'binaries'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'shared_libs'), { recursive: true });
   fs.writeFileSync(
-    path.join(root, 'src-tauri', 'binaries', 'sona-cli-x86_64-pc-windows-msvc.exe'),
-    'cli',
+    path.join(root, 'src-tauri', 'binaries', 'ffmpeg-x86_64-pc-windows-msvc.exe'),
+    'ffmpeg',
   );
   fs.writeFileSync(
     path.join(root, 'src-tauri', 'resources', 'shared_libs', 'sherpa-onnx-c-api.dll'),
@@ -83,37 +52,48 @@ test('verify-cli-bundle requires the installer, CLI sidecar, and shared sherpa l
     'onnxruntime',
   );
   writeTauriConfig(root);
+  const bundleRoot = path.join(root, 'target', target, 'release', 'bundle', 'nsis');
+  fs.mkdirSync(bundleRoot, { recursive: true });
+  fs.writeFileSync(path.join(bundleRoot, 'Sona_0.8.0_x64-setup.exe'), 'installer');
 
   const result = spawnSync(
     node,
     [
-      path.join(repoRoot, 'scripts', 'verify-cli-bundle.js'),
+      path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'),
       '--repo-root',
       root,
-      '--bundle-root',
-      bundleRoot,
       '--target',
       target,
+      '--bundle-root',
+      bundleRoot,
     ],
     { cwd: repoRoot, encoding: 'utf8' },
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Verified packaged CLI sidecar/);
+  assert.match(result.stdout, /Verified packaged ffmpeg sidecar/);
   assert.match(result.stdout, /Verified shared libraries/);
 });
 
-test('desktop tauri crate relies on the standalone sona-cli sidecar instead of an embedded cli module', () => {
+test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   const libRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
   const cargoToml = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const tauriConfig = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.conf.json'), 'utf8');
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
   );
+  const tauriScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'tauri.js'), 'utf8');
+  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'), 'utf8');
+  const oldCliSidecarScript = ['prepare', 'cli', 'sidecar'].join('-');
+  const oldCliBundleScript = ['verify', 'cli', 'bundle'].join('-');
 
   assert.doesNotMatch(libRs, /\bmod cli;/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'cli')), false);
   assert.doesNotMatch(cargoToml, /^clap\s*=/mu);
   assert.doesNotMatch(cargoToml, /^clap_complete\s*=/mu);
-  assert.doesNotMatch(prWorkflow, /cli::transcribe::tests/u);
+  assert.doesNotMatch(tauriConfig, /binaries\/sona-cli/u);
+  assert.doesNotMatch(tauriScript, new RegExp(oldCliSidecarScript, 'u'));
+  assert.doesNotMatch(verifyScript, /sona-cli/u);
+  assert.doesNotMatch(prWorkflow, new RegExp(`${oldCliSidecarScript}|${oldCliBundleScript}`, 'u'));
 });

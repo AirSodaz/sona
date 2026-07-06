@@ -29,7 +29,6 @@ pub use crate::core::asr_metrics::{
 pub use crate::core::model_config::ModelFileConfig;
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
-pub(crate) use batch::transcribe_batch_with_progress_and_fallback_notice;
 pub use error::SherpaError;
 pub use model_config::Recognizer;
 pub(crate) use model_config::{

@@ -34,7 +34,7 @@ use sona_core::transcribe_runtime::{
 use crate::core::database::{Database, DatabaseError};
 use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 
-pub const CLI_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in sona-cli serve because no desktop online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
+pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiServerTranscriptionDefaults {
@@ -784,7 +784,7 @@ async fn start_worker_loop(
                             Err(e) => JobStatus::Failed(e.to_string()),
                         }
                     } else {
-                        JobStatus::Failed(CLI_ONLINE_ASR_BATCH_UNAVAILABLE.to_string())
+                        JobStatus::Failed(DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE.to_string())
                     }
                 } else {
                     JobStatus::Failed("Missing online provider ID".to_string())

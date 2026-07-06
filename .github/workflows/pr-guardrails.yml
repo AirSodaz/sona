@@ -90,8 +90,8 @@ jobs:
       - name: Prepare ffmpeg sidecar
         run: node scripts/setup-ffmpeg.js
 
-      - name: Prepare standalone CLI sidecar
-        run: node scripts/prepare-cli-sidecar.js
+      - name: Build standalone CLI
+        run: cargo build -p sona-cli --release
 
       - name: Run core, bindings, and standalone CLI tests
         run: cargo test -p sona-core -p sona-ts-bind -p sona-uniffi-bind -p sona-cli

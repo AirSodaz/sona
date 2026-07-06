@@ -1,8 +1,10 @@
-use crate::audio::{extract_and_resample_audio, fixed_chunk_audio, save_wav_file, vad_segment_audio};
+use crate::audio::{
+    extract_and_resample_audio, fixed_chunk_audio, save_wav_file, vad_segment_audio,
+};
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use sherpa_onnx::{
-    OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig,
-    OfflineRecognizer, OfflineRecognizerConfig, SileroVadModelConfig, VadModelConfig,
+    OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig, OfflineRecognizer,
+    OfflineRecognizerConfig, SileroVadModelConfig, VadModelConfig,
 };
 use sona_core::model_config::ModelFileConfig;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
@@ -108,12 +110,8 @@ impl LocalOfflineTranscriber {
             self.hotwords.clone(),
         )?;
 
-        let recognizer = create_recognizer(
-            model_type,
-            self.num_threads,
-            provider,
-            &self.file_config,
-        )?;
+        let recognizer =
+            create_recognizer(model_type, self.num_threads, provider, &self.file_config)?;
         let punctuation = load_punctuation(self.punctuation_model.as_deref())?;
         let vad_config = load_vad_config(self.vad_model.as_deref())?;
 
@@ -207,7 +205,11 @@ fn build_model_config(
             llm: get_path(&fc.llm)?,
             embedding: get_path(&fc.embedding)?,
             tokenizer: get_path(&fc.tokenizer)?,
-            tokens: fc.tokens.as_ref().map(|_| get_path(&fc.tokens)).transpose()?,
+            tokens: fc
+                .tokens
+                .as_ref()
+                .map(|_| get_path(&fc.tokens))
+                .transpose()?,
             language: if language == "multilingual" {
                 String::new()
             } else {
@@ -287,15 +289,13 @@ fn create_recognizer(
             config.model_config.funasr_nano.encoder_adaptor =
                 Some(encoder_adaptor.to_string_lossy().to_string());
             config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
-            config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
+            config.model_config.funasr_nano.embedding =
+                Some(embedding.to_string_lossy().to_string());
             config.model_config.funasr_nano.tokenizer =
                 Some(tokenizer.to_string_lossy().to_string());
             config.model_config.funasr_nano.language = Some(language);
         }
-        ModelType::OfflineFireRedAsr {
-            encoder,
-            decoder,
-        } => {
+        ModelType::OfflineFireRedAsr { encoder, decoder } => {
             config.model_config.tokens = file_tokens(file_config);
             config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
             config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
@@ -320,7 +320,8 @@ fn create_recognizer(
         }
     }
 
-    OfflineRecognizer::create(&config).ok_or_else(|| "Failed to create OfflineRecognizer".to_string())
+    OfflineRecognizer::create(&config)
+        .ok_or_else(|| "Failed to create OfflineRecognizer".to_string())
 }
 
 struct Punctuation(OfflinePunctuation);
@@ -336,8 +337,8 @@ impl Punctuation {
             },
         };
 
-        let inner = OfflinePunctuation::create(&config)
-            .ok_or("Failed to create OfflinePunctuation")?;
+        let inner =
+            OfflinePunctuation::create(&config).ok_or("Failed to create OfflinePunctuation")?;
         Ok(Self(inner))
     }
 

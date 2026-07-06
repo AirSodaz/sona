@@ -72,7 +72,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn template_contains_transcribe_and_serve_keys() {
+    fn template_contains_shared_transcribe_and_serve_keys() {
         let content = sona_core::cli_config::render_cli_config_template(None);
         for key in [
             "model_id",

@@ -4,7 +4,6 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # Generated keys are commented out by default. Uncomment the settings you want
 # before using this file with Sona commands.
 # `sona-cli transcribe` requires model_id to be enabled.
-# `sona-cli serve` falls back to runtime defaults for omitted keys.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
 #   sona-cli serve -c ./sona-cli.toml
