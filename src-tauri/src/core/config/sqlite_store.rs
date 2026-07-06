@@ -14,7 +14,7 @@ where
     db: Arc<D>,
 }
 
-crate::impl_db_repository!(SqliteConfigStore);
+sona_sqlite::impl_db_repository!(SqliteConfigStore);
 
 impl<D> SqliteConfigStore<D>
 where

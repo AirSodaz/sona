@@ -1,0 +1,16 @@
+[package]
+name = "sona-sqlite"
+version.workspace = true
+description = "SQLite adapter for Sona core ports"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = "0.4.22"
+rusqlite = { version = "0.40.1", features = ["bundled", "backup"] }
+serde_json = "1"
+sona-core = { path = "../../core" }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+tempfile = "3"

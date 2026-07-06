@@ -13,7 +13,7 @@ where
     db: Arc<D>,
 }
 
-crate::impl_db_repository!(SqliteProjectRepository);
+sona_sqlite::impl_db_repository!(SqliteProjectRepository);
 
 const PROJECT_COLUMNS: [&str; 14] = [
     "id",

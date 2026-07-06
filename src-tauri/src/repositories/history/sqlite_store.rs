@@ -210,7 +210,7 @@ where
     db: Arc<D>,
 }
 
-crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
+sona_sqlite::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
 
 struct StagedHistoryAudio {
     staging_path: PathBuf,

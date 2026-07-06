@@ -335,7 +335,7 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
+    use crate::Database;
 
     fn schema_versions(db: &Database) -> Vec<i64> {
         db.with_connection(|conn| {

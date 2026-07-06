@@ -26,7 +26,7 @@ where
     db: Arc<D>,
 }
 
-crate::impl_db_repository!(SqliteLedgerRepository);
+sona_sqlite::impl_db_repository!(SqliteLedgerRepository);
 
 impl<D> SqliteLedgerRepository<D>
 where

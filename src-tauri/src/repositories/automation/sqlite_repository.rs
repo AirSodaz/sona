@@ -13,7 +13,7 @@ where
     db: Arc<D>,
 }
 
-crate::impl_db_repository!(SqliteAutomationRepository);
+sona_sqlite::impl_db_repository!(SqliteAutomationRepository);
 
 impl<D> SqliteAutomationRepository<D>
 where

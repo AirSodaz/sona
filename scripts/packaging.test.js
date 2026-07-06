@@ -318,6 +318,27 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm-providers\.json/u);
 });
 
+test('SQLite database handle and schema are owned by sqlite adapter', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const desktopDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'mod.rs'), 'utf8');
+  const sqliteCargoPath = path.join(repoRoot, 'adapters', 'sqlite', 'Cargo.toml');
+  const sqliteLibPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs');
+
+  assert.match(workspaceCargo, /"adapters\/sqlite"/u);
+  assert.ok(fs.existsSync(sqliteCargoPath));
+  assert.ok(fs.existsSync(sqliteLibPath));
+  assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/adapters\/sqlite"/u);
+  assert.match(desktopDatabase, /pub mod legacy_migration;/u);
+  assert.match(desktopDatabase, /pub use sona_sqlite::\{/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'error.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'ports.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'schema.rs')), false);
+  assert.doesNotMatch(desktopDatabase, /rusqlite::Connection/u);
+  assert.doesNotMatch(desktopDatabase, /struct ConnectionPool/u);
+  assert.doesNotMatch(desktopDatabase, /pub struct Database/u);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

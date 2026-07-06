@@ -5398,6 +5398,7 @@ dependencies = [
  "sona-core",
  "sona-local-asr",
  "sona-online-asr",
+ "sona-sqlite",
  "specta",
  "specta-typescript",
  "sysinfo",
@@ -5508,6 +5509,18 @@ dependencies = [
  "sona-core",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "sona-sqlite"
+version = "0.8.0"
+dependencies = [
+ "log",
+ "rusqlite",
+ "serde_json",
+ "sona-core",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

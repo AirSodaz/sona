@@ -24,6 +24,7 @@ embed-resource = "3.0.9"
 sona-core = { path = "../core", features = ["specta"] }
 sona-local-asr = { path = "../adapters/local_asr" }
 sona-online-asr = { path = "../adapters/online_asr" }
+sona-sqlite = { path = "../adapters/sqlite" }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
