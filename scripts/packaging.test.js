@@ -195,7 +195,7 @@ test('desktop api server invokes local offline ASR through the core transcriber 
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
 });
 
-test('pr guardrails run local ASR adapter tests with core bindings and standalone CLI', () => {
+test('pr guardrails run ASR adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
@@ -203,7 +203,7 @@ test('pr guardrails run local ASR adapter tests with core bindings and standalon
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-local-asr -p sona-online-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -300,6 +300,36 @@ test('standalone CLI invokes local offline ASR through the core transcriber port
   assert.match(cliTranscribeRs, /sona_local_asr::offline::LocalOfflineAsrAdapter/u);
   assert.match(cliTranscribeRs, /\.transcribe\(plan\)/u);
   assert.doesNotMatch(cliTranscribeRs, /run_offline_transcription/u);
+});
+
+test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR adapter', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
+  const onlineAsrCargoPath = path.join(repoRoot, 'adapters', 'online_asr', 'Cargo.toml');
+  const onlineAsrLibPath = path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs');
+  const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
+  const groqRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'groq.rs'), 'utf8');
+  const mistralRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mistral.rs'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/online_asr"/u);
+  assert.ok(fs.existsSync(onlineAsrCargoPath));
+  assert.ok(fs.existsSync(onlineAsrLibPath));
+  assert.match(tauriCargo, /sona-online-asr\s*=\s*\{\s*path\s*=\s*"..\/adapters\/online_asr"/u);
+  assert.match(prWorkflow, /sona-online-asr/u);
+  assert.match(coreAsr, /trait OnlineBatchTranscriber/u);
+  assert.match(coreAsr, /struct OnlineBatchTranscriptionRequest/u);
+  assert.match(coreAsr, /struct OnlineBatchTranscriptionOutput/u);
+
+  for (const providerRs of [groqRs, mistralRs]) {
+    assert.match(providerRs, /sona_online_asr::/u);
+    assert.doesNotMatch(providerRs, /reqwest::multipart/u);
+    assert.doesNotMatch(providerRs, /reqwest::Client/u);
+    assert.doesNotMatch(providerRs, /\.post\(/u);
+  }
 });
 
 test('desktop hardware module reuses local ASR adapter GPU planning', () => {

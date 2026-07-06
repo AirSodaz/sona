@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(feature = "specta")]
 use specta::Type;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 const ONLINE_ASR_PROVIDERS_JSON: &str = include_str!("online-asr-providers.json");
@@ -51,6 +52,28 @@ pub trait OfflineTranscriber: Send + Sync {
         &self,
         plan: OfflineTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, String>;
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OnlineBatchTranscriptionRequest {
+    pub file_path: PathBuf,
+    pub request: AsrTranscriptionRequest,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OnlineBatchTranscriptionOutput {
+    pub segments: Vec<TranscriptSegment>,
+    pub audio_duration_ms: f64,
+    pub buffered_samples: usize,
+    pub stage: String,
+}
+
+#[async_trait]
+pub trait OnlineBatchTranscriber: Send + Sync {
+    async fn transcribe(
+        &self,
+        request: OnlineBatchTranscriptionRequest,
+    ) -> Result<OnlineBatchTranscriptionOutput, String>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

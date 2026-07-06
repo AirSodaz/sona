@@ -5397,6 +5397,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-core",
  "sona-local-asr",
+ "sona-online-asr",
  "specta",
  "specta-typescript",
  "sysinfo",
@@ -5494,6 +5495,18 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "sona-online-asr"
+version = "0.8.0"
+dependencies = [
+ "async-trait",
+ "reqwest 0.13.4",
+ "serde_json",
+ "sona-core",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
