@@ -388,8 +388,8 @@ async fn handle_local_streaming_socket(
                         let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
                         total_samples += samples.len();
 
-                        vad.0.accept_waveform(&samples);
-                        let currently_speaking = vad.0.detected();
+                        crate::integrations::asr::accept_vad_samples(&vad, &samples);
+                        let currently_speaking = crate::integrations::asr::vad_detected(&vad);
 
                         if current_segment_id.is_none() {
                             current_segment_id = Some(uuid::Uuid::new_v4().to_string());

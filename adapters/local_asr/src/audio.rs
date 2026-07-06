@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 pub type VadConfig = VadModelConfig;
 pub type VadDetector = VoiceActivityDetector;
 
-pub struct SafeVad(pub VadDetector);
+pub struct SafeVad(VadDetector);
 unsafe impl Send for SafeVad {}
 unsafe impl Sync for SafeVad {}
 
@@ -283,6 +283,19 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
             None
         }
     }
+}
+
+pub fn reset_vad(vad: &mut SafeVad) {
+    vad.0.reset();
+    vad.0.clear();
+}
+
+pub fn accept_vad_samples(vad: &SafeVad, samples: &[f32]) {
+    vad.0.accept_waveform(samples);
+}
+
+pub fn vad_detected(vad: &SafeVad) -> bool {
+    vad.0.detected()
 }
 
 pub fn vad_segment_audio(

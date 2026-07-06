@@ -238,11 +238,11 @@ pub fn build_offline_model_config(
     )
 }
 
-pub struct SafeOnlineRecognizer(pub OnlineRecognizer);
+pub struct SafeOnlineRecognizer(OnlineRecognizer);
 unsafe impl Send for SafeOnlineRecognizer {}
 unsafe impl Sync for SafeOnlineRecognizer {}
 
-pub struct SafeOfflineRecognizer(pub OfflineRecognizer);
+pub struct SafeOfflineRecognizer(OfflineRecognizer);
 unsafe impl Send for SafeOfflineRecognizer {}
 unsafe impl Sync for SafeOfflineRecognizer {}
 
@@ -629,7 +629,7 @@ where
 unsafe impl Send for Recognizer {}
 unsafe impl Sync for Recognizer {}
 
-pub struct SafeStream(pub sherpa_onnx::OnlineStream);
+pub struct SafeStream(sherpa_onnx::OnlineStream);
 unsafe impl Send for SafeStream {}
 unsafe impl Sync for SafeStream {}
 

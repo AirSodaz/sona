@@ -6,9 +6,9 @@ use super::metrics::{
 };
 use super::model_config::{
     ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream,
-    SafeVad, accept_online_samples, build_model_config, create_online_stream,
+    SafeVad, accept_online_samples, accept_vad_samples, build_model_config, create_online_stream,
     decode_offline_samples, decode_online_ready, is_online_endpoint, load_punctuation, load_vad,
-    online_stream_result, reset_online_stream,
+    online_stream_result, reset_online_stream, reset_vad, vad_detected,
 };
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
@@ -498,9 +498,8 @@ async fn start_recognizer_impl_inner(
     start_instance_runtime(instance, stream);
 
     if instance.vad_model.is_some() {
-        if let Some(SafeVad(v)) = instance.vad.as_mut() {
-            v.reset();
-            v.clear();
+        if let Some(vad) = instance.vad.as_mut() {
+            reset_vad(vad);
         } else {
             instance.vad = load_vad(instance.vad_model.clone());
         }
@@ -767,7 +766,7 @@ async fn feed_audio_samples_inner(
 
     match &recognizer.inner {
         RecognizerInner::Offline(_) => {
-            let Some(SafeVad(vad)) = instance.vad.as_ref() else {
+            let Some(vad) = instance.vad.as_ref() else {
                 println!(
                     "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
                     instance_id
@@ -778,8 +777,8 @@ async fn feed_audio_samples_inner(
             // Offline live transcription is VAD-driven: we keep feeding audio to
             // the detector, grow/trim utterance buffers, and only run full
             // recognizer inference when a speech segment boundary is reached.
-            vad.accept_waveform(samples);
-            let currently_speaking = vad.detected();
+            accept_vad_samples(vad, samples);
+            let currently_speaking = vad_detected(vad);
 
             if let Some(label) = diagnostics_instance_label(instance_id)
                 && instance.total_samples % 160000 < 2000

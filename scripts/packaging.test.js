@@ -278,7 +278,8 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
     'utf8',
   );
 
-  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{SafeVad, load_vad\}/u);
+  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{[^}]*SafeVad/u);
+  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{[^}]*load_vad/u);
   assert.doesNotMatch(modelConfigRs, /create_vad_detector/u);
   assert.doesNotMatch(modelConfigRs, /pub struct SafeVad/u);
   assert.doesNotMatch(modelConfigRs, /SileroVadModelConfig/u);
@@ -385,4 +386,33 @@ test('desktop online stream operations are delegated to local ASR adapter', () =
   assert.doesNotMatch(desktopOnlineRs, /r\.0\.decode\(&[^)]*\.0\)/u);
   assert.doesNotMatch(desktopOnlineRs, /r\.0\.get_result\(&[^)]*\.0\)/u);
   assert.doesNotMatch(desktopOnlineRs, /r\.0\.reset\(&[^)]*\.0\)/u);
+});
+
+test('desktop VAD runtime operations use private local ASR wrappers', () => {
+  const audioRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'), 'utf8');
+  const recognizerRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'), 'utf8');
+  const modelConfigRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+    'utf8',
+  );
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+  const streamingRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    'utf8',
+  );
+  const desktopVadRs = `${sherpaRs}\n${streamingRs}`;
+
+  assert.match(modelConfigRs, /accept_vad_samples/u);
+  assert.match(modelConfigRs, /reset_vad/u);
+  assert.match(modelConfigRs, /vad_detected/u);
+  assert.doesNotMatch(desktopVadRs, /SafeVad\([^)]+\)/u);
+  assert.doesNotMatch(desktopVadRs, /\.0\.accept_waveform/u);
+  assert.doesNotMatch(desktopVadRs, /\.0\.detected/u);
+  assert.doesNotMatch(audioRs, /pub struct SafeVad\(pub /u);
+  assert.doesNotMatch(recognizerRs, /pub struct SafeOnlineRecognizer\(pub /u);
+  assert.doesNotMatch(recognizerRs, /pub struct SafeOfflineRecognizer\(pub /u);
+  assert.doesNotMatch(recognizerRs, /pub struct SafeStream\(pub /u);
 });

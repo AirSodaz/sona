@@ -1,5 +1,5 @@
 pub use crate::core::model_config::ModelFileConfig;
-pub use sona_local_asr::audio::{SafeVad, load_vad};
+pub use sona_local_asr::audio::{SafeVad, accept_vad_samples, load_vad, reset_vad, vad_detected};
 pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 pub use sona_local_asr::recognizer::{
     ModelType, OfflineDecodeResult, OnlineDecodeResult, Recognizer, RecognizerCreateResult,
