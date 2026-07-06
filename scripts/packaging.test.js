@@ -157,3 +157,14 @@ test('pr guardrails run local ASR adapter tests with core bindings and standalon
     /cargo test -p sona-core -p sona-local-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
+
+test('desktop hardware module reuses local ASR adapter GPU planning', () => {
+  const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
+
+  assert.match(hardwareRs, /pub\(crate\) use sona_local_asr::gpu::\{/u);
+  assert.match(hardwareRs, /sona_local_asr::gpu::check_gpu_availability\(\)\.await/u);
+  assert.match(hardwareRs, /sona_local_asr::gpu::resolve_gpu_acceleration_plan/u);
+  assert.doesNotMatch(hardwareRs, /tokio::process::Command/u);
+  assert.doesNotMatch(hardwareRs, /struct GpuAccelerationPlan/u);
+  assert.doesNotMatch(hardwareRs, /struct GpuFallbackNotice/u);
+});
