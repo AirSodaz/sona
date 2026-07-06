@@ -161,6 +161,16 @@ jobs:
         run: |
           echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
 
+      - name: Build standalone CLI
+        if: ${{ matrix.args != '--target universal-apple-darwin' }}
+        env:
+          LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
+        run: cargo build -p sona-cli --release ${{ matrix.args }}
+
+      - name: Package standalone CLI
+        if: ${{ matrix.args != '--target universal-apple-darwin' }}
+        run: node scripts/package-sona-cli.js ${{ matrix.args }}
+
       - name: Build the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -201,6 +211,8 @@ jobs:
         with:
           name: nightly-assets-${{ matrix.platform }}-${{ strategy.job-index }}
           path: |
+            target/release/sona-cli-*.tar.gz
+            target/**/release/sona-cli-*.tar.gz
             target/**/release/bundle/dmg/*.dmg
             target/**/release/bundle/deb/*.deb
             target/**/release/bundle/appimage/*.AppImage

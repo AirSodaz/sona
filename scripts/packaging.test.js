@@ -119,6 +119,52 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   assert.deepEqual(desktopCliCoreReferences, []);
 });
 
+test('standalone CLI package includes sona-cli binary and shared libraries', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-cli-package-'));
+  const target = 'x86_64-pc-windows-msvc';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const libDir = path.join(root, 'sherpa-onnx-libs');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.mkdirSync(libDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(libDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
+  fs.writeFileSync(path.join(libDir, 'onnxruntime.dll'), 'onnxruntime');
+
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'scripts', 'package-sona-cli.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--lib-dir',
+      libDir,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Packaged standalone CLI/);
+
+  const packageDir = path.join(releaseDir, 'sona-cli-package', `sona-cli-${target}`);
+  assert.equal(fs.existsSync(path.join(packageDir, 'sona-cli.exe')), true);
+  assert.equal(fs.existsSync(path.join(packageDir, 'sherpa-onnx-c-api.dll')), true);
+  assert.equal(fs.existsSync(path.join(packageDir, 'onnxruntime.dll')), true);
+  assert.equal(fs.existsSync(path.join(releaseDir, `sona-cli-${target}.tar.gz`)), true);
+});
+
+test('release workflows package standalone CLI artifacts with shared libraries', () => {
+  for (const workflowName of ['release.yml', 'nightly.yml']) {
+    const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflowName), 'utf8');
+
+    assert.match(workflow, /cargo build -p sona-cli --release \$\{\{ matrix\.args \}\}/u);
+    assert.match(workflow, /node scripts\/package-sona-cli\.js \$\{\{ matrix\.args \}\}/u);
+    assert.match(workflow, /matrix\.args != '--target universal-apple-darwin'/u);
+    assert.match(workflow, /target\/\*\*\/release\/sona-cli-\*\.tar\.gz/u);
+  }
+});
+
 test('core crate does not keep sona-cli config template surface', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
 
