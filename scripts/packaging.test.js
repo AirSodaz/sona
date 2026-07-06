@@ -168,3 +168,14 @@ test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   assert.doesNotMatch(hardwareRs, /struct GpuAccelerationPlan/u);
   assert.doesNotMatch(hardwareRs, /struct GpuFallbackNotice/u);
 });
+
+test('desktop audio pipeline reuses local ASR adapter media helpers', () => {
+  const pipelineRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'pipeline.rs'), 'utf8');
+
+  assert.match(pipelineRs, /pub use sona_local_asr::audio::\{/u);
+  assert.doesNotMatch(pipelineRs, /tokio::process::Command/u);
+  assert.doesNotMatch(pipelineRs, /hound::/u);
+  assert.doesNotMatch(pipelineRs, /fn pcm_bytes_to_f32/u);
+  assert.doesNotMatch(pipelineRs, /pub fn fixed_chunk_audio/u);
+  assert.doesNotMatch(pipelineRs, /pub fn whole_audio_segment/u);
+});
