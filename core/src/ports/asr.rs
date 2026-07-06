@@ -45,6 +45,7 @@ pub trait OfflineTranscriber: Send + Sync {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AsrTranscriptionRequest {
     pub mode: AsrMode,
@@ -60,6 +61,7 @@ pub struct AsrTranscriptionRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(tag = "engine")]
 pub enum AsrEngineConfig {
     #[serde(rename = "local-sherpa", rename_all = "camelCase")]
@@ -139,6 +141,7 @@ impl AsrTranscriptionRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProviderRequest {
     pub provider_id: String,
@@ -148,6 +151,7 @@ pub struct OnlineAsrProviderRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct VolcengineDoubaoAsrConfig {
     #[serde(default)]

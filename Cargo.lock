@@ -5508,6 +5508,7 @@ dependencies = [
 name = "sona-uniffi-bind"
 version = "0.8.0"
 dependencies = [
+ "serde_json",
  "sona-core",
  "thiserror 2.0.18",
  "uniffi",
@@ -5547,6 +5548,7 @@ checksum = "38f9a30cbcbb7011f1da7d73483983bf838af123883e45f2b36ed76328df9c50"
 dependencies = [
  "paste",
  "rustc_version 0.4.1",
+ "serde_json",
  "specta-macros",
 ]
 

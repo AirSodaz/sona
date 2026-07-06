@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerProcessingConfig {
     pub speaker_segmentation_model_path: Option<String>,
@@ -9,6 +12,7 @@ pub struct SpeakerProcessingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerProfileSample {
     pub id: String,
@@ -18,6 +22,7 @@ pub struct SpeakerProfileSample {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerProfile {
     pub id: String,

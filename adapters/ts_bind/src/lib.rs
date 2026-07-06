@@ -6,23 +6,43 @@
 //! same pure Rust types without reaching into the desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
-pub use sona_core::ports::asr::{AsrEngine, AsrMode, BatchSegmentationMode};
+pub use sona_core::model_config::ModelFileConfig;
+pub use sona_core::ports::asr::{
+    AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
+    OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
+};
 pub use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
+pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
 
+const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
+    "LlmProvider",
+    "PolishPresetId",
+    "SummaryTemplateId",
+    "RuntimeEnvironmentStatus",
+    "RuntimePathKind",
+    "RuntimePathStatus",
+    "AsrEngine",
+    "AsrMode",
+    "BatchSegmentationMode",
+    "ModelFileConfig",
+    "SpeakerProcessingConfig",
+    "SpeakerProfile",
+    "SpeakerProfileSample",
+    "TranscriptNormalizationOptions",
+    "TranscriptPostprocessOptions",
+    "TranscriptTextReplacementRule",
+    "TranscriptTextReplacementRuleSet",
+    "AsrTranscriptionRequest",
+    "AsrEngineConfig",
+    "OnlineAsrProviderRequest",
+    "VolcengineDoubaoAsrConfig",
+];
+
 pub fn exported_core_type_names() -> &'static [&'static str] {
-    &[
-        "LlmProvider",
-        "PolishPresetId",
-        "SummaryTemplateId",
-        "RuntimeEnvironmentStatus",
-        "RuntimePathKind",
-        "RuntimePathStatus",
-        "AsrEngine",
-        "AsrMode",
-        "BatchSegmentationMode",
-    ]
+    EXPORTED_CORE_TYPE_NAMES
 }
 
 #[cfg(test)]
@@ -31,20 +51,7 @@ mod tests {
 
     #[test]
     fn lists_core_types_owned_by_ts_bindings() {
-        assert_eq!(
-            exported_core_type_names(),
-            &[
-                "LlmProvider",
-                "PolishPresetId",
-                "SummaryTemplateId",
-                "RuntimeEnvironmentStatus",
-                "RuntimePathKind",
-                "RuntimePathStatus",
-                "AsrEngine",
-                "AsrMode",
-                "BatchSegmentationMode",
-            ]
-        );
+        assert_eq!(exported_core_type_names(), EXPORTED_CORE_TYPE_NAMES);
     }
 
     #[test]
@@ -62,5 +69,17 @@ mod tests {
         assert_specta_type::<sona_core::ports::asr::AsrEngine>();
         assert_specta_type::<sona_core::ports::asr::AsrMode>();
         assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();
+        assert_specta_type::<ModelFileConfig>();
+        assert_specta_type::<SpeakerProcessingConfig>();
+        assert_specta_type::<SpeakerProfile>();
+        assert_specta_type::<SpeakerProfileSample>();
+        assert_specta_type::<TranscriptNormalizationOptions>();
+        assert_specta_type::<TranscriptPostprocessOptions>();
+        assert_specta_type::<TranscriptTextReplacementRule>();
+        assert_specta_type::<TranscriptTextReplacementRuleSet>();
+        assert_specta_type::<AsrTranscriptionRequest>();
+        assert_specta_type::<AsrEngineConfig>();
+        assert_specta_type::<OnlineAsrProviderRequest>();
+        assert_specta_type::<VolcengineDoubaoAsrConfig>();
     }
 }

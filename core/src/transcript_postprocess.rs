@@ -1,9 +1,12 @@
 use regex::{NoExpand, Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 
 use crate::transcript::{TranscriptSegment, TranscriptUpdate};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptTextReplacementRule {
     #[serde(default)]
@@ -13,6 +16,7 @@ pub struct TranscriptTextReplacementRule {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptTextReplacementRuleSet {
     #[serde(default)]
@@ -24,6 +28,7 @@ pub struct TranscriptTextReplacementRuleSet {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptPostprocessOptions {
     #[serde(default)]
@@ -46,6 +51,7 @@ impl Default for TranscriptPostprocessOptions {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptNormalizationOptions {
     pub enable_timeline: bool,

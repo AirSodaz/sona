@@ -207,6 +207,36 @@ test('pr guardrails run local ASR adapter tests with core bindings and standalon
   );
 });
 
+test('core ASR request contract is exposed through TS and UniFFI binding crates', () => {
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');
+
+  assert.match(coreCargo, /specta = \{[^}]*features = \["derive", "serde_json"\]/u);
+
+  for (const typeName of [
+    'AsrTranscriptionRequest',
+    'AsrEngineConfig',
+    'OnlineAsrProviderRequest',
+    'VolcengineDoubaoAsrConfig',
+    'TranscriptPostprocessOptions',
+    'SpeakerProcessingConfig',
+    'ModelFileConfig',
+  ]) {
+    assert.match(tsBindLib, new RegExp(`\\b${typeName}\\b`, 'u'));
+  }
+
+  assert.match(uniffiLib, /default_batch_segmentation_mode/u);
+  assert.match(uniffiLib, /online_asr_provider_request/u);
+  assert.match(uniffiLib, /volcengine_doubao_asr_config_from_json/u);
+  assert.match(uniffiMapper, /pub enum FfiAsrEngine/u);
+  assert.match(uniffiMapper, /pub enum FfiAsrMode/u);
+  assert.match(uniffiMapper, /pub enum FfiBatchSegmentationMode/u);
+  assert.match(uniffiMapper, /pub struct FfiOnlineAsrProviderRequest/u);
+  assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),
