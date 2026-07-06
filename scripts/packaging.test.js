@@ -178,4 +178,7 @@ test('desktop audio pipeline reuses local ASR adapter media helpers', () => {
   assert.doesNotMatch(pipelineRs, /fn pcm_bytes_to_f32/u);
   assert.doesNotMatch(pipelineRs, /pub fn fixed_chunk_audio/u);
   assert.doesNotMatch(pipelineRs, /pub fn whole_audio_segment/u);
+  assert.match(pipelineRs, /sona_local_asr::audio::vad_segment_audio_with_capacity/u);
+  assert.doesNotMatch(pipelineRs, /VoiceActivityDetector/u);
+  assert.doesNotMatch(pipelineRs, /VadModelConfig/u);
 });

@@ -2,6 +2,8 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
 use std::path::{Path, PathBuf};
 
+pub type VadConfig = VadModelConfig;
+
 #[derive(Debug, Clone)]
 pub struct AudioSegment {
     pub samples: Vec<f32>,
@@ -144,15 +146,29 @@ pub fn whole_audio_segment(samples: &[f32], sample_rate: u32) -> Vec<AudioSegmen
 pub fn vad_segment_audio(
     samples: &[f32],
     sample_rate: u32,
-    vad_config: &VadModelConfig,
+    vad_config: &VadConfig,
     buffer_size_seconds: f32,
 ) -> Result<Vec<AudioSegment>, String> {
-    let buffer_size_seconds = if buffer_size_seconds > 0.0 {
+    let detector_capacity_seconds = if buffer_size_seconds > 0.0 {
         buffer_size_seconds
     } else {
         60.0
     };
-    let mut vad = VoiceActivityDetector::create(vad_config, buffer_size_seconds)
+    vad_segment_audio_with_capacity(samples, sample_rate, vad_config, detector_capacity_seconds)
+}
+
+pub fn vad_segment_audio_with_capacity(
+    samples: &[f32],
+    sample_rate: u32,
+    vad_config: &VadConfig,
+    detector_capacity_seconds: f32,
+) -> Result<Vec<AudioSegment>, String> {
+    let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
+        detector_capacity_seconds
+    } else {
+        60.0
+    };
+    let mut vad = VoiceActivityDetector::create(vad_config, detector_capacity_seconds)
         .ok_or("Failed to create VoiceActivityDetector")?;
 
     let window_size = vad_config.silero_vad.window_size as usize;
@@ -161,11 +177,11 @@ pub fn vad_segment_audio(
 
     for chunk in samples.chunks(chunk_size) {
         vad.accept_waveform(chunk);
-        extract_vad_segments(&mut vad, sample_rate, &mut segments);
+        extract_vad_segments(&mut vad, sample_rate, &mut segments, false);
     }
 
     vad.flush();
-    extract_vad_segments(&mut vad, sample_rate, &mut segments);
+    extract_vad_segments(&mut vad, sample_rate, &mut segments, true);
 
     Ok(segments)
 }
@@ -174,15 +190,28 @@ fn extract_vad_segments(
     vad: &mut VoiceActivityDetector,
     sample_rate: u32,
     segments: &mut Vec<AudioSegment>,
+    is_flush: bool,
 ) {
     while !vad.is_empty() {
         if let Some(segment) = vad.front() {
             let start_sample = segment.start() as usize;
             let seg_samples = segment.samples().to_vec();
+            let start_time = start_sample as f32 / sample_rate as f32;
+            let duration = seg_samples.len() as f32 / sample_rate as f32;
+
+            let tag = if is_flush { "(flush)" } else { "" };
+            log::debug!(
+                "[Sona VAD] segment {} start_sample={} duration={:.2}s samples={}",
+                tag,
+                start_sample,
+                duration,
+                seg_samples.len()
+            );
+
             segments.push(AudioSegment {
-                start_time: start_sample as f32 / sample_rate as f32,
-                duration: seg_samples.len() as f32 / sample_rate as f32,
                 samples: seg_samples,
+                start_time,
+                duration,
             });
         }
         vad.pop();

@@ -1,64 +1,16 @@
-use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
 pub use sona_local_asr::audio::{
-    AudioSegment, extract_and_resample_audio, fixed_chunk_audio, pcm_i16_to_f32,
+    AudioSegment, VadConfig, extract_and_resample_audio, fixed_chunk_audio, pcm_i16_to_f32,
     resolve_ffmpeg_sidecar_path, resolve_ffmpeg_sidecar_path_from_exe, save_wav_file,
-    whole_audio_segment,
+    vad_segment_audio_with_capacity, whole_audio_segment,
 };
 
 pub fn vad_segment_audio(
     samples: &[f32],
     sample_rate: u32,
-    vad_config: &VadModelConfig,
+    vad_config: &VadConfig,
     _buffer_size_seconds: f32,
 ) -> Result<Vec<AudioSegment>, String> {
-    let mut vad = VoiceActivityDetector::create(vad_config, 60.0)
-        .ok_or("Failed to create VoiceActivityDetector")?;
-
-    let window_size = vad_config.silero_vad.window_size as usize;
-    let chunk_size = if window_size > 0 { window_size } else { 512 };
-    let mut segments = Vec::new();
-
-    for chunk in samples.chunks(chunk_size) {
-        vad.accept_waveform(chunk);
-        extract_vad_segments(&mut vad, sample_rate, &mut segments, false);
-    }
-
-    vad.flush();
-    extract_vad_segments(&mut vad, sample_rate, &mut segments, true);
-
-    Ok(segments)
-}
-
-fn extract_vad_segments(
-    vad: &mut VoiceActivityDetector,
-    sample_rate: u32,
-    segments: &mut Vec<AudioSegment>,
-    is_flush: bool,
-) {
-    while !vad.is_empty() {
-        if let Some(segment) = vad.front() {
-            let start_sample = segment.start() as usize;
-            let seg_samples = segment.samples().to_vec();
-            let start_time = start_sample as f32 / sample_rate as f32;
-            let duration = seg_samples.len() as f32 / sample_rate as f32;
-
-            let tag = if is_flush { "(flush)" } else { "" };
-            log::debug!(
-                "[Sona VAD] segment {} start_sample={} duration={:.2}s samples={}",
-                tag,
-                start_sample,
-                duration,
-                seg_samples.len()
-            );
-
-            segments.push(AudioSegment {
-                samples: seg_samples,
-                start_time,
-                duration,
-            });
-        }
-        vad.pop();
-    }
+    sona_local_asr::audio::vad_segment_audio_with_capacity(samples, sample_rate, vad_config, 60.0)
 }
 
 #[cfg(test)]
