@@ -1,6 +1,5 @@
 pub mod asr_metrics;
 pub mod cli_config;
-pub mod cli_models;
 pub mod cli_runtime;
 pub mod dashboard;
 pub mod diagnostics;
@@ -11,6 +10,7 @@ pub mod file_utils;
 pub mod gpu;
 pub mod history;
 pub mod history_store;
+pub mod model_catalog;
 pub mod model_config;
 pub mod model_downloads;
 pub mod paths;

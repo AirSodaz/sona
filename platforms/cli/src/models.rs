@@ -3,11 +3,11 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::cli_models::{
-    CliModelSummary, ModelListEntry, ModelListFilter, list_cli_models, remove_model_install_path,
-    render_cli_model_table, select_cli_models,
-};
 use sona_core::cli_runtime::resolve_cli_models_dir;
+use sona_core::model_catalog::{
+    ModelListEntry, ModelListFilter, ModelSummary, list_models as list_model_catalog,
+    remove_model_install_path, select_models,
+};
 use sona_core::model_downloads::{
     ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
     resolve_model_download,
@@ -128,7 +128,7 @@ pub fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
 }
 
 fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
-    let models = select_cli_models(
+    let models = select_models(
         list_models(args.models_dir.clone())?,
         &ModelListFilter {
             mode: args.mode.clone(),
@@ -146,7 +146,7 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         )
         .map_err(|error| CliError::Serialize(format!("Failed to serialize model list: {error}")))?
     } else {
-        render_cli_model_table(&models)
+        render_model_table(&models)
     };
 
     Ok(CliOutput::stdout(output))
@@ -299,9 +299,9 @@ fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> CliResult<boo
     ))
 }
 
-fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<CliModelSummary>> {
+fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<ModelSummary>> {
     let models_dir = resolve_models_dir(models_dir)?;
-    Ok(list_cli_models(&models_dir))
+    Ok(list_model_catalog(&models_dir))
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
@@ -345,17 +345,72 @@ where
     runtime.block_on(factory())
 }
 
+fn render_model_table(models: &[ModelSummary]) -> String {
+    let rows = models
+        .iter()
+        .map(|model| {
+            [
+                model.id.clone(),
+                model.model_type.clone(),
+                model.language.clone(),
+                model.size.clone(),
+                if model.installed { "yes" } else { "no" }.to_string(),
+                model.modes.join(","),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let headers = ["ID", "Type", "Language", "Size", "Installed", "Modes"];
+    let mut widths = headers.map(str::len);
+
+    for row in &rows {
+        for (index, value) in row.iter().enumerate() {
+            widths[index] = widths[index].max(value.len());
+        }
+    }
+
+    let mut output = String::new();
+    append_table_row(&mut output, &headers, &widths);
+    append_table_separator(&mut output, &widths);
+    for row in rows {
+        let refs = [
+            row[0].as_str(),
+            row[1].as_str(),
+            row[2].as_str(),
+            row[3].as_str(),
+            row[4].as_str(),
+            row[5].as_str(),
+        ];
+        append_table_row(&mut output, &refs, &widths);
+    }
+    output
+}
+
+fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            output.push_str("  ");
+        }
+        output.push_str(&format!("{value:<width$}", width = widths[index]));
+    }
+    output.push('\n');
+}
+
+fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
+    for (index, width) in widths.iter().enumerate() {
+        if index > 0 {
+            output.push_str("  ");
+        }
+        output.push_str(&"-".repeat(*width));
+    }
+    output.push('\n');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn model_summary(
-        id: &str,
-        model_type: &str,
-        language: &str,
-        installed: bool,
-    ) -> CliModelSummary {
-        CliModelSummary {
+    fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
+        ModelSummary {
             id: id.to_string(),
             name: format!("{id} name"),
             model_type: model_type.to_string(),
@@ -369,7 +424,7 @@ mod tests {
 
     #[test]
     fn renders_model_list_as_table_with_headers() {
-        let table = render_cli_model_table(&[
+        let table = render_model_table(&[
             model_summary("short", "vad", "all", true),
             model_summary("longer-model-id", "whisper", "zh,en", false),
         ]);

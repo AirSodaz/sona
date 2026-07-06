@@ -1,12 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use sona_core::cli_models::{
-    CliModelSummary, ModelListFilter, list_cli_models, remove_model_install_path,
-    render_cli_model_table, select_cli_models,
+use sona_core::model_catalog::{
+    ModelListFilter, ModelSummary, list_models, remove_model_install_path, select_models,
 };
 
-fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> CliModelSummary {
-    CliModelSummary {
+fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
+    ModelSummary {
         id: id.to_string(),
         name: format!("{id} name"),
         model_type: model_type.to_string(),
@@ -19,12 +18,12 @@ fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) ->
 }
 
 #[test]
-fn lists_cli_models_with_install_status_from_models_dir() {
+fn lists_models_with_install_status_from_models_dir() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path().join("models");
     std::fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
 
-    let models = list_cli_models(&models_dir);
+    let models = list_models(&models_dir);
 
     assert!(models.iter().any(|model| {
         model.id == "sherpa-onnx-whisper-turbo"
@@ -39,23 +38,23 @@ fn lists_cli_models_with_install_status_from_models_dir() {
 }
 
 #[test]
-fn selects_cli_models_by_mode_type_language_and_install_status() {
+fn selects_models_by_mode_type_language_and_install_status() {
     let models = vec![
-        CliModelSummary {
+        ModelSummary {
             modes: vec!["offline".to_string()],
             ..model_summary("whisper-zh", "whisper", "zh,en", true)
         },
-        CliModelSummary {
+        ModelSummary {
             modes: vec!["streaming".to_string()],
             ..model_summary("stream-zh", "zipformer", "zh", true)
         },
-        CliModelSummary {
+        ModelSummary {
             modes: vec!["offline".to_string()],
             ..model_summary("vad-all", "vad", "all", false)
         },
     ];
 
-    let selected = select_cli_models(
+    let selected = select_models(
         models,
         &ModelListFilter {
             mode: Some("offline".to_string()),
@@ -67,23 +66,6 @@ fn selects_cli_models_by_mode_type_language_and_install_status() {
 
     assert_eq!(selected.len(), 1);
     assert_eq!(selected[0].id, "whisper-zh");
-}
-
-#[test]
-fn renders_cli_model_table_without_install_path_column() {
-    let table = render_cli_model_table(&[
-        model_summary("short", "vad", "all", true),
-        model_summary("longer-model-id", "whisper", "zh,en", false),
-    ]);
-
-    assert!(table.contains("ID"));
-    assert!(table.contains("Type"));
-    assert!(table.contains("Language"));
-    assert!(table.contains("Installed"));
-    assert!(table.contains("longer-model-id"));
-    assert!(table.contains("yes"));
-    assert!(table.contains("no"));
-    assert!(!table.contains("install_path"));
 }
 
 #[test]

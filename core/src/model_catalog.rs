@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::preset_models::{is_preset_model_installed_at, preset_models};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CliModelSummary {
+pub struct ModelSummary {
     pub id: String,
     pub name: String,
     pub model_type: String,
@@ -37,12 +37,12 @@ pub struct ModelListEntry {
     pub install_path: String,
 }
 
-pub fn list_cli_models(models_dir: &Path) -> Vec<CliModelSummary> {
+pub fn list_models(models_dir: &Path) -> Vec<ModelSummary> {
     preset_models()
         .iter()
         .map(|model| {
             let install_path = model.resolve_install_path(models_dir);
-            CliModelSummary {
+            ModelSummary {
                 id: model.id.clone(),
                 name: model.name.clone(),
                 model_type: model.model_type.clone(),
@@ -56,10 +56,7 @@ pub fn list_cli_models(models_dir: &Path) -> Vec<CliModelSummary> {
         .collect()
 }
 
-pub fn select_cli_models(
-    models: Vec<CliModelSummary>,
-    filter: &ModelListFilter,
-) -> Vec<CliModelSummary> {
+pub fn select_models(models: Vec<ModelSummary>, filter: &ModelListFilter) -> Vec<ModelSummary> {
     let language_filter = filter.language.as_deref().map(str::to_lowercase);
     models
         .into_iter()
@@ -92,46 +89,6 @@ pub fn select_cli_models(
         .collect()
 }
 
-pub fn render_cli_model_table(models: &[CliModelSummary]) -> String {
-    let rows = models
-        .iter()
-        .map(|model| {
-            [
-                model.id.clone(),
-                model.model_type.clone(),
-                model.language.clone(),
-                model.size.clone(),
-                if model.installed { "yes" } else { "no" }.to_string(),
-                model.modes.join(","),
-            ]
-        })
-        .collect::<Vec<_>>();
-    let headers = ["ID", "Type", "Language", "Size", "Installed", "Modes"];
-    let mut widths = headers.map(str::len);
-
-    for row in &rows {
-        for (index, value) in row.iter().enumerate() {
-            widths[index] = widths[index].max(value.len());
-        }
-    }
-
-    let mut output = String::new();
-    append_table_row(&mut output, &headers, &widths);
-    append_table_separator(&mut output, &widths);
-    for row in rows {
-        let refs = [
-            row[0].as_str(),
-            row[1].as_str(),
-            row[2].as_str(),
-            row[3].as_str(),
-            row[4].as_str(),
-            row[5].as_str(),
-        ];
-        append_table_row(&mut output, &refs, &widths);
-    }
-    output
-}
-
 pub fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
     let metadata = match std::fs::symlink_metadata(install_path) {
         Ok(metadata) => metadata,
@@ -161,8 +118,8 @@ pub fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
     }
 }
 
-impl From<CliModelSummary> for ModelListEntry {
-    fn from(model: CliModelSummary) -> Self {
+impl From<ModelSummary> for ModelListEntry {
+    fn from(model: ModelSummary) -> Self {
         Self {
             id: model.id,
             name: model.name,
@@ -174,24 +131,4 @@ impl From<CliModelSummary> for ModelListEntry {
             install_path: model.install_path.to_string_lossy().to_string(),
         }
     }
-}
-
-fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&format!("{value:<width$}", width = widths[index]));
-    }
-    output.push('\n');
-}
-
-fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
-    for (index, width) in widths.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&"-".repeat(*width));
-    }
-    output.push('\n');
 }
