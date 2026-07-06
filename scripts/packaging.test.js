@@ -308,7 +308,7 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
   assert.match(coreMigration, /crate::llm_providers::find_llm_provider_by_id_or_alias/u);
   assert.match(desktopConfig, /pub use sona_core::config::\{/u);
-  assert.match(desktopConfig, /^pub mod sqlite_store;/mu);
+  assert.match(desktopConfig, /pub use sona_sqlite::config_store as sqlite_store;/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'defaults.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'migration.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'types.rs')), false);
@@ -337,6 +337,23 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopDatabase, /rusqlite::Connection/u);
   assert.doesNotMatch(desktopDatabase, /struct ConnectionPool/u);
   assert.doesNotMatch(desktopDatabase, /pub struct Database/u);
+});
+
+test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
+  const desktopConfig = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'mod.rs'), 'utf8');
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs')));
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'task_ledger.rs')));
+  assert.match(sqliteLib, /^pub mod config_store;/mu);
+  assert.match(sqliteLib, /^pub mod task_ledger;/mu);
+  assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
+  assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
+  assert.match(desktopConfig, /pub use sona_sqlite::config_store as sqlite_store;/u);
+  assert.match(desktopCore, /pub use sona_sqlite::task_ledger as task_ledger_sqlite;/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'sqlite_store.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
 });
 
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {

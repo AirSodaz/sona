@@ -1,12 +1,11 @@
-use crate::core::database::DatabaseError;
-use crate::core::database::ports::Database as DatabasePort;
+use crate::DatabaseError;
+use crate::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::Arc;
-
-use crate::core::task_ledger::types::{
-    TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+use sona_core::task_ledger::types::{
+    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
+use std::sync::Arc;
 
 const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
 const TASK_LEDGER_COLUMNS: &str = "id, kind, status, title, progress, created_at, updated_at,
@@ -19,14 +18,14 @@ const UPSERT_TASK_SQL: &str = "INSERT OR REPLACE INTO task_ledger (
 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)";
 
 #[derive(Clone)]
-pub struct SqliteLedgerRepository<D = crate::core::database::Database>
+pub struct SqliteLedgerRepository<D = crate::Database>
 where
     D: DatabasePort,
 {
     db: Arc<D>,
 }
 
-sona_sqlite::impl_db_repository!(SqliteLedgerRepository);
+crate::impl_db_repository!(SqliteLedgerRepository);
 
 impl<D> SqliteLedgerRepository<D>
 where
@@ -203,9 +202,7 @@ fn enum_to_storage<T: Serialize>(value: &T) -> Result<String, DatabaseError> {
     }
 }
 
-fn task_kind_from_storage(
-    value: String,
-) -> Result<crate::core::task_ledger::types::TaskLedgerKind, DatabaseError> {
+fn task_kind_from_storage(value: String) -> Result<TaskLedgerKind, DatabaseError> {
     let stored = if value.trim().is_empty() {
         "llmPolish".to_string()
     } else {
@@ -285,8 +282,7 @@ fn normalize_loaded_record(mut record: TaskLedgerRecord) -> TaskLedgerRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
-    use crate::core::task_ledger::types::TaskLedgerKind;
+    use crate::Database;
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;

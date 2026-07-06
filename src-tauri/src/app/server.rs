@@ -1822,7 +1822,7 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let store = SqliteConfigStore::new(Arc::new(db));
         store
             .save_config(&serde_json::json!({
                 "asr": {
@@ -1859,7 +1859,7 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let store = SqliteConfigStore::new(Arc::new(db));
         store
             .save_config(&serde_json::json!({
                 "asr": {
@@ -1893,7 +1893,7 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::with_db(PathBuf::new(), db);
+        let store = SqliteConfigStore::new(Arc::new(db));
         store
             .save_config(&serde_json::json!({
                 "httpServerEnabled": true,

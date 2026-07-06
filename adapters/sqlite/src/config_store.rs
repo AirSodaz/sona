@@ -1,20 +1,20 @@
-use crate::core::config::defaults::CURRENT_CONFIG_VERSION;
-use crate::core::database::DatabaseError;
-use crate::core::database::ports::Database as DatabasePort;
+use crate::DatabaseError;
+use crate::ports::Database as DatabasePort;
 use rusqlite::{Connection, Transaction};
 use serde_json::{Map, Value, json};
+use sona_core::config::defaults::CURRENT_CONFIG_VERSION;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct SqliteConfigStore<D = crate::core::database::Database>
+pub struct SqliteConfigStore<D = crate::Database>
 where
     D: DatabasePort,
 {
     db: Arc<D>,
 }
 
-sona_sqlite::impl_db_repository!(SqliteConfigStore);
+crate::impl_db_repository!(SqliteConfigStore);
 
 impl<D> SqliteConfigStore<D>
 where
@@ -828,7 +828,7 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
+    use crate::Database;
     use serde_json::json;
     use std::sync::Arc;
 

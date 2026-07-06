@@ -1,8 +1,12 @@
+pub mod config_store;
 pub mod error;
 pub mod ports;
 pub mod schema;
+pub mod task_ledger;
 
+pub use config_store::SqliteConfigStore;
 pub use error::DatabaseError;
+pub use task_ledger::SqliteLedgerRepository;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::ops::{Deref, DerefMut};
