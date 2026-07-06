@@ -13,6 +13,7 @@ pub mod history_store;
 pub mod model_catalog;
 pub mod model_config;
 pub mod model_downloads;
+pub mod model_paths;
 pub mod paths;
 pub mod ports;
 pub mod preset_models;

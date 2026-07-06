@@ -5,7 +5,7 @@ use sona_core::cli_runtime::{
     DEFAULT_GPU_ACCELERATION, DEFAULT_SERVE_HOST, DEFAULT_SERVE_IP_WHITELIST, DEFAULT_SERVE_PORT,
     GPU_ACCELERATION_VALUES, ServeConfigSection, ServeRuntimeArgs, TranscribeConfigSection,
     UnifiedConfigFile, load_serve_config_file, resolve_cli_gpu_acceleration,
-    resolve_cli_models_dir, resolve_serve_runtime_options,
+    resolve_serve_runtime_options,
 };
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use tempfile::tempdir;
@@ -71,17 +71,6 @@ fn runtime_config_sections_default_cleanly() {
 
     let serve = ServeConfigSection::default();
     assert!(serve.host.is_none());
-}
-
-#[test]
-fn resolve_cli_models_dir_rejects_existing_file() {
-    let dir = tempdir().unwrap();
-    let file_path = dir.path().join("not_a_dir.txt");
-    fs::write(&file_path, "dummy").unwrap();
-
-    let error = resolve_cli_models_dir(Some(file_path)).unwrap_err();
-
-    assert!(error.contains("exists but is not a directory"));
 }
 
 #[test]

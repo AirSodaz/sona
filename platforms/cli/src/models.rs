@@ -3,7 +3,6 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::cli_runtime::resolve_cli_models_dir;
 use sona_core::model_catalog::{
     ModelListEntry, ModelListFilter, ModelSummary, list_models as list_model_catalog,
     remove_model_install_path, select_models,
@@ -12,6 +11,7 @@ use sona_core::model_downloads::{
     ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
     resolve_model_download,
 };
+use sona_core::model_paths::resolve_models_dir as resolve_catalog_models_dir;
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -305,7 +305,7 @@ fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<ModelSummary>> {
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
-    resolve_cli_models_dir(configured).map_err(CliError::Validation)
+    resolve_catalog_models_dir(configured).map_err(CliError::Validation)
 }
 
 fn map_download_error(error: String) -> CliError {

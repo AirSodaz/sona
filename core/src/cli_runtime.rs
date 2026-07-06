@@ -1,4 +1,3 @@
-use crate::paths::default_desktop_models_dir;
 use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -168,29 +167,6 @@ impl UnifiedConfigFile {
     }
 }
 
-pub fn resolve_cli_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, String> {
-    let path = if let Some(path) = configured {
-        path
-    } else {
-        default_desktop_models_dir().ok_or_else(|| {
-            "Unable to infer the desktop models directory. Pass --models-dir explicitly."
-                .to_string()
-        })?
-    };
-
-    if std::fs::metadata(&path)
-        .map(|metadata| !metadata.is_dir())
-        .unwrap_or(false)
-    {
-        return Err(format!(
-            "Models directory '{}' exists but is not a directory.",
-            path.display()
-        ));
-    }
-
-    Ok(path)
-}
-
 pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {
     let contents = std::fs::read_to_string(path)
         .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
@@ -214,7 +190,7 @@ pub fn resolve_serve_runtime_options(
             .unwrap_or_else(|| DEFAULT_SERVE_HOST.to_string()),
         port: args.port.or(config.port).unwrap_or(DEFAULT_SERVE_PORT),
         api_key: args.api_key.or(config.api_key).unwrap_or_default(),
-        models_dir: resolve_cli_models_dir(args.models_dir.or(config.models_dir))?,
+        models_dir: crate::model_paths::resolve_models_dir(args.models_dir.or(config.models_dir))?,
         ip_whitelist: args
             .ip_whitelist
             .or(config.ip_whitelist)

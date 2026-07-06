@@ -1,4 +1,4 @@
-use crate::cli_runtime::{TranscribeConfigSection, resolve_cli_models_dir};
+use crate::cli_runtime::TranscribeConfigSection;
 use crate::export::ExportFormat;
 use crate::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
@@ -389,7 +389,8 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
 
     ensure_input_file_exists(&options.input)?;
     ensure_output_can_be_written(&output_target, options.force)?;
-    let models_dir = resolve_cli_models_dir(options.models_dir.or(config.models_dir))?;
+    let models_dir =
+        crate::model_paths::resolve_models_dir(options.models_dir.or(config.models_dir))?;
     let model_id = options.model_id.or(config.model_id).ok_or_else(|| {
         "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
     })?;
