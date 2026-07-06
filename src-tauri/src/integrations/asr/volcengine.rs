@@ -14,10 +14,10 @@ use super::types::{
 };
 use crate::integrations::asr::postprocess::TranscriptPostprocessor;
 use async_trait::async_trait;
-use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use serde_json::{Value, json};
+use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -797,54 +797,17 @@ pub async fn process_batch_file_impl(
     if request.mode != AsrMode::Offline {
         return Err(SherpaError::VolcengineBatchOnlyForOffline);
     }
-    let config = config_from_request(&request, VolcengineMode::Batch)?;
+    config_from_request(&request, VolcengineMode::Batch)?;
     let started = Instant::now();
-    let bytes =
-        tokio::fs::read(&file_path)
-            .await
-            .map_err(|error| SherpaError::AudioFileReadFailed {
-                error: error.to_string(),
-            })?;
-    let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    let request_id = uuid::Uuid::new_v4().to_string();
-    let body = build_flash_batch_request_body(&file_path, audio_data, &request);
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(&config.batch_endpoint)
-        .header("X-Api-Key", &config.api_key)
-        .header("X-Api-Resource-Id", &config.batch_resource_id)
-        .header("X-Api-Request-Id", request_id)
-        .header("X-Api-Sequence", "-1")
-        .json(&body)
-        .send()
+    let output = sona_online_asr::VolcengineDoubaoBatchTranscriber::default()
+        .transcribe(OnlineBatchTranscriptionRequest {
+            file_path: file_path.clone(),
+            request: request.clone(),
+        })
         .await
-        .map_err(|error| SherpaError::VolcengineBatchRequestFailed {
-            error: error.to_string(),
-        })?;
-    let status = response.status();
-    let headers = response.headers().clone();
-    let api_code = headers
-        .get("X-Api-Status-Code")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    let api_message = headers
-        .get("X-Api-Message")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
-        return Err(SherpaError::VolcengineBatchRequestFailed {
-            error: map_status_error(status.as_u16(), api_code.as_deref(), api_message.as_deref())
-                .to_string(),
-        });
-    }
+        .map_err(|error| SherpaError::VolcengineBatchRequestFailed { error })?;
 
-    let response_value = response.json::<Value>().await.map_err(|error| {
-        SherpaError::VolcengineBatchResponseParseFailed {
-            error: error.to_string(),
-        }
-    })?;
-    let mut segments = segments_from_response_value(&response_value, true, "volc-batch")?;
+    let mut segments = output.segments;
     segments = apply_timeline_normalization(segments, request.normalization_options);
     segments =
         TranscriptPostprocessor::compile(request.postprocess_options)?.process_segments(segments);
@@ -853,14 +816,10 @@ pub async fn process_batch_file_impl(
         occurred_at_ms: current_time_millis(),
         source: "batch".to_string(),
         instance_id: None,
-        stage: "volcengine_batch_complete".to_string(),
+        stage: output.stage,
         is_final: true,
-        audio_duration_ms: response_value
-            .get("audio_info")
-            .and_then(|value| value.get("duration"))
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0),
-        buffered_samples: bytes.len() / 2,
+        audio_duration_ms: output.audio_duration_ms,
+        buffered_samples: output.buffered_samples,
         audio_extract_ms: None,
         decode_ms: duration_to_ms(started.elapsed()),
         emit_latency_ms: None,

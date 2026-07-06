@@ -332,6 +332,26 @@ test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR 
   }
 });
 
+test('desktop Volcengine batch provider delegates HTTP work to online ASR adapter', () => {
+  const onlineAsrLib = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs'),
+    'utf8',
+  );
+  const volcengineRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    'utf8',
+  );
+
+  assert.match(onlineAsrLib, /VolcengineDoubaoBatchTranscriber/u);
+  assert.match(onlineAsrLib, /resolve_volcengine_config/u);
+  assert.match(onlineAsrLib, /build_volcengine_flash_batch_request_body/u);
+  assert.match(onlineAsrLib, /segments_from_volcengine_response/u);
+  assert.match(volcengineRs, /sona_online_asr::VolcengineDoubaoBatchTranscriber/u);
+  assert.doesNotMatch(volcengineRs, /reqwest::Client/u);
+  assert.doesNotMatch(volcengineRs, /\.post\(/u);
+  assert.doesNotMatch(volcengineRs, /base64::engine::general_purpose::STANDARD\.encode/u);
+});
+
 test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
 
