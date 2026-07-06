@@ -7,7 +7,6 @@ use super::types::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
 };
 use async_trait::async_trait;
-use sona_core::transcribe_runtime::OfflineTranscribePlan;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalSherpaAdapter;
@@ -24,33 +23,6 @@ impl LocalSherpaAdapter {
             ));
         }
         Ok(())
-    }
-
-    pub fn offline_plan_to_batch_request(
-        plan: OfflineTranscribePlan,
-    ) -> Result<BatchTranscriptionRequest, String> {
-        Ok(BatchTranscriptionRequest {
-            instance_id: None,
-            file_path: plan.input_path,
-            save_to_path: plan.save_to_path,
-            model_path: plan.model_path,
-            num_threads: plan.num_threads,
-            enable_itn: plan.enable_itn,
-            language: plan.language,
-            punctuation_model: plan.punctuation_model,
-            vad_model: plan.vad_model,
-            vad_buffer: plan.vad_buffer,
-            batch_segmentation_mode: BatchSegmentationMode::Vad,
-            model_type: plan.model_type,
-            file_config: plan.file_config,
-            hotwords: plan.hotwords,
-            speaker_processing: None,
-            normalization_options: TranscriptNormalizationOptions::default(),
-            postprocessor: TranscriptPostprocessor::compile(
-                TranscriptPostprocessOptions::default(),
-            )?,
-            gpu_acceleration: plan.gpu_acceleration,
-        })
     }
 }
 

@@ -536,8 +536,6 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     });
 }
 
-use crate::integrations::asr::transcribe_batch_with_progress;
-
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum JobStatus {
     Pending,
@@ -791,11 +789,13 @@ async fn start_worker_loop(
                     JobStatus::Failed("Missing online provider ID".to_string())
                 }
             } else {
-                match build_local_batch_request(&job, &models_dir, &defaults) {
-                    Ok(request) => match transcribe_batch_with_progress(&request, |_| {}).await {
-                        Ok(segments) => JobStatus::Completed(segments),
-                        Err(e) => JobStatus::Failed(e),
-                    },
+                match build_local_transcribe_plan(&job, &models_dir, &defaults) {
+                    Ok(plan) => {
+                        match sona_local_asr::offline::run_offline_transcription(plan).await {
+                            Ok(segments) => JobStatus::Completed(segments),
+                            Err(e) => JobStatus::Failed(e),
+                        }
+                    }
                     Err(e) => JobStatus::Failed(e),
                 }
             };
@@ -849,18 +849,17 @@ pub(crate) fn build_local_transcribe_options(
     }
 }
 
-pub(crate) fn build_local_batch_request(
+pub(crate) fn build_local_transcribe_plan(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> Result<crate::integrations::asr::BatchTranscriptionRequest, String> {
+) -> Result<sona_core::transcribe_runtime::OfflineTranscribePlan, String> {
     let options = build_local_transcribe_options(job, models_dir, defaults);
-    let plan = resolve_offline_transcribe_plan_with_install_checker(
+    resolve_offline_transcribe_plan_with_install_checker(
         options,
         None,
         is_preset_model_installed_at,
-    )?;
-    crate::integrations::asr::LocalSherpaAdapter::offline_plan_to_batch_request(plan)
+    )
 }
 
 fn companion_defaults_for_model(
@@ -1700,11 +1699,11 @@ mod tests {
             punctuation_model_id: None,
         };
 
-        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
+        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
 
-        assert_eq!(request.gpu_acceleration.as_deref(), Some("cuda"));
+        assert_eq!(plan.gpu_acceleration.as_deref(), Some("cuda"));
         assert_eq!(
-            request.vad_model.as_deref(),
+            plan.vad_model.as_deref(),
             Some(
                 models_dir
                     .join("silero_vad.onnx")
@@ -1713,17 +1712,17 @@ mod tests {
                     .as_str()
             )
         );
-        assert!(request.punctuation_model.is_none());
-        assert_eq!(request.file_path, PathBuf::from("sample.wav"));
-        assert_eq!(request.hotwords.as_deref(), Some("Sona"));
+        assert!(plan.punctuation_model.is_none());
+        assert_eq!(plan.input_path, PathBuf::from("sample.wav"));
+        assert_eq!(plan.hotwords.as_deref(), Some("Sona"));
         assert_eq!(
-            request.model_path,
+            plan.model_path,
             models_dir
                 .join("sherpa-onnx-whisper-turbo")
                 .display()
                 .to_string()
         );
-        assert_eq!(request.language, "auto");
+        assert_eq!(plan.language, "auto");
     }
 
     #[test]
@@ -1749,10 +1748,10 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults::default();
 
-        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
+        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
 
         assert_eq!(
-            request.vad_model.as_deref(),
+            plan.vad_model.as_deref(),
             Some(
                 models_dir
                     .join("silero_vad.onnx")
@@ -1761,7 +1760,7 @@ mod tests {
                     .as_str()
             )
         );
-        assert!(request.punctuation_model.is_none());
+        assert!(plan.punctuation_model.is_none());
     }
 
     #[test]
@@ -1791,10 +1790,10 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults::default();
 
-        let request = build_local_batch_request(&job, &models_dir, &defaults).unwrap();
+        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
 
         assert_eq!(
-            request.punctuation_model.as_deref(),
+            plan.punctuation_model.as_deref(),
             Some(
                 models_dir
                     .join(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)

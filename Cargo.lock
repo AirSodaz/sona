@@ -5397,6 +5397,7 @@ dependencies = [
  "sha2 0.11.0",
  "sherpa-onnx",
  "sona-core",
+ "sona-local-asr",
  "specta",
  "specta-typescript",
  "sysinfo",
