@@ -268,3 +268,15 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
   assert.doesNotMatch(modelConfigRs, /VadModelConfig/u);
   assert.doesNotMatch(modelConfigRs, /VoiceActivityDetector/u);
 });
+
+test('desktop punctuation loading is delegated to local ASR adapter', () => {
+  const modelConfigRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+    'utf8',
+  );
+
+  assert.match(modelConfigRs, /pub use sona_local_asr::punctuation::\{Punctuation, load_punctuation\}/u);
+  assert.doesNotMatch(modelConfigRs, /OfflinePunctuation/u);
+  assert.doesNotMatch(modelConfigRs, /OfflinePunctuationConfig/u);
+  assert.doesNotMatch(modelConfigRs, /OfflinePunctuationModelConfig/u);
+});

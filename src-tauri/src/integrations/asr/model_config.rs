@@ -3,6 +3,7 @@ use log::{debug, info};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
 };
+pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -528,55 +529,6 @@ unsafe impl Sync for SafeStream {}
 pub struct SafeVad(pub sona_local_asr::audio::VadDetector);
 unsafe impl Send for SafeVad {}
 unsafe impl Sync for SafeVad {}
-
-// -----------------------------------------------------------------------------------------
-// Punctuation
-// -----------------------------------------------------------------------------------------
-pub struct Punctuation {
-    inner: sherpa_onnx::OfflinePunctuation,
-}
-
-impl Punctuation {
-    pub fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
-        let config = sherpa_onnx::OfflinePunctuationConfig {
-            model: sherpa_onnx::OfflinePunctuationModelConfig {
-                ct_transformer: Some(model_path.to_string()),
-                num_threads,
-                debug: false,
-                provider: Some("cpu".to_string()),
-            },
-        };
-
-        let inner = sherpa_onnx::OfflinePunctuation::create(&config)
-            .ok_or("Failed to create OfflinePunctuation")?;
-
-        Ok(Self { inner })
-    }
-
-    pub fn add_punct(&self, text: &str) -> String {
-        self.inner
-            .add_punctuation(text)
-            .unwrap_or_else(|| text.to_string())
-    }
-}
-
-unsafe impl Send for Punctuation {}
-unsafe impl Sync for Punctuation {}
-
-pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation> {
-    let p_path = punctuation_model?;
-
-    if p_path.is_empty() || !Path::new(&p_path).exists() {
-        return None;
-    }
-
-    let entries = std::fs::read_dir(&p_path).ok()?;
-    let onnx_file = entries
-        .flatten()
-        .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
-
-    Punctuation::new(&onnx_file.path().to_string_lossy(), 1).ok()
-}
 
 pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
     let v_path = vad_model?;

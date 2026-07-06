@@ -1,12 +1,10 @@
 use crate::audio::{
     VadDetectorOptions, create_vad_config, extract_and_resample_audio, fixed_chunk_audio,
-    resolve_model_onnx_path, save_wav_file, vad_segment_audio,
+    save_wav_file, vad_segment_audio,
 };
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
-use sherpa_onnx::{
-    OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig, OfflineRecognizer,
-    OfflineRecognizerConfig, VadModelConfig,
-};
+use crate::punctuation::{Punctuation, load_punctuation_from_path};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, VadModelConfig};
 use sona_core::model_config::ModelFileConfig;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
 use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
@@ -113,7 +111,7 @@ impl LocalOfflineTranscriber {
 
         let recognizer =
             create_recognizer(model_type, self.num_threads, provider, &self.file_config)?;
-        let punctuation = load_punctuation(self.punctuation_model.as_deref())?;
+        let punctuation = load_punctuation_from_path(self.punctuation_model.as_deref())?;
         let vad_config = load_vad_config(self.vad_model.as_deref())?;
 
         let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
@@ -323,40 +321,6 @@ fn create_recognizer(
 
     OfflineRecognizer::create(&config)
         .ok_or_else(|| "Failed to create OfflineRecognizer".to_string())
-}
-
-struct Punctuation(OfflinePunctuation);
-
-impl Punctuation {
-    fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
-        let config = OfflinePunctuationConfig {
-            model: OfflinePunctuationModelConfig {
-                ct_transformer: Some(model_path.to_string()),
-                num_threads,
-                debug: false,
-                provider: Some("cpu".to_string()),
-            },
-        };
-
-        let inner =
-            OfflinePunctuation::create(&config).ok_or("Failed to create OfflinePunctuation")?;
-        Ok(Self(inner))
-    }
-
-    fn add_punct(&self, text: &str) -> String {
-        self.0
-            .add_punctuation(text)
-            .unwrap_or_else(|| text.to_string())
-    }
-}
-
-fn load_punctuation(punctuation_model: Option<&Path>) -> Result<Option<Punctuation>, String> {
-    let Some(path) = punctuation_model else {
-        return Ok(None);
-    };
-
-    let model_path = resolve_model_onnx_path(path)?;
-    Punctuation::new(&model_path.to_string_lossy(), 1).map(Some)
 }
 
 fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, String> {
