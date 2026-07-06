@@ -58,6 +58,40 @@ pub enum ModelType {
     },
 }
 
+impl ModelType {
+    fn model_type_name(&self) -> &'static str {
+        match self {
+            ModelType::OnlineTransducer { .. } => "zipformer",
+            ModelType::OnlineParaformer { .. } => "paraformer",
+            ModelType::OfflineSenseVoice { .. } => "sensevoice",
+            ModelType::OfflineWhisper { .. } => "whisper",
+            ModelType::OfflineFunASRNano { .. } => "funasr-nano",
+            ModelType::OfflineFireRedAsr { .. } => "fire-red-asr",
+            ModelType::OfflineDolphin { .. } => "dolphin",
+            ModelType::OfflineQwen3Asr { .. } => "qwen3-asr",
+        }
+    }
+
+    fn is_offline(&self) -> bool {
+        matches!(
+            self,
+            ModelType::OfflineSenseVoice { .. }
+                | ModelType::OfflineWhisper { .. }
+                | ModelType::OfflineFunASRNano { .. }
+                | ModelType::OfflineFireRedAsr { .. }
+                | ModelType::OfflineDolphin { .. }
+                | ModelType::OfflineQwen3Asr { .. }
+        )
+    }
+}
+
+fn is_offline_model_type(model_type: &str) -> bool {
+    matches!(
+        model_type,
+        "sensevoice" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr"
+    )
+}
+
 /// Resolves one installed model directory plus its file manifest into the
 /// concrete Sherpa recognizer variant needed by the runtime.
 pub fn build_model_config(
@@ -180,6 +214,28 @@ pub fn build_model_config(
         }
         _ => Err(format!("Unsupported model type: {}", model_type)),
     }
+}
+
+pub fn build_offline_model_config(
+    model_path: &Path,
+    model_type: &str,
+    file_config: &Option<ModelFileConfig>,
+    enable_itn: bool,
+    language: &str,
+    hotwords: Option<String>,
+) -> Result<ModelType, String> {
+    if !is_offline_model_type(model_type) {
+        return Err(format!("Unsupported offline model type: {model_type}"));
+    }
+
+    build_model_config(
+        model_path,
+        model_type,
+        file_config,
+        enable_itn,
+        language,
+        hotwords,
+    )
 }
 
 pub struct SafeOnlineRecognizer(pub OnlineRecognizer);
@@ -443,6 +499,30 @@ pub fn create_recognizer_with_gpu_plan(
         provider,
         fallback_notice,
     })
+}
+
+pub fn create_offline_recognizer(
+    model_type: ModelType,
+    num_threads: i32,
+    provider: Option<&str>,
+) -> Result<OfflineRecognizer, String> {
+    if !model_type.is_offline() {
+        return Err(format!(
+            "Unsupported offline model type: {}",
+            model_type.model_type_name()
+        ));
+    }
+
+    match Recognizer::new(
+        model_type,
+        num_threads,
+        provider.map(std::string::ToString::to_string),
+    )?
+    .inner
+    {
+        RecognizerInner::Offline(recognizer) => Ok(recognizer.0),
+        RecognizerInner::Online(_) => Err("Unsupported offline model type".to_string()),
+    }
 }
 
 fn create_value_with_gpu_plan<T, F>(

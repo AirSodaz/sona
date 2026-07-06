@@ -294,3 +294,17 @@ test('desktop recognizer construction is delegated to local ASR adapter', () => 
   assert.doesNotMatch(modelConfigRs, /pub enum ModelType/u);
   assert.doesNotMatch(modelConfigRs, /impl Recognizer/u);
 });
+
+test('local offline transcription reuses local ASR recognizer model construction', () => {
+  const offlineRs = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'offline.rs'),
+    'utf8',
+  );
+
+  assert.match(offlineRs, /use crate::recognizer::\{[^}]*build_offline_model_config/u);
+  assert.match(offlineRs, /create_offline_recognizer/u);
+  assert.doesNotMatch(offlineRs, /enum ModelType/u);
+  assert.doesNotMatch(offlineRs, /OfflineRecognizerConfig/u);
+  assert.doesNotMatch(offlineRs, /fn build_model_config/u);
+  assert.doesNotMatch(offlineRs, /fn create_recognizer/u);
+});

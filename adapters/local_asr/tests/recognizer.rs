@@ -1,5 +1,7 @@
 use sona_core::model_config::ModelFileConfig;
-use sona_local_asr::recognizer::{ModelType, build_model_config};
+use sona_local_asr::recognizer::{
+    ModelType, build_model_config, build_offline_model_config, create_offline_recognizer,
+};
 use std::path::Path;
 
 #[test]
@@ -70,4 +72,32 @@ fn build_model_config_still_requires_tokens_for_sensevoice() {
         error.contains("Required file name not specified in config"),
         "unexpected error: {error}"
     );
+}
+
+#[test]
+fn build_offline_model_config_rejects_online_model_type_before_file_validation() {
+    let model_path = Path::new("C:/models/zipformer");
+    let file_config = Some(ModelFileConfig::default());
+
+    let error =
+        build_offline_model_config(model_path, "zipformer", &file_config, false, "auto", None)
+            .expect_err("offline transcription should reject online model types");
+
+    assert_eq!(error, "Unsupported offline model type: zipformer");
+}
+
+#[test]
+fn create_offline_recognizer_rejects_online_model_type() {
+    let model_type = ModelType::OnlineParaformer {
+        encoder: "encoder.onnx".into(),
+        decoder: "decoder.onnx".into(),
+        tokens: "tokens.txt".into(),
+    };
+
+    let error = match create_offline_recognizer(model_type, 1, Some("cpu")) {
+        Err(error) => error,
+        Ok(_) => panic!("online recognizer variants cannot be used for offline transcription"),
+    };
+
+    assert_eq!(error, "Unsupported offline model type: paraformer");
 }

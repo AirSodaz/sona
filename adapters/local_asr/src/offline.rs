@@ -4,7 +4,8 @@ use crate::audio::{
 };
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use crate::punctuation::{Punctuation, load_punctuation_from_path};
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, VadModelConfig};
+use crate::recognizer::{build_offline_model_config, create_offline_recognizer};
+use sherpa_onnx::{OfflineRecognizer, VadModelConfig};
 use sona_core::model_config::ModelFileConfig;
 use sona_core::transcribe_runtime::OfflineTranscribePlan;
 use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
@@ -100,7 +101,7 @@ impl LocalOfflineTranscriber {
         &self,
         provider: Option<&str>,
     ) -> Result<Vec<TranscriptSegment>, String> {
-        let model_type = build_model_config(
+        let model_type = build_offline_model_config(
             &self.model_path,
             &self.model_type,
             &self.file_config,
@@ -109,8 +110,7 @@ impl LocalOfflineTranscriber {
             self.hotwords.clone(),
         )?;
 
-        let recognizer =
-            create_recognizer(model_type, self.num_threads, provider, &self.file_config)?;
+        let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
         let punctuation = load_punctuation_from_path(self.punctuation_model.as_deref())?;
         let vad_config = load_vad_config(self.vad_model.as_deref())?;
 
@@ -127,200 +127,6 @@ impl LocalOfflineTranscriber {
             self.vad_buffer,
         )
     }
-}
-
-#[derive(Debug, Clone)]
-enum ModelType {
-    OfflineSenseVoice {
-        model: PathBuf,
-        language: String,
-        use_itn: bool,
-    },
-    OfflineWhisper {
-        encoder: PathBuf,
-        decoder: PathBuf,
-        language: String,
-    },
-    OfflineFunASRNano {
-        encoder_adaptor: PathBuf,
-        llm: PathBuf,
-        embedding: PathBuf,
-        tokenizer: PathBuf,
-        tokens: Option<PathBuf>,
-        language: String,
-    },
-    OfflineFireRedAsr {
-        encoder: PathBuf,
-        decoder: PathBuf,
-    },
-    OfflineDolphin {
-        model: PathBuf,
-    },
-    OfflineQwen3Asr {
-        conv_frontend: PathBuf,
-        encoder: PathBuf,
-        decoder: PathBuf,
-        tokenizer: PathBuf,
-        hotwords: Option<String>,
-    },
-}
-
-fn build_model_config(
-    model_path: &Path,
-    model_type: &str,
-    file_config: &Option<ModelFileConfig>,
-    enable_itn: bool,
-    language: &str,
-    hotwords: Option<String>,
-) -> Result<ModelType, String> {
-    let fc = file_config
-        .as_ref()
-        .ok_or("File configuration is missing for this model.")?;
-
-    let get_path = |filename: &Option<String>| -> Result<PathBuf, String> {
-        let name = filename
-            .as_ref()
-            .ok_or("Required file name not specified in config")?;
-        Ok(model_path.join(name))
-    };
-
-    match model_type {
-        "sensevoice" => Ok(ModelType::OfflineSenseVoice {
-            model: get_path(&fc.model)?,
-            language: language.to_string(),
-            use_itn: enable_itn,
-        }),
-        "whisper" => Ok(ModelType::OfflineWhisper {
-            encoder: get_path(&fc.encoder)?,
-            decoder: get_path(&fc.decoder)?,
-            language: if language == "auto" {
-                String::new()
-            } else {
-                language.to_string()
-            },
-        }),
-        "funasr-nano" => Ok(ModelType::OfflineFunASRNano {
-            encoder_adaptor: get_path(&fc.encoder_adaptor)?,
-            llm: get_path(&fc.llm)?,
-            embedding: get_path(&fc.embedding)?,
-            tokenizer: get_path(&fc.tokenizer)?,
-            tokens: fc
-                .tokens
-                .as_ref()
-                .map(|_| get_path(&fc.tokens))
-                .transpose()?,
-            language: if language == "multilingual" {
-                String::new()
-            } else {
-                language.to_string()
-            },
-        }),
-        "fire-red-asr" => Ok(ModelType::OfflineFireRedAsr {
-            encoder: get_path(&fc.encoder)?,
-            decoder: get_path(&fc.decoder)?,
-        }),
-        "dolphin" => Ok(ModelType::OfflineDolphin {
-            model: get_path(&fc.model)?,
-        }),
-        "qwen3-asr" => Ok(ModelType::OfflineQwen3Asr {
-            conv_frontend: get_path(&fc.conv_frontend)?,
-            encoder: get_path(&fc.encoder)?,
-            decoder: get_path(&fc.decoder)?,
-            tokenizer: get_path(&fc.tokenizer)?,
-            hotwords,
-        }),
-        other => Err(format!("Unsupported offline model type: {other}")),
-    }
-}
-
-fn file_tokens(file_config: &Option<ModelFileConfig>) -> Option<String> {
-    file_config
-        .as_ref()
-        .and_then(|config| config.tokens.as_ref())
-        .map(|path| path.to_string())
-}
-
-fn create_recognizer(
-    model_type: ModelType,
-    num_threads: i32,
-    provider: Option<&str>,
-    file_config: &Option<ModelFileConfig>,
-) -> Result<OfflineRecognizer, String> {
-    let mut config = OfflineRecognizerConfig::default();
-    config.model_config.num_threads = num_threads;
-    config.model_config.provider = Some(provider.unwrap_or("cpu").to_string());
-    config.feat_config.sample_rate = 16000;
-    config.feat_config.feature_dim = 80;
-
-    match model_type {
-        ModelType::OfflineSenseVoice {
-            model,
-            language,
-            use_itn,
-        } => {
-            config.model_config.tokens = file_tokens(file_config);
-            config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
-            config.model_config.sense_voice.language = Some(language);
-            config.model_config.sense_voice.use_itn = use_itn;
-        }
-        ModelType::OfflineWhisper {
-            encoder,
-            decoder,
-            language,
-        } => {
-            config.model_config.tokens = file_tokens(file_config);
-            config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
-            config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
-            config.model_config.whisper.language = Some(language);
-        }
-        ModelType::OfflineFunASRNano {
-            encoder_adaptor,
-            llm,
-            embedding,
-            tokenizer,
-            tokens,
-            language,
-        } => {
-            config.model_config.tokens = tokens
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string())
-                .or_else(|| file_tokens(file_config));
-            config.model_config.funasr_nano.encoder_adaptor =
-                Some(encoder_adaptor.to_string_lossy().to_string());
-            config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
-            config.model_config.funasr_nano.embedding =
-                Some(embedding.to_string_lossy().to_string());
-            config.model_config.funasr_nano.tokenizer =
-                Some(tokenizer.to_string_lossy().to_string());
-            config.model_config.funasr_nano.language = Some(language);
-        }
-        ModelType::OfflineFireRedAsr { encoder, decoder } => {
-            config.model_config.tokens = file_tokens(file_config);
-            config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
-            config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
-        }
-        ModelType::OfflineDolphin { model } => {
-            config.model_config.tokens = file_tokens(file_config);
-            config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
-        }
-        ModelType::OfflineQwen3Asr {
-            conv_frontend,
-            encoder,
-            decoder,
-            tokenizer,
-            hotwords,
-        } => {
-            config.model_config.qwen3_asr.conv_frontend =
-                Some(conv_frontend.to_string_lossy().to_string());
-            config.model_config.qwen3_asr.encoder = Some(encoder.to_string_lossy().to_string());
-            config.model_config.qwen3_asr.decoder = Some(decoder.to_string_lossy().to_string());
-            config.model_config.qwen3_asr.tokenizer = Some(tokenizer.to_string_lossy().to_string());
-            config.model_config.qwen3_asr.hotwords = hotwords;
-        }
-    }
-
-    OfflineRecognizer::create(&config)
-        .ok_or_else(|| "Failed to create OfflineRecognizer".to_string())
 }
 
 fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, String> {
