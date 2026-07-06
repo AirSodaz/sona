@@ -1,9 +1,9 @@
 use serde_json::{Map, Value, json};
 
-use crate::core::domain::{
+use crate::domain::{
     BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
 };
-use crate::integrations::asr_providers::online_asr_providers;
+use crate::ports::asr::online_asr_providers;
 
 pub const CURRENT_CONFIG_VERSION: i64 = 7;
 pub const DEFAULT_POLISH_PRESET_ID: &str = "general";

@@ -1,9 +1,9 @@
 use super::defaults::*;
 use super::types::MigrationResult;
-use crate::core::domain::{
+use crate::domain::{
     BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
 };
-use crate::integrations::asr_providers::{
+use crate::ports::asr::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
 use serde_json::{Map, Value, json};
@@ -1431,9 +1431,7 @@ fn normalize_provider_str(provider: &str) -> String {
         return LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string();
     }
 
-    if let Some(llm_provider) =
-        crate::integrations::llm_providers::find_llm_provider_by_id_or_alias(provider)
-    {
+    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
         return llm_provider.id.clone();
     }
 
@@ -1501,9 +1499,7 @@ fn provider_defaults(
         return defaults;
     }
 
-    if let Some(llm_provider) =
-        crate::integrations::llm_providers::find_llm_provider_by_id_or_alias(provider)
-    {
+    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
         let mut defaults = Map::new();
         defaults.insert("apiHost".to_string(), json!(llm_provider.defaults.api_host));
         defaults.insert("apiKey".to_string(), json!(""));
@@ -2024,7 +2020,7 @@ fn merge_object_values(first: Value, second: Option<Value>) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::config::{migrate_app_config, resolve_effective_config};
+    use crate::config::{migrate_app_config, resolve_effective_config};
 
     #[test]
     fn config_core_migrates_legacy_config_to_current_shape() {

@@ -1,4 +1,5 @@
 pub mod asr_metrics;
+pub mod config;
 pub mod dashboard;
 pub mod diagnostics;
 pub mod domain;
@@ -8,6 +9,7 @@ pub mod file_utils;
 pub mod gpu;
 pub mod history;
 pub mod history_store;
+pub mod llm_providers;
 pub mod model_catalog;
 pub mod model_config;
 pub mod model_downloads;

@@ -290,6 +290,34 @@ test('preset model catalog data is owned by core and reused by frontend', () => 
   assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/preset-models\.json/u);
 });
 
+test('app config migration and LLM provider manifest are owned by core', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
+  const coreDefaults = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'defaults.rs'), 'utf8');
+  const coreMigration = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'migration.rs'), 'utf8');
+  const desktopConfig = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'mod.rs'), 'utf8');
+  const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
+  const llmProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'llm', 'providers.ts'), 'utf8');
+
+  assert.match(coreLib, /^pub mod config;/mu);
+  assert.match(coreLib, /^pub mod llm_providers;/mu);
+  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm-providers.json')));
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'shared', 'llm-providers.json')), false);
+  assert.match(coreConfig, /^pub mod defaults;/mu);
+  assert.match(coreConfig, /pub fn migrate_app_config/u);
+  assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
+  assert.match(coreMigration, /crate::llm_providers::find_llm_provider_by_id_or_alias/u);
+  assert.match(desktopConfig, /pub use sona_core::config::\{/u);
+  assert.match(desktopConfig, /^pub mod sqlite_store;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'defaults.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'migration.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'types.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'error.rs')), false);
+  assert.doesNotMatch(desktopIntegrations, /^pub mod llm_providers;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_providers.rs')), false);
+  assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm-providers\.json/u);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

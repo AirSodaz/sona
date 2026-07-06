@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::sync::OnceLock;
 
-const LLM_PROVIDERS_JSON: &str = include_str!("../../../src/shared/llm-providers.json");
+const LLM_PROVIDERS_JSON: &str = include_str!("llm-providers.json");
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
