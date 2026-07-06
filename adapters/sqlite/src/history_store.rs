@@ -1,12 +1,12 @@
-use super::fs_utils::{
+use crate::DatabaseError;
+use crate::ports::Database as DatabasePort;
+use serde_json::{Map, Value};
+use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::history::fs_utils::{
     ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
 };
-use super::transcript_payload::normalize_history_transcript_segments;
-use crate::core::database::DatabaseError;
-use crate::core::database::ports::Database as DatabasePort;
-use crate::core::history_store::{HistoryStore, HistoryStoreError};
-use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::history::{
+use sona_core::history::transcript_payload::normalize_history_transcript_segments;
+use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
@@ -15,7 +15,8 @@ use crate::repositories::history::{
     HistoryWorkspaceScope, HistoryWorkspaceSummary, LiveRecordingDraftResult,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
-use serde_json::{Map, Value};
+use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_core::transcript::TranscriptSegment;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,6 +31,8 @@ use uuid::Uuid;
 
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
 const MILLIS_PER_DAY: u64 = 86_400_000;
+const HISTORY_DIR_NAME: &str = "history";
+const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
 
 pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
     "id",
@@ -88,7 +91,7 @@ fn history_insert_sql() -> String {
     )
 }
 
-pub(crate) fn insert_history_item_row(
+pub fn insert_history_item_row(
     tx: &rusqlite::Transaction<'_>,
     item: &HistoryItemRecord,
     transcript_path: &str,
@@ -202,7 +205,7 @@ fn add_workspace_query_conditions(
 }
 
 #[derive(Clone)]
-pub struct SqliteHistoryStore<D = crate::core::database::Database>
+pub struct SqliteHistoryStore<D = crate::Database>
 where
     D: DatabasePort,
 {
@@ -210,7 +213,7 @@ where
     db: Arc<D>,
 }
 
-sona_sqlite::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
+crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
 
 struct StagedHistoryAudio {
     staging_path: PathBuf,
@@ -236,11 +239,11 @@ impl StagedHistoryAudio {
     }
 
     fn cleanup_staging(&self) {
-        let _ = crate::repositories::storage::remove_path_if_exists(&self.staging_path);
+        let _ = sona_core::file_utils::remove_path_if_exists(&self.staging_path);
     }
 
     fn cleanup_final(&self) {
-        let _ = crate::repositories::storage::remove_path_if_exists(&self.target_path);
+        let _ = sona_core::file_utils::remove_path_if_exists(&self.target_path);
     }
 }
 
@@ -249,8 +252,7 @@ where
     D: DatabasePort,
 {
     fn history_dir(&self) -> PathBuf {
-        self.app_local_data_dir
-            .join(crate::repositories::history::HISTORY_DIR_NAME)
+        self.app_local_data_dir.join(HISTORY_DIR_NAME)
     }
 
     fn audio_path(&self, file_name: &str) -> Result<PathBuf, DatabaseError> {
@@ -299,7 +301,7 @@ where
             Ok(())
         })();
         if write_result.is_err() {
-            let _ = crate::repositories::storage::remove_path_if_exists(&staging_path);
+            let _ = sona_core::file_utils::remove_path_if_exists(&staging_path);
         }
         write_result?;
         Ok(StagedHistoryAudio {
@@ -322,7 +324,7 @@ where
             .map(|_| ())
             .map_err(|error| DatabaseError::Internal(error.to_string()));
         if copy_result.is_err() {
-            let _ = crate::repositories::storage::remove_path_if_exists(&staging_path);
+            let _ = sona_core::file_utils::remove_path_if_exists(&staging_path);
         }
         copy_result?;
         Ok(StagedHistoryAudio {
@@ -343,7 +345,7 @@ where
             let entry = entry.map_err(|e| DatabaseError::Internal(e.to_string()))?;
             let file_name = entry.file_name();
             if file_name.to_string_lossy().contains(STAGED_AUDIO_MARKER) {
-                crate::repositories::storage::remove_path_if_exists(&entry.path())
+                sona_core::file_utils::remove_path_if_exists(&entry.path())
                     .map_err(DatabaseError::Internal)?;
             }
         }
@@ -463,7 +465,7 @@ where
                         }
 
                         if let Err(error) =
-                            crate::repositories::storage::remove_path_if_exists(&audio_path)
+                            sona_core::file_utils::remove_path_if_exists(&audio_path)
                         {
                             log::warn!(
                                 "Failed to clean history audio {}: {}",
@@ -907,7 +909,7 @@ where
             };
 
             // 5. In-memory text search matching and sorting
-            let mut result = super::workspace_query::query_workspace_items_with_counts(
+            let mut result = sona_core::history::workspace_query::query_workspace_items_with_counts(
                 items,
                 request,
                 item_counts,
@@ -927,7 +929,7 @@ where
         request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
         self.ensure_ready()?;
-        let item = super::item_factory::create_live_draft_item(request)
+        let item = sona_core::history::item_factory::create_live_draft_item(request)
             .map_err(DatabaseError::Internal)?;
         let audio_absolute_path = self
             .audio_path(&item.audio_path)?
@@ -1003,7 +1005,7 @@ where
 
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
-        let mut item = super::item_factory::create_recording_item(
+        let mut item = sona_core::history::item_factory::create_recording_item(
             duration,
             project_id,
             audio_extension.as_deref(),
@@ -1075,7 +1077,7 @@ where
 
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
-        let imported = super::item_factory::create_imported_file_item(
+        let imported = sona_core::history::item_factory::create_imported_file_item(
             id,
             source_path,
             converted_source_path,
@@ -1149,7 +1151,7 @@ where
 
         for audio_path_str in audio_paths {
             if let Some(path) = optional_history_child_path(&self.history_dir(), &audio_path_str)
-                && let Err(error) = crate::repositories::storage::remove_path_if_exists(&path)
+                && let Err(error) = sona_core::file_utils::remove_path_if_exists(&path)
             {
                 log::warn!(
                     "Failed to remove history audio after deleting DB row {}: {}",
@@ -1297,7 +1299,7 @@ where
                  )",
                 rusqlite::params![
                     history_id,
-                    crate::repositories::history::TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT as i64
+                    TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT as i64
                 ],
             )?;
 
@@ -1516,7 +1518,7 @@ where
     ) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        let summary_payload = crate::repositories::history::fs_utils::ensure_json_object_value(
+        let summary_payload = sona_core::history::fs_utils::ensure_json_object_value(
             summary_payload,
             "History summary payload",
         )
@@ -1776,35 +1778,26 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D> crate::core::dashboard::ports::HistoryRepository for SqliteHistoryStore<D>
+impl<D> sona_core::dashboard::ports::HistoryRepository for SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
-    async fn list_items(
-        &self,
-    ) -> Result<Vec<HistoryItemRecord>, crate::core::dashboard::error::DashboardServiceError> {
-        HistoryStore::list_items(self).map_err(|error| {
-            crate::core::dashboard::error::DashboardServiceError::HistoryRepository(
-                error.to_string(),
-            )
-        })
+    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardServiceError> {
+        HistoryStore::list_items(self)
+            .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
     }
 
     async fn load_transcript(
         &self,
         history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, crate::core::dashboard::error::DashboardServiceError>
-    {
-        HistoryStore::load_transcript(self, history_id).map_err(|error| {
-            crate::core::dashboard::error::DashboardServiceError::HistoryRepository(
-                error.to_string(),
-            )
-        })
+    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardServiceError> {
+        HistoryStore::load_transcript(self, history_id)
+            .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
     }
 }
 
 fn build_fts_query(query: &str) -> String {
-    let normalized = super::workspace_query::normalize_workspace_search_text(query);
+    let normalized = sona_core::history::workspace_query::normalize_workspace_search_text(query);
     let terms: Vec<&str> = normalized
         .text
         .split(|c: char| c.is_whitespace() || ",.?!;:()[]{}<>'/\\|~`-=_+\"".contains(c))
@@ -1831,7 +1824,7 @@ fn build_fts_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
+    use crate::Database;
     use serde_json::json;
     use std::sync::Arc;
     use tempfile::tempdir;
@@ -2636,7 +2629,7 @@ mod tests {
 
     #[test]
     fn test_sqlite_store_workspace_query() {
-        use crate::repositories::history::{
+        use sona_core::history::{
             HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceScope,
             HistoryWorkspaceSortOrder,
         };
@@ -2733,7 +2726,7 @@ mod tests {
 
     #[test]
     fn test_workspace_query_with_reconciliation() {
-        use crate::repositories::history::{
+        use sona_core::history::{
             HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceScope,
             HistoryWorkspaceSortOrder,
         };
@@ -2831,7 +2824,7 @@ mod tests {
 
     #[test]
     fn test_sqlite_store_fts_workspace_query() {
-        use crate::repositories::history::{
+        use sona_core::history::{
             HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceScope,
             HistoryWorkspaceSortOrder,
         };

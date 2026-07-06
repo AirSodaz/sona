@@ -436,6 +436,18 @@ test('history filesystem helpers are owned by core history module', () => {
   assert.doesNotMatch(desktopHistory, /^pub\(crate\) mod fs_utils;/mu);
 });
 
+test('SQLite history store is owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_store.rs')));
+  assert.match(sqliteLib, /^pub mod history_store;/mu);
+  assert.match(sqliteLib, /^pub use history_store::SqliteHistoryStore;/mu);
+  assert.match(desktopHistory, /pub use sona_sqlite::history_store as sqlite_store;/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'sqlite_store.rs')), false);
+  assert.doesNotMatch(desktopHistory, /^pub mod sqlite_store;/mu);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

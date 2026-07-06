@@ -1,9 +1,9 @@
 pub mod backup;
 pub(crate) mod llm_helpers;
 pub(crate) mod repository;
-pub mod sqlite_store;
 mod state;
 pub use repository::HistoryRepository;
+pub use sona_sqlite::history_store as sqlite_store;
 pub use sqlite_store::SqliteHistoryStore;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -32,8 +32,6 @@ pub(crate) const HISTORY_DIR_NAME: &str = "history";
 pub(crate) const HISTORY_INDEX_FILE_NAME: &str = "index.json";
 pub(crate) const SUMMARY_FILE_SUFFIX: &str = ".summary.json";
 pub(crate) const HISTORY_VERSIONS_DIR_NAME: &str = "versions";
-pub(crate) const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
-
 pub(crate) const CONFIG_DIR_NAME: &str = "config";
 pub(crate) const CONFIG_FILE_NAME: &str = "sona-config.json";
 pub(crate) const PROJECTS_DIR_NAME: &str = "projects";

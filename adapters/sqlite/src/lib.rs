@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod config_store;
 pub mod error;
+pub mod history_store;
 pub mod llm_usage;
 pub mod ports;
 pub mod project;
@@ -11,6 +12,7 @@ pub mod task_ledger;
 pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
 pub use config_store::SqliteConfigStore;
 pub use error::DatabaseError;
+pub use history_store::SqliteHistoryStore;
 pub use project::SqliteProjectRepository;
 pub use task_ledger::SqliteLedgerRepository;
 
