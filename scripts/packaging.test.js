@@ -280,3 +280,17 @@ test('desktop punctuation loading is delegated to local ASR adapter', () => {
   assert.doesNotMatch(modelConfigRs, /OfflinePunctuationConfig/u);
   assert.doesNotMatch(modelConfigRs, /OfflinePunctuationModelConfig/u);
 });
+
+test('desktop recognizer construction is delegated to local ASR adapter', () => {
+  const modelConfigRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+    'utf8',
+  );
+
+  assert.match(modelConfigRs, /pub use sona_local_asr::recognizer::/u);
+  assert.doesNotMatch(modelConfigRs, /use sherpa_onnx::/u);
+  assert.doesNotMatch(modelConfigRs, /OfflineRecognizerConfig/u);
+  assert.doesNotMatch(modelConfigRs, /OnlineRecognizerConfig/u);
+  assert.doesNotMatch(modelConfigRs, /pub enum ModelType/u);
+  assert.doesNotMatch(modelConfigRs, /impl Recognizer/u);
+});
