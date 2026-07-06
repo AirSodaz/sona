@@ -25,7 +25,7 @@ type HmacSha256 = Hmac<Sha256>;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
-use sona_core::cli_runtime::{DEFAULT_GPU_ACCELERATION, resolve_cli_gpu_acceleration};
+use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
     OfflineTranscribeCliOptions, resolve_offline_transcribe_plan_with_install_checker,
@@ -391,7 +391,7 @@ pub async fn start_api_server(
         .join(",");
     let parsed_arc = std::sync::Arc::new(parsed_whitelist);
     let transcription_defaults = ApiServerTranscriptionDefaults {
-        gpu_acceleration: resolve_cli_gpu_acceleration(Some(gpu_acceleration))
+        gpu_acceleration: resolve_gpu_acceleration(Some(gpu_acceleration))
             .map_err(|e| e.to_string())?,
         ..Default::default()
     };
@@ -489,7 +489,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             };
             let parsed_arc = std::sync::Arc::new(parsed_whitelist);
             let transcription_defaults =
-                match resolve_cli_gpu_acceleration(Some(settings.gpu_acceleration)) {
+                match resolve_gpu_acceleration(Some(settings.gpu_acceleration)) {
                     Ok(gpu_acceleration) => ApiServerTranscriptionDefaults {
                         gpu_acceleration,
                         ..Default::default()

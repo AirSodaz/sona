@@ -3,8 +3,10 @@ use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODE
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
-pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
+pub use crate::gpu::{
+    DEFAULT_GPU_ACCELERATION, GPU_ACCELERATION_VALUES,
+    resolve_gpu_acceleration as resolve_cli_gpu_acceleration,
+};
 pub const DEFAULT_SERVE_PORT: u16 = 14200;
 pub const DEFAULT_SERVE_HOST: &str = "127.0.0.1";
 pub const DEFAULT_SERVE_IP_WHITELIST: &str = "localhost";
@@ -187,20 +189,6 @@ pub fn resolve_cli_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, St
     }
 
     Ok(path)
-}
-
-pub fn resolve_cli_gpu_acceleration(value: Option<String>) -> Result<Option<String>, String> {
-    let value = value.unwrap_or_else(|| DEFAULT_GPU_ACCELERATION.to_string());
-    let normalized = value.trim().to_ascii_lowercase();
-
-    if GPU_ACCELERATION_VALUES.contains(&normalized.as_str()) {
-        Ok(Some(normalized))
-    } else {
-        Err(format!(
-            "gpu_acceleration must be one of {}.",
-            GPU_ACCELERATION_VALUES.join(", ")
-        ))
-    }
 }
 
 pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {

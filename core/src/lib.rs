@@ -8,6 +8,7 @@ pub mod domain;
 pub mod downloads;
 pub mod export;
 pub mod file_utils;
+pub mod gpu;
 pub mod history;
 pub mod history_store;
 pub mod model_config;

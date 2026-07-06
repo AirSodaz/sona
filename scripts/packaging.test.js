@@ -34,6 +34,17 @@ function writeTauriConfig(root) {
   );
 }
 
+function rustFilesUnder(root) {
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  return entries.flatMap((entry) => {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      return rustFilesUnder(fullPath);
+    }
+    return entry.isFile() && entry.name.endsWith('.rs') ? [fullPath] : [];
+  });
+}
+
 test('tauri bundle verification requires ffmpeg sidecar and shared libraries', () => {
   const root = makeTempRepo();
   const target = 'x86_64-pc-windows-msvc';
@@ -96,4 +107,14 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   assert.doesNotMatch(tauriScript, new RegExp(oldCliSidecarScript, 'u'));
   assert.doesNotMatch(verifyScript, /sona-cli/u);
   assert.doesNotMatch(prWorkflow, new RegExp(`${oldCliSidecarScript}|${oldCliBundleScript}`, 'u'));
+
+  const desktopCliCoreReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+    .map((filePath) => ({
+      filePath,
+      content: fs.readFileSync(filePath, 'utf8'),
+    }))
+    .filter(({ content }) => /sona_core::cli_/u.test(content))
+    .map(({ filePath }) => path.relative(repoRoot, filePath));
+
+  assert.deepEqual(desktopCliCoreReferences, []);
 });

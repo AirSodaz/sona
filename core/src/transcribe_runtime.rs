@@ -380,9 +380,8 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
             OutputTarget::File(path) => Some(path.as_path()),
         },
     )?;
-    let gpu_acceleration = crate::cli_runtime::resolve_cli_gpu_acceleration(
-        cli.gpu_acceleration.or(config.gpu_acceleration),
-    )?;
+    let gpu_acceleration =
+        crate::gpu::resolve_gpu_acceleration(cli.gpu_acceleration.or(config.gpu_acceleration))?;
 
     ensure_input_file_exists(&cli.input)?;
     ensure_output_can_be_written(&output_target, cli.force)?;
