@@ -320,3 +320,14 @@ test('desktop live offline decode is delegated to local ASR adapter', () => {
   assert.doesNotMatch(sherpaRs, /use sherpa_onnx::OfflineRecognizer/u);
   assert.doesNotMatch(sherpaRs, /let stream = r\.create_stream\(\)/u);
 });
+
+test('desktop batch offline decode is delegated to local ASR adapter', () => {
+  const batchRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
+    'utf8',
+  );
+
+  assert.match(batchRs, /decode_offline_samples/u);
+  assert.doesNotMatch(batchRs, /FFI: Calling accept_waveform \(Offline segment\)/u);
+  assert.doesNotMatch(batchRs, /let stream = r\.0\.create_stream\(\)/u);
+});

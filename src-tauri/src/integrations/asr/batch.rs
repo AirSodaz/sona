@@ -6,7 +6,8 @@ use super::metrics::{
 };
 use super::model_config::{
     Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
-    SafeStream, build_model_config, create_recognizer_with_gpu_plan, load_punctuation,
+    SafeStream, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
+    load_punctuation,
 };
 use super::state::AsrState;
 use super::transcript::{
@@ -17,7 +18,6 @@ use super::types::{
     BatchSegmentationMode, BatchTranscriptionRequest, TranscriptNormalizationOptions,
     TranscriptSegment,
 };
-use log::debug;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -261,47 +261,39 @@ where
     }
 
     for (i, seg) in segments.into_iter().enumerate() {
+        if let Some(res) = decode_offline_samples(r, &seg.samples)
+            && !res.text.trim().is_empty()
         {
-            let stream = r.0.create_stream();
-            debug!("FFI: Calling accept_waveform (Offline segment)");
-            stream.accept_waveform(16000, &seg.samples);
-            debug!("FFI: Successfully returned from accept_waveform (Offline segment)");
-            r.0.decode(&stream);
+            let text = format_transcript(&res.text, punctuation);
+            let timestamps_abs = res
+                .timestamps
+                .as_ref()
+                .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
 
-            if let Some(res) = stream.get_result()
-                && !res.text.trim().is_empty()
-            {
-                let text = format_transcript(&res.text, punctuation);
-                let timestamps_abs = res
-                    .timestamps
-                    .as_ref()
-                    .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
-                let durations = timestamps_abs
-                    .as_ref()
-                    .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
+            let segment = TranscriptSegment {
+                id: uuid::Uuid::new_v4().to_string(),
+                text,
+                start: seg.start_time as f64,
+                end: (seg.start_time + seg.duration) as f64,
+                is_final: true,
+                timing: None,
+                tokens: Some(res.tokens),
+                timestamps: timestamps_abs,
+                durations,
+                translation: None,
+                speaker: None,
+                speaker_attribution: None,
+            };
 
-                let segment = TranscriptSegment {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    text,
-                    start: seg.start_time as f64,
-                    end: (seg.start_time + seg.duration) as f64,
-                    is_final: true,
-                    timing: None,
-                    tokens: Some(res.tokens),
-                    timestamps: timestamps_abs,
-                    durations,
-                    translation: None,
-                    speaker: None,
-                    speaker_attribution: None,
-                };
-
-                if let (Some(emitter), Some(id)) = (emitter, instance_id) {
-                    let update = build_transcript_update(segment.clone(), normalization_options);
-                    emit_transcript_update(emitter, id, &update, "batch-offline", None);
-                }
-
-                results.push(segment);
+            if let (Some(emitter), Some(id)) = (emitter, instance_id) {
+                let update = build_transcript_update(segment.clone(), normalization_options);
+                emit_transcript_update(emitter, id, &update, "batch-offline", None);
             }
+
+            results.push(segment);
         }
         let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
         on_progress(progress);
