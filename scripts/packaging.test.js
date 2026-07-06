@@ -277,6 +277,19 @@ test('online ASR provider manifest is owned by core and re-exported by desktop',
   assert.match(asrConfigServiceTest, /\.\.\/\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
 });
 
+test('preset model catalog data is owned by core and reused by frontend', () => {
+  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
+  const corePresetModelsPath = path.join(repoRoot, 'core', 'src', 'preset-models.json');
+  const legacySharedPresetModelsPath = path.join(repoRoot, 'src', 'shared', 'preset-models.json');
+  const modelServiceTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'modelService.ts'), 'utf8');
+
+  assert.ok(fs.existsSync(corePresetModelsPath));
+  assert.equal(fs.existsSync(legacySharedPresetModelsPath), false);
+  assert.match(corePresetModels, /include_str!\("preset-models\.json"\)/u);
+  assert.doesNotMatch(corePresetModels, /src\/shared\/preset-models\.json/u);
+  assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/preset-models\.json/u);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

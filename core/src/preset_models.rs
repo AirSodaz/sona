@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model_config::ModelFileConfig;
 
-const PRESET_MODELS_JSON: &str = include_str!("../../src/shared/preset-models.json");
+const PRESET_MODELS_JSON: &str = include_str!("preset-models.json");
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =
     "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17";
 const DEFAULT_SENSEVOICE_FP32_MODEL_ID: &str = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
