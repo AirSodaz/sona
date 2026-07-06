@@ -309,3 +309,14 @@ test('local offline transcription reuses local ASR recognizer model construction
   assert.doesNotMatch(offlineRs, /fn build_model_config/u);
   assert.doesNotMatch(offlineRs, /fn create_recognizer/u);
 });
+
+test('desktop live offline decode is delegated to local ASR adapter', () => {
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+
+  assert.match(sherpaRs, /decode_offline_samples/u);
+  assert.doesNotMatch(sherpaRs, /use sherpa_onnx::OfflineRecognizer/u);
+  assert.doesNotMatch(sherpaRs, /let stream = r\.create_stream\(\)/u);
+});

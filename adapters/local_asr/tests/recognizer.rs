@@ -1,6 +1,7 @@
 use sona_core::model_config::ModelFileConfig;
 use sona_local_asr::recognizer::{
-    ModelType, build_model_config, build_offline_model_config, create_offline_recognizer,
+    ModelType, OfflineDecodeResult, build_model_config, build_offline_model_config,
+    create_offline_recognizer,
 };
 use std::path::Path;
 
@@ -100,4 +101,15 @@ fn create_offline_recognizer_rejects_online_model_type() {
     };
 
     assert_eq!(error, "Unsupported offline model type: paraformer");
+}
+
+#[test]
+fn offline_decode_result_reports_empty_text() {
+    let result = OfflineDecodeResult {
+        text: "   ".to_string(),
+        tokens: Vec::new(),
+        timestamps: None,
+    };
+
+    assert!(result.is_empty_text());
 }

@@ -246,6 +246,19 @@ pub struct SafeOfflineRecognizer(pub OfflineRecognizer);
 unsafe impl Send for SafeOfflineRecognizer {}
 unsafe impl Sync for SafeOfflineRecognizer {}
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfflineDecodeResult {
+    pub text: String,
+    pub tokens: Vec<String>,
+    pub timestamps: Option<Vec<f32>>,
+}
+
+impl OfflineDecodeResult {
+    pub fn is_empty_text(&self) -> bool {
+        self.text.trim().is_empty()
+    }
+}
+
 pub enum RecognizerInner {
     Online(SafeOnlineRecognizer),
     Offline(SafeOfflineRecognizer),
@@ -523,6 +536,21 @@ pub fn create_offline_recognizer(
         RecognizerInner::Offline(recognizer) => Ok(recognizer.0),
         RecognizerInner::Online(_) => Err("Unsupported offline model type".to_string()),
     }
+}
+
+pub fn decode_offline_samples(
+    recognizer: &SafeOfflineRecognizer,
+    samples: &[f32],
+) -> Option<OfflineDecodeResult> {
+    let stream = recognizer.0.create_stream();
+    stream.accept_waveform(16000, samples);
+    recognizer.0.decode(&stream);
+
+    stream.get_result().map(|result| OfflineDecodeResult {
+        text: result.text,
+        tokens: result.tokens,
+        timestamps: result.timestamps,
+    })
 }
 
 fn create_value_with_gpu_plan<T, F>(

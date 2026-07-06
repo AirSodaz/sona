@@ -5,8 +5,8 @@ use super::metrics::{
     log_model_load_metric, samples_to_ms, set_live_inference_metric,
 };
 use super::model_config::{
-    ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeStream, SafeVad,
-    build_model_config, load_punctuation, load_vad,
+    ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream,
+    SafeVad, build_model_config, decode_offline_samples, load_punctuation, load_vad,
 };
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
@@ -19,7 +19,6 @@ use super::types::{
 use crate::integrations::asr::ModelConfigKey;
 use crate::integrations::asr::state::AsrState;
 use log::{debug, info, trace};
-use sherpa_onnx::OfflineRecognizer;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,7 +65,7 @@ fn build_live_metric(
 fn run_offline_inference(
     speech_buffer: &[Vec<f32>],
     emitter: &dyn crate::core::event::EventEmitter,
-    r: &OfflineRecognizer,
+    r: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
     segment_id: &str,
     global_start: f64,
@@ -95,16 +94,12 @@ fn run_offline_inference(
     for chunk in speech_buffer {
         full_audio.extend_from_slice(chunk);
     }
-    let stream = r.create_stream();
     let decode_started = Instant::now();
     debug!(
-        "[Offline] FFI: Calling accept_waveform (Offline) with {} samples",
+        "[Offline] FFI: Calling decode_offline_samples with {} samples",
         full_audio.len()
     );
-    stream.accept_waveform(16000, &full_audio);
-
-    debug!("[Offline] FFI: Calling decode");
-    r.decode(&stream);
+    let decode_result = decode_offline_samples(r, &full_audio);
     debug!("[Offline] FFI: Decode finished");
     let decode_ms = duration_to_ms(decode_started.elapsed());
 
@@ -136,7 +131,7 @@ fn run_offline_inference(
         );
     }
 
-    if let Some(result) = stream.get_result() {
+    if let Some(result) = decode_result {
         let raw_text = result.text.trim();
         if !raw_text.is_empty() {
             // The offline path emits only meaningful text: raw recognizer output
@@ -606,7 +601,7 @@ async fn flush_recognizer_impl_inner(
                     run_offline_inference(
                         &offline_copy,
                         emitter_copy.as_ref(),
-                        &safe_r.0,
+                        safe_r,
                         punct_copy.as_deref(),
                         &seg_id_copy,
                         global_start,
@@ -896,7 +891,7 @@ async fn feed_audio_samples_inner(
                             run_offline_inference(
                                 &offline_copy,
                                 emitter_copy.as_ref(),
-                                &safe_r.0,
+                                safe_r,
                                 punct_copy.as_deref(),
                                 &seg_id_copy,
                                 global_start,
@@ -964,7 +959,7 @@ async fn feed_audio_samples_inner(
                             run_offline_inference(
                                 &offline_copy,
                                 emitter_copy.as_ref(),
-                                &safe_r.0,
+                                safe_r,
                                 punct_copy.as_deref(),
                                 &seg_id_copy,
                                 global_start,
