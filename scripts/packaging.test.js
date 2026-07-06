@@ -145,3 +145,15 @@ test('desktop api server reuses local ASR adapter for standalone offline transcr
   assert.doesNotMatch(apiServer, /use crate::integrations::asr::transcribe_batch_with_progress;/u);
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
 });
+
+test('pr guardrails run local ASR adapter tests with core bindings and standalone CLI', () => {
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
+
+  assert.match(
+    prWorkflow,
+    /cargo test -p sona-core -p sona-local-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+  );
+});

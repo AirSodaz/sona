@@ -93,8 +93,8 @@ jobs:
       - name: Build standalone CLI
         run: cargo build -p sona-cli --release
 
-      - name: Run core, bindings, and standalone CLI tests
-        run: cargo test -p sona-core -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
+      - name: Run core, adapters, bindings, and standalone CLI tests
+        run: cargo test -p sona-core -p sona-local-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
 
       - name: Compile Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-run
