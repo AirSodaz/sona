@@ -104,6 +104,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
 }
 
 pub use crate::core::domain::LlmProvider;
+pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -111,35 +112,6 @@ pub enum LlmTaskType {
     Polish,
     Translate,
     Summary,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmUsageCategory {
-    Summary,
-    Translation,
-    Polish,
-    TitleGeneration,
-    ConnectionTest,
-    Generic,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmGenerateSource {
-    TitleGeneration,
-    ConnectionTest,
-    Generic,
-}
-
-impl From<LlmGenerateSource> for LlmUsageCategory {
-    fn from(value: LlmGenerateSource) -> Self {
-        match value {
-            LlmGenerateSource::TitleGeneration => LlmUsageCategory::TitleGeneration,
-            LlmGenerateSource::ConnectionTest => LlmUsageCategory::ConnectionTest,
-            LlmGenerateSource::Generic => LlmUsageCategory::Generic,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -234,14 +206,6 @@ pub struct StandardMessage {
 pub struct StandardLlmRequest {
     pub messages: Vec<StandardMessage>,
     pub temperature: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenUsage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

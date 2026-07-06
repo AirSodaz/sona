@@ -1,7 +1,6 @@
 pub(crate) mod commands;
 pub(crate) mod jobs;
-#[path = "llm_usage.rs"]
-pub(crate) mod llm_usage;
+pub(crate) use sona_core::llm_usage;
 mod network;
 mod providers;
 mod streaming;

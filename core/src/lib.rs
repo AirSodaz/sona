@@ -10,6 +10,7 @@ pub mod gpu;
 pub mod history;
 pub mod history_store;
 pub mod llm_providers;
+pub mod llm_usage;
 pub mod model_catalog;
 pub mod model_config;
 pub mod model_downloads;

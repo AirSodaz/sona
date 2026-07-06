@@ -1,47 +1,83 @@
-pub use crate::core::dashboard::models::{
+pub use crate::dashboard::models::{
     DashboardUsageBucket, LlmUsageDashboardStats, UsageBreakdown, UsageTrendPoint,
 };
-use crate::integrations::llm::{LlmUsageCategory, TokenUsage};
 use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub(crate) const RECENT_DAILY_WINDOW: i64 = 30;
+pub const RECENT_DAILY_WINDOW: i64 = 30;
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmUsageCategory {
+    Summary,
+    Translation,
+    Polish,
+    TitleGeneration,
+    ConnectionTest,
+    Generic,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmGenerateSource {
+    TitleGeneration,
+    ConnectionTest,
+    Generic,
+}
+
+impl From<LlmGenerateSource> for LlmUsageCategory {
+    fn from(value: LlmGenerateSource) -> Self {
+        match value {
+            LlmGenerateSource::TitleGeneration => LlmUsageCategory::TitleGeneration,
+            LlmGenerateSource::ConnectionTest => LlmUsageCategory::ConnectionTest,
+            LlmGenerateSource::Generic => LlmUsageCategory::Generic,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct UsageBucket {
-    pub(crate) call_count: u64,
-    pub(crate) calls_with_usage: u64,
-    pub(crate) calls_without_usage: u64,
-    pub(crate) prompt_tokens: u64,
-    pub(crate) completion_tokens: u64,
-    pub(crate) total_tokens: u64,
+pub struct UsageBucket {
+    pub call_count: u64,
+    pub calls_with_usage: u64,
+    pub calls_without_usage: u64,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct LlmUsageStatsFile {
-    pub(crate) schema_version: u64,
+pub struct LlmUsageStatsFile {
+    pub schema_version: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) started_at: Option<String>,
+    pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) last_updated_at: Option<String>,
-    pub(crate) totals: UsageBucket,
-    pub(crate) by_provider: BTreeMap<String, UsageBucket>,
-    pub(crate) by_category: BTreeMap<String, UsageBucket>,
-    pub(crate) daily: BTreeMap<String, UsageBucket>,
+    pub last_updated_at: Option<String>,
+    pub totals: UsageBucket,
+    pub by_provider: BTreeMap<String, UsageBucket>,
+    pub by_category: BTreeMap<String, UsageBucket>,
+    pub daily: BTreeMap<String, UsageBucket>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct UsageRecord {
-    pub(crate) occurred_at: String,
-    pub(crate) provider: String,
-    pub(crate) category: LlmUsageCategory,
-    pub(crate) usage: Option<TokenUsage>,
+pub struct UsageRecord {
+    pub occurred_at: String,
+    pub provider: String,
+    pub category: LlmUsageCategory,
+    pub usage: Option<TokenUsage>,
 }
 
-pub(crate) fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
+pub fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
     let by_provider = to_sorted_breakdown(&stats.by_provider);
     let by_category = to_sorted_breakdown(&stats.by_category);
 

@@ -1,12 +1,10 @@
-use crate::core::database::{Database, DatabaseError};
-use crate::integrations::llm::llm_usage::{
-    LlmUsageDashboardStats, LlmUsageStatsFile, UsageBucket, UsageRecord,
-};
+use crate::{Database, DatabaseError};
 use chrono::{DateTime, Local};
 use serde_json::Value;
+use sona_core::llm_usage::{LlmUsageDashboardStats, LlmUsageStatsFile, UsageBucket, UsageRecord};
 use std::collections::BTreeMap;
 
-pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseError> {
+pub fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseError> {
     let prompt_tokens = record
         .usage
         .as_ref()
@@ -52,7 +50,7 @@ pub(crate) fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), Da
     })
 }
 
-pub(crate) fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, DatabaseError> {
+pub fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, DatabaseError> {
     let rows: Vec<(String, String, String, i64, i64, i64)> = db.with_connection(|conn| {
         let mut stmt = conn.prepare_cached(
             "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens FROM analytics.llm_usage ORDER BY occurred_at"
@@ -343,9 +341,7 @@ fn is_date_key(value: &str) -> bool {
 
 pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, DatabaseError> {
     let stats = read_stats(db)?;
-    Ok(crate::integrations::llm::llm_usage::to_dashboard_stats(
-        &stats,
-    ))
+    Ok(sona_core::llm_usage::to_dashboard_stats(&stats))
 }
 
 fn create_empty_stats() -> LlmUsageStatsFile {
@@ -384,10 +380,9 @@ fn add_usage_bucket(target: &mut UsageBucket, usage: &UsageBucket) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
-    use crate::integrations::llm::llm_usage::UsageRecord;
-    use crate::integrations::llm::{LlmUsageCategory, TokenUsage};
+    use crate::Database;
     use serde_json::json;
+    use sona_core::llm_usage::{LlmUsageCategory, TokenUsage, UsageRecord};
 
     #[test]
     fn test_llm_usage_record_and_read_stats() {

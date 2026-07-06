@@ -5516,6 +5516,7 @@ name = "sona-sqlite"
 version = "0.8.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "log",
  "rusqlite",
  "serde",

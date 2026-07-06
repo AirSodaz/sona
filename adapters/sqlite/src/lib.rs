@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod config_store;
 pub mod error;
+pub mod llm_usage;
 pub mod ports;
 pub mod project;
 pub mod schema;
