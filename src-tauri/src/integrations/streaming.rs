@@ -589,11 +589,7 @@ fn run_offline_inference_standalone(
         full_audio.extend_from_slice(chunk);
     }
 
-    let stream = r.0.create_stream();
-    stream.accept_waveform(16000, &full_audio);
-    r.0.decode(&stream);
-
-    if let Some(result) = stream.get_result() {
+    if let Some(result) = crate::integrations::asr::decode_offline_samples(r, &full_audio) {
         let cleaned_text = crate::integrations::asr::normalize_recognizer_text(&result.text);
         if cleaned_text.is_empty() {
             return None;

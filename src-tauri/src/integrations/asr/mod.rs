@@ -32,7 +32,8 @@ pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
 pub use model_config::Recognizer;
 pub(crate) use model_config::{
-    RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, load_vad,
+    RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
+    load_vad,
 };
 pub use postprocess::TranscriptPostprocessor;
 pub(crate) use state::ModelConfigKey;
