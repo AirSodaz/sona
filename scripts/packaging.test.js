@@ -262,8 +262,9 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
     'utf8',
   );
 
-  assert.match(modelConfigRs, /sona_local_asr::audio::create_vad_detector/u);
-  assert.match(modelConfigRs, /SafeVad\(pub sona_local_asr::audio::VadDetector\)/u);
+  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{SafeVad, load_vad\}/u);
+  assert.doesNotMatch(modelConfigRs, /create_vad_detector/u);
+  assert.doesNotMatch(modelConfigRs, /pub struct SafeVad/u);
   assert.doesNotMatch(modelConfigRs, /SileroVadModelConfig/u);
   assert.doesNotMatch(modelConfigRs, /VadModelConfig/u);
   assert.doesNotMatch(modelConfigRs, /VoiceActivityDetector/u);

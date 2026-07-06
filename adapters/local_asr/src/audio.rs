@@ -6,6 +6,10 @@ use std::path::{Path, PathBuf};
 pub type VadConfig = VadModelConfig;
 pub type VadDetector = VoiceActivityDetector;
 
+pub struct SafeVad(pub VadDetector);
+unsafe impl Send for SafeVad {}
+unsafe impl Sync for SafeVad {}
+
 #[derive(Debug, Clone, Copy)]
 pub struct VadDetectorOptions {
     pub threshold: f32,
@@ -256,6 +260,29 @@ pub fn create_vad_detector(
     };
     VoiceActivityDetector::create(&vad_config, detector_capacity_seconds)
         .ok_or("Failed to create VoiceActivityDetector".to_string())
+}
+
+pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
+    let v_path = vad_model?;
+
+    if v_path.is_empty() {
+        println!(
+            "[Sherpa] load_vad: Path is empty or does not exist: {}",
+            v_path
+        );
+        return None;
+    }
+
+    match create_vad_detector(Path::new(&v_path), 60.0) {
+        Ok(vad) => {
+            println!("[Sherpa] load_vad: VAD successfully created!");
+            Some(SafeVad(vad))
+        }
+        Err(error) => {
+            println!("[Sherpa] load_vad: {error}");
+            None
+        }
+    }
 }
 
 pub fn vad_segment_audio(
