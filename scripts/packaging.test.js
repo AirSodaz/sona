@@ -424,3 +424,15 @@ test('desktop VAD runtime operations use private local ASR wrappers', () => {
   assert.doesNotMatch(recognizerRs, /pub struct SafeOfflineRecognizer\(pub /u);
   assert.doesNotMatch(recognizerRs, /pub struct SafeStream\(pub /u);
 });
+
+test('local ASR VAD sherpa primitives are crate-private', () => {
+  const audioRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'), 'utf8');
+
+  assert.doesNotMatch(audioRs, /^pub type VadConfig\s*=/mu);
+  assert.doesNotMatch(audioRs, /^pub type VadDetector\s*=/mu);
+  assert.doesNotMatch(audioRs, /^pub fn create_vad_config/mu);
+  assert.doesNotMatch(audioRs, /^pub fn create_vad_detector/mu);
+  assert.doesNotMatch(audioRs, /^pub fn vad_segment_audio_with_capacity/mu);
+  assert.match(audioRs, /^pub\(crate\) type VadConfig\s*=/mu);
+  assert.match(audioRs, /^pub\(crate\) fn create_vad_config/mu);
+});

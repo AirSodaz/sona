@@ -3,8 +3,8 @@ use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use sona_core::ports::asr::BatchSegmentationMode;
 use std::path::{Path, PathBuf};
 
-pub type VadConfig = VadModelConfig;
-pub type VadDetector = VoiceActivityDetector;
+pub(crate) type VadConfig = VadModelConfig;
+pub(crate) type VadDetector = VoiceActivityDetector;
 
 pub struct SafeVad(VadDetector);
 unsafe impl Send for SafeVad {}
@@ -227,7 +227,7 @@ pub fn segment_batch_audio(
         .unwrap_or_else(|_| fixed_chunk_audio(samples, 16000, 30.0))
 }
 
-pub fn create_vad_config(
+pub(crate) fn create_vad_config(
     vad_model: &Path,
     options: VadDetectorOptions,
 ) -> Result<VadConfig, String> {
@@ -248,7 +248,7 @@ pub fn create_vad_config(
     })
 }
 
-pub fn create_vad_detector(
+pub(crate) fn create_vad_detector(
     vad_model: &Path,
     detector_capacity_seconds: f32,
 ) -> Result<VadDetector, String> {
@@ -312,7 +312,7 @@ pub fn vad_segment_audio(
     vad_segment_audio_with_capacity(samples, sample_rate, vad_config, detector_capacity_seconds)
 }
 
-pub fn vad_segment_audio_with_capacity(
+pub(crate) fn vad_segment_audio_with_capacity(
     samples: &[f32],
     sample_rate: u32,
     vad_config: &VadConfig,
