@@ -375,6 +375,25 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   );
 });
 
+test('SQLite project repository is owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopProject = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs'), 'utf8');
+  const desktopProjectTypes = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'types.rs'),
+    'utf8',
+  );
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'project.rs')));
+  assert.match(sqliteLib, /^pub mod project;/mu);
+  assert.match(sqliteLib, /^pub use project::SqliteProjectRepository;/mu);
+  assert.match(desktopProject, /pub use sona_sqlite::project as sqlite_repository;/u);
+  assert.match(desktopProjectTypes, /pub use crate::core::project::\*;/u);
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'sqlite_repository.rs')),
+    false,
+  );
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),

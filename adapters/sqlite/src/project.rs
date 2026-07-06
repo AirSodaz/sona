@@ -1,19 +1,23 @@
-use crate::core::database::DatabaseError;
-use crate::core::database::ports::Database as DatabasePort;
+use crate::DatabaseError;
+use crate::ports::Database as DatabasePort;
 use serde_json::Value;
+use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::dashboard::ports::ProjectRepository;
+use sona_core::file_utils::current_time_millis;
+use sona_core::project::{
+    ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord, normalize_defaults,
+};
 use std::sync::Arc;
 
-use super::types::{ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord};
-
 #[derive(Clone)]
-pub struct SqliteProjectRepository<D = crate::core::database::Database>
+pub struct SqliteProjectRepository<D = crate::Database>
 where
     D: DatabasePort,
 {
     db: Arc<D>,
 }
 
-sona_sqlite::impl_db_repository!(SqliteProjectRepository);
+crate::impl_db_repository!(SqliteProjectRepository);
 
 const PROJECT_COLUMNS: [&str; 14] = [
     "id",
@@ -107,8 +111,7 @@ where
     }
 
     pub fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, DatabaseError> {
-        let now = crate::repositories::project::repository::current_time_millis()
-            .map_err(DatabaseError::Internal)?;
+        let now = current_time_millis().map_err(DatabaseError::Internal)?;
         let id = uuid::Uuid::new_v4().to_string();
 
         let defaults = self.build_defaults(&input)?;
@@ -261,8 +264,7 @@ where
                 }
             }
 
-            let now = crate::repositories::project::repository::current_time_millis()
-                .map_err(DatabaseError::Internal)?;
+            let now = current_time_millis().map_err(DatabaseError::Internal)?;
 
             let rows_affected = tx.execute(
                 &project_update_sql(),
@@ -367,10 +369,7 @@ where
                     .unwrap_or(0) as i64;
 
                 let defaults = project.get("defaults").and_then(Value::as_object);
-                let defaults = crate::repositories::project::repository::normalize_defaults(
-                    defaults,
-                    &ProjectListOptions::default(),
-                );
+                let defaults = normalize_defaults(defaults, &ProjectListOptions::default());
 
                 stmt.execute(rusqlite::named_params! {
                     ":id": &id,
@@ -603,18 +602,14 @@ fn hydrate_project_default_links(
 }
 
 #[async_trait::async_trait]
-impl<D> crate::core::dashboard::ports::ProjectRepository for SqliteProjectRepository<D>
+impl<D> ProjectRepository for SqliteProjectRepository<D>
 where
     D: DatabasePort,
 {
-    async fn count_projects(
-        &self,
-    ) -> Result<u64, crate::core::dashboard::error::DashboardServiceError> {
-        let projects = self.list(ProjectListOptions::default()).map_err(|error| {
-            crate::core::dashboard::error::DashboardServiceError::ProjectRepository(
-                error.to_string(),
-            )
-        })?;
+    async fn count_projects(&self) -> Result<u64, DashboardServiceError> {
+        let projects = self
+            .list(ProjectListOptions::default())
+            .map_err(|error| DashboardServiceError::ProjectRepository(error.to_string()))?;
         Ok(projects.len() as u64)
     }
 }
@@ -622,9 +617,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
-    use crate::repositories::project::types::ProjectDefaultsInput;
+    use crate::Database;
     use serde_json::json;
+    use sona_core::project::ProjectDefaultsInput;
     use std::path::PathBuf;
     use std::sync::Arc;
 

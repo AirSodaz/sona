@@ -2,12 +2,14 @@ pub mod automation;
 pub mod config_store;
 pub mod error;
 pub mod ports;
+pub mod project;
 pub mod schema;
 pub mod task_ledger;
 
 pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
 pub use config_store::SqliteConfigStore;
 pub use error::DatabaseError;
+pub use project::SqliteProjectRepository;
 pub use task_ledger::SqliteLedgerRepository;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};

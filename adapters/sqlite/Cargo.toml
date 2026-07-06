@@ -6,6 +6,7 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
+async-trait = "0.1"
 log = "0.4.22"
 rusqlite = { version = "0.40.1", features = ["bundled", "backup"] }
 serde = { version = "1", features = ["derive"] }
