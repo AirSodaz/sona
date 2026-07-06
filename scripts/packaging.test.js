@@ -329,6 +329,27 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
   assert.doesNotMatch(localOffline, /^fn synthesize_durations/mu);
 });
 
+test('timeline transcript normalization is owned by core and reused by desktop', () => {
+  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
+  const tauriTranscript = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    'utf8',
+  );
+
+  assert.match(coreTranscript, /pub fn apply_timeline_normalization\(/u);
+  assert.match(coreTranscript, /pub fn build_transcript_update\(/u);
+  assert.match(
+    tauriTranscript,
+    /pub\(crate\) use sona_core::transcript::\{[\s\S]*apply_timeline_normalization[\s\S]*build_transcript_update[\s\S]*\};/u,
+  );
+  assert.doesNotMatch(tauriTranscript, /struct TokenMap/u);
+  assert.doesNotMatch(tauriTranscript, /struct SplitterState/u);
+  assert.doesNotMatch(tauriTranscript, /fn split_segment_by_parts/u);
+  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn apply_timeline_normalization/u);
+  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn build_transcript_update/u);
+  assert.match(tauriTranscript, /pub\(crate\)\s+fn emit_transcript_update/u);
+});
+
 test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR adapter', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');

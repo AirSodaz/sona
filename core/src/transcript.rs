@@ -1,3 +1,4 @@
+use crate::transcript_postprocess::TranscriptNormalizationOptions;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +93,31 @@ pub struct TranscriptUpdate {
     pub upsert_segments: Vec<TranscriptSegment>,
 }
 
+const MAX_SEGMENT_LENGTH_CJK: usize = 36;
+const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
+const ABBREVIATIONS: &[&str] = &[
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "no", "op", "vol", "fig",
+    "inc", "ltd", "co", "dept",
+];
+
+#[derive(Clone, Debug)]
+struct TokenMap {
+    start_indices: Vec<usize>,
+    end_indices: Vec<usize>,
+    timestamps: Vec<f32>,
+}
+
+#[derive(Clone, Debug)]
+struct SplitterState {
+    current_text: String,
+    current_start: f64,
+    current_segment_start: f64,
+    char_index: usize,
+    effective_char_index: usize,
+    last_token_index: usize,
+    next_token_slice_start: usize,
+}
+
 pub fn ensure_transcript_segment_timing(segment: &mut TranscriptSegment) {
     segment.start = segment.start.max(0.0);
     segment.end = segment.end.max(segment.start);
@@ -140,6 +166,451 @@ pub fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32
     }
 
     Some(durations)
+}
+
+fn normalize_transcript_segments(mut segments: Vec<TranscriptSegment>) -> Vec<TranscriptSegment> {
+    for segment in &mut segments {
+        ensure_transcript_segment_timing(segment);
+    }
+    segments
+}
+
+fn is_meaningful_segment_char(ch: char) -> bool {
+    ch.is_alphanumeric()
+}
+
+fn effective_length(text: &str) -> usize {
+    text.chars()
+        .filter(|ch| is_meaningful_segment_char(*ch))
+        .count()
+}
+
+fn ends_with_abbreviation(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let last_word = trimmed
+        .split_whitespace()
+        .last()
+        .unwrap_or_default()
+        .trim_matches(|ch: char| !ch.is_alphanumeric())
+        .to_ascii_lowercase();
+    ABBREVIATIONS.iter().any(|value| *value == last_word)
+}
+
+fn contains_cjk(text: &str) -> bool {
+    text.chars().any(crate::text_alignment::is_cjk_char)
+}
+
+fn is_strong_split_char(ch: char) -> bool {
+    matches!(ch, '.' | '?' | '!' | '\u{3002}' | '\u{FF01}' | '\u{FF1F}')
+}
+
+fn is_weak_split_char(ch: char) -> bool {
+    matches!(ch, ',' | ';' | ':' | '\u{FF0C}' | '\u{FF1B}' | '\u{FF1A}')
+}
+
+fn split_text_parts<F>(text: &str, is_delimiter: F) -> Vec<String>
+where
+    F: Fn(char) -> bool,
+{
+    let chars = text.chars().collect::<Vec<_>>();
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        if is_delimiter(chars[index]) {
+            if !current.is_empty() {
+                parts.push(current.clone());
+                current.clear();
+            }
+
+            let start = index;
+            index += 1;
+            while index < chars.len() && is_delimiter(chars[index]) {
+                index += 1;
+            }
+            parts.push(chars[start..index].iter().collect());
+            continue;
+        }
+
+        current.push(chars[index]);
+        index += 1;
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+
+    parts
+}
+
+fn segment_has_token_timestamps(segment: &TranscriptSegment) -> bool {
+    matches!(
+        (segment.tokens.as_ref(), segment.timestamps.as_ref()),
+        (Some(tokens), Some(timestamps)) if !tokens.is_empty() && tokens.len() == timestamps.len()
+    )
+}
+
+fn build_token_map(segment: &TranscriptSegment) -> Option<TokenMap> {
+    let tokens = segment.tokens.as_ref()?;
+    let timestamps = segment.timestamps.as_ref()?;
+    if tokens.is_empty() || tokens.len() != timestamps.len() {
+        return None;
+    }
+
+    let mut start_indices = Vec::with_capacity(tokens.len());
+    let mut end_indices = Vec::with_capacity(tokens.len());
+    let mut current_len = 0usize;
+
+    for token in tokens {
+        let token_len = effective_length(token);
+        start_indices.push(current_len);
+        current_len += token_len;
+        end_indices.push(current_len);
+    }
+
+    Some(TokenMap {
+        start_indices,
+        end_indices,
+        timestamps: timestamps.clone(),
+    })
+}
+
+fn find_timestamp_from_map(
+    map: &TokenMap,
+    effective_index: usize,
+    hint_index: usize,
+) -> Option<(f32, usize)> {
+    if hint_index < map.start_indices.len()
+        && map.start_indices[hint_index] <= effective_index
+        && effective_index < map.end_indices[hint_index]
+    {
+        return Some((map.timestamps[hint_index], hint_index));
+    }
+
+    let next = hint_index + 1;
+    if next < map.start_indices.len()
+        && map.start_indices[next] <= effective_index
+        && effective_index < map.end_indices[next]
+    {
+        return Some((map.timestamps[next], next));
+    }
+
+    let mut left = if hint_index < map.start_indices.len()
+        && map.start_indices[hint_index] <= effective_index
+    {
+        hint_index
+    } else {
+        0
+    };
+    let mut right = map.start_indices.len().saturating_sub(1);
+    let mut index = None;
+
+    while left <= right {
+        let mid = (left + right) / 2;
+        if map.start_indices[mid] <= effective_index {
+            index = Some(mid);
+            left = mid + 1;
+        } else if mid == 0 {
+            break;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    let found_index = index?;
+    if effective_index >= map.end_indices[found_index] {
+        return None;
+    }
+
+    Some((map.timestamps[found_index], found_index))
+}
+
+fn finalize_split_segment(
+    mut segment: TranscriptSegment,
+    is_first: bool,
+    original_id: &str,
+) -> TranscriptSegment {
+    if !is_first {
+        segment.id = uuid::Uuid::new_v4().to_string();
+    } else {
+        segment.id = original_id.to_string();
+    }
+    segment
+}
+
+fn split_segment_by_parts<F>(
+    segment: &TranscriptSegment,
+    is_delimiter: F,
+    check_abbreviations: bool,
+) -> Vec<TranscriptSegment>
+where
+    F: Fn(char) -> bool + Copy,
+{
+    let parts = split_text_parts(&segment.text, is_delimiter);
+    if parts.len() <= 1 {
+        return vec![segment.clone()];
+    }
+
+    let has_timestamps = segment_has_token_timestamps(segment);
+    let token_map = if has_timestamps {
+        build_token_map(segment)
+    } else {
+        None
+    };
+    let total_duration = segment.end - segment.start;
+    let total_char_len = segment.text.chars().count().max(1);
+
+    let mut state = SplitterState {
+        current_text: String::new(),
+        current_start: segment.start,
+        current_segment_start: token_map
+            .as_ref()
+            .and_then(|map| map.timestamps.first().copied())
+            .map(|value| value as f64)
+            .unwrap_or(segment.start),
+        char_index: 0,
+        effective_char_index: 0,
+        last_token_index: 0,
+        next_token_slice_start: 0,
+    };
+
+    let mut results = Vec::new();
+    let original_id = segment.id.clone();
+
+    for part in parts {
+        let part_effective_len = effective_length(&part);
+        let is_delimiter_part = part.chars().next().map(is_delimiter).unwrap_or(false);
+
+        if is_delimiter_part {
+            let should_merge = check_abbreviations
+                && part.contains('.')
+                && ends_with_abbreviation(&state.current_text);
+            state.current_text.push_str(&part);
+            state.char_index += part.chars().count();
+            state.effective_char_index += part_effective_len;
+
+            if should_merge {
+                continue;
+            }
+
+            let fallback_ratio = state.current_text.chars().count() as f64 / total_char_len as f64;
+            let fallback_segment_end = state.current_start + fallback_ratio * total_duration;
+
+            let mut segment_end = fallback_segment_end;
+            let mut current_tokens = None;
+            let mut current_timestamps = None;
+            let mut current_durations = None;
+
+            if let Some(map) = token_map.as_ref() {
+                let mut slice_end = map.timestamps.len();
+                if let Some((timestamp, found_index)) =
+                    find_timestamp_from_map(map, state.effective_char_index, state.last_token_index)
+                {
+                    slice_end = found_index;
+                    segment_end = timestamp as f64;
+                    state.last_token_index = found_index;
+                }
+
+                if slice_end > state.next_token_slice_start {
+                    if let Some(tokens) = segment.tokens.as_ref() {
+                        current_tokens =
+                            Some(tokens[state.next_token_slice_start..slice_end].to_vec());
+                    }
+                    if let Some(timestamps) = segment.timestamps.as_ref() {
+                        current_timestamps =
+                            Some(timestamps[state.next_token_slice_start..slice_end].to_vec());
+                    }
+                    if let Some(durations) = segment
+                        .durations
+                        .as_ref()
+                        .filter(|values| values.len() == map.timestamps.len())
+                    {
+                        current_durations =
+                            Some(durations[state.next_token_slice_start..slice_end].to_vec());
+                    }
+                    state.next_token_slice_start = slice_end;
+                }
+
+                if let Some(timestamps) = current_timestamps
+                    .as_ref()
+                    .filter(|values| !values.is_empty())
+                {
+                    state.current_segment_start = timestamps[0] as f64;
+                }
+            }
+
+            let child = TranscriptSegment {
+                id: original_id.clone(),
+                text: state.current_text.trim().to_string(),
+                start: state.current_segment_start,
+                end: segment_end.max(state.current_segment_start),
+                is_final: true,
+                timing: None,
+                tokens: current_tokens,
+                timestamps: current_timestamps,
+                durations: current_durations,
+                translation: segment.translation.clone(),
+                speaker: segment.speaker.clone(),
+                speaker_attribution: segment.speaker_attribution.clone(),
+            };
+
+            if !child.text.is_empty() {
+                results.push(finalize_split_segment(
+                    child,
+                    results.is_empty(),
+                    &original_id,
+                ));
+            }
+
+            state.current_start = segment_end;
+            state.current_segment_start = segment_end;
+            state.current_text.clear();
+
+            if let Some(map) = token_map.as_ref()
+                && state.last_token_index == state.next_token_slice_start
+                && state.next_token_slice_start < map.timestamps.len()
+            {
+                state.current_segment_start = map.timestamps[state.next_token_slice_start] as f64;
+                state.current_start = state.current_segment_start;
+            }
+
+            continue;
+        }
+
+        state.current_text.push_str(&part);
+        state.char_index += part.chars().count();
+        state.effective_char_index += part_effective_len;
+    }
+
+    if !state.current_text.trim().is_empty() {
+        let mut current_tokens = None;
+        let mut current_timestamps = None;
+        let mut current_durations = None;
+
+        if let Some(map) = token_map.as_ref() {
+            if let Some(tokens) = segment.tokens.as_ref() {
+                current_tokens = Some(tokens[state.next_token_slice_start..].to_vec());
+            }
+            if let Some(timestamps) = segment.timestamps.as_ref() {
+                current_timestamps = Some(timestamps[state.next_token_slice_start..].to_vec());
+            }
+            if let Some(durations) = segment
+                .durations
+                .as_ref()
+                .filter(|values| values.len() == map.timestamps.len())
+            {
+                current_durations = Some(durations[state.next_token_slice_start..].to_vec());
+            }
+            if let Some(timestamps) = current_timestamps
+                .as_ref()
+                .filter(|values| !values.is_empty())
+            {
+                state.current_segment_start = timestamps[0] as f64;
+            }
+        }
+
+        let child = TranscriptSegment {
+            id: original_id.clone(),
+            text: state.current_text.trim().to_string(),
+            start: state.current_segment_start,
+            end: segment.end,
+            is_final: true,
+            timing: None,
+            tokens: current_tokens,
+            timestamps: current_timestamps,
+            durations: current_durations,
+            translation: segment.translation.clone(),
+            speaker: segment.speaker.clone(),
+            speaker_attribution: segment.speaker_attribution.clone(),
+        };
+
+        if !child.text.is_empty() {
+            results.push(finalize_split_segment(
+                child,
+                results.is_empty(),
+                &original_id,
+            ));
+        }
+    }
+
+    if results.is_empty() {
+        vec![segment.clone()]
+    } else {
+        results
+    }
+}
+
+fn split_segment_by_punctuation_rules(segment: &TranscriptSegment) -> Vec<TranscriptSegment> {
+    let first_pass = split_segment_by_parts(segment, is_strong_split_char, true);
+    let mut final_segments = Vec::new();
+
+    for segment in first_pass {
+        let limit = if contains_cjk(&segment.text) {
+            MAX_SEGMENT_LENGTH_CJK
+        } else {
+            MAX_SEGMENT_LENGTH_WESTERN
+        };
+
+        if segment.text.chars().count() > limit {
+            final_segments.extend(split_segment_by_parts(&segment, is_weak_split_char, false));
+        } else {
+            final_segments.push(segment);
+        }
+    }
+
+    final_segments
+}
+
+pub fn apply_timeline_normalization(
+    segments: Vec<TranscriptSegment>,
+    options: TranscriptNormalizationOptions,
+) -> Vec<TranscriptSegment> {
+    if !options.enable_timeline {
+        return normalize_transcript_segments(segments);
+    }
+
+    let mut results = Vec::new();
+    for segment in segments {
+        if segment.is_final {
+            results.extend(split_segment_by_punctuation_rules(&segment));
+        } else {
+            results.push(segment);
+        }
+    }
+
+    results.sort_by(|left, right| {
+        left.start
+            .partial_cmp(&right.start)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left.end
+                    .partial_cmp(&right.end)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+
+    normalize_transcript_segments(results)
+}
+
+pub fn build_transcript_update(
+    segment: TranscriptSegment,
+    options: TranscriptNormalizationOptions,
+) -> TranscriptUpdate {
+    let remove_ids = if options.enable_timeline && segment.is_final {
+        vec![segment.id.clone()]
+    } else {
+        Vec::new()
+    };
+
+    TranscriptUpdate {
+        remove_ids,
+        upsert_segments: apply_timeline_normalization(vec![segment], options),
+    }
 }
 
 fn normalize_timing_units(
@@ -380,5 +851,57 @@ mod tests {
 
         assert_eq!(durations, vec![0.25, 0.5, 0.5]);
         assert_eq!(synthesize_durations(&[], 1.25), None);
+    }
+
+    #[test]
+    fn apply_timeline_normalization_splits_token_level_segments_with_model_timing() {
+        let segment = TranscriptSegment {
+            text: "Hello. World.".to_string(),
+            tokens: Some(vec![
+                "Hello".to_string(),
+                ".".to_string(),
+                "World".to_string(),
+                ".".to_string(),
+            ]),
+            timestamps: Some(vec![0.0, 0.5, 1.0, 1.5]),
+            durations: Some(vec![0.5; 4]),
+            ..sample_segment("Hello. World.", 0.0, 2.0)
+        };
+
+        let results = apply_timeline_normalization(
+            vec![segment],
+            TranscriptNormalizationOptions {
+                enable_timeline: true,
+            },
+        );
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].text, "Hello.");
+        assert_eq!(results[1].text, "World.");
+        assert_eq!(results[0].id, "segment-1");
+        assert_ne!(results[1].id, "segment-1");
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.level),
+            Some(TranscriptTimingLevel::Token)
+        );
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.source),
+            Some(TranscriptTimingSource::Model)
+        );
+        assert!(results[1].start >= results[0].end);
+    }
+
+    #[test]
+    fn build_transcript_update_replaces_final_segments_atomically_when_timeline_enabled() {
+        let update = build_transcript_update(
+            sample_segment("Hello. World.", 0.0, 2.0),
+            TranscriptNormalizationOptions {
+                enable_timeline: true,
+            },
+        );
+
+        assert_eq!(update.remove_ids, vec!["segment-1".to_string()]);
+        assert_eq!(update.upsert_segments.len(), 2);
+        assert_eq!(update.upsert_segments[0].id, "segment-1");
     }
 }
