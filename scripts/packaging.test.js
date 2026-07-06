@@ -215,18 +215,34 @@ test('desktop hardware module reuses local ASR adapter GPU planning', () => {
   assert.doesNotMatch(hardwareRs, /struct GpuFallbackNotice/u);
 });
 
-test('desktop audio pipeline reuses local ASR adapter media helpers', () => {
-  const pipelineRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'pipeline.rs'), 'utf8');
+test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
+  const coreMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
+  const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
+  const speakerRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'speaker.rs'), 'utf8');
+  const runtimeStatusRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'), 'utf8');
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
 
-  assert.match(pipelineRs, /pub use sona_local_asr::audio::\{/u);
-  assert.doesNotMatch(pipelineRs, /tokio::process::Command/u);
-  assert.doesNotMatch(pipelineRs, /hound::/u);
-  assert.doesNotMatch(pipelineRs, /fn pcm_bytes_to_f32/u);
-  assert.doesNotMatch(pipelineRs, /pub fn fixed_chunk_audio/u);
-  assert.doesNotMatch(pipelineRs, /pub fn whole_audio_segment/u);
-  assert.match(pipelineRs, /sona_local_asr::audio::vad_segment_audio_with_capacity/u);
-  assert.doesNotMatch(pipelineRs, /VoiceActivityDetector/u);
-  assert.doesNotMatch(pipelineRs, /VadModelConfig/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'pipeline.rs')), false);
+  assert.doesNotMatch(coreMod, /^pub mod pipeline;/mu);
+  assert.match(batchRs, /sona_local_asr::audio::extract_and_resample_audio/u);
+  assert.match(batchRs, /sona_local_asr::audio::save_wav_file/u);
+  assert.match(speakerRs, /sona_local_asr::audio::extract_and_resample_audio/u);
+  assert.match(speakerRs, /sona_local_asr::audio::save_wav_file/u);
+  assert.match(runtimeStatusRs, /sona_local_asr::audio::resolve_ffmpeg_sidecar_path/u);
+  assert.doesNotMatch(prWorkflow, /core::pipeline::tests/u);
+
+  const desktopPipelineReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+    .map((filePath) => ({
+      filePath,
+      content: fs.readFileSync(filePath, 'utf8'),
+    }))
+    .filter(({ content }) => /crate::core::pipeline|core::pipeline/u.test(content))
+    .map(({ filePath }) => path.relative(repoRoot, filePath));
+
+  assert.deepEqual(desktopPipelineReferences, []);
 });
 
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {

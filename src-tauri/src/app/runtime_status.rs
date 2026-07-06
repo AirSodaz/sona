@@ -26,7 +26,7 @@ pub(crate) async fn open_log_folder<R: tauri::Runtime>(
 pub(crate) fn resolve_runtime_environment_status(
     provider: &dyn crate::core::paths::PathProvider,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    let ffmpeg_path = crate::core::pipeline::resolve_ffmpeg_sidecar_path()?;
+    let ffmpeg_path = sona_local_asr::audio::resolve_ffmpeg_sidecar_path()?;
     let log_dir = provider
         .resolve_path(crate::core::paths::PathKind::AppLogData)
         .map_err(|e: String| -> String { e })?;

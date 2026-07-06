@@ -96,11 +96,11 @@ where
     let total_started = Instant::now();
     let audio_extract_started = Instant::now();
     let samples =
-        crate::core::pipeline::extract_and_resample_audio(&request.file_path, 16000).await?;
+        sona_local_asr::audio::extract_and_resample_audio(&request.file_path, 16000).await?;
     let audio_extract_ms = duration_to_ms(audio_extract_started.elapsed());
 
     if let Some(path) = request.save_to_path.as_ref() {
-        crate::core::pipeline::save_wav_file(&samples, 16000, path).map_err(|e| e.to_string())?;
+        sona_local_asr::audio::save_wav_file(&samples, 16000, path).map_err(|e| e.to_string())?;
     }
 
     let model_load_started = Instant::now();

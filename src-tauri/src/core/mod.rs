@@ -5,7 +5,6 @@ pub mod diagnostics;
 pub mod event;
 pub mod history_store;
 pub mod paths;
-pub mod pipeline;
 pub mod preset_models;
 pub mod recovery;
 pub mod storage_usage;

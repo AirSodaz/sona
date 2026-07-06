@@ -105,7 +105,7 @@ pub async fn annotate_speaker_segments_from_file(
         return Ok(segments);
     }
 
-    let samples = crate::core::pipeline::extract_and_resample_audio(
+    let samples = sona_local_asr::audio::extract_and_resample_audio(
         std::path::Path::new(&file_path),
         SAMPLE_RATE as u32,
     )
@@ -119,7 +119,7 @@ pub async fn import_speaker_profile_sample(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<SpeakerProfileSample, String> {
-    let samples = crate::core::pipeline::extract_and_resample_audio(
+    let samples = sona_local_asr::audio::extract_and_resample_audio(
         std::path::Path::new(&source_path),
         SAMPLE_RATE as u32,
     )
@@ -143,7 +143,7 @@ pub async fn import_speaker_profile_sample(
     std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
 
     let output_path = profile_dir.join(format!("{sample_id}.wav"));
-    crate::core::pipeline::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
+    sona_local_asr::audio::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
         .map_err(|e| e.to_string())?;
 
     Ok(SpeakerProfileSample {

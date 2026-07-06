@@ -102,9 +102,6 @@ jobs:
       - name: Run desktop entry tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --test desktop_entry
 
-      - name: Run pipeline tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::pipeline::tests
-
       - name: Run preset model tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::preset_models::tests
 
