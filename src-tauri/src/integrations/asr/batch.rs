@@ -6,8 +6,9 @@ use super::metrics::{
 };
 use super::model_config::{
     Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
-    SafeStream, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
-    load_punctuation,
+    accept_online_samples, build_model_config, create_online_stream,
+    create_recognizer_with_gpu_plan, decode_offline_samples, decode_online_ready,
+    is_online_endpoint, load_punctuation, online_stream_result, reset_online_stream,
 };
 use super::state::AsrState;
 use super::transcript::{
@@ -314,7 +315,7 @@ async fn process_batch_online<F>(
 where
     F: FnMut(f32),
 {
-    let stream = SafeStream(r.0.create_stream());
+    let stream = create_online_stream(r);
     let mut segments = Vec::new();
     let mut segment_start = 0.0;
     let mut current_samples = 0;
@@ -327,14 +328,12 @@ where
     }
 
     for chunk in samples.chunks(chunk_size) {
-        stream.0.accept_waveform(16000, chunk);
+        accept_online_samples(&stream, chunk);
         current_samples += chunk.len();
-        while r.0.is_ready(&stream.0) {
-            r.0.decode(&stream.0);
-        }
-        if r.0.is_endpoint(&stream.0) {
+        decode_online_ready(r, &stream);
+        if is_online_endpoint(r, &stream) {
             let current_time = current_samples as f64 / 16000.0;
-            if let Some(result) = r.0.get_result(&stream.0)
+            if let Some(result) = online_stream_result(r, &stream)
                 && !result.text.trim().is_empty()
             {
                 let text = format_transcript(&result.text, punctuation);
@@ -369,7 +368,7 @@ where
 
                 segments.push(segment);
             }
-            r.0.reset(&stream.0);
+            reset_online_stream(r, &stream);
             segment_start = current_time;
         }
         let progress = (current_samples as f32 / total_samples as f32) * 100.0;
@@ -378,12 +377,10 @@ where
     }
 
     let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-    stream.0.accept_waveform(16000, &tail_padding);
-    while r.0.is_ready(&stream.0) {
-        r.0.decode(&stream.0);
-    }
+    accept_online_samples(&stream, &tail_padding);
+    decode_online_ready(r, &stream);
 
-    if let Some(result) = r.0.get_result(&stream.0)
+    if let Some(result) = online_stream_result(r, &stream)
         && !result.text.trim().is_empty()
     {
         let text = format_transcript(&result.text, punctuation);

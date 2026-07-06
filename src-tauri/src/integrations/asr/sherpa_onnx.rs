@@ -6,7 +6,9 @@ use super::metrics::{
 };
 use super::model_config::{
     ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream,
-    SafeVad, build_model_config, decode_offline_samples, load_punctuation, load_vad,
+    SafeVad, accept_online_samples, build_model_config, create_online_stream,
+    decode_offline_samples, decode_online_ready, is_online_endpoint, load_punctuation, load_vad,
+    online_stream_result, reset_online_stream,
 };
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
@@ -487,7 +489,7 @@ async fn start_recognizer_impl_inner(
     };
 
     let stream = match &recognizer.inner {
-        RecognizerInner::Online(r) => Some(SafeStream(r.0.create_stream())),
+        RecognizerInner::Online(r) => Some(create_online_stream(r)),
         _ => None,
     };
 
@@ -646,14 +648,12 @@ async fn flush_recognizer_impl_inner(
         let decode_started = Instant::now();
         let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
         debug!("FFI: Calling accept_waveform (Online, tail_padding)");
-        st.0.accept_waveform(16000, &tail_padding);
+        accept_online_samples(st, &tail_padding);
         debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
-        while r.0.is_ready(&st.0) {
-            r.0.decode(&st.0);
-        }
+        decode_online_ready(r, st);
         let decode_ms = duration_to_ms(decode_started.elapsed());
 
-        if let Some(result) = r.0.get_result(&st.0)
+        if let Some(result) = online_stream_result(r, st)
             && !result.text.trim().is_empty()
         {
             let text = format_transcript(&result.text, instance.punctuation.as_deref());
@@ -714,7 +714,7 @@ async fn flush_recognizer_impl_inner(
         );
 
         instance.current_segment_id = None;
-        r.0.reset(&st.0);
+        reset_online_stream(r, st);
         instance.segment_start_time = current_time;
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] flush_recognizer({label}) complete. mode=online");
@@ -1019,18 +1019,16 @@ async fn feed_audio_samples_inner(
                 .ok_or("Stream not initialized for online model")?;
 
             let decode_started = Instant::now();
-            st.0.accept_waveform(16000, samples);
+            accept_online_samples(st, samples);
             instance.total_samples += samples.len();
 
-            while r.0.is_ready(&st.0) {
-                r.0.decode(&st.0);
-            }
+            decode_online_ready(r, st);
             let decode_ms = duration_to_ms(decode_started.elapsed());
 
             let current_time = instance.total_samples as f64 / 16000.0;
-            let endpoint_detected = r.0.is_endpoint(&st.0);
+            let endpoint_detected = is_online_endpoint(r, st);
 
-            if let Some(result) = r.0.get_result(&st.0) {
+            if let Some(result) = online_stream_result(r, st) {
                 let has_text = !result.text.trim().is_empty();
                 if has_text || instance.current_segment_id.is_some() {
                     let id = instance
@@ -1106,16 +1104,14 @@ async fn feed_audio_samples_inner(
                 let endpoint_decode_started = Instant::now();
                 let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
                 debug!("FFI: Calling accept_waveform (Online, tail_padding)");
-                st.0.accept_waveform(16000, &tail_padding);
+                accept_online_samples(st, &tail_padding);
                 debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
-                while r.0.is_ready(&st.0) {
-                    r.0.decode(&st.0);
-                }
+                decode_online_ready(r, st);
                 let final_decode_ms = decode_ms + duration_to_ms(endpoint_decode_started.elapsed());
                 let final_buffered_samples =
                     ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
-                if let Some(result) = r.0.get_result(&st.0)
+                if let Some(result) = online_stream_result(r, st)
                     && !result.text.trim().is_empty()
                 {
                     let text = format_transcript(&result.text, instance.punctuation.as_deref());
@@ -1178,7 +1174,7 @@ async fn feed_audio_samples_inner(
 
                 instance.current_segment_id = None;
                 instance.last_partial_metric_sample = 0;
-                r.0.reset(&st.0);
+                reset_online_stream(r, st);
                 instance.segment_start_time = current_time;
             }
 

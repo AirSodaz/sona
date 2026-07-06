@@ -259,6 +259,13 @@ impl OfflineDecodeResult {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct OnlineDecodeResult {
+    pub text: String,
+    pub tokens: Vec<String>,
+    pub timestamps: Option<Vec<f32>>,
+}
+
 pub enum RecognizerInner {
     Online(SafeOnlineRecognizer),
     Offline(SafeOfflineRecognizer),
@@ -551,6 +558,42 @@ pub fn decode_offline_samples(
         tokens: result.tokens,
         timestamps: result.timestamps,
     })
+}
+
+pub fn create_online_stream(recognizer: &SafeOnlineRecognizer) -> SafeStream {
+    SafeStream(recognizer.0.create_stream())
+}
+
+pub fn accept_online_samples(stream: &SafeStream, samples: &[f32]) {
+    stream.0.accept_waveform(16000, samples);
+}
+
+pub fn decode_online_ready(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) {
+    while recognizer.0.is_ready(&stream.0) {
+        recognizer.0.decode(&stream.0);
+    }
+}
+
+pub fn is_online_endpoint(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) -> bool {
+    recognizer.0.is_endpoint(&stream.0)
+}
+
+pub fn online_stream_result(
+    recognizer: &SafeOnlineRecognizer,
+    stream: &SafeStream,
+) -> Option<OnlineDecodeResult> {
+    recognizer
+        .0
+        .get_result(&stream.0)
+        .map(|result| OnlineDecodeResult {
+            text: result.text,
+            tokens: result.tokens,
+            timestamps: result.timestamps,
+        })
+}
+
+pub fn reset_online_stream(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) {
+    recognizer.0.reset(&stream.0);
 }
 
 fn create_value_with_gpu_plan<T, F>(

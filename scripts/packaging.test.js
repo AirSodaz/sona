@@ -359,3 +359,30 @@ test('desktop streaming offline decode is delegated to local ASR adapter', () =>
   assert.doesNotMatch(streamingRs, /stream\.accept_waveform\(16000, &full_audio\)/u);
   assert.doesNotMatch(streamingRs, /r\.0\.decode\(&stream\)/u);
 });
+
+test('desktop online stream operations are delegated to local ASR adapter', () => {
+  const modelConfigRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+    'utf8',
+  );
+  const batchRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
+    'utf8',
+  );
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+  const desktopOnlineRs = `${batchRs}\n${sherpaRs}`;
+
+  assert.match(modelConfigRs, /create_online_stream/u);
+  assert.match(modelConfigRs, /accept_online_samples/u);
+  assert.match(modelConfigRs, /decode_online_ready/u);
+  assert.match(modelConfigRs, /online_stream_result/u);
+  assert.doesNotMatch(desktopOnlineRs, /SafeStream\(r\.0\.create_stream\(\)\)/u);
+  assert.doesNotMatch(desktopOnlineRs, /\.0\.accept_waveform\(16000/u);
+  assert.doesNotMatch(desktopOnlineRs, /r\.0\.is_ready\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(desktopOnlineRs, /r\.0\.decode\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(desktopOnlineRs, /r\.0\.get_result\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(desktopOnlineRs, /r\.0\.reset\(&[^)]*\.0\)/u);
+});
