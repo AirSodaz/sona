@@ -16,12 +16,6 @@ use sona_core::transcribe_runtime::OfflineTranscribePlan;
 use sona_core::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 use std::path::{Path, PathBuf};
 
-pub async fn run_offline_transcription(
-    plan: OfflineTranscribePlan,
-) -> Result<Vec<TranscriptSegment>, String> {
-    LocalOfflineAsrAdapter.transcribe(plan).await
-}
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LocalOfflineAsrAdapter;
 
@@ -261,8 +255,9 @@ fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
 
 #[cfg(test)]
 mod tests {
-    use super::run_offline_transcription;
+    use super::LocalOfflineAsrAdapter;
     use sona_core::export::ExportFormat;
+    use sona_core::ports::asr::OfflineTranscriber;
     use sona_core::transcribe_runtime::{OfflineTranscribePlan, OutputTarget};
     use std::path::PathBuf;
 
@@ -287,7 +282,7 @@ mod tests {
             quiet: true,
         };
 
-        let error = run_offline_transcription(plan).await.unwrap_err();
+        let error = LocalOfflineAsrAdapter.transcribe(plan).await.unwrap_err();
         assert!(error.contains("existing file"));
     }
 }

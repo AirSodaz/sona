@@ -26,6 +26,7 @@ use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
 use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
+use sona_core::ports::asr::OfflineTranscriber;
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
     OfflineTranscribeOptions, resolve_offline_transcribe_plan_with_install_checker,
@@ -791,7 +792,8 @@ async fn start_worker_loop(
             } else {
                 match build_local_transcribe_plan(&job, &models_dir, &defaults) {
                     Ok(plan) => {
-                        match sona_local_asr::offline::run_offline_transcription(plan).await {
+                        let transcriber = sona_local_asr::offline::LocalOfflineAsrAdapter;
+                        match transcriber.transcribe(plan).await {
                             Ok(segments) => JobStatus::Completed(segments),
                             Err(e) => JobStatus::Failed(e),
                         }
