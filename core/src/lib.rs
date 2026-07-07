@@ -14,6 +14,7 @@ pub mod history_store;
 pub mod llm_jobs;
 pub mod llm_provider_protocol;
 pub mod llm_providers;
+pub mod llm_streaming_protocol;
 pub mod llm_tasks;
 pub mod llm_usage;
 pub mod media_detector;

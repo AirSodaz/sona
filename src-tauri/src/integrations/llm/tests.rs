@@ -429,7 +429,17 @@ fn openai_chat_payload_keeps_temperature_when_reasoning_is_enabled() {
     config.reasoning_enabled = Some(true);
     config.reasoning_level = Some("high".to_string());
 
-    let payload = build_openai_chat_payload(&config, "hello", true);
+    let payload = build_openai_chat_payload(
+        OpenAiChatPayloadConfig {
+            strategy: config.strategy,
+            model: &config.model,
+            temperature: config.temperature,
+            reasoning_enabled: config.reasoning_enabled.unwrap_or(false),
+            reasoning_level: config.reasoning_level.as_deref(),
+        },
+        "hello",
+        true,
+    );
 
     assert_eq!(payload["model"], "test-model");
     assert_eq!(payload["stream"], true);

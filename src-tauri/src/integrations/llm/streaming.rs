@@ -9,135 +9,6 @@ use rig_core::providers::{anthropic, copilot, gemini, ollama};
 use rig_core::streaming::StreamedAssistantContent;
 use serde_json::{Value, json};
 
-/// Keeps the progressively built response text and emits both the full text and
-/// the latest delta, because downstream listeners render partial output while
-/// also needing the complete accumulated value for replacement-style updates.
-pub(crate) struct StreamTextAccumulator<'a, EmitFn>
-where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
-{
-    text: String,
-    emitted_any: bool,
-    emit_delta: &'a mut EmitFn,
-}
-
-impl<'a, EmitFn> StreamTextAccumulator<'a, EmitFn>
-where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
-{
-    pub(crate) fn new(emit_delta: &'a mut EmitFn) -> Self {
-        Self {
-            text: String::new(),
-            emitted_any: false,
-            emit_delta,
-        }
-    }
-
-    pub(crate) fn push(&mut self, delta: &str) -> Result<(), String> {
-        if delta.is_empty() {
-            return Ok(());
-        }
-
-        self.text.push_str(delta);
-        self.emitted_any = true;
-        (self.emit_delta)(&self.text, delta)
-    }
-
-    pub(crate) fn text(&self) -> String {
-        self.text.clone()
-    }
-}
-
-/// Reassembles transport chunks into complete lines before higher-level
-/// streaming parsers inspect them. HTTP/SSE providers can split a single line
-/// across arbitrary network chunks, so chunk boundaries are not message
-/// boundaries.
-#[derive(Default)]
-pub(crate) struct StreamingLineBuffer {
-    buffer: String,
-}
-
-impl StreamingLineBuffer {
-    pub(crate) fn process(&mut self, chunk: &str) -> Vec<String> {
-        if chunk.find('\n').is_none() {
-            // Keep buffering until we see a line terminator. Partial lines are
-            // not safe to parse yet.
-            self.buffer.push_str(chunk);
-            return Vec::new();
-        }
-
-        self.buffer.push_str(chunk);
-        let mut lines = self
-            .buffer
-            .split('\n')
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>();
-        self.buffer = lines.pop().unwrap_or_default();
-        lines
-    }
-
-    pub(crate) fn flush(&mut self) -> Vec<String> {
-        if self.buffer.trim().is_empty() {
-            self.buffer.clear();
-            return Vec::new();
-        }
-
-        let line = self.buffer.clone();
-        self.buffer.clear();
-        vec![line]
-    }
-}
-
-/// Collects SSE `data:` lines and emits one logical event per blank-line
-/// separator. This keeps us aligned with SSE framing instead of assuming each
-/// incoming chunk is already a complete event.
-#[derive(Default)]
-struct SseEventBuffer {
-    line_buffer: StreamingLineBuffer,
-    data_lines: Vec<String>,
-}
-
-impl SseEventBuffer {
-    fn process(&mut self, chunk: &str) -> Vec<String> {
-        let mut events = Vec::new();
-        for line in self.line_buffer.process(chunk) {
-            self.process_line(&line, &mut events);
-        }
-        events
-    }
-
-    fn flush(&mut self) -> Vec<String> {
-        let mut events = Vec::new();
-        for line in self.line_buffer.flush() {
-            self.process_line(&line, &mut events);
-        }
-
-        if !self.data_lines.is_empty() {
-            events.push(self.data_lines.join("\n"));
-            self.data_lines.clear();
-        }
-
-        events
-    }
-
-    fn process_line(&mut self, raw_line: &str, events: &mut Vec<String>) {
-        let line = raw_line.trim_end_matches('\r');
-        if line.is_empty() {
-            if !self.data_lines.is_empty() {
-                events.push(self.data_lines.join("\n"));
-                self.data_lines.clear();
-            }
-            return;
-        }
-
-        if let Some(rest) = line.strip_prefix("data:") {
-            self.data_lines.push(rest.trim_start().to_string());
-        }
-        // Ignore other SSE fields such as `event:` or `id:` because current
-        // provider integrations only consume the payload carried in `data:`.
-    }
-}
-
 async fn stream_rig_completion_model<M, EmitFn>(
     model: M,
     input: &str,
@@ -164,7 +35,7 @@ where
         }
     }
 
-    let text = if accumulator.text.is_empty() {
+    let text = if accumulator.is_empty() {
         extract_text_response(&stream.choice)?
     } else {
         accumulator.text()
@@ -179,66 +50,24 @@ where
     })
 }
 
-fn build_openai_stream_url(config: &LlmConfig) -> String {
-    match config.strategy {
-        LlmProviderStrategy::AzureOpenAi => {
-            let version = config.api_version.as_deref().unwrap_or("2024-10-21");
-            format!(
-                "{}/openai/deployments/{}/chat/completions?api-version={}",
-                config.base_url.trim_end_matches('/'),
-                config.model.trim(),
-                version
-            )
-        }
-        LlmProviderStrategy::Perplexity => join_url(
-            &config.base_url,
-            config.api_path.as_deref().unwrap_or("/chat/completions"),
-        ),
-        _ => join_url(
-            &config.base_url,
-            config.api_path.as_deref().unwrap_or("/v1/chat/completions"),
-        ),
+fn openai_stream_url_config(config: &LlmConfig) -> OpenAiStreamUrlConfig<'_> {
+    OpenAiStreamUrlConfig {
+        strategy: config.strategy,
+        base_url: &config.base_url,
+        model: &config.model,
+        api_path: config.api_path.as_deref(),
+        api_version: config.api_version.as_deref(),
     }
 }
 
-pub(crate) fn build_openai_chat_payload(config: &LlmConfig, input: &str, stream: bool) -> Value {
-    let mut payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
-        json!({
-            "messages": [
-                {
-                    "role": "user",
-                    "content": input,
-                }
-            ],
-        })
-    } else {
-        json!({
-            "model": config.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": input,
-                }
-            ],
-        })
-    };
-
-    if stream {
-        payload["stream"] = json!(true);
-        if config.strategy != LlmProviderStrategy::AzureOpenAi {
-            payload["stream_options"] = json!({"include_usage": true});
-        }
+fn openai_chat_payload_config(config: &LlmConfig) -> OpenAiChatPayloadConfig<'_> {
+    OpenAiChatPayloadConfig {
+        strategy: config.strategy,
+        model: &config.model,
+        temperature: config.temperature,
+        reasoning_enabled: config.reasoning_enabled.unwrap_or(false),
+        reasoning_level: config.reasoning_level.as_deref(),
     }
-
-    payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
-
-    if config.reasoning_enabled.unwrap_or(false)
-        && let Some(ref level) = config.reasoning_level
-    {
-        payload["reasoning_effort"] = json!(level);
-    }
-
-    payload
 }
 
 async fn stream_openai_chat_completion<EmitFn>(
@@ -250,9 +79,9 @@ where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
     let mut last_usage: Option<TokenUsage> = None;
-    let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
+    let url = LlmApiUrl::parse(&build_openai_stream_url(openai_stream_url_config(config)))?;
     let client = url.client(config.timeout_seconds)?;
-    let payload = build_openai_chat_payload(config, input, true);
+    let payload = build_openai_chat_payload(openai_chat_payload_config(config), input, true);
 
     let mut request = client
         .post(url.reqwest_url())
@@ -334,7 +163,7 @@ where
         }
     }
 
-    if accumulator.text.is_empty() {
+    if accumulator.is_empty() {
         return Err("LLM response did not contain text output".to_string());
     }
 
@@ -685,7 +514,7 @@ where
         }
     }
 
-    if accumulator.text.is_empty() {
+    if accumulator.is_empty() {
         return Err("LLM response did not contain text output".to_string());
     }
 
@@ -817,7 +646,7 @@ where
 {
     let mut accumulator = StreamTextAccumulator::new(emit_delta);
     let stream_result = try_stream_text(&request, &mut accumulator).await;
-    let emitted_any = accumulator.emitted_any;
+    let emitted_any = accumulator.emitted_any();
     drop(accumulator);
 
     match stream_result {
@@ -846,7 +675,7 @@ pub(crate) async fn generate_with_openai_chat_api(
     }
     headers.extend(extra_headers);
 
-    let payload = build_openai_chat_payload(config, input, false);
+    let payload = build_openai_chat_payload(openai_chat_payload_config(config), input, false);
 
     let response = post_json_request(url, headers, payload, config.timeout_seconds).await?;
     Ok(StandardLlmResponse {
