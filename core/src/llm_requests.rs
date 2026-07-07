@@ -4,6 +4,7 @@ use crate::llm_tasks::{
 };
 use crate::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 use crate::transcript::TranscriptSegment;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "specta")]
@@ -64,6 +65,88 @@ impl<'de> Deserialize<'de> for LlmConfig {
             timeout_seconds: raw.timeout_seconds,
         })
     }
+}
+
+pub fn validate_llm_api_host(base_url: &str) -> Result<(), String> {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return Err("LLM API host cannot be empty".to_string());
+    }
+
+    let url = Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))?;
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback_host(&url) => Ok(()),
+        "http" => Err("LLM API host must use https:// unless it points to localhost.".to_string()),
+        _ => Err("LLM API host must start with https:// or localhost http://.".to_string()),
+    }
+}
+
+fn is_loopback_host(url: &Url) -> bool {
+    url.host_str()
+        .map(|host| {
+            let normalized = host.trim_matches(['[', ']']).to_ascii_lowercase();
+            normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
+        })
+        .unwrap_or(false)
+}
+
+pub fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
+    if config.model.trim().is_empty() {
+        return Err("Model name cannot be empty".to_string());
+    }
+
+    validate_llm_api_host(&config.base_url)
+}
+
+pub fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {
+    if task_id.trim().is_empty() {
+        return Err("Task ID cannot be empty".to_string());
+    }
+
+    validate_llm_config(config)
+}
+
+pub fn validate_llm_generate_request(request: &LlmGenerateRequest) -> Result<(), String> {
+    validate_llm_config(&request.config)?;
+
+    if request.input.trim().is_empty() {
+        return Err("Input cannot be empty".to_string());
+    }
+
+    Ok(())
+}
+
+pub fn validate_polish_segments_request(request: &PolishSegmentsRequest) -> Result<(), String> {
+    validate_task_request(&request.task_id, &request.config)?;
+
+    if matches!(
+        request.config.strategy,
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+    ) {
+        return Err("Google Translate does not support transcript polishing".to_string());
+    }
+
+    Ok(())
+}
+
+pub fn validate_translate_segments_request(
+    request: &TranslateSegmentsRequest,
+) -> Result<(), String> {
+    validate_task_request(&request.task_id, &request.config)?;
+
+    if request.target_language.trim().is_empty() {
+        return Err("Target language cannot be empty".to_string());
+    }
+
+    Ok(())
+}
+
+pub fn validate_summarize_transcript_request(
+    request: &SummarizeTranscriptRequest,
+) -> Result<(), String> {
+    validate_task_request(&request.task_id, &request.config)?;
+    crate::llm_tasks::validate_summary_strategy(request.config.strategy)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

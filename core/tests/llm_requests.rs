@@ -3,6 +3,9 @@ use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm_requests::{
     HistorySummaryPayload, LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest,
     TranscriptLlmJobRequest, TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
+    validate_llm_config, validate_llm_generate_request, validate_polish_segments_request,
+    validate_summarize_transcript_request, validate_task_request,
+    validate_translate_segments_request,
 };
 use sona_core::llm_tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
@@ -77,6 +80,116 @@ fn llm_config_accepts_custom_provider_with_explicit_strategy() {
     );
     assert_eq!(config.strategy, LlmProviderStrategy::OpenAiResponses);
     assert_eq!(config.api_path.as_deref(), Some("/v1/responses"));
+}
+
+#[test]
+fn llm_config_validation_rejects_remote_http_hosts() {
+    let mut config = sample_config();
+    config.base_url = "http://api.example.com/v1".to_string();
+
+    let error = validate_llm_config(&config).unwrap_err();
+
+    assert_eq!(
+        error,
+        "LLM API host must use https:// unless it points to localhost."
+    );
+}
+
+#[test]
+fn llm_config_validation_accepts_https_and_loopback_http_hosts() {
+    for base_url in [
+        "https://api.example.com/v1",
+        "http://localhost:1234/v1",
+        "http://127.0.0.1:11434",
+        "http://[::1]:11434",
+    ] {
+        let mut config = sample_config();
+        config.base_url = base_url.to_string();
+
+        validate_llm_config(&config).unwrap_or_else(|error| {
+            panic!("{base_url} should be accepted but failed with {error}")
+        });
+    }
+}
+
+#[test]
+fn task_request_validation_requires_a_task_id() {
+    let error = validate_task_request("  ", &sample_config()).unwrap_err();
+
+    assert_eq!(error, "Task ID cannot be empty");
+}
+
+#[test]
+fn generate_request_validation_requires_input_text() {
+    let error = validate_llm_generate_request(&sona_core::llm_requests::LlmGenerateRequest {
+        config: sample_config(),
+        input: "  ".to_string(),
+        source: None,
+    })
+    .unwrap_err();
+
+    assert_eq!(error, "Input cannot be empty");
+}
+
+#[test]
+fn polish_request_validation_rejects_google_translate_strategy() {
+    let mut config = sample_config();
+    config.strategy = LlmProviderStrategy::GoogleTranslateFree;
+    let request = PolishSegmentsRequest {
+        task_id: "task-polish".to_string(),
+        config,
+        segments: vec![],
+        chunk_size: None,
+        context: None,
+        keywords: None,
+    };
+
+    let error = validate_polish_segments_request(&request).unwrap_err();
+
+    assert_eq!(
+        error,
+        "Google Translate does not support transcript polishing"
+    );
+}
+
+#[test]
+fn translate_request_validation_requires_target_language() {
+    let request = TranslateSegmentsRequest {
+        task_id: "task-translate".to_string(),
+        config: sample_config(),
+        segments: vec![],
+        chunk_size: None,
+        target_language: "  ".to_string(),
+        target_language_name: None,
+    };
+
+    let error = validate_translate_segments_request(&request).unwrap_err();
+
+    assert_eq!(error, "Target language cannot be empty");
+}
+
+#[test]
+fn summary_request_validation_rejects_google_translate_strategy() {
+    let mut config = sample_config();
+    config.strategy = LlmProviderStrategy::GoogleTranslate;
+    let request = SummarizeTranscriptRequest {
+        task_id: "task-summary".to_string(),
+        config,
+        template: SummaryTemplateConfig {
+            id: "meeting".to_string(),
+            name: "Meeting".to_string(),
+            instructions: "Summarize decisions.".to_string(),
+        },
+        segments: vec![],
+        chunk_char_budget: None,
+    };
+
+    let error = validate_summarize_transcript_request(&request).unwrap_err();
+
+    assert_eq!(
+        error,
+        "Google Translate does not support transcript summaries"
+    );
 }
 
 #[test]

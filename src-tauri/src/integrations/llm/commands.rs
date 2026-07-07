@@ -119,11 +119,7 @@ pub(crate) async fn generate_llm_text_command(
     app: AppHandle,
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
-    validate_llm_config(&request.config)?;
-
-    if request.input.trim().is_empty() {
-        return Err("Input cannot be empty".to_string());
-    }
+    validate_llm_generate_request(&request)?;
 
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
     let usage = UsageRecorder::new(app, request.config.clone(), category);
@@ -147,14 +143,7 @@ pub(super) async fn polish_transcript_segments_with_observer<F>(
 where
     F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
 {
-    validate_task_request(&request.task_id, &request.config)?;
-
-    if matches!(
-        request.config.strategy,
-        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
-    ) {
-        return Err("Google Translate does not support transcript polishing".to_string());
-    }
+    validate_polish_segments_request(&request)?;
 
     let config = request.config.clone();
     let context = request.context.clone();
@@ -214,11 +203,7 @@ pub(super) async fn translate_transcript_segments_with_observer<F>(
 where
     F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
 {
-    validate_task_request(&request.task_id, &request.config)?;
-
-    if request.target_language.trim().is_empty() {
-        return Err("Target language cannot be empty".to_string());
-    }
+    validate_translate_segments_request(&request)?;
 
     let config = request.config.clone();
     let target_language = request.target_language.clone();
@@ -462,8 +447,7 @@ pub(crate) async fn summarize_transcript_command(
     app: AppHandle,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
-    validate_task_request(&request.task_id, &request.config)?;
-    validate_summary_strategy(request.config.strategy)?;
+    validate_summarize_transcript_request(&request)?;
 
     let task_id = request.task_id.clone();
     let streamed_task_id = task_id.clone();
