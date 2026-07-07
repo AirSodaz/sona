@@ -1,4 +1,4 @@
-use crate::core::database::DatabaseError;
+use sona_sqlite::DatabaseError;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -20,7 +20,7 @@ where
         + Send
         + 'static,
 {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
         task(crate::repositories::project::SqliteProjectRepository::new(
             db,

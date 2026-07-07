@@ -54,7 +54,7 @@ pub async fn download_file<R: tauri::Runtime>(
     id: String,
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
-    use crate::core::downloads::{
+    use sona_core::downloads::{
         complete_download_file, download_file as core_download_file, temporary_download_path,
     };
     use tauri::Emitter;

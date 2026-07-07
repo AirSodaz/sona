@@ -87,8 +87,8 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::integrations::asr::
 fn sample_llm_config(base_url: &str) -> LlmConfig {
     LlmConfig {
         timeout_seconds: None,
-        provider: crate::core::domain::LlmProvider::Builtin(
-            crate::core::domain::BuiltinLlmProvider::OpenAi,
+        provider: sona_core::domain::LlmProvider::Builtin(
+            sona_core::domain::BuiltinLlmProvider::OpenAi,
         ),
         strategy: LlmProviderStrategy::OpenAiCompatible,
         base_url: base_url.to_string(),
@@ -147,8 +147,8 @@ fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
 #[tokio::test]
 async fn list_llm_models_rejects_remote_http_before_requesting_models() {
     let error = list_llm_models_command(LlmModelsRequest {
-        provider: crate::core::domain::LlmProvider::Builtin(
-            crate::core::domain::BuiltinLlmProvider::OpenAi,
+        provider: sona_core::domain::LlmProvider::Builtin(
+            sona_core::domain::BuiltinLlmProvider::OpenAi,
         ),
         strategy: Some(LlmProviderStrategy::OpenAiCompatible),
         base_url: "http://api.example.com/v1".to_string(),
@@ -452,7 +452,7 @@ fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
 
     assert_eq!(
         config.provider,
-        LlmProvider::Builtin(crate::core::domain::BuiltinLlmProvider::Gemini)
+        LlmProvider::Builtin(sona_core::domain::BuiltinLlmProvider::Gemini)
     );
     assert_eq!(config.strategy, LlmProviderStrategy::Gemini);
 }

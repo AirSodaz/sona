@@ -77,7 +77,7 @@ impl UsageRecorder {
         use tauri::Manager;
         let db = std::sync::Arc::clone(
             self.app
-                .state::<std::sync::Arc<crate::core::database::Database>>()
+                .state::<std::sync::Arc<sona_sqlite::Database>>()
                 .inner(),
         );
         if let Err(error) = crate::integrations::llm_usage_sqlite::record_usage(

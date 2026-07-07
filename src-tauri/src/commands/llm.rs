@@ -60,13 +60,13 @@ pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     crate::integrations::llm_usage_sqlite::read_raw(db.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     crate::integrations::llm_usage_sqlite::replace_raw(db.as_ref(), &content)
         .map_err(|e| e.to_string())
 }

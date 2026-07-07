@@ -1,1 +1,1 @@
-pub use crate::core::project::*;
+pub use sona_core::project::*;

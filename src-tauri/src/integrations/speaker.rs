@@ -2,13 +2,13 @@ use crate::integrations::asr::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
 
-pub use crate::core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
-pub use crate::core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
+pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
+pub use sona_core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 
-use crate::core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use crate::platform::paths::{PathKind, PathProvider};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use sona_core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
 use sona_local_asr::speaker::SpeakerDiarizationSegment;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -1176,7 +1176,7 @@ fn speaker_assignments_equal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::text_alignment::lex_text_units;
+    use sona_core::text_alignment::lex_text_units;
 
     fn speaker(id: &str, label: &str, kind: &str, score: Option<f32>) -> SpeakerTag {
         SpeakerTag {

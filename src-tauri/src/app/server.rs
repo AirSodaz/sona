@@ -32,8 +32,8 @@ use sona_core::transcribe_runtime::{
     OfflineTranscribeOptions, resolve_offline_transcribe_plan_with_install_checker,
 };
 
-use crate::core::database::{Database, DatabaseError};
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use sona_sqlite::{Database, DatabaseError};
 
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
@@ -1442,13 +1442,13 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::config::sqlite_store::SqliteConfigStore;
-    use crate::core::database::Database;
     use crate::platform::paths::{MockPathProvider, PathKind};
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
+    use sona_sqlite::Database;
+    use sona_sqlite::config_store::SqliteConfigStore;
     use std::collections::HashMap as StdHashMap;
     use std::fs;
     use tower::ServiceExt;

@@ -3,10 +3,10 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::State;
 
-use crate::core::dashboard::DashboardService;
 use crate::repositories::analytics::SqliteAnalyticsRepository;
 use crate::repositories::history::SqliteHistoryStore;
 use crate::repositories::project::SqliteProjectRepository;
+use sona_core::dashboard::DashboardService;
 
 pub type AppDashboardService =
     DashboardService<SqliteHistoryStore, SqliteProjectRepository, SqliteAnalyticsRepository>;

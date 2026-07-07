@@ -1,10 +1,10 @@
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::storage_usage::{
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use sona_sqlite::storage_usage::{
     StorageUsageSnapshot, WebviewBrowsingDataClearResult, build_webview_clear_result,
     collect_storage_usage_snapshot, observable_webview_cache_bytes,
 };
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 
 #[tauri::command]
 pub async fn storage_get_usage_snapshot<R: Runtime>(
@@ -12,10 +12,7 @@ pub async fn storage_get_usage_snapshot<R: Runtime>(
 ) -> Result<StorageUsageSnapshot, String> {
     let app_local_data_dir =
         TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = std::sync::Arc::clone(
-        app.state::<std::sync::Arc<crate::core::database::Database>>()
-            .inner(),
-    );
+    let db = std::sync::Arc::clone(app.state::<std::sync::Arc<sona_sqlite::Database>>().inner());
 
     tauri::async_runtime::spawn_blocking(move || {
         collect_storage_usage_snapshot(&app_local_data_dir, db.as_ref())

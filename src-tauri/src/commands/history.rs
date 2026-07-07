@@ -3,8 +3,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::core::database::Database;
-use crate::core::history_store::{HistoryStore, HistoryStoreError};
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use crate::repositories::history::SqliteHistoryStore;
@@ -22,6 +20,8 @@ use crate::repositories::history::{
     PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_sqlite::Database;
 
 async fn run_history_file_task_inner<T, F>(
     app_local_data_dir: PathBuf,

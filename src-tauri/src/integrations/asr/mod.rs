@@ -23,10 +23,6 @@ fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
-pub use crate::core::asr_metrics::{
-    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
-};
-pub use crate::core::model_config::ModelFileConfig;
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
@@ -36,6 +32,10 @@ pub(crate) use model_config::{
     decode_offline_samples, load_vad, reset_vad, vad_detected,
 };
 pub use postprocess::TranscriptPostprocessor;
+pub use sona_core::asr_metrics::{
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+};
+pub use sona_core::model_config::ModelFileConfig;
 pub(crate) use state::ModelConfigKey;
 pub use state::{AsrState, RecognizerPool};
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};

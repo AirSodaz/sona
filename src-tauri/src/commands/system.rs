@@ -2,14 +2,14 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
-use crate::core::database::DatabaseError;
 use crate::platform::paths::{PathProvider, TauriPathProvider};
+use sona_sqlite::DatabaseError;
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
-use crate::core::task_ledger::types::{
+use sona_core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
 };
-use crate::core::task_ledger_sqlite::SqliteLedgerRepository;
+use sona_sqlite::task_ledger::SqliteLedgerRepository;
 
 async fn run_task_ledger_repository_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
@@ -17,7 +17,7 @@ where
     T: Send + 'static,
     F: FnOnce(SqliteLedgerRepository) -> Result<T, DatabaseError> + Send + 'static,
 {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
         task(SqliteLedgerRepository::new(db)).map_err(|e| e.to_string())
     })
@@ -375,30 +375,30 @@ pub async fn import_speaker_profile_sample(
 #[tauri::command]
 pub fn build_speaker_review_snapshot(
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
-    active_filter: crate::core::speaker_review::SpeakerReviewFilter,
-) -> crate::core::speaker_review::SpeakerReviewSnapshot {
-    crate::core::speaker_review::build_speaker_review_snapshot(segments, active_filter)
+    active_filter: sona_core::speaker_review::SpeakerReviewFilter,
+) -> sona_core::speaker_review::SpeakerReviewSnapshot {
+    sona_core::speaker_review::build_speaker_review_snapshot(segments, active_filter)
 }
 
 #[tauri::command]
 pub async fn apply_speaker_profile_to_group(
-    request: crate::core::speaker_correction::ApplySpeakerProfileToGroupRequest,
-) -> Result<crate::core::speaker_correction::SpeakerCorrectionResponse, String> {
-    crate::core::speaker_correction::apply_speaker_profile_to_group(request).await
+    request: sona_core::speaker_correction::ApplySpeakerProfileToGroupRequest,
+) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::speaker_correction::apply_speaker_profile_to_group(request).await
 }
 
 #[tauri::command]
 pub async fn reset_speaker_group_to_anonymous(
-    request: crate::core::speaker_correction::SpeakerGroupRequest,
-) -> Result<crate::core::speaker_correction::SpeakerCorrectionResponse, String> {
-    crate::core::speaker_correction::reset_speaker_group_to_anonymous(request).await
+    request: sona_core::speaker_correction::SpeakerGroupRequest,
+) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::speaker_correction::reset_speaker_group_to_anonymous(request).await
 }
 
 #[tauri::command]
 pub async fn confirm_speaker_group_review(
-    request: crate::core::speaker_correction::SpeakerGroupRequest,
-) -> Result<crate::core::speaker_correction::SpeakerCorrectionResponse, String> {
-    crate::core::speaker_correction::confirm_speaker_group_review(request).await
+    request: sona_core::speaker_correction::SpeakerGroupRequest,
+) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::speaker_correction::confirm_speaker_group_review(request).await
 }
 
 // Wrapped API server commands
@@ -454,11 +454,9 @@ pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String
 
 fn sqlite_config_store<R: Runtime>(
     app: &AppHandle<R>,
-) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
-    Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
-        db,
-    ))
+) -> Result<sona_sqlite::config_store::SqliteConfigStore, String> {
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
+    Ok(sona_sqlite::config_store::SqliteConfigStore::new(db))
 }
 
 #[tauri::command]
@@ -501,11 +499,11 @@ pub fn migrate_app_config(
     saved_config: Option<Value>,
     legacy_config: Option<Value>,
     default_rule_set_name: String,
-) -> crate::core::config::MigrationResult {
-    crate::core::config::migrate_app_config(saved_config, legacy_config, default_rule_set_name)
+) -> sona_core::config::MigrationResult {
+    sona_core::config::migrate_app_config(saved_config, legacy_config, default_rule_set_name)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn resolve_effective_config(global_config: Value, project: Option<Value>) -> Value {
-    crate::core::config::resolve_effective_config(global_config, project)
+    sona_core::config::resolve_effective_config(global_config, project)
 }

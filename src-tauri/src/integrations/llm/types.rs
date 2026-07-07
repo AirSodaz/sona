@@ -39,7 +39,7 @@ pub enum LlmProviderStrategy {
 
 impl LlmProviderStrategy {
     pub(crate) fn from_provider(provider: &LlmProvider) -> Self {
-        use crate::core::domain::{BuiltinLlmProvider, LlmProvider};
+        use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
         match provider {
             LlmProvider::Custom(_) => Self::OpenAiCompatible,
             LlmProvider::Builtin(b) => match b {
@@ -103,7 +103,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
     }
 }
 
-pub use crate::core::domain::LlmProvider;
+pub use sona_core::domain::LlmProvider;
 pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

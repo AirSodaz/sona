@@ -288,7 +288,6 @@ test('preset model catalog data is owned by core and reused by frontend', () => 
 });
 
 test('desktop platform adapters own Tauri path event diagnostics and preset model bridges', () => {
-  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
   const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const platformPaths = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'paths.rs'), 'utf8');
   const platformEvent = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'event.rs'), 'utf8');
@@ -305,10 +304,6 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(desktopPlatform, /^pub mod event;/mu);
   assert.match(desktopPlatform, /^pub mod preset_models;/mu);
   assert.match(desktopPlatform, /^pub mod diagnostics;/mu);
-  assert.doesNotMatch(desktopCore, /^pub mod paths;/mu);
-  assert.doesNotMatch(desktopCore, /^pub mod event;/mu);
-  assert.doesNotMatch(desktopCore, /^pub mod preset_models;/mu);
-  assert.doesNotMatch(desktopCore, /^pub mod diagnostics;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'paths.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'event.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'preset_models.rs')), false);
@@ -323,12 +318,26 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
 });
 
+test('desktop tauri crate imports core crates directly without a local core shim', () => {
+  const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+    .map((filePath) => fs.readFileSync(filePath, 'utf8'))
+    .join('\n');
+
+  assert.doesNotMatch(desktopLib, /^pub mod core;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core')), false);
+  assert.doesNotMatch(desktopRust, /crate::core::/u);
+  assert.match(desktopRust, /sona_core::/u);
+  assert.match(desktopRust, /sona_sqlite::/u);
+});
+
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
   const coreDefaults = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'defaults.rs'), 'utf8');
   const coreMigration = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'migration.rs'), 'utf8');
-  const desktopConfig = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'mod.rs'), 'utf8');
+  const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const desktopServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
   const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const llmProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'llm', 'providers.ts'), 'utf8');
 
@@ -340,8 +349,9 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(coreConfig, /pub fn migrate_app_config/u);
   assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
   assert.match(coreMigration, /crate::llm_providers::find_llm_provider_by_id_or_alias/u);
-  assert.match(desktopConfig, /pub use sona_core::config::\{/u);
-  assert.match(desktopConfig, /pub use sona_sqlite::config_store as sqlite_store;/u);
+  assert.match(desktopSystemCommand, /sona_core::config::migrate_app_config/u);
+  assert.match(desktopServer, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'defaults.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'migration.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'types.rs')), false);
@@ -354,7 +364,7 @@ test('app config migration and LLM provider manifest are owned by core', () => {
 test('SQLite database handle and schema are owned by sqlite adapter', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
-  const desktopDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'mod.rs'), 'utf8');
+  const desktopSetup = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
   const sqliteCargoPath = path.join(repoRoot, 'adapters', 'sqlite', 'Cargo.toml');
   const sqliteLibPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs');
   const sqliteMigrationPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs');
@@ -366,7 +376,9 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(sqliteMigrationPath));
   assert.match(sqliteLib, /^pub mod legacy_migration;/mu);
   assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/adapters\/sqlite"/u);
-  assert.match(desktopDatabase, /pub use sona_sqlite::\{[\s\S]*legacy_migration[\s\S]*\};/u);
+  assert.match(desktopSetup, /sona_sqlite::Database::open/u);
+  assert.match(desktopSetup, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database')), false);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'legacy_migration.rs')),
     false,
@@ -374,16 +386,15 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'error.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'ports.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'schema.rs')), false);
-  assert.doesNotMatch(desktopDatabase, /pub mod legacy_migration;/u);
-  assert.doesNotMatch(desktopDatabase, /rusqlite::Connection/u);
-  assert.doesNotMatch(desktopDatabase, /struct ConnectionPool/u);
-  assert.doesNotMatch(desktopDatabase, /pub struct Database/u);
+  assert.doesNotMatch(desktopSetup, /crate::core::database/u);
+  assert.doesNotMatch(desktopSetup, /rusqlite::Connection/u);
+  assert.doesNotMatch(desktopSetup, /struct ConnectionPool/u);
+  assert.doesNotMatch(desktopSetup, /pub struct Database/u);
 });
 
 test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
-  const desktopConfig = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'mod.rs'), 'utf8');
+  const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'task_ledger.rs')));
@@ -391,8 +402,8 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   assert.match(sqliteLib, /^pub mod task_ledger;/mu);
   assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
   assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
-  assert.match(desktopConfig, /pub use sona_sqlite::config_store as sqlite_store;/u);
-  assert.match(desktopCore, /pub use sona_sqlite::task_ledger as task_ledger_sqlite;/u);
+  assert.match(desktopSystemCommand, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'sqlite_store.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
 });
@@ -436,7 +447,6 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_runtime.rs'),
     'utf8',
   );
-  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
   const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
   const desktopCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'automation.rs'), 'utf8');
 
@@ -452,7 +462,6 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.match(desktopLib, /^pub mod platform;/mu);
   assert.match(desktopLib, /crate::platform::automation_runtime::AutomationRuntimeState/u);
   assert.match(desktopCommands, /crate::platform::automation_runtime::\{/u);
-  assert.doesNotMatch(desktopCore, /^pub mod automation;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'automation.rs')), false);
   assert.doesNotMatch(desktopPlatformRuntime, /const SUPPORTED_MEDIA_EXTENSIONS/u);
   assert.doesNotMatch(desktopPlatformRuntime, /pub struct AutomationRuntimeRuleConfig/u);
@@ -474,7 +483,7 @@ test('SQLite project repository is owned by sqlite adapter', () => {
   assert.match(sqliteLib, /^pub mod project;/mu);
   assert.match(sqliteLib, /^pub use project::SqliteProjectRepository;/mu);
   assert.match(desktopProject, /pub use sona_sqlite::project as sqlite_repository;/u);
-  assert.match(desktopProjectTypes, /pub use crate::core::project::\*;/u);
+  assert.match(desktopProjectTypes, /pub use sona_core::project::\*;/u);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'sqlite_repository.rs')),
     false,
@@ -500,22 +509,19 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.match(tauriLlmTypes, /pub use sona_core::llm_usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
   assert.match(desktopAnalytics, /pub use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
   assert.doesNotMatch(desktopAnalytics, /struct AnalyticsRepositoryImpl/u);
-  assert.doesNotMatch(desktopAnalytics, /impl crate::core::dashboard::ports::AnalyticsRepository/u);
+  assert.doesNotMatch(desktopAnalytics, /impl sona_core::dashboard::ports::AnalyticsRepository/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs')), false);
 });
 
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'storage_usage.rs')));
   assert.match(sqliteLib, /^pub mod storage_usage;/mu);
-  assert.match(desktopCore, /pub use sona_sqlite::storage_usage;/u);
-  assert.match(desktopStorageCommand, /crate::core::storage_usage::\{/u);
+  assert.match(desktopStorageCommand, /sona_sqlite::storage_usage::\{/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'storage_usage.rs')), false);
-  assert.doesNotMatch(desktopCore, /^pub mod storage_usage;/mu);
 });
 
 test('history filesystem helpers are owned by core history module', () => {
@@ -732,7 +738,6 @@ test('desktop hardware module reuses local ASR adapter GPU planning', () => {
 });
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
-  const coreMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
   const speakerRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'speaker.rs'), 'utf8');
   const runtimeStatusRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'), 'utf8');
@@ -742,7 +747,6 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   );
 
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'pipeline.rs')), false);
-  assert.doesNotMatch(coreMod, /^pub mod pipeline;/mu);
   assert.match(batchRs, /sona_local_asr::audio::extract_and_resample_audio/u);
   assert.match(batchRs, /sona_local_asr::audio::save_wav_file/u);
   assert.match(speakerRs, /sona_local_asr::audio::extract_and_resample_audio/u);

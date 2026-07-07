@@ -1,10 +1,10 @@
-use crate::core::database::DatabaseError;
 use serde_json::Value;
 use sona_core::automation::{
     AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleValidationResult,
     is_virtual_automation_project, normalize_automation_path, resolve_batch_offline_model_path,
     validate_rule_activation,
 };
+use sona_sqlite::DatabaseError;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -80,7 +80,7 @@ where
         + Send
         + 'static,
 {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
         task(crate::repositories::automation::SqliteAutomationRepository::new(db))
     })

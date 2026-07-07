@@ -12,11 +12,9 @@ use crate::repositories::project::{
 
 fn sqlite_config_store<R: Runtime>(
     app: &AppHandle<R>,
-) -> Result<crate::core::config::sqlite_store::SqliteConfigStore, String> {
-    let db = Arc::clone(app.state::<Arc<crate::core::database::Database>>().inner());
-    Ok(crate::core::config::sqlite_store::SqliteConfigStore::new(
-        db,
-    ))
+) -> Result<sona_sqlite::config_store::SqliteConfigStore, String> {
+    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
+    Ok(sona_sqlite::config_store::SqliteConfigStore::new(db))
 }
 
 fn active_project_id_from_value(value: &Value) -> Option<String> {

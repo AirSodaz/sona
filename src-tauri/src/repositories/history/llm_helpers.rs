@@ -4,14 +4,14 @@ use std::sync::Arc;
 use serde_json::{Value, to_value};
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::database::Database;
-use crate::core::history_store::{HistoryStore, HistoryStoreError};
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::paths::PathProvider;
 use crate::repositories::history::sqlite_store::SqliteHistoryStore;
 use crate::repositories::history::{
     HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
+use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_sqlite::Database;
 
 pub(crate) async fn run_llm_db_task<T, F>(
     app_local_data_dir: PathBuf,
@@ -101,12 +101,12 @@ pub(crate) fn save_llm_summary_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
     use crate::repositories::history::sqlite_store::SqliteHistoryStore;
     use crate::repositories::history::{
         HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest,
     };
     use serde_json::json;
+    use sona_sqlite::Database;
     use tempfile::tempdir;
 
     fn segment(id: &str, text: &str) -> TranscriptSegment {

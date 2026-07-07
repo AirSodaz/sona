@@ -1,9 +1,6 @@
 pub mod integrations {
     pub use tauri_appsona_lib::integrations::asr_providers;
 }
-pub mod core {
-    pub use tauri_appsona_lib::core::*;
-}
 use tauri_appsona_lib::repositories::automation as automation_repository;
 
 use automation_repository::{

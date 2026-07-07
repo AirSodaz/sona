@@ -13,14 +13,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to get app_local_data_dir");
 
     // Initialize the SQLite database
-    let db = Arc::new(crate::core::database::Database::open(&app_local_data_dir)?);
-    crate::core::database::Database::set_global(Arc::clone(&db))?;
+    let db = Arc::new(sona_sqlite::Database::open(&app_local_data_dir)?);
+    sona_sqlite::Database::set_global(Arc::clone(&db))?;
 
     // Migrate legacy JSON data to SQLite
-    let migration_result = crate::core::database::legacy_migration::migrate_legacy_to_sqlite(
-        db.as_ref(),
-        &app_local_data_dir,
-    )?;
+    let migration_result =
+        sona_sqlite::legacy_migration::migrate_legacy_to_sqlite(db.as_ref(), &app_local_data_dir)?;
     if migration_result.migrated {
         log::info!(
             "Migrated legacy data: {} history items, {} projects",
@@ -39,7 +37,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if migration_result.errors.is_empty() {
-            crate::core::database::legacy_migration::move_legacy_domains_to_backup(
+            sona_sqlite::legacy_migration::move_legacy_domains_to_backup(
                 &app_local_data_dir,
                 migration_result.domains,
             )?;

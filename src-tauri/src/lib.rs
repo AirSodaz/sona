@@ -1,6 +1,5 @@
 pub mod app;
 pub mod commands;
-pub mod core;
 pub mod integrations;
 pub mod platform;
 pub mod repositories;
@@ -77,9 +76,9 @@ pub fn run_app() -> Result<(), tauri::Error> {
     #[cfg(debug_assertions)]
     {
         tauri_specta::Builder::<tauri::Wry>::new()
-            .typ::<crate::core::domain::LlmProvider>()
-            .typ::<crate::core::domain::PolishPresetId>()
-            .typ::<crate::core::domain::SummaryTemplateId>()
+            .typ::<sona_core::domain::LlmProvider>()
+            .typ::<sona_core::domain::PolishPresetId>()
+            .typ::<sona_core::domain::SummaryTemplateId>()
             .export(
                 specta_typescript::Typescript::default(),
                 "../src/bindings.ts",

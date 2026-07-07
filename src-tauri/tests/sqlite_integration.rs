@@ -3,9 +3,9 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use tauri_appsona_lib::core::database::Database;
-use tauri_appsona_lib::core::database::legacy_migration::migrate_legacy_to_sqlite;
-use tauri_appsona_lib::core::history_store::HistoryStore;
+use sona_core::history_store::HistoryStore;
+use sona_sqlite::Database;
+use sona_sqlite::legacy_migration::migrate_legacy_to_sqlite;
 use tauri_appsona_lib::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
