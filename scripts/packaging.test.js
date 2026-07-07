@@ -278,6 +278,34 @@ test('core owns ASR runtime error contract reused by desktop', () => {
   assert.match(desktopAsrMod, /pub use sona_core::ports::asr::SherpaError;/u);
 });
 
+test('core owns local batch ASR request contract reused by desktop', () => {
+  const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
+  const desktopAsrTypes = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'types.rs'),
+    'utf8',
+  );
+  const desktopAsrAdapter = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    'utf8',
+  );
+  const desktopBatchProcessor = desktopAsrAdapter.slice(
+    desktopAsrAdapter.indexOf('pub struct LocalSherpaBatchProcessor'),
+  );
+
+  assert.match(coreAsr, /pub struct BatchTranscriptionRequest/u);
+  assert.match(coreAsr, /pub instance_id: Option<String>/u);
+  assert.match(coreAsr, /pub postprocessor: TranscriptPostprocessor/u);
+  assert.match(coreAsr, /pub fn validate_local_sherpa_mode/u);
+  assert.match(coreAsr, /pub fn from_local_sherpa_request/u);
+  assert.match(desktopAsrTypes, /BatchTranscriptionRequest/u);
+  assert.doesNotMatch(desktopAsrTypes, /pub struct BatchTranscriptionRequest/u);
+  assert.match(desktopAsrAdapter, /validate_local_sherpa_mode\(request, AsrMode::Batch\)/u);
+  assert.match(desktopAsrAdapter, /validate_local_sherpa_mode\(request, AsrMode::Streaming\)/u);
+  assert.match(desktopAsrAdapter, /BatchTranscriptionRequest::from_local_sherpa_request/u);
+  assert.doesNotMatch(desktopBatchProcessor, /AsrEngineConfig::LocalSherpa/u);
+  assert.doesNotMatch(desktopAsrAdapter, /fn ensure_mode/u);
+});
+
 test('core LLM request contracts are exposed through UniFFI binding records', () => {
   const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
   const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');

@@ -1,6 +1,7 @@
 use crate::model_config::ModelFileConfig;
 use crate::transcribe_runtime::BatchTranscribePlan;
 use crate::transcript::TranscriptSegment;
+use crate::transcript_postprocess::TranscriptPostprocessor;
 pub use crate::transcript_postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
     TranscriptTextReplacementRuleSet,
@@ -223,6 +224,83 @@ pub trait BatchTranscriber: Send + Sync {
     -> Result<Vec<TranscriptSegment>, String>;
 }
 
+#[derive(Debug, Clone)]
+pub struct BatchTranscriptionRequest {
+    pub instance_id: Option<String>,
+    pub file_path: PathBuf,
+    pub save_to_path: Option<PathBuf>,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub batch_segmentation_mode: BatchSegmentationMode,
+    pub model_type: String,
+    pub file_config: Option<ModelFileConfig>,
+    pub hotwords: Option<String>,
+    pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+    pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocessor: TranscriptPostprocessor,
+    pub gpu_acceleration: Option<String>,
+}
+
+impl BatchTranscriptionRequest {
+    pub fn from_local_sherpa_request(
+        file_path: PathBuf,
+        save_to_path: Option<PathBuf>,
+        request: AsrTranscriptionRequest,
+        speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+        instance_id: Option<String>,
+    ) -> Result<Self, String> {
+        let AsrTranscriptionRequest {
+            language,
+            enable_itn,
+            normalization_options,
+            postprocess_options,
+            hotwords,
+            engine_config,
+            ..
+        } = request;
+
+        match engine_config {
+            AsrEngineConfig::LocalSherpa {
+                model_path,
+                num_threads,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                batch_segmentation_mode,
+                model_type,
+                file_config,
+                gpu_acceleration,
+                ..
+            } => Ok(Self {
+                instance_id,
+                file_path,
+                save_to_path,
+                model_path,
+                num_threads,
+                enable_itn,
+                language,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                batch_segmentation_mode,
+                model_type,
+                file_config: *file_config,
+                hotwords,
+                speaker_processing,
+                normalization_options,
+                postprocessor: TranscriptPostprocessor::compile(postprocess_options)?,
+                gpu_acceleration,
+            }),
+            _ => Err("Expected LocalSherpa engine config".to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct OnlineBatchTranscriptionRequest {
     pub file_path: PathBuf,
@@ -346,6 +424,22 @@ impl AsrTranscriptionRequest {
             AsrEngineConfig::Online { provider } => provider.provider_id.as_str(),
         }
     }
+}
+
+pub fn validate_local_sherpa_mode(
+    request: &AsrTranscriptionRequest,
+    expected: AsrMode,
+) -> Result<(), String> {
+    if request.engine() != AsrEngine::LocalSherpa {
+        return Err("Unsupported ASR engine for local Sherpa adapter".to_string());
+    }
+    if request.mode != expected {
+        return Err(format!(
+            "ASR request mode mismatch: expected {:?}, got {:?}",
+            expected, request.mode
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

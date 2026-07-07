@@ -1,29 +1,14 @@
 use super::SherpaError;
-use super::TranscriptPostprocessor;
 use super::state::AsrState;
 use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{
     AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
 };
 use async_trait::async_trait;
+use sona_core::ports::asr::validate_local_sherpa_mode;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalSherpaAdapter;
-
-impl LocalSherpaAdapter {
-    pub fn ensure_mode(request: &AsrTranscriptionRequest, expected: AsrMode) -> Result<(), String> {
-        if request.engine() != super::types::AsrEngine::LocalSherpa {
-            return Err("Unsupported ASR engine for local Sherpa adapter".to_string());
-        }
-        if request.mode != expected {
-            return Err(format!(
-                "ASR request mode mismatch: expected {:?}, got {:?}",
-                expected, request.mode
-            ));
-        }
-        Ok(())
-    }
-}
 
 #[async_trait]
 impl AsrProviderAdapter for LocalSherpaAdapter {
@@ -35,7 +20,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         &self,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
-        Self::ensure_mode(request, AsrMode::Batch).map_err(SherpaError::Generic)?;
+        validate_local_sherpa_mode(request, AsrMode::Batch).map_err(SherpaError::Generic)?;
         Ok(Some(std::sync::Arc::new(LocalSherpaBatchProcessor)))
     }
 
@@ -45,7 +30,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         instance_id: &str,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
-        Self::ensure_mode(request, AsrMode::Streaming).map_err(SherpaError::Generic)?;
+        validate_local_sherpa_mode(request, AsrMode::Streaming).map_err(SherpaError::Generic)?;
 
         if let crate::integrations::asr::types::AsrEngineConfig::LocalSherpa {
             model_path,
@@ -101,46 +86,14 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
         speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
-        let config = match request.engine_config.clone() {
-            crate::integrations::asr::types::AsrEngineConfig::LocalSherpa {
-                model_path,
-                num_threads,
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                batch_segmentation_mode,
-                model_type,
-                file_config,
-                gpu_acceleration,
-                ..
-            } => BatchTranscriptionRequest {
-                instance_id,
-                file_path,
-                save_to_path,
-                model_path,
-                num_threads,
-                enable_itn: request.enable_itn,
-                language: request.language,
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                batch_segmentation_mode,
-                model_type,
-                file_config: *file_config,
-                hotwords: request.hotwords,
-                speaker_processing,
-                normalization_options: request.normalization_options,
-                postprocessor: TranscriptPostprocessor::compile(
-                    request.postprocess_options.clone(),
-                )?,
-                gpu_acceleration,
-            },
-            _ => {
-                return Err(SherpaError::Generic(
-                    "Expected LocalSherpa engine config".to_string(),
-                ));
-            }
-        };
+        let config = BatchTranscriptionRequest::from_local_sherpa_request(
+            file_path,
+            save_to_path,
+            request,
+            speaker_processing,
+            instance_id,
+        )
+        .map_err(SherpaError::Generic)?;
 
         super::batch::process_batch_request_impl(emitter, state, config)
             .await
