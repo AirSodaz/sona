@@ -375,7 +375,7 @@ async fn handle_local_streaming_socket(
         .await;
 
     // Phase 2: Audio streaming
-    let mut offline_state = crate::integrations::asr::sherpa_onnx::OfflineState::default();
+    let mut offline_state = sona_local_asr::runtime::OfflineState::default();
     let mut total_samples = 0;
     let mut current_segment_id: Option<String> = None;
     let mut last_inference_time = std::time::Instant::now();

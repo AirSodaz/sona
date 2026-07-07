@@ -1,7 +1,12 @@
+use crate::audio::SafeVad;
 use crate::punctuation::Punctuation;
-use crate::recognizer::Recognizer;
-use std::collections::HashMap;
+use crate::recognizer::{Recognizer, SafeStream};
+use sona_core::ports::asr::TranscriptNormalizationOptions;
+use sona_core::transcript_postprocess::TranscriptPostprocessor;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 use tokio::sync::{Mutex, OnceCell};
 
 type RecognizerCell = Arc<OnceCell<Arc<Recognizer>>>;
@@ -68,6 +73,77 @@ impl ModelConfigKey {
     }
 }
 
+pub fn buffered_sample_count(chunks: &[Vec<f32>]) -> usize {
+    chunks.iter().map(|chunk| chunk.len()).sum()
+}
+
+pub fn start_instance_runtime(instance: &mut SherpaInstance, stream: Option<SafeStream>) {
+    instance.stream = stream;
+    reset_instance_runtime_state(instance);
+    instance.is_running = true;
+}
+
+pub fn stop_instance_runtime(instance: &mut SherpaInstance) {
+    instance.stream = None;
+    reset_instance_runtime_state(instance);
+    instance.is_running = false;
+}
+
+fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
+    instance.total_samples = 0;
+    instance.segment_start_time = 0.0;
+    instance.offline_state = OfflineState::default();
+    instance.current_segment_id = None;
+    instance.last_partial_metric_sample = 0;
+    instance.record_diagnostics = RecordDiagnosticsState::default();
+}
+
+#[derive(Default)]
+pub struct SherpaInstance {
+    pub recognizer: Option<Arc<Recognizer>>,
+    pub stream: Option<SafeStream>,
+    pub vad: Option<SafeVad>,
+    pub punctuation: Option<Arc<Punctuation>>,
+    pub total_samples: usize,
+    pub segment_start_time: f64,
+    pub offline_state: OfflineState,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub current_segment_id: Option<String>,
+    pub last_partial_metric_sample: usize,
+    pub is_running: bool,
+    pub record_diagnostics: RecordDiagnosticsState,
+    pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocessor: TranscriptPostprocessor,
+}
+
+pub struct OfflineState {
+    pub speech_buffer: Vec<Vec<f32>>,
+    pub ring_buffer: VecDeque<Vec<f32>>,
+    pub is_speaking: bool,
+    pub last_inference_time: Instant,
+    pub utterance_start_sample: usize,
+}
+
+#[derive(Default)]
+pub struct RecordDiagnosticsState {
+    pub first_sample_logged: bool,
+    pub skipped_while_stopped_logged: bool,
+    pub first_segment_emitted: Arc<AtomicBool>,
+}
+
+impl Default for OfflineState {
+    fn default() -> Self {
+        Self {
+            speech_buffer: Vec::new(),
+            ring_buffer: VecDeque::new(),
+            is_speaking: false,
+            utterance_start_sample: 0,
+            last_inference_time: Instant::now(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +165,56 @@ mod tests {
         assert_ne!(key(Some("cpu")), key(Some("cuda")));
         assert_ne!(key(Some("cpu")), key(None));
         assert_eq!(key(Some("cpu")), key(Some("cpu")));
+    }
+
+    #[test]
+    fn start_and_stop_reset_per_run_state_without_dropping_attachments() {
+        let mut instance = SherpaInstance {
+            total_samples: 42,
+            segment_start_time: 1.25,
+            vad_model: Some("vad.onnx".to_string()),
+            current_segment_id: Some("segment-1".to_string()),
+            last_partial_metric_sample: 24,
+            is_running: false,
+            record_diagnostics: RecordDiagnosticsState {
+                first_sample_logged: true,
+                skipped_while_stopped_logged: true,
+                first_segment_emitted: Arc::new(AtomicBool::new(true)),
+            },
+            ..Default::default()
+        };
+        instance.offline_state.speech_buffer.push(vec![1.0, 2.0]);
+        instance.offline_state.ring_buffer.push_back(vec![3.0]);
+
+        start_instance_runtime(&mut instance, None);
+
+        assert!(instance.is_running);
+        assert_eq!(instance.total_samples, 0);
+        assert_eq!(instance.segment_start_time, 0.0);
+        assert!(instance.offline_state.speech_buffer.is_empty());
+        assert!(instance.offline_state.ring_buffer.is_empty());
+        assert_eq!(instance.current_segment_id, None);
+        assert_eq!(instance.last_partial_metric_sample, 0);
+        assert!(!instance.record_diagnostics.first_sample_logged);
+        assert!(!instance.record_diagnostics.skipped_while_stopped_logged);
+        assert_eq!(instance.vad_model.as_deref(), Some("vad.onnx"));
+
+        instance.total_samples = 9;
+        instance.current_segment_id = Some("segment-2".to_string());
+        stop_instance_runtime(&mut instance);
+
+        assert!(!instance.is_running);
+        assert_eq!(instance.total_samples, 0);
+        assert_eq!(instance.current_segment_id, None);
+        assert!(instance.stream.is_none());
+        assert_eq!(instance.vad_model.as_deref(), Some("vad.onnx"));
+    }
+
+    #[test]
+    fn buffered_sample_count_sums_chunk_lengths() {
+        assert_eq!(
+            buffered_sample_count(&[vec![0.0, 1.0], vec![2.0], vec![]]),
+            3
+        );
     }
 }

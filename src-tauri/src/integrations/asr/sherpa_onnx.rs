@@ -15,12 +15,16 @@ use super::types::{
 use crate::integrations::asr::ModelConfigKey;
 use crate::integrations::asr::state::AsrState;
 use log::{debug, info, trace};
-use sona_local_asr::audio::{SafeVad, accept_vad_samples, load_vad, reset_vad, vad_detected};
+use sona_local_asr::audio::{accept_vad_samples, load_vad, reset_vad, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
-    Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream, accept_online_samples,
-    build_model_config, create_online_stream, decode_offline_samples, decode_online_ready,
-    is_online_endpoint, online_stream_result, reset_online_stream,
+    Recognizer, RecognizerInner, SafeOfflineRecognizer, accept_online_samples, build_model_config,
+    create_online_stream, decode_offline_samples, decode_online_ready, is_online_endpoint,
+    online_stream_result, reset_online_stream,
+};
+use sona_local_asr::runtime::{
+    OfflineState, SherpaInstance, buffered_sample_count, start_instance_runtime,
+    stop_instance_runtime,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -1244,81 +1248,4 @@ pub fn log_segment_emit_diagnostics(
         "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
         stage, segment.id, segment.is_final, text_len
     );
-}
-
-pub fn buffered_sample_count(chunks: &[Vec<f32>]) -> usize {
-    chunks.iter().map(|chunk| chunk.len()).sum()
-}
-
-pub fn start_instance_runtime(instance: &mut SherpaInstance, stream: Option<SafeStream>) {
-    // Online recognizers get a fresh stream per run; offline recognizers leave
-    // this as `None` and rebuild utterances from buffered audio chunks.
-    instance.stream = stream;
-    reset_instance_runtime_state(instance);
-    instance.is_running = true;
-}
-
-pub fn stop_instance_runtime(instance: &mut SherpaInstance) {
-    // Stopping a run clears volatile state only; the instance still keeps its
-    // recognizer and optional VAD/punctuation attachments for the next start.
-    instance.stream = None;
-    reset_instance_runtime_state(instance);
-    instance.is_running = false;
-}
-
-fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
-    // Reset only per-run counters and buffers. The shared recognizer/VAD/model
-    // attachments stay on the instance so later starts can reuse them.
-    instance.total_samples = 0;
-    instance.segment_start_time = 0.0;
-    instance.offline_state = OfflineState::default();
-    instance.current_segment_id = None;
-    instance.last_partial_metric_sample = 0;
-    instance.record_diagnostics = RecordDiagnosticsState::default();
-}
-
-#[derive(Default)]
-pub struct SherpaInstance {
-    pub recognizer: Option<Arc<Recognizer>>,
-    pub stream: Option<SafeStream>,
-    pub vad: Option<SafeVad>,
-    pub punctuation: Option<Arc<Punctuation>>,
-    pub total_samples: usize,
-    pub segment_start_time: f64,
-    pub offline_state: OfflineState,
-    pub vad_model: Option<String>,
-    pub vad_buffer: f32,
-    pub current_segment_id: Option<String>,
-    pub last_partial_metric_sample: usize,
-    pub is_running: bool,
-    pub record_diagnostics: RecordDiagnosticsState,
-    pub normalization_options: TranscriptNormalizationOptions,
-    pub postprocessor: TranscriptPostprocessor,
-}
-
-pub struct OfflineState {
-    pub speech_buffer: Vec<Vec<f32>>,
-    pub ring_buffer: std::collections::VecDeque<Vec<f32>>,
-    pub is_speaking: bool,
-    pub last_inference_time: std::time::Instant,
-    pub utterance_start_sample: usize,
-}
-
-#[derive(Default)]
-pub struct RecordDiagnosticsState {
-    pub first_sample_logged: bool,
-    pub skipped_while_stopped_logged: bool,
-    pub first_segment_emitted: Arc<AtomicBool>,
-}
-
-impl Default for OfflineState {
-    fn default() -> Self {
-        Self {
-            speech_buffer: Vec::new(),
-            ring_buffer: std::collections::VecDeque::new(),
-            is_speaking: false,
-            utterance_start_sample: 0,
-            last_inference_time: std::time::Instant::now(),
-        }
-    }
 }

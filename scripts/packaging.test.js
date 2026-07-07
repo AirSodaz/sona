@@ -332,6 +332,38 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
 });
 
+test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
+  const localAsrRuntime = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),
+    'utf8',
+  );
+  const desktopSherpa = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+  const desktopStreaming = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    'utf8',
+  );
+
+  for (const symbol of ['SherpaInstance', 'OfflineState', 'RecordDiagnosticsState']) {
+    assert.match(localAsrRuntime, new RegExp(`pub struct ${symbol}`, 'u'));
+    assert.doesNotMatch(desktopSherpa, new RegExp(`pub struct ${symbol}`, 'u'));
+  }
+
+  for (const helper of [
+    'buffered_sample_count',
+    'start_instance_runtime',
+    'stop_instance_runtime',
+  ]) {
+    assert.match(localAsrRuntime, new RegExp(`pub fn ${helper}`, 'u'));
+    assert.doesNotMatch(desktopSherpa, new RegExp(`pub fn ${helper}`, 'u'));
+  }
+
+  assert.match(desktopSherpa, /use sona_local_asr::runtime::\{[\s\S]*SherpaInstance/u);
+  assert.match(desktopStreaming, /sona_local_asr::runtime::OfflineState/u);
+});
+
 test('core owns local batch ASR request contract reused by desktop', () => {
   const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
   const desktopAsrTypes = fs.readFileSync(
@@ -1365,11 +1397,16 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
     'utf8',
   );
+  const localAsrRuntime = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),
+    'utf8',
+  );
 
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs')), false);
   assert.doesNotMatch(asrMod, /^mod model_config;/mu);
   assert.match(asrMod, /pub\(crate\) use sona_local_asr::audio::\{[\s\S]*load_vad/u);
-  assert.match(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*SafeVad/u);
+  assert.match(localAsrRuntime, /use crate::audio::SafeVad/u);
+  assert.doesNotMatch(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*SafeVad/u);
   assert.doesNotMatch(asrMod, /create_vad_detector/u);
   assert.doesNotMatch(asrMod, /pub struct SafeVad/u);
   assert.doesNotMatch(asrMod, /SileroVadModelConfig/u);
