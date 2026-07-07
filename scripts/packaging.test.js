@@ -293,16 +293,21 @@ test('core owns local batch ASR request contract reused by desktop', () => {
   );
 
   assert.match(coreAsr, /pub struct BatchTranscriptionRequest/u);
+  assert.match(coreAsr, /pub struct LocalSherpaStreamingRequest/u);
   assert.match(coreAsr, /pub instance_id: Option<String>/u);
+  assert.match(coreAsr, /pub instance_id: String/u);
   assert.match(coreAsr, /pub postprocessor: TranscriptPostprocessor/u);
   assert.match(coreAsr, /pub fn validate_local_sherpa_mode/u);
   assert.match(coreAsr, /pub fn from_local_sherpa_request/u);
   assert.match(desktopAsrTypes, /BatchTranscriptionRequest/u);
+  assert.match(desktopAsrTypes, /LocalSherpaStreamingRequest/u);
   assert.doesNotMatch(desktopAsrTypes, /pub struct BatchTranscriptionRequest/u);
+  assert.doesNotMatch(desktopAsrTypes, /pub struct LocalSherpaStreamingRequest/u);
   assert.match(desktopAsrAdapter, /validate_local_sherpa_mode\(request, AsrMode::Batch\)/u);
-  assert.match(desktopAsrAdapter, /validate_local_sherpa_mode\(request, AsrMode::Streaming\)/u);
   assert.match(desktopAsrAdapter, /BatchTranscriptionRequest::from_local_sherpa_request/u);
+  assert.match(desktopAsrAdapter, /LocalSherpaStreamingRequest::from_local_sherpa_request/u);
   assert.doesNotMatch(desktopBatchProcessor, /AsrEngineConfig::LocalSherpa/u);
+  assert.doesNotMatch(desktopAsrAdapter, /AsrEngineConfig::LocalSherpa/u);
   assert.doesNotMatch(desktopAsrAdapter, /fn ensure_mode/u);
 });
 

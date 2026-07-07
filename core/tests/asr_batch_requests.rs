@@ -1,7 +1,7 @@
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
-    BatchTranscriptionRequest, OnlineAsrProviderRequest, TranscriptNormalizationOptions,
-    TranscriptPostprocessOptions, validate_local_sherpa_mode,
+    BatchTranscriptionRequest, LocalSherpaStreamingRequest, OnlineAsrProviderRequest,
+    TranscriptNormalizationOptions, TranscriptPostprocessOptions, validate_local_sherpa_mode,
 };
 use sona_core::transcript_postprocess::TranscriptPostprocessor;
 
@@ -178,4 +178,80 @@ fn local_batch_request_mapping_rejects_online_engine() {
     .unwrap_err();
 
     assert_eq!(error, "Expected LocalSherpa engine config");
+}
+
+#[test]
+fn local_streaming_request_mapping_from_asr_request_is_core_owned() {
+    let request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/live-sherpa".to_string(),
+        2,
+        false,
+        "en".to_string(),
+        Some("models/live-punctuation".to_string()),
+        Some("models/live-vad".to_string()),
+        4.5,
+        "sense-voice".to_string(),
+        None,
+        Some("Sona live".to_string()),
+        TranscriptNormalizationOptions {
+            enable_timeline: true,
+        },
+        TranscriptPostprocessOptions::default(),
+        None,
+        Some("cpu".to_string()),
+    );
+
+    let streaming_request =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-1".to_string(), request)
+            .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-1");
+    assert_eq!(streaming_request.model_path, "models/live-sherpa");
+    assert_eq!(streaming_request.num_threads, 2);
+    assert!(!streaming_request.enable_itn);
+    assert_eq!(streaming_request.language, "en");
+    assert_eq!(
+        streaming_request.punctuation_model.as_deref(),
+        Some("models/live-punctuation")
+    );
+    assert_eq!(
+        streaming_request.vad_model.as_deref(),
+        Some("models/live-vad")
+    );
+    assert_eq!(streaming_request.vad_buffer, 4.5);
+    assert_eq!(streaming_request.model_type, "sense-voice");
+    assert_eq!(streaming_request.hotwords.as_deref(), Some("Sona live"));
+    assert!(streaming_request.normalization_options.enable_timeline);
+    assert_eq!(streaming_request.gpu_acceleration.as_deref(), Some("cpu"));
+}
+
+#[test]
+fn local_streaming_request_mapping_rejects_batch_mode() {
+    let request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Batch,
+        "models/sherpa".to_string(),
+        4,
+        true,
+        "auto".to_string(),
+        None,
+        None,
+        5.0,
+        "whisper".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+
+    let error =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-2".to_string(), request)
+            .unwrap_err();
+
+    assert_eq!(
+        error,
+        "ASR request mode mismatch: expected Streaming, got Batch"
+    );
 }

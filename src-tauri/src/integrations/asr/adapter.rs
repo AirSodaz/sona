@@ -2,7 +2,8 @@ use super::SherpaError;
 use super::state::AsrState;
 use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{
-    AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
+    AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, LocalSherpaStreamingRequest,
+    TranscriptSegment,
 };
 use async_trait::async_trait;
 use sona_core::ports::asr::validate_local_sherpa_mode;
@@ -30,45 +31,16 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         instance_id: &str,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
-        validate_local_sherpa_mode(request, AsrMode::Streaming).map_err(SherpaError::Generic)?;
+        let request = LocalSherpaStreamingRequest::from_local_sherpa_request(
+            instance_id.to_string(),
+            request.clone(),
+        )
+        .map_err(SherpaError::Generic)?;
 
-        if let crate::integrations::asr::types::AsrEngineConfig::LocalSherpa {
-            model_path,
-            num_threads,
-            punctuation_model,
-            vad_model,
-            vad_buffer,
-            model_type,
-            file_config,
-            gpu_acceleration,
-            ..
-        } = request.engine_config.clone()
-        {
-            let session = super::sherpa_onnx::init_recognizer_impl(
-                state,
-                instance_id,
-                model_path,
-                num_threads,
-                request.enable_itn,
-                request.language.clone(),
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                model_type,
-                *file_config,
-                request.hotwords.clone(),
-                Some(request.normalization_options),
-                Some(request.postprocess_options.clone()),
-                gpu_acceleration,
-            )
+        let session = super::sherpa_onnx::init_recognizer_impl(state, request)
             .await
             .map_err(SherpaError::Generic)?;
-            Ok(Some(session))
-        } else {
-            Err(SherpaError::Generic(
-                "Expected LocalSherpa engine config".to_string(),
-            ))
-        }
+        Ok(Some(session))
     }
 }
 

@@ -10,12 +10,11 @@ use super::transcript::{
     synthesize_durations,
 };
 use super::types::{
-    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
+    LocalSherpaStreamingRequest, TranscriptNormalizationOptions, TranscriptSegment,
 };
 use crate::integrations::asr::ModelConfigKey;
 use crate::integrations::asr::state::AsrState;
 use log::{debug, info, trace};
-use sona_core::model_config::ModelFileConfig;
 use sona_local_asr::audio::{SafeVad, accept_vad_samples, load_vad, reset_vad, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
@@ -329,24 +328,27 @@ pub async fn resolve_punctuation(
     .cloned()
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn init_recognizer_impl(
     state: &AsrState,
-    instance_id: &str,
-    model_path: String,
-    num_threads: i32,
-    enable_itn: bool,
-    language: String,
-    punctuation_model: Option<String>,
-    vad_model: Option<String>,
-    vad_buffer: f32,
-    model_type: String,
-    file_config: Option<ModelFileConfig>,
-    hotwords: Option<String>,
-    normalization_options: Option<TranscriptNormalizationOptions>,
-    postprocess_options: Option<TranscriptPostprocessOptions>,
-    gpu_acceleration: Option<String>,
+    request: LocalSherpaStreamingRequest,
 ) -> Result<Arc<LocalSherpaSession>, String> {
+    let LocalSherpaStreamingRequest {
+        instance_id,
+        model_path,
+        num_threads,
+        enable_itn,
+        language,
+        punctuation_model,
+        vad_model,
+        vad_buffer,
+        model_type,
+        file_config,
+        hotwords,
+        normalization_options,
+        postprocess_options,
+        gpu_acceleration,
+    } = request;
+
     let gpu_plan =
         crate::app::hardware::resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
 
@@ -440,7 +442,7 @@ pub async fn init_recognizer_impl(
     let rss_after_mb = capture_process_memory_mb();
     let model_load_metric = AsrModelLoadMetric {
         occurred_at_ms: current_time_millis(),
-        instance_id: instance_id.to_string(),
+        instance_id: instance_id.clone(),
         model_path: model_path.clone(),
         model_type: model_type.clone(),
         recognizer_kind: recognizer.kind_label().to_string(),
@@ -466,8 +468,8 @@ pub async fn init_recognizer_impl(
         punctuation,
         vad_model: vad_model.clone(),
         vad_buffer,
-        normalization_options: normalization_options.unwrap_or_default(),
-        postprocessor: TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?,
+        normalization_options,
+        postprocessor: TranscriptPostprocessor::compile(postprocess_options)?,
         ..Default::default()
     };
 

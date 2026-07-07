@@ -301,6 +301,73 @@ impl BatchTranscriptionRequest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalSherpaStreamingRequest {
+    pub instance_id: String,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub model_type: String,
+    pub file_config: Option<ModelFileConfig>,
+    pub hotwords: Option<String>,
+    pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocess_options: TranscriptPostprocessOptions,
+    pub gpu_acceleration: Option<String>,
+}
+
+impl LocalSherpaStreamingRequest {
+    pub fn from_local_sherpa_request(
+        instance_id: String,
+        request: AsrTranscriptionRequest,
+    ) -> Result<Self, String> {
+        validate_local_sherpa_mode(&request, AsrMode::Streaming)?;
+
+        let AsrTranscriptionRequest {
+            language,
+            enable_itn,
+            normalization_options,
+            postprocess_options,
+            hotwords,
+            engine_config,
+            ..
+        } = request;
+
+        match engine_config {
+            AsrEngineConfig::LocalSherpa {
+                model_path,
+                num_threads,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                model_type,
+                file_config,
+                gpu_acceleration,
+                ..
+            } => Ok(Self {
+                instance_id,
+                model_path,
+                num_threads,
+                enable_itn,
+                language,
+                punctuation_model,
+                vad_model,
+                vad_buffer,
+                model_type,
+                file_config: *file_config,
+                hotwords,
+                normalization_options,
+                postprocess_options,
+                gpu_acceleration,
+            }),
+            _ => Err("Expected LocalSherpa engine config".to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct OnlineBatchTranscriptionRequest {
     pub file_path: PathBuf,
