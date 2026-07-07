@@ -32,6 +32,7 @@ pub fn init_dll_directory() {
     {
         let candidates = [
             exe_dir.join("resources").join("shared_libs"),
+            exe_dir.join("..").join("resources").join("shared_libs"),
             exe_dir
                 .join("..")
                 .join("..")

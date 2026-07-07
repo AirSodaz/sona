@@ -345,6 +345,24 @@ test('preset model catalog data is owned by core and reused by frontend', () => 
   assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/preset-models\.json/u);
 });
 
+test('core model path resolution is adapter-driven without desktop filesystem probes', () => {
+  const coreModelPaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_paths.rs'), 'utf8');
+  const cliDesktopPaths = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'desktop_paths.rs'), 'utf8');
+  const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
+  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcribe_runtime.rs'), 'utf8');
+  const coreServeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'serve_runtime.rs'), 'utf8');
+
+  assert.match(coreModelPaths, /pub enum ModelsDirStatus/u);
+  assert.match(coreModelPaths, /status_of/u);
+  assert.doesNotMatch(coreModelPaths, /default_desktop_models_dir/u);
+  assert.doesNotMatch(coreModelPaths, /std::fs::metadata/u);
+  assert.match(cliDesktopPaths, /pub fn models_dir_status/u);
+  assert.match(cliModels, /crate::desktop_paths::default_models_dir/u);
+  assert.match(cliModels, /crate::desktop_paths::models_dir_status/u);
+  assert.match(coreTranscribeRuntime, /default_models_dir: Option<PathBuf>/u);
+  assert.match(coreServeRuntime, /default_models_dir: Option<PathBuf>/u);
+});
+
 test('desktop platform adapters own Tauri path event diagnostics and preset model bridges', () => {
   const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const platformPaths = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'paths.rs'), 'utf8');

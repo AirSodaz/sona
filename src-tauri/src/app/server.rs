@@ -29,7 +29,8 @@ use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
 use sona_core::ports::asr::{BatchTranscriber, find_online_asr_provider, online_asr_providers};
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
-    BatchTranscribeOptions, resolve_batch_transcribe_plan_with_install_checker,
+    BatchTranscribeOptions,
+    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status,
 };
 
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
@@ -840,6 +841,7 @@ pub(crate) fn build_local_transcribe_options(
         },
         model_id: Some(job.model_id.clone()),
         models_dir: Some(models_dir.to_path_buf()),
+        default_models_dir: None,
         vad_model_id,
         punctuation_model_id,
         threads: None,
@@ -859,7 +861,12 @@ pub(crate) fn build_local_transcribe_plan(
     defaults: &ApiServerTranscriptionDefaults,
 ) -> Result<sona_core::transcribe_runtime::BatchTranscribePlan, String> {
     let options = build_local_transcribe_options(job, models_dir, defaults);
-    resolve_batch_transcribe_plan_with_install_checker(options, None, is_preset_model_installed_at)
+    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+        options,
+        None,
+        is_preset_model_installed_at,
+        crate::platform::paths::models_dir_status,
+    )
 }
 
 fn companion_defaults_for_model(

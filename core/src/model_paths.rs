@@ -1,20 +1,35 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::paths::default_desktop_models_dir;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelsDirStatus {
+    Missing,
+    Directory,
+    NotDirectory,
+}
 
-pub fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, String> {
-    let path = if let Some(path) = configured {
-        path
+pub fn status_of(exists: bool, is_dir: bool) -> ModelsDirStatus {
+    if !exists {
+        ModelsDirStatus::Missing
+    } else if is_dir {
+        ModelsDirStatus::Directory
     } else {
-        default_desktop_models_dir().ok_or_else(|| {
-            "Unable to infer the models directory. Pass --models-dir explicitly.".to_string()
-        })?
-    };
+        ModelsDirStatus::NotDirectory
+    }
+}
 
-    if std::fs::metadata(&path)
-        .map(|metadata| !metadata.is_dir())
-        .unwrap_or(false)
-    {
+pub fn resolve_models_dir<F>(
+    configured: Option<PathBuf>,
+    default_models_dir: Option<PathBuf>,
+    models_dir_status: F,
+) -> Result<PathBuf, String>
+where
+    F: FnOnce(&Path) -> ModelsDirStatus,
+{
+    let path = configured.or(default_models_dir).ok_or_else(|| {
+        "Unable to infer the models directory. Pass --models-dir explicitly.".to_string()
+    })?;
+
+    if matches!(models_dir_status(&path), ModelsDirStatus::NotDirectory) {
         return Err(format!(
             "Models directory '{}' exists but is not a directory.",
             path.display()

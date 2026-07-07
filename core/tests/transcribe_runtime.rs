@@ -188,6 +188,7 @@ fn temp_transcribe_options() -> BatchTranscribeOptions {
         language: None,
         model_id: None,
         models_dir: None,
+        default_models_dir: None,
         vad_model_id: None,
         punctuation_model_id: None,
         threads: None,

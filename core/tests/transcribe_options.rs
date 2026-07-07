@@ -11,6 +11,7 @@ fn batch_transcribe_options_are_not_cli_specific() {
         language: None,
         model_id: None,
         models_dir: None,
+        default_models_dir: None,
         vad_model_id: None,
         punctuation_model_id: None,
         threads: None,

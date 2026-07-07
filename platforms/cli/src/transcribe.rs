@@ -6,7 +6,7 @@ use crate::{CliError, CliOutput, CliResult};
 use sona_core::ports::asr::BatchTranscriber;
 use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
-    BatchTranscribeOptions, OutputTarget, resolve_batch_transcribe_plan,
+    BatchTranscribeOptions, OutputTarget, resolve_batch_transcribe_plan_with_models_dir_status,
 };
 
 #[derive(Debug, Args)]
@@ -77,6 +77,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         language: args.language,
         model_id: args.model_id,
         models_dir: args.models_dir,
+        default_models_dir: crate::desktop_paths::default_models_dir(),
         vad_model_id: args.vad_model_id,
         punctuation_model_id: args.punctuation_model_id,
         threads: args.threads,
@@ -89,7 +90,12 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         force: args.force,
     };
 
-    let plan = resolve_batch_transcribe_plan(options, config).map_err(CliError::Validation)?;
+    let plan = resolve_batch_transcribe_plan_with_models_dir_status(
+        options,
+        config,
+        crate::desktop_paths::models_dir_status,
+    )
+    .map_err(CliError::Validation)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let runtime = tokio::runtime::Builder::new_multi_thread()

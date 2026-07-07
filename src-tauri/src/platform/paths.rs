@@ -4,7 +4,15 @@ pub use sona_core::paths::{
 };
 pub use sona_core::ports::path::{PathKind, PathProvider};
 
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
+
+pub fn models_dir_status(path: &Path) -> sona_core::model_paths::ModelsDirStatus {
+    match path.metadata() {
+        Ok(metadata) => sona_core::model_paths::status_of(true, metadata.is_dir()),
+        Err(_) => sona_core::model_paths::status_of(false, false),
+    }
+}
 
 /// Tauri adapter for the pure `sona-core` path provider port.
 ///
@@ -28,7 +36,7 @@ impl<R: Runtime> TauriPathProvider<R> {
 }
 
 impl<R: Runtime> PathProvider for TauriPathProvider<R> {
-    fn resolve_path(&self, kind: PathKind) -> Result<std::path::PathBuf, String> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
         match kind {
             PathKind::AppData => self.app.path().app_data_dir().map_err(|e| e.to_string()),
             PathKind::AppLocalData => self

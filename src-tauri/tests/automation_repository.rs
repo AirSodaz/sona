@@ -32,6 +32,19 @@ fn sample_rule(
 fn valid_global_config(batch_model_path: &str) -> Value {
     json!({
         "batchModelPath": batch_model_path,
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "local",
+                    "mode": "batch",
+                    "modelId": null,
+                    "modelPath": batch_model_path,
+                    "providerId": null,
+                    "profileId": null
+                }
+            },
+            "providers": {}
+        },
         "llmSettings": {
             "activeProvider": "open_ai",
             "providers": {
@@ -286,15 +299,13 @@ fn validation_requires_feature_models_when_auto_stages_are_enabled() {
             rule.stage_config.auto_polish = true;
         },
     );
-    let global_config = json!({
-        "batchModelPath": batch_model_dir,
-        "llmSettings": {
-            "activeProvider": "open_ai",
-            "providers": {},
-            "models": {},
-            "modelOrder": [],
-            "selections": {}
-        }
+    let mut global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
+    global_config["llmSettings"] = json!({
+        "activeProvider": "open_ai",
+        "providers": {},
+        "models": {},
+        "modelOrder": [],
+        "selections": {}
     });
 
     let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));

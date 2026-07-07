@@ -1,4 +1,5 @@
 use crate::export::ExportFormat;
+use crate::model_paths::ModelsDirStatus;
 use crate::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
     is_preset_model_installed_at,
@@ -44,6 +45,7 @@ pub struct BatchTranscribeOptions {
     pub language: Option<String>,
     pub model_id: Option<String>,
     pub models_dir: Option<PathBuf>,
+    pub default_models_dir: Option<PathBuf>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
     pub threads: Option<i32>,
@@ -114,10 +116,21 @@ pub fn resolve_batch_transcribe_plan(
     options: BatchTranscribeOptions,
     config: Option<TranscribeConfigSection>,
 ) -> Result<BatchTranscribePlan, String> {
-    resolve_batch_transcribe_plan_with_install_checker(
+    resolve_batch_transcribe_plan_with_models_dir_status(options, config, |_| {
+        ModelsDirStatus::Missing
+    })
+}
+
+pub fn resolve_batch_transcribe_plan_with_models_dir_status(
+    options: BatchTranscribeOptions,
+    config: Option<TranscribeConfigSection>,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<BatchTranscribePlan, String> {
+    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
         config,
         is_preset_model_installed_at,
+        models_dir_status,
     )
 }
 
@@ -371,6 +384,20 @@ pub fn resolve_batch_transcribe_plan_with_install_checker(
     config: Option<TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
 ) -> Result<BatchTranscribePlan, String> {
+    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+        options,
+        config,
+        is_installed,
+        |_| ModelsDirStatus::Missing,
+    )
+}
+
+pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+    options: BatchTranscribeOptions,
+    config: Option<TranscribeConfigSection>,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<BatchTranscribePlan, String> {
     let config = config.unwrap_or_default();
     let output_target = resolve_output_target(options.output.clone());
     let export_format = resolve_export_format(
@@ -385,8 +412,11 @@ pub fn resolve_batch_transcribe_plan_with_install_checker(
 
     ensure_input_file_exists(&options.input)?;
     ensure_output_can_be_written(&output_target, options.force)?;
-    let models_dir =
-        crate::model_paths::resolve_models_dir(options.models_dir.or(config.models_dir))?;
+    let models_dir = crate::model_paths::resolve_models_dir(
+        options.models_dir.or(config.models_dir),
+        options.default_models_dir,
+        models_dir_status,
+    )?;
     let model_id = options.model_id.or(config.model_id).ok_or_else(|| {
         "Missing required batch model. Pass --model-id or set model_id in --config.".to_string()
     })?;

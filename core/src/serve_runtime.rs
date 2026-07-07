@@ -1,4 +1,5 @@
 use crate::gpu::resolve_gpu_acceleration;
+use crate::model_paths::ModelsDirStatus;
 use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use crate::runtime_config::ServeConfigSection;
 use std::path::PathBuf;
@@ -18,6 +19,7 @@ pub struct ServeRuntimeArgs {
     pub port: Option<u16>,
     pub api_key: Option<String>,
     pub models_dir: Option<PathBuf>,
+    pub default_models_dir: Option<PathBuf>,
     pub ip_whitelist: Option<String>,
     pub max_streaming: Option<usize>,
     pub max_concurrent: Option<usize>,
@@ -66,7 +68,11 @@ pub fn resolve_serve_runtime_options(
             .unwrap_or_else(|| DEFAULT_SERVE_HOST.to_string()),
         port: args.port.or(config.port).unwrap_or(DEFAULT_SERVE_PORT),
         api_key: args.api_key.or(config.api_key).unwrap_or_default(),
-        models_dir: crate::model_paths::resolve_models_dir(args.models_dir.or(config.models_dir))?,
+        models_dir: crate::model_paths::resolve_models_dir(
+            args.models_dir.or(config.models_dir),
+            args.default_models_dir,
+            |_| ModelsDirStatus::Missing,
+        )?,
         ip_whitelist: args
             .ip_whitelist
             .or(config.ip_whitelist)

@@ -11,7 +11,6 @@ use sona_core::model_downloads::{
     ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
     resolve_model_download,
 };
-use sona_core::model_paths::resolve_models_dir as resolve_catalog_models_dir;
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -301,7 +300,12 @@ fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<ModelSummary>> {
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
-    resolve_catalog_models_dir(configured).map_err(CliError::Validation)
+    sona_core::model_paths::resolve_models_dir(
+        configured,
+        crate::desktop_paths::default_models_dir(),
+        crate::desktop_paths::models_dir_status,
+    )
+    .map_err(CliError::Validation)
 }
 
 fn map_download_error(error: String) -> CliError {
