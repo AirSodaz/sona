@@ -179,33 +179,33 @@ pub async fn get_path_statuses(
 
 #[tauri::command]
 pub async fn webdav_test_connection(
-    config: crate::integrations::webdav::WebDavConfigPayload,
-) -> Result<crate::integrations::webdav::WebDavConnectionResult, String> {
-    crate::integrations::webdav::webdav_test_connection(config).await
+    config: sona_core::webdav::WebDavConfigPayload,
+) -> Result<sona_core::webdav::WebDavConnectionResult, String> {
+    sona_core::webdav::webdav_test_connection(config).await
 }
 
 #[tauri::command]
 pub async fn webdav_list_backups(
-    config: crate::integrations::webdav::WebDavConfigPayload,
-) -> Result<Vec<crate::integrations::webdav::RemoteBackupEntry>, String> {
-    crate::integrations::webdav::webdav_list_backups(config).await
+    config: sona_core::webdav::WebDavConfigPayload,
+) -> Result<Vec<sona_core::webdav::RemoteBackupEntry>, String> {
+    sona_core::webdav::webdav_list_backups(config).await
 }
 
 #[tauri::command]
 pub async fn webdav_upload_backup(
-    config: crate::integrations::webdav::WebDavConfigPayload,
+    config: sona_core::webdav::WebDavConfigPayload,
     local_archive_path: String,
 ) -> Result<(), String> {
-    crate::integrations::webdav::webdav_upload_backup(config, local_archive_path).await
+    sona_core::webdav::webdav_upload_backup(config, local_archive_path).await
 }
 
 #[tauri::command]
 pub async fn webdav_download_backup(
-    config: crate::integrations::webdav::WebDavConfigPayload,
+    config: sona_core::webdav::WebDavConfigPayload,
     href: String,
     output_path: String,
 ) -> Result<(), String> {
-    crate::integrations::webdav::webdav_download_backup(config, href, output_path).await
+    sona_core::webdav::webdav_download_backup(config, href, output_path).await
 }
 
 #[tauri::command]

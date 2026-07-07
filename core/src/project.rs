@@ -170,6 +170,16 @@ pub fn non_empty_trimmed_string(value: Option<&Value>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+pub const ACTIVE_PROJECT_SETTINGS_KEY: &str = "sona-active-project-id";
+
+pub fn active_project_id_from_value(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(str::trim)
+        .map(ToOwned::to_owned)
+        .filter(|value| !value.is_empty())
+}
+
 pub fn string_array(value: Option<&Value>) -> Option<Vec<String>> {
     Some(
         value?

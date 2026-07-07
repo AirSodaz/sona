@@ -4,10 +4,11 @@ use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use crate::platform::project_repository::{
-    ACTIVE_PROJECT_SETTINGS_KEY, SETTINGS_FILE_NAME, run_project_task,
+    SETTINGS_FILE_NAME, active_project_id_from_value, run_project_task,
 };
 use sona_core::project::{
-    ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRecord,
+    ACTIVE_PROJECT_SETTINGS_KEY, ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions,
+    ProjectRecord,
 };
 
 fn sqlite_config_store<R: Runtime>(
@@ -15,14 +16,6 @@ fn sqlite_config_store<R: Runtime>(
 ) -> Result<sona_sqlite::config_store::SqliteConfigStore, String> {
     let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     Ok(sona_sqlite::config_store::SqliteConfigStore::new(db))
-}
-
-fn active_project_id_from_value(value: &Value) -> Option<String> {
-    value
-        .as_str()
-        .map(str::trim)
-        .map(ToOwned::to_owned)
-        .filter(|value| !value.is_empty())
 }
 
 #[tauri::command]

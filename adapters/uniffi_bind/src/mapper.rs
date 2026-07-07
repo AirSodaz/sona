@@ -69,6 +69,7 @@ fn runtime_path_kind_to_ffi(kind: RuntimePathKind) -> FfiRuntimePathKind {
     }
 }
 
+#[expect(dead_code)]
 pub fn asr_engine_to_ffi(engine: AsrEngine) -> FfiAsrEngine {
     match engine {
         AsrEngine::LocalSherpa => FfiAsrEngine::LocalSherpa,
@@ -76,6 +77,7 @@ pub fn asr_engine_to_ffi(engine: AsrEngine) -> FfiAsrEngine {
     }
 }
 
+#[expect(dead_code)]
 pub fn asr_mode_to_ffi(mode: AsrMode) -> FfiAsrMode {
     match mode {
         AsrMode::Streaming => FfiAsrMode::Streaming,
