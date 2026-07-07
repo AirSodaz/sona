@@ -1,4 +1,5 @@
 pub mod asr_metrics;
+pub mod automation;
 pub mod config;
 pub mod dashboard;
 pub mod diagnostics;

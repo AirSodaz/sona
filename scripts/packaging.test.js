@@ -362,18 +362,32 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
 });
 
 test('SQLite automation repository is owned by sqlite adapter', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreAutomationPath = path.join(repoRoot, 'core', 'src', 'automation.rs');
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopAutomation = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs'), 'utf8');
+  const desktopAutomationRepository = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'repository.rs'),
+    'utf8',
+  );
   const desktopAutomationTypes = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'types.rs'),
     'utf8',
   );
 
+  assert.ok(fs.existsSync(coreAutomationPath));
+  assert.match(coreLib, /^pub mod automation;/mu);
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'automation.rs')));
   assert.match(sqliteLib, /^pub mod automation;/mu);
   assert.match(sqliteLib, /^pub use automation::\{AutomationRepositoryState, SqliteAutomationRepository\};/mu);
   assert.match(desktopAutomation, /pub use sona_sqlite::automation as sqlite_repository;/u);
+  assert.match(desktopAutomationTypes, /pub use sona_core::automation::\{/u);
   assert.match(desktopAutomationTypes, /pub use sona_sqlite::automation::AutomationRepositoryState;/u);
+  assert.match(desktopAutomationRepository, /validate_rule_activation/u);
+  assert.doesNotMatch(desktopAutomationRepository, /is_feature_llm_config_complete/u);
+  assert.doesNotMatch(desktopAutomationRepository, /fn is_feature_llm_config_complete/u);
+  assert.doesNotMatch(desktopAutomationRepository, /fn is_batch_asr_configured/u);
+  assert.doesNotMatch(desktopAutomationRepository, /online_asr_providers/u);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'sqlite_repository.rs')),
     false,
