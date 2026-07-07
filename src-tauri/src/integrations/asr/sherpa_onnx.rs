@@ -238,7 +238,7 @@ fn run_offline_inference(
     }
 }
 
-use crate::integrations::asr::error::SherpaError;
+use crate::integrations::asr::SherpaError;
 use async_trait::async_trait;
 
 pub struct LocalSherpaSession {

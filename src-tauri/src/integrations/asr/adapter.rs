@@ -1,5 +1,5 @@
+use super::SherpaError;
 use super::TranscriptPostprocessor;
-use super::error::SherpaError;
 use super::state::AsrState;
 use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{

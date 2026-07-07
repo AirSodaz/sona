@@ -254,6 +254,30 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
 });
 
+test('core owns ASR runtime error contract reused by desktop', () => {
+  const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
+  const desktopAsrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    'utf8',
+  );
+  const desktopAsrErrorPath = path.join(
+    repoRoot,
+    'src-tauri',
+    'src',
+    'integrations',
+    'asr',
+    'error.rs',
+  );
+
+  assert.match(coreAsr, /pub enum SherpaError/u);
+  assert.match(coreAsr, /impl Serialize for SherpaError/u);
+  assert.match(coreAsr, /UNSUPPORTED_ONLINE_PROVIDER/u);
+  assert.match(coreAsr, /GENERIC_ERROR/u);
+  assert.equal(fs.existsSync(desktopAsrErrorPath), false);
+  assert.doesNotMatch(desktopAsrMod, /^mod error;/mu);
+  assert.match(desktopAsrMod, /pub use sona_core::ports::asr::SherpaError;/u);
+});
+
 test('core LLM request contracts are exposed through UniFFI binding records', () => {
   const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
   const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
+use crate::integrations::asr::SherpaError;
 use crate::integrations::asr::TranscriptSegment;
-use crate::integrations::asr::error::SherpaError;
 use crate::integrations::asr::state::AsrState;
 use crate::integrations::asr::types::AsrTranscriptionRequest;
 

@@ -1,4 +1,4 @@
-use super::error::SherpaError;
+use super::SherpaError;
 use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
