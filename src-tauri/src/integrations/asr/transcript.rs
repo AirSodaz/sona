@@ -3,14 +3,16 @@ use super::recognizer_output_event;
 use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
 use super::types::TranscriptUpdate;
 #[cfg(test)]
-use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
+use super::types::{
+    TranscriptSegment, TranscriptTimingLevel, TranscriptTimingSource,
+};
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 pub(crate) use sona_core::transcript::{
     apply_timeline_normalization, build_transcript_update, normalize_recognizer_text,
-    synthesize_durations,
+    select_final_transcript_text, synthesize_durations,
 };
 
 pub(crate) fn emit_transcript_update(
@@ -48,115 +50,6 @@ pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -
         result = p.add_punct(&result);
     }
     result
-}
-
-fn is_meaningful_text_char(ch: char) -> bool {
-    ch.is_alphanumeric()
-}
-
-fn extract_meaningful_text(text: &str) -> String {
-    text.chars()
-        .filter(|ch| is_meaningful_text_char(*ch))
-        .collect()
-}
-
-fn extract_ascii_digits(text: &str) -> String {
-    text.chars().filter(|ch| ch.is_ascii_digit()).collect()
-}
-
-fn is_preservable_trailing_punctuation(ch: char) -> bool {
-    matches!(
-        ch,
-        '。' | '，'
-            | '！'
-            | '？'
-            | '：'
-            | '；'
-            | '、'
-            | '.'
-            | ','
-            | '!'
-            | '?'
-            | ':'
-            | ';'
-            | ')'
-            | '）'
-            | ']'
-            | '】'
-            | '}'
-            | '」'
-            | '』'
-            | '》'
-            | '〉'
-            | '"'
-            | '\''
-            | '”'
-            | '’'
-    )
-}
-
-fn extract_trailing_punctuation(text: &str) -> String {
-    let trimmed = text.trim_end();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-
-    let mut start = trimmed.len();
-    for (idx, ch) in trimmed.char_indices().rev() {
-        if is_preservable_trailing_punctuation(ch) {
-            start = idx;
-        } else {
-            break;
-        }
-    }
-
-    if start < trimmed.len() {
-        trimmed[start..].to_string()
-    } else {
-        String::new()
-    }
-}
-
-fn merge_cleaned_text_with_trailing_punctuation(
-    cleaned_text: &str,
-    formatted_text: &str,
-) -> String {
-    let mut result = cleaned_text.trim().to_string();
-    let trailing_punctuation = extract_trailing_punctuation(formatted_text);
-
-    if !trailing_punctuation.is_empty() && !result.ends_with(&trailing_punctuation) {
-        result.push_str(&trailing_punctuation);
-    }
-
-    result
-}
-
-fn should_fallback_to_cleaned_text(cleaned_text: &str, formatted_text: &str) -> bool {
-    let cleaned_meaningful = extract_meaningful_text(cleaned_text);
-    if cleaned_meaningful.is_empty() {
-        return false;
-    }
-
-    let formatted_meaningful = extract_meaningful_text(formatted_text);
-    if formatted_meaningful.is_empty() {
-        return true;
-    }
-
-    let cleaned_digits = extract_ascii_digits(cleaned_text);
-    if !cleaned_digits.is_empty() && extract_ascii_digits(formatted_text) != cleaned_digits {
-        return true;
-    }
-
-    false
-}
-
-fn select_final_transcript_text(cleaned_text: &str, formatted_text: &str) -> String {
-    let normalized_formatted = normalize_recognizer_text(formatted_text);
-    if should_fallback_to_cleaned_text(cleaned_text, &normalized_formatted) {
-        return merge_cleaned_text_with_trailing_punctuation(cleaned_text, &normalized_formatted);
-    }
-
-    normalized_formatted
 }
 
 pub(crate) fn finalize_transcript_text(
@@ -207,27 +100,10 @@ pub(crate) fn log_text_transform_diagnostics(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 #[cfg(test)]
 mod tests {
-    use super::super::types::{
-        TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
-    };
+    use super::super::types::TranscriptNormalizationOptions;
     use super::*;
-    use sona_core::transcript::ensure_transcript_segment_timing;
-
-    #[test]
-    fn normalize_recognizer_text_strips_multiple_leading_tags() {
-        assert_eq!(
-            normalize_recognizer_text("  <|zh|><|withitn|><|noise|> 123。 "),
-            "123。"
-        );
-    }
-
-    #[test]
-    fn select_final_transcript_text_falls_back_to_cleaned_digits_when_formatting_drops_them() {
-        assert_eq!(select_final_transcript_text("123", "。"), "123。");
-    }
 
     fn sample_segment(text: &str, start: f64, end: f64) -> TranscriptSegment {
         TranscriptSegment {
@@ -244,93 +120,6 @@ mod tests {
             speaker: None,
             speaker_attribution: None,
         }
-    }
-
-    #[test]
-    fn ensure_transcript_segment_timing_builds_token_level_units_from_legacy_fields() {
-        let mut segment = TranscriptSegment {
-            text: "你好世界".to_string(),
-            tokens: Some(vec![
-                "你".to_string(),
-                "好".to_string(),
-                "世".to_string(),
-                "界".to_string(),
-            ]),
-            timestamps: Some(vec![0.0, 0.25, 0.5, 0.75]),
-            durations: Some(vec![0.25, 0.25, 0.25, 0.25]),
-            ..sample_segment("你好世界", 0.0, 1.0)
-        };
-
-        ensure_transcript_segment_timing(&mut segment);
-
-        let timing = segment.timing.expect("timing should exist");
-        assert_eq!(timing.level, TranscriptTimingLevel::Token);
-        assert_eq!(timing.source, TranscriptTimingSource::Model);
-        assert_eq!(timing.units.len(), 4);
-        assert_eq!(timing.units[0].text, "你");
-        assert_eq!(timing.units[0].start, 0.0);
-        assert_eq!(timing.units[3].text, "界");
-        assert_eq!(timing.units[3].end, 1.0);
-    }
-
-    #[test]
-    fn ensure_transcript_segment_timing_falls_back_to_segment_level_without_token_timestamps() {
-        let mut segment = TranscriptSegment {
-            tokens: Some(vec!["Hello".to_string(), "world".to_string()]),
-            ..sample_segment("Hello world", 1.0, 3.0)
-        };
-
-        ensure_transcript_segment_timing(&mut segment);
-
-        let timing = segment.timing.expect("timing should exist");
-        assert_eq!(timing.level, TranscriptTimingLevel::Segment);
-        assert_eq!(timing.source, TranscriptTimingSource::Derived);
-        assert_eq!(
-            timing.units,
-            vec![TranscriptTimingUnit {
-                text: "Hello world".to_string(),
-                start: 1.0,
-                end: 3.0,
-            }]
-        );
-    }
-
-    #[test]
-    fn apply_timeline_normalization_splits_token_level_segments_with_model_timing() {
-        let segment = TranscriptSegment {
-            text: "你好。世界。".to_string(),
-            tokens: Some(vec![
-                "你".to_string(),
-                "好".to_string(),
-                "。".to_string(),
-                "世".to_string(),
-                "界".to_string(),
-                "。".to_string(),
-            ]),
-            timestamps: Some(vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0]),
-            durations: Some(vec![0.2; 6]),
-            ..sample_segment("你好。世界。", 0.0, 1.2)
-        };
-
-        let results = apply_timeline_normalization(
-            vec![segment],
-            TranscriptNormalizationOptions {
-                enable_timeline: true,
-            },
-        );
-
-        assert_eq!(results.len(), 2);
-        assert_eq!(results[0].text, "你好。");
-        assert_eq!(results[1].text, "世界。");
-        assert_eq!(
-            results[0].timing.as_ref().map(|timing| timing.level),
-            Some(TranscriptTimingLevel::Token)
-        );
-        assert_eq!(
-            results[0].timing.as_ref().map(|timing| timing.source),
-            Some(TranscriptTimingSource::Model)
-        );
-        assert!(results[1].start >= results[0].end);
     }
 
     #[test]
@@ -355,19 +144,5 @@ mod tests {
             results[1].timing.as_ref().map(|timing| timing.source),
             Some(TranscriptTimingSource::Derived)
         );
-    }
-
-    #[test]
-    fn build_transcript_update_replaces_final_segments_atomically_when_timeline_enabled() {
-        let update = build_transcript_update(
-            sample_segment("Hello. World.", 0.0, 2.0),
-            TranscriptNormalizationOptions {
-                enable_timeline: true,
-            },
-        );
-
-        assert_eq!(update.remove_ids, vec!["segment-1".to_string()]);
-        assert_eq!(update.upsert_segments.len(), 2);
-        assert_eq!(update.upsert_segments[0].id, "segment-1");
     }
 }

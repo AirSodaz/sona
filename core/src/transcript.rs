@@ -613,11 +613,11 @@ pub fn build_transcript_update(
     }
 }
 
-fn normalize_timing_units(
-    units: Vec<TranscriptTimingUnit>,
+pub(crate) fn normalize_timing_units_impl(
+    units: Vec<(String, f64, f64)>,
     segment_start: f64,
     segment_end: f64,
-) -> Vec<TranscriptTimingUnit> {
+) -> Vec<(String, f64, f64)> {
     let safe_start = segment_start.max(0.0);
     let safe_end = segment_end.max(safe_start);
 
@@ -626,25 +626,33 @@ fn normalize_timing_units(
     units
         .into_iter()
         .enumerate()
-        .filter_map(|(index, unit)| {
-            if unit.text.is_empty() {
+        .filter_map(|(index, (text, start, end))| {
+            if text.is_empty() {
                 return None;
             }
 
-            let start = unit.start.max(safe_start).min(safe_end);
+            let s = start.max(safe_start).min(safe_end);
             let fallback_end = if index + 1 == unit_count {
                 safe_end
             } else {
-                start
+                s
             };
-            let end = unit.end.max(fallback_end).min(safe_end).max(start);
+            let e = end.max(fallback_end).min(safe_end).max(s);
 
-            Some(TranscriptTimingUnit {
-                text: unit.text,
-                start,
-                end,
-            })
+            Some((text, s, e))
         })
+        .collect()
+}
+
+fn normalize_timing_units(
+    units: Vec<TranscriptTimingUnit>,
+    segment_start: f64,
+    segment_end: f64,
+) -> Vec<TranscriptTimingUnit> {
+    let tuples = units.into_iter().map(|u| (u.text, u.start, u.end)).collect();
+    normalize_timing_units_impl(tuples, segment_start, segment_end)
+        .into_iter()
+        .map(|(text, start, end)| TranscriptTimingUnit { text, start, end })
         .collect()
 }
 
@@ -742,6 +750,115 @@ fn build_timing_from_legacy(segment: &TranscriptSegment) -> Option<TranscriptTim
         source: TranscriptTimingSource::Model,
         units,
     })
+}
+
+fn is_meaningful_text_char(ch: char) -> bool {
+    ch.is_alphanumeric()
+}
+
+fn extract_meaningful_text(text: &str) -> String {
+    text.chars()
+        .filter(|ch| is_meaningful_text_char(*ch))
+        .collect()
+}
+
+fn extract_ascii_digits(text: &str) -> String {
+    text.chars().filter(|ch| ch.is_ascii_digit()).collect()
+}
+
+fn is_preservable_trailing_punctuation(ch: char) -> bool {
+    matches!(
+        ch,
+        '。' | '，'
+            | '！'
+            | '？'
+            | '：'
+            | '；'
+            | '、'
+            | '.'
+            | ','
+            | '!'
+            | '?'
+            | ':'
+            | ';'
+            | ')'
+            | '）'
+            | ']'
+            | '】'
+            | '}'
+            | '」'
+            | '』'
+            | '》'
+            | '〉'
+            | '"'
+            | '\''
+            | '”'
+            | '’'
+    )
+}
+
+fn extract_trailing_punctuation(text: &str) -> String {
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut start = trimmed.len();
+    for (idx, ch) in trimmed.char_indices().rev() {
+        if is_preservable_trailing_punctuation(ch) {
+            start = idx;
+        } else {
+            break;
+        }
+    }
+
+    if start < trimmed.len() {
+        trimmed[start..].to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn merge_cleaned_text_with_trailing_punctuation(
+    cleaned_text: &str,
+    formatted_text: &str,
+) -> String {
+    let mut result = cleaned_text.trim().to_string();
+    let trailing_punctuation = extract_trailing_punctuation(formatted_text);
+
+    if !trailing_punctuation.is_empty() && !result.ends_with(&trailing_punctuation) {
+        result.push_str(&trailing_punctuation);
+    }
+
+    result
+}
+
+fn should_fallback_to_cleaned_text(cleaned_text: &str, formatted_text: &str) -> bool {
+    let cleaned_meaningful = extract_meaningful_text(cleaned_text);
+    if cleaned_meaningful.is_empty() {
+        return false;
+    }
+
+    let formatted_meaningful = extract_meaningful_text(formatted_text);
+    if formatted_meaningful.is_empty() {
+        return true;
+    }
+
+    let cleaned_digits = extract_ascii_digits(cleaned_text);
+    if !cleaned_digits.is_empty() && extract_ascii_digits(formatted_text) != cleaned_digits {
+        return true;
+    }
+
+    false
+}
+
+pub fn select_final_transcript_text(cleaned_text: &str, formatted_text: &str) -> String {
+    let normalized_formatted = normalize_recognizer_text(formatted_text);
+    if should_fallback_to_cleaned_text(cleaned_text, &normalized_formatted) {
+        return merge_cleaned_text_with_trailing_punctuation(cleaned_text, &normalized_formatted);
+    }
+
+    normalized_formatted
 }
 
 #[cfg(test)]
@@ -903,5 +1020,10 @@ mod tests {
         assert_eq!(update.remove_ids, vec!["segment-1".to_string()]);
         assert_eq!(update.upsert_segments.len(), 2);
         assert_eq!(update.upsert_segments[0].id, "segment-1");
+    }
+
+    #[test]
+    fn select_final_transcript_text_falls_back_to_cleaned_digits_when_formatting_drops_them() {
+        assert_eq!(select_final_transcript_text("123", "。"), "123。");
     }
 }

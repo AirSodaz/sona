@@ -423,32 +423,10 @@ fn normalize_timing_units(
     start: f64,
     end: f64,
 ) -> Vec<RecoveredTranscriptTimingUnit> {
-    let safe_start = start.max(0.0);
-    let safe_end = end.max(safe_start);
-    let unit_count = units.len();
-
-    units
+    let tuples = units.into_iter().map(|u| (u.text, u.start, u.end)).collect();
+    crate::transcript::normalize_timing_units_impl(tuples, start, end)
         .into_iter()
-        .enumerate()
-        .filter_map(|(index, unit)| {
-            if unit.text.is_empty() {
-                return None;
-            }
-
-            let unit_start = unit.start.max(safe_start).min(safe_end);
-            let fallback_end = if index + 1 == unit_count {
-                safe_end
-            } else {
-                unit_start
-            };
-            let unit_end = unit.end.max(fallback_end).min(safe_end).max(unit_start);
-
-            Some(RecoveredTranscriptTimingUnit {
-                text: unit.text,
-                start: unit_start,
-                end: unit_end,
-            })
-        })
+        .map(|(text, start, end)| RecoveredTranscriptTimingUnit { text, start, end })
         .collect()
 }
 
