@@ -1,5 +1,5 @@
 use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::export::{
+use crate::platform::export_files::{
     ExportFormat, ExportMode, ExportTranscriptFileRequest, ExportTranscriptFileResult,
     export_transcript_file_inner,
 };

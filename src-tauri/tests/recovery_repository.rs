@@ -1,7 +1,5 @@
-#[path = "../src/repositories/recovery.rs"]
+#[path = "../src/platform/recovery_repository.rs"]
 mod recovery_adapter;
-#[path = "../src/repositories/storage.rs"]
-pub mod storage;
 
 use recovery_adapter::FsRecoveryRepository;
 use serde_json::{Value, json};

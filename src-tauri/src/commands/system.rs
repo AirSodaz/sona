@@ -34,7 +34,7 @@ fn emit_task_ledger_snapshot<R: Runtime>(
 }
 
 // recovery helper functions (copied from core/recovery/commands.rs)
-use crate::repositories::recovery::FsRecoveryRepository;
+use crate::platform::recovery_repository::FsRecoveryRepository;
 use sona_core::recovery::repository::RecoveryRepository;
 use sona_core::recovery::types::RecoverySnapshot;
 

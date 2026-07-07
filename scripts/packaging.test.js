@@ -331,6 +331,37 @@ test('desktop tauri crate imports core crates directly without a local core shim
   assert.match(desktopRust, /sona_sqlite::/u);
 });
 
+test('desktop filesystem adapters live in platform rather than repositories', () => {
+  const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const desktopRepositories = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
+    'utf8',
+  );
+  const platformExport = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'export_files.rs'), 'utf8');
+  const platformStorage = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'file_storage.rs'), 'utf8');
+  const platformRecovery = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
+    'utf8',
+  );
+  const exportCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'export.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+
+  assert.match(desktopPlatform, /^pub mod export_files;/mu);
+  assert.match(desktopPlatform, /^pub mod file_storage;/mu);
+  assert.match(desktopPlatform, /^pub mod recovery_repository;/mu);
+  assert.doesNotMatch(desktopRepositories, /^pub mod export;/mu);
+  assert.doesNotMatch(desktopRepositories, /^pub mod storage;/mu);
+  assert.doesNotMatch(desktopRepositories, /^pub mod recovery;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'export.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'storage.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'recovery.rs')), false);
+  assert.match(platformExport, /pub\(crate\) fn export_transcript_file_inner/u);
+  assert.match(platformStorage, /pub use sona_core::file_utils::\{/u);
+  assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
+  assert.match(exportCommand, /crate::platform::export_files::\{/u);
+  assert.match(systemCommand, /crate::platform::recovery_repository::FsRecoveryRepository/u);
+});
+
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
