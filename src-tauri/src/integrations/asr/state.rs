@@ -165,7 +165,7 @@ mod tests {
     impl AsrStreamingSession for DummySession {
         async fn start(
             &self,
-            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
             _state: &AsrState,
             _instance_id: &str,
         ) -> Result<(), crate::integrations::asr::SherpaError> {
@@ -180,7 +180,7 @@ mod tests {
         }
         async fn flush(
             &self,
-            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
             _state: &AsrState,
             _instance_id: &str,
         ) -> Result<(), crate::integrations::asr::SherpaError> {
@@ -188,7 +188,7 @@ mod tests {
         }
         async fn feed_audio_chunk(
             &self,
-            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
             _state: &AsrState,
             _instance_id: &str,
             _samples: Vec<u8>,
@@ -197,7 +197,7 @@ mod tests {
         }
         async fn feed_audio_samples(
             &self,
-            _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
             _state: &AsrState,
             _instance_id: &str,
             _samples: &[f32],

@@ -94,7 +94,7 @@ pub struct LocalSherpaBatchProcessor;
 impl AsrBatchProcessor for LocalSherpaBatchProcessor {
     async fn process_file(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,

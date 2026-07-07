@@ -14,7 +14,7 @@ pub(crate) use sona_core::transcript::{
 };
 
 pub(crate) fn emit_transcript_update(
-    emitter: &dyn crate::core::event::EventEmitter,
+    emitter: &dyn crate::platform::event::EventEmitter,
     instance_id: &str,
     update: &TranscriptUpdate,
     stage: &str,

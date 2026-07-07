@@ -66,7 +66,7 @@ fn build_live_metric(
 #[allow(clippy::too_many_arguments)]
 fn run_offline_inference(
     speech_buffer: &[Vec<f32>],
-    emitter: &dyn crate::core::event::EventEmitter,
+    emitter: &dyn crate::platform::event::EventEmitter,
     r: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
     segment_id: &str,
@@ -247,7 +247,7 @@ pub struct LocalSherpaSession {
 impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSession {
     async fn start(
         &self,
-        _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         _state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError> {
@@ -266,7 +266,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
 
     async fn flush(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError> {
@@ -278,7 +278,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
 
     async fn feed_audio_chunk(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: Vec<u8>,
@@ -291,7 +291,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
 
     async fn feed_audio_samples(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: &[f32],
@@ -542,7 +542,7 @@ async fn stop_recognizer_impl_inner(
 }
 
 async fn flush_recognizer_impl_inner(
-    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -724,7 +724,7 @@ async fn flush_recognizer_impl_inner(
 }
 
 async fn feed_audio_samples_inner(
-    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -1183,7 +1183,7 @@ async fn feed_audio_samples_inner(
 }
 
 async fn feed_audio_chunk_impl_inner(
-    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     state: &AsrState,
     instance_id: &str,
     instance: &mut SherpaInstance,

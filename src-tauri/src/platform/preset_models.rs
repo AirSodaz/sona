@@ -1,4 +1,4 @@
-use crate::core::paths::{PathKind, PathProvider};
+use crate::platform::paths::{PathKind, PathProvider};
 pub use sona_core::preset_models::*;
 use std::path::PathBuf;
 

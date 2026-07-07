@@ -5,8 +5,8 @@ use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::core::database::Database;
 use crate::core::history_store::{HistoryStore, HistoryStoreError};
-use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 use crate::integrations::asr::TranscriptSegment;
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use crate::repositories::history::SqliteHistoryStore;
 use crate::repositories::history::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,

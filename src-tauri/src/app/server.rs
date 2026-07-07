@@ -33,7 +33,7 @@ use sona_core::transcribe_runtime::{
 };
 
 use crate::core::database::{Database, DatabaseError};
-use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
 
@@ -48,9 +48,11 @@ impl Default for ApiServerTranscriptionDefaults {
     fn default() -> Self {
         Self {
             gpu_acceleration: Some(DEFAULT_GPU_ACCELERATION.to_string()),
-            vad_model_id: Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            vad_model_id: Some(
+                crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ),
             punctuation_model_id: Some(
-                crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
+                crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
             ),
         }
     }
@@ -868,13 +870,13 @@ fn companion_defaults_for_model(
     model_id: &str,
     defaults: &ApiServerTranscriptionDefaults,
 ) -> (Option<String>, Option<String>) {
-    let rules =
-        crate::core::preset_models::find_preset_model(model_id).map(|model| model.resolved_rules());
+    let rules = crate::platform::preset_models::find_preset_model(model_id)
+        .map(|model| model.resolved_rules());
 
     let vad_model_id = match defaults.vad_model_id.as_deref() {
         Some(id)
             if rules.map(|rules| rules.requires_vad).unwrap_or(true)
-                || id != crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
+                || id != crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
         {
             Some(id.to_string())
         }
@@ -886,7 +888,7 @@ fn companion_defaults_for_model(
             if rules
                 .map(|rules| rules.requires_punctuation)
                 .unwrap_or(true)
-                || id != crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
+                || id != crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
         {
             Some(id.to_string())
         }
@@ -1095,7 +1097,7 @@ pub async fn handle_info(
 
     let models_dir = state.models_dir.clone();
     let snapshot = tokio::task::spawn_blocking(move || {
-        crate::core::preset_models::build_model_catalog_snapshot(&models_dir)
+        crate::platform::preset_models::build_model_catalog_snapshot(&models_dir)
     })
     .await
     .map_err(|e| {
@@ -1112,13 +1114,12 @@ pub async fn handle_info(
         .map(|m| m.id.clone())
         .collect();
 
-    let vad_installed = snapshot
-        .models
-        .iter()
-        .any(|m| m.id == crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed);
+    let vad_installed = snapshot.models.iter().any(|m| {
+        m.id == crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed
+    });
 
     let punctuation_installed = snapshot.models.iter().any(|m| {
-        m.id == crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
+        m.id == crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
     });
 
     let online_providers = crate::integrations::asr_providers::online_asr_providers();
@@ -1443,7 +1444,7 @@ mod tests {
     use super::*;
     use crate::core::config::sqlite_store::SqliteConfigStore;
     use crate::core::database::Database;
-    use crate::core::paths::{MockPathProvider, PathKind};
+    use crate::platform::paths::{MockPathProvider, PathKind};
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -1681,7 +1682,7 @@ mod tests {
         install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
         install_preset_model(
             &models_dir,
-            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
@@ -1697,7 +1698,9 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults {
             gpu_acceleration: Some("cuda".to_string()),
-            vad_model_id: Some(crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            vad_model_id: Some(
+                crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ),
             punctuation_model_id: None,
         };
 
@@ -1734,7 +1737,7 @@ mod tests {
         install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
         install_preset_model(
             &models_dir,
-            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
@@ -1772,11 +1775,11 @@ mod tests {
         install_preset_model(&models_dir, "sherpa-onnx-funasr-nano-int8-2025-12-30");
         install_preset_model(
             &models_dir,
-            crate::core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
         );
         install_preset_model(
             &models_dir,
-            crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID,
+            crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID,
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
@@ -1798,7 +1801,7 @@ mod tests {
             plan.punctuation_model.as_deref(),
             Some(
                 models_dir
-                    .join(crate::core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
+                    .join(crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
                     .display()
                     .to_string()
                     .as_str()

@@ -1,10 +1,10 @@
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
 use crate::core::storage_usage::{
     StorageUsageSnapshot, WebviewBrowsingDataClearResult, build_webview_clear_result,
     collect_storage_usage_snapshot, observable_webview_cache_bytes,
 };
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 
 #[tauri::command]
 pub async fn storage_get_usage_snapshot<R: Runtime>(

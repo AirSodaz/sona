@@ -287,6 +287,42 @@ test('preset model catalog data is owned by core and reused by frontend', () => 
   assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/preset-models\.json/u);
 });
 
+test('desktop platform adapters own Tauri path event diagnostics and preset model bridges', () => {
+  const desktopCore = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'mod.rs'), 'utf8');
+  const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformPaths = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'paths.rs'), 'utf8');
+  const platformEvent = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'event.rs'), 'utf8');
+  const platformPresetModels = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'preset_models.rs'),
+    'utf8',
+  );
+  const platformDiagnostics = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    'utf8',
+  );
+
+  assert.match(desktopPlatform, /^pub mod paths;/mu);
+  assert.match(desktopPlatform, /^pub mod event;/mu);
+  assert.match(desktopPlatform, /^pub mod preset_models;/mu);
+  assert.match(desktopPlatform, /^pub mod diagnostics;/mu);
+  assert.doesNotMatch(desktopCore, /^pub mod paths;/mu);
+  assert.doesNotMatch(desktopCore, /^pub mod event;/mu);
+  assert.doesNotMatch(desktopCore, /^pub mod preset_models;/mu);
+  assert.doesNotMatch(desktopCore, /^pub mod diagnostics;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'paths.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'event.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'preset_models.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'diagnostics.rs')), false);
+  assert.match(platformPaths, /pub struct TauriPathProvider/u);
+  assert.match(platformPaths, /impl<R: Runtime> PathProvider for TauriPathProvider<R>/u);
+  assert.match(platformEvent, /impl<R: Runtime> EventEmitter for AppHandle<R>/u);
+  assert.match(platformEvent, /impl<R: Runtime> EventEmitter for Window<R>/u);
+  assert.match(platformPresetModels, /pub use sona_core::preset_models::\*/u);
+  assert.match(platformPresetModels, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(platformDiagnostics, /pub use sona_core::diagnostics::\{/u);
+  assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
+});
+
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');

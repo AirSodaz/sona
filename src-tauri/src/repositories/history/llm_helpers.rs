@@ -6,8 +6,8 @@ use tauri::{AppHandle, Manager, Runtime};
 
 use crate::core::database::Database;
 use crate::core::history_store::{HistoryStore, HistoryStoreError};
-use crate::core::paths::PathProvider;
 use crate::integrations::asr::TranscriptSegment;
+use crate::platform::paths::PathProvider;
 use crate::repositories::history::sqlite_store::SqliteHistoryStore;
 use crate::repositories::history::{
     HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
@@ -38,8 +38,8 @@ where
     T: Send + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir = crate::core::paths::TauriPathProvider::from_app(app)
-        .resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    let app_local_data_dir = crate::platform::paths::TauriPathProvider::from_app(app)
+        .resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
     run_llm_db_task(app_local_data_dir, db, task).await
 }

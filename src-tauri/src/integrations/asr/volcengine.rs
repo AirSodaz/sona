@@ -145,7 +145,7 @@ pub struct VolcengineBatchProcessor;
 impl AsrBatchProcessor for VolcengineBatchProcessor {
     async fn process_file(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         file_path: std::path::PathBuf,
         _save_to_path: Option<std::path::PathBuf>,
@@ -161,7 +161,7 @@ impl AsrBatchProcessor for VolcengineBatchProcessor {
 impl AsrStreamingSession for VolcengineStreamingSession {
     async fn start(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         _state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError> {
@@ -174,7 +174,7 @@ impl AsrStreamingSession for VolcengineStreamingSession {
 
     async fn flush(
         &self,
-        _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         _state: &AsrState,
         _instance_id: &str,
     ) -> Result<(), SherpaError> {
@@ -183,7 +183,7 @@ impl AsrStreamingSession for VolcengineStreamingSession {
 
     async fn feed_audio_chunk(
         &self,
-        _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         _state: &AsrState,
         _instance_id: &str,
         samples: Vec<u8>,
@@ -193,7 +193,7 @@ impl AsrStreamingSession for VolcengineStreamingSession {
 
     async fn feed_audio_samples(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         _state: &AsrState,
         _instance_id: &str,
         samples: &[f32],
@@ -203,7 +203,7 @@ impl AsrStreamingSession for VolcengineStreamingSession {
 }
 
 async fn start_streaming_recognizer_impl(
-    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     session: &VolcengineStreamingSession,
     instance_id: &str,
 ) -> Result<(), SherpaError> {
@@ -364,7 +364,7 @@ async fn feed_audio_chunk_impl(
 /// Feed f32 audio samples from the hardware capture worker to a Volcengine
 /// streaming session. Converts f32 → i16 PCM bytes and sends via WebSocket.
 async fn feed_audio_samples_impl(
-    _emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     session: &VolcengineStreamingSession,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
@@ -423,7 +423,7 @@ async fn stop_streaming_recognizer_impl(
 }
 
 pub async fn process_batch_file_impl(
-    emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     state: &AsrState,
     file_path: std::path::PathBuf,
     request: AsrTranscriptionRequest,

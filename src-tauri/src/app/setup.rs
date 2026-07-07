@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tauri::{Listener, Manager};
 
-use crate::core::paths::{PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathProvider, TauriPathProvider};
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
@@ -9,7 +9,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let path_provider = TauriPathProvider::from_app(&app_handle_for_listener);
     let app_local_data_dir = path_provider
-        .resolve_path(crate::core::paths::PathKind::AppLocalData)
+        .resolve_path(crate::platform::paths::PathKind::AppLocalData)
         .expect("Failed to get app_local_data_dir");
 
     // Initialize the SQLite database
@@ -71,7 +71,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let config_for_listener = config_for_listener.clone();
         let app_handle = listener_app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let path_provider = crate::core::paths::TauriPathProvider::from_app(&app_handle);
+            let path_provider = crate::platform::paths::TauriPathProvider::from_app(&app_handle);
             let new_config_map = crate::app::server::load_online_asr_config(&path_provider);
             *config_for_listener.write().await = new_config_map;
         });

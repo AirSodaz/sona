@@ -99,8 +99,8 @@ pub async fn feed_audio_samples(
             SherpaError::Generic(format!("ASR instance {} not found", instance_id))
         })?
     };
-    let emitter =
-        std::sync::Arc::new(app.clone()) as std::sync::Arc<dyn crate::core::event::EventEmitter>;
+    let emitter = std::sync::Arc::new(app.clone())
+        as std::sync::Arc<dyn crate::platform::event::EventEmitter>;
     session
         .feed_audio_samples(emitter, state, instance_id, samples)
         .await

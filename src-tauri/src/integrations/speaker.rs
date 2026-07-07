@@ -5,8 +5,8 @@ use crate::integrations::asr::{
 pub use crate::core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
 pub use crate::core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 
-use crate::core::paths::{PathKind, PathProvider};
 use crate::core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
+use crate::platform::paths::{PathKind, PathProvider};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use sona_local_asr::speaker::SpeakerDiarizationSegment;

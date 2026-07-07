@@ -9,27 +9,27 @@ use crate::integrations::asr::types::AsrTranscriptionRequest;
 pub trait AsrStreamingSession: Send + Sync {
     async fn start(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError>;
     async fn stop(&self, state: &AsrState, instance_id: &str) -> Result<(), SherpaError>;
     async fn flush(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
     ) -> Result<(), SherpaError>;
     async fn feed_audio_chunk(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: Vec<u8>,
     ) -> Result<(), SherpaError>;
     async fn feed_audio_samples(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         instance_id: &str,
         samples: &[f32],
@@ -40,7 +40,7 @@ pub trait AsrStreamingSession: Send + Sync {
 pub trait AsrBatchProcessor: Send + Sync {
     async fn process_file(
         &self,
-        emitter: std::sync::Arc<dyn crate::core::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
         state: &AsrState,
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,

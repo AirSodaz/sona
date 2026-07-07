@@ -1,8 +1,8 @@
-use crate::core::event::EventEmitter;
 use crate::integrations::asr::{
     AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment,
     ensure_adapter, get_provider_id,
 };
+use crate::platform::event::EventEmitter;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 

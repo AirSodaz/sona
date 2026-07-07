@@ -1,9 +1,9 @@
-use crate::core::paths::{PathKind, PathProvider};
-use crate::core::preset_models::{
+use crate::integrations::asr::AsrState;
+use crate::platform::paths::{PathKind, PathProvider};
+use crate::platform::preset_models::{
     ModelCatalogModel, ModelRules as PresetModelRules, ModelSelectionPaths,
     build_model_catalog_snapshot, resolve_model_catalog_selected_ids,
 };
-use crate::integrations::asr::AsrState;
 
 use tauri::State;
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::core::database::DatabaseError;
-use crate::core::paths::{PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathProvider, TauriPathProvider};
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use crate::core::task_ledger::types::{
@@ -46,7 +46,8 @@ where
     T: Send + 'static,
     F: FnOnce(FsRecoveryRepository) -> Result<T, String> + Send + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(crate::core::paths::PathKind::AppLocalData)?;
+    let app_local_data_dir =
+        provider.resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
     tauri::async_runtime::spawn_blocking(move || {
         task(FsRecoveryRepository::new(app_local_data_dir))
     })
@@ -210,29 +211,32 @@ pub async fn webdav_download_backup(
 #[tauri::command]
 pub async fn get_model_catalog_snapshot(
     app: AppHandle,
-) -> Result<crate::core::preset_models::ModelCatalogSnapshot, String> {
+) -> Result<crate::platform::preset_models::ModelCatalogSnapshot, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    crate::core::preset_models::get_model_catalog_snapshot(&path_provider).await
+    crate::platform::preset_models::get_model_catalog_snapshot(&path_provider).await
 }
 
 #[tauri::command(rename = "resolve_model_catalog_selected_ids")]
 pub async fn resolve_model_catalog_selected_ids_command(
     app: AppHandle,
-    paths: crate::core::preset_models::ModelSelectionPaths,
-) -> Result<crate::core::preset_models::ModelCatalogSelectedIds, String> {
+    paths: crate::platform::preset_models::ModelSelectionPaths,
+) -> Result<crate::platform::preset_models::ModelCatalogSelectedIds, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    crate::core::preset_models::resolve_model_catalog_selected_ids_command(&path_provider, paths)
-        .await
+    crate::platform::preset_models::resolve_model_catalog_selected_ids_command(
+        &path_provider,
+        paths,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn get_diagnostics_core_snapshot(
     app: AppHandle,
     state: State<'_, crate::integrations::asr::AsrState>,
-    input: crate::core::diagnostics::DiagnosticsCoreInput,
-) -> Result<crate::core::diagnostics::DiagnosticsCoreSnapshot, String> {
+    input: crate::platform::diagnostics::DiagnosticsCoreInput,
+) -> Result<crate::platform::diagnostics::DiagnosticsCoreSnapshot, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    crate::core::diagnostics::get_diagnostics_core_snapshot(&path_provider, state, input).await
+    crate::platform::diagnostics::get_diagnostics_core_snapshot(&path_provider, state, input).await
 }
 
 // Relocated task_ledger commands

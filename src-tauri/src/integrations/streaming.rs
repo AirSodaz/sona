@@ -486,7 +486,7 @@ async fn load_recognizer(
     hotwords: Option<String>,
 ) -> Result<Arc<crate::integrations::asr::Recognizer>, String> {
     let preset =
-        crate::core::preset_models::find_preset_model(model_id).ok_or("Model not found")?;
+        crate::platform::preset_models::find_preset_model(model_id).ok_or("Model not found")?;
     let model_path = preset.resolve_install_path(&state.models_dir);
     let config = crate::integrations::asr::build_model_config(
         &model_path,
@@ -565,7 +565,7 @@ async fn load_recognizer(
 }
 
 pub(crate) fn resolve_vad_model_path(models_dir: &Path, vad_model_id_or_path: &str) -> PathBuf {
-    crate::core::preset_models::find_preset_model(vad_model_id_or_path)
+    crate::platform::preset_models::find_preset_model(vad_model_id_or_path)
         .map(|model| model.resolve_install_path(models_dir))
         .unwrap_or_else(|| PathBuf::from(vad_model_id_or_path))
 }

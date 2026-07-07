@@ -1,4 +1,4 @@
-use crate::core::paths::{PathKind, PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
