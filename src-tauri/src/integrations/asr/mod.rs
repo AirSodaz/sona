@@ -34,8 +34,9 @@ pub use sona_local_asr::recognizer::Recognizer;
 pub(crate) use sona_local_asr::recognizer::{
     RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
 };
-pub(crate) use state::ModelConfigKey;
-pub use state::{AsrState, RecognizerPool};
+pub(crate) use sona_local_asr::runtime::ModelConfigKey;
+pub use sona_local_asr::runtime::RecognizerPool;
+pub use state::AsrState;
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 pub(crate) use transcript::{
     finalize_transcript_text, normalize_recognizer_text, synthesize_durations,

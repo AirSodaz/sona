@@ -1,9 +1,10 @@
 use log::{info, warn};
 pub use sona_core::asr_metrics::{
-    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot, calculate_rss_delta_mb,
+    calculate_rtf, current_time_millis, duration_to_ms, format_optional_count, format_optional_mb,
+    format_optional_ms, format_optional_rtf, samples_to_ms,
 };
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sysinfo::{ProcessesToUpdate, System};
 
 const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
@@ -12,44 +13,6 @@ pub(crate) type AsrMetricsStore = Arc<Mutex<AsrRuntimeMetricsSnapshot>>;
 
 pub(crate) fn new_metrics_store() -> AsrMetricsStore {
     Arc::new(Mutex::new(AsrRuntimeMetricsSnapshot::default()))
-}
-
-pub(crate) fn current_time_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
-pub(crate) fn duration_to_ms(duration: Duration) -> f64 {
-    duration.as_secs_f64() * 1000.0
-}
-
-pub(crate) fn samples_to_ms(samples: usize, sample_rate: f64) -> f64 {
-    if sample_rate <= 0.0 {
-        return 0.0;
-    }
-
-    samples as f64 / sample_rate * 1000.0
-}
-
-pub(crate) fn calculate_rtf(decode_ms: f64, audio_duration_ms: f64) -> Option<f64> {
-    (audio_duration_ms > 0.0).then(|| decode_ms / audio_duration_ms)
-}
-
-pub(crate) fn calculate_rss_delta_mb(
-    before_mb: Option<f64>,
-    after_mb: Option<f64>,
-    reused_from_pool: bool,
-) -> Option<f64> {
-    if reused_from_pool {
-        return None;
-    }
-
-    match (before_mb, after_mb) {
-        (Some(before), Some(after)) => Some(after - before),
-        _ => None,
-    }
 }
 
 pub(crate) fn capture_process_memory_mb() -> Option<f64> {
@@ -134,22 +97,10 @@ pub(crate) fn log_inference_metric(metric: &AsrInferenceMetric) {
         metric.decode_ms,
         format_optional_ms(metric.emit_latency_ms),
         format_optional_ms(metric.total_ms),
-        metric.rtf.map(|value| format!("{value:.4}")).unwrap_or_else(|| "unknown".to_string()),
+        format_optional_rtf(metric.rtf),
         format_optional_mb(metric.process_rss_mb),
-        metric.segment_count.map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string()),
+        format_optional_count(metric.segment_count),
     );
-}
-
-fn format_optional_mb(value: Option<f64>) -> String {
-    value
-        .map(|inner| format!("{inner:.1}"))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn format_optional_ms(value: Option<f64>) -> String {
-    value
-        .map(|inner| format!("{inner:.1}"))
-        .unwrap_or_else(|| "unknown".to_string())
 }
 
 #[cfg(test)]
@@ -161,14 +112,5 @@ mod tests {
         let memory = capture_process_memory_mb();
 
         assert!(memory.is_none() || memory.unwrap() >= 0.0);
-    }
-
-    #[test]
-    fn rss_delta_is_suppressed_for_pool_reuse() {
-        assert_eq!(calculate_rss_delta_mb(Some(100.0), Some(140.0), true), None);
-        assert_eq!(
-            calculate_rss_delta_mb(Some(100.0), Some(140.0), false),
-            Some(40.0)
-        );
     }
 }

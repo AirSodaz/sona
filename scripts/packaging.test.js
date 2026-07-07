@@ -278,6 +278,60 @@ test('core owns ASR runtime error contract reused by desktop', () => {
   assert.match(desktopAsrMod, /pub use sona_core::ports::asr::SherpaError;/u);
 });
 
+test('core owns ASR metric helpers reused by desktop', () => {
+  const coreMetrics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'asr_metrics.rs'), 'utf8');
+  const desktopMetrics = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'metrics.rs'),
+    'utf8',
+  );
+
+  for (const helper of [
+    'current_time_millis',
+    'duration_to_ms',
+    'samples_to_ms',
+    'calculate_rtf',
+    'calculate_rss_delta_mb',
+    'format_optional_mb',
+    'format_optional_ms',
+    'format_optional_rtf',
+    'format_optional_count',
+  ]) {
+    assert.match(coreMetrics, new RegExp(`pub fn ${helper}`, 'u'));
+    assert.match(desktopMetrics, new RegExp(`sona_core::asr_metrics::[\\s\\S]*${helper}`, 'u'));
+    assert.doesNotMatch(desktopMetrics, new RegExp(`fn ${helper}`, 'u'));
+  }
+
+  assert.match(desktopMetrics, /pub\(crate\) fn capture_process_memory_mb/u);
+  assert.match(desktopMetrics, /sysinfo::/u);
+});
+
+test('local ASR runtime pool is owned by the local ASR adapter', () => {
+  const localAsrLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'lib.rs'), 'utf8');
+  const localAsrRuntime = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),
+    'utf8',
+  );
+  const desktopAsrState = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'),
+    'utf8',
+  );
+  const desktopAsrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    'utf8',
+  );
+
+  assert.match(localAsrLib, /^pub mod runtime;/mu);
+  assert.match(localAsrRuntime, /pub struct RecognizerPool/u);
+  assert.match(localAsrRuntime, /pub struct ModelConfigKey/u);
+  assert.match(localAsrRuntime, /pub recognizers:/u);
+  assert.match(localAsrRuntime, /pub punctuations:/u);
+  assert.match(desktopAsrState, /use sona_local_asr::runtime::RecognizerPool;/u);
+  assert.doesNotMatch(desktopAsrState, /pub struct RecognizerPool/u);
+  assert.doesNotMatch(desktopAsrState, /pub struct ModelConfigKey/u);
+  assert.match(desktopAsrMod, /pub use sona_local_asr::runtime::RecognizerPool;/u);
+  assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
+});
+
 test('core owns local batch ASR request contract reused by desktop', () => {
   const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
   const desktopAsrTypes = fs.readFileSync(

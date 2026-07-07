@@ -305,7 +305,7 @@ impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSessio
 }
 
 pub async fn resolve_punctuation(
-    pool: &crate::integrations::asr::state::RecognizerPool,
+    pool: &crate::integrations::asr::RecognizerPool,
     punctuation_model: Option<String>,
 ) -> Option<Arc<Punctuation>> {
     let p_path = punctuation_model?;
