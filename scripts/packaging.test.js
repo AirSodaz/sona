@@ -362,6 +362,40 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.match(systemCommand, /crate::platform::recovery_repository::FsRecoveryRepository/u);
 });
 
+test('desktop automation and project repository task adapters live in platform', () => {
+  const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const desktopRepositories = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
+    'utf8',
+  );
+  const platformAutomation = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
+    'utf8',
+  );
+  const platformProject = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'project_repository.rs'),
+    'utf8',
+  );
+  const automationCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'automation.rs'), 'utf8');
+  const projectCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'project.rs'), 'utf8');
+
+  assert.match(desktopPlatform, /^pub mod automation_repository;/mu);
+  assert.match(desktopPlatform, /^pub mod project_repository;/mu);
+  assert.doesNotMatch(desktopRepositories, /^pub mod automation;/mu);
+  assert.doesNotMatch(desktopRepositories, /^pub mod project;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project')), false);
+  assert.match(platformAutomation, /pub fn validate_rule_activation_inner/u);
+  assert.match(platformAutomation, /sona_sqlite::automation::SqliteAutomationRepository/u);
+  assert.match(platformProject, /sona_sqlite::project::SqliteProjectRepository/u);
+  assert.match(automationCommand, /crate::platform::automation_repository::\{/u);
+  assert.match(projectCommand, /crate::platform::project_repository::\{/u);
+  assert.match(automationCommand, /sona_core::automation::\{/u);
+  assert.match(projectCommand, /sona_core::project::\{/u);
+});
+
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
@@ -443,29 +477,27 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreAutomationPath = path.join(repoRoot, 'core', 'src', 'automation.rs');
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopAutomation = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs'), 'utf8');
-  const desktopAutomationRepository = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'repository.rs'),
+  const platformAutomationRepository = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
     'utf8',
   );
-  const desktopAutomationTypes = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'types.rs'),
-    'utf8',
-  );
+  const desktopAutomationCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'automation.rs'), 'utf8');
 
   assert.ok(fs.existsSync(coreAutomationPath));
   assert.match(coreLib, /^pub mod automation;/mu);
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'automation.rs')));
   assert.match(sqliteLib, /^pub mod automation;/mu);
   assert.match(sqliteLib, /^pub use automation::\{AutomationRepositoryState, SqliteAutomationRepository\};/mu);
-  assert.match(desktopAutomation, /pub use sona_sqlite::automation as sqlite_repository;/u);
-  assert.match(desktopAutomationTypes, /pub use sona_core::automation::\{/u);
-  assert.match(desktopAutomationTypes, /pub use sona_sqlite::automation::AutomationRepositoryState;/u);
-  assert.match(desktopAutomationRepository, /validate_rule_activation/u);
-  assert.doesNotMatch(desktopAutomationRepository, /is_feature_llm_config_complete/u);
-  assert.doesNotMatch(desktopAutomationRepository, /fn is_feature_llm_config_complete/u);
-  assert.doesNotMatch(desktopAutomationRepository, /fn is_batch_asr_configured/u);
-  assert.doesNotMatch(desktopAutomationRepository, /online_asr_providers/u);
+  assert.match(platformAutomationRepository, /sona_sqlite::automation::SqliteAutomationRepository/u);
+  assert.match(platformAutomationRepository, /validate_rule_activation/u);
+  assert.match(desktopAutomationCommand, /sona_core::automation::\{/u);
+  assert.match(desktopAutomationCommand, /sona_sqlite::automation::AutomationRepositoryState/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation')), false);
+  assert.doesNotMatch(platformAutomationRepository, /is_feature_llm_config_complete/u);
+  assert.doesNotMatch(platformAutomationRepository, /fn is_feature_llm_config_complete/u);
+  assert.doesNotMatch(platformAutomationRepository, /fn is_batch_asr_configured/u);
+  assert.doesNotMatch(platformAutomationRepository, /online_asr_providers/u);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation', 'sqlite_repository.rs')),
     false,
@@ -504,17 +536,19 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
 
 test('SQLite project repository is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopProject = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs'), 'utf8');
-  const desktopProjectTypes = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'types.rs'),
+  const platformProjectRepository = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'project_repository.rs'),
     'utf8',
   );
+  const desktopProjectCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'project.rs'), 'utf8');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'project.rs')));
   assert.match(sqliteLib, /^pub mod project;/mu);
   assert.match(sqliteLib, /^pub use project::SqliteProjectRepository;/mu);
-  assert.match(desktopProject, /pub use sona_sqlite::project as sqlite_repository;/u);
-  assert.match(desktopProjectTypes, /pub use sona_core::project::\*;/u);
+  assert.match(platformProjectRepository, /sona_sqlite::project::SqliteProjectRepository/u);
+  assert.match(desktopProjectCommand, /sona_core::project::\{/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project')), false);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'sqlite_repository.rs')),
     false,

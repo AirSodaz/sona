@@ -74,15 +74,13 @@ pub async fn run_automation_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(
-            crate::repositories::automation::SqliteAutomationRepository,
-        ) -> Result<T, DatabaseError>
+    F: FnOnce(sona_sqlite::automation::SqliteAutomationRepository) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
     let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
-        task(crate::repositories::automation::SqliteAutomationRepository::new(db))
+        task(sona_sqlite::automation::SqliteAutomationRepository::new(db))
     })
     .await
     .map_err(|error| error.to_string())?

@@ -1,14 +1,13 @@
 pub mod integrations {
     pub use tauri_appsona_lib::integrations::asr_providers;
 }
-use tauri_appsona_lib::repositories::automation as automation_repository;
-
-use automation_repository::{
-    AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
-    normalize_automation_path, validate_rule_activation_inner,
-};
 use serde_json::{Value, json};
+use sona_core::automation::{
+    AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
+    normalize_automation_path,
+};
 use std::fs;
+use tauri_appsona_lib::platform::automation_repository::validate_rule_activation_inner;
 use tempfile::tempdir;
 
 fn sample_rule(

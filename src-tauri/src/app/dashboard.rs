@@ -5,8 +5,8 @@ use tauri::State;
 
 use crate::repositories::analytics::SqliteAnalyticsRepository;
 use crate::repositories::history::SqliteHistoryStore;
-use crate::repositories::project::SqliteProjectRepository;
 use sona_core::dashboard::DashboardService;
+use sona_sqlite::project::SqliteProjectRepository;
 
 pub type AppDashboardService =
     DashboardService<SqliteHistoryStore, SqliteProjectRepository, SqliteAnalyticsRepository>;

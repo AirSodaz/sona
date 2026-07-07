@@ -1,13 +1,12 @@
+use crate::platform::automation_repository::{run_automation_task, validate_rule_activation_inner};
 use crate::platform::automation_runtime::{
     AutomationRuntimePathCollectionResult, AutomationRuntimeReplaceResult,
     AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_rule_path_result,
     create_event_sink, replace_rule_runtimes_with, scan_rule_runtime, start_rule_runtime,
 };
-use crate::repositories::automation::{
-    AutomationRepositoryState, AutomationRule, AutomationRuleValidationResult,
-    repository::run_automation_task, repository::validate_rule_activation_inner,
-};
 use serde_json::Value;
+use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
+use sona_sqlite::automation::AutomationRepositoryState;
 use tauri::{AppHandle, Runtime, State};
 
 #[tauri::command]

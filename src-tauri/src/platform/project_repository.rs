@@ -16,15 +16,13 @@ pub async fn run_project_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T,
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(crate::repositories::project::SqliteProjectRepository) -> Result<T, DatabaseError>
+    F: FnOnce(sona_sqlite::project::SqliteProjectRepository) -> Result<T, DatabaseError>
         + Send
         + 'static,
 {
     let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
     tauri::async_runtime::spawn_blocking(move || {
-        task(crate::repositories::project::SqliteProjectRepository::new(
-            db,
-        ))
+        task(sona_sqlite::project::SqliteProjectRepository::new(db))
     })
     .await
     .map_err(|error| error.to_string())?

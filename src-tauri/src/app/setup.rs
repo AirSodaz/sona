@@ -48,7 +48,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         app_local_data_dir.clone(),
         Arc::clone(&db),
     ));
-    let project_repo = Arc::new(crate::repositories::project::SqliteProjectRepository::new(
+    let project_repo = Arc::new(sona_sqlite::project::SqliteProjectRepository::new(
         Arc::clone(&db),
     ));
     let analytics_repo =

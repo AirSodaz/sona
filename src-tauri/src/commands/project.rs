@@ -3,10 +3,10 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
-use crate::repositories::project::repository::{
+use crate::platform::project_repository::{
     ACTIVE_PROJECT_SETTINGS_KEY, SETTINGS_FILE_NAME, run_project_task,
 };
-use crate::repositories::project::{
+use sona_core::project::{
     ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRecord,
 };
 
