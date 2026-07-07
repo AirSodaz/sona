@@ -1,4 +1,4 @@
-use crate::core::automation::{
+use crate::platform::automation_runtime::{
     AutomationRuntimePathCollectionResult, AutomationRuntimeReplaceResult,
     AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_rule_path_result,
     create_event_sink, replace_rule_runtimes_with, scan_rule_runtime, start_rule_runtime,

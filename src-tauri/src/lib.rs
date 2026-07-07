@@ -2,6 +2,7 @@ pub mod app;
 pub mod commands;
 pub mod core;
 pub mod integrations;
+pub mod platform;
 pub mod repositories;
 
 #[cfg(all(test, target_os = "windows", target_env = "msvc"))]
@@ -155,7 +156,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .manage(crate::app::server::ApiServerController::default())
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())
-        .manage(crate::core::automation::AutomationRuntimeState::default())
+        .manage(crate::platform::automation_runtime::AutomationRuntimeState::default())
         .manage(crate::repositories::history::HistoryRepositoryState::default())
         .manage(crate::repositories::history::PreparedBackupImportState::default())
         .manage(crate::integrations::audio::AudioState::new())

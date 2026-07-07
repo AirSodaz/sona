@@ -1,4 +1,3 @@
-pub mod automation;
 pub mod config;
 pub mod database;
 pub mod diagnostics;
