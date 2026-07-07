@@ -333,10 +333,6 @@ test('desktop tauri crate imports core crates directly without a local core shim
 
 test('desktop filesystem adapters live in platform rather than repositories', () => {
   const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
-  const desktopRepositories = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
-    'utf8',
-  );
   const platformExport = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'export_files.rs'), 'utf8');
   const platformStorage = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'file_storage.rs'), 'utf8');
   const platformRecovery = fs.readFileSync(
@@ -349,9 +345,6 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.match(desktopPlatform, /^pub mod export_files;/mu);
   assert.match(desktopPlatform, /^pub mod file_storage;/mu);
   assert.match(desktopPlatform, /^pub mod recovery_repository;/mu);
-  assert.doesNotMatch(desktopRepositories, /^pub mod export;/mu);
-  assert.doesNotMatch(desktopRepositories, /^pub mod storage;/mu);
-  assert.doesNotMatch(desktopRepositories, /^pub mod recovery;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'export.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'storage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'recovery.rs')), false);
@@ -364,10 +357,6 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
 
 test('desktop automation and project repository task adapters live in platform', () => {
   const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
-  const desktopRepositories = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
-    'utf8',
-  );
   const platformAutomation = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
     'utf8',
@@ -381,8 +370,6 @@ test('desktop automation and project repository task adapters live in platform',
 
   assert.match(desktopPlatform, /^pub mod automation_repository;/mu);
   assert.match(desktopPlatform, /^pub mod project_repository;/mu);
-  assert.doesNotMatch(desktopRepositories, /^pub mod automation;/mu);
-  assert.doesNotMatch(desktopRepositories, /^pub mod project;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs')), false);
@@ -396,15 +383,23 @@ test('desktop automation and project repository task adapters live in platform',
   assert.match(projectCommand, /sona_core::project::\{/u);
 });
 
-test('desktop repositories avoid pure analytics and history type re-export shims', () => {
-  const desktopRepositories = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
+test('desktop history repository facade lives in platform without repositories module', () => {
+  const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformHistory = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
     'utf8',
   );
-  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
   const dashboardApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'dashboard.rs'), 'utf8');
   const setupApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
-  const historyTypeShimReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history'))
+  const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+    .map((filePath) => ({
+      filePath,
+      content: fs.readFileSync(filePath, 'utf8'),
+    }))
+    .filter(({ content }) => /crate::repositories|repositories::history/u.test(content))
+    .map(({ filePath }) => path.relative(repoRoot, filePath));
+  const historyTypeShimReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository'))
     .map((filePath) => ({
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
@@ -412,13 +407,19 @@ test('desktop repositories avoid pure analytics and history type re-export shims
     .filter(({ content }) => /super::types|history::types/u.test(content))
     .map(({ filePath }) => path.relative(repoRoot, filePath));
 
-  assert.doesNotMatch(desktopRepositories, /^pub mod analytics;/mu);
-  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs')), false);
-  assert.doesNotMatch(desktopHistory, /^mod types;/mu);
-  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'types.rs')), false);
+  assert.doesNotMatch(desktopLib, /^pub mod repositories;/mu);
+  assert.match(desktopPlatform, /^pub mod history_repository;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories')), false);
+  assert.ok(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'llm_helpers.rs')));
+  assert.ok(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'state.rs')));
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'types.rs')), false);
+  assert.doesNotMatch(platformHistory, /^mod types;/mu);
   assert.deepEqual(historyTypeShimReferences, []);
-  assert.match(desktopHistory, /pub use sona_core::history::\{/u);
+  assert.deepEqual(desktopRust, []);
+  assert.match(platformHistory, /pub use sona_core::history::\{/u);
+  assert.match(dashboardApp, /use crate::platform::history_repository::SqliteHistoryStore;/u);
   assert.match(dashboardApp, /use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
+  assert.match(setupApp, /crate::platform::history_repository::SqliteHistoryStore::new/u);
   assert.match(setupApp, /sona_sqlite::analytics::SqliteAnalyticsRepository::new/u);
 });
 
@@ -614,43 +615,52 @@ test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', (
 
 test('history filesystem helpers are owned by core history module', () => {
   const coreHistory = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'history', 'mod.rs'), 'utf8');
-  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+  const platformHistory = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    'utf8',
+  );
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'history', 'fs_utils.rs')));
   assert.match(coreHistory, /^pub mod fs_utils;/mu);
-  assert.match(desktopHistory, /pub\(crate\) use sona_core::history::fs_utils;/u);
+  assert.match(platformHistory, /pub\(crate\) use sona_core::history::fs_utils;/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'fs_utils.rs')), false);
-  assert.doesNotMatch(desktopHistory, /^pub\(crate\) mod fs_utils;/mu);
+  assert.doesNotMatch(platformHistory, /^pub\(crate\) mod fs_utils;/mu);
 });
 
 test('SQLite history store is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+  const platformHistory = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    'utf8',
+  );
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_store.rs')));
   assert.match(sqliteLib, /^pub mod history_store;/mu);
   assert.match(sqliteLib, /^pub use history_store::SqliteHistoryStore;/mu);
-  assert.match(desktopHistory, /pub use sona_sqlite::history_store as sqlite_store;/u);
+  assert.match(platformHistory, /pub use sona_sqlite::history_store as sqlite_store;/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'sqlite_store.rs')), false);
-  assert.doesNotMatch(desktopHistory, /^pub mod sqlite_store;/mu);
+  assert.doesNotMatch(platformHistory, /^pub mod sqlite_store;/mu);
 });
 
 test('history backup archive persistence is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
-  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+  const platformHistory = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    'utf8',
+  );
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_backup.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_archive.rs')));
   assert.match(sqliteLib, /^pub mod history_backup;/mu);
   assert.match(sqliteLib, /^pub mod history_archive;/mu);
-  assert.match(desktopHistory, /pub use sona_sqlite::history_backup as backup;/u);
+  assert.match(platformHistory, /pub use sona_sqlite::history_backup as backup;/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'backup.rs')), false);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'repository.rs')),
     false,
   );
-  assert.doesNotMatch(desktopHistory, /^pub mod backup;/mu);
-  assert.doesNotMatch(desktopHistory, /^pub\(crate\) mod repository;/mu);
+  assert.doesNotMatch(platformHistory, /^pub mod backup;/mu);
+  assert.doesNotMatch(platformHistory, /^pub\(crate\) mod repository;/mu);
 });
 
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {

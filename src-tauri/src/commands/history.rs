@@ -4,13 +4,12 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-use crate::repositories::history::SqliteHistoryStore;
-use crate::repositories::history::backup::{
+use crate::platform::history_repository::SqliteHistoryStore;
+use crate::platform::history_repository::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
-use crate::repositories::history::fs_utils::remove_path_if_exists;
-use crate::repositories::history::{
+use crate::platform::history_repository::fs_utils::remove_path_if_exists;
+use crate::platform::history_repository::{
     BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryAudioCleanupReport,
     HistoryAudioCleanupRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
     HistoryListOptions, HistoryRepositoryState, HistorySaveImportedFileRequest,
@@ -20,6 +19,7 @@ use crate::repositories::history::{
     PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_sqlite::Database;
 
@@ -50,7 +50,8 @@ where
     let app_local_data_dir =
         TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
     let db = Arc::clone(app.state::<Arc<Database>>().inner());
-    crate::repositories::history::llm_helpers::run_llm_db_task(app_local_data_dir, db, task).await
+    crate::platform::history_repository::llm_helpers::run_llm_db_task(app_local_data_dir, db, task)
+        .await
 }
 
 async fn run_history_file_task<R, T, F>(
@@ -266,7 +267,7 @@ pub fn history_build_transcript_diff(
     current_segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptDiffResult, String> {
     Ok(
-        crate::repositories::history::transcript_diff::build_transcript_diff(
+        crate::platform::history_repository::transcript_diff::build_transcript_diff(
             snapshot_segments,
             current_segments,
         ),
@@ -279,7 +280,7 @@ pub fn history_restore_transcript_diff_rows(
     selected_row_ids: Vec<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     Ok(
-        crate::repositories::history::transcript_diff::restore_transcript_diff_rows(
+        crate::platform::history_repository::transcript_diff::restore_transcript_diff_rows(
             rows,
             selected_row_ids,
         ),

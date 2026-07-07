@@ -6,11 +6,11 @@ use std::sync::Arc;
 use sona_core::history_store::HistoryStore;
 use sona_sqlite::Database;
 use sona_sqlite::legacy_migration::migrate_legacy_to_sqlite;
-use tauri_appsona_lib::repositories::history::backup::{
+use tauri_appsona_lib::platform::history_repository::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
-use tauri_appsona_lib::repositories::history::sqlite_store::SqliteHistoryStore;
-use tauri_appsona_lib::repositories::history::{
+use tauri_appsona_lib::platform::history_repository::sqlite_store::SqliteHistoryStore;
+use tauri_appsona_lib::platform::history_repository::{
     ExportBackupArchiveRequest, HistorySaveRecordingRequest, TranscriptSnapshotReason,
 };
 

@@ -2,7 +2,6 @@ pub mod app;
 pub mod commands;
 pub mod integrations;
 pub mod platform;
-pub mod repositories;
 
 #[cfg(all(test, target_os = "windows", target_env = "msvc"))]
 #[link(name = "windows-test-manifest")]
@@ -156,8 +155,8 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())
         .manage(crate::platform::automation_runtime::AutomationRuntimeState::default())
-        .manage(crate::repositories::history::HistoryRepositoryState::default())
-        .manage(crate::repositories::history::PreparedBackupImportState::default())
+        .manage(crate::platform::history_repository::HistoryRepositoryState::default())
+        .manage(crate::platform::history_repository::PreparedBackupImportState::default())
         .manage(crate::integrations::audio::AudioState::new())
         .manage(crate::integrations::asr::AsrState::new())
         .plugin(tauri_plugin_opener::init())

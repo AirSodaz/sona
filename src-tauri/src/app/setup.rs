@@ -44,10 +44,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let history_repo = Arc::new(crate::repositories::history::SqliteHistoryStore::new(
-        app_local_data_dir.clone(),
-        Arc::clone(&db),
-    ));
+    let history_repo = Arc::new(
+        crate::platform::history_repository::SqliteHistoryStore::new(
+            app_local_data_dir.clone(),
+            Arc::clone(&db),
+        ),
+    );
     let project_repo = Arc::new(sona_sqlite::project::SqliteProjectRepository::new(
         Arc::clone(&db),
     ));

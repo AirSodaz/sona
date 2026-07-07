@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::State;
 
-use crate::repositories::history::SqliteHistoryStore;
+use crate::platform::history_repository::SqliteHistoryStore;
 use sona_core::dashboard::DashboardService;
 use sona_sqlite::analytics::SqliteAnalyticsRepository;
 use sona_sqlite::project::SqliteProjectRepository;

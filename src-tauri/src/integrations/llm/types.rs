@@ -390,5 +390,5 @@ pub struct TranscriptLlmJobResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<HistorySummaryPayload>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub history_item: Option<crate::repositories::history::HistoryItemRecord>,
+    pub history_item: Option<crate::platform::history_repository::HistoryItemRecord>,
 }

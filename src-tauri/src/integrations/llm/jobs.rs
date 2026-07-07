@@ -7,8 +7,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::*;
 use crate::integrations::asr::TranscriptSegment;
-use crate::repositories::history::llm_helpers;
-use crate::repositories::history::{HistoryRepositoryState, TranscriptSnapshotReason};
+use crate::platform::history_repository::llm_helpers;
+use crate::platform::history_repository::{HistoryRepositoryState, TranscriptSnapshotReason};
 
 fn normalized_job_history_id(job_history_id: Option<&str>) -> Option<String> {
     job_history_id
@@ -117,7 +117,7 @@ fn emit_transcript_job_update(
     job_history_id: Option<String>,
     segments: Option<Vec<TranscriptSegment>>,
     summary: Option<HistorySummaryPayload>,
-    history_item: Option<crate::repositories::history::HistoryItemRecord>,
+    history_item: Option<crate::platform::history_repository::HistoryItemRecord>,
 ) -> Result<(), String> {
     app.emit(
         LLM_TRANSCRIPT_JOB_UPDATE_EVENT,

@@ -3,7 +3,7 @@ use crate::integrations::llm::{
     SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranscriptLlmJobResult,
     TranscriptSummaryResult, TranslateSegmentsRequest, TranslatedSegment,
 };
-use crate::repositories::history::HistoryRepositoryState;
+use crate::platform::history_repository::HistoryRepositoryState;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
