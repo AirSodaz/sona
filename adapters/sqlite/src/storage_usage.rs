@@ -254,7 +254,7 @@ pub fn build_webview_clear_result(
 }
 
 pub fn collect_sqlite_usage_summary(db: &Database) -> Result<SQLiteUsageSummary, String> {
-    db.with_connection(|conn| collect_sqlite_usage_summary_inner(conn))
+    db.with_connection(collect_sqlite_usage_summary_inner)
         .map_err(|error| error.to_string())
 }
 

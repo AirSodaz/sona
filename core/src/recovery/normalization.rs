@@ -423,7 +423,10 @@ fn normalize_timing_units(
     start: f64,
     end: f64,
 ) -> Vec<RecoveredTranscriptTimingUnit> {
-    let tuples = units.into_iter().map(|u| (u.text, u.start, u.end)).collect();
+    let tuples = units
+        .into_iter()
+        .map(|u| (u.text, u.start, u.end))
+        .collect();
     crate::transcript::normalize_timing_units_impl(tuples, start, end)
         .into_iter()
         .map(|(text, start, end)| RecoveredTranscriptTimingUnit { text, start, end })

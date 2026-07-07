@@ -1,25 +1,19 @@
-/// A trait for objects that can emit events, abstracting away Tauri's AppHandle/Window.
-pub trait EventEmitter: Send + Sync + 'static {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String>;
-}
+/// Re-export the core trait so platform consumers can use either path.
+pub use sona_core::ports::event::EventEmitter;
 
-impl<T: EventEmitter + ?Sized> EventEmitter for std::sync::Arc<T> {
+use tauri::{AppHandle, Emitter, Runtime};
+
+/// Tauri adapter: wraps AppHandle into the core EventEmitter port.
+///
+/// Using a newtype avoids Rust's orphan rule — the trait lives in `sona-core`
+/// and the foreign type `AppHandle` comes from `tauri`, so a direct impl is
+/// not allowed in this crate. The newtype keeps the dependency direction
+/// explicit: platform code adapts Tauri into the core port.
+pub struct TauriEventEmitter<R: Runtime>(pub AppHandle<R>);
+
+impl<R: Runtime> EventEmitter for TauriEventEmitter<R> {
     fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String> {
-        (**self).emit(event, payload)
-    }
-}
-
-use tauri::{AppHandle, Emitter, Runtime, Window};
-
-impl<R: Runtime> EventEmitter for AppHandle<R> {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String> {
-        Emitter::emit(self, event, &payload).map_err(|error| error.to_string())
-    }
-}
-
-impl<R: Runtime> EventEmitter for Window<R> {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String> {
-        Emitter::emit(self, event, &payload).map_err(|error| error.to_string())
+        Emitter::emit(&self.0, event, &payload).map_err(|error| error.to_string())
     }
 }
 

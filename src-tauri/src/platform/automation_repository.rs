@@ -19,15 +19,17 @@ pub fn validate_rule_activation_inner(
     let export_directory = rule.export_config.directory.trim();
 
     let watch_directory_exists = !watch_directory.is_empty() && Path::new(watch_directory).exists();
-    let export_directory_ready = should_prepare_export_directory(
+    let export_directory_ready = if should_prepare_export_directory(
         rule,
         project,
         watch_directory,
         export_directory,
         watch_directory_exists,
-    )
-    .then(|| prepare_export_directory(export_directory))
-    .unwrap_or(false);
+    ) {
+        prepare_export_directory(export_directory)
+    } else {
+        false
+    };
     let offline_model_path_exists = resolve_batch_offline_model_path(global_config)
         .as_deref()
         .map(|path| Path::new(path).exists())

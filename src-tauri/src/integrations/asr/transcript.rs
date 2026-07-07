@@ -3,9 +3,7 @@ use super::recognizer_output_event;
 use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
 use super::types::TranscriptUpdate;
 #[cfg(test)]
-use super::types::{
-    TranscriptSegment, TranscriptTimingLevel, TranscriptTimingSource,
-};
+use super::types::{TranscriptSegment, TranscriptTimingLevel, TranscriptTimingSource};
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

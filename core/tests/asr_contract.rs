@@ -32,7 +32,7 @@ fn local_sherpa_request_builder_preserves_shared_contract_fields() {
     assert_eq!(request.engine(), AsrEngine::LocalSherpa);
     assert_eq!(request.mode, AsrMode::Offline);
     assert_eq!(request.language, "ja");
-    assert_eq!(request.enable_itn, true);
+    assert!(request.enable_itn);
     assert_eq!(request.hotwords.as_deref(), Some("hotwords"));
     assert!(matches!(
         request.engine_config,

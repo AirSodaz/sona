@@ -632,11 +632,7 @@ pub(crate) fn normalize_timing_units_impl(
             }
 
             let s = start.max(safe_start).min(safe_end);
-            let fallback_end = if index + 1 == unit_count {
-                safe_end
-            } else {
-                s
-            };
+            let fallback_end = if index + 1 == unit_count { safe_end } else { s };
             let e = end.max(fallback_end).min(safe_end).max(s);
 
             Some((text, s, e))
@@ -649,7 +645,10 @@ fn normalize_timing_units(
     segment_start: f64,
     segment_end: f64,
 ) -> Vec<TranscriptTimingUnit> {
-    let tuples = units.into_iter().map(|u| (u.text, u.start, u.end)).collect();
+    let tuples = units
+        .into_iter()
+        .map(|u| (u.text, u.start, u.end))
+        .collect();
     normalize_timing_units_impl(tuples, segment_start, segment_end)
         .into_iter()
         .map(|(text, start, end)| TranscriptTimingUnit { text, start, end })

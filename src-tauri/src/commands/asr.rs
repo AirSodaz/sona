@@ -2,7 +2,7 @@ use crate::integrations::asr::{
     AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment,
     ensure_adapter, get_provider_id,
 };
-use crate::platform::event::EventEmitter;
+use crate::platform::event::{EventEmitter, TauriEventEmitter};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -42,7 +42,7 @@ pub async fn start_recognizer(
             SherpaError::Generic(format!("ASR instance {} not found", instance_id))
         })?
     };
-    let emitter = Arc::new(app.clone()) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session.start(emitter, &state, &instance_id).await
 }
 
@@ -70,7 +70,7 @@ pub async fn flush_recognizer(
             SherpaError::Generic(format!("ASR instance {} not found", instance_id))
         })?
     };
-    let emitter = Arc::new(app.clone()) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session.flush(emitter, &state, &instance_id).await
 }
 
@@ -87,7 +87,7 @@ pub async fn feed_audio_chunk(
             SherpaError::Generic(format!("ASR instance {} not found", instance_id))
         })?
     };
-    let emitter = Arc::new(app.clone()) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session
         .feed_audio_chunk(emitter, &state, &instance_id, samples)
         .await
@@ -112,7 +112,7 @@ pub async fn process_batch_file(
                 get_provider_id(&asr_request).unwrap_or("unknown")
             ))
         })?;
-    let emitter = Arc::new(app.clone()) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     processor
         .process_file(
             emitter,
