@@ -1,114 +1,18 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::SecondsFormat;
 use serde_json::to_value;
+use sona_core::llm_jobs::{
+    compute_summary_source_fingerprint, merge_polished_items_into_segments,
+    merge_translated_items_into_segments, normalized_job_history_id,
+    segment_inputs_from_transcript, summary_inputs_from_transcript,
+};
 use tauri::{AppHandle, Emitter, State};
 
 use super::*;
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::history_repository::llm_helpers;
 use crate::platform::history_repository::{HistoryRepositoryState, TranscriptSnapshotReason};
-
-fn normalized_job_history_id(job_history_id: Option<&str>) -> Option<String> {
-    job_history_id
-        .map(str::trim)
-        .filter(|value| !value.is_empty() && *value != "current")
-        .map(str::to_string)
-}
-
-fn segment_inputs_from_transcript(segments: &[TranscriptSegment]) -> Vec<LlmSegmentInput> {
-    segments
-        .iter()
-        .map(|segment| LlmSegmentInput {
-            id: segment.id.clone(),
-            text: segment.text.clone(),
-        })
-        .collect()
-}
-
-fn summary_inputs_from_transcript(segments: &[TranscriptSegment]) -> Vec<SummarySegmentInput> {
-    segments
-        .iter()
-        .map(|segment| {
-            let text = segment
-                .speaker
-                .as_ref()
-                .map(|speaker| format!("{}: {}", speaker.label, segment.text))
-                .unwrap_or_else(|| segment.text.clone());
-            SummarySegmentInput {
-                id: segment.id.clone(),
-                text,
-                start: segment.start as f32,
-                end: segment.end as f32,
-                is_final: segment.is_final,
-            }
-        })
-        .collect()
-}
-
-pub(crate) fn merge_translated_items_into_segments(
-    mut segments: Vec<TranscriptSegment>,
-    items: &[TranslatedSegment],
-) -> Vec<TranscriptSegment> {
-    let items_by_id: HashMap<&str, &TranslatedSegment> =
-        items.iter().map(|item| (item.id.as_str(), item)).collect();
-    for segment in &mut segments {
-        if let Some(item) = items_by_id.get(segment.id.as_str()) {
-            segment.translation = Some(item.translation.clone());
-        }
-    }
-    segments
-}
-
-pub(crate) fn merge_polished_items_into_segments(
-    mut segments: Vec<TranscriptSegment>,
-    items: &[PolishedSegment],
-) -> Vec<TranscriptSegment> {
-    let items_by_id: HashMap<&str, &PolishedSegment> =
-        items.iter().map(|item| (item.id.as_str(), item)).collect();
-    for segment in &mut segments {
-        if let Some(item) = items_by_id.get(segment.id.as_str()) {
-            segment.text = item.text.clone();
-        }
-    }
-    segments
-}
-
-pub(crate) fn compute_summary_source_fingerprint(segments: &[TranscriptSegment]) -> String {
-    segments
-        .iter()
-        .map(|segment| {
-            let (speaker_id, speaker_label, speaker_kind, speaker_score) = segment
-                .speaker
-                .as_ref()
-                .map_or(("", "", "", String::new()), |speaker| {
-                    (
-                        speaker.id.as_str(),
-                        speaker.label.as_str(),
-                        speaker.kind.as_str(),
-                        speaker
-                            .score
-                            .map(|score| score.to_string())
-                            .unwrap_or_default(),
-                    )
-                });
-            format!(
-                "{}:{}:{}:{}:{}:{}:{}:{}:{}",
-                segment.id,
-                segment.text,
-                segment.start,
-                segment.end,
-                segment.is_final,
-                speaker_id,
-                speaker_label,
-                speaker_kind,
-                speaker_score
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("|")
-}
 
 fn emit_transcript_job_update(
     app: &AppHandle,

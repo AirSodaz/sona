@@ -1,13 +1,13 @@
 use super::commands::list_llm_models_command;
-use super::jobs::{
-    compute_summary_source_fingerprint, merge_polished_items_into_segments,
-    merge_translated_items_into_segments,
-};
 use super::network::LlmApiUrl;
 use super::*;
 use futures_util::future::BoxFuture;
 use reqwest::{StatusCode, header::RETRY_AFTER};
 use serde_json::json;
+use sona_core::llm_jobs::{
+    compute_summary_source_fingerprint, merge_polished_items_into_segments,
+    merge_translated_items_into_segments,
+};
 use std::{
     sync::{
         Arc, Mutex,

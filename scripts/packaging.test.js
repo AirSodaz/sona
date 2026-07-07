@@ -637,6 +637,23 @@ test('LLM task models and prompt planning are owned by core and reused by deskto
   assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) fn build_polish_prompt/u);
 });
 
+test('transcript LLM job helpers are owned by core and reused by desktop', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreLlmJobs = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_jobs.rs'), 'utf8');
+  const desktopLlmJobs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'jobs.rs'), 'utf8');
+
+  assert.match(coreLib, /^pub mod llm_jobs;/mu);
+  assert.match(coreLlmJobs, /pub fn normalized_job_history_id/u);
+  assert.match(coreLlmJobs, /pub fn segment_inputs_from_transcript/u);
+  assert.match(coreLlmJobs, /pub fn merge_translated_items_into_segments/u);
+  assert.match(coreLlmJobs, /pub fn compute_summary_source_fingerprint/u);
+  assert.match(desktopLlmJobs, /sona_core::llm_jobs::\{/u);
+  assert.doesNotMatch(desktopLlmJobs, /fn normalized_job_history_id/u);
+  assert.doesNotMatch(desktopLlmJobs, /fn segment_inputs_from_transcript/u);
+  assert.doesNotMatch(desktopLlmJobs, /pub\(crate\) fn merge_translated_items_into_segments/u);
+  assert.doesNotMatch(desktopLlmJobs, /pub\(crate\) fn compute_summary_source_fingerprint/u);
+});
+
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
