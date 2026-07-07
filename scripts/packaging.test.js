@@ -693,6 +693,41 @@ test('LLM streaming protocol helpers are owned by core and reused by desktop', (
   assert.doesNotMatch(desktopStreaming, /fn build_openai_stream_url/u);
 });
 
+test('LLM request and config contracts are owned by core and reused by desktop', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreRequestsPath = path.join(repoRoot, 'core', 'src', 'llm_requests.rs');
+  const coreRequests = fs.readFileSync(coreRequestsPath, 'utf8');
+  const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
+  const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
+  const requestTypes = [
+    'LlmConfig',
+    'LlmGenerateRequest',
+    'LlmUsageEventPayload',
+    'LlmModelsRequest',
+    'PolishSegmentsRequest',
+    'TranslateSegmentsRequest',
+    'SummarizeTranscriptRequest',
+    'TranscriptLlmJobRequest',
+    'TranscriptSummaryRecordPayload',
+    'HistorySummaryPayload',
+  ];
+
+  assert.match(coreLib, /^pub mod llm_requests;/mu);
+  for (const typeName of requestTypes) {
+    assert.match(coreRequests, new RegExp(`pub struct ${typeName}\\b`, 'u'));
+    assert.match(desktopLlmTypes, new RegExp(`\\b${typeName}\\b`, 'u'));
+    assert.match(tsBindLib, new RegExp(`\\b${typeName}\\b`, 'u'));
+  }
+
+  assert.match(desktopLlmTypes, /pub use sona_core::llm_requests::\{/u);
+  assert.match(tsBindLib, /sona_core::llm_requests::\{/u);
+  assert.doesNotMatch(desktopLlmTypes, /struct RawLlmConfig/u);
+  for (const typeName of requestTypes) {
+    assert.doesNotMatch(desktopLlmTypes, new RegExp(`pub struct ${typeName}\\b`, 'u'));
+  }
+  assert.match(desktopLlmTypes, /pub struct TranscriptLlmJobResult/u);
+});
+
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');

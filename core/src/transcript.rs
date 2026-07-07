@@ -1,7 +1,11 @@
 use crate::transcript_postprocess::TranscriptNormalizationOptions;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "specta")]
+use specta::Type;
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
 pub enum TranscriptTimingLevel {
     Token,
@@ -9,6 +13,7 @@ pub enum TranscriptTimingLevel {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
 pub enum TranscriptTimingSource {
     Model,
@@ -16,6 +21,7 @@ pub enum TranscriptTimingSource {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptTimingUnit {
     pub text: String,
@@ -24,6 +30,7 @@ pub struct TranscriptTimingUnit {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptTiming {
     pub level: TranscriptTimingLevel,
@@ -32,6 +39,7 @@ pub struct TranscriptTiming {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerTag {
     pub id: String,
@@ -41,6 +49,7 @@ pub struct SpeakerTag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerCandidate {
     pub profile_id: String,
@@ -50,6 +59,7 @@ pub struct SpeakerCandidate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerAttribution {
     pub group_id: String,
@@ -61,6 +71,7 @@ pub struct SpeakerAttribution {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSegment {
     pub id: String,
@@ -87,6 +98,7 @@ pub struct TranscriptSegment {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptUpdate {
     pub remove_ids: Vec<String>,

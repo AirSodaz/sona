@@ -11,6 +11,7 @@ use specta::Type;
 pub const RECENT_DAILY_WINDOW: i64 = 30;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum LlmUsageCategory {
     Summary,
@@ -22,6 +23,7 @@ pub enum LlmUsageCategory {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum LlmGenerateSource {
     TitleGeneration,

@@ -9,11 +9,17 @@ pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
 pub use sona_core::llm_provider_protocol::{
     LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
 };
+pub use sona_core::llm_requests::{
+    HistorySummaryPayload, LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload,
+    PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
+    TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
+};
 pub use sona_core::llm_tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
     LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
     TranscriptSummaryResult, TranslatedSegment,
 };
+pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 pub use sona_core::model_config::ModelFileConfig;
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
@@ -23,6 +29,10 @@ pub use sona_core::ports::asr::{
 };
 pub use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
 pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
+pub use sona_core::transcript::{
+    SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
+    TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
+};
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
 
@@ -35,6 +45,16 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "StandardLlmRequest",
     "StandardLlmResponse",
     "LlmModelSummary",
+    "LlmConfig",
+    "LlmGenerateRequest",
+    "LlmUsageEventPayload",
+    "LlmModelsRequest",
+    "PolishSegmentsRequest",
+    "TranslateSegmentsRequest",
+    "SummarizeTranscriptRequest",
+    "TranscriptLlmJobRequest",
+    "TranscriptSummaryRecordPayload",
+    "HistorySummaryPayload",
     "LlmProviderStrategy",
     "LlmTaskType",
     "SummaryTemplateConfig",
@@ -46,6 +66,18 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmTaskProgressPayload",
     "LlmTaskChunkPayload",
     "LlmTaskTextPayload",
+    "LlmGenerateSource",
+    "LlmUsageCategory",
+    "TokenUsage",
+    "TranscriptTimingLevel",
+    "TranscriptTimingSource",
+    "TranscriptTimingUnit",
+    "TranscriptTiming",
+    "SpeakerTag",
+    "SpeakerCandidate",
+    "SpeakerAttribution",
+    "TranscriptSegment",
+    "TranscriptUpdate",
     "RuntimeEnvironmentStatus",
     "RuntimePathKind",
     "RuntimePathStatus",
@@ -103,6 +135,16 @@ mod tests {
         assert_specta_type::<StandardLlmRequest>();
         assert_specta_type::<StandardLlmResponse>();
         assert_specta_type::<LlmModelSummary>();
+        assert_specta_type::<LlmConfig>();
+        assert_specta_type::<LlmGenerateRequest>();
+        assert_specta_type::<LlmUsageEventPayload>();
+        assert_specta_type::<LlmModelsRequest>();
+        assert_specta_type::<PolishSegmentsRequest>();
+        assert_specta_type::<TranslateSegmentsRequest>();
+        assert_specta_type::<SummarizeTranscriptRequest>();
+        assert_specta_type::<TranscriptLlmJobRequest>();
+        assert_specta_type::<TranscriptSummaryRecordPayload>();
+        assert_specta_type::<HistorySummaryPayload>();
         assert_specta_type::<LlmProviderStrategy>();
         assert_specta_type::<LlmTaskType>();
         assert_specta_type::<SummaryTemplateConfig>();
@@ -114,6 +156,18 @@ mod tests {
         assert_specta_type::<LlmTaskProgressPayload>();
         assert_specta_type::<LlmTaskChunkPayload<PolishedSegment>>();
         assert_specta_type::<LlmTaskTextPayload>();
+        assert_specta_type::<LlmGenerateSource>();
+        assert_specta_type::<LlmUsageCategory>();
+        assert_specta_type::<TokenUsage>();
+        assert_specta_type::<TranscriptTimingLevel>();
+        assert_specta_type::<TranscriptTimingSource>();
+        assert_specta_type::<TranscriptTimingUnit>();
+        assert_specta_type::<TranscriptTiming>();
+        assert_specta_type::<SpeakerTag>();
+        assert_specta_type::<SpeakerCandidate>();
+        assert_specta_type::<SpeakerAttribution>();
+        assert_specta_type::<TranscriptSegment>();
+        assert_specta_type::<TranscriptUpdate>();
         assert_specta_type::<ModelFileConfig>();
         assert_specta_type::<SpeakerProcessingConfig>();
         assert_specta_type::<SpeakerProfile>();
