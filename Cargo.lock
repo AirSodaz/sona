@@ -5518,6 +5518,7 @@ name = "sona-online-llm"
 version = "0.8.0"
 dependencies = [
  "async-trait",
+ "futures-util",
  "log",
  "reqwest 0.13.4",
  "rig-core",

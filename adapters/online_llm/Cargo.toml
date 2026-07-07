@@ -7,6 +7,7 @@ edition.workspace = true
 
 [dependencies]
 async-trait = "0.1"
+futures-util = "0.3"
 log = "0.4.22"
 reqwest = { version = "0.13", features = ["rustls", "json"] }
 rig-core = "0.39"

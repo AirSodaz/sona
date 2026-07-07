@@ -681,6 +681,7 @@ test('LLM streaming protocol helpers are owned by core and reused by desktop', (
   const coreStreaming = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_streaming_protocol.rs'), 'utf8');
   const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const desktopStreaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'streaming.rs'), 'utf8');
+  const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
   assert.match(coreLib, /^pub mod llm_streaming_protocol;/mu);
   assert.match(coreStreaming, /pub struct StreamTextAccumulator/u);
@@ -688,11 +689,16 @@ test('LLM streaming protocol helpers are owned by core and reused by desktop', (
   assert.match(coreStreaming, /pub struct SseEventBuffer/u);
   assert.match(coreStreaming, /pub fn build_openai_chat_payload/u);
   assert.match(desktopLlm, /sona_core::llm_streaming_protocol::\{/u);
+  assert.match(onlineLlmLib, /pub async fn try_stream_text_with_provider/u);
+  assert.match(desktopStreaming, /try_stream_text_with_provider/u);
   assert.doesNotMatch(desktopStreaming, /pub\(crate\) struct StreamTextAccumulator/u);
   assert.doesNotMatch(desktopStreaming, /pub\(crate\) struct StreamingLineBuffer/u);
   assert.doesNotMatch(desktopStreaming, /struct SseEventBuffer/u);
   assert.doesNotMatch(desktopStreaming, /pub\(crate\) fn build_openai_chat_payload/u);
   assert.doesNotMatch(desktopStreaming, /fn build_openai_stream_url/u);
+  assert.doesNotMatch(desktopStreaming, /reqwest::header::CONTENT_TYPE/u);
+  assert.doesNotMatch(desktopStreaming, /rig_core::providers/u);
+  assert.doesNotMatch(desktopStreaming, /StreamedAssistantContent/u);
 });
 
 test('LLM request and config contracts are owned by core and reused by desktop', () => {

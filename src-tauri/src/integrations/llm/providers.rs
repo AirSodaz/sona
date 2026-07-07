@@ -4,8 +4,12 @@ use tauri::{AppHandle, Emitter};
 
 pub(crate) use sona_online_llm::{
     GoogleTranslateRequest, GoogleTranslateResponse, OnlineLlmAdapter as DesktopLlmAdapter,
+    generate_text_with_provider,
+};
+#[cfg(test)]
+pub(crate) use sona_online_llm::{
     build_gemini_generate_content_request_parts_for_reqwest as build_gemini_generate_content_request_parts,
-    extract_text_response, generate_text_with_provider, token_usage_from_rig_usage,
+    extract_text_response, token_usage_from_rig_usage,
 };
 
 pub(crate) fn emit_llm_usage_event(
