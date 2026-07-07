@@ -46,10 +46,10 @@ class ModelRegistryService {
         paths.streamingModelPath,
         snapshot.selectionOptions.streaming,
       ),
-      offline: resolveSelectedModelId(
+      batch: resolveSelectedModelId(
         snapshot,
-        paths.offlineModelPath,
-        snapshot.selectionOptions.offline,
+        paths.batchModelPath,
+        snapshot.selectionOptions.batch,
       ),
       speakerSegmentation: resolveSelectedModelId(
         snapshot,

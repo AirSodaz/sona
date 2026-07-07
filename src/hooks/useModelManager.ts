@@ -34,7 +34,7 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
     sections: [],
     selectionOptions: {
         streaming: [],
-        offline: [],
+        batch: [],
         speakerSegmentation: [],
         speakerEmbedding: [],
     },
@@ -55,7 +55,7 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
 
 const EMPTY_MODEL_CATALOG_SELECTED_IDS: ModelCatalogSelectedIds = {
     streaming: null,
-    offline: null,
+    batch: null,
     speakerSegmentation: null,
     speakerEmbedding: null,
 };
@@ -192,13 +192,13 @@ export function useModelManager(isOpen: boolean) {
 
         return modelService.resolveModelCatalogSelectedIdsFromSnapshot(modelCatalog, {
             streamingModelPath: config.streamingModelPath || '',
-            offlineModelPath: config.offlineModelPath || '',
+            batchModelPath: config.batchModelPath || '',
             speakerSegmentationModelPath: config.speakerSegmentationModelPath || '',
             speakerEmbeddingModelPath: config.speakerEmbeddingModelPath || '',
         });
     }, [
         catalogLoadState,
-        config.offlineModelPath,
+        config.batchModelPath,
         config.speakerEmbeddingModelPath,
         config.speakerSegmentationModelPath,
         config.streamingModelPath,

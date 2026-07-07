@@ -107,7 +107,7 @@ vi.mock('../../services/modelService', () => ({
         getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false }),
         resolveModelCatalogSelectedIds: vi.fn().mockResolvedValue({
             streaming: null,
-            offline: null,
+            batch: null,
             speakerSegmentation: null,
             speakerEmbedding: null,
         }),
@@ -116,8 +116,8 @@ vi.mock('../../services/modelService', () => ({
 }));
 
 const TEST_MODEL_CATALOG_MODELS = [
-    { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'sherpa-onnx', filename: 'test-model', modes: ['streaming', 'offline'] },
-    { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'sherpa-onnx', filename: 'test-model-2', modes: ['streaming', 'offline'] },
+    { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'sherpa-onnx', filename: 'test-model', modes: ['streaming', 'batch'] },
+    { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'sherpa-onnx', filename: 'test-model-2', modes: ['streaming', 'batch'] },
     { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'sherpa-onnx', filename: 'test-punct' },
 ];
 
@@ -157,7 +157,7 @@ function createModelCatalogSnapshot(installedIds: string[] = []) {
                 installPath: model.installPath,
                 isInstalled: model.isInstalled,
             })),
-            offline: asrModels.map((model) => ({
+            batch: asrModels.map((model) => ({
                 id: model.id,
                 label: model.name,
                 installPath: model.installPath,
@@ -229,7 +229,7 @@ describe('Settings', () => {
 
             return {
                 streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
-                offline: resolve(paths.offlineModelPath, snapshot.selectionOptions.offline),
+                batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
                 speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
                 speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
             };
@@ -239,7 +239,7 @@ describe('Settings', () => {
             config: {
 
                 streamingModelPath: "/path/to/model",
-                offlineModelPath: '/test/offline',
+                batchModelPath: '/test/batch',
                 enableITN: true,
                 appLanguage: 'auto',
                 language: 'en',
@@ -451,7 +451,7 @@ describe('Settings', () => {
 
         await act(async () => {
             useTranscriptStore.getState().setConfig({ streamingModelPath: path,
-                offlineModelPath: path });
+                batchModelPath: path });
         });
 
         // Verify store update

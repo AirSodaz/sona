@@ -23,7 +23,7 @@ import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
-const OFFLINE_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
+const BATCH_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
 const VAD_PATH = 'C:\\models\\silero_vad.onnx';
 
 const runtimeEnvironment = {
@@ -49,22 +49,22 @@ function makeCoreSnapshot() {
     runtimeEnvironment,
     config: {
       streamingModelPath: STREAMING_SENSEVOICE_PATH,
-      offlineModelPath: OFFLINE_QWEN_PATH,
+      batchModelPath: BATCH_QWEN_PATH,
       vadModelPath: VAD_PATH,
       punctuationModelPath: '',
       microphoneId: 'default',
     },
     selectedModels: {
       live: { id: 'sensevoice-live', name: 'SenseVoice Live' },
-      offline: { id: 'qwen-offline', name: 'Qwen Offline' },
+      batch: { id: 'qwen-batch', name: 'Qwen Batch' },
     },
     modelRules: {
       live: { requiresVad: true, requiresPunctuation: false },
-      offline: { requiresVad: false, requiresPunctuation: false },
+      batch: { requiresVad: false, requiresPunctuation: false },
     },
     pathStatuses: {
       liveModel: { path: STREAMING_SENSEVOICE_PATH, kind: 'directory', error: null },
-      offlineModel: { path: OFFLINE_QWEN_PATH, kind: 'directory', error: null },
+      batchModel: { path: BATCH_QWEN_PATH, kind: 'directory', error: null },
       vad: { path: VAD_PATH, kind: 'file', error: null },
       punctuation: null,
     },
@@ -156,7 +156,7 @@ describe('diagnosticsService', () => {
       config: {
         ...DEFAULT_CONFIG,
         streamingModelPath: STREAMING_SENSEVOICE_PATH,
-        offlineModelPath: OFFLINE_QWEN_PATH,
+        batchModelPath: BATCH_QWEN_PATH,
         vadModelPath: VAD_PATH,
         voiceTypingEnabled: true,
         voiceTypingShortcut: 'Alt+V',
@@ -170,7 +170,7 @@ describe('diagnosticsService', () => {
         input: expect.objectContaining({
           config: expect.objectContaining({
             streamingModelPath: STREAMING_SENSEVOICE_PATH,
-            offlineModelPath: OFFLINE_QWEN_PATH,
+            batchModelPath: BATCH_QWEN_PATH,
             vadModelPath: VAD_PATH,
             microphoneId: 'default',
           }),

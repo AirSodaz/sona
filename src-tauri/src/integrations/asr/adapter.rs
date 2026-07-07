@@ -35,7 +35,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         &self,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
-        Self::ensure_mode(request, AsrMode::Offline).map_err(SherpaError::Generic)?;
+        Self::ensure_mode(request, AsrMode::Batch).map_err(SherpaError::Generic)?;
         Ok(Some(std::sync::Arc::new(LocalSherpaBatchProcessor)))
     }
 

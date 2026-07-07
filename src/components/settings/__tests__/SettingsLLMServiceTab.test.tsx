@@ -37,7 +37,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): AppConfig {
   const baseConfig = buildTestConfig({
     streamingModelPath: '/path/to/model',
-    offlineModelPath: '',
+    batchModelPath: '',
     language: 'auto',
     summaryEnabled: true,
     llmSettings: createLlmSettings(provider),

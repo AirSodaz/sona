@@ -13,14 +13,14 @@ import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
 
 vi.mock('../../stores/effectiveConfigStore', () => ({
   getEffectiveConfigSnapshot: () => ({
-    offlineModelPath: 'C:/models/asr.onnx',
+    batchModelPath: 'C:/models/asr.onnx',
     enableITN: true,
     language: 'auto',
   }),
   useEffectiveConfigStore: {
     getState: () => ({
       config: {
-        offlineModelPath: 'C:/models/asr.onnx',
+        batchModelPath: 'C:/models/asr.onnx',
         enableITN: true,
         language: 'auto',
       },

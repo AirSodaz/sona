@@ -118,7 +118,7 @@ describe('automationService repository persistence', () => {
 
   it('delegates activation validation to the native repository command', async () => {
     const rule = createRule({ enabled: true });
-    const config = { offlineModelPath: 'C:\\models\\sensevoice' } as any;
+    const config = { batchModelPath: 'C:\\models\\sensevoice' } as any;
     const project = { id: 'project-1', name: 'Team Sync' } as any;
     testContext.automationValidateRuleActivationMock.mockResolvedValue({ valid: true });
 

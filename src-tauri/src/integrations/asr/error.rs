@@ -93,8 +93,8 @@ pub enum SherpaError {
     #[error("火山实时 ASR 只能用于 streaming 槽位。")]
     VolcengineRealtimeOnlyForStreaming,
 
-    #[error("火山批量 ASR 只能用于 offline/batch 槽位。")]
-    VolcengineBatchOnlyForOffline,
+    #[error("火山批量 ASR 只能用于 batch 槽位。")]
+    VolcengineBatchModeMismatch,
 
     #[error("{0}")]
     Generic(String),
@@ -146,7 +146,7 @@ impl Serialize for SherpaError {
                 "VOLCENGINE_LOCAL_FILE_BATCH_UNSUPPORTED"
             }
             Self::VolcengineRealtimeOnlyForStreaming => "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING",
-            Self::VolcengineBatchOnlyForOffline => "VOLCENGINE_BATCH_ONLY_FOR_OFFLINE",
+            Self::VolcengineBatchModeMismatch => "VOLCENGINE_BATCH_MODE_MISMATCH",
             Self::Generic(_) => "GENERIC_ERROR",
         };
 

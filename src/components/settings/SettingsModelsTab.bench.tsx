@@ -9,7 +9,7 @@ interface ModelInfo {
 // Generate some mock models
 const mockModels: ModelInfo[] = Array.from({ length: 20 }, (_, i) => ({
     id: `model-${i}`,
-    modes: i % 2 === 0 ? ['streaming'] : ['offline', 'streaming']
+    modes: i % 2 === 0 ? ['streaming'] : ['batch', 'streaming']
 }));
 
 // Mock model path resolution - simulate a small delay to mimic IPC call
@@ -21,12 +21,12 @@ const getModelPath = async (id: string): Promise<string> => {
 
 describe('SettingsModelsTab model resolution', () => {
 
-    bench('baseline sequential loop (streaming + offline)', async () => {
+    bench('baseline sequential loop (streaming + batch)', async () => {
         const streamingModelPath = '/path/to/models/model-18';
-        const offlineModelPath = '/path/to/models/model-19';
+        const batchModelPath = '/path/to/models/model-19';
 
         let selectedStreamingModelId = '';
-        let selectedOfflineModelId = '';
+        let selectedBatchModelId = '';
 
         // Streaming logic
         if (streamingModelPath) {
@@ -42,12 +42,12 @@ describe('SettingsModelsTab model resolution', () => {
         }
 
         // Offline logic
-        if (offlineModelPath) {
+        if (batchModelPath) {
             for (const model of mockModels) {
-                if (model.modes?.includes('offline')) {
+                if (model.modes?.includes('batch')) {
                     const path = await getModelPath(model.id);
-                    if (path === offlineModelPath) {
-                        selectedOfflineModelId = model.id;
+                    if (path === batchModelPath) {
+                        selectedBatchModelId = model.id;
                         break;
                     }
                 }
@@ -55,17 +55,17 @@ describe('SettingsModelsTab model resolution', () => {
         }
 
         // Use variables to prevent strict compiler errors
-        if (!selectedStreamingModelId || !selectedOfflineModelId) {
+        if (!selectedStreamingModelId || !selectedBatchModelId) {
             return;
         }
     });
 
     bench('optimized map with Promise.all', async () => {
         const streamingModelPath = '/path/to/models/model-18';
-        const offlineModelPath = '/path/to/models/model-19';
+        const batchModelPath = '/path/to/models/model-19';
 
         let selectedStreamingModelId = '';
-        let selectedOfflineModelId = '';
+        let selectedBatchModelId = '';
 
         // Optimization logic: map path -> id
         const pathMap = new Map<string, string>();
@@ -81,12 +81,12 @@ describe('SettingsModelsTab model resolution', () => {
             selectedStreamingModelId = pathMap.get(streamingModelPath) || '';
         }
 
-        if (offlineModelPath) {
-            selectedOfflineModelId = pathMap.get(offlineModelPath) || '';
+        if (batchModelPath) {
+            selectedBatchModelId = pathMap.get(batchModelPath) || '';
         }
 
         // Use variables to prevent strict compiler errors
-        if (!selectedStreamingModelId || !selectedOfflineModelId) {
+        if (!selectedStreamingModelId || !selectedBatchModelId) {
             return;
         }
     });

@@ -17,14 +17,14 @@ function isAppConfigLike(value: unknown): value is AppConfig {
   }
   const candidate = value as Partial<AppConfig>;
   return typeof candidate.streamingModelPath === 'string'
-    && typeof candidate.offlineModelPath === 'string';
+    && typeof candidate.batchModelPath === 'string';
 }
 
 function shouldUseGlobalSnapshot(snapshot: AppConfig | undefined, globalConfig: AppConfig): boolean {
   return !snapshot
     || (snapshot === DEFAULT_CONFIG && globalConfig !== DEFAULT_CONFIG)
     || snapshot.streamingModelPath !== globalConfig.streamingModelPath
-    || snapshot.offlineModelPath !== globalConfig.offlineModelPath
+    || snapshot.batchModelPath !== globalConfig.batchModelPath
     || snapshot.asr !== globalConfig.asr;
 }
 

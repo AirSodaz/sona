@@ -402,7 +402,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ],
     )
     .unwrap_or_default();
-    let offline_model_path = first_string(
+    let batch_model_path = first_string(
         &parsed,
         &["offlineModelPath", "recognitionModelPath", "modelPath"],
     )
@@ -424,7 +424,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     for (key, value) in [
         ("configVersion", json!(CURRENT_CONFIG_VERSION)),
         ("streamingModelPath", json!(streaming_model_path.clone())),
-        ("offlineModelPath", json!(offline_model_path.clone())),
+        ("batchModelPath", json!(batch_model_path.clone())),
         (
             "punctuationModelPath",
             json!(string_at(&parsed, "punctuationModelPath").unwrap_or_default()),
@@ -785,7 +785,7 @@ fn has_valid_asr_config(config: &Value) -> bool {
         ("live", "streaming"),
         ("caption", "streaming"),
         ("voiceTyping", "streaming"),
-        ("batch", "offline"),
+        ("batch", "batch"),
     ] {
         let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
             return false;
@@ -841,7 +841,7 @@ fn has_valid_or_legacy_current_asr_config(config: &Value) -> bool {
         ("live", "streaming"),
         ("caption", "streaming"),
         ("voiceTyping", "streaming"),
-        ("batch", "offline"),
+        ("batch", "batch"),
     ] {
         let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
             return false;
@@ -917,7 +917,9 @@ fn normalize_asr_selection(
 
 fn normalize_asr_config(config: &Value) -> Value {
     let streaming_model_path = string_at(config, "streamingModelPath").unwrap_or_default();
-    let offline_model_path = string_at(config, "offlineModelPath").unwrap_or_default();
+    let batch_model_path = string_at(config, "batchModelPath")
+        .or_else(|| string_at(config, "offlineModelPath"))
+        .unwrap_or_default();
     let selections = config.get("asr").and_then(|value| value.get("selections"));
     let providers = config.get("asr").and_then(|value| value.get("providers"));
 
@@ -942,8 +944,8 @@ fn normalize_asr_config(config: &Value) -> Value {
             ),
             "batch": normalize_asr_selection(
                 existing_selection("batch"),
-                "offline",
-                offline_model_path,
+                "batch",
+                batch_model_path,
             ),
         },
         "providers": normalize_asr_providers(providers),
@@ -2063,7 +2065,7 @@ mod tests {
         assert!(result.migrated);
         assert_eq!(result.config["configVersion"], 7);
         assert_eq!(result.config["streamingModelPath"], "models/recognition");
-        assert_eq!(result.config["offlineModelPath"], "models/recognition");
+        assert_eq!(result.config["batchModelPath"], "models/recognition");
         assert_eq!(
             result.config["asr"]["selections"]["live"],
             json!({
@@ -2077,7 +2079,7 @@ mod tests {
             result.config["asr"]["selections"]["batch"],
             json!({
                 "engine": "local-sherpa",
-                "mode": "offline",
+                "mode": "batch",
                 "modelId": null,
                 "modelPath": "models/recognition"
             })
@@ -2153,7 +2155,7 @@ mod tests {
                     "live": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
                     "caption": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
                     "voiceTyping": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
-                    "batch": { "engine": "local-sherpa", "mode": "offline", "modelId": null, "modelPath": "C:/models/offline" }
+                    "batch": { "engine": "local-sherpa", "mode": "batch", "modelId": null, "modelPath": "C:/models/offline" }
                 }
             },
             "streamingModelPath": "C:/models/live",
@@ -2289,7 +2291,7 @@ mod tests {
                     },
                     "batch": {
                         "engine": "volcengine-doubao",
-                        "mode": "offline",
+                        "mode": "batch",
                         "modelId": null,
                         "modelPath": "",
                         "providerId": "volcengine-doubao",
@@ -2339,7 +2341,7 @@ mod tests {
             result.config["asr"]["selections"]["batch"],
             json!({
                 "engine": "online",
-                "mode": "offline",
+                "mode": "batch",
                 "modelId": null,
                 "modelPath": "",
                 "providerId": "volcengine-doubao",
@@ -2368,7 +2370,7 @@ mod tests {
                 "selections": {
                     "batch": {
                         "engine": "volcengine-doubao",
-                        "mode": "offline",
+                        "mode": "batch",
                         "modelId": null,
                         "modelPath": "",
                         "providerId": "volcengine-doubao",
@@ -2620,7 +2622,7 @@ mod tests {
                     "live": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
                     "caption": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
                     "voiceTyping": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },
-                    "batch": { "engine": "online", "mode": "offline", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" }
+                    "batch": { "engine": "online", "mode": "batch", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" }
                 },
                 "providers": {
                     "online": {

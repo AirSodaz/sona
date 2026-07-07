@@ -55,7 +55,7 @@ describe('batchQueueStore buffering', () => {
         useBatchQueueStore.getState().clearQueue();
         useTranscriptStore.getState().setConfig({
             streamingModelPath: "/path/to/model",
-            offlineModelPath: '/model'
+            batchModelPath: '/model'
         });
         vi.clearAllMocks();
     });

@@ -25,10 +25,10 @@ export function usePolishActions() {
     const handleRetranscribe = async (onPreStart?: () => void) => {
         if (isRetranscribing) return;
 
-        if (!config.offlineModelPath) {
+        if (!config.batchModelPath) {
             await showError({
-                code: 'config.offline_model_missing',
-                messageKey: 'errors.config.offline_model_missing',
+                code: 'config.batch_model_missing',
+                messageKey: 'errors.config.batch_model_missing',
                 showCause: false,
             });
             return;

@@ -162,7 +162,7 @@ const MODEL_CATALOG_SECTION_TYPES: [ModelCatalogSectionType; 5] = [
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSelectionOptions {
     pub streaming: Vec<ModelSelectionOption>,
-    pub offline: Vec<ModelSelectionOption>,
+    pub batch: Vec<ModelSelectionOption>,
     pub speaker_segmentation: Vec<ModelSelectionOption>,
     pub speaker_embedding: Vec<ModelSelectionOption>,
 }
@@ -205,7 +205,7 @@ pub struct ModelCatalogRestoreDefaults {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub streaming_model_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub offline_model_path: Option<String>,
+    pub batch_model_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vad_model_path: Option<String>,
     pub punctuation_model_path: Option<String>,
@@ -221,7 +221,7 @@ pub struct ModelCatalogRestoreDefaults {
 #[serde(rename_all = "camelCase")]
 pub struct ModelSelectionPaths {
     pub streaming_model_path: String,
-    pub offline_model_path: String,
+    pub batch_model_path: String,
     pub speaker_segmentation_model_path: String,
     pub speaker_embedding_model_path: String,
 }
@@ -230,7 +230,7 @@ pub struct ModelSelectionPaths {
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSelectedIds {
     pub streaming: Option<String>,
-    pub offline: Option<String>,
+    pub batch: Option<String>,
     pub speaker_segmentation: Option<String>,
     pub speaker_embedding: Option<String>,
 }
@@ -316,10 +316,10 @@ pub fn resolve_model_catalog_selected_ids(
             &paths.streaming_model_path,
             &snapshot.selection_options.streaming,
         ),
-        offline: resolve_selected_model_id(
+        batch: resolve_selected_model_id(
             snapshot,
-            &paths.offline_model_path,
-            &snapshot.selection_options.offline,
+            &paths.batch_model_path,
+            &snapshot.selection_options.batch,
         ),
         speaker_segmentation: resolve_selected_model_id(
             snapshot,
@@ -424,9 +424,9 @@ fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectio
             .filter(|model| model.supports_mode("streaming"))
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
-        offline: models
+        batch: models
             .iter()
-            .filter(|model| model.supports_mode("offline"))
+            .filter(|model| model.supports_mode("batch"))
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
         speaker_segmentation: models
@@ -545,7 +545,7 @@ fn build_restore_defaults(models: &[ModelCatalogModel]) -> ModelCatalogRestoreDe
 
     ModelCatalogRestoreDefaults {
         streaming_model_path: fallback_asr_path.clone(),
-        offline_model_path: fallback_asr_path,
+        batch_model_path: fallback_asr_path,
         vad_model_path,
         punctuation_model_path: Some(String::new()),
         speaker_segmentation_model_path: Some(String::new()),

@@ -44,7 +44,7 @@ async fn enrich_diagnostics_core_input(
         &catalog,
         &ModelSelectionPaths {
             streaming_model_path: input.config.streaming_model_path.clone(),
-            offline_model_path: input.config.offline_model_path.clone(),
+            batch_model_path: input.config.batch_model_path.clone(),
             speaker_segmentation_model_path: String::new(),
             speaker_embedding_model_path: String::new(),
         },
@@ -54,22 +54,22 @@ async fn enrich_diagnostics_core_input(
         .streaming
         .as_deref()
         .and_then(|model_id| catalog.models.iter().find(|model| model.id == model_id));
-    let offline_model = selected
-        .offline
+    let batch_model = selected
+        .batch
         .as_deref()
         .and_then(|model_id| catalog.models.iter().find(|model| model.id == model_id));
 
     input.selected_models = SelectedModelsInput {
         live: live_model.map(model_summary_input),
-        offline: offline_model.map(model_summary_input),
+        batch: batch_model.map(model_summary_input),
     };
     input.model_rules = ModelRulesInput {
         live: live_model.map(|model| model_rule_input(model.rules)),
-        offline: offline_model.map(|model| model_rule_input(model.rules)),
+        batch: batch_model.map(|model| model_rule_input(model.rules)),
     };
     input.path_statuses = PathStatusesInput {
         live_model: resolve_core_path_status(input.config.streaming_model_path.trim()),
-        offline_model: resolve_core_path_status(input.config.offline_model_path.trim()),
+        batch_model: resolve_core_path_status(input.config.batch_model_path.trim()),
         vad: resolve_core_path_status(input.config.vad_model_path.trim()),
         punctuation: resolve_core_path_status(input.config.punctuation_model_path.trim()),
     };
@@ -78,10 +78,10 @@ async fn enrich_diagnostics_core_input(
     );
     input.asr_runtime_metrics = state.metrics_snapshot().await;
     input.onboarding_ready = !input.config.streaming_model_path.trim().is_empty()
-        && !input.config.offline_model_path.trim().is_empty();
+        && !input.config.batch_model_path.trim().is_empty();
     input.punctuation_required = [
         input.model_rules.live.as_ref(),
-        input.model_rules.offline.as_ref(),
+        input.model_rules.batch.as_ref(),
     ]
     .iter()
     .any(|rules| rules.map(|item| item.requires_punctuation).unwrap_or(false));

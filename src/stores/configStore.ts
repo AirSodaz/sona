@@ -69,7 +69,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       },
       batch: {
         engine: 'local-sherpa',
-        mode: 'offline',
+        mode: 'batch',
         modelId: null,
         modelPath: '',
       },
@@ -83,7 +83,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     },
   },
   streamingModelPath: '',
-  offlineModelPath: '',
+  batchModelPath: '',
   punctuationModelPath: '',
   vadModelPath: '',
   speakerSegmentationModelPath: '',
@@ -187,7 +187,7 @@ const AUDIO_KEYS: (keyof AudioConfig)[] = [
 const MODEL_KEYS: (keyof ModelConfig)[] = [
   'asr',
   'streamingModelPath',
-  'offlineModelPath',
+  'batchModelPath',
   'punctuationModelPath',
   'vadModelPath',
   'speakerSegmentationModelPath',
@@ -261,7 +261,7 @@ export function useAudioConfig(): AudioConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, AUDIO_KEYS)));
 }
 
-/** Model paths (streaming, offline, VAD, punctuation). */
+/** Model paths (streaming, batch, VAD, punctuation). */
 export function useModelConfig(): ModelConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, MODEL_KEYS)));
 }

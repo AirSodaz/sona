@@ -8,7 +8,7 @@ fn asr_runtime_metrics_transport_shape_lives_in_core() {
             instance_id: "instance-1".to_string(),
             model_path: "model.onnx".to_string(),
             model_type: "sensevoice".to_string(),
-            recognizer_kind: "offline".to_string(),
+            recognizer_kind: "batch".to_string(),
             num_threads: 4,
             reused_from_pool: true,
             load_ms: 12.5,

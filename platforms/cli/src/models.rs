@@ -23,7 +23,7 @@ pub struct ModelsArgs {
 pub enum ModelCommands {
     /// Lists preset models known to the CLI.
     #[command(
-        after_help = "Examples:\n  sona-cli models list\n  sona-cli models list --mode offline --type whisper\n  sona-cli models list --language zh --installed"
+        after_help = "Examples:\n  sona-cli models list\n  sona-cli models list --mode batch --type whisper\n  sona-cli models list --language zh --installed"
     )]
     List(ModelListArgs),
     /// Downloads a preset model into the models directory.
@@ -48,11 +48,7 @@ pub struct ModelListArgs {
     )]
     models_dir: Option<PathBuf>,
     /// Filter by supported mode.
-    #[arg(
-        long,
-        value_name = "MODE",
-        help = "Filter by mode: streaming or offline"
-    )]
+    #[arg(long, value_name = "MODE", help = "Filter by mode: streaming or batch")]
     mode: Option<String>,
     /// Filter by model type.
     #[arg(
@@ -416,7 +412,7 @@ mod tests {
             model_type: model_type.to_string(),
             language: language.to_string(),
             size: "1 MB".to_string(),
-            modes: vec!["offline".to_string()],
+            modes: vec!["batch".to_string()],
             installed,
             install_path: PathBuf::from(format!("C:/models/{id}")),
         }

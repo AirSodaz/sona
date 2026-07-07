@@ -185,7 +185,7 @@ export async function hydrateAppStartupState(): Promise<void> {
     const onboarding = await hydrateOnboardingState(loadedConfig, configMigrated);
     useOnboardingStore.getState().setPersistedState(
       onboarding.state,
-      Boolean(loadedConfig.streamingModelPath && loadedConfig.offlineModelPath),
+      Boolean(loadedConfig.streamingModelPath && loadedConfig.batchModelPath),
     );
 
     await useProjectStore.getState().loadProjects();

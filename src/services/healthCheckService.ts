@@ -9,7 +9,7 @@ import { logger } from '../utils/logger';
 import { BaseDirectory, exists } from './tauri/platform/fs';
 
 const HISTORY_DIR = 'history';
-type ModelConfigKey = 'offlineModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';
+type ModelConfigKey = 'batchModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';
 type ConfiguredModelField = { key: ModelConfigKey; path: string };
 
 export interface HealthCheckServicePorts {
@@ -102,7 +102,7 @@ export class HealthCheckService {
     let changed = false;
 
     const modelFields = [
-      { key: 'offlineModelPath', path: config.offlineModelPath },
+      { key: 'batchModelPath', path: config.batchModelPath },
       { key: 'streamingModelPath', path: config.streamingModelPath },
       { key: 'punctuationModelPath', path: config.punctuationModelPath },
       { key: 'vadModelPath', path: config.vadModelPath }

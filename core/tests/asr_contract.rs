@@ -10,7 +10,7 @@ use sona_core::transcript_postprocess::{
 #[test]
 fn local_sherpa_request_builder_preserves_shared_contract_fields() {
     let request = AsrTranscriptionRequest::local_sherpa(
-        AsrMode::Offline,
+        AsrMode::Batch,
         "/models/sherpa".to_string(),
         8,
         true,
@@ -30,7 +30,7 @@ fn local_sherpa_request_builder_preserves_shared_contract_fields() {
     );
 
     assert_eq!(request.engine(), AsrEngine::LocalSherpa);
-    assert_eq!(request.mode, AsrMode::Offline);
+    assert_eq!(request.mode, AsrMode::Batch);
     assert_eq!(request.language, "ja");
     assert!(request.enable_itn);
     assert_eq!(request.hotwords.as_deref(), Some("hotwords"));
@@ -123,7 +123,7 @@ fn online_asr_provider_manifest_is_owned_by_core_contract() {
 #[test]
 fn asr_request_provider_id_is_derived_from_core_engine_config() {
     let local = AsrTranscriptionRequest::local_sherpa(
-        AsrMode::Offline,
+        AsrMode::Batch,
         "/models/sherpa".to_string(),
         4,
         false,
@@ -140,7 +140,7 @@ fn asr_request_provider_id_is_derived_from_core_engine_config() {
         None,
     );
     let online = AsrTranscriptionRequest {
-        mode: AsrMode::Offline,
+        mode: AsrMode::Batch,
         language: "auto".to_string(),
         enable_itn: false,
         normalization_options: TranscriptNormalizationOptions::default(),

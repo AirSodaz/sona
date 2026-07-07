@@ -73,7 +73,7 @@ export interface AudioConfig {
 // ---------------------------------------------------------------------------
 
 export type AsrEngine = 'local-sherpa' | 'online';
-export type AsrMode = 'streaming' | 'offline' | 'batch';
+export type AsrMode = 'streaming' | 'batch';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
 export type OnlineAsrProviderId = string;
 
@@ -108,8 +108,8 @@ export interface ModelConfig {
   asr?: AsrConfig;
   /** Path to streaming model (e.g. sherpa-onnx streaming sensevoice). */
   streamingModelPath: string;
-  /** Path to offline model (e.g. sherpa-onnx offline sensevoice). */
-  offlineModelPath: string;
+  /** Path to batch model (e.g. sherpa-onnx batch sensevoice). */
+  batchModelPath: string;
   /** Path to punctuation model. */
   punctuationModelPath?: string;
   /** Path to VAD model. */

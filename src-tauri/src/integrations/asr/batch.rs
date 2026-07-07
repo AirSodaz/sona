@@ -168,7 +168,7 @@ where
     let decode_started = Instant::now();
     let segments = match &recognizer.inner {
         RecognizerInner::Offline(r) => {
-            process_batch_offline(
+            process_batch_local(
                 r,
                 &samples,
                 request.vad_model.clone(),
@@ -232,7 +232,7 @@ where
     Ok(postprocessed_segments)
 }
 
-async fn process_batch_offline<F>(
+async fn process_batch_local<F>(
     r: &SafeOfflineRecognizer,
     samples: &[f32],
     vad_model: Option<String>,
@@ -291,7 +291,7 @@ where
 
             if let (Some(emitter), Some(id)) = (emitter, instance_id) {
                 let update = build_transcript_update(segment.clone(), normalization_options);
-                emit_transcript_update(emitter, id, &update, "batch-offline", None);
+                emit_transcript_update(emitter, id, &update, "batch-local", None);
             }
 
             results.push(segment);

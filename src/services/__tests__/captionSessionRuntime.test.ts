@@ -81,7 +81,7 @@ vi.stubGlobal('MediaStream', class {
 describe('captionSessionRuntime', () => {
   const config = buildTestConfig({
     streamingModelPath: '/path/to/model',
-    offlineModelPath: '/path/to/model',
+    batchModelPath: '/path/to/model',
     language: 'en',
   });
 

@@ -55,7 +55,7 @@ const testContext = vi.hoisted(() => {
         },
         configState: {
             config: {
-                offlineModelPath: 'C:\\models\\sensevoice',
+                batchModelPath: 'C:\\models\\sensevoice',
                 translationLanguage: 'en',
                 polishCustomPresets: [],
             },
@@ -204,7 +204,7 @@ describe('automationStore', () => {
             projectId === projectRecord.id ? projectRecord : null
         ));
         configState.config = {
-            offlineModelPath: 'C:\\models\\sensevoice',
+            batchModelPath: 'C:\\models\\sensevoice',
             translationLanguage: 'en',
             polishCustomPresets: [],
         };
@@ -370,7 +370,7 @@ describe('automationStore', () => {
     it('validates an enabled rule before persisting it', async () => {
         validateAutomationRuleForActivationMock.mockResolvedValue({
             valid: false,
-            message: 'Missing offline model.',
+            message: 'Missing batch model.',
         });
 
         await expect(useAutomationStore.getState().saveRule({
@@ -390,7 +390,7 @@ describe('automationStore', () => {
                 format: 'txt',
                 mode: 'original',
             },
-        })).rejects.toThrow('Missing offline model.');
+        })).rejects.toThrow('Missing batch model.');
 
         expect(saveAutomationRulesMock).not.toHaveBeenCalled();
     });

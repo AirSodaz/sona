@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => {
       description: '',
       url: '',
       type: 'sensevoice',
-      modes: ['offline'],
+      modes: ['batch'],
       language: 'zh',
       size: '1 MB',
       engine: 'sherpa-onnx',
@@ -94,14 +94,14 @@ function buildAsrConfig(overrides: Partial<AppConfig> = {}): AppConfig {
         },
         batch: {
           engine: 'local-sherpa',
-          mode: 'offline',
+          mode: 'batch',
           modelId: 'local-batch',
           modelPath: 'C:/models/local-batch',
         },
       },
     },
     streamingModelPath: 'C:/legacy/live',
-    offlineModelPath: 'C:/legacy/batch',
+    batchModelPath: 'C:/legacy/batch',
     vadModelPath: 'C:/models/silero_vad.onnx',
     punctuationModelPath: 'C:/models/punct',
     vadBufferSize: 8,
@@ -178,7 +178,7 @@ describe('asrConfigService', () => {
 
     expect(request).toMatchObject({
       engine: 'local-sherpa',
-      mode: 'offline',
+      mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'C:/models/local-batch',
       modelType: 'sensevoice',
@@ -211,7 +211,7 @@ describe('asrConfigService', () => {
 
     expect(request).toMatchObject({
       engine: 'local-sherpa',
-      mode: 'offline',
+      mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'C:/models/local-batch',
       vadModel: null,
@@ -224,7 +224,7 @@ describe('asrConfigService', () => {
   it('falls back to legacy model paths when ASR selections are missing', () => {
     const request = resolveAsrTranscriptionRequest(buildTestConfig({
       streamingModelPath: 'C:/legacy/live',
-      offlineModelPath: 'C:/legacy/batch',
+      batchModelPath: 'C:/legacy/batch',
       vadBufferSize: 5,
       asr: undefined,
     }), 'voiceTyping');
@@ -244,11 +244,11 @@ describe('asrConfigService', () => {
       modelPath: 'D:/models/local-batch',
     });
 
-    expect(patch.offlineModelPath).toBe('D:/models/local-batch');
+    expect(patch.batchModelPath).toBe('D:/models/local-batch');
     expect(patch.streamingModelPath).toBeUndefined();
     expect(patch.asr?.selections.batch).toMatchObject({
       engine: 'local-sherpa',
-      mode: 'offline',
+      mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'D:/models/local-batch',
     });
@@ -262,7 +262,7 @@ describe('asrConfigService', () => {
           live: createVolcengineDoubaoSelection('streaming'),
           caption: createVolcengineDoubaoSelection('streaming'),
           voiceTyping: createVolcengineDoubaoSelection('streaming'),
-          batch: createVolcengineDoubaoSelection('offline'),
+          batch: createVolcengineDoubaoSelection('batch'),
         },
         providers: {
           online: {
@@ -296,7 +296,7 @@ describe('asrConfigService', () => {
     });
     expect(batch).toMatchObject({
       engine: 'online',
-      mode: 'offline',
+      mode: 'batch',
       onlineProvider: {
         providerId: 'volcengine-doubao',
         config: {
@@ -331,7 +331,7 @@ describe('asrConfigService', () => {
           live: createVolcengineDoubaoSelection('streaming'),
           caption: createVolcengineDoubaoSelection('streaming'),
           voiceTyping: createVolcengineDoubaoSelection('streaming'),
-          batch: createVolcengineDoubaoSelection('offline'),
+          batch: createVolcengineDoubaoSelection('batch'),
         },
         providers: {
           volcengineDoubao: {
@@ -364,7 +364,7 @@ describe('asrConfigService', () => {
           live: createVolcengineDoubaoSelection('streaming'),
           caption: createVolcengineDoubaoSelection('streaming'),
           voiceTyping: createVolcengineDoubaoSelection('streaming'),
-          batch: createVolcengineDoubaoSelection('offline'),
+          batch: createVolcengineDoubaoSelection('batch'),
         },
       },
     } as Partial<AppConfig>);
@@ -383,7 +383,7 @@ describe('asrConfigService', () => {
           voiceTyping: createVolcengineDoubaoSelection('streaming'),
           batch: {
             engine: 'local-sherpa',
-            mode: 'offline',
+            mode: 'batch',
             modelId: 'local-batch',
             modelPath: 'C:/models/local-batch',
           },
@@ -413,6 +413,6 @@ describe('asrConfigService', () => {
       batchResourceId: 'volc.bigasr.auc_turbo',
     });
     expect(patch.asr?.selections.live.engine).toBe('online');
-    expect(patch.offlineModelPath).toBe('D:/models/local-batch');
+    expect(patch.batchModelPath).toBe('D:/models/local-batch');
   });
 });

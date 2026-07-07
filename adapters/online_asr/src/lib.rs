@@ -48,9 +48,9 @@ impl WhisperCompatibleProvider {
         }
     }
 
-    fn offline_only_error(self) -> String {
+    fn batch_only_error(self) -> String {
         format!(
-            "{} API can only be used in offline/batch mode.",
+            "{} API can only be used in batch mode.",
             self.provider_name()
         )
     }
@@ -191,8 +191,8 @@ impl OnlineBatchTranscriber for VolcengineDoubaoBatchTranscriber {
         &self,
         input: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, String> {
-        if input.request.mode != AsrMode::Offline {
-            return Err("Volcengine batch ASR can only be used in offline/batch mode.".to_string());
+        if input.request.mode != AsrMode::Batch {
+            return Err("Volcengine batch ASR can only be used in batch mode.".to_string());
         }
 
         let config = resolve_volcengine_config(&input.request, VolcengineMode::Batch)?;
@@ -279,8 +279,8 @@ impl OnlineBatchTranscriber for WhisperCompatibleBatchTranscriber {
         &self,
         input: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, String> {
-        if input.request.mode != AsrMode::Offline {
-            return Err(self.provider.offline_only_error());
+        if input.request.mode != AsrMode::Batch {
+            return Err(self.provider.batch_only_error());
         }
 
         let config = resolve_whisper_config(&input.request, self.provider)?;
@@ -1004,7 +1004,7 @@ mod tests {
 
     fn online_request(provider_id: &str, config: serde_json::Value) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest {
-            mode: AsrMode::Offline,
+            mode: AsrMode::Batch,
             language: "auto".to_string(),
             enable_itn: false,
             normalization_options: TranscriptNormalizationOptions::default(),

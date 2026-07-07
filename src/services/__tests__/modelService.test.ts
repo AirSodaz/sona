@@ -38,7 +38,7 @@ describe('ModelService', () => {
                 description: 'settings.descriptions.catalog_model',
                 url: 'https://example.com/catalog-model.tar.bz2',
                 type: 'sensevoice',
-                modes: ['streaming', 'offline'],
+                modes: ['streaming', 'batch'],
                 language: 'zh,en',
                 size: '1 MB',
                 isRecommended: true,
@@ -77,7 +77,7 @@ describe('ModelService', () => {
                             isInstalled: true,
                         },
                     ],
-                    offline: [
+                    batch: [
                         {
                             id: 'catalog-model',
                             label: 'Catalog Model',
@@ -112,7 +112,7 @@ describe('ModelService', () => {
                 },
                 restoreDefaults: {
                     streamingModelPath: '/app/data/models/catalog-model',
-                    offlineModelPath: '/app/data/models/catalog-model',
+                    batchModelPath: '/app/data/models/catalog-model',
                     vadModelPath: '/app/data/models/silero_vad.onnx',
                     punctuationModelPath: '',
                     speakerSegmentationModelPath: '',
@@ -181,7 +181,7 @@ describe('ModelService', () => {
                             isInstalled: true,
                         },
                     ],
-                    offline: [],
+                    batch: [],
                     speakerSegmentation: [],
                     speakerEmbedding: [],
                 },
@@ -232,14 +232,14 @@ describe('ModelService', () => {
         it('delegates selected model path resolution to the Rust app wrapper', async () => {
             vi.mocked(invoke).mockResolvedValueOnce({
                 streaming: 'streaming-id',
-                offline: null,
+                batch: null,
                 speakerSegmentation: null,
                 speakerEmbedding: 'speaker-embedding-id',
             });
 
             const result = await modelService.resolveModelCatalogSelectedIds({
                 streamingModelPath: 'C:/models/streaming',
-                offlineModelPath: '',
+                batchModelPath: '',
                 speakerSegmentationModelPath: '',
                 speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
             });
@@ -247,14 +247,14 @@ describe('ModelService', () => {
             expect(invoke).toHaveBeenCalledWith('resolve_model_catalog_selected_ids', {
                 paths: {
                     streamingModelPath: 'C:/models/streaming',
-                    offlineModelPath: '',
+                    batchModelPath: '',
                     speakerSegmentationModelPath: '',
                     speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
                 },
             });
             expect(result).toEqual({
                 streaming: 'streaming-id',
-                offline: null,
+                batch: null,
                 speakerSegmentation: null,
                 speakerEmbedding: 'speaker-embedding-id',
             });
@@ -304,7 +304,7 @@ describe('ModelService', () => {
                 sections: [],
                 selectionOptions: {
                     streaming: [],
-                    offline: [],
+                    batch: [],
                     speakerSegmentation: [],
                     speakerEmbedding: [],
                 },
@@ -362,7 +362,7 @@ describe('ModelService', () => {
                 description: 'settings.descriptions.catalog_download',
                 url: 'https://example.com/catalog-download.tar.bz2',
                 type: 'sensevoice',
-                modes: ['offline'],
+                modes: ['batch'],
                 language: 'zh,en',
                 size: '1 MB',
                 isArchive: true,
@@ -383,7 +383,7 @@ describe('ModelService', () => {
                         sections: [],
                         selectionOptions: {
                             streaming: [],
-                            offline: [],
+                            batch: [],
                             speakerSegmentation: [],
                             speakerEmbedding: [],
                         },
@@ -474,10 +474,10 @@ describe('ModelService', () => {
     describe('Qwen3 ASR metadata', () => {
         const qwen3ModelId = 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
 
-        it('registers qwen3-asr as an offline-only model with VAD support', () => {
+        it('registers qwen3-asr as an batch-only model with VAD support', () => {
             const qwen3Model = PRESET_MODELS.find((model) => model.id === qwen3ModelId);
-            const offlineModelIds = PRESET_MODELS
-                .filter((model) => model.modes?.includes('offline'))
+            const batchModelIds = PRESET_MODELS
+                .filter((model) => model.modes?.includes('batch'))
                 .map((model) => model.id);
             const streamingModelIds = PRESET_MODELS
                 .filter((model) => model.modes?.includes('streaming'))
@@ -486,7 +486,7 @@ describe('ModelService', () => {
             expect(qwen3Model).toMatchObject({
                 id: qwen3ModelId,
                 type: 'qwen3-asr',
-                modes: ['offline'],
+                modes: ['batch'],
                 fileConfig: {
                     convFrontend: 'conv_frontend.onnx',
                     encoder: 'encoder.int8.onnx',
@@ -495,7 +495,7 @@ describe('ModelService', () => {
                 },
             });
             expect(qwen3Model?.fileConfig).not.toHaveProperty('tokens');
-            expect(offlineModelIds).toContain(qwen3ModelId);
+            expect(batchModelIds).toContain(qwen3ModelId);
             expect(streamingModelIds).not.toContain(qwen3ModelId);
             expect(modelService.getModelRules(qwen3ModelId)).toEqual({
                 requiresVad: true,

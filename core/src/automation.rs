@@ -66,7 +66,7 @@ pub struct AutomationRuleValidationResult {
 pub struct AutomationRuleActivationEnvironment {
     pub watch_directory_exists: bool,
     pub export_directory_ready: bool,
-    pub offline_model_path_exists: bool,
+    pub batch_model_path_exists: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -188,8 +188,8 @@ pub fn validate_rule_activation(
 
     if !is_batch_asr_configured(global_config, environment) {
         return invalid_validation(
-            "automation.offline_model_missing",
-            "A batch ASR model or cloud ASR credential is required before automation can run.",
+            "automation.batch_model_missing",
+            "A batch ASR model or online ASR credential is required before automation can run.",
         );
     }
 
@@ -232,7 +232,7 @@ pub fn is_virtual_automation_project(project_id: &str) -> bool {
     matches!(project_id, "inbox" | "none")
 }
 
-pub fn resolve_batch_offline_model_path(global_config: &Value) -> Option<String> {
+pub fn resolve_batch_model_path(global_config: &Value) -> Option<String> {
     global_config
         .get("asr")
         .and_then(|asr| asr.get("selections"))
@@ -585,8 +585,7 @@ fn is_batch_asr_configured(
         return true;
     }
 
-    resolve_batch_offline_model_path(global_config).is_some()
-        && environment.offline_model_path_exists
+    resolve_batch_model_path(global_config).is_some() && environment.batch_model_path_exists
 }
 
 fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use sona_core::transcribe_runtime::OfflineTranscribeOptions;
+use sona_core::transcribe_runtime::BatchTranscribeOptions;
 
 #[test]
-fn offline_transcribe_options_are_not_cli_specific() {
-    let options = OfflineTranscribeOptions {
+fn batch_transcribe_options_are_not_cli_specific() {
+    let options = BatchTranscribeOptions {
         input: PathBuf::from("sample.wav"),
         output: None,
         format: None,

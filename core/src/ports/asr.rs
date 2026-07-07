@@ -1,5 +1,5 @@
 use crate::model_config::ModelFileConfig;
-use crate::transcribe_runtime::OfflineTranscribePlan;
+use crate::transcribe_runtime::BatchTranscribePlan;
 use crate::transcript::TranscriptSegment;
 pub use crate::transcript_postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
@@ -34,7 +34,8 @@ pub enum AsrEngine {
 #[serde(rename_all = "lowercase")]
 pub enum AsrMode {
     Streaming,
-    Offline,
+    #[serde(alias = "offline")]
+    Batch,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -47,11 +48,9 @@ pub enum BatchSegmentationMode {
 }
 
 #[async_trait]
-pub trait OfflineTranscriber: Send + Sync {
-    async fn transcribe(
-        &self,
-        plan: OfflineTranscribePlan,
-    ) -> Result<Vec<TranscriptSegment>, String>;
+pub trait BatchTranscriber: Send + Sync {
+    async fn transcribe(&self, plan: BatchTranscribePlan)
+    -> Result<Vec<TranscriptSegment>, String>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -206,6 +205,7 @@ pub struct VolcengineDoubaoAsrConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 struct OnlineAsrProviderManifest {
     schema_version: u32,
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn local_sherpa_request_builder_sets_defaults() {
         let request = AsrTranscriptionRequest::local_sherpa(
-            AsrMode::Offline,
+            AsrMode::Batch,
             "model".to_string(),
             4,
             true,

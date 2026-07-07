@@ -156,7 +156,7 @@ describe('hydrateAppStartupState', () => {
         appLanguage: 'zh-CN',
         startOnLaunch: true,
         streamingModelPath: '/models/stream.onnx',
-        offlineModelPath: '/models/offline.onnx',
+        batchModelPath: '/models/batch.onnx',
         polishCustomPresets: [],
       },
       migrated: true,
@@ -174,7 +174,7 @@ describe('hydrateAppStartupState', () => {
     expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
       appLanguage: 'zh-CN',
       streamingModelPath: '/models/stream.onnx',
-      offlineModelPath: '/models/offline.onnx',
+      batchModelPath: '/models/batch.onnx',
     }));
     expect(mockSetConfig).toHaveBeenCalledWith({
       polishCustomPresets: [{ id: 'project-preset', name: 'Migrated Preset', context: 'Context' }],

@@ -45,10 +45,10 @@ fn resolves_model_paths_without_filesystem_status_checks() {
 fn preset_rules_and_modes_are_core_domain_metadata() {
     let vad = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
     assert_eq!(vad.resolved_rules(), DEFAULT_MODEL_RULES);
-    assert!(!vad.supports_mode("offline"));
+    assert!(!vad.supports_mode("batch"));
 
     let offline = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
-    assert!(offline.supports_mode("offline"));
+    assert!(offline.supports_mode("batch"));
 }
 
 #[test]
@@ -101,10 +101,7 @@ fn builds_catalog_snapshot_from_injected_install_status() {
         snapshot.restore_defaults.streaming_model_path,
         Some(int8_path.clone())
     );
-    assert_eq!(
-        snapshot.restore_defaults.offline_model_path,
-        Some(int8_path)
-    );
+    assert_eq!(snapshot.restore_defaults.batch_model_path, Some(int8_path));
     assert_eq!(
         snapshot.restore_defaults.vad_model_path,
         snapshot
@@ -169,10 +166,7 @@ fn build_model_catalog_snapshot_uses_filesystem_install_status() {
         snapshot.restore_defaults.streaming_model_path,
         Some(int8_path.clone())
     );
-    assert_eq!(
-        snapshot.restore_defaults.offline_model_path,
-        Some(int8_path)
-    );
+    assert_eq!(snapshot.restore_defaults.batch_model_path, Some(int8_path));
     assert_eq!(snapshot.restore_defaults.vad_model_path, Some(silero_path));
 }
 
@@ -223,7 +217,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         &snapshot,
         &ModelSelectionPaths {
             streaming_model_path: int8_path,
-            offline_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
+            batch_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
                 .to_string(),
             speaker_segmentation_model_path: String::new(),
             speaker_embedding_model_path:
@@ -236,7 +230,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string())
     );
     assert_eq!(
-        selected.offline,
+        selected.batch,
         Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string())
     );
     assert_eq!(selected.speaker_segmentation, None);

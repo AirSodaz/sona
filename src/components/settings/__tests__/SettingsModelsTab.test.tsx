@@ -108,7 +108,7 @@ function buildModelCatalog(installedModels: Set<string>) {
         ],
         selectionOptions: {
             streaming: [],
-            offline: [],
+            batch: [],
             speakerSegmentation: [
                 {
                     id: speakerSegmentationModel.id,
@@ -166,7 +166,7 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
             modelCatalog: buildModelCatalog(installedModels),
             selectedModelIds: {
                 streaming: null,
-                offline: null,
+                batch: null,
                 speakerSegmentation: config.speakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
                 speakerEmbedding: config.speakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
             },
@@ -361,7 +361,7 @@ describe('SettingsModelsTab speaker model selections', () => {
         });
     });
 
-    it('allows selecting Volcengine Doubao cloud ASR even when no local ASR model is installed', async () => {
+    it('allows selecting Volcengine Doubao online ASR even when no local ASR model is installed', async () => {
         setTestConfig({
             asr: {
                 providers: {
@@ -420,7 +420,7 @@ describe('SettingsModelsTab speaker model selections', () => {
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
-                        mode: 'offline',
+                        mode: 'batch',
                         modelId: null,
                         modelPath: '',
                         providerId: 'volcengine-doubao',
@@ -428,7 +428,7 @@ describe('SettingsModelsTab speaker model selections', () => {
                     },
                 },
             },
-            offlineModelPath: '',
+            batchModelPath: '',
         } as any);
 
         renderTab(new Set());
@@ -448,7 +448,7 @@ describe('SettingsModelsTab speaker model selections', () => {
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
-                        mode: 'offline',
+                        mode: 'batch',
                         modelId: null,
                         modelPath: '',
                         providerId: 'volcengine-doubao',

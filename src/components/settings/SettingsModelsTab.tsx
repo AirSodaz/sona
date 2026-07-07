@@ -19,7 +19,7 @@ import {
 import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
 import { Settings2, PlaySquare } from 'lucide-react';
-import { ModelIcon, RestoreIcon, CloudIcon } from '../Icons';
+import { ModelIcon, RestoreIcon, OnlineIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 import { DynamicProviderSettings, VolcengineSettingsCard, GroqWhisperSettingsCard, type ProviderSettingsProps } from './OnlineAsrSettingsCards';
@@ -100,7 +100,7 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
 
     return (
         <SettingsSection
-            title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
+            title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
             icon={<RestoreIcon />}
         >
             <SettingsItem
@@ -302,11 +302,11 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             : selectedModelIds.streaming ?? '',
         [modelConfig.asr?.selections.live, selectedModelIds.streaming],
     );
-    const selectedOfflineModelId = useMemo(
+    const selectedBatchModelId = useMemo(
         () => modelConfig.asr?.selections.batch.engine === 'online'
             ? (modelConfig.asr.selections.batch.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
-            : selectedModelIds.offline ?? '',
-        [modelConfig.asr?.selections.batch, selectedModelIds.offline],
+            : selectedModelIds.batch ?? '',
+        [modelConfig.asr?.selections.batch, selectedModelIds.batch],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
         () => selectedModelIds.speakerSegmentation ?? '',
@@ -342,13 +342,13 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     };
 
     const handleModelChange = async (
-        type: 'streaming' | 'offline' | 'speakerSegmentation' | 'speakerEmbedding',
+        type: 'streaming' | 'batch' | 'speakerSegmentation' | 'speakerEmbedding',
         modelId: string,
     ) => {
         const configKey = type === 'streaming'
             ? 'streamingModelPath'
-            : type === 'offline'
-                ? 'offlineModelPath'
+            : type === 'batch'
+                ? 'batchModelPath'
                 : type === 'speakerSegmentation'
                     ? 'speakerSegmentationModelPath'
                     : 'speakerEmbeddingModelPath';
@@ -362,7 +362,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 updateConfig(patch);
                 return;
             }
-            if (type === 'offline') {
+            if (type === 'batch') {
                 updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
                     modelId: null,
                     modelPath: '',
@@ -376,7 +376,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         if (isOnlineAsrProviderId(modelId)) {
             if (type === 'streaming') {
                 updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, modelId));
-            } else if (type === 'offline') {
+            } else if (type === 'batch') {
                 updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', modelId));
             }
             return;
@@ -394,7 +394,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 modelPath: path,
             });
             updateConfig(patch);
-        } else if (type === 'offline') {
+        } else if (type === 'batch') {
             updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
                 modelId,
                 modelPath: path,
@@ -435,35 +435,35 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                     label: (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
-                            <CloudIcon style={{ color: 'var(--color-text-muted)' }} />
+                            <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
                         </span>
                     ),
                 })),
         ];
     }, [selectedStreamingModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
 
-    const offlineOptions = useMemo(() => {
+    const batchOptions = useMemo(() => {
         return [
-            ...toDropdownOptions(selectionOptions.offline, selectedOfflineModelId),
+            ...toDropdownOptions(selectionOptions.batch, selectedBatchModelId),
             ...ONLINE_ASR_PROVIDER_DEFINITIONS
                 .filter(provider => {
-                    if (provider.id === selectedOfflineModelId) return true;
+                    if (provider.id === selectedBatchModelId) return true;
                     const providerConfig = modelConfig.asr?.providers?.online?.[provider.id]
                         ?? (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID ? modelConfig.asr?.providers?.volcengineDoubao : undefined)
                         ?? provider.defaultConfig;
-                    return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'offline');
+                    return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'batch');
                 })
                 .map((provider) => ({
                 value: provider.id,
                 label: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
-                        <CloudIcon style={{ color: 'var(--color-text-muted)' }} />
+                        <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
                     </span>
                 ),
             })),
         ];
-    }, [selectedOfflineModelId, selectionOptions.offline, t, modelConfig.asr?.providers]);
+    }, [selectedBatchModelId, selectionOptions.batch, t, modelConfig.asr?.providers]);
 
     const isVolcengineSelected = Object.values(modelConfig.asr?.selections ?? {}).some(
         (selection) => selection.engine === 'online' && selection.providerId === VOLCENGINE_DOUBAO_PROVIDER_ID,
@@ -546,16 +546,16 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.offline_model_label')}
-                    hint={t('settings.offline_model_hint')}
+                    title={t('settings.batch_model_label')}
+                    hint={t('settings.batch_model_hint')}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
-                            id="settings-offline-path"
-                            value={selectedOfflineModelId}
-                            onChange={(value) => handleModelChange('offline', value)}
-                            placeholder={t('settings.select_offline_model')}
-                            options={offlineOptions}
+                            id="settings-batch-path"
+                            value={selectedBatchModelId}
+                            onChange={(value) => handleModelChange('batch', value)}
+                            placeholder={t('settings.select_batch_model')}
+                            options={batchOptions}
                             style={{ flex: 1 }}
                             disabled={localModelActionsDisabled}
                         />
@@ -564,7 +564,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
                 <SettingsItem
                     title={t('settings.speaker_segmentation_model_label', { defaultValue: 'Speaker Segmentation Model' })}
-                    hint={t('settings.speaker_segmentation_model_hint', { defaultValue: 'Used to split offline recordings into anonymous speaker turns.' })}
+                    hint={t('settings.speaker_segmentation_model_hint', { defaultValue: 'Used to split batch recordings into anonymous speaker turns.' })}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
@@ -600,7 +600,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
                 {isVolcengineSelected && (
                     <div className="settings-hint">
-                        {t(onlineAsrProvider.cloudUploadHintKey, { defaultValue: onlineAsrProvider.cloudUploadHintDefault })}
+                        {t(onlineAsrProvider.onlineUploadHintKey, { defaultValue: onlineAsrProvider.onlineUploadHintDefault })}
                     </div>
                 )}
             </SettingsSection>
@@ -617,7 +617,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 />
             ) : (
                 <SettingsSection
-                    title={t('settings.offline_model_management', { defaultValue: '离线模型管理' })}
+                    title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
                     icon={<RestoreIcon />}
                 >
                     {catalogLoadState === 'loading' && (

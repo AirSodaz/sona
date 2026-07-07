@@ -27,7 +27,7 @@ describe('transcriptionRequest helpers', () => {
 
   it('builds a record recognizer init request with local model override and timeline enabled', () => {
     const config = buildTestConfig({
-      offlineModelPath: '/models/offline',
+      batchModelPath: '/models/batch',
       streamingModelPath: '/models/streaming',
       enableTimeline: true,
       enableITN: false,
@@ -86,7 +86,7 @@ describe('transcriptionRequest helpers', () => {
 
   it('builds batch process requests with speaker processing and save target', () => {
     const config = buildTestConfig({
-      offlineModelPath: '/models/offline',
+      batchModelPath: '/models/batch',
       speakerSegmentationModelPath: '/models/speaker-segmentation',
       speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
       speakerProfiles: [
@@ -113,7 +113,7 @@ describe('transcriptionRequest helpers', () => {
     });
 
     expect(asrRequest).toEqual(expect.objectContaining({
-      mode: 'offline',
+      mode: 'batch',
       modelPath: '/models/runtime-offline',
       language: 'zh',
       enableItn: false,
@@ -139,7 +139,7 @@ describe('transcriptionRequest helpers', () => {
 
   it('builds batch process requests in whole-file mode when batch VAD is disabled', () => {
     const config = buildTestConfig({
-      offlineModelPath: '/models/offline',
+      batchModelPath: '/models/batch',
       batchVadEnabled: false,
     });
 
@@ -151,8 +151,8 @@ describe('transcriptionRequest helpers', () => {
     });
 
     expect(asrRequest).toEqual(expect.objectContaining({
-      mode: 'offline',
-      modelPath: '/models/offline',
+      mode: 'batch',
+      modelPath: '/models/batch',
       vadModel: null,
       batchSegmentationMode: 'whole',
     }));

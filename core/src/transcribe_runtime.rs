@@ -37,7 +37,7 @@ pub struct BatchInputSource {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct OfflineTranscribeOptions {
+pub struct BatchTranscribeOptions {
     pub input: PathBuf,
     pub output: Option<PathBuf>,
     pub format: Option<String>,
@@ -57,7 +57,7 @@ pub struct OfflineTranscribeOptions {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct OfflineTranscribePlan {
+pub struct BatchTranscribePlan {
     pub input_path: PathBuf,
     pub save_to_path: Option<PathBuf>,
     pub model_path: String,
@@ -110,11 +110,11 @@ pub fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
     }
 }
 
-pub fn resolve_offline_transcribe_plan(
-    options: OfflineTranscribeOptions,
+pub fn resolve_batch_transcribe_plan(
+    options: BatchTranscribeOptions,
     config: Option<TranscribeConfigSection>,
-) -> Result<OfflineTranscribePlan, String> {
-    resolve_offline_transcribe_plan_with_install_checker(
+) -> Result<BatchTranscribePlan, String> {
+    resolve_batch_transcribe_plan_with_install_checker(
         options,
         config,
         is_preset_model_installed_at,
@@ -366,11 +366,11 @@ fn batch_relative_output_path(
     Ok(output)
 }
 
-pub fn resolve_offline_transcribe_plan_with_install_checker(
-    options: OfflineTranscribeOptions,
+pub fn resolve_batch_transcribe_plan_with_install_checker(
+    options: BatchTranscribeOptions,
     config: Option<TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<OfflineTranscribePlan, String> {
+) -> Result<BatchTranscribePlan, String> {
     let config = config.unwrap_or_default();
     let output_target = resolve_output_target(options.output.clone());
     let export_format = resolve_export_format(
@@ -388,9 +388,9 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
     let models_dir =
         crate::model_paths::resolve_models_dir(options.models_dir.or(config.models_dir))?;
     let model_id = options.model_id.or(config.model_id).ok_or_else(|| {
-        "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
+        "Missing required batch model. Pass --model-id or set model_id in --config.".to_string()
     })?;
-    let model = resolve_offline_model(&model_id)?;
+    let model = resolve_batch_model(&model_id)?;
     let rules = model.resolved_rules();
 
     let vad_model_id = options.vad_model_id.or(config.vad_model_id);
@@ -440,7 +440,7 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
         optional_installed_companion(punctuation_model_id.as_deref(), &models_dir, is_installed)?
     };
 
-    Ok(OfflineTranscribePlan {
+    Ok(BatchTranscribePlan {
         input_path: options.input,
         save_to_path: options.save_wav,
         model_path,
@@ -460,12 +460,12 @@ pub fn resolve_offline_transcribe_plan_with_install_checker(
     })
 }
 
-fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
+fn resolve_batch_model(model_id: &str) -> Result<&'static PresetModel, String> {
     let model =
         find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
-    if !model.supports_mode("offline") {
+    if !model.supports_mode("batch") {
         return Err(format!(
-            "Model '{model_id}' does not support offline transcription."
+            "Model '{model_id}' does not support batch transcription."
         ));
     }
     Ok(model)

@@ -31,7 +31,7 @@ pub struct DiagnosticsCoreInput {
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsConfigInput {
     pub streaming_model_path: String,
-    pub offline_model_path: String,
+    pub batch_model_path: String,
     #[serde(default)]
     pub vad_model_path: String,
     #[serde(default)]
@@ -44,7 +44,7 @@ pub struct DiagnosticsConfigInput {
 #[serde(rename_all = "camelCase")]
 pub struct SelectedModelsInput {
     pub live: Option<ModelSummaryInput>,
-    pub offline: Option<ModelSummaryInput>,
+    pub batch: Option<ModelSummaryInput>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -58,7 +58,7 @@ pub struct ModelSummaryInput {
 #[serde(rename_all = "camelCase")]
 pub struct ModelRulesInput {
     pub live: Option<ModelRuleInput>,
-    pub offline: Option<ModelRuleInput>,
+    pub batch: Option<ModelRuleInput>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -72,7 +72,7 @@ pub struct ModelRuleInput {
 #[serde(rename_all = "camelCase")]
 pub struct PathStatusesInput {
     pub live_model: Option<RuntimePathStatus>,
-    pub offline_model: Option<RuntimePathStatus>,
+    pub batch_model: Option<RuntimePathStatus>,
     pub vad: Option<RuntimePathStatus>,
     pub punctuation: Option<RuntimePathStatus>,
 }

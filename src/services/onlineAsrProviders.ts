@@ -20,8 +20,8 @@ export type OnlineAsrProviderDefinition = {
   optionDefaultLabel: string;
   titleKey: string;
   titleDefault: string;
-  cloudUploadHintKey: string;
-  cloudUploadHintDefault: string;
+  onlineUploadHintKey: string;
+  onlineUploadHintDefault: string;
   defaultConfig: OnlineAsrProviderConfig;
   manifestEntry: typeof onlineAsrProviderManifest.providers[number];
   normalizeConfig: (config: Partial<OnlineAsrProviderConfig> | undefined) => OnlineAsrProviderConfig;
@@ -94,7 +94,7 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] = on
       }
     }
     
-    if (mode === 'offline' && entry.id === VOLCENGINE_DOUBAO_PROVIDER_ID) {
+    if (mode === 'batch' && entry.id === VOLCENGINE_DOUBAO_PROVIDER_ID) {
        if (!entry.batch.localFileMode.supported || !isVolcengineFlashBatchMode(config)) {
          return false;
        }
@@ -110,8 +110,8 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] = on
     optionDefaultLabel: entry.ui.optionDefaultLabel,
     titleKey: entry.ui.titleKey,
     titleDefault: entry.ui.titleDefault,
-    cloudUploadHintKey: entry.ui.cloudUploadHintKey,
-    cloudUploadHintDefault: entry.ui.cloudUploadHintDefault,
+    onlineUploadHintKey: entry.ui.onlineUploadHintKey,
+    onlineUploadHintDefault: entry.ui.onlineUploadHintDefault,
     defaultConfig: entry.defaults as OnlineAsrProviderConfig,
     manifestEntry: entry,
     normalizeConfig,

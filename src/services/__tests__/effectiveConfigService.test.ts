@@ -16,7 +16,7 @@ function createBaseConfig(): AppConfig {
     appLanguage: 'en',
     theme: 'light',
     streamingModelPath: '/models/live',
-    offlineModelPath: '/models/offline',
+    batchModelPath: '/models/batch',
     punctuationModelPath: '',
     vadModelPath: '',
     llmSettings: createLlmSettings(),

@@ -13,7 +13,7 @@ const streamingModel: ModelInfo = {
   description: '',
   url: '',
   type: 'sensevoice',
-  modes: ['streaming', 'offline'],
+  modes: ['streaming', 'batch'],
   language: 'en',
   size: '1 MB',
   engine: 'sherpa-onnx',
@@ -43,12 +43,12 @@ function makeRestoreDefaults(overrides: Partial<ModelCatalogRestoreDefaults> = {
 }
 
 describe('modelConfigPatches', () => {
-  it('builds ASR selection patches for streaming/offline model loads', () => {
+  it('builds ASR selection patches for streaming/Batch Model loads', () => {
     const config = buildTestConfig();
 
     expect(buildModelPathConfigPatch(config, streamingModel, '/models/streaming')).toEqual(expect.objectContaining({
       streamingModelPath: '/models/streaming',
-      offlineModelPath: '/models/streaming',
+      batchModelPath: '/models/streaming',
       asr: expect.objectContaining({
         selections: expect.objectContaining({
           live: expect.objectContaining({
@@ -83,7 +83,7 @@ describe('modelConfigPatches', () => {
   it('clears every config field pointing to a deleted model path', () => {
     const config = buildTestConfig({
       streamingModelPath: '/models/deleted',
-      offlineModelPath: '/models/deleted',
+      batchModelPath: '/models/deleted',
       punctuationModelPath: '/models/deleted',
       vadModelPath: '/models/deleted',
       speakerSegmentationModelPath: '/models/deleted',
@@ -92,7 +92,7 @@ describe('modelConfigPatches', () => {
 
     expect(buildModelRemovalConfigPatch(config, '/models/deleted')).toEqual(expect.objectContaining({
       streamingModelPath: '',
-      offlineModelPath: '',
+      batchModelPath: '',
       punctuationModelPath: '',
       vadModelPath: '',
       speakerSegmentationModelPath: '',
@@ -111,7 +111,7 @@ describe('modelConfigPatches', () => {
   it('restores catalog defaults and keeps current paths when optional defaults are absent', () => {
     const config = buildTestConfig({
       streamingModelPath: '/current/live',
-      offlineModelPath: '/current/batch',
+      batchModelPath: '/current/batch',
       vadModelPath: '/current/vad',
       vadBufferSize: 9,
       maxConcurrent: 4,
@@ -120,13 +120,13 @@ describe('modelConfigPatches', () => {
 
     const patch = buildRestoreDefaultModelConfigPatch(config, makeRestoreDefaults({
       streamingModelPath: '/models/default-live',
-      offlineModelPath: '/models/default-batch',
+      batchModelPath: '/models/default-batch',
     }));
     const nextConfig = { ...config, ...patch };
 
     expect(nextConfig).toEqual(expect.objectContaining({
       streamingModelPath: '/models/default-live',
-      offlineModelPath: '/models/default-batch',
+      batchModelPath: '/models/default-batch',
       vadModelPath: '/current/vad',
       vadBufferSize: 5,
       maxConcurrent: 2,

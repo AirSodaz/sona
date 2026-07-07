@@ -103,7 +103,7 @@ describe('projectStore', () => {
         systemAudioDeviceId: 'default',
         muteDuringRecording: false,
         streamingModelPath: '/models/live',
-        offlineModelPath: '/models/offline',
+        batchModelPath: '/models/batch',
         punctuationModelPath: '',
         vadModelPath: '',
         language: 'auto',

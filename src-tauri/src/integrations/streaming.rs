@@ -150,7 +150,7 @@ async fn handle_online_streaming_socket(
             let _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&ServerMessage::Error {
-                        message: "Cloud ASR streaming requires AppHandle".to_string(),
+                        message: "Online ASR streaming requires AppHandle".to_string(),
                     })
                     .unwrap()
                     .into(),

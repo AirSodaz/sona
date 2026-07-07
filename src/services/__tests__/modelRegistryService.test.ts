@@ -33,7 +33,7 @@ function makeSnapshot(): ModelCatalogSnapshot {
     sections: [],
     selectionOptions: {
       streaming: [],
-      offline: [],
+      batch: [],
       speakerSegmentation: [],
       speakerEmbedding: [],
     },
@@ -65,7 +65,7 @@ describe('modelRegistryService', () => {
     getModelCatalogSnapshot.mockResolvedValue(makeSnapshot());
     resolveModelCatalogSelectedIds.mockResolvedValue({
       streaming: 'streaming-id',
-      offline: null,
+      batch: null,
       speakerSegmentation: null,
       speakerEmbedding: null,
     });
@@ -139,19 +139,19 @@ describe('modelRegistryService', () => {
 
     await expect(registry.resolveModelCatalogSelectedIds({
       streamingModelPath: '/streaming',
-      offlineModelPath: '',
+      batchModelPath: '',
       speakerSegmentationModelPath: '',
       speakerEmbeddingModelPath: '',
     })).resolves.toEqual({
       streaming: 'streaming-id',
-      offline: null,
+      batch: null,
       speakerSegmentation: null,
       speakerEmbedding: null,
     });
 
     expect(resolveModelCatalogSelectedIds).toHaveBeenCalledWith({
       streamingModelPath: '/streaming',
-      offlineModelPath: '',
+      batchModelPath: '',
       speakerSegmentationModelPath: '',
       speakerEmbeddingModelPath: '',
     });
@@ -169,7 +169,7 @@ describe('modelRegistryService', () => {
             isInstalled: true,
           },
         ],
-        offline: [
+        batch: [
           {
             id: snapshotModel.id,
             label: snapshotModel.name,
@@ -201,14 +201,14 @@ describe('modelRegistryService', () => {
 
     const result = registry.resolveModelCatalogSelectedIdsFromSnapshot(snapshot, {
       streamingModelPath: 'C:\\snapshot\\models\\snapshot-model',
-      offlineModelPath: 'D:\\portable\\snapshot-model',
+      batchModelPath: 'D:\\portable\\snapshot-model',
       speakerSegmentationModelPath: '',
       speakerEmbeddingModelPath: '',
     });
 
     expect(result).toEqual({
       streaming: snapshotModel.id,
-      offline: snapshotModel.id,
+      batch: snapshotModel.id,
       speakerSegmentation: null,
       speakerEmbedding: null,
     });

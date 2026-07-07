@@ -56,7 +56,7 @@ export class DiagnosticsService {
     const coreSnapshot = await this.ports.getDiagnosticsCoreSnapshot({
       config: {
         streamingModelPath: config.streamingModelPath,
-        offlineModelPath: config.offlineModelPath,
+        batchModelPath: config.batchModelPath,
         vadModelPath: config.vadModelPath ?? '',
         punctuationModelPath: config.punctuationModelPath ?? '',
         microphoneId: config.microphoneId ?? 'default',

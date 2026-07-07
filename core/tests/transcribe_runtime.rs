@@ -6,11 +6,11 @@ use sona_core::preset_models::PresetModel;
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
-    BatchInputSource, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
-    DEFAULT_VAD_BUFFER_SIZE, OfflineTranscribeOptions, OutputTarget, load_transcribe_config_file,
-    plan_batch_output_files, resolve_batch_input_source, resolve_batch_jobs, resolve_export_format,
-    resolve_offline_transcribe_plan_with_install_checker, resolve_output_target,
-    should_run_path_batch,
+    BatchInputSource, BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE,
+    DEFAULT_THREADS, DEFAULT_VAD_BUFFER_SIZE, OutputTarget, load_transcribe_config_file,
+    plan_batch_output_files, resolve_batch_input_source, resolve_batch_jobs,
+    resolve_batch_transcribe_plan_with_install_checker, resolve_export_format,
+    resolve_output_target, should_run_path_batch,
 };
 use tempfile::tempdir;
 
@@ -180,8 +180,8 @@ fn batch_output_plans_reject_duplicate_outputs_without_recursive_structure() {
     assert!(error.contains("demo.json"));
 }
 
-fn temp_transcribe_options() -> OfflineTranscribeOptions {
-    OfflineTranscribeOptions {
+fn temp_transcribe_options() -> BatchTranscribeOptions {
+    BatchTranscribeOptions {
         input: PathBuf::from("sample.wav"),
         output: None,
         format: None,
@@ -230,7 +230,7 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
 }
 
 #[test]
-fn offline_plan_cli_values_override_config_file_values() {
+fn batch_plan_cli_values_override_config_file_values() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -242,7 +242,7 @@ fn offline_plan_cli_values_override_config_file_values() {
     cli.enable_itn = Some(true);
     cli.hotwords = Some("cli-term".to_string());
 
-    let resolved = resolve_offline_transcribe_plan_with_install_checker(
+    let resolved = resolve_batch_transcribe_plan_with_install_checker(
         cli,
         Some(TranscribeConfigSection {
             threads: Some(2),
@@ -268,7 +268,7 @@ fn offline_plan_cli_values_override_config_file_values() {
 }
 
 #[test]
-fn offline_plan_defaults_gpu_language_threads_and_vad_buffer() {
+fn batch_plan_defaults_gpu_language_threads_and_vad_buffer() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -278,7 +278,7 @@ fn offline_plan_defaults_gpu_language_threads_and_vad_buffer() {
     cli.vad_model_id = Some("silero-vad".to_string());
 
     let resolved =
-        resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+        resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
 
     assert_eq!(resolved.gpu_acceleration.as_deref(), Some("auto"));
     assert_eq!(resolved.language, DEFAULT_LANGUAGE);
@@ -287,7 +287,7 @@ fn offline_plan_defaults_gpu_language_threads_and_vad_buffer() {
 }
 
 #[test]
-fn offline_plan_defaults_required_companions_when_omitted() {
+fn batch_plan_defaults_required_companions_when_omitted() {
     let (_dir, input_path, models_dir) = installed_funasr_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -296,7 +296,7 @@ fn offline_plan_defaults_required_companions_when_omitted() {
     cli.models_dir = Some(models_dir.clone());
 
     let resolved =
-        resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+        resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
 
     assert_eq!(
         resolved.vad_model.as_deref(),
@@ -319,7 +319,7 @@ fn offline_plan_defaults_required_companions_when_omitted() {
 }
 
 #[test]
-fn offline_plan_config_can_override_required_companion_default() {
+fn batch_plan_config_can_override_required_companion_default() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -327,7 +327,7 @@ fn offline_plan_config_can_override_required_companion_default() {
     cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
     cli.models_dir = Some(models_dir);
 
-    let error = resolve_offline_transcribe_plan_with_install_checker(
+    let error = resolve_batch_transcribe_plan_with_install_checker(
         cli,
         Some(TranscribeConfigSection {
             vad_model_id: Some("custom-vad".to_string()),
@@ -342,7 +342,7 @@ fn offline_plan_config_can_override_required_companion_default() {
 }
 
 #[test]
-fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
+fn batch_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -351,7 +351,7 @@ fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
     cli.models_dir = Some(models_dir);
     cli.vad_model_id = Some("silero-vad".to_string());
 
-    let resolved = resolve_offline_transcribe_plan_with_install_checker(
+    let resolved = resolve_batch_transcribe_plan_with_install_checker(
         cli,
         Some(TranscribeConfigSection {
             gpu_acceleration: Some("cpu".to_string()),
@@ -367,7 +367,7 @@ fn offline_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
 }
 
 #[test]
-fn offline_plan_cli_gpu_overrides_config_file() {
+fn batch_plan_cli_gpu_overrides_config_file() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -377,7 +377,7 @@ fn offline_plan_cli_gpu_overrides_config_file() {
     cli.vad_model_id = Some("silero-vad".to_string());
     cli.gpu_acceleration = Some("cuda".to_string());
 
-    let resolved = resolve_offline_transcribe_plan_with_install_checker(
+    let resolved = resolve_batch_transcribe_plan_with_install_checker(
         cli,
         Some(TranscribeConfigSection {
             gpu_acceleration: Some("cpu".to_string()),
@@ -391,12 +391,12 @@ fn offline_plan_cli_gpu_overrides_config_file() {
 }
 
 #[test]
-fn offline_plan_invalid_gpu_fails_before_model_resolution() {
+fn batch_plan_invalid_gpu_fails_before_model_resolution() {
     let mut cli = temp_transcribe_options();
     cli.model_id = Some("not-a-real-model".to_string());
     cli.gpu_acceleration = Some("vulkan".to_string());
 
-    let error = resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists)
+    let error = resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists)
         .unwrap_err();
 
     assert!(error.contains("gpu_acceleration"));
@@ -405,7 +405,7 @@ fn offline_plan_invalid_gpu_fails_before_model_resolution() {
 }
 
 #[test]
-fn offline_plan_infers_export_format_from_output_path() {
+fn batch_plan_infers_export_format_from_output_path() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -416,12 +416,12 @@ fn offline_plan_infers_export_format_from_output_path() {
     cli.vad_model_id = Some("silero-vad".to_string());
 
     let resolved =
-        resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+        resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
     assert_eq!(resolved.export_format, ExportFormat::Srt);
 }
 
 #[test]
-fn offline_plan_format_flag_overrides_output_extension() {
+fn batch_plan_format_flag_overrides_output_extension() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -433,12 +433,12 @@ fn offline_plan_format_flag_overrides_output_extension() {
     cli.vad_model_id = Some("silero-vad".to_string());
 
     let resolved =
-        resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+        resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
     assert_eq!(resolved.export_format, ExportFormat::Json);
 }
 
 #[test]
-fn offline_plan_defaults_required_punctuation_constant_when_needed() {
+fn batch_plan_defaults_required_punctuation_constant_when_needed() {
     let (_dir, input_path, models_dir) = installed_funasr_fixture();
 
     let mut cli = temp_transcribe_options();
@@ -447,7 +447,7 @@ fn offline_plan_defaults_required_punctuation_constant_when_needed() {
     cli.models_dir = Some(models_dir);
 
     let resolved =
-        resolve_offline_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+        resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
     assert!(
         resolved
             .punctuation_model

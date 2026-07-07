@@ -92,7 +92,7 @@ describe('TranscriptEditor Optimization', () => {
             config: {
                 enableTimeline: true,
                 streamingModelPath: "/path/to/model",
-                offlineModelPath: '',
+                batchModelPath: '',
                 language: 'en',
                 appLanguage: 'en',
             } as any

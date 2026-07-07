@@ -125,7 +125,7 @@ describe('batchQueueStore History Integration', () => {
             config: {
                 ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
-                offlineModelPath: '/path/to/model',
+                batchModelPath: '/path/to/model',
                 language: 'en',
 
                 appLanguage: 'en'
@@ -199,7 +199,7 @@ describe('batchQueueStore History Integration', () => {
                         voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                         batch: {
                             engine: 'online',
-                            mode: 'offline',
+                            mode: 'batch',
                             modelId: null,
                             modelPath: '',
                             providerId: 'volcengine-doubao',

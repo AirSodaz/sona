@@ -24,7 +24,7 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
 
 export interface DiagnosticsConfigFacts {
   streamingModelPath: string;
-  offlineModelPath: string;
+  batchModelPath: string;
   vadModelPath: string;
   punctuationModelPath: string;
   microphoneId: string;
@@ -42,17 +42,17 @@ export interface ModelRuleFacts {
 
 export interface DiagnosticsSelectedModelsFacts {
   live: ModelSummaryFacts | null;
-  offline: ModelSummaryFacts | null;
+  batch: ModelSummaryFacts | null;
 }
 
 export interface DiagnosticsModelRulesFacts {
   live: ModelRuleFacts | null;
-  offline: ModelRuleFacts | null;
+  batch: ModelRuleFacts | null;
 }
 
 export interface DiagnosticsPathStatusesFacts {
   liveModel: RuntimePathStatus | null;
-  offlineModel: RuntimePathStatus | null;
+  batchModel: RuntimePathStatus | null;
   vad: RuntimePathStatus | null;
   punctuation: RuntimePathStatus | null;
 }
@@ -95,7 +95,7 @@ export interface DiagnosticsCoreFactsSnapshot {
 interface BuiltChecks {
   model: {
     liveModelCheck: DiagnosticCheck;
-    offlineModelCheck: DiagnosticCheck;
+    batchModelCheck: DiagnosticCheck;
     vadCheck: DiagnosticCheck;
     punctuationCheck: DiagnosticCheck;
   };
@@ -285,7 +285,7 @@ function buildModelChecks(
 ): BuiltChecks['model'] {
   const { config } = snapshot;
   const streamingPath = config.streamingModelPath.trim();
-  const offlinePath = config.offlineModelPath.trim();
+  const batchPath = config.batchModelPath.trim();
   const vadPath = config.vadModelPath.trim();
   const punctuationPath = config.punctuationModelPath.trim();
   const openModelSettings = openModelSettingsAction(t);
@@ -324,15 +324,15 @@ function buildModelChecks(
     readyMeta: snapshot.selectedModels.live?.name ?? config.streamingModelPath,
   });
 
-  const offlineModelCheck = buildModelPathPolicyCheck({
-    id: 'offline-model',
-    title: tr(t, 'settings.diagnostics.offline_model_title', 'Batch Import Model'),
-    selectedPath: offlinePath,
-    pathStatus: snapshot.pathStatuses.offlineModel,
+  const batchModelCheck = buildModelPathPolicyCheck({
+    id: 'batch-model',
+    title: tr(t, 'settings.diagnostics.batch_model_title', 'Batch Import Model'),
+    selectedPath: batchPath,
+    pathStatus: snapshot.pathStatuses.batchModel,
     missingSelectionStatus: 'missing',
     missingSelectionDescription: tr(
       t,
-      'settings.diagnostics.offline_model_missing',
+      'settings.diagnostics.batch_model_missing',
       'No Batch Import Model is selected yet.',
     ),
     missingPathStatus: 'failed',
@@ -353,9 +353,9 @@ function buildModelChecks(
       'The selected model is configured and reachable.',
     ),
     action: openModelSettings,
-    missingPathMeta: config.offlineModelPath,
-    unknownPathMeta: offlinePath,
-    readyMeta: snapshot.selectedModels.offline?.name ?? config.offlineModelPath,
+    missingPathMeta: config.batchModelPath,
+    unknownPathMeta: batchPath,
+    readyMeta: snapshot.selectedModels.batch?.name ?? config.batchModelPath,
   });
 
   const vadCheck = !snapshot.selectedModels.live
@@ -460,7 +460,7 @@ function buildModelChecks(
 
   return {
     liveModelCheck,
-    offlineModelCheck,
+    batchModelCheck,
     vadCheck,
     punctuationCheck,
   };
@@ -925,7 +925,7 @@ function batchImportOverviewAction(
   checks: BuiltChecks,
 ): DiagnosticAction | undefined {
   if (
-    checks.model.offlineModelCheck.status !== 'ready'
+    checks.model.batchModelCheck.status !== 'ready'
     || checks.model.punctuationCheck.status === 'warning'
   ) {
     return openModelSettingsAction(t);
@@ -950,7 +950,7 @@ function buildOverviewCards(
         : tr(
             t,
             'settings.diagnostics.first_run_missing',
-            'The recommended offline setup is still incomplete.',
+            'The recommended batch setup is still incomplete.',
           ),
       [
         snapshot.onboardingReady ? 'ready' : 'missing',
@@ -982,10 +982,10 @@ function buildOverviewCards(
       tr(
         t,
         'settings.diagnostics.batch_import_card_description',
-        'Offline model and bundled media decoding support for file processing.',
+        'batch model and bundled media decoding support for file processing.',
       ),
       [
-        checks.model.offlineModelCheck.status,
+        checks.model.batchModelCheck.status,
         checks.model.punctuationCheck.status,
         checks.runtime.ffmpegCheck.status,
       ],
@@ -1017,7 +1017,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
       ),
       checks: [
         checks.model.liveModelCheck,
-        checks.model.offlineModelCheck,
+        checks.model.batchModelCheck,
         checks.model.vadCheck,
         checks.model.punctuationCheck,
       ],

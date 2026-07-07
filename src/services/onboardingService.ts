@@ -14,7 +14,7 @@ export interface OnboardingDownloadUpdate {
 
 export interface RecommendedOnboardingPaths {
   streamingModelPath: string;
-  offlineModelPath: string;
+  batchModelPath: string;
   vadModelPath: string;
 }
 
@@ -39,7 +39,7 @@ export async function resolveRecommendedOnboardingPaths(): Promise<RecommendedOn
 
   return {
     streamingModelPath: recognitionPath,
-    offlineModelPath: recognitionPath,
+    batchModelPath: recognitionPath,
     vadModelPath: vadPath,
   };
 }
@@ -52,7 +52,7 @@ export function getRecommendedOnboardingConfig(
 ): Partial<AppConfig> {
   return {
     streamingModelPath: paths.streamingModelPath,
-    offlineModelPath: paths.offlineModelPath,
+    batchModelPath: paths.batchModelPath,
     vadModelPath: paths.vadModelPath,
     enableITN: true,
   };
@@ -96,7 +96,7 @@ export async function downloadRecommendedOnboardingModels(
 
   return {
     streamingModelPath: recognitionPath,
-    offlineModelPath: recognitionPath,
+    batchModelPath: recognitionPath,
     vadModelPath: vadPath,
   };
 }

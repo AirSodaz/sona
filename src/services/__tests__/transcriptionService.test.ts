@@ -303,7 +303,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const TranscriptionService = await loadTranscriptionService();
         await syncTranscriptConfig();
         const service = new TranscriptionService('record');
-        service.setModelPath('/models/offline');
+        service.setModelPath('/models/batch');
 
         await service.transcribeFile('C:/audio/demo.wav');
 
@@ -332,7 +332,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const TranscriptionService = await loadTranscriptionService();
         await syncTranscriptConfig();
         const service = new TranscriptionService('record');
-        service.setModelPath('/models/offline');
+        service.setModelPath('/models/batch');
 
         await service.transcribeFile('C:/audio/demo.wav');
 
@@ -392,7 +392,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const TranscriptionService = await loadTranscriptionService();
         await syncTranscriptConfig();
         const service = new TranscriptionService('record');
-        service.setModelPath('/models/offline');
+        service.setModelPath('/models/batch');
 
         const segments = await service.transcribeFile('C:/audio/demo.wav');
 
@@ -442,7 +442,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                     },
                     batch: {
                         engine: 'local-sherpa',
-                        mode: 'offline',
+                        mode: 'batch',
                         modelId: null,
                         modelPath: '',
                     },
@@ -512,7 +512,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                     },
                     batch: {
                         engine: 'online',
-                        mode: 'offline',
+                        mode: 'batch',
                         modelId: null,
                         modelPath: '',
                         providerId: 'volcengine-doubao',
@@ -555,7 +555,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
             asrRequest: expect.objectContaining({
                 engine: 'online',
-                mode: 'offline',
+                mode: 'batch',
                 onlineProvider: expect.objectContaining({
                     providerId: 'volcengine-doubao',
                     config: expect.objectContaining({

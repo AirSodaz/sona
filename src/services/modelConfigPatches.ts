@@ -24,7 +24,7 @@ export function buildModelPathConfigPatch(
         modelPath: path,
       }));
     }
-    if (model.modes.includes('offline')) {
+    if (model.modes.includes('batch')) {
       Object.assign(updates, syncLegacyAsrSelectionFields(
         { ...config, ...updates },
         'batch',
@@ -58,7 +58,7 @@ export function buildModelRemovalConfigPatch(
   deletedPath: string,
 ): Partial<AppConfig> {
   const updates: Partial<AppConfig> = {};
-  const asr = createDefaultAsrConfig(config.streamingModelPath, config.offlineModelPath);
+  const asr = createDefaultAsrConfig(config.streamingModelPath, config.batchModelPath);
 
   if (config.asr?.selections) {
     asr.selections = { ...config.asr.selections };
@@ -71,9 +71,9 @@ export function buildModelRemovalConfigPatch(
     asr.selections.voiceTyping = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
   }
 
-  if (config.offlineModelPath === deletedPath) {
-    updates.offlineModelPath = '';
-    asr.selections.batch = { engine: 'local-sherpa', mode: 'offline', modelId: null, modelPath: '' };
+  if (config.batchModelPath === deletedPath) {
+    updates.batchModelPath = '';
+    asr.selections.batch = { engine: 'local-sherpa', mode: 'batch', modelId: null, modelPath: '' };
   }
 
   if (config.punctuationModelPath === deletedPath) {
@@ -122,13 +122,13 @@ export function buildRestoreDefaultModelConfigPatch(
     ));
   }
 
-  if (defaults.offlineModelPath !== undefined) {
+  if (defaults.batchModelPath !== undefined) {
     Object.assign(updates, syncLegacyAsrSelectionFields(
       { ...config, ...updates },
       'batch',
       {
         modelId: null,
-        modelPath: defaults.offlineModelPath,
+        modelPath: defaults.batchModelPath,
       },
     ));
   }

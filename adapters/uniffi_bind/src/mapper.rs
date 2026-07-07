@@ -27,7 +27,7 @@ pub enum FfiAsrEngine {
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiAsrMode {
     Streaming,
-    Offline,
+    Batch,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -79,7 +79,7 @@ pub fn asr_engine_to_ffi(engine: AsrEngine) -> FfiAsrEngine {
 pub fn asr_mode_to_ffi(mode: AsrMode) -> FfiAsrMode {
     match mode {
         AsrMode::Streaming => FfiAsrMode::Streaming,
-        AsrMode::Offline => FfiAsrMode::Offline,
+        AsrMode::Batch => FfiAsrMode::Batch,
     }
 }
 

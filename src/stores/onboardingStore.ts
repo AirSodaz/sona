@@ -37,7 +37,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
 
   setPersistedState: (state: OnboardingState, configHasModels: boolean) => {
     // We mock a partial config just for `getResumeOnboardingStep` to know if models exist.
-    const mockConfig = configHasModels ? { streamingModelPath: 'mock', offlineModelPath: 'mock' } : undefined;
+    const mockConfig = configHasModels ? { streamingModelPath: 'mock', batchModelPath: 'mock' } : undefined;
     set({
       persistedState: state,
       currentStep: getResumeOnboardingStep(mockConfig, 'startup', state),

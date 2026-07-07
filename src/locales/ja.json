@@ -52,7 +52,7 @@
             "translation_model_missing": "まず、[設定] > [LLM サービス] で翻訳用のモデルを割り当ててください。",
             "summary_model_missing": "まず、[設定] > [LLM サービス] で Summary 用のモデルを割り当ててください。",
             "local_model_missing": "最初に設定でローカル モデルを構成してください。",
-            "offline_model_missing": "最初に設定でローカル モデルを構成してください。"
+            "batch_model_missing": "最初に設定でローカル モデルを構成してください。"
         },
         "batch": {
             "unsupported_format": "サポートされていないファイル形式です。 {{formats}} を使用してください。",
@@ -754,8 +754,8 @@
             "log_dir_title": "ログディレクトリ",
             "log_dir_ready": "実行時ログは、トラブルシューティングのために解決できます。",
             "log_dir_missing": "Sona はランタイム ログ ディレクトリを解決できませんでした。",
-            "offline_model_missing": "Batch Import Model がまだ選択されていません。",
-            "offline_model_title": "Batch Import Model"
+            "batch_model_missing": "Batch Import Model がまだ選択されていません。",
+            "batch_model_title": "Batch Import Model"
         },
         "vocabulary": "語彙",
         "vocabulary_description": "カスタム語彙、ホットワード、Polish キーワードセット、Polish コンテキストプリセット、Summary テンプレートを管理します。",
@@ -869,8 +869,6 @@
             "xiaomi_title": "シャオミ",
             "mistral_voxtral_option": "ボクストラル (ミストラル)",
             "mistral_title": "ボクストラル (ミストラル)",
-            "mistral_cloud_upload_hint": "音声は転写のためにミストラルに送信されます。",
-            "groq_cloud_upload_hint": "音声は文字起こしのために Groq に送信されます。 Groq には 25MB のファイル サイズ制限があることに注意してください。",
             "groq_model_label": "Whisper モデル",
             "batch_endpoint_label": "バッチエンドポイント",
             "active": "アクティブ",
@@ -882,7 +880,9 @@
             "volcengine_batch_mode_flash": "フラッシュ（シンクダイレクト）",
             "volcengine_batch_mode_offpeak": "オフピーク (非同期割引)",
             "volcengine_batch_mode_url_only_unavailable": "公開音声 URL が必要です。ローカル Batch Import はまだ対応していません。",
-            "cloud_upload_hint": "音声は認識のためにクラウドに送信されます。"
+            "online_upload_hint": "音声は認識のためにクラウドに送信されます。",
+            "groq_online_upload_hint": "音声は文字起こしのために Groq に送信されます。 Groq には 25MB のファイル サイズ制限があることに注意してください。",
+            "mistral_online_upload_hint": "音声は転写のためにミストラルに送信されます。"
         },
         "model_settings_description": "ローカルの転写モデルと処理動作を管理します。",
         "local_path": "ローカルセットアップ",
@@ -1293,10 +1293,10 @@
         "language_zh_tw": "繁體中文",
         "language_ja": "日本語",
         "language_ko": "한국어",
-        "offline_model_hint": "オーディオ/ビデオ ファイルの処理に使用されます。",
-        "offline_model_label": "Batch Import Model",
-        "offline_model_management": "ローカルモデル管理",
-        "select_offline_model": "ローカル モデルを選択...",
+        "batch_model_hint": "オーディオ/ビデオ ファイルの処理に使用されます。",
+        "batch_model_label": "Batch Import Model",
+        "batch_model_management": "ローカルモデル管理",
+        "select_batch_model": "ローカル モデルを選択...",
         "keep_microphone_active": "マイクを常時有効にする",
         "keep_microphone_active_hint": "オンにすると、音声入力の遅延を下げるためにマイクを待機状態にします。オフのままなら、録音、音声入力、入力プレビューをしていない間はマイクを解放します。"
     },

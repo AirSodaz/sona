@@ -91,12 +91,12 @@ describe('FirstRunGuide', () => {
     ] as any);
     vi.mocked(downloadRecommendedOnboardingModels).mockResolvedValue({
       streamingModelPath: '/models/live',
-      offlineModelPath: '/models/offline',
+      batchModelPath: '/models/batch',
       vadModelPath: '/models/vad',
     });
     vi.mocked(getRecommendedOnboardingConfig).mockReturnValue({
       streamingModelPath: '/models/live',
-      offlineModelPath: '/models/offline',
+      batchModelPath: '/models/batch',
       vadModelPath: '/models/vad',
     });
     vi.mocked(requestMicrophonePermission).mockResolvedValue(true);
@@ -112,7 +112,7 @@ describe('FirstRunGuide', () => {
       config: {
         ...useConfigStore.getState().config,
         streamingModelPath: '',
-        offlineModelPath: '',
+        batchModelPath: '',
         microphoneId: 'default',
       },
     });
@@ -160,7 +160,7 @@ describe('FirstRunGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
 
     expect(useConfigStore.getState().config.streamingModelPath).toBe('/models/live');
-    expect(useConfigStore.getState().config.offlineModelPath).toBe('/models/offline');
+    expect(useConfigStore.getState().config.batchModelPath).toBe('/models/batch');
     expect(useTranscriptStore.getState().mode).toBe('live');
     expect(useOnboardingStore.getState().persistedState.status).toBe('completed');
     expect(useOnboardingStore.getState().isOpen).toBe(false);

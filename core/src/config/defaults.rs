@@ -39,7 +39,7 @@ pub fn default_config() -> Value {
         ("keepMicrophoneActive", json!(false)),
         ("asr", default_asr_config()),
         ("streamingModelPath", json!("")),
-        ("offlineModelPath", json!("")),
+        ("batchModelPath", json!("")),
         ("punctuationModelPath", json!("")),
         ("vadModelPath", json!("")),
         ("speakerSegmentationModelPath", json!("")),
@@ -113,7 +113,7 @@ pub fn default_asr_config() -> Value {
         "batch".to_string(),
         json!({
             "engine": "local-sherpa",
-            "mode": "offline",
+            "mode": "batch",
             "modelId": null,
             "modelPath": ""
         }),

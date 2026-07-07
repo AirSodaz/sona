@@ -26,16 +26,16 @@ use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
 use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
-use sona_core::ports::asr::OfflineTranscriber;
+use sona_core::ports::asr::BatchTranscriber;
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
-    OfflineTranscribeOptions, resolve_offline_transcribe_plan_with_install_checker,
+    BatchTranscribeOptions, resolve_batch_transcribe_plan_with_install_checker,
 };
 
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use sona_sqlite::{Database, DatabaseError};
 
-pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Cloud ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Cloud ASR providers.";
+pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiServerTranscriptionDefaults {
@@ -755,7 +755,7 @@ async fn start_worker_loop(
                                 config: job.online_provider_config.clone().unwrap_or_default(),
                             },
                         },
-                        mode: crate::integrations::asr::AsrMode::Offline,
+                        mode: crate::integrations::asr::AsrMode::Batch,
                         enable_itn: false,
                         language: if job.language == "auto" {
                             "".to_string()
@@ -794,7 +794,7 @@ async fn start_worker_loop(
             } else {
                 match build_local_transcribe_plan(&job, &models_dir, &defaults) {
                     Ok(plan) => {
-                        let transcriber = sona_local_asr::offline::LocalOfflineAsrAdapter;
+                        let transcriber = sona_local_asr::batch::LocalBatchAsrAdapter;
                         match transcriber.transcribe(plan).await {
                             Ok(segments) => JobStatus::Completed(segments),
                             Err(e) => JobStatus::Failed(e),
@@ -826,10 +826,10 @@ pub(crate) fn build_local_transcribe_options(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> OfflineTranscribeOptions {
+) -> BatchTranscribeOptions {
     let (vad_model_id, punctuation_model_id) =
         companion_defaults_for_model(&job.model_id, defaults);
-    OfflineTranscribeOptions {
+    BatchTranscribeOptions {
         input: job.file_path.clone(),
         output: None,
         format: None,
@@ -857,13 +857,9 @@ pub(crate) fn build_local_transcribe_plan(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> Result<sona_core::transcribe_runtime::OfflineTranscribePlan, String> {
+) -> Result<sona_core::transcribe_runtime::BatchTranscribePlan, String> {
     let options = build_local_transcribe_options(job, models_dir, defaults);
-    resolve_offline_transcribe_plan_with_install_checker(
-        options,
-        None,
-        is_preset_model_installed_at,
-    )
+    resolve_batch_transcribe_plan_with_install_checker(options, None, is_preset_model_installed_at)
 }
 
 fn companion_defaults_for_model(

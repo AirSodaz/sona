@@ -80,7 +80,7 @@ describe('batchQueueStore Concurrency', () => {
             config: {
                 ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
-                offlineModelPath: '/mock/model',
+                batchModelPath: '/mock/model',
                 language: 'en',
                 appLanguage: 'auto',
                 maxConcurrent: 2

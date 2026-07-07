@@ -11,7 +11,7 @@ fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) ->
         model_type: model_type.to_string(),
         language: language.to_string(),
         size: "1 MB".to_string(),
-        modes: vec!["offline".to_string()],
+        modes: vec!["batch".to_string()],
         installed,
         install_path: PathBuf::from(format!("C:/models/{id}")),
     }
@@ -41,7 +41,7 @@ fn lists_models_with_install_status_from_models_dir() {
 fn selects_models_by_mode_type_language_and_install_status() {
     let models = vec![
         ModelSummary {
-            modes: vec!["offline".to_string()],
+            modes: vec!["batch".to_string()],
             ..model_summary("whisper-zh", "whisper", "zh,en", true)
         },
         ModelSummary {
@@ -49,7 +49,7 @@ fn selects_models_by_mode_type_language_and_install_status() {
             ..model_summary("stream-zh", "zipformer", "zh", true)
         },
         ModelSummary {
-            modes: vec!["offline".to_string()],
+            modes: vec!["batch".to_string()],
             ..model_summary("vad-all", "vad", "all", false)
         },
     ];
@@ -57,7 +57,7 @@ fn selects_models_by_mode_type_language_and_install_status() {
     let selected = select_models(
         models,
         &ModelListFilter {
-            mode: Some("offline".to_string()),
+            mode: Some("batch".to_string()),
             model_type: Some("whisper".to_string()),
             language: Some("zh".to_string()),
             installed_only: true,

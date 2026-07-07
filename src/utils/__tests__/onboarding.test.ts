@@ -19,7 +19,7 @@ describe('onboarding utils', () => {
         null,
         JSON.stringify({
           streamingModelPath: '/models/live',
-          offlineModelPath: '/models/offline',
+          batchModelPath: '/models/batch',
         }),
         null,
       ),
@@ -42,7 +42,7 @@ describe('onboarding utils', () => {
         '{broken-json',
         JSON.stringify({
           streamingModelPath: '/models/live',
-          offlineModelPath: '/models/offline',
+          batchModelPath: '/models/batch',
         }),
         null,
       ),
@@ -53,11 +53,11 @@ describe('onboarding utils', () => {
   });
 
   it('shows the reminder only when required models are still missing', () => {
-    expect(shouldShowOnboardingReminder({ streamingModelPath: '', offlineModelPath: '' })).toBe(true);
+    expect(shouldShowOnboardingReminder({ streamingModelPath: '', batchModelPath: '' })).toBe(true);
     expect(
       shouldShowOnboardingReminder({
         streamingModelPath: '/models/live',
-        offlineModelPath: '/models/offline',
+        batchModelPath: '/models/batch',
       }),
     ).toBe(false);
   });
@@ -65,7 +65,7 @@ describe('onboarding utils', () => {
   it('hides the reminder when it was dismissed earlier', () => {
     expect(
       shouldShowOnboardingReminder(
-        { streamingModelPath: '', offlineModelPath: '' },
+        { streamingModelPath: '', batchModelPath: '' },
         {
           version: 1,
           status: 'deferred',
@@ -96,7 +96,7 @@ describe('onboarding utils', () => {
   it('resumes at the microphone step once models are configured', () => {
     expect(
       getResumeOnboardingStep(
-        { streamingModelPath: '/models/live', offlineModelPath: '/models/offline' },
+        { streamingModelPath: '/models/live', batchModelPath: '/models/batch' },
         'startup',
         { version: 1, status: 'deferred' },
       ),
@@ -106,7 +106,7 @@ describe('onboarding utils', () => {
   it('starts at microphone for brand new users', () => {
     expect(
       getResumeOnboardingStep(
-        { streamingModelPath: '', offlineModelPath: '' },
+        { streamingModelPath: '', batchModelPath: '' },
         'startup',
         { version: 1, status: 'pending' },
       ),
@@ -116,7 +116,7 @@ describe('onboarding utils', () => {
   it('returns models if microphone is likely done but models are missing', () => {
     expect(
       getResumeOnboardingStep(
-        { streamingModelPath: '', offlineModelPath: '' },
+        { streamingModelPath: '', batchModelPath: '' },
         'startup',
         { version: 1, status: 'deferred' },
       ),

@@ -15,7 +15,7 @@ const catalogModel = {
     description: 'settings.descriptions.preset_a',
     url: 'https://example.com/preset-a.tar.bz2',
     type: 'sensevoice',
-    modes: ['streaming', 'offline'],
+    modes: ['streaming', 'batch'],
     language: 'zh,en',
     size: '1 MB',
     engine: 'sherpa-onnx',
@@ -47,7 +47,7 @@ const modelCatalogSnapshot = {
                 isInstalled: true,
             },
         ],
-        offline: [
+        batch: [
             {
                 id: 'preset-a',
                 label: 'Preset A',
@@ -107,7 +107,7 @@ function buildInstalledCatalogSnapshot(installedIds: string[]): any {
                 installPath: model.installPath,
                 isInstalled: model.isInstalled,
             })),
-            offline: models.map((model) => ({
+            batch: models.map((model) => ({
                 id: model.id,
                 label: model.name,
                 installPath: model.installPath,
@@ -126,7 +126,7 @@ function buildInstalledCatalogSnapshot(installedIds: string[]): any {
                 : installedIds.includes(SENSEVOICE_FP32_ID)
                     ? `/models/${SENSEVOICE_FP32_ID}`
                     : undefined,
-            offlineModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
+            batchModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
                 ? `/models/${SENSEVOICE_INT8_ID}`
                 : installedIds.includes(SENSEVOICE_FP32_ID)
                     ? `/models/${SENSEVOICE_FP32_ID}`
@@ -184,7 +184,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         setTestConfig({
             streamingModelPath: '/current/live',
-            offlineModelPath: '/current/offline',
+            batchModelPath: '/current/batch',
             vadModelPath: '/current/vad',
             punctuationModelPath: '/current/punctuation',
             speakerSegmentationModelPath: '/current/speaker-segmentation',
@@ -220,7 +220,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(modelCatalogSnapshot);
         vi.mocked(modelService.resolveModelCatalogSelectedIds).mockResolvedValue({
             streaming: null,
-            offline: null,
+            batch: null,
             speakerSegmentation: null,
             speakerEmbedding: null,
         });
@@ -239,7 +239,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
             return {
                 streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
-                offline: resolve(paths.offlineModelPath, snapshot.selectionOptions.offline),
+                batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
                 speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
                 speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
             };
@@ -332,7 +332,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
     it('resolves selected model ids from the loaded snapshot without backend fallback', async () => {
         setTestConfig({
             streamingModelPath: '/models/preset-a',
-            offlineModelPath: 'D:\\portable\\preset-a',
+            batchModelPath: 'D:\\portable\\preset-a',
             speakerSegmentationModelPath: '',
             speakerEmbeddingModelPath: '',
         });
@@ -349,7 +349,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             expect(result.current.catalogLoadState).toBe('ready');
             expect(result.current.selectedModelIds).toMatchObject({
                 streaming: 'preset-a',
-                offline: 'preset-a',
+                batch: 'preset-a',
             });
         });
 
@@ -370,7 +370,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            offlineModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+            batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
             vadModelPath: `/models/${SILERO_VAD_ID}`,
             punctuationModelPath: '',
             speakerSegmentationModelPath: '',
@@ -405,7 +405,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_FP32_ID}`,
-            offlineModelPath: `/models/${SENSEVOICE_FP32_ID}`,
+            batchModelPath: `/models/${SENSEVOICE_FP32_ID}`,
             vadModelPath: '/current/vad',
             punctuationModelPath: '',
             speakerSegmentationModelPath: '',
@@ -430,7 +430,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: '/current/live',
-            offlineModelPath: '/current/offline',
+            batchModelPath: '/current/batch',
             vadModelPath: '/current/vad',
             punctuationModelPath: '',
             speakerSegmentationModelPath: '',
@@ -455,7 +455,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            offlineModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+            batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
             vadModelPath: '/current/vad',
             punctuationModelPath: '',
             speakerSegmentationModelPath: '',

@@ -10,7 +10,7 @@ fn base_input() -> DiagnosticsCoreInput {
     DiagnosticsCoreInput {
         config: DiagnosticsConfigInput {
             streaming_model_path: "C:\\models\\live".to_string(),
-            offline_model_path: "C:\\models\\offline".to_string(),
+            batch_model_path: "C:\\models\\batch".to_string(),
             vad_model_path: "C:\\models\\vad.onnx".to_string(),
             punctuation_model_path: "".to_string(),
             microphone_id: "default".to_string(),
@@ -20,9 +20,9 @@ fn base_input() -> DiagnosticsCoreInput {
                 id: "live".to_string(),
                 name: "Live Model".to_string(),
             }),
-            offline: Some(ModelSummaryInput {
-                id: "offline".to_string(),
-                name: "Offline Model".to_string(),
+            batch: Some(ModelSummaryInput {
+                id: "batch".to_string(),
+                name: "Batch Model".to_string(),
             }),
         },
         model_rules: ModelRulesInput {
@@ -30,17 +30,14 @@ fn base_input() -> DiagnosticsCoreInput {
                 requires_vad: true,
                 requires_punctuation: false,
             }),
-            offline: Some(ModelRuleInput {
+            batch: Some(ModelRuleInput {
                 requires_vad: false,
                 requires_punctuation: false,
             }),
         },
         path_statuses: PathStatusesInput {
             live_model: Some(path_status("C:\\models\\live", RuntimePathKind::Directory)),
-            offline_model: Some(path_status(
-                "C:\\models\\offline",
-                RuntimePathKind::Directory,
-            )),
+            batch_model: Some(path_status("C:\\models\\batch", RuntimePathKind::Directory)),
             vad: Some(path_status("C:\\models\\vad.onnx", RuntimePathKind::File)),
             punctuation: None,
         },
@@ -141,7 +138,7 @@ fn core_snapshot_carries_asr_metrics_without_formatting() {
             instance_id: "record".to_string(),
             model_path: "C:\\models\\live".to_string(),
             model_type: "sensevoice".to_string(),
-            recognizer_kind: "offline".to_string(),
+            recognizer_kind: "batch".to_string(),
             num_threads: 4,
             reused_from_pool: false,
             load_ms: 123.4,

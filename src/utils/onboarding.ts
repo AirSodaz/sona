@@ -61,11 +61,11 @@ export function parseStoredConfig(rawValue: string | null): Partial<AppConfig> {
       streamingModelPath:
         config.streamingModelPath ||
         config.recognitionModelPath ||
-        config.offlineModelPath ||
+        config.batchModelPath ||
         config.modelPath ||
         '',
-      offlineModelPath:
-        config.offlineModelPath ||
+      batchModelPath:
+        config.batchModelPath ||
         config.recognitionModelPath ||
         config.modelPath ||
         '',
@@ -86,7 +86,7 @@ export function hasConfiguredRecognitionModel(config?: Partial<AppConfig> | null
     return false;
   }
 
-  return Boolean(config.streamingModelPath || config.offlineModelPath);
+  return Boolean(config.streamingModelPath || config.batchModelPath);
 }
 
 /**
@@ -97,7 +97,7 @@ export function hasRequiredOnboardingModels(config?: Partial<AppConfig> | null):
     return false;
   }
 
-  return Boolean(config.streamingModelPath && config.offlineModelPath);
+  return Boolean(config.streamingModelPath && config.batchModelPath);
 }
 
 /**

@@ -3,10 +3,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::ports::asr::OfflineTranscriber;
+use sona_core::ports::asr::BatchTranscriber;
 use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
-    OfflineTranscribeOptions, OutputTarget, resolve_offline_transcribe_plan,
+    BatchTranscribeOptions, OutputTarget, resolve_batch_transcribe_plan,
 };
 
 #[derive(Debug, Args)]
@@ -70,7 +70,7 @@ pub struct TranscribeArgs {
 
 pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let config = load_config(args.config.as_ref())?;
-    let options = OfflineTranscribeOptions {
+    let options = BatchTranscribeOptions {
         input: args.input,
         output: args.output,
         format: args.format,
@@ -89,14 +89,14 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         force: args.force,
     };
 
-    let plan = resolve_offline_transcribe_plan(options, config).map_err(CliError::Validation)?;
+    let plan = resolve_batch_transcribe_plan(options, config).map_err(CliError::Validation)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
-    let transcriber = sona_local_asr::offline::LocalOfflineAsrAdapter;
+    let transcriber = sona_local_asr::batch::LocalBatchAsrAdapter;
     let segments = runtime
         .block_on(transcriber.transcribe(plan))
         .map_err(CliError::Other)?;

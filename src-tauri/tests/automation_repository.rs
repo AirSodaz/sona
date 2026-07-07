@@ -32,9 +32,9 @@ fn sample_rule(
     rule
 }
 
-fn valid_global_config(offline_model_path: &str) -> Value {
+fn valid_global_config(batch_model_path: &str) -> Value {
     json!({
-        "offlineModelPath": offline_model_path,
+        "batchModelPath": batch_model_path,
         "llmSettings": {
             "activeProvider": "open_ai",
             "providers": {
@@ -88,15 +88,15 @@ fn validation_creates_the_output_directory_for_valid_rules() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
-    let offline_model_dir = dir.path().join("offline-model");
+    let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
-    fs::create_dir_all(&offline_model_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
         export_dir.to_string_lossy().into_owned(),
         |_| {},
     );
-    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+    let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
     let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));
 
@@ -120,7 +120,7 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
         "selections": {
             "batch": {
                 "engine": "online",
-                "mode": "offline",
+                "mode": "batch",
                 "modelId": null,
                 "modelPath": "",
                 "providerId": "volcengine-doubao",
@@ -162,7 +162,7 @@ fn validation_uses_volcengine_batch_defaults_when_only_api_key_is_saved() {
         "selections": {
             "batch": {
                 "engine": "online",
-                "mode": "offline",
+                "mode": "batch",
                 "modelId": null,
                 "modelPath": "",
                 "providerId": "volcengine-doubao",
@@ -200,7 +200,7 @@ fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_asy
         "selections": {
             "batch": {
                 "engine": "online",
-                "mode": "offline",
+                "mode": "batch",
                 "modelId": null,
                 "modelPath": "",
                 "providerId": "volcengine-doubao",
@@ -225,7 +225,7 @@ fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_asy
     assert!(!result.valid);
     assert_eq!(
         result.code.as_deref(),
-        Some("automation.offline_model_missing")
+        Some("automation.batch_model_missing")
     );
 }
 
@@ -234,9 +234,9 @@ fn validation_accepts_inbox_without_project_record() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
-    let offline_model_dir = dir.path().join("offline-model");
+    let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
-    fs::create_dir_all(&offline_model_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
         export_dir.to_string_lossy().into_owned(),
@@ -244,7 +244,7 @@ fn validation_accepts_inbox_without_project_record() {
             rule.project_id = "inbox".to_string();
         },
     );
-    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+    let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
     let result = validate_rule_activation_inner(&rule, &global_config, None);
 
@@ -256,9 +256,9 @@ fn validation_rejects_missing_real_project_record() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
-    let offline_model_dir = dir.path().join("offline-model");
+    let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
-    fs::create_dir_all(&offline_model_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
         export_dir.to_string_lossy().into_owned(),
@@ -266,7 +266,7 @@ fn validation_rejects_missing_real_project_record() {
             rule.project_id = "missing-project".to_string();
         },
     );
-    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+    let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
     let result = validate_rule_activation_inner(&rule, &global_config, None);
 
@@ -279,9 +279,9 @@ fn validation_requires_feature_models_when_auto_stages_are_enabled() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
-    let offline_model_dir = dir.path().join("offline-model");
+    let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
-    fs::create_dir_all(&offline_model_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
         export_dir.to_string_lossy().into_owned(),
@@ -290,7 +290,7 @@ fn validation_requires_feature_models_when_auto_stages_are_enabled() {
         },
     );
     let global_config = json!({
-        "offlineModelPath": offline_model_dir,
+        "batchModelPath": batch_model_dir,
         "llmSettings": {
             "activeProvider": "open_ai",
             "providers": {},
@@ -314,9 +314,9 @@ fn validation_accepts_translation_with_google_translate_free_without_an_api_key(
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");
     let export_dir = dir.path().join("exports");
-    let offline_model_dir = dir.path().join("offline-model");
+    let batch_model_dir = dir.path().join("batch-model");
     fs::create_dir_all(&watch_dir).unwrap();
-    fs::create_dir_all(&offline_model_dir).unwrap();
+    fs::create_dir_all(&batch_model_dir).unwrap();
     let rule = sample_rule(
         watch_dir.to_string_lossy().into_owned(),
         export_dir.to_string_lossy().into_owned(),
@@ -325,7 +325,7 @@ fn validation_accepts_translation_with_google_translate_free_without_an_api_key(
             rule.export_config.mode = "translation".to_string();
         },
     );
-    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+    let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
     let result = validate_rule_activation_inner(&rule, &global_config, Some(&json!({})));
 

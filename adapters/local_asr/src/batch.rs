@@ -11,8 +11,8 @@ use crate::recognizer::{
 use async_trait::async_trait;
 use sherpa_onnx::VadModelConfig;
 use sona_core::model_config::ModelFileConfig;
-use sona_core::ports::asr::OfflineTranscriber;
-use sona_core::transcribe_runtime::OfflineTranscribePlan;
+use sona_core::ports::asr::BatchTranscriber;
+use sona_core::transcribe_runtime::BatchTranscribePlan;
 use sona_core::transcript::{
     TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
     synthesize_durations,
@@ -20,21 +20,21 @@ use sona_core::transcript::{
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct LocalOfflineAsrAdapter;
+pub struct LocalBatchAsrAdapter;
 
 #[async_trait]
-impl OfflineTranscriber for LocalOfflineAsrAdapter {
+impl BatchTranscriber for LocalBatchAsrAdapter {
     async fn transcribe(
         &self,
-        plan: OfflineTranscribePlan,
+        plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, String> {
-        let job = OfflineTranscriptionJob::from_plan(plan)?;
+        let job = BatchTranscriptionJob::from_plan(plan)?;
         job.transcribe().await
     }
 }
 
 #[derive(Debug, Clone)]
-struct OfflineTranscriptionJob {
+struct BatchTranscriptionJob {
     input_path: PathBuf,
     save_to_path: Option<PathBuf>,
     model_path: PathBuf,
@@ -51,8 +51,8 @@ struct OfflineTranscriptionJob {
     quiet: bool,
 }
 
-impl OfflineTranscriptionJob {
-    fn from_plan(plan: OfflineTranscribePlan) -> Result<Self, String> {
+impl BatchTranscriptionJob {
+    fn from_plan(plan: BatchTranscribePlan) -> Result<Self, String> {
         if !plan.input_path.is_file() {
             return Err(format!(
                 "Input file must be an existing file: {}",
@@ -227,15 +227,15 @@ fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation
 
 #[cfg(test)]
 mod tests {
-    use super::LocalOfflineAsrAdapter;
+    use super::LocalBatchAsrAdapter;
     use sona_core::export::ExportFormat;
-    use sona_core::ports::asr::OfflineTranscriber;
-    use sona_core::transcribe_runtime::{OfflineTranscribePlan, OutputTarget};
+    use sona_core::ports::asr::BatchTranscriber;
+    use sona_core::transcribe_runtime::{BatchTranscribePlan, OutputTarget};
     use std::path::PathBuf;
 
     #[tokio::test]
-    async fn offline_transcription_rejects_missing_input_file() {
-        let plan = OfflineTranscribePlan {
+    async fn batch_transcription_rejects_missing_input_file() {
+        let plan = BatchTranscribePlan {
             input_path: PathBuf::from("missing.wav"),
             save_to_path: None,
             model_path: "C:/models/demo".to_string(),
@@ -254,7 +254,7 @@ mod tests {
             quiet: true,
         };
 
-        let error = LocalOfflineAsrAdapter.transcribe(plan).await.unwrap_err();
+        let error = LocalBatchAsrAdapter.transcribe(plan).await.unwrap_err();
         assert!(error.contains("existing file"));
     }
 }

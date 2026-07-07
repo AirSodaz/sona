@@ -21,7 +21,7 @@ export function doesModelPathMatch(
 
 export function findSelectedModelByMode(
     modelPath: string,
-    mode: 'streaming' | 'offline',
+    mode: 'streaming' | 'batch',
 ): ModelInfo | null {
     return (
         PRESET_MODELS.find(

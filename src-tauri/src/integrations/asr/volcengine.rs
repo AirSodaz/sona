@@ -428,8 +428,8 @@ pub async fn process_batch_file_impl(
     file_path: std::path::PathBuf,
     request: AsrTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    if request.mode != AsrMode::Offline {
-        return Err(SherpaError::VolcengineBatchOnlyForOffline);
+    if request.mode != AsrMode::Batch {
+        return Err(SherpaError::VolcengineBatchModeMismatch);
     }
     config_from_request(&request, sona_online_asr::VolcengineMode::Batch)?;
     let started = Instant::now();
@@ -488,7 +488,7 @@ mod tests {
 
     fn online_request(config: serde_json::Value) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest {
-            mode: AsrMode::Offline,
+            mode: AsrMode::Batch,
             language: "auto".to_string(),
             enable_itn: true,
             normalization_options: TranscriptNormalizationOptions::default(),

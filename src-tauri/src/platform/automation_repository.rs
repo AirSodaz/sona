@@ -1,7 +1,7 @@
 use serde_json::Value;
 use sona_core::automation::{
     AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleValidationResult,
-    is_virtual_automation_project, normalize_automation_path, resolve_batch_offline_model_path,
+    is_virtual_automation_project, normalize_automation_path, resolve_batch_model_path,
     validate_rule_activation,
 };
 use sona_sqlite::DatabaseError;
@@ -30,7 +30,7 @@ pub fn validate_rule_activation_inner(
     } else {
         false
     };
-    let offline_model_path_exists = resolve_batch_offline_model_path(global_config)
+    let batch_model_path_exists = resolve_batch_model_path(global_config)
         .as_deref()
         .map(|path| Path::new(path).exists())
         .unwrap_or(false);
@@ -42,7 +42,7 @@ pub fn validate_rule_activation_inner(
         AutomationRuleActivationEnvironment {
             watch_directory_exists,
             export_directory_ready,
-            offline_model_path_exists,
+            batch_model_path_exists,
         },
     )
 }

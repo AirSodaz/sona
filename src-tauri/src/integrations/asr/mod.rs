@@ -84,8 +84,8 @@ pub(crate) fn ensure_adapter(
 
 /// Feed f32 audio samples from the hardware capture worker to the correct
 /// ASR backend. Routes by the engine selected during `init_recognizer` so an
-/// expected cloud recognizer cannot silently fall through to local Sherpa when
-/// the cloud session is missing or failed.
+/// expected online recognizer cannot silently fall through to local Sherpa when
+/// the online session is missing or failed.
 pub async fn feed_audio_samples(
     app: &AppHandle,
     state: &AsrState,

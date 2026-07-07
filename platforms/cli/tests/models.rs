@@ -56,7 +56,7 @@ fn models_list_can_filter_by_mode_type_and_language() {
         "--models-dir",
         dir.path().to_string_lossy().as_ref(),
         "--mode",
-        "offline",
+        "batch",
         "--type",
         "whisper",
         "--language",

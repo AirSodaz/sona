@@ -247,7 +247,7 @@ describe('batchQueueStore', () => {
                     voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
-                        mode: 'offline',
+                        mode: 'batch',
                         modelId: null,
                         modelPath: '',
                         providerId: 'volcengine-doubao',

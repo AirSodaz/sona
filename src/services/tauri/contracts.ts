@@ -132,7 +132,7 @@ type TranscriptPostprocessOptions = {
 };
 
 type AsrTranscriptionRequestBase = {
-  mode: "streaming" | "offline" | "batch";
+  mode: "streaming" | "batch";
   language: string;
   enableItn: boolean;
   normalizationOptions: {
@@ -290,14 +290,14 @@ type LlmModelSummary = {
 
 export type ModelSelectionPaths = {
   streamingModelPath: string;
-  offlineModelPath: string;
+  batchModelPath: string;
   speakerSegmentationModelPath: string;
   speakerEmbeddingModelPath: string;
 };
 
 export type ModelCatalogSelectedIds = {
   streaming: string | null;
-  offline: string | null;
+  batch: string | null;
   speakerSegmentation: string | null;
   speakerEmbedding: string | null;
 };

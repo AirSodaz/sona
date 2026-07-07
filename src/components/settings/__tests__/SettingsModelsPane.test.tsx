@@ -12,7 +12,7 @@ const useModelManagerMock = vi.hoisted(() => vi.fn(() => ({
         sections: [],
         selectionOptions: {
             streaming: [],
-            offline: [],
+            batch: [],
             speakerSegmentation: [],
             speakerEmbedding: [],
         },
@@ -32,7 +32,7 @@ const useModelManagerMock = vi.hoisted(() => vi.fn(() => ({
     },
     selectedModelIds: {
         streaming: null,
-        offline: null,
+        batch: null,
         speakerSegmentation: null,
         speakerEmbedding: null,
     },

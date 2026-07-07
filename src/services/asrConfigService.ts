@@ -83,7 +83,7 @@ const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
   live: 'streaming',
   caption: 'streaming',
   voiceTyping: 'streaming',
-  batch: 'offline',
+  batch: 'batch',
 };
 
 function isLegacyOnlineEngine(engine: unknown): boolean {
@@ -100,14 +100,14 @@ export class AsrConfigService {
 
   createDefaultAsrConfig = (
     streamingModelPath = '',
-    offlineModelPath = '',
+    batchModelPath = '',
   ): AsrConfig => {
     return {
       selections: {
         live: this.createLocalSherpaSelection('streaming', streamingModelPath),
         caption: this.createLocalSherpaSelection('streaming', streamingModelPath),
         voiceTyping: this.createLocalSherpaSelection('streaming', streamingModelPath),
-        batch: this.createLocalSherpaSelection('offline', offlineModelPath),
+        batch: this.createLocalSherpaSelection('batch', batchModelPath),
       },
       providers: this.createDefaultAsrProviders(),
     };
@@ -283,7 +283,7 @@ export class AsrConfigService {
     if (mode === 'streaming') {
       patch.streamingModelPath = updates.modelPath;
     } else {
-      patch.offlineModelPath = updates.modelPath;
+      patch.batchModelPath = updates.modelPath;
     }
     return patch;
   }
@@ -344,7 +344,7 @@ export class AsrConfigService {
   private getLegacyModelPath = (config: AppConfig, mode: AsrMode): string => {
     return mode === 'streaming'
       ? config.streamingModelPath || ''
-      : config.offlineModelPath || '';
+      : config.batchModelPath || '';
   }
 
   private normalizeAsrConfig = (config: ModelConfig): AsrConfig => {
@@ -354,7 +354,7 @@ export class AsrConfigService {
         live: this.normalizeSelection(currentSelections?.live, 'streaming', config.streamingModelPath || ''),
         caption: this.normalizeSelection(currentSelections?.caption, 'streaming', config.streamingModelPath || ''),
         voiceTyping: this.normalizeSelection(currentSelections?.voiceTyping, 'streaming', config.streamingModelPath || ''),
-        batch: this.normalizeSelection(currentSelections?.batch, 'offline', config.offlineModelPath || ''),
+        batch: this.normalizeSelection(currentSelections?.batch, 'batch', config.batchModelPath || ''),
       },
       providers: this.normalizeAsrProviders(config.asr?.providers),
     };
@@ -406,7 +406,7 @@ export class AsrConfigService {
     if (selection.modelId) {
       return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
     }
-    return findSelectedModelByMode(selection.modelPath, selection.mode === 'batch' ? 'offline' : selection.mode);
+    return findSelectedModelByMode(selection.modelPath, selection.mode);
   }
 
   private buildHotwords = (config: AppConfig): string | null => {

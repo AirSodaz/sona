@@ -52,7 +52,7 @@
             "translation_model_missing": "먼저 설정 > LLM Service에서 번역에 사용할 모델을 지정하세요.",
             "summary_model_missing": "먼저 설정 > LLM Service에서 요약에 사용할 모델을 지정하세요.",
             "local_model_missing": "먼저 설정에서 로컬 모델을 구성하세요.",
-            "offline_model_missing": "먼저 설정에서 로컬 모델을 구성하세요."
+            "batch_model_missing": "먼저 설정에서 로컬 모델을 구성하세요."
         },
         "batch": {
             "unsupported_format": "지원되지 않는 파일 형식입니다. 다음 형식을 사용하세요: {{formats}}",
@@ -754,8 +754,8 @@
             "log_dir_title": "로그 디렉터리",
             "log_dir_ready": "문제 해결용 런타임 로그 위치를 확인할 수 있습니다.",
             "log_dir_missing": "Sona가 런타임 로그 디렉터리를 확인하지 못했습니다.",
-            "offline_model_missing": "아직 Batch Import 모델이 선택되지 않았습니다.",
-            "offline_model_title": "일괄 가져오기 모델"
+            "batch_model_missing": "아직 Batch Import 모델이 선택되지 않았습니다.",
+            "batch_model_title": "일괄 가져오기 모델"
         },
         "vocabulary": "어휘",
         "vocabulary_description": "사용자 vocabulary, hotwords, 정리 키워드 세트, 텍스트 정리 context preset, 요약 템플릿을 관리합니다.",
@@ -869,8 +869,6 @@
             "xiaomi_title": "Xiaomi",
             "mistral_voxtral_option": "Voxtral (Mistral)",
             "mistral_title": "Voxtral (Mistral)",
-            "mistral_cloud_upload_hint": "오디오 will be sent to Mistral for 전사.",
-            "groq_cloud_upload_hint": "전사를 위해 오디오가 Groq로 전송됩니다. Groq에는 25MB 파일 크기 제한이 있습니다.",
             "groq_model_label": "Whisper 모델",
             "batch_endpoint_label": "Batch Endpoint",
             "active": "진행 중",
@@ -882,7 +880,9 @@
             "volcengine_batch_mode_flash": "Flash (Sync Direct)",
             "volcengine_batch_mode_offpeak": "Off-peak (Discount Async)",
             "volcengine_batch_mode_url_only_unavailable": "Requires a public 오디오 URL; 로컬 batch import does not support it yet.",
-            "cloud_upload_hint": "오디오 will be sent to the cloud for recognition."
+            "online_upload_hint": "오디오 will be sent to the cloud for recognition.",
+            "groq_online_upload_hint": "전사를 위해 오디오가 Groq로 전송됩니다. Groq에는 25MB 파일 크기 제한이 있습니다.",
+            "mistral_online_upload_hint": "오디오 will be sent to Mistral for 전사."
         },
         "model_settings_description": "Manage 로컬 전사 모델 and processing behavior.",
         "local_path": "로컬 Setup",
@@ -1293,10 +1293,10 @@
         "language_zh_tw": "繁體中文",
         "language_ja": "日本語",
         "language_ko": "한국어",
-        "offline_model_hint": "오디오/비디오 파일 처리에 사용됩니다.",
-        "offline_model_label": "일괄 가져오기 모델",
-        "offline_model_management": "로컬 모델 관리",
-        "select_offline_model": "선택 로컬 모델...",
+        "batch_model_hint": "오디오/비디오 파일 처리에 사용됩니다.",
+        "batch_model_label": "일괄 가져오기 모델",
+        "batch_model_management": "로컬 모델 관리",
+        "select_batch_model": "선택 로컬 모델...",
         "keep_microphone_active": "마이크 항상 활성화",
         "keep_microphone_active_hint": "켜면 음성 입력 지연을 줄이기 위해 마이크를 미리 준비해 둡니다. 꺼 둔 상태에서는 녹음, 받아쓰기, 입력 미리보기를 하지 않을 때 마이크를 해제합니다."
     },

@@ -115,7 +115,7 @@ describe('BatchImport Integration', () => {
             config: {
                 ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
-                offlineModelPath: '/mock/offline/model',
+                batchModelPath: '/mock/batch/model',
                 punctuationModelPath: '',
                 enableITN: false,
                 theme: 'auto',
@@ -316,11 +316,11 @@ describe('BatchImport Integration', () => {
         fireEvent.click(addButton);
     });
 
-    it('reopens onboarding when selecting a file without an offline model', async () => {
+    it('reopens onboarding when selecting a file without an Batch Model', async () => {
         useConfigStore.setState({
             config: {
                 ...useConfigStore.getState().config,
-                offlineModelPath: '',
+                batchModelPath: '',
             },
         });
         vi.mocked(open).mockResolvedValue(['/path/to/test.wav']);

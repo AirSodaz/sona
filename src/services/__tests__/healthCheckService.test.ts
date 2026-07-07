@@ -106,7 +106,7 @@ describe('healthCheckService', () => {
     describe('checkModels', () => {
         it('should clear invalid model paths from config', async () => {
             useConfigStore.getState().setConfig({
-                offlineModelPath: '/valid/path',
+                batchModelPath: '/valid/path',
                 streamingModelPath: '/invalid/path',
             });
 
@@ -118,14 +118,14 @@ describe('healthCheckService', () => {
             await healthCheckService.checkModels();
 
             expect(useConfigStore.getState().config.streamingModelPath).toBe('');
-            expect(useConfigStore.getState().config.offlineModelPath).toBe('/valid/path');
+            expect(useConfigStore.getState().config.batchModelPath).toBe('/valid/path');
             expect(settingsStore.set).toHaveBeenCalled();
             expect(settingsStore.save).toHaveBeenCalled();
         });
 
         it('should keep configured model paths when runtime validation is unknown', async () => {
             useConfigStore.getState().setConfig({
-                offlineModelPath: '/unknown/path',
+                batchModelPath: '/unknown/path',
             });
 
             (getPathStatusMap as any).mockResolvedValue({
@@ -134,7 +134,7 @@ describe('healthCheckService', () => {
 
             await healthCheckService.checkModels();
 
-            expect(useConfigStore.getState().config.offlineModelPath).toBe('/unknown/path');
+            expect(useConfigStore.getState().config.batchModelPath).toBe('/unknown/path');
             expect(settingsStore.set).not.toHaveBeenCalled();
             expect(settingsStore.save).not.toHaveBeenCalled();
         });

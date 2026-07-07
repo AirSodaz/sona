@@ -3,8 +3,7 @@ use sona_core::automation::{
     AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleExportConfig,
     AutomationRuleStageConfig, AutomationRuntimePathCollectionOutcome,
     AutomationRuntimePathMetadata, AutomationRuntimeRuleConfig, collect_runtime_rule_path_result,
-    resolve_batch_offline_model_path, should_consider_runtime_candidate_path,
-    validate_rule_activation,
+    resolve_batch_model_path, should_consider_runtime_candidate_path, validate_rule_activation,
 };
 
 #[test]
@@ -70,7 +69,7 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
         AutomationRuleActivationEnvironment {
             watch_directory_exists: true,
             export_directory_ready: true,
-            offline_model_path_exists: false,
+            batch_model_path_exists: false,
         },
     );
 
@@ -79,7 +78,7 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
 }
 
 #[test]
-fn resolves_trimmed_batch_offline_model_path() {
+fn resolves_trimmed_batch_model_path() {
     let config = json!({
         "asr": {
             "selections": {
@@ -93,7 +92,7 @@ fn resolves_trimmed_batch_offline_model_path() {
     });
 
     assert_eq!(
-        resolve_batch_offline_model_path(&config).as_deref(),
+        resolve_batch_model_path(&config).as_deref(),
         Some("C:\\models\\sherpa")
     );
 }

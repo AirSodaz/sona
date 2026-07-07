@@ -55,8 +55,8 @@ export interface ModelInfo {
       | 'qwen3-asr'
       | 'speaker-segmentation'
       | 'speaker-embedding';
-    /** Modes supported by the model (e.g., streaming, offline). */
-    modes?: ('streaming' | 'offline')[];
+    /** Modes supported by the model (e.g., streaming, batch). */
+    modes?: ('streaming' | 'batch')[];
     /** Languages supported by the model (comma-separated). */
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
@@ -118,7 +118,7 @@ export interface ModelSelectionOption {
 
 export interface ModelCatalogSelectionOptions {
     streaming: ModelSelectionOption[];
-    offline: ModelSelectionOption[];
+    batch: ModelSelectionOption[];
     speakerSegmentation: ModelSelectionOption[];
     speakerEmbedding: ModelSelectionOption[];
 }
@@ -139,7 +139,7 @@ export interface ModelCatalogPathMatchToken {
 
 export interface ModelCatalogRestoreDefaults {
     streamingModelPath?: string;
-    offlineModelPath?: string;
+    batchModelPath?: string;
     vadModelPath?: string;
     punctuationModelPath?: string;
     speakerSegmentationModelPath?: string;
@@ -164,14 +164,14 @@ export interface ModelCatalogSnapshot {
 
 export interface ModelSelectionPaths {
     streamingModelPath: string;
-    offlineModelPath: string;
+    batchModelPath: string;
     speakerSegmentationModelPath: string;
     speakerEmbeddingModelPath: string;
 }
 
 export interface ModelCatalogSelectedIds {
     streaming: string | null;
-    offline: string | null;
+    batch: string | null;
     speakerSegmentation: string | null;
     speakerEmbedding: string | null;
 }

@@ -335,7 +335,7 @@ describe('LiveRecord Native Capture', () => {
             useConfigStore.setState({
                 config: {
                     ...useConfigStore.getState().config, streamingModelPath: "/path/to/model",
-                    offlineModelPath: '/path/to/model'
+                    batchModelPath: '/path/to/model'
                 }
             });
             useDialogStore.setState({

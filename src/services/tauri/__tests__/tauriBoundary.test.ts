@@ -229,13 +229,13 @@ describe('tauri boundary wrappers', () => {
   it('app wrappers resolve model catalog selected ids', async () => {
     const paths = {
       streamingModelPath: 'C:/models/live',
-      offlineModelPath: 'C:/models/offline',
+      batchModelPath: 'C:/models/batch',
       speakerSegmentationModelPath: '',
       speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
     };
     const selectedIds = {
       streaming: 'live-model',
-      offline: 'offline-model',
+      batch: 'batch-model',
       speakerSegmentation: null,
       speakerEmbedding: 'speaker-model',
     };
@@ -254,22 +254,22 @@ describe('tauri boundary wrappers', () => {
       scannedAt: '2026-05-03T00:00:00.000Z',
       config: {
         streamingModelPath: 'C:/models/live',
-        offlineModelPath: 'C:/models/offline',
+        batchModelPath: 'C:/models/batch',
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
       },
       selectedModels: {
         live: { id: 'live', name: 'Live Model' },
-        offline: { id: 'offline', name: 'Offline Model' },
+        batch: { id: 'batch', name: 'Batch Model' },
       },
       modelRules: {
         live: { requiresVad: false, requiresPunctuation: false },
-        offline: { requiresVad: false, requiresPunctuation: false },
+        batch: { requiresVad: false, requiresPunctuation: false },
       },
       pathStatuses: {
         liveModel: { path: 'C:/models/live', kind: 'directory', error: null },
-        offlineModel: { path: 'C:/models/offline', kind: 'directory', error: null },
+        batchModel: { path: 'C:/models/batch', kind: 'directory', error: null },
         vad: null,
         punctuation: null,
       },
@@ -302,7 +302,7 @@ describe('tauri boundary wrappers', () => {
     const input = {
       config: {
         streamingModelPath: 'C:/models/live',
-        offlineModelPath: 'C:/models/offline',
+        batchModelPath: 'C:/models/batch',
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
@@ -348,7 +348,7 @@ describe('tauri boundary wrappers', () => {
     const globalConfig = {
       configVersion: 6,
       streamingModelPath: '',
-      offlineModelPath: '',
+      batchModelPath: '',
       appLanguage: 'auto',
       language: 'auto',
       llmSettings: {},
