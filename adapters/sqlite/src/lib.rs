@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod automation;
 pub mod config_store;
 pub mod error;

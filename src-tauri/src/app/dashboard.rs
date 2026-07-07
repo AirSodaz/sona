@@ -4,12 +4,12 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::core::dashboard::DashboardService;
-use crate::repositories::analytics::AnalyticsRepositoryImpl;
+use crate::repositories::analytics::SqliteAnalyticsRepository;
 use crate::repositories::history::SqliteHistoryStore;
 use crate::repositories::project::SqliteProjectRepository;
 
 pub type AppDashboardService =
-    DashboardService<SqliteHistoryStore, SqliteProjectRepository, AnalyticsRepositoryImpl>;
+    DashboardService<SqliteHistoryStore, SqliteProjectRepository, SqliteAnalyticsRepository>;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

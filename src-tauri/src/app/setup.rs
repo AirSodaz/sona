@@ -54,7 +54,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&db),
     ));
     let analytics_repo =
-        Arc::new(crate::repositories::analytics::AnalyticsRepositoryImpl::new(Arc::clone(&db)));
+        Arc::new(crate::repositories::analytics::SqliteAnalyticsRepository::new(Arc::clone(&db)));
 
     let dashboard_service = Arc::new(crate::app::dashboard::AppDashboardService::new(
         history_repo,
