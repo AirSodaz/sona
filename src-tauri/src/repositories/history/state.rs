@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use super::types::PreparedBackupImportSnapshot;
+use sona_core::history::PreparedBackupImportSnapshot;
 
 #[derive(Clone, Default)]
 pub struct HistoryRepositoryState {

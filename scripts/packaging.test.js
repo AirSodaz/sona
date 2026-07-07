@@ -396,6 +396,32 @@ test('desktop automation and project repository task adapters live in platform',
   assert.match(projectCommand, /sona_core::project::\{/u);
 });
 
+test('desktop repositories avoid pure analytics and history type re-export shims', () => {
+  const desktopRepositories = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'mod.rs'),
+    'utf8',
+  );
+  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+  const dashboardApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'dashboard.rs'), 'utf8');
+  const setupApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
+  const historyTypeShimReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history'))
+    .map((filePath) => ({
+      filePath,
+      content: fs.readFileSync(filePath, 'utf8'),
+    }))
+    .filter(({ content }) => /super::types|history::types/u.test(content))
+    .map(({ filePath }) => path.relative(repoRoot, filePath));
+
+  assert.doesNotMatch(desktopRepositories, /^pub mod analytics;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs')), false);
+  assert.doesNotMatch(desktopHistory, /^mod types;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'types.rs')), false);
+  assert.deepEqual(historyTypeShimReferences, []);
+  assert.match(desktopHistory, /pub use sona_core::history::\{/u);
+  assert.match(dashboardApp, /use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
+  assert.match(setupApp, /sona_sqlite::analytics::SqliteAnalyticsRepository::new/u);
+});
+
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
@@ -561,7 +587,6 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   const tauriLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const tauriIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const tauriLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
-  const desktopAnalytics = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs'), 'utf8');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm_usage.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'llm_usage.rs')));
@@ -572,9 +597,7 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.match(tauriLlm, /pub\(crate\) use sona_core::llm_usage;/u);
   assert.match(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
   assert.match(tauriLlmTypes, /pub use sona_core::llm_usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
-  assert.match(desktopAnalytics, /pub use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
-  assert.doesNotMatch(desktopAnalytics, /struct AnalyticsRepositoryImpl/u);
-  assert.doesNotMatch(desktopAnalytics, /impl sona_core::dashboard::ports::AnalyticsRepository/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs')), false);
 });

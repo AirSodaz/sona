@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 use super::backup::build_backup_manifest;
 use super::fs_utils::{create_tar_bz2_archive, write_json_pretty_atomic};
-use super::types::{
+use sona_core::history::{
     HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
 };
 use sona_sqlite::history_backup::{
