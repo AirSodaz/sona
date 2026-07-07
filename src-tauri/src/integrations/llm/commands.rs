@@ -1,8 +1,9 @@
-use super::network::{LlmApiUrl, validate_llm_api_host};
+use super::network::LlmApiUrl;
 use super::*;
 use futures_util::future::BoxFuture;
 use log::info;
 use serde::Serialize;
+use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
 use tauri::{AppHandle, Emitter};
 
 fn polished_segment_id(item: &PolishedSegment) -> &str {
@@ -119,7 +120,7 @@ pub(crate) async fn generate_llm_text_command(
 
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
     let usage = UsageRecorder::new(app, request.config.clone(), category);
-    let response = generate_with_rig(request).await?;
+    let response = DesktopLlmAdapter::default().generate_text(request).await?;
     usage.record(&response);
     Ok(response.text)
 }
@@ -459,6 +460,7 @@ pub(crate) async fn summarize_transcript_command(
     let streamed_task_id = task_id.clone();
     let buffered_config = request.config.clone();
     let streamed_config = request.config.clone();
+    let buffered_llm = DesktopLlmAdapter::default();
     let template = request.template;
     let progress_events = CommandEventEmitter::new(app.clone());
     let stream_events = progress_events.clone();
@@ -477,13 +479,15 @@ pub(crate) async fn summarize_transcript_command(
         move |prompt| {
             let config = buffered_config.clone();
             let usage = buffered_usage.clone();
+            let llm = buffered_llm;
             Box::pin(async move {
-                let response = generate_with_rig(LlmGenerateRequest {
-                    config,
-                    input: prompt,
-                    source: None,
-                })
-                .await?;
+                let response = llm
+                    .generate_text(LlmGenerateRequest {
+                        config,
+                        input: prompt,
+                        source: None,
+                    })
+                    .await?;
                 usage.record(&response);
                 Ok(response.text)
             })
@@ -515,24 +519,5 @@ pub(crate) async fn summarize_transcript_command(
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let strategy = request
-        .strategy
-        .unwrap_or_else(|| LlmProviderStrategy::from_provider(&request.provider));
-    if !strategy_supports_model_listing(strategy) {
-        return Ok(vec![]);
-    }
-    validate_llm_api_host(&request.base_url)?;
-
-    let base_url = LlmApiUrl::parse(&request.base_url)?;
-    let client = base_url.client(None)?;
-
-    match strategy {
-        LlmProviderStrategy::Gemini => {
-            get_gemini_models(&client, &request.api_key, &base_url).await
-        }
-        LlmProviderStrategy::Ollama => {
-            get_openai_models(&client, &request.api_key, &base_url, true).await
-        }
-        _ => get_openai_models(&client, &request.api_key, &base_url, false).await,
-    }
+    DesktopLlmAdapter::default().list_models(request).await
 }

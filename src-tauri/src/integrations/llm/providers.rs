@@ -1,4 +1,4 @@
-use super::network::{LlmApiUrl, post_json_request};
+use super::network::{LlmApiUrl, post_json_request, validate_llm_api_host};
 use super::*;
 use async_trait::async_trait;
 use log::warn;
@@ -14,6 +14,7 @@ use sona_core::llm_provider_protocol::{
     build_gemini_generate_content_request_parts as build_core_gemini_generate_content_request_parts,
     extract_anthropic_text_response, normalize_token_usage, ollama_model_to_summary,
 };
+use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
 use tauri::{AppHandle, Emitter};
 
 #[derive(Serialize)]
@@ -593,6 +594,51 @@ impl AdapterFactory {
             LlmProviderStrategy::Perplexity => Box::new(PerplexityAdapter),
             _ => Box::new(GenericHttpAdapter),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct DesktopLlmAdapter;
+
+#[async_trait]
+impl LlmTextGenerator for DesktopLlmAdapter {
+    async fn generate_text(
+        &self,
+        request: LlmGenerateRequest,
+    ) -> Result<StandardLlmResponse, String> {
+        super::streaming::generate_with_rig(request).await
+    }
+}
+
+#[async_trait]
+impl LlmModelLister for DesktopLlmAdapter {
+    async fn list_models(&self, request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
+        list_models_with_desktop_adapter(request).await
+    }
+}
+
+pub(crate) async fn list_models_with_desktop_adapter(
+    request: LlmModelsRequest,
+) -> Result<Vec<LlmModelSummary>, String> {
+    let strategy = request
+        .strategy
+        .unwrap_or_else(|| LlmProviderStrategy::from_provider(&request.provider));
+    if !strategy_supports_model_listing(strategy) {
+        return Ok(vec![]);
+    }
+    validate_llm_api_host(&request.base_url)?;
+
+    let base_url = LlmApiUrl::parse(&request.base_url)?;
+    let client = base_url.client(None)?;
+
+    match strategy {
+        LlmProviderStrategy::Gemini => {
+            get_gemini_models(&client, &request.api_key, &base_url).await
+        }
+        LlmProviderStrategy::Ollama => {
+            get_openai_models(&client, &request.api_key, &base_url, true).await
+        }
+        _ => get_openai_models(&client, &request.api_key, &base_url, false).await,
     }
 }
 

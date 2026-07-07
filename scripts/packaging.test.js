@@ -728,6 +728,28 @@ test('LLM request and config contracts are owned by core and reused by desktop',
   assert.match(desktopLlmTypes, /pub struct TranscriptLlmJobResult/u);
 });
 
+test('LLM generation and model listing use core ports with desktop adapters', () => {
+  const corePorts = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'mod.rs'), 'utf8');
+  const coreLlmPortPath = path.join(repoRoot, 'core', 'src', 'ports', 'llm.rs');
+  const coreLlmPort = fs.readFileSync(coreLlmPortPath, 'utf8');
+  const desktopCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'), 'utf8');
+  const desktopProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
+
+  assert.match(corePorts, /^pub mod llm;/mu);
+  assert.match(coreLlmPort, /trait LlmTextGenerator/u);
+  assert.match(coreLlmPort, /trait LlmModelLister/u);
+  assert.match(coreLlmPort, /LlmGenerateRequest/u);
+  assert.match(coreLlmPort, /LlmModelsRequest/u);
+  assert.match(coreLlmPort, /StandardLlmResponse/u);
+  assert.match(coreLlmPort, /LlmModelSummary/u);
+  assert.match(desktopProviders, /impl LlmTextGenerator for DesktopLlmAdapter/u);
+  assert.match(desktopProviders, /impl LlmModelLister for DesktopLlmAdapter/u);
+  assert.match(desktopCommands, /DesktopLlmAdapter/u);
+  assert.match(desktopCommands, /\.generate_text\(/u);
+  assert.match(desktopCommands, /\.list_models\(/u);
+  assert.doesNotMatch(desktopCommands, /generate_with_rig/u);
+});
+
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
