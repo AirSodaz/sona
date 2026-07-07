@@ -10,6 +10,7 @@ name = "sona_uniffi_bind"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
+serde = "1"
 serde_json = "1"
 sona-core = { path = "../../core" }
 thiserror = "2.0.18"

@@ -5558,6 +5558,7 @@ dependencies = [
 name = "sona-uniffi-bind"
 version = "0.8.0"
 dependencies = [
+ "serde",
  "serde_json",
  "sona-core",
  "thiserror 2.0.18",

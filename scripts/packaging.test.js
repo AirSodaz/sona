@@ -254,6 +254,39 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
 });
 
+test('core LLM request contracts are exposed through UniFFI binding records', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');
+
+  for (const exportName of [
+    'llm_config_from_json',
+    'polish_segments_request_from_json',
+    'translate_segments_request_from_json',
+    'summarize_transcript_request_from_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}`, 'u'));
+  }
+
+  for (const typeName of [
+    'FfiLlmProviderStrategy',
+    'FfiLlmConfig',
+    'FfiLlmSegmentInput',
+    'FfiSummarySegmentInput',
+    'FfiSummaryTemplateConfig',
+    'FfiPolishSegmentsRequest',
+    'FfiTranslateSegmentsRequest',
+    'FfiSummarizeTranscriptRequest',
+  ]) {
+    assert.match(uniffiMapper, new RegExp(`pub (?:enum|struct) ${typeName}`, 'u'));
+  }
+
+  assert.match(uniffiMapper, /pub fn llm_config_to_ffi/u);
+  assert.match(uniffiMapper, /pub fn polish_segments_request_to_ffi/u);
+  assert.match(uniffiMapper, /pub fn translate_segments_request_to_ffi/u);
+  assert.match(uniffiMapper, /pub fn summarize_transcript_request_to_ffi/u);
+});
+
 test('online ASR provider manifest is owned by core and used directly by desktop', () => {
   const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
   const coreManifestPath = path.join(repoRoot, 'core', 'src', 'ports', 'online-asr-providers.json');

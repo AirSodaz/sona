@@ -1,4 +1,7 @@
 use sona_core::export::ExportFormat;
+use sona_core::llm_requests::{
+    LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
+};
 use sona_core::ports::asr::{
     BatchSegmentationMode, OnlineAsrProviderRequest, VolcengineDoubaoAsrConfig,
 };
@@ -9,8 +12,10 @@ use sona_core::runtime::resolve_runtime_path_status;
 
 mod mapper;
 pub use mapper::{
-    FfiAsrEngine, FfiAsrMode, FfiBatchSegmentationMode, FfiOnlineAsrProviderRequest,
-    FfiRuntimePathKind, FfiRuntimePathStatus, FfiVolcengineDoubaoAsrConfig,
+    FfiAsrEngine, FfiAsrMode, FfiBatchSegmentationMode, FfiLlmConfig, FfiLlmProviderStrategy,
+    FfiLlmSegmentInput, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiRuntimePathKind,
+    FfiRuntimePathStatus, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
+    FfiSummaryTemplateConfig, FfiTranslateSegmentsRequest, FfiVolcengineDoubaoAsrConfig,
 };
 
 uniffi::setup_scaffolding!();
@@ -92,6 +97,44 @@ impl SonaCoreFacade {
 
         Ok(mapper::volcengine_doubao_asr_config_to_ffi(config))
     }
+
+    pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
+        let config: LlmConfig = parse_core_json(&config_json, "LLM config")?;
+        Ok(mapper::llm_config_to_ffi(config))
+    }
+
+    pub fn polish_segments_request_from_json(
+        request_json: String,
+    ) -> SonaCoreBindingResult<FfiPolishSegmentsRequest> {
+        let request: PolishSegmentsRequest =
+            parse_core_json(&request_json, "polish segments request")?;
+        Ok(mapper::polish_segments_request_to_ffi(request))
+    }
+
+    pub fn translate_segments_request_from_json(
+        request_json: String,
+    ) -> SonaCoreBindingResult<FfiTranslateSegmentsRequest> {
+        let request: TranslateSegmentsRequest =
+            parse_core_json(&request_json, "translate segments request")?;
+        Ok(mapper::translate_segments_request_to_ffi(request))
+    }
+
+    pub fn summarize_transcript_request_from_json(
+        request_json: String,
+    ) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
+        let request: SummarizeTranscriptRequest =
+            parse_core_json(&request_json, "summarize transcript request")?;
+        Ok(mapper::summarize_transcript_request_to_ffi(request))
+    }
+}
+
+fn parse_core_json<T>(json: &str, label: &str) -> SonaCoreBindingResult<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_str(json).map_err(|error| SonaCoreBindingError::InvalidInput {
+        message: format!("Invalid {label} JSON: {error}"),
+    })
 }
 
 #[uniffi::export]
@@ -138,6 +181,32 @@ pub fn volcengine_doubao_asr_config_from_json(
     config_json: String,
 ) -> SonaCoreBindingResult<FfiVolcengineDoubaoAsrConfig> {
     SonaCoreFacade::volcengine_doubao_asr_config_from_json(config_json)
+}
+
+#[uniffi::export]
+pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
+    SonaCoreFacade::llm_config_from_json(config_json)
+}
+
+#[uniffi::export]
+pub fn polish_segments_request_from_json(
+    request_json: String,
+) -> SonaCoreBindingResult<FfiPolishSegmentsRequest> {
+    SonaCoreFacade::polish_segments_request_from_json(request_json)
+}
+
+#[uniffi::export]
+pub fn translate_segments_request_from_json(
+    request_json: String,
+) -> SonaCoreBindingResult<FfiTranslateSegmentsRequest> {
+    SonaCoreFacade::translate_segments_request_from_json(request_json)
+}
+
+#[uniffi::export]
+pub fn summarize_transcript_request_from_json(
+    request_json: String,
+) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
+    SonaCoreFacade::summarize_transcript_request_from_json(request_json)
 }
 
 #[cfg(test)]
@@ -241,5 +310,105 @@ mod tests {
                 .to_string()
                 .contains("Invalid ASR provider config JSON")
         );
+    }
+
+    #[test]
+    fn facade_maps_llm_config_and_segment_task_requests_from_json() {
+        let config = SonaCoreFacade::llm_config_from_json(
+            r#"{
+                "provider": "open_ai",
+                "baseUrl": "https://api.openai.com",
+                "apiKey": "secret",
+                "model": "gpt-4o-mini",
+                "temperature": 0.2,
+                "timeoutSeconds": 30
+            }"#
+            .to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(config.provider_id, "open_ai");
+        assert_eq!(config.strategy, FfiLlmProviderStrategy::OpenAi);
+        assert_eq!(config.model, "gpt-4o-mini");
+        assert_eq!(config.temperature, Some(0.2));
+        assert_eq!(config.timeout_seconds, Some(30));
+
+        let polish = SonaCoreFacade::polish_segments_request_from_json(
+            r#"{
+                "taskId": "polish-1",
+                "config": {
+                    "provider": "open_ai",
+                    "baseUrl": "https://api.openai.com",
+                    "apiKey": "secret",
+                    "model": "gpt-4o-mini"
+                },
+                "segments": [{"id": "s1", "text": "hello"}],
+                "chunkSize": 4,
+                "context": "meeting",
+                "keywords": "roadmap"
+            }"#
+            .to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(polish.task_id, "polish-1");
+        assert_eq!(polish.segments[0].id, "s1");
+        assert_eq!(polish.chunk_size, Some(4));
+        assert_eq!(polish.context.as_deref(), Some("meeting"));
+
+        let translate = SonaCoreFacade::translate_segments_request_from_json(
+            r#"{
+                "taskId": "translate-1",
+                "config": {
+                    "provider": "google_translate_free",
+                    "baseUrl": "https://translate.googleapis.com/translate_a/single",
+                    "apiKey": "",
+                    "model": "translate"
+                },
+                "segments": [{"id": "s1", "text": "hello"}],
+                "targetLanguage": "ja",
+                "targetLanguageName": "Japanese"
+            }"#
+            .to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            translate.config.strategy,
+            FfiLlmProviderStrategy::GoogleTranslateFree
+        );
+        assert_eq!(translate.target_language, "ja");
+        assert_eq!(translate.target_language_name.as_deref(), Some("Japanese"));
+
+        let summary = SonaCoreFacade::summarize_transcript_request_from_json(
+            r#"{
+                "taskId": "summary-1",
+                "config": {
+                    "provider": "open_ai",
+                    "baseUrl": "https://api.openai.com",
+                    "apiKey": "secret",
+                    "model": "gpt-4o-mini"
+                },
+                "template": {
+                    "id": "general",
+                    "name": "General",
+                    "instructions": "Summarize."
+                },
+                "segments": [{
+                    "id": "s1",
+                    "text": "hello",
+                    "start": 0.0,
+                    "end": 1.5,
+                    "isFinal": true
+                }],
+                "chunkCharBudget": 1200
+            }"#
+            .to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(summary.template.id, "general");
+        assert_eq!(summary.segments[0].end, 1.5);
+        assert_eq!(summary.chunk_char_budget, Some(1200));
     }
 }
