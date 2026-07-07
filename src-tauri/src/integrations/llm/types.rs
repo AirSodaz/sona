@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub use sona_core::domain::LlmProvider;
+pub use sona_core::llm_provider_protocol::{
+    LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
+};
 pub use sona_core::llm_tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
     LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
@@ -72,34 +75,6 @@ pub struct LlmGenerateRequest {
     pub source: Option<LlmGenerateSource>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum MessageRole {
-    #[serde(rename = "system")]
-    System,
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "assistant")]
-    Assistant,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StandardMessage {
-    pub role: MessageRole,
-    pub content: String,
-}
-
-#[derive(Debug)]
-pub struct StandardLlmRequest {
-    pub messages: Vec<StandardMessage>,
-    pub temperature: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StandardLlmResponse {
-    pub text: String,
-    pub usage: Option<TokenUsage>,
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmUsageEventPayload {
@@ -118,19 +93,6 @@ pub struct LlmModelsRequest {
     pub strategy: Option<LlmProviderStrategy>,
     pub base_url: String,
     pub api_key: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmModelSummary {
-    pub model: String,
-    pub input_price: Option<f64>,
-    pub output_price: Option<f64>,
-    pub context_window: Option<u64>,
-    pub max_output_tokens: Option<u64>,
-    pub supports_multimodal: Option<bool>,
-    pub supports_tools: Option<bool>,
-    pub supports_reasoning: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

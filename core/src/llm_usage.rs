@@ -5,6 +5,9 @@ use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+#[cfg(feature = "specta")]
+use specta::Type;
+
 pub const RECENT_DAILY_WINDOW: i64 = 30;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +40,7 @@ impl From<LlmGenerateSource> for LlmUsageCategory {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub prompt_tokens: u32,

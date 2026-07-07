@@ -1,5 +1,15 @@
 pub(crate) mod commands;
 pub(crate) mod jobs;
+#[cfg(test)]
+pub(crate) use sona_core::llm_provider_protocol::{
+    GeminiModel, OpenAiModel, is_gemini_text_generation_model,
+};
+pub(crate) use sona_core::llm_provider_protocol::{
+    build_standard_input, clean_gemini_base_url, extract_text_from_json_response,
+    extract_usage_from_json_response, format_gemini_models_url, format_openai_models_urls,
+    gemini_model_to_summary, join_url, openai_model_to_summary, strategy_supports_model_listing,
+    strategy_uses_openai_chat_payload,
+};
 pub(crate) use sona_core::llm_tasks::{DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET, chunk_error};
 #[cfg(test)]
 pub(crate) use sona_core::llm_tasks::{

@@ -6,6 +6,9 @@
 //! same pure Rust types without reaching into the desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
+pub use sona_core::llm_provider_protocol::{
+    LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
+};
 pub use sona_core::llm_tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
     LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
@@ -27,6 +30,11 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmProvider",
     "PolishPresetId",
     "SummaryTemplateId",
+    "MessageRole",
+    "StandardMessage",
+    "StandardLlmRequest",
+    "StandardLlmResponse",
+    "LlmModelSummary",
     "LlmProviderStrategy",
     "LlmTaskType",
     "SummaryTemplateConfig",
@@ -90,6 +98,11 @@ mod tests {
         assert_specta_type::<sona_core::ports::asr::AsrEngine>();
         assert_specta_type::<sona_core::ports::asr::AsrMode>();
         assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();
+        assert_specta_type::<MessageRole>();
+        assert_specta_type::<StandardMessage>();
+        assert_specta_type::<StandardLlmRequest>();
+        assert_specta_type::<StandardLlmResponse>();
+        assert_specta_type::<LlmModelSummary>();
         assert_specta_type::<LlmProviderStrategy>();
         assert_specta_type::<LlmTaskType>();
         assert_specta_type::<SummaryTemplateConfig>();

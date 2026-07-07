@@ -654,6 +654,26 @@ test('transcript LLM job helpers are owned by core and reused by desktop', () =>
   assert.doesNotMatch(desktopLlmJobs, /pub\(crate\) fn compute_summary_source_fingerprint/u);
 });
 
+test('LLM provider protocol mapping is owned by core and reused by desktop', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreProviderProtocol = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_provider_protocol.rs'), 'utf8');
+  const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
+  const desktopLlmProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
+
+  assert.match(coreLib, /^pub mod llm_provider_protocol;/mu);
+  assert.match(coreProviderProtocol, /pub struct LlmModelSummary/u);
+  assert.match(coreProviderProtocol, /pub struct StandardLlmRequest/u);
+  assert.match(coreProviderProtocol, /pub fn format_openai_models_urls/u);
+  assert.match(coreProviderProtocol, /pub fn extract_text_from_json_response/u);
+  assert.match(desktopLlmTypes, /pub use sona_core::llm_provider_protocol::\{/u);
+  assert.match(desktopLlmProviders, /sona_core::llm_provider_protocol::\{/u);
+  assert.doesNotMatch(desktopLlmProviders, /fn strategy_uses_openai_chat_payload/u);
+  assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn clean_gemini_base_url/u);
+  assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn format_openai_models_urls/u);
+  assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn extract_text_from_json_response/u);
+  assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn build_standard_input/u);
+});
+
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
