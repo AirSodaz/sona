@@ -6,6 +6,11 @@
 //! same pure Rust types without reaching into the desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
+pub use sona_core::llm_tasks::{
+    LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
+    LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
+    TranscriptSummaryResult, TranslatedSegment,
+};
 pub use sona_core::model_config::ModelFileConfig;
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
@@ -22,6 +27,17 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmProvider",
     "PolishPresetId",
     "SummaryTemplateId",
+    "LlmProviderStrategy",
+    "LlmTaskType",
+    "SummaryTemplateConfig",
+    "LlmSegmentInput",
+    "SummarySegmentInput",
+    "PolishedSegment",
+    "TranslatedSegment",
+    "TranscriptSummaryResult",
+    "LlmTaskProgressPayload",
+    "LlmTaskChunkPayload",
+    "LlmTaskTextPayload",
     "RuntimeEnvironmentStatus",
     "RuntimePathKind",
     "RuntimePathStatus",
@@ -74,6 +90,17 @@ mod tests {
         assert_specta_type::<sona_core::ports::asr::AsrEngine>();
         assert_specta_type::<sona_core::ports::asr::AsrMode>();
         assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();
+        assert_specta_type::<LlmProviderStrategy>();
+        assert_specta_type::<LlmTaskType>();
+        assert_specta_type::<SummaryTemplateConfig>();
+        assert_specta_type::<LlmSegmentInput>();
+        assert_specta_type::<SummarySegmentInput>();
+        assert_specta_type::<PolishedSegment>();
+        assert_specta_type::<TranslatedSegment>();
+        assert_specta_type::<TranscriptSummaryResult>();
+        assert_specta_type::<LlmTaskProgressPayload>();
+        assert_specta_type::<LlmTaskChunkPayload<PolishedSegment>>();
+        assert_specta_type::<LlmTaskTextPayload>();
         assert_specta_type::<ModelFileConfig>();
         assert_specta_type::<SpeakerProcessingConfig>();
         assert_specta_type::<SpeakerProfile>();

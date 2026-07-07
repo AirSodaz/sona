@@ -1,5 +1,11 @@
 pub(crate) mod commands;
 pub(crate) mod jobs;
+pub(crate) use sona_core::llm_tasks::{DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET, chunk_error};
+#[cfg(test)]
+pub(crate) use sona_core::llm_tasks::{
+    DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET, build_summary_chunk_prompt, build_summary_finalize_prompt,
+    clean_json_response, prompt_char_count, split_summary_segments,
+};
 pub(crate) use sona_core::llm_usage;
 mod network;
 mod providers;
@@ -9,15 +15,10 @@ mod tasks;
 mod tests;
 mod types;
 
-const DEFAULT_SEGMENT_CHUNK_SIZE: usize = 30;
-const DEFAULT_SEGMENT_CONTEXT_CHAR_BUDGET: usize = 32_000;
-const DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET: usize = DEFAULT_SEGMENT_CONTEXT_CHAR_BUDGET / 2;
 const GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY: usize = 2;
 const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
 const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
 const GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS: [u64; GOOGLE_TRANSLATE_FREE_MAX_RETRIES] = [500, 1000];
-const DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET: usize = 6000;
-const MIN_SUMMARY_CHUNK_CHAR_BUDGET: usize = 1200;
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
 const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";

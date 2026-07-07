@@ -1,126 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmProviderStrategy {
-    OpenAi,
-    OpenAiResponses,
-    #[serde(rename = "azure_openai")]
-    AzureOpenAi,
-    Anthropic,
-    Gemini,
-    Ollama,
-    DeepSeek,
-    MoonshotAi,
-    MoonshotCn,
-    Xiaomi,
-    Kimi,
-    SiliconFlow,
-    Qwen,
-    QwenPortal,
-    MinimaxGlobal,
-    MinimaxCn,
-    OpenRouter,
-    LmStudio,
-    Groq,
-    XAi,
-    MistralAi,
-    Perplexity,
-    Volcengine,
-    Chatglm,
-    Copilot,
-    #[serde(rename = "google_translate")]
-    GoogleTranslate,
-    #[serde(rename = "google_translate_free")]
-    GoogleTranslateFree,
-    OpenAiCompatible,
-    OpenAiCompatibleCustomPath,
-}
-
-impl LlmProviderStrategy {
-    pub(crate) fn from_provider(provider: &LlmProvider) -> Self {
-        use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
-        match provider {
-            LlmProvider::Custom(_) => Self::OpenAiCompatible,
-            LlmProvider::Builtin(b) => match b {
-                BuiltinLlmProvider::OpenAi => Self::OpenAi,
-                BuiltinLlmProvider::OpenAiResponses => Self::OpenAiResponses,
-                BuiltinLlmProvider::AzureOpenai => Self::AzureOpenAi,
-                BuiltinLlmProvider::Anthropic => Self::Anthropic,
-                BuiltinLlmProvider::Gemini => Self::Gemini,
-                BuiltinLlmProvider::Ollama => Self::Ollama,
-                BuiltinLlmProvider::MoonshotAi => Self::MoonshotAi,
-                BuiltinLlmProvider::MoonshotCn => Self::MoonshotCn,
-                BuiltinLlmProvider::Xiaomi => Self::Xiaomi,
-                BuiltinLlmProvider::Perplexity => Self::Perplexity,
-                BuiltinLlmProvider::Copilot => Self::Copilot,
-                BuiltinLlmProvider::Volcengine => Self::OpenAiCompatibleCustomPath,
-                BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
-                BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
-                _ => Self::OpenAiCompatible,
-            },
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for LlmProviderStrategy {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Ok(match value.as_str() {
-            "open_ai" => Self::OpenAi,
-            "open_ai_responses" | "openai_responses" => Self::OpenAiResponses,
-            "azure_openai" => Self::AzureOpenAi,
-            "anthropic" => Self::Anthropic,
-            "gemini" => Self::Gemini,
-            "ollama" => Self::Ollama,
-            "deep_seek" => Self::DeepSeek,
-            "kimi" => Self::Kimi,
-            "silicon_flow" => Self::SiliconFlow,
-            "qwen" => Self::Qwen,
-            "qwen_portal" => Self::QwenPortal,
-            "minimax_global" => Self::MinimaxGlobal,
-            "minimax_cn" => Self::MinimaxCn,
-            "openrouter" | "open_router" => Self::OpenRouter,
-            "lm_studio" => Self::LmStudio,
-            "groq" => Self::Groq,
-            "x_ai" => Self::XAi,
-            "mistral_ai" => Self::MistralAi,
-            "perplexity" => Self::Perplexity,
-            "volcengine" => Self::Volcengine,
-            "chatglm" => Self::Chatglm,
-            "copilot" | "github_copilot" => Self::Copilot,
-            "google_translate" => Self::GoogleTranslate,
-            "google_translate_free" => Self::GoogleTranslateFree,
-            "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,
-            "open_ai_compatible_custom_path" | "openai_compatible_custom_path" => {
-                Self::OpenAiCompatibleCustomPath
-            }
-            _ => Self::OpenAiCompatible,
-        })
-    }
-}
-
 pub use sona_core::domain::LlmProvider;
+pub use sona_core::llm_tasks::{
+    LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
+    LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
+    TranscriptSummaryResult, TranslatedSegment,
+};
 pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmTaskType {
-    Polish,
-    Translate,
-    Summary,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SummaryTemplateConfig {
-    pub id: String,
-    pub name: String,
-    pub instructions: String,
-}
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -247,13 +133,6 @@ pub struct LlmModelSummary {
     pub supports_reasoning: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmSegmentInput {
-    pub id: String,
-    pub text: String,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PolishSegmentsRequest {
@@ -276,16 +155,6 @@ pub struct TranslateSegmentsRequest {
     pub target_language_name: Option<String>, // Decoupled English name payload
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SummarySegmentInput {
-    pub id: String,
-    pub text: String,
-    pub start: f32,
-    pub end: f32,
-    pub is_final: bool,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SummarizeTranscriptRequest {
@@ -294,55 +163,6 @@ pub struct SummarizeTranscriptRequest {
     pub template: SummaryTemplateConfig,
     pub segments: Vec<SummarySegmentInput>,
     pub chunk_char_budget: Option<usize>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PolishedSegment {
-    pub id: String,
-    pub text: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranslatedSegment {
-    pub id: String,
-    pub translation: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptSummaryResult {
-    pub template_id: String,
-    pub content: String,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskProgressPayload {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub completed_chunks: usize,
-    pub total_chunks: usize,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskChunkPayload<T> {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub chunk_index: usize,
-    pub total_chunks: usize,
-    pub items: Vec<T>,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskTextPayload {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub text: String,
-    pub delta: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -609,6 +609,34 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs')), false);
 });
 
+test('LLM task models and prompt planning are owned by core and reused by desktop', () => {
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreLlmTasks = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_tasks.rs'), 'utf8');
+  const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
+  const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
+  const desktopLlmTasks = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'), 'utf8');
+  const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(coreLib, /^pub mod llm_tasks;/mu);
+  assert.match(coreLlmTasks, /pub enum LlmTaskType/u);
+  assert.match(coreLlmTasks, /pub struct LlmSegmentInput/u);
+  assert.match(coreLlmTasks, /pub fn plan_segment_task_chunks/u);
+  assert.match(coreLlmTasks, /pub fn build_polish_prompt/u);
+  assert.match(coreLlmTasks, /pub fn build_summary_chunk_prompt/u);
+  assert.match(desktopLlm, /pub\(crate\) use sona_core::llm_tasks::\{/u);
+  assert.match(desktopLlmTypes, /pub use sona_core::llm_tasks::\{[\s\S]*LlmTaskType[\s\S]*SummarySegmentInput/u);
+  assert.match(desktopLlmTasks, /sona_core::llm_tasks::\{/u);
+  assert.match(desktopLlmTasks, /plan_segment_task_chunks/u);
+  assert.match(desktopLlmTasks, /build_polish_prompt/u);
+  assert.match(tsBindLib, /sona_core::llm_tasks::\{/u);
+  assert.match(tsBindLib, /LlmTaskType/u);
+  assert.match(tsBindLib, /TranscriptSummaryResult/u);
+  assert.doesNotMatch(desktopLlmTypes, /pub enum LlmTaskType/u);
+  assert.doesNotMatch(desktopLlmTypes, /pub struct LlmSegmentInput/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) fn plan_segment_task_chunks/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) fn build_polish_prompt/u);
+});
+
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');

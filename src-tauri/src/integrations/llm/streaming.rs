@@ -7,7 +7,6 @@ use rig_core::client::{CompletionClient, Nothing};
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::providers::{anthropic, copilot, gemini, ollama};
 use rig_core::streaming::StreamedAssistantContent;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 /// Keeps the progressively built response text and emits both the full text and
@@ -137,61 +136,6 @@ impl SseEventBuffer {
         // Ignore other SSE fields such as `event:` or `id:` because current
         // provider integrations only consume the payload carried in `data:`.
     }
-}
-
-pub(crate) fn normalize_incremental_json_line(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if trimmed.is_empty() || trimmed == "```" || trimmed == "```json" {
-        return None;
-    }
-
-    let trimmed = trimmed.trim_end_matches(',').trim();
-    if trimmed.starts_with('{') && trimmed.ends_with('}') {
-        return Some(trimmed.to_string());
-    }
-
-    None
-}
-
-pub(crate) fn parse_json_array_or_ndjson<T: DeserializeOwned>(
-    response_text: &str,
-    task_type: LlmTaskType,
-    chunk_number: usize,
-) -> Result<Vec<T>, String> {
-    let cleaned = clean_json_response(response_text);
-    if cleaned.starts_with('[') {
-        return serde_json::from_str::<Vec<T>>(&cleaned).map_err(|error| {
-            chunk_error(
-                task_type,
-                chunk_number,
-                format!("invalid JSON response: {error}"),
-            )
-        });
-    }
-
-    let mut items = Vec::new();
-    for line in cleaned.lines() {
-        if let Some(normalized) = normalize_incremental_json_line(line) {
-            let parsed = serde_json::from_str::<T>(&normalized).map_err(|error| {
-                chunk_error(
-                    task_type,
-                    chunk_number,
-                    format!("invalid JSON response: {error}"),
-                )
-            })?;
-            items.push(parsed);
-        }
-    }
-
-    if items.is_empty() {
-        return Err(chunk_error(
-            task_type,
-            chunk_number,
-            "invalid JSON response: expected NDJSON lines or a JSON array",
-        ));
-    }
-
-    Ok(items)
 }
 
 async fn stream_rig_completion_model<M, EmitFn>(
