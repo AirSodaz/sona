@@ -21,7 +21,15 @@ pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
         return false;
     }
 
-    let kind = infer::get(&buf[..n]);
+    is_valid_media_bytes(&buf[..n])
+}
+
+pub fn is_valid_media_bytes(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+
+    let kind = infer::get(bytes);
     if let Some(kind) = kind {
         let mime = kind.mime_type();
         if mime.starts_with("audio/")
@@ -41,7 +49,7 @@ pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
     // Fallback for formats that might not be in `infer` or have a different mime type
 
     // AMR: "#!AMR\n"
-    if n >= 6 && &buf[..6] == b"#!AMR\n" {
+    if bytes.len() >= 6 && &bytes[..6] == b"#!AMR\n" {
         return true;
     }
 
@@ -50,7 +58,7 @@ pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
         0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE,
         0x6C,
     ];
-    if n >= 16 && buf[..16] == asf_guid {
+    if bytes.len() >= 16 && bytes[..16] == asf_guid {
         return true;
     }
 

@@ -941,7 +941,7 @@ pub async fn handle_transcribe(
             temp_file_path = Some(file_path);
 
             if let Some(ref path) = temp_file_path
-                && !crate::integrations::media_detector::is_valid_media_file(path).await
+                && !sona_core::media_detector::is_valid_media_file(path).await
             {
                 let _ = tokio::fs::remove_file(path).await;
                 return Err((

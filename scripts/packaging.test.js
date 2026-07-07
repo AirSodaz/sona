@@ -179,13 +179,13 @@ test('core crate exposes serve runtime without cli runtime surface', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_runtime.rs')), false);
 });
 
-test('desktop api server invokes local offline ASR through the core transcriber port', () => {
+test('desktop api server invokes local batch ASR through the core transcriber port', () => {
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
 
   assert.match(tauriCargo, /^sona-local-asr\s*=\s*\{ path = "\.\.\/adapters\/local_asr" \}/mu);
-  assert.match(apiServer, /use sona_core::ports::asr::OfflineTranscriber;/u);
-  assert.match(apiServer, /sona_local_asr::offline::LocalOfflineAsrAdapter/u);
+  assert.match(apiServer, /use sona_core::ports::asr::BatchTranscriber;/u);
+  assert.match(apiServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(apiServer, /\.transcribe\(plan\)/u);
   assert.doesNotMatch(apiServer, /run_offline_transcription/u);
   assert.doesNotMatch(apiServer, /use crate::integrations::asr::transcribe_batch_with_progress;/u);
@@ -310,8 +310,8 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'diagnostics.rs')), false);
   assert.match(platformPaths, /pub struct TauriPathProvider/u);
   assert.match(platformPaths, /impl<R: Runtime> PathProvider for TauriPathProvider<R>/u);
-  assert.match(platformEvent, /impl<R: Runtime> EventEmitter for AppHandle<R>/u);
-  assert.match(platformEvent, /impl<R: Runtime> EventEmitter for Window<R>/u);
+  assert.match(platformEvent, /pub struct TauriEventEmitter<R: Runtime>\(pub AppHandle<R>\)/u);
+  assert.match(platformEvent, /impl<R: Runtime> EventEmitter for TauriEventEmitter<R>/u);
   assert.match(platformPresetModels, /pub use sona_core::preset_models::\*/u);
   assert.match(platformPresetModels, /tauri::async_runtime::spawn_blocking/u);
   assert.match(platformDiagnostics, /pub use sona_core::diagnostics::\{/u);
@@ -333,7 +333,6 @@ test('desktop tauri crate imports core crates directly without a local core shim
 
 test('desktop filesystem adapters live in platform rather than repositories', () => {
   const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
-  const platformExport = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'export_files.rs'), 'utf8');
   const platformStorage = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'file_storage.rs'), 'utf8');
   const platformRecovery = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
@@ -342,16 +341,18 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   const exportCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'export.rs'), 'utf8');
   const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
 
-  assert.match(desktopPlatform, /^pub mod export_files;/mu);
+  assert.doesNotMatch(desktopPlatform, /^pub mod export_files;/mu);
   assert.match(desktopPlatform, /^pub mod file_storage;/mu);
   assert.match(desktopPlatform, /^pub mod recovery_repository;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'export_files.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'export.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'storage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'recovery.rs')), false);
-  assert.match(platformExport, /pub\(crate\) fn export_transcript_file_inner/u);
   assert.match(platformStorage, /pub use sona_core::file_utils::\{/u);
   assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
-  assert.match(exportCommand, /crate::platform::export_files::\{/u);
+  assert.match(exportCommand, /use sona_core::export::\{[\s\S]*export_transcript_file as core_export_transcript_file/u);
+  assert.match(exportCommand, /core_export_transcript_file\(ExportTranscriptFileRequest/u);
+  assert.doesNotMatch(exportCommand, /crate::platform::export_files/u);
   assert.match(systemCommand, /crate::platform::recovery_repository::FsRecoveryRepository/u);
 });
 
@@ -663,14 +664,14 @@ test('history backup archive persistence is owned by sqlite adapter', () => {
   assert.doesNotMatch(platformHistory, /^pub\(crate\) mod repository;/mu);
 });
 
-test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
+test('standalone CLI invokes local batch ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),
     'utf8',
   );
 
-  assert.match(cliTranscribeRs, /use sona_core::ports::asr::OfflineTranscriber;/u);
-  assert.match(cliTranscribeRs, /sona_local_asr::offline::LocalOfflineAsrAdapter/u);
+  assert.match(cliTranscribeRs, /use sona_core::ports::asr::BatchTranscriber;/u);
+  assert.match(cliTranscribeRs, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(cliTranscribeRs, /\.transcribe\(plan\)/u);
   assert.doesNotMatch(cliTranscribeRs, /run_offline_transcription/u);
 });
@@ -681,8 +682,8 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
-  const localOffline = fs.readFileSync(
-    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'offline.rs'),
+  const localBatch = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'batch.rs'),
     'utf8',
   );
 
@@ -693,13 +694,13 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
     /pub\(crate\) use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
   );
   assert.match(
-    localOffline,
+    localBatch,
     /use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
   );
   assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn normalize_recognizer_text/u);
   assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn synthesize_durations/u);
-  assert.doesNotMatch(localOffline, /^fn normalize_recognizer_text/mu);
-  assert.doesNotMatch(localOffline, /^fn synthesize_durations/mu);
+  assert.doesNotMatch(localBatch, /^fn normalize_recognizer_text/mu);
+  assert.doesNotMatch(localBatch, /^fn synthesize_durations/mu);
 });
 
 test('timeline transcript normalization is owned by core and reused by desktop', () => {
@@ -916,6 +917,28 @@ test('speaker processing runtime is owned by local ASR adapter and wrapped by de
   assert.doesNotMatch(batchRs, /crate::integrations::speaker/u);
 });
 
+test('media file detection is owned by core and reused by desktop', () => {
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreMediaDetector = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'media_detector.rs'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+
+  assert.match(coreCargo, /^infer\s*=/mu);
+  assert.match(coreLib, /^pub mod media_detector;/mu);
+  assert.match(coreMediaDetector, /pub fn is_valid_media_bytes/u);
+  assert.match(coreMediaDetector, /pub async fn is_valid_media_file/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'media_detector.rs')), false);
+  assert.doesNotMatch(desktopIntegrations, /^pub mod media_detector;/mu);
+  assert.doesNotMatch(tauriCargo, /^infer\s*=/mu);
+  assert.match(systemCommand, /sona_core::media_detector::check_media_formats/u);
+  assert.match(apiServer, /sona_core::media_detector::is_valid_media_file/u);
+  assert.doesNotMatch(systemCommand, /crate::integrations::media_detector/u);
+  assert.doesNotMatch(apiServer, /crate::integrations::media_detector/u);
+});
+
 test('desktop live VAD creation is delegated to local ASR adapter', () => {
   const modelConfigRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
@@ -957,9 +980,9 @@ test('desktop recognizer construction is delegated to local ASR adapter', () => 
   assert.doesNotMatch(modelConfigRs, /impl Recognizer/u);
 });
 
-test('local offline transcription reuses local ASR recognizer model construction', () => {
-  const offlineRs = fs.readFileSync(
-    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'offline.rs'),
+test('local batch transcription reuses local ASR recognizer model construction', () => {
+  const batchRs = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'batch.rs'),
     'utf8',
   );
   const recognizerRs = fs.readFileSync(
@@ -967,19 +990,19 @@ test('local offline transcription reuses local ASR recognizer model construction
     'utf8',
   );
 
-  assert.match(offlineRs, /pub struct LocalOfflineAsrAdapter/u);
-  assert.match(offlineRs, /impl OfflineTranscriber for LocalOfflineAsrAdapter/u);
-  assert.match(offlineRs, /use crate::recognizer::\{[^}]*build_offline_model_config/u);
-  assert.match(offlineRs, /decode_offline_samples/u);
-  assert.match(offlineRs, /create_offline_recognizer/u);
+  assert.match(batchRs, /pub struct LocalBatchAsrAdapter/u);
+  assert.match(batchRs, /impl BatchTranscriber for LocalBatchAsrAdapter/u);
+  assert.match(batchRs, /use crate::recognizer::\{[^}]*build_offline_model_config/u);
+  assert.match(batchRs, /decode_offline_samples/u);
+  assert.match(batchRs, /create_offline_recognizer/u);
   assert.match(recognizerRs, /pub fn create_offline_recognizer\([\s\S]*\) -> Result<SafeOfflineRecognizer, String>/u);
-  assert.doesNotMatch(offlineRs, /pub async fn run_offline_transcription/u);
-  assert.doesNotMatch(offlineRs, /enum ModelType/u);
-  assert.doesNotMatch(offlineRs, /use sherpa_onnx::OfflineRecognizer/u);
+  assert.doesNotMatch(batchRs, /pub async fn run_offline_transcription/u);
+  assert.doesNotMatch(batchRs, /enum ModelType/u);
+  assert.doesNotMatch(batchRs, /use sherpa_onnx::OfflineRecognizer/u);
   assert.doesNotMatch(recognizerRs, /\) -> Result<OfflineRecognizer, String>/u);
-  assert.doesNotMatch(offlineRs, /OfflineRecognizerConfig/u);
-  assert.doesNotMatch(offlineRs, /fn build_model_config/u);
-  assert.doesNotMatch(offlineRs, /fn create_recognizer/u);
+  assert.doesNotMatch(batchRs, /OfflineRecognizerConfig/u);
+  assert.doesNotMatch(batchRs, /fn build_model_config/u);
+  assert.doesNotMatch(batchRs, /fn create_recognizer/u);
 });
 
 test('desktop live offline decode is delegated to local ASR adapter', () => {

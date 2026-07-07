@@ -34,6 +34,7 @@ bzip2 = "0.4"
 tar = "0.4"
 toml = "0.8.20"
 walkdir = "2.5.0"
+infer = "0.16"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros"] }
