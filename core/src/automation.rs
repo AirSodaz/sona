@@ -69,6 +69,72 @@ pub struct AutomationRuleActivationEnvironment {
     pub offline_model_path_exists: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRuntimeRuleConfig {
+    pub rule_id: String,
+    pub watch_directory: String,
+    pub recursive: bool,
+    pub exclude_directory: String,
+    pub debounce_ms: u64,
+    pub stable_window_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRuntimeReplaceResult {
+    pub rule_id: String,
+    pub started: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRuntimeCandidatePayload {
+    pub rule_id: String,
+    pub file_path: String,
+    pub source_fingerprint: String,
+    pub size: u64,
+    pub mtime_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationRuntimePathCollectionOutcome {
+    Candidate,
+    Missing,
+    Unsupported,
+    Excluded,
+    NotFile,
+    Error,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRuntimePathCollectionResult {
+    pub file_path: String,
+    pub outcome: AutomationRuntimePathCollectionOutcome,
+    pub candidate: Option<AutomationRuntimeCandidatePayload>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutomationRuntimePathMetadata {
+    pub is_file: bool,
+    pub size: u64,
+    pub mtime_ms: u64,
+}
+
+const SUPPORTED_MEDIA_EXTENSIONS: &[&str] = &[
+    ".wav", ".mp3", ".m4a", ".aiff", ".flac", ".ogg", ".wma", ".aac", ".opus", ".amr", ".mp4",
+    ".webm", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".3gp",
+];
+
 pub fn validate_rule_activation(
     rule: &AutomationRule,
     global_config: &Value,
@@ -176,6 +242,149 @@ pub fn resolve_batch_offline_model_path(global_config: &Value) -> Option<String>
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+pub fn should_consider_runtime_candidate_path(
+    rule: &AutomationRuntimeRuleConfig,
+    file_path: &str,
+) -> bool {
+    is_supported_runtime_media_path(file_path)
+        && is_runtime_path_within_watch_scope(rule, file_path)
+        && !is_path_inside_runtime_directory(file_path, &rule.exclude_directory)
+}
+
+pub fn collect_runtime_rule_path_result(
+    rule: &AutomationRuntimeRuleConfig,
+    file_path: &str,
+    metadata: Result<Option<AutomationRuntimePathMetadata>, String>,
+) -> AutomationRuntimePathCollectionResult {
+    if !is_supported_runtime_media_path(file_path) {
+        return runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::Unsupported,
+            None,
+            None,
+        );
+    }
+
+    if !is_runtime_path_within_watch_scope(rule, file_path)
+        || is_path_inside_runtime_directory(file_path, &rule.exclude_directory)
+    {
+        return runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::Excluded,
+            None,
+            None,
+        );
+    }
+
+    match metadata {
+        Ok(Some(metadata)) if metadata.is_file => runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::Candidate,
+            Some(runtime_candidate_payload(
+                rule,
+                file_path,
+                metadata.size,
+                metadata.mtime_ms,
+            )),
+            None,
+        ),
+        Ok(Some(_)) => runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::NotFile,
+            None,
+            None,
+        ),
+        Ok(None) => runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::Missing,
+            None,
+            None,
+        ),
+        Err(error) => runtime_path_result(
+            file_path,
+            AutomationRuntimePathCollectionOutcome::Error,
+            None,
+            Some(error),
+        ),
+    }
+}
+
+fn runtime_candidate_payload(
+    rule: &AutomationRuntimeRuleConfig,
+    file_path: &str,
+    size: u64,
+    mtime_ms: u64,
+) -> AutomationRuntimeCandidatePayload {
+    let normalized_path = normalize_automation_path(file_path);
+    AutomationRuntimeCandidatePayload {
+        rule_id: rule.rule_id.clone(),
+        file_path: file_path.to_string(),
+        source_fingerprint: format!("{normalized_path}::{size}::{mtime_ms}"),
+        size,
+        mtime_ms,
+    }
+}
+
+fn runtime_path_result(
+    file_path: &str,
+    outcome: AutomationRuntimePathCollectionOutcome,
+    candidate: Option<AutomationRuntimeCandidatePayload>,
+    error: Option<String>,
+) -> AutomationRuntimePathCollectionResult {
+    AutomationRuntimePathCollectionResult {
+        file_path: file_path.to_string(),
+        outcome,
+        candidate,
+        error,
+    }
+}
+
+fn is_supported_runtime_media_path(file_path: &str) -> bool {
+    let normalized = file_path.trim().to_lowercase();
+    SUPPORTED_MEDIA_EXTENSIONS
+        .iter()
+        .any(|extension| normalized.ends_with(extension))
+}
+
+fn is_path_inside_runtime_directory(file_path: &str, directory_path: &str) -> bool {
+    if directory_path.trim().is_empty() {
+        return false;
+    }
+
+    let normalized_file = normalize_automation_path(file_path);
+    let normalized_directory = normalize_automation_path(directory_path);
+
+    normalized_file == normalized_directory
+        || normalized_file.starts_with(&format!("{}\\", normalized_directory))
+}
+
+fn is_runtime_path_within_watch_scope(rule: &AutomationRuntimeRuleConfig, file_path: &str) -> bool {
+    let watch_directory = rule.watch_directory.trim();
+    if watch_directory.is_empty() {
+        return false;
+    }
+
+    if !is_path_inside_runtime_directory(file_path, watch_directory) {
+        return false;
+    }
+
+    if rule.recursive {
+        return true;
+    }
+
+    parent_path_string(file_path)
+        .map(|parent| normalize_automation_path(&parent))
+        .map(|parent| parent == normalize_automation_path(watch_directory))
+        .unwrap_or(false)
+}
+
+fn parent_path_string(file_path: &str) -> Option<String> {
+    let normalized = normalize_automation_path(file_path);
+    normalized
+        .rsplit_once('\\')
+        .map(|(parent, _)| parent.to_string())
 }
 
 fn default_export_mode() -> String {

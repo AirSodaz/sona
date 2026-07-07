@@ -394,6 +394,30 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   );
 });
 
+test('automation runtime path rules are owned by core and adapted by desktop', () => {
+  const coreAutomation = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'automation.rs'), 'utf8');
+  const desktopCoreAutomation = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'core', 'automation.rs'),
+    'utf8',
+  );
+
+  assert.match(coreAutomation, /pub struct AutomationRuntimeRuleConfig/u);
+  assert.match(coreAutomation, /pub struct AutomationRuntimeCandidatePayload/u);
+  assert.match(coreAutomation, /pub enum AutomationRuntimePathCollectionOutcome/u);
+  assert.match(coreAutomation, /pub struct AutomationRuntimePathMetadata/u);
+  assert.match(coreAutomation, /pub fn should_consider_runtime_candidate_path/u);
+  assert.match(coreAutomation, /pub fn collect_runtime_rule_path_result/u);
+  assert.match(desktopCoreAutomation, /sona_core::automation::\{/u);
+  assert.match(desktopCoreAutomation, /collect_runtime_rule_path_result/u);
+  assert.match(desktopCoreAutomation, /should_consider_runtime_candidate_path/u);
+  assert.doesNotMatch(desktopCoreAutomation, /const SUPPORTED_MEDIA_EXTENSIONS/u);
+  assert.doesNotMatch(desktopCoreAutomation, /pub struct AutomationRuntimeRuleConfig/u);
+  assert.doesNotMatch(desktopCoreAutomation, /pub struct AutomationRuntimeCandidatePayload/u);
+  assert.doesNotMatch(desktopCoreAutomation, /pub enum AutomationRuntimePathCollectionOutcome/u);
+  assert.doesNotMatch(desktopCoreAutomation, /fn is_supported_media_path/u);
+  assert.doesNotMatch(desktopCoreAutomation, /fn is_path_within_watch_scope/u);
+});
+
 test('SQLite project repository is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopProject = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs'), 'utf8');
