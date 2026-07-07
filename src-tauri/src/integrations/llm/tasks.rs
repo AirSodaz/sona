@@ -1,16 +1,20 @@
-use super::network::{LlmApiUrl, validate_llm_api_host};
+use super::network::validate_llm_api_host;
 use super::*;
 use futures_util::{StreamExt, future::BoxFuture, stream};
-use log::{info, warn};
-use reqwest::{Client, StatusCode, header::RETRY_AFTER};
 use serde::{Serialize, de::DeserializeOwned};
-use serde_json::Value;
 use sona_core::llm_tasks::{PlannedSegmentChunk, chunk_error, normalize_incremental_json_line};
 pub(crate) use sona_core::llm_tasks::{
     build_polish_prompt, build_translate_prompt, parse_polish_chunk, parse_translate_chunk,
     plan_segment_task_chunks, run_summary_task, validate_summary_strategy,
 };
-use std::{future::Future, time::Duration};
+#[cfg(test)]
+pub(crate) use sona_online_llm::{
+    GoogleTranslateFreeAttemptError, parse_google_translate_free_retry_after,
+};
+pub(crate) use sona_online_llm::{
+    execute_google_translate_free_request, fetch_google_translate_free_translation,
+};
+use std::future::Future;
 
 pub(crate) struct SegmentTaskContext<'a> {
     pub(crate) task_id: &'a str,
@@ -96,203 +100,6 @@ pub(crate) struct StreamingSegmentTaskConfig<
     pub(crate) on_success: OnSuccessFn,
     pub(crate) emit_chunk: EmitChunkFn,
     pub(crate) emit_progress: EmitProgressFn,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum GoogleTranslateFreeAttemptError {
-    HttpStatus {
-        status: StatusCode,
-        retry_after: Option<Duration>,
-    },
-    Message(String),
-}
-
-fn format_attempt_label(attempts: usize) -> &'static str {
-    if attempts == 1 { "attempt" } else { "attempts" }
-}
-
-pub(crate) fn parse_google_translate_free_retry_after(
-    headers: &reqwest::header::HeaderMap,
-) -> Option<Duration> {
-    headers
-        .get(RETRY_AFTER)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .map(|seconds| clamp_google_translate_free_retry_after(Duration::from_secs(seconds)))
-}
-
-fn clamp_google_translate_free_retry_after(duration: Duration) -> Duration {
-    // Treat server-provided Retry-After as a hint, but cap it so one response
-    // cannot stall the whole translation task for an excessive amount of time.
-    duration.min(Duration::from_secs(
-        GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS,
-    ))
-}
-
-fn default_google_translate_free_retry_delay(failed_attempt: usize) -> Duration {
-    let delay_ms = GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS
-        .get(failed_attempt.saturating_sub(1))
-        .copied()
-        .unwrap_or(
-            *GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS
-                .last()
-                .unwrap_or(&1000),
-        );
-    Duration::from_millis(delay_ms)
-}
-
-fn google_translate_free_retry_delay(
-    error: &GoogleTranslateFreeAttemptError,
-    failed_attempt: usize,
-) -> Option<Duration> {
-    match error {
-        // Only 429 responses are retried. Other free-endpoint failures usually
-        // indicate bad input or a non-transient upstream error, so retrying
-        // would just add latency without improving success rate.
-        GoogleTranslateFreeAttemptError::HttpStatus {
-            status,
-            retry_after,
-        } if *status == StatusCode::TOO_MANY_REQUESTS
-            && failed_attempt <= GOOGLE_TRANSLATE_FREE_MAX_RETRIES =>
-        {
-            Some(
-                retry_after
-                    .map(clamp_google_translate_free_retry_after)
-                    .unwrap_or_else(|| default_google_translate_free_retry_delay(failed_attempt)),
-            )
-        }
-        _ => None,
-    }
-}
-
-fn google_translate_free_error_summary(error: &GoogleTranslateFreeAttemptError) -> String {
-    match error {
-        GoogleTranslateFreeAttemptError::HttpStatus { status, .. } => {
-            format!("Free API Error: {}", status)
-        }
-        GoogleTranslateFreeAttemptError::Message(message) => {
-            format!("Free translation request failed: {}", message)
-        }
-    }
-}
-
-fn google_translate_free_error_message(
-    error: &GoogleTranslateFreeAttemptError,
-    attempts: usize,
-) -> String {
-    format!(
-        "{} after {} {}",
-        google_translate_free_error_summary(error),
-        attempts,
-        format_attempt_label(attempts)
-    )
-}
-
-fn extract_google_translate_free_translation(
-    body: &Value,
-) -> Result<String, GoogleTranslateFreeAttemptError> {
-    let mut translated = String::new();
-
-    if let Some(outer_arr) = body.as_array()
-        && let Some(inner_arr) = outer_arr.first().and_then(|value| value.as_array())
-    {
-        for part in inner_arr {
-            if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
-                translated.push_str(text);
-            }
-        }
-    }
-
-    if translated.is_empty() {
-        return Err(GoogleTranslateFreeAttemptError::Message(
-            "Empty translation".to_string(),
-        ));
-    }
-
-    Ok(translated)
-}
-
-pub(crate) async fn fetch_google_translate_free_translation(
-    client: &Client,
-    base_url: &LlmApiUrl,
-    target_language: &str,
-    text: &str,
-) -> Result<String, GoogleTranslateFreeAttemptError> {
-    let url = base_url
-        .with_query(&format!(
-            "client=gtx&sl=auto&tl={}&dt=t&q={}",
-            target_language,
-            urlencoding::encode(text)
-        ))
-        .map_err(GoogleTranslateFreeAttemptError::Message)?;
-    let response = client
-        .get(url.reqwest_url())
-        .send()
-        .await
-        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
-
-    if !response.status().is_success() {
-        return Err(GoogleTranslateFreeAttemptError::HttpStatus {
-            status: response.status(),
-            retry_after: parse_google_translate_free_retry_after(response.headers()),
-        });
-    }
-
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
-    extract_google_translate_free_translation(&body)
-}
-
-pub(crate) async fn execute_google_translate_free_request<
-    FetchFn,
-    FetchFuture,
-    SleepFn,
-    SleepFuture,
->(
-    index: usize,
-    text: String,
-    target_language: String,
-    mut fetch: FetchFn,
-    mut sleep_fn: SleepFn,
-) -> Result<(usize, String), String>
-where
-    FetchFn: FnMut(String, String) -> FetchFuture,
-    FetchFuture: Future<Output = Result<String, GoogleTranslateFreeAttemptError>>,
-    SleepFn: FnMut(Duration) -> SleepFuture,
-    SleepFuture: Future<Output = ()>,
-{
-    let mut attempts = 0usize;
-
-    loop {
-        attempts += 1;
-
-        match fetch(text.clone(), target_language.clone()).await {
-            Ok(translation) => return Ok((index, translation)),
-            Err(error) => {
-                if let Some(delay) = google_translate_free_retry_delay(&error, attempts) {
-                    info!(
-                        "[LLM] google_translate_free request hit 429 and will retry: index={} failed_attempt={} next_attempt={} delay_ms={}",
-                        index,
-                        attempts,
-                        attempts + 1,
-                        delay.as_millis()
-                    );
-                    sleep_fn(delay).await;
-                    continue;
-                }
-
-                warn!(
-                    "[LLM] google_translate_free request failed after retries: index={} attempts={} error={}",
-                    index,
-                    attempts,
-                    google_translate_free_error_summary(&error)
-                );
-                return Err(google_translate_free_error_message(&error, attempts));
-            }
-        }
-    }
 }
 
 pub(crate) async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(

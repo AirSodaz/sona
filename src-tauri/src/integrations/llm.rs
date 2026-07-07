@@ -2,13 +2,13 @@ pub(crate) mod commands;
 pub(crate) mod jobs;
 #[cfg(test)]
 pub(crate) use sona_core::llm_provider_protocol::{
-    GeminiModel, OpenAiModel, is_gemini_text_generation_model,
+    GeminiModel, OpenAiModel, format_gemini_models_url, format_openai_models_urls,
+    gemini_model_to_summary, is_gemini_text_generation_model, openai_model_to_summary,
+    strategy_supports_model_listing,
 };
 pub(crate) use sona_core::llm_provider_protocol::{
     build_standard_input, clean_gemini_base_url, extract_text_from_json_response,
-    extract_usage_from_json_response, format_gemini_models_url, format_openai_models_urls,
-    gemini_model_to_summary, join_url, openai_model_to_summary, strategy_supports_model_listing,
-    strategy_uses_openai_chat_payload,
+    extract_usage_from_json_response, join_url,
 };
 pub(crate) use sona_core::llm_streaming_protocol::{
     OpenAiChatPayloadConfig, OpenAiStreamUrlConfig, SseEventBuffer, StreamTextAccumulator,
@@ -30,9 +30,6 @@ mod tests;
 mod types;
 
 const GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY: usize = 2;
-const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
-const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
-const GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS: [u64; GOOGLE_TRANSLATE_FREE_MAX_RETRIES] = [500, 1000];
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
 const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";

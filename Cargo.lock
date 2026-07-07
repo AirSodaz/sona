@@ -5396,6 +5396,7 @@ dependencies = [
  "sona-core",
  "sona-local-asr",
  "sona-online-asr",
+ "sona-online-llm",
  "sona-sqlite",
  "specta",
  "specta-typescript",
@@ -5510,6 +5511,21 @@ dependencies = [
  "sona-core",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "sona-online-llm"
+version = "0.8.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "reqwest 0.13.4",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "sona-core",
+ "tokio",
+ "urlencoding",
 ]
 
 [[package]]

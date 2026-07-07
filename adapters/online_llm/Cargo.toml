@@ -1,0 +1,17 @@
+[package]
+name = "sona-online-llm"
+version.workspace = true
+description = "Reusable online LLM provider adapters for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+log = "0.4.22"
+reqwest = { version = "0.13", features = ["rustls", "json"] }
+rig-core = "0.39"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sona-core = { path = "../../core" }
+tokio = { version = "1", features = ["time"] }
+urlencoding = "2.1.3"

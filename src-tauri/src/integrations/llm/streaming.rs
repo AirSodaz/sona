@@ -1,4 +1,4 @@
-use super::network::{LlmApiUrl, post_json_request};
+use super::network::LlmApiUrl;
 use super::*;
 use futures_util::StreamExt;
 use log::warn;
@@ -663,81 +663,8 @@ where
     }
 }
 
-pub(crate) async fn generate_with_openai_chat_api(
-    url: &LlmApiUrl,
-    config: &LlmConfig,
-    input: &str,
-    extra_headers: Vec<(&str, String)>,
-) -> Result<StandardLlmResponse, String> {
-    let mut headers = vec![];
-    if !config.api_key.is_empty() {
-        headers.push(("Authorization", format!("Bearer {}", config.api_key)));
-    }
-    headers.extend(extra_headers);
-
-    let payload = build_openai_chat_payload(openai_chat_payload_config(config), input, false);
-
-    let response = post_json_request(url, headers, payload, config.timeout_seconds).await?;
-    Ok(StandardLlmResponse {
-        text: extract_text_from_json_response(&response)?,
-        usage: extract_usage_from_json_response(&response),
-    })
-}
-
-pub(crate) async fn generate_with_openai_responses_api(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-    api_path: Option<&str>,
-) -> Result<StandardLlmResponse, String> {
-    let base_url = LlmApiUrl::parse(base_url)?;
-    let url = base_url.join(api_path.unwrap_or("/v1/responses"))?;
-    let payload = json!({
-        "model": model,
-        "input": input,
-        "temperature": temperature.unwrap_or(0.7),
-    });
-
-    let response = post_json_request(
-        &url,
-        vec![("Authorization", format!("Bearer {}", api_key))],
-        payload,
-        None,
-    )
-    .await?;
-
-    Ok(StandardLlmResponse {
-        text: extract_text_from_json_response(&response)?,
-        usage: extract_usage_from_json_response(&response),
-    })
-}
-
-pub(crate) async fn generate_with_openai_custom_path(
-    config: &LlmConfig,
-    input: &str,
-) -> Result<StandardLlmResponse, String> {
-    let base_url = LlmApiUrl::parse(&config.base_url)?;
-    let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
-    generate_with_openai_chat_api(&url, config, input, vec![]).await
-}
-
 pub(crate) async fn generate_with_rig(
     request: LlmGenerateRequest,
 ) -> Result<StandardLlmResponse, String> {
-    let adapter = AdapterFactory::create(request.config.strategy);
-    let std_req = StandardLlmRequest {
-        messages: vec![StandardMessage {
-            role: MessageRole::User,
-            content: request.input,
-        }],
-        temperature: request.config.temperature.unwrap_or(0.7),
-    };
-
-    let url = LlmApiUrl::parse(&request.config.base_url)?;
-    let client = url.client(request.config.timeout_seconds)?;
-    let response = adapter.generate(&client, &std_req, &request.config).await?;
-
-    Ok(response)
+    generate_text_with_provider(request).await
 }

@@ -192,7 +192,7 @@ test('desktop api server invokes local batch ASR through the core transcriber po
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
 });
 
-test('pr guardrails run ASR adapter tests with core bindings and standalone CLI', () => {
+test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
@@ -200,7 +200,7 @@ test('pr guardrails run ASR adapter tests with core bindings and standalone CLI'
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-online-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-local-asr -p sona-online-llm -p sona-online-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -659,6 +659,7 @@ test('LLM provider protocol mapping is owned by core and reused by desktop', () 
   const coreProviderProtocol = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_provider_protocol.rs'), 'utf8');
   const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
   const desktopLlmProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
+  const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
   assert.match(coreLib, /^pub mod llm_provider_protocol;/mu);
   assert.match(coreProviderProtocol, /pub struct LlmModelSummary/u);
@@ -666,7 +667,8 @@ test('LLM provider protocol mapping is owned by core and reused by desktop', () 
   assert.match(coreProviderProtocol, /pub fn format_openai_models_urls/u);
   assert.match(coreProviderProtocol, /pub fn extract_text_from_json_response/u);
   assert.match(desktopLlmTypes, /pub use sona_core::llm_provider_protocol::\{/u);
-  assert.match(desktopLlmProviders, /sona_core::llm_provider_protocol::\{/u);
+  assert.match(onlineLlmLib, /sona_core::llm_provider_protocol::\{/u);
+  assert.match(desktopLlmProviders, /sona_online_llm::\{/u);
   assert.doesNotMatch(desktopLlmProviders, /fn strategy_uses_openai_chat_payload/u);
   assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn clean_gemini_base_url/u);
   assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn format_openai_models_urls/u);
@@ -734,6 +736,7 @@ test('LLM generation and model listing use core ports with desktop adapters', ()
   const coreLlmPort = fs.readFileSync(coreLlmPortPath, 'utf8');
   const desktopCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'), 'utf8');
   const desktopProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
+  const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
   assert.match(corePorts, /^pub mod llm;/mu);
   assert.match(coreLlmPort, /trait LlmTextGenerator/u);
@@ -742,12 +745,45 @@ test('LLM generation and model listing use core ports with desktop adapters', ()
   assert.match(coreLlmPort, /LlmModelsRequest/u);
   assert.match(coreLlmPort, /StandardLlmResponse/u);
   assert.match(coreLlmPort, /LlmModelSummary/u);
-  assert.match(desktopProviders, /impl LlmTextGenerator for DesktopLlmAdapter/u);
-  assert.match(desktopProviders, /impl LlmModelLister for DesktopLlmAdapter/u);
+  assert.match(onlineLlmLib, /impl LlmTextGenerator for OnlineLlmAdapter/u);
+  assert.match(onlineLlmLib, /impl LlmModelLister for OnlineLlmAdapter/u);
+  assert.match(desktopProviders, /OnlineLlmAdapter as DesktopLlmAdapter/u);
   assert.match(desktopCommands, /DesktopLlmAdapter/u);
   assert.match(desktopCommands, /\.generate_text\(/u);
   assert.match(desktopCommands, /\.list_models\(/u);
   assert.doesNotMatch(desktopCommands, /generate_with_rig/u);
+});
+
+test('online LLM provider implementation lives in adapter crate', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const onlineLlmCargoPath = path.join(repoRoot, 'adapters', 'online_llm', 'Cargo.toml');
+  const onlineLlmLibPath = path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs');
+  const onlineLlmLib = fs.readFileSync(onlineLlmLibPath, 'utf8');
+  const desktopProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
+  const desktopNetwork = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'network.rs'), 'utf8');
+  const desktopTasks = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/online_llm"/u);
+  assert.ok(fs.existsSync(onlineLlmCargoPath));
+  assert.match(tauriCargo, /sona-online-llm\s*=\s*\{\s*path\s*=\s*"..\/adapters\/online_llm"/u);
+  assert.match(onlineLlmLib, /pub struct OnlineLlmAdapter/u);
+  assert.match(onlineLlmLib, /impl LlmTextGenerator for OnlineLlmAdapter/u);
+  assert.match(onlineLlmLib, /impl LlmModelLister for OnlineLlmAdapter/u);
+  assert.match(onlineLlmLib, /pub struct LlmApiUrl/u);
+  assert.match(desktopProviders, /sona_online_llm::\{/u);
+  assert.match(desktopNetwork, /sona_online_llm::\{/u);
+  assert.match(desktopTasks, /sona_online_llm::\{/u);
+  assert.match(onlineLlmLib, /pub async fn execute_google_translate_free_request/u);
+  assert.match(onlineLlmLib, /pub async fn fetch_google_translate_free_translation/u);
+  assert.doesNotMatch(desktopProviders, /pub(?:\(crate\))? trait LlmAdapter/u);
+  assert.doesNotMatch(desktopProviders, /struct AdapterFactory/u);
+  assert.doesNotMatch(desktopProviders, /pub\(crate\) async fn get_openai_models/u);
+  assert.doesNotMatch(desktopProviders, /pub\(crate\) async fn get_gemini_models/u);
+  assert.doesNotMatch(desktopTasks, /enum GoogleTranslateFreeAttemptError/u);
+  assert.doesNotMatch(desktopTasks, /fn parse_google_translate_free_retry_after/u);
+  assert.doesNotMatch(desktopTasks, /fn extract_google_translate_free_translation/u);
+  assert.doesNotMatch(desktopTasks, /fn google_translate_free_retry_delay/u);
 });
 
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
