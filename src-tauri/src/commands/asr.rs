@@ -99,7 +99,7 @@ pub async fn process_batch_file(
     state: State<'_, AsrState>,
     file_path: String,
     save_to_path: Option<String>,
-    speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+    speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
     asr_request: AsrTranscriptionRequest,
     instance_id: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, SherpaError> {

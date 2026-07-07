@@ -197,7 +197,7 @@ where
     };
     let decode_ms = duration_to_ms(decode_started.elapsed());
 
-    let annotated_segments = crate::integrations::speaker::annotate_segments_with_speakers(
+    let annotated_segments = sona_local_asr::speaker_processing::annotate_segments_with_speakers(
         &samples,
         &segments,
         request.speaker_processing.as_ref(),

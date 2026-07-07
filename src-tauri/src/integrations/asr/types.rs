@@ -27,7 +27,7 @@ pub struct BatchTranscriptionRequest {
     pub model_type: String,
     pub file_config: Option<sona_core::model_config::ModelFileConfig>,
     pub hotwords: Option<String>,
-    pub speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+    pub speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
     pub gpu_acceleration: Option<String>,

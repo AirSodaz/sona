@@ -166,7 +166,7 @@ async fn list_llm_models_rejects_remote_http_before_requesting_models() {
 #[test]
 fn transcript_job_translation_merge_preserves_existing_segment_fields() {
     let mut first = sample_transcript_segment("1", "hello");
-    first.speaker = Some(crate::integrations::speaker::SpeakerTag {
+    first.speaker = Some(sona_core::transcript::SpeakerTag {
         id: "speaker-a".to_string(),
         label: "Alice".to_string(),
         kind: "identified".to_string(),
@@ -210,7 +210,7 @@ fn transcript_job_polish_merge_only_rewrites_text() {
 #[test]
 fn transcript_job_summary_fingerprint_matches_frontend_contract() {
     let mut segment = sample_transcript_segment("1", "Hello");
-    segment.speaker = Some(crate::integrations::speaker::SpeakerTag {
+    segment.speaker = Some(sona_core::transcript::SpeakerTag {
         id: "speaker-a".to_string(),
         label: "Alice".to_string(),
         kind: "identified".to_string(),

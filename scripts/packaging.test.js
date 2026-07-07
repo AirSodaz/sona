@@ -837,7 +837,10 @@ test('desktop hardware module reuses local ASR adapter GPU planning', () => {
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
-  const speakerRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'speaker.rs'), 'utf8');
+  const localAsrSpeakerProcessing = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
+    'utf8',
+  );
   const runtimeStatusRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'), 'utf8');
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -847,8 +850,8 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'pipeline.rs')), false);
   assert.match(batchRs, /sona_local_asr::audio::extract_and_resample_audio/u);
   assert.match(batchRs, /sona_local_asr::audio::save_wav_file/u);
-  assert.match(speakerRs, /sona_local_asr::audio::extract_and_resample_audio/u);
-  assert.match(speakerRs, /sona_local_asr::audio::save_wav_file/u);
+  assert.match(localAsrSpeakerProcessing, /crate::audio::extract_and_resample_audio/u);
+  assert.match(localAsrSpeakerProcessing, /crate::audio::save_wav_file/u);
   assert.match(runtimeStatusRs, /sona_local_asr::audio::resolve_ffmpeg_sidecar_path/u);
   assert.doesNotMatch(prWorkflow, /core::pipeline::tests/u);
 
@@ -874,20 +877,43 @@ test('desktop batch ASR delegates audio segmentation to local ASR adapter', () =
   assert.doesNotMatch(batchRs, /crate::core::pipeline::whole_audio_segment/u);
 });
 
-test('desktop speaker processing delegates sherpa speaker primitives to local ASR adapter', () => {
+test('speaker processing runtime is owned by local ASR adapter and wrapped by desktop platform', () => {
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const localAsrLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'lib.rs'), 'utf8');
-  const speakerRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'speaker.rs'), 'utf8');
+  const localAsrProcessing = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
+    'utf8',
+  );
+  const desktopPlatform = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformSpeaker = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'speaker_processing.rs'),
+    'utf8',
+  );
+  const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
 
   assert.match(localAsrLib, /^pub mod speaker;/mu);
+  assert.match(localAsrLib, /^pub mod speaker_processing;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker.rs')), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs')), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'speaker.rs')), false);
+  assert.match(desktopPlatform, /^pub mod speaker_processing;/mu);
+  assert.doesNotMatch(desktopIntegrations, /^pub mod speaker;/mu);
   assert.doesNotMatch(tauriCargo, /^sherpa-onnx\s*=/mu);
-  assert.doesNotMatch(speakerRs, /use sherpa_onnx::/u);
-  assert.match(speakerRs, /sona_local_asr::speaker::run_speaker_diarization/u);
-  assert.match(speakerRs, /sona_local_asr::speaker::SpeakerEmbeddingIndex/u);
-  assert.doesNotMatch(speakerRs, /OfflineSpeakerDiarization/u);
-  assert.doesNotMatch(speakerRs, /SpeakerEmbeddingExtractor/u);
-  assert.doesNotMatch(speakerRs, /SpeakerEmbeddingManager/u);
+  assert.match(localAsrProcessing, /crate::speaker::run_speaker_diarization/u);
+  assert.match(localAsrProcessing, /crate::speaker::SpeakerEmbeddingIndex/u);
+  assert.match(localAsrProcessing, /crate::audio::extract_and_resample_audio/u);
+  assert.doesNotMatch(localAsrProcessing, /use sherpa_onnx::/u);
+  assert.doesNotMatch(localAsrProcessing, /OfflineSpeakerDiarization/u);
+  assert.doesNotMatch(localAsrProcessing, /SpeakerEmbeddingExtractor/u);
+  assert.doesNotMatch(localAsrProcessing, /SpeakerEmbeddingManager/u);
+  assert.match(platformSpeaker, /sona_local_asr::speaker_processing::annotate_speaker_segments_from_file/u);
+  assert.match(platformSpeaker, /sona_local_asr::speaker_processing::import_speaker_profile_sample/u);
+  assert.match(systemCommand, /crate::platform::speaker_processing::annotate_speaker_segments_from_file/u);
+  assert.match(systemCommand, /crate::platform::speaker_processing::import_speaker_profile_sample/u);
+  assert.match(batchRs, /sona_local_asr::speaker_processing::annotate_segments_with_speakers/u);
+  assert.doesNotMatch(batchRs, /crate::integrations::speaker/u);
 });
 
 test('desktop live VAD creation is delegated to local ASR adapter', () => {

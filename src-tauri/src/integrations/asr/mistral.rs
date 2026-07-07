@@ -48,7 +48,7 @@ impl AsrBatchProcessor for MistralVoxtralBatchProcessor {
         file_path: std::path::PathBuf,
         _save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
-        _speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+        _speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
         _instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
         process_batch_file_impl(emitter, state, file_path, request)

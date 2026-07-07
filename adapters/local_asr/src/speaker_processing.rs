@@ -1,19 +1,16 @@
-use crate::integrations::asr::{
-    TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, ensure_transcript_segment_timing,
-};
-
-pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
-pub use sona_core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
-
-use crate::platform::paths::{PathKind, PathProvider};
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
+use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
 use sona_core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
-use sona_local_asr::speaker::SpeakerDiarizationSegment;
+use sona_core::transcript::{
+    SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
+    TranscriptTimingLevel, ensure_transcript_segment_timing,
+};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+
+use crate::speaker::SpeakerDiarizationSegment;
 
 const SPEAKER_PROCESSING_LOG_TARGET: &str = "speaker_processing";
 const SAMPLE_RATE: i32 = 16_000;
@@ -100,7 +97,7 @@ pub async fn annotate_speaker_segments_from_file(
         return Ok(segments);
     }
 
-    let samples = sona_local_asr::audio::extract_and_resample_audio(
+    let samples = crate::audio::extract_and_resample_audio(
         std::path::Path::new(&file_path),
         SAMPLE_RATE as u32,
     )
@@ -109,12 +106,12 @@ pub async fn annotate_speaker_segments_from_file(
 }
 
 pub async fn import_speaker_profile_sample(
-    provider: &dyn PathProvider,
+    app_data_dir: &Path,
     profile_id: String,
     source_path: String,
     source_name: Option<String>,
 ) -> Result<SpeakerProfileSample, String> {
-    let samples = sona_local_asr::audio::extract_and_resample_audio(
+    let samples = crate::audio::extract_and_resample_audio(
         std::path::Path::new(&source_path),
         SAMPLE_RATE as u32,
     )
@@ -133,12 +130,11 @@ pub async fn import_speaker_profile_sample(
         })
         .unwrap_or_else(|| "Sample".to_string());
 
-    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
     let profile_dir = app_data_dir.join("speaker-profiles").join(&profile_id);
     std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
 
     let output_path = profile_dir.join(format!("{sample_id}.wav"));
-    sona_local_asr::audio::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
+    crate::audio::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
         .map_err(|e| e.to_string())?;
 
     Ok(SpeakerProfileSample {
@@ -366,7 +362,7 @@ fn run_diarization(
     segmentation_model: &Path,
     embedding_model: &Path,
 ) -> Result<Vec<SpeakerDiarizationSegment>, String> {
-    sona_local_asr::speaker::run_speaker_diarization(samples, segmentation_model, embedding_model)
+    crate::speaker::run_speaker_diarization(samples, segmentation_model, embedding_model)
 }
 
 fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Vec<ClusterInfo> {
@@ -450,7 +446,7 @@ fn build_cluster_speaker_assignments(
         return Ok(default_assignments);
     }
 
-    let embedding_index = sona_local_asr::speaker::SpeakerEmbeddingIndex::new(embedding_model)?;
+    let embedding_index = crate::speaker::SpeakerEmbeddingIndex::new(embedding_model)?;
 
     let mut loaded_profile_names = HashMap::new();
     let mut profile_readiness = HashMap::new();
@@ -521,7 +517,7 @@ fn build_cluster_speaker_assignments(
 fn identify_cluster_candidates(
     samples: &[f32],
     cluster: &ClusterInfo,
-    embedding_index: &sona_local_asr::speaker::SpeakerEmbeddingIndex,
+    embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
     profile_names: &HashMap<String, String>,
 ) -> Result<Vec<ClusterCandidate>, String> {
     let mut candidate_spans = cluster
@@ -1583,14 +1579,14 @@ mod tests {
         let mut segment = sample_segment(0.0, 2.0, "Hello there");
         segment.timing = Some(TranscriptTiming {
             level: TranscriptTimingLevel::Token,
-            source: crate::integrations::asr::TranscriptTimingSource::Model,
+            source: sona_core::transcript::TranscriptTimingSource::Model,
             units: vec![
-                crate::integrations::asr::TranscriptTimingUnit {
+                sona_core::transcript::TranscriptTimingUnit {
                     text: "Hello".to_string(),
                     start: 0.0,
                     end: 1.0,
                 },
-                crate::integrations::asr::TranscriptTimingUnit {
+                sona_core::transcript::TranscriptTimingUnit {
                     text: " there".to_string(),
                     start: 1.0,
                     end: 2.0,

@@ -3,8 +3,7 @@ use super::error::SherpaError;
 use super::state::AsrState;
 use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{
-    AsrMode, AsrTranscriptionRequest, BatchSegmentationMode, BatchTranscriptionRequest,
-    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
+    AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
 };
 use async_trait::async_trait;
 
@@ -99,7 +98,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
-        speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+        speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError> {
         let config = match request.engine_config.clone() {

@@ -9,3 +9,4 @@ pub mod paths;
 pub mod preset_models;
 pub mod project_repository;
 pub mod recovery_repository;
+pub mod speaker_processing;

@@ -4,3 +4,4 @@ pub mod offline;
 pub mod punctuation;
 pub mod recognizer;
 pub mod speaker;
+pub mod speaker_processing;

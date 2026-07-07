@@ -29,7 +29,7 @@ pub use error::SherpaError;
 pub use model_config::Recognizer;
 pub(crate) use model_config::{
     RecognizerInner, accept_vad_samples, build_model_config, create_recognizer_with_gpu_plan,
-    decode_offline_samples, load_vad, reset_vad, vad_detected,
+    decode_offline_samples, load_vad, vad_detected,
 };
 pub use postprocess::TranscriptPostprocessor;
 pub use sona_core::asr_metrics::{
@@ -40,8 +40,7 @@ pub(crate) use state::ModelConfigKey;
 pub use state::{AsrState, RecognizerPool};
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 pub(crate) use transcript::{
-    ensure_transcript_segment_timing, finalize_transcript_text, normalize_recognizer_text,
-    synthesize_durations,
+    finalize_transcript_text, normalize_recognizer_text, synthesize_durations,
 };
 pub use types::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,

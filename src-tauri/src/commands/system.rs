@@ -345,9 +345,9 @@ pub async fn recovery_persist_queue_snapshot(
 pub async fn annotate_speaker_segments_from_file(
     file_path: String,
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
-    speaker_processing: Option<crate::integrations::speaker::SpeakerProcessingConfig>,
+    speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String> {
-    crate::integrations::speaker::annotate_speaker_segments_from_file(
+    crate::platform::speaker_processing::annotate_speaker_segments_from_file(
         file_path,
         segments,
         speaker_processing,
@@ -361,9 +361,9 @@ pub async fn import_speaker_profile_sample(
     profile_id: String,
     source_path: String,
     source_name: Option<String>,
-) -> Result<crate::integrations::speaker::SpeakerProfileSample, String> {
+) -> Result<sona_core::speaker::SpeakerProfileSample, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    crate::integrations::speaker::import_speaker_profile_sample(
+    crate::platform::speaker_processing::import_speaker_profile_sample(
         &path_provider,
         profile_id,
         source_path,

@@ -41,7 +41,7 @@ pub(crate) fn export_transcript_file_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::speaker::SpeakerTag;
+    use sona_core::transcript::SpeakerTag;
 
     fn sample_segments() -> Vec<TranscriptSegment> {
         vec![

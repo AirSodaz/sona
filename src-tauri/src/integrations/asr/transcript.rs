@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 pub(crate) use sona_core::transcript::{
-    apply_timeline_normalization, build_transcript_update, ensure_transcript_segment_timing,
-    normalize_recognizer_text, synthesize_durations,
+    apply_timeline_normalization, build_transcript_update, normalize_recognizer_text,
+    synthesize_durations,
 };
 
 pub(crate) fn emit_transcript_update(
@@ -214,6 +214,7 @@ mod tests {
         TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
     };
     use super::*;
+    use sona_core::transcript::ensure_transcript_segment_timing;
 
     #[test]
     fn normalize_recognizer_text_strips_multiple_leading_tags() {
