@@ -28,11 +28,11 @@ describe('patch-channel.js integration', () => {
         version: '1.0.0'
       }, null, 2));
 
-      // Create mock Cargo.toml
-      fs.writeFileSync(path.join(tauriDir, 'Cargo.toml'), `
-[package]
-name = "sona"
+      // Create mock workspace Cargo.toml
+      fs.writeFileSync(path.join(tempDir, 'Cargo.toml'), `
+[workspace.package]
 version = "1.0.0"
+authors = ["AirSodaz"]
 edition = "2024"
       `.trim());
 
@@ -68,7 +68,7 @@ edition = "2024"
       const patchedPackage = JSON.parse(fs.readFileSync(path.join(tempDir, 'package.json'), 'utf8'));
       expect(patchedPackage.version).toBe('1.0.0-45');
 
-      const patchedCargo = fs.readFileSync(path.join(tauriDir, 'Cargo.toml'), 'utf8');
+      const patchedCargo = fs.readFileSync(path.join(tempDir, 'Cargo.toml'), 'utf8');
       expect(patchedCargo).toContain('version = "1.0.0-45"');
 
       const patchedTauri = JSON.parse(fs.readFileSync(path.join(tauriDir, 'tauri.conf.json'), 'utf8'));

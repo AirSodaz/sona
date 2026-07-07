@@ -38,23 +38,23 @@ function patchPackageJson(version) {
   console.log(`[patch-channel] package.json -> version ${version}`);
 }
 
-function patchCargoToml(version) {
-  const file = path.join(repoRoot, 'src-tauri', 'Cargo.toml');
+function patchWorkspaceCargoToml(version) {
+  const file = path.join(repoRoot, 'Cargo.toml');
   if (!fs.existsSync(file)) {
     throw new Error(`Cargo.toml not found at ${file}`);
   }
   const content = fs.readFileSync(file, 'utf8');
   const lines = content.split(/\r?\n/);
-  let inPackageSection = false;
+  let inWorkspacePackageSection = false;
   let patched = false;
 
   const result = lines.map((line) => {
     const sectionMatch = line.match(/^\[(.+)\]\s*$/);
     if (sectionMatch) {
-      inPackageSection = sectionMatch[1] === 'package';
+      inWorkspacePackageSection = sectionMatch[1] === 'workspace.package';
       return line;
     }
-    if (inPackageSection && !patched && /^\s*version\s*=\s*".*"\s*$/.test(line)) {
+    if (inWorkspacePackageSection && !patched && /^\s*version\s*=\s*".*"\s*$/.test(line)) {
       patched = true;
       const leadingWhitespace = line.match(/^\s*/)[0];
       return `${leadingWhitespace}version = "${version}"`;
@@ -63,13 +63,13 @@ function patchCargoToml(version) {
   });
 
   if (!patched) {
-    throw new Error('Could not find a version line inside [package] in src-tauri/Cargo.toml');
+    throw new Error('Could not find a version line inside [workspace.package] in Cargo.toml');
   }
 
   // Preserve carriage returns if original content has them
   const lineEnding = content.includes('\r\n') ? '\r\n' : '\n';
   fs.writeFileSync(file, result.join(lineEnding));
-  console.log(`[patch-channel] src-tauri/Cargo.toml -> version ${version}`);
+  console.log(`[patch-channel] Cargo.toml (workspace) -> version ${version}`);
 }
 
 function patchTauriConf(version, config) {
@@ -129,7 +129,7 @@ function main() {
   }
 
   patchPackageJson(version);
-  patchCargoToml(version);
+  patchWorkspaceCargoToml(version);
   patchTauriConf(version, config);
   patchTauriWindowsConf(config);
 
