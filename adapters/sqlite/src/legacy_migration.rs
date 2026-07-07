@@ -3,9 +3,9 @@ use std::path::Path;
 
 use rusqlite::Transaction;
 use serde_json::Value;
+use sona_core::project::{ProjectDefaults, ProjectListOptions, normalize_project_value};
 
-use super::Database;
-use super::DatabaseError;
+use crate::{Database, DatabaseError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationReport {
@@ -494,10 +494,7 @@ fn migrate_projects(
     };
 
     for (i, project_val) in projects.iter().enumerate() {
-        let mut project = crate::repositories::project::repository::normalize_project_value(
-            project_val,
-            &crate::repositories::project::types::ProjectListOptions::default(),
-        );
+        let mut project = normalize_project_value(project_val, &ProjectListOptions::default());
         if project.id.is_empty() {
             project.id = format!("_migrated_{i}");
         }
@@ -552,7 +549,7 @@ fn migrate_projects(
 fn insert_project_default_links(
     tx: &Transaction,
     project_id: &str,
-    defaults: &crate::repositories::project::types::ProjectDefaults,
+    defaults: &ProjectDefaults,
 ) -> Result<(), rusqlite::Error> {
     insert_project_default_link_kind(
         tx,
@@ -990,7 +987,6 @@ fn verify_counts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
     use serde_json::json;
     use std::fs;
 

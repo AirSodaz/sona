@@ -4,6 +4,7 @@ pub mod error;
 pub mod history_archive;
 pub mod history_backup;
 pub mod history_store;
+pub mod legacy_migration;
 pub mod llm_usage;
 pub mod ports;
 pub mod project;

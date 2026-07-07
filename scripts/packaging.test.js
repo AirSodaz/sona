@@ -321,16 +321,24 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   const desktopDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'mod.rs'), 'utf8');
   const sqliteCargoPath = path.join(repoRoot, 'adapters', 'sqlite', 'Cargo.toml');
   const sqliteLibPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs');
+  const sqliteMigrationPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs');
+  const sqliteLib = fs.readFileSync(sqliteLibPath, 'utf8');
 
   assert.match(workspaceCargo, /"adapters\/sqlite"/u);
   assert.ok(fs.existsSync(sqliteCargoPath));
   assert.ok(fs.existsSync(sqliteLibPath));
+  assert.ok(fs.existsSync(sqliteMigrationPath));
+  assert.match(sqliteLib, /^pub mod legacy_migration;/mu);
   assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/adapters\/sqlite"/u);
-  assert.match(desktopDatabase, /pub mod legacy_migration;/u);
-  assert.match(desktopDatabase, /pub use sona_sqlite::\{/u);
+  assert.match(desktopDatabase, /pub use sona_sqlite::\{[\s\S]*legacy_migration[\s\S]*\};/u);
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'legacy_migration.rs')),
+    false,
+  );
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'error.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'ports.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'schema.rs')), false);
+  assert.doesNotMatch(desktopDatabase, /pub mod legacy_migration;/u);
   assert.doesNotMatch(desktopDatabase, /rusqlite::Connection/u);
   assert.doesNotMatch(desktopDatabase, /struct ConnectionPool/u);
   assert.doesNotMatch(desktopDatabase, /pub struct Database/u);
