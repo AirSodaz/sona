@@ -14,6 +14,13 @@ fn translated_segment_id(item: &TranslatedSegment) -> &str {
     item.id.as_str()
 }
 
+fn generate_segment_streaming<'a>(
+    request: LlmGenerateRequest,
+    emit_delta: &'a mut (dyn FnMut(&str, &str) -> Result<(), String> + Send),
+) -> BoxFuture<'a, Result<StandardLlmResponse, String>> {
+    Box::pin(generate_with_optional_streaming(request, emit_delta))
+}
+
 #[derive(Clone)]
 struct CommandEventEmitter {
     app: AppHandle,
@@ -175,6 +182,7 @@ where
                 input: prompt,
                 source: None,
             },
+            generate_streaming: generate_segment_streaming,
             get_output_id: polished_segment_id,
             on_success: move |response: &StandardLlmResponse| usage.record(response),
             emit_chunk: move |payload: LlmTaskChunkPayload<PolishedSegment>| {
@@ -433,6 +441,7 @@ where
                 input: prompt,
                 source: None,
             },
+            generate_streaming: generate_segment_streaming,
             get_output_id: translated_segment_id,
             on_success: move |response: &StandardLlmResponse| usage.record(response),
             emit_chunk: move |payload: LlmTaskChunkPayload<TranslatedSegment>| {

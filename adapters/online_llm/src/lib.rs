@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream};
 use log::{info, warn};
 use reqwest::{
     Client, StatusCode, Url,
@@ -372,6 +372,33 @@ where
             }
         }
     }
+}
+
+pub async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(
+    texts: Vec<String>,
+    max_concurrency: usize,
+    mut run_request: RunFn,
+) -> Result<Vec<String>, String>
+where
+    RunFn: FnMut(usize, String) -> RunFuture,
+    RunFuture: Future<Output = Result<(usize, String), String>>,
+{
+    let mut indexed_translations = Vec::with_capacity(texts.len());
+    let results = stream::iter(texts.into_iter().enumerate())
+        .map(move |(index, text)| run_request(index, text))
+        .buffer_unordered(max_concurrency.max(1))
+        .collect::<Vec<_>>()
+        .await;
+
+    for result in results {
+        indexed_translations.push(result?);
+    }
+
+    indexed_translations.sort_by_key(|(index, _)| *index);
+    Ok(indexed_translations
+        .into_iter()
+        .map(|(_, translation)| translation)
+        .collect())
 }
 
 #[async_trait]
@@ -933,7 +960,7 @@ async fn stream_rig_completion_model<M, EmitFn>(
 where
     M: CompletionModel,
     M::StreamingResponse: Clone + Unpin + GetTokenUsage + 'static,
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let mut stream = model
         .completion_request(input)
@@ -981,7 +1008,7 @@ async fn stream_openai_chat_completion<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<StandardLlmResponse, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let mut last_usage: Option<TokenUsage> = None;
     let url = LlmApiUrl::parse(&build_openai_stream_url(openai_stream_url_config(config)))?;
@@ -1084,7 +1111,7 @@ async fn stream_anthropic_custom_completion<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<StandardLlmResponse, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let mut input_tokens = 0;
     let mut output_tokens = 0;
@@ -1203,7 +1230,7 @@ async fn stream_gemini_custom_completion<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<StandardLlmResponse, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let mut last_usage: Option<TokenUsage> = None;
     let is_gemini_2_5 = config.model.contains("gemini-2.5");
@@ -1324,7 +1351,7 @@ async fn stream_openai_responses_completion<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<StandardLlmResponse, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let base_url = LlmApiUrl::parse(&config.base_url)?;
     let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/responses"))?;
@@ -1417,7 +1444,7 @@ pub async fn try_stream_text_with_provider<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<Option<StandardLlmResponse>, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let input = build_standard_input(&StandardLlmRequest {
         messages: vec![StandardMessage {

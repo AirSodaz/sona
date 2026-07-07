@@ -7,7 +7,7 @@ pub(crate) async fn try_stream_text<EmitFn>(
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<Option<StandardLlmResponse>, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     try_stream_text_with_provider(request, accumulator).await
 }
@@ -17,7 +17,7 @@ pub(crate) async fn generate_with_optional_streaming<EmitFn>(
     emit_delta: &mut EmitFn,
 ) -> Result<StandardLlmResponse, String>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     let mut accumulator = StreamTextAccumulator::new(emit_delta);
     let stream_result = try_stream_text(&request, &mut accumulator).await;

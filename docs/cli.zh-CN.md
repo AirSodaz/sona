@@ -9,8 +9,9 @@
 - `models list`
 - `models download`
 - `models delete`
+- `transcribe`
 
-离线转写和无头 API 服务正在迁移到 `sona-cli`，目前还不属于现阶段独立 CLI 的已发布能力。
+无头 HTTP API 服务目前仍是桌面应用能力；`sona-cli` 尚未发布 `serve` 命令。
 
 ## 运行方式
 
@@ -23,6 +24,7 @@
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
 ```
 
 ## 命令
@@ -92,6 +94,21 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 不会自动删除伴生模型。
+
+### `transcribe`
+
+使用离线 ASR 适配器转写一个本地音频或视频文件。
+
+```bash
+sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
+sona-cli transcribe ./sample.wav --config ./sona-cli.toml --output ./out.srt
+sona-cli transcribe ./sample.wav --format txt --quiet
+```
+
+- 省略 `--output` 时默认输出到 `stdout`
+- 支持导出格式：`json`、`txt`、`srt`、`vtt`、`md`
+- `--config` 读取由 `init-config` 生成的带注释 `sona-cli.toml` 模板
+- `--force` 允许覆盖已有输出文件
 
 ## 全局参数
 

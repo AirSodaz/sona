@@ -7,7 +7,7 @@ use crate::llm_tasks::LlmProviderStrategy;
 /// text together with the latest delta for replacement-style consumers.
 pub struct StreamTextAccumulator<'a, EmitFn>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     text: String,
     emitted_any: bool,
@@ -16,7 +16,7 @@ where
 
 impl<'a, EmitFn> StreamTextAccumulator<'a, EmitFn>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
 {
     pub fn new(emit_delta: &'a mut EmitFn) -> Self {
         Self {

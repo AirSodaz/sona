@@ -31,30 +31,28 @@ For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md
 
 ### CLI
 
-Sona supports offline batch transcription commands directly through the main desktop executable. Packaged installs do not add it to your shell `PATH`, so invoke the app binary itself with CLI subcommands.
+Sona ships command-line workflows through the standalone `sona-cli` binary. The desktop Tauri app no longer parses CLI subcommands; release and nightly builds stage `sona-cli` into the same-platform desktop installer resources so it can share the bundled Sherpa-onnx dynamic libraries.
 
-Installed package locations:
+Installed package notes:
 
-- Windows: run `Sona.exe transcribe ...` from the installation directory
-- macOS: run `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
-- Linux: run the packaged `Sona` binary with CLI subcommands from the install location
-- AppImage: run the mounted AppImage executable with CLI subcommands
+- Windows/macOS/Linux packages include the matching `sona-cli` resource beside the desktop bundle resources.
+- `sona-cli` is independent from the desktop executable and can also be built as its own release binary.
 
-Source builds can still run the CLI directly with Cargo:
+Source builds can run or build the CLI directly from the workspace:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
+cargo run -p sona-cli -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
+pnpm run build:sona-cli
 ```
 
-Current CLI scope is intentionally narrow:
+Current standalone CLI scope:
 
-- Single-file and directory offline transcription
+- Single-file offline transcription
 - Preset model listing, downloads, and deletion
-- Headless HTTP API server startup through `sona serve`; see [docs/api.md](docs/api.md)
-- Export to `json`, `txt`, `srt`, `vtt`, or `md`
-- Exposed through the main desktop executable, but not registered on `PATH`
+- Runtime path status inspection
+- Commented `sona-cli.toml` starter generation
 
-For the full CLI guide and the `sona init-config` TOML template workflow, read [docs/cli.md](docs/cli.md).
+For the full CLI guide and the `sona-cli init-config` TOML template workflow, read [docs/cli.md](docs/cli.md).
 
 ### Build from Source
 
@@ -131,4 +129,4 @@ To build the application for production:
 pnpm run tauri build
 ```
 
-The executable will be generated in `src-tauri/target/release/bundle`.
+Desktop bundles are generated under `target/release/bundle` or `target/<triple>/release/bundle` depending on the build target.

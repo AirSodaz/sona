@@ -7,11 +7,11 @@ pub(crate) use sona_core::llm_provider_protocol::{
     is_gemini_text_generation_model, join_url, openai_model_to_summary,
     strategy_supports_model_listing,
 };
+pub(crate) use sona_core::llm_streaming_protocol::StreamTextAccumulator;
 #[cfg(test)]
 pub(crate) use sona_core::llm_streaming_protocol::{
     OpenAiChatPayloadConfig, build_openai_chat_payload,
 };
-pub(crate) use sona_core::llm_streaming_protocol::{StreamTextAccumulator, StreamingLineBuffer};
 pub(crate) use sona_core::llm_tasks::{DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET, chunk_error};
 #[cfg(test)]
 pub(crate) use sona_core::llm_tasks::{

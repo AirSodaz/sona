@@ -1,4 +1,7 @@
 use crate::domain::{BuiltinLlmProvider, LlmProvider};
+use crate::llm_provider_protocol::StandardLlmResponse;
+use crate::llm_requests::LlmGenerateRequest;
+use crate::llm_streaming_protocol::StreamingLineBuffer;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -211,6 +214,94 @@ pub struct PlannedSegmentChunk {
     pub start: usize,
     pub end: usize,
     pub prompt: String,
+}
+
+pub struct SegmentTaskContext<'a> {
+    pub task_id: &'a str,
+    pub task_type: LlmTaskType,
+    pub segments: &'a [LlmSegmentInput],
+    pub chunk_size: Option<usize>,
+    pub prompt_char_budget: usize,
+}
+
+impl<'a> SegmentTaskContext<'a> {
+    fn plan_chunks<BuildPrompt>(&self, build_prompt: &mut BuildPrompt) -> Vec<PlannedSegmentChunk>
+    where
+        BuildPrompt: FnMut(&[LlmSegmentInput]) -> String,
+    {
+        plan_segment_task_chunks(
+            self.task_id,
+            self.task_type,
+            self.segments,
+            self.chunk_size,
+            self.prompt_char_budget,
+            build_prompt,
+        )
+    }
+
+    fn chunk_payload<Output>(
+        &self,
+        chunk_number: usize,
+        total_chunks: usize,
+        items: Vec<Output>,
+    ) -> LlmTaskChunkPayload<Output> {
+        LlmTaskChunkPayload {
+            task_id: self.task_id.to_string(),
+            task_type: self.task_type,
+            chunk_index: chunk_number,
+            total_chunks,
+            items,
+        }
+    }
+
+    fn progress_payload(
+        &self,
+        completed_chunks: usize,
+        total_chunks: usize,
+    ) -> LlmTaskProgressPayload {
+        LlmTaskProgressPayload {
+            task_id: self.task_id.to_string(),
+            task_type: self.task_type,
+            completed_chunks,
+            total_chunks,
+        }
+    }
+}
+
+pub struct BufferedSegmentTaskConfig<
+    BuildPrompt,
+    ParseChunk,
+    GenerateFn,
+    OnSuccessFn,
+    EmitChunkFn,
+    EmitProgressFn,
+> {
+    pub build_prompt: BuildPrompt,
+    pub parse_chunk: ParseChunk,
+    pub generate_text: GenerateFn,
+    pub on_success: OnSuccessFn,
+    pub emit_chunk: EmitChunkFn,
+    pub emit_progress: EmitProgressFn,
+}
+
+pub struct StreamingSegmentTaskConfig<
+    BuildPrompt,
+    ParseChunk,
+    BuildRequest,
+    GenerateStreamingFn,
+    GetId,
+    OnSuccessFn,
+    EmitChunkFn,
+    EmitProgressFn,
+> {
+    pub build_prompt: BuildPrompt,
+    pub parse_chunk: ParseChunk,
+    pub build_request: BuildRequest,
+    pub generate_streaming: GenerateStreamingFn,
+    pub get_output_id: GetId,
+    pub on_success: OnSuccessFn,
+    pub emit_chunk: EmitChunkFn,
+    pub emit_progress: EmitProgressFn,
 }
 
 fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
@@ -481,6 +572,215 @@ pub fn parse_translate_chunk(
         |item| &item.id,
     )?;
     Ok(parsed)
+}
+
+pub async fn run_segment_task<
+    Output,
+    BuildPrompt,
+    ParseChunk,
+    GenerateFn,
+    OnSuccessFn,
+    EmitChunkFn,
+    EmitProgressFn,
+>(
+    context: SegmentTaskContext<'_>,
+    config: BufferedSegmentTaskConfig<
+        BuildPrompt,
+        ParseChunk,
+        GenerateFn,
+        OnSuccessFn,
+        EmitChunkFn,
+        EmitProgressFn,
+    >,
+) -> Result<Vec<Output>, String>
+where
+    Output: Serialize + Clone,
+    BuildPrompt: FnMut(&[LlmSegmentInput]) -> String,
+    ParseChunk: FnMut(&str, &[LlmSegmentInput], usize) -> Result<Vec<Output>, String>,
+    GenerateFn: FnMut(String) -> BoxFuture<'static, Result<StandardLlmResponse, String>>,
+    OnSuccessFn: FnMut(&StandardLlmResponse),
+    EmitChunkFn: FnMut(LlmTaskChunkPayload<Output>) -> Result<(), String>,
+    EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String>,
+{
+    if context.segments.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let BufferedSegmentTaskConfig {
+        mut build_prompt,
+        mut parse_chunk,
+        mut generate_text,
+        mut on_success,
+        mut emit_chunk,
+        mut emit_progress,
+    } = config;
+
+    let planned_chunks = context.plan_chunks(&mut build_prompt);
+    let total_chunks = planned_chunks.len();
+    let mut results = Vec::with_capacity(context.segments.len());
+
+    for (chunk_index, planned_chunk) in planned_chunks.into_iter().enumerate() {
+        let chunk_number = chunk_index + 1;
+        let chunk = &context.segments[planned_chunk.start..planned_chunk.end];
+        let response = generate_text(planned_chunk.prompt)
+            .await
+            .map_err(|error| chunk_error(context.task_type, chunk_number, error))?;
+        on_success(&response);
+        let response_text = response.text;
+        let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
+
+        emit_chunk(context.chunk_payload(chunk_number, total_chunks, parsed.clone()))?;
+        emit_progress(context.progress_payload(chunk_number, total_chunks))?;
+
+        results.extend(parsed);
+    }
+
+    Ok(results)
+}
+
+pub async fn run_streaming_segment_task<
+    Output,
+    BuildPrompt,
+    ParseChunk,
+    BuildRequest,
+    GenerateStreamingFn,
+    GetId,
+    OnSuccessFn,
+    EmitChunkFn,
+    EmitProgressFn,
+>(
+    context: SegmentTaskContext<'_>,
+    config: StreamingSegmentTaskConfig<
+        BuildPrompt,
+        ParseChunk,
+        BuildRequest,
+        GenerateStreamingFn,
+        GetId,
+        OnSuccessFn,
+        EmitChunkFn,
+        EmitProgressFn,
+    >,
+) -> Result<Vec<Output>, String>
+where
+    Output: Serialize + Clone + DeserializeOwned + Send,
+    BuildPrompt: FnMut(&[LlmSegmentInput]) -> String + Send,
+    ParseChunk: FnMut(&str, &[LlmSegmentInput], usize) -> Result<Vec<Output>, String> + Send,
+    BuildRequest: FnMut(String) -> LlmGenerateRequest + Send,
+    GenerateStreamingFn: for<'emit> FnMut(
+            LlmGenerateRequest,
+            &'emit mut (dyn FnMut(&str, &str) -> Result<(), String> + Send),
+        ) -> BoxFuture<'emit, Result<StandardLlmResponse, String>>
+        + Send,
+    GetId: for<'item> FnMut(&'item Output) -> &'item str + Send,
+    OnSuccessFn: FnMut(&StandardLlmResponse) + Send,
+    EmitChunkFn: FnMut(LlmTaskChunkPayload<Output>) -> Result<(), String> + Send,
+    EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String> + Send,
+{
+    if context.segments.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let StreamingSegmentTaskConfig {
+        mut build_prompt,
+        mut parse_chunk,
+        mut build_request,
+        mut generate_streaming,
+        mut get_output_id,
+        mut on_success,
+        mut emit_chunk,
+        mut emit_progress,
+    } = config;
+
+    let planned_chunks = context.plan_chunks(&mut build_prompt);
+    let total_chunks = planned_chunks.len();
+    let mut results = Vec::with_capacity(context.segments.len());
+
+    for (chunk_index, planned_chunk) in planned_chunks.into_iter().enumerate() {
+        let chunk_number = chunk_index + 1;
+        let chunk = &context.segments[planned_chunk.start..planned_chunk.end];
+        let mut line_buffer = StreamingLineBuffer::default();
+        let mut streamed_items = Vec::new();
+        let response_text = {
+            let mut emit_streamed_line = |line: &str| -> Result<(), String> {
+                let Some(normalized) = normalize_incremental_json_line(line) else {
+                    return Ok(());
+                };
+
+                let parsed = serde_json::from_str::<Output>(&normalized).map_err(|error| {
+                    chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        format!("invalid JSON response: {error}"),
+                    )
+                })?;
+                let expected_segment = chunk.get(streamed_items.len()).ok_or_else(|| {
+                    chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        "received more objects than expected",
+                    )
+                })?;
+                let actual_id = get_output_id(&parsed);
+                if actual_id != expected_segment.id {
+                    return Err(chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        format!(
+                            "segment {} expected id '{}' but received '{}'",
+                            streamed_items.len() + 1,
+                            expected_segment.id,
+                            actual_id
+                        ),
+                    ));
+                }
+
+                streamed_items.push(parsed.clone());
+                emit_chunk(context.chunk_payload(chunk_number, total_chunks, vec![parsed]))?;
+                Ok(())
+            };
+
+            let mut emit_delta = |_: &str, delta: &str| -> Result<(), String> {
+                for line in line_buffer.process(delta) {
+                    emit_streamed_line(&line)?;
+                }
+                Ok(())
+            };
+
+            let response = generate_streaming(build_request(planned_chunk.prompt), &mut emit_delta)
+                .await
+                .map_err(|error| chunk_error(context.task_type, chunk_number, error))?;
+            on_success(&response);
+            let response_text = response.text;
+            for line in line_buffer.flush() {
+                emit_streamed_line(&line)?;
+            }
+            response_text
+        };
+
+        let parsed = if streamed_items.is_empty() {
+            let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
+            emit_chunk(context.chunk_payload(chunk_number, total_chunks, parsed.clone()))?;
+            parsed
+        } else {
+            if streamed_items.len() != chunk.len() {
+                return Err(chunk_error(
+                    context.task_type,
+                    chunk_number,
+                    format!(
+                        "expected {} objects but received {}",
+                        chunk.len(),
+                        streamed_items.len()
+                    ),
+                ));
+            }
+            streamed_items
+        };
+
+        emit_progress(context.progress_payload(chunk_number, total_chunks))?;
+        results.extend(parsed);
+    }
+
+    Ok(results)
 }
 
 pub fn build_polish_prompt(

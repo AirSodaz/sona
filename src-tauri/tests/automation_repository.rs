@@ -1,6 +1,3 @@
-pub mod integrations {
-    pub use tauri_appsona_lib::integrations::asr_providers;
-}
 use serde_json::{Value, json};
 use sona_core::automation::{
     AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,

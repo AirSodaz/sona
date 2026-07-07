@@ -162,6 +162,26 @@ test('release workflows stage standalone CLI into the same-platform desktop inst
   }
 });
 
+test('CLI documentation describes standalone sona-cli packaging only', () => {
+  const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
+  const readmeZh = fs.readFileSync(path.join(repoRoot, 'README.zh-CN.md'), 'utf8');
+  const cliGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'cli.md'), 'utf8');
+  const docs = `${readme}\n${readmeZh}\n${cliGuide}`;
+
+  assert.match(readme, /cargo run -p sona-cli -- transcribe/u);
+  assert.match(readmeZh, /cargo run -p sona-cli -- transcribe/u);
+  assert.match(readme, /pnpm run build:sona-cli/u);
+  assert.match(readmeZh, /pnpm run build:sona-cli/u);
+  assert.match(cliGuide, /### `transcribe`/u);
+  assert.match(cliGuide, /sona-cli transcribe/u);
+
+  assert.doesNotMatch(docs, /main desktop executable/u);
+  assert.doesNotMatch(docs, /Sona\.exe transcribe/u);
+  assert.doesNotMatch(docs, /Contents\/MacOS\/Sona transcribe/u);
+  assert.doesNotMatch(docs, /cargo run --manifest-path src-tauri\/Cargo\.toml/u);
+  assert.doesNotMatch(docs, /not part of the current standalone surface yet/u);
+});
+
 test('core crate does not keep sona-cli config template surface', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
 
@@ -615,24 +635,34 @@ test('LLM task models and prompt planning are owned by core and reused by deskto
   const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
   const desktopLlmTasks = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'), 'utf8');
+  const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
 
   assert.match(coreLib, /^pub mod llm_tasks;/mu);
   assert.match(coreLlmTasks, /pub enum LlmTaskType/u);
   assert.match(coreLlmTasks, /pub struct LlmSegmentInput/u);
   assert.match(coreLlmTasks, /pub fn plan_segment_task_chunks/u);
+  assert.match(coreLlmTasks, /pub struct SegmentTaskContext/u);
+  assert.match(coreLlmTasks, /pub async fn run_segment_task/u);
+  assert.match(coreLlmTasks, /pub async fn run_streaming_segment_task/u);
   assert.match(coreLlmTasks, /pub fn build_polish_prompt/u);
   assert.match(coreLlmTasks, /pub fn build_summary_chunk_prompt/u);
+  assert.match(onlineLlmLib, /pub async fn run_google_translate_free_requests_in_order/u);
   assert.match(desktopLlm, /pub\(crate\) use sona_core::llm_tasks::\{/u);
   assert.match(desktopLlmTypes, /pub use sona_core::llm_tasks::\{[\s\S]*LlmTaskType[\s\S]*SummarySegmentInput/u);
   assert.match(desktopLlmTasks, /sona_core::llm_tasks::\{/u);
-  assert.match(desktopLlmTasks, /plan_segment_task_chunks/u);
-  assert.match(desktopLlmTasks, /build_polish_prompt/u);
+  assert.match(desktopLlmTasks, /run_segment_task/u);
+  assert.match(desktopLlmTasks, /run_streaming_segment_task/u);
+  assert.match(desktopLlmTasks, /sona_online_llm::\{/u);
   assert.match(tsBindLib, /sona_core::llm_tasks::\{/u);
   assert.match(tsBindLib, /LlmTaskType/u);
   assert.match(tsBindLib, /TranscriptSummaryResult/u);
   assert.doesNotMatch(desktopLlmTypes, /pub enum LlmTaskType/u);
   assert.doesNotMatch(desktopLlmTypes, /pub struct LlmSegmentInput/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) struct SegmentTaskContext/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) async fn run_segment_task/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) async fn run_streaming_segment_task/u);
+  assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) async fn run_google_translate_free_requests_in_order/u);
   assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) fn plan_segment_task_chunks/u);
   assert.doesNotMatch(desktopLlmTasks, /pub\(crate\) fn build_polish_prompt/u);
 });
