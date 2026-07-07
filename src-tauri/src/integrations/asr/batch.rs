@@ -4,12 +4,6 @@ use super::metrics::{
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
     log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
-use super::model_config::{
-    Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
-    accept_online_samples, build_model_config, create_online_stream,
-    create_recognizer_with_gpu_plan, decode_offline_samples, decode_online_ready,
-    is_online_endpoint, load_punctuation, online_stream_result, reset_online_stream,
-};
 use super::state::AsrState;
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
@@ -18,6 +12,13 @@ use super::transcript::{
 use super::types::{
     BatchSegmentationMode, BatchTranscriptionRequest, TranscriptNormalizationOptions,
     TranscriptSegment,
+};
+use sona_local_asr::punctuation::{Punctuation, load_punctuation};
+use sona_local_asr::recognizer::{
+    Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
+    accept_online_samples, build_model_config, create_online_stream,
+    create_recognizer_with_gpu_plan, decode_offline_samples, decode_online_ready,
+    is_online_endpoint, online_stream_result, reset_online_stream,
 };
 use std::path::Path;
 use std::sync::Arc;

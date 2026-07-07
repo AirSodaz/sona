@@ -9,11 +9,11 @@ use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
-use crate::integrations::asr::postprocess::TranscriptPostprocessor;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
+use sona_core::transcript_postprocess::TranscriptPostprocessor;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -110,7 +110,7 @@ pub struct VolcengineAdapter;
 #[async_trait]
 impl AsrProviderAdapter for VolcengineAdapter {
     fn provider_id(&self) -> &'static str {
-        crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
+        sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID
     }
 
     fn create_batch_processor(
@@ -497,8 +497,7 @@ mod tests {
             speaker_processing: None,
             engine_config: crate::integrations::asr::types::AsrEngineConfig::Online {
                 provider: crate::integrations::asr::types::OnlineAsrProviderRequest {
-                    provider_id: crate::integrations::asr_providers::VOLCENGINE_DOUBAO_PROVIDER_ID
-                        .to_string(),
+                    provider_id: sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
                     profile_id: "volcengine-doubao-default".to_string(),
                     config,
                 },

@@ -119,7 +119,7 @@ async fn handle_streaming_socket(
 
     let (model_id, language, hotwords, vad_model_id) = start_msg;
 
-    if crate::integrations::asr_providers::find_online_asr_provider(&model_id).is_some() {
+    if sona_core::ports::asr::find_online_asr_provider(&model_id).is_some() {
         handle_online_streaming_socket(socket, state, session_id, model_id, language, hotwords)
             .await;
     } else {
@@ -160,7 +160,7 @@ async fn handle_online_streaming_socket(
         }
     };
 
-    let provider = crate::integrations::asr_providers::find_online_asr_provider(&model_id).unwrap();
+    let provider = sona_core::ports::asr::find_online_asr_provider(&model_id).unwrap();
     if !provider.streaming.supported.unwrap_or(true) {
         let _ = socket
             .send(Message::Text(

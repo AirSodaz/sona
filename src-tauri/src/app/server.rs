@@ -26,7 +26,7 @@ use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
 use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
-use sona_core::ports::asr::BatchTranscriber;
+use sona_core::ports::asr::{BatchTranscriber, find_online_asr_provider, online_asr_providers};
 use sona_core::preset_models::is_preset_model_installed_at;
 use sona_core::transcribe_runtime::{
     BatchTranscribeOptions, resolve_batch_transcribe_plan_with_install_checker,
@@ -969,7 +969,7 @@ pub async fn handle_transcribe(
     let mut online_provider_id = None;
     let mut online_provider_config = None;
 
-    if let Some(provider) = crate::integrations::asr_providers::find_online_asr_provider(&m_id) {
+    if let Some(provider) = find_online_asr_provider(&m_id) {
         engine = "Online".to_string();
         online_provider_id = Some(provider.id.clone());
         let configs = state.online_asr_config.read().await;
@@ -1118,7 +1118,7 @@ pub async fn handle_info(
         m.id == crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
     });
 
-    let online_providers = crate::integrations::asr_providers::online_asr_providers();
+    let online_providers = online_asr_providers();
     let configs = state.online_asr_config.read().await;
     let mut online_asr_providers = Vec::new();
 

@@ -1,5 +1,3 @@
-use super::postprocess::TranscriptPostprocessor;
-
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -10,6 +8,7 @@ pub use sona_core::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
     TranscriptTimingUnit, TranscriptUpdate,
 };
+use sona_core::transcript_postprocess::TranscriptPostprocessor;
 
 #[derive(Debug, Clone)]
 pub struct BatchTranscriptionRequest {

@@ -4,12 +4,6 @@ use super::metrics::{
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
     log_model_load_metric, samples_to_ms, set_live_inference_metric,
 };
-use super::model_config::{
-    ModelFileConfig, Punctuation, Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream,
-    SafeVad, accept_online_samples, accept_vad_samples, build_model_config, create_online_stream,
-    decode_offline_samples, decode_online_ready, is_online_endpoint, load_punctuation, load_vad,
-    online_stream_result, reset_online_stream, reset_vad, vad_detected,
-};
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
     log_text_transform_diagnostics, normalize_recognizer_text, preview_text_for_log,
@@ -21,6 +15,14 @@ use super::types::{
 use crate::integrations::asr::ModelConfigKey;
 use crate::integrations::asr::state::AsrState;
 use log::{debug, info, trace};
+use sona_core::model_config::ModelFileConfig;
+use sona_local_asr::audio::{SafeVad, accept_vad_samples, load_vad, reset_vad, vad_detected};
+use sona_local_asr::punctuation::{Punctuation, load_punctuation};
+use sona_local_asr::recognizer::{
+    Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeStream, accept_online_samples,
+    build_model_config, create_online_stream, decode_offline_samples, decode_online_ready,
+    is_online_endpoint, online_stream_result, reset_online_stream,
+};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

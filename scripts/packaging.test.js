@@ -184,7 +184,7 @@ test('desktop api server invokes local batch ASR through the core transcriber po
   const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
 
   assert.match(tauriCargo, /^sona-local-asr\s*=\s*\{ path = "\.\.\/adapters\/local_asr" \}/mu);
-  assert.match(apiServer, /use sona_core::ports::asr::BatchTranscriber;/u);
+  assert.match(apiServer, /use sona_core::ports::asr::\{[\s\S]*BatchTranscriber/u);
   assert.match(apiServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(apiServer, /\.transcribe\(plan\)/u);
   assert.doesNotMatch(apiServer, /run_offline_transcription/u);
@@ -234,14 +234,16 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
 });
 
-test('online ASR provider manifest is owned by core and re-exported by desktop', () => {
+test('online ASR provider manifest is owned by core and used directly by desktop', () => {
   const coreAsr = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'), 'utf8');
   const coreManifestPath = path.join(repoRoot, 'core', 'src', 'ports', 'online-asr-providers.json');
   const legacySharedManifestPath = path.join(repoRoot, 'src', 'shared', 'online-asr-providers.json');
-  const desktopProviders = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr_providers.rs'),
-    'utf8',
-  );
+  const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
+  const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
+  const onlineAdapterRs = ['groq.rs', 'mistral.rs', 'volcengine.rs']
+    .map((file) => fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', file), 'utf8'))
+    .join('\n');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
   const onlineProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'onlineAsrProviders.ts'), 'utf8');
   const asrConfigServiceTest = fs.readFileSync(
@@ -261,10 +263,13 @@ test('online ASR provider manifest is owned by core and re-exported by desktop',
   assert.match(coreAsr, /pub struct OnlineAsrBatchCapability/u);
   assert.match(coreAsr, /pub fn provider_id\(&self\) -> &str/u);
 
-  assert.match(desktopProviders, /pub use sona_core::ports::asr::\{/u);
-  assert.doesNotMatch(desktopProviders, /include_str!/u);
-  assert.doesNotMatch(desktopProviders, /struct OnlineAsrProviderManifest/u);
-  assert.doesNotMatch(desktopProviders, /static ONLINE_ASR_PROVIDER_MANIFEST/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr_providers.rs')), false);
+  assert.doesNotMatch(desktopIntegrations, /^pub mod asr_providers;/mu);
+  assert.match(apiServer, /sona_core::ports::asr::\{[^}]*find_online_asr_provider[^}]*online_asr_providers/u);
+  assert.match(streamingRs, /sona_core::ports::asr::find_online_asr_provider/u);
+  assert.match(onlineAdapterRs, /sona_core::ports::asr::GROQ_WHISPER_PROVIDER_ID/u);
+  assert.match(onlineAdapterRs, /sona_core::ports::asr::MISTRAL_VOXTRAL_PROVIDER_ID/u);
+  assert.match(onlineAdapterRs, /sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID/u);
 
   assert.match(tsBindLib, /OnlineAsrProvider/u);
   assert.match(tsBindLib, /OnlineAsrCapability/u);
@@ -678,6 +683,7 @@ test('standalone CLI invokes local batch ASR through the core transcriber port',
 
 test('recognizer transcript utilities are owned by core and reused by adapters', () => {
   const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
+  const asrMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'), 'utf8');
   const tauriTranscript = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
@@ -689,6 +695,9 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 
   assert.match(coreTranscript, /pub fn normalize_recognizer_text\(/u);
   assert.match(coreTranscript, /pub fn synthesize_durations\(/u);
+  assert.match(asrMod, /pub use sona_core::transcript_postprocess::TranscriptPostprocessor/u);
+  assert.doesNotMatch(asrMod, /^mod postprocess;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'postprocess.rs')), false);
   assert.match(
     tauriTranscript,
     /pub\(crate\) use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
@@ -940,44 +949,50 @@ test('media file detection is owned by core and reused by desktop', () => {
 });
 
 test('desktop live VAD creation is delegated to local ASR adapter', () => {
-  const modelConfigRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+  const asrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    'utf8',
+  );
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
     'utf8',
   );
 
-  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{[^}]*SafeVad/u);
-  assert.match(modelConfigRs, /pub use sona_local_asr::audio::\{[^}]*load_vad/u);
-  assert.doesNotMatch(modelConfigRs, /create_vad_detector/u);
-  assert.doesNotMatch(modelConfigRs, /pub struct SafeVad/u);
-  assert.doesNotMatch(modelConfigRs, /SileroVadModelConfig/u);
-  assert.doesNotMatch(modelConfigRs, /VadModelConfig/u);
-  assert.doesNotMatch(modelConfigRs, /VoiceActivityDetector/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs')), false);
+  assert.doesNotMatch(asrMod, /^mod model_config;/mu);
+  assert.match(asrMod, /pub\(crate\) use sona_local_asr::audio::\{[\s\S]*load_vad/u);
+  assert.match(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*SafeVad/u);
+  assert.doesNotMatch(asrMod, /create_vad_detector/u);
+  assert.doesNotMatch(asrMod, /pub struct SafeVad/u);
+  assert.doesNotMatch(asrMod, /SileroVadModelConfig/u);
+  assert.doesNotMatch(asrMod, /VadModelConfig/u);
+  assert.doesNotMatch(asrMod, /VoiceActivityDetector/u);
 });
 
 test('desktop punctuation loading is delegated to local ASR adapter', () => {
-  const modelConfigRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+  const asrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
-  assert.match(modelConfigRs, /pub use sona_local_asr::punctuation::\{Punctuation, load_punctuation\}/u);
-  assert.doesNotMatch(modelConfigRs, /OfflinePunctuation/u);
-  assert.doesNotMatch(modelConfigRs, /OfflinePunctuationConfig/u);
-  assert.doesNotMatch(modelConfigRs, /OfflinePunctuationModelConfig/u);
+  assert.match(asrMod, /pub use sona_local_asr::punctuation::\{Punctuation, load_punctuation\}/u);
+  assert.doesNotMatch(asrMod, /OfflinePunctuation/u);
+  assert.doesNotMatch(asrMod, /OfflinePunctuationConfig/u);
+  assert.doesNotMatch(asrMod, /OfflinePunctuationModelConfig/u);
 });
 
 test('desktop recognizer construction is delegated to local ASR adapter', () => {
-  const modelConfigRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+  const asrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
-  assert.match(modelConfigRs, /pub use sona_local_asr::recognizer::/u);
-  assert.doesNotMatch(modelConfigRs, /use sherpa_onnx::/u);
-  assert.doesNotMatch(modelConfigRs, /OfflineRecognizerConfig/u);
-  assert.doesNotMatch(modelConfigRs, /OnlineRecognizerConfig/u);
-  assert.doesNotMatch(modelConfigRs, /pub enum ModelType/u);
-  assert.doesNotMatch(modelConfigRs, /impl Recognizer/u);
+  assert.match(asrMod, /pub use sona_local_asr::recognizer::/u);
+  assert.doesNotMatch(asrMod, /use sherpa_onnx::/u);
+  assert.doesNotMatch(asrMod, /OfflineRecognizerConfig/u);
+  assert.doesNotMatch(asrMod, /OnlineRecognizerConfig/u);
+  assert.doesNotMatch(asrMod, /pub enum ModelType/u);
+  assert.doesNotMatch(asrMod, /impl Recognizer/u);
 });
 
 test('local batch transcription reuses local ASR recognizer model construction', () => {
@@ -1040,10 +1055,6 @@ test('desktop streaming offline decode is delegated to local ASR adapter', () =>
 });
 
 test('desktop online stream operations are delegated to local ASR adapter', () => {
-  const modelConfigRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
-    'utf8',
-  );
   const batchRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
     'utf8',
@@ -1054,10 +1065,10 @@ test('desktop online stream operations are delegated to local ASR adapter', () =
   );
   const desktopOnlineRs = `${batchRs}\n${sherpaRs}`;
 
-  assert.match(modelConfigRs, /create_online_stream/u);
-  assert.match(modelConfigRs, /accept_online_samples/u);
-  assert.match(modelConfigRs, /decode_online_ready/u);
-  assert.match(modelConfigRs, /online_stream_result/u);
+  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*create_online_stream/u);
+  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*accept_online_samples/u);
+  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*decode_online_ready/u);
+  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*online_stream_result/u);
   assert.doesNotMatch(desktopOnlineRs, /SafeStream\(r\.0\.create_stream\(\)\)/u);
   assert.doesNotMatch(desktopOnlineRs, /\.0\.accept_waveform\(16000/u);
   assert.doesNotMatch(desktopOnlineRs, /r\.0\.is_ready\(&[^)]*\.0\)/u);
@@ -1069,8 +1080,8 @@ test('desktop online stream operations are delegated to local ASR adapter', () =
 test('desktop VAD runtime operations use private local ASR wrappers', () => {
   const audioRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'), 'utf8');
   const recognizerRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'), 'utf8');
-  const modelConfigRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'),
+  const asrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
   const sherpaRs = fs.readFileSync(
@@ -1083,9 +1094,9 @@ test('desktop VAD runtime operations use private local ASR wrappers', () => {
   );
   const desktopVadRs = `${sherpaRs}\n${streamingRs}`;
 
-  assert.match(modelConfigRs, /accept_vad_samples/u);
-  assert.match(modelConfigRs, /reset_vad/u);
-  assert.match(modelConfigRs, /vad_detected/u);
+  assert.match(asrMod, /accept_vad_samples/u);
+  assert.match(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*reset_vad/u);
+  assert.match(asrMod, /vad_detected/u);
   assert.doesNotMatch(desktopVadRs, /SafeVad\([^)]+\)/u);
   assert.doesNotMatch(desktopVadRs, /\.0\.accept_waveform/u);
   assert.doesNotMatch(desktopVadRs, /\.0\.detected/u);

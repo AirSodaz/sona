@@ -8,8 +8,6 @@ mod error;
 mod groq;
 mod metrics;
 mod mistral;
-mod model_config;
-mod postprocess;
 pub mod sherpa_onnx;
 pub mod state;
 pub mod traits;
@@ -26,16 +24,17 @@ fn recognizer_output_event(instance_id: &str) -> String {
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
 pub use error::SherpaError;
-pub use model_config::Recognizer;
-pub(crate) use model_config::{
-    RecognizerInner, accept_vad_samples, build_model_config, create_recognizer_with_gpu_plan,
-    decode_offline_samples, load_vad, vad_detected,
-};
-pub use postprocess::TranscriptPostprocessor;
 pub use sona_core::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 pub use sona_core::model_config::ModelFileConfig;
+pub use sona_core::transcript_postprocess::TranscriptPostprocessor;
+pub(crate) use sona_local_asr::audio::{accept_vad_samples, load_vad, vad_detected};
+pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
+pub use sona_local_asr::recognizer::Recognizer;
+pub(crate) use sona_local_asr::recognizer::{
+    RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
+};
 pub(crate) use state::ModelConfigKey;
 pub use state::{AsrState, RecognizerPool};
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};

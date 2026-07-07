@@ -3,9 +3,10 @@ use super::metrics::{
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
-use super::model_config::{Punctuation, Recognizer};
 use super::traits::AsrStreamingSession;
 use super::types::AsrEngine;
+use sona_local_asr::punctuation::Punctuation;
+use sona_local_asr::recognizer::Recognizer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OnceCell};

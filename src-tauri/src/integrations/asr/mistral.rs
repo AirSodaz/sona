@@ -6,10 +6,10 @@ use super::metrics::{
 use super::state::AsrState;
 use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{AsrTranscriptionRequest, TranscriptSegment};
-use crate::integrations::asr::postprocess::TranscriptPostprocessor;
 use crate::integrations::asr::transcript::apply_timeline_normalization;
 use async_trait::async_trait;
 use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
+use sona_core::transcript_postprocess::TranscriptPostprocessor;
 use std::time::Instant;
 
 pub struct MistralVoxtralAdapter;
@@ -17,7 +17,7 @@ pub struct MistralVoxtralAdapter;
 #[async_trait]
 impl AsrProviderAdapter for MistralVoxtralAdapter {
     fn provider_id(&self) -> &'static str {
-        crate::integrations::asr_providers::MISTRAL_VOXTRAL_PROVIDER_ID
+        sona_core::ports::asr::MISTRAL_VOXTRAL_PROVIDER_ID
     }
 
     fn create_batch_processor(
