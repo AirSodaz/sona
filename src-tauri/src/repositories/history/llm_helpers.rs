@@ -129,7 +129,7 @@ mod tests {
     fn make_store() -> (tempfile::TempDir, SqliteHistoryStore) {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::new(db));
         store.ensure_ready().unwrap();
         (root, store)
     }
@@ -182,7 +182,7 @@ mod tests {
     fn llm_history_helpers_skip_current_jobs_without_writing() {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let repository = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        let repository = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::new(db));
 
         let snapshot = create_llm_transcript_snapshot_record(
             &repository,

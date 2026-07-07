@@ -8,7 +8,7 @@ use super::fs_utils::{create_tar_bz2_archive, write_json_pretty_atomic};
 use super::types::{
     HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
 };
-use super::{
+use sona_sqlite::history_backup::{
     ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
     AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, CONFIG_DIR_NAME, CONFIG_FILE_NAME,
     HISTORY_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,

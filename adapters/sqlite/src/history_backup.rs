@@ -5,28 +5,39 @@ use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::repositories::project::normalize_project_record_for_import;
-
-use super::fs_utils::{
+use crate::history_archive::{HistoryRepository, normalize_history_item_value};
+use crate::history_store::{SqliteHistoryStore, insert_history_item_row};
+use sona_core::history::fs_utils::{
     create_tar_bz2_archive, create_temp_directory, ensure_json_array_value,
     ensure_json_object_value, ensure_safe_file_name, extract_tar_bz2_archive, read_json_value,
     remove_path_if_exists, write_json_pretty_atomic,
 };
-use super::repository::{HistoryRepository, normalize_history_item_value};
-use super::sqlite_store::{SqliteHistoryStore, insert_history_item_row};
-use super::types::PreparedBackupImportSnapshot;
-use super::{
-    ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
-    AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, BACKUP_HISTORY_MODE,
-    BACKUP_SCHEMA_VERSION, BackupManifest, BackupManifestCounts, BackupManifestScopes,
-    CONFIG_DIR_NAME, CONFIG_FILE_NAME, ExportBackupArchiveRequest, HISTORY_DIR_NAME,
-    HISTORY_VERSIONS_DIR_NAME, HistoryItemRecord, HistoryItemStatus, PROJECTS_DIR_NAME,
-    PROJECTS_INDEX_FILE_NAME, PreparedBackupImport, SUMMARY_FILE_SUFFIX,
+use sona_core::history::{
+    BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
+    HistoryItemRecord, HistoryItemStatus, PreparedBackupImport, PreparedBackupImportSnapshot,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
-use crate::core::history_store::HistoryStore;
+use sona_core::history_store::HistoryStore;
+use sona_core::project::normalize_project_record_for_import;
 
-pub(crate) fn build_backup_manifest(
+pub const HISTORY_DIR_NAME: &str = "history";
+pub const HISTORY_INDEX_FILE_NAME: &str = "index.json";
+pub const SUMMARY_FILE_SUFFIX: &str = ".summary.json";
+pub const HISTORY_VERSIONS_DIR_NAME: &str = "versions";
+pub const CONFIG_DIR_NAME: &str = "config";
+pub const CONFIG_FILE_NAME: &str = "sona-config.json";
+pub const PROJECTS_DIR_NAME: &str = "projects";
+pub const PROJECTS_INDEX_FILE_NAME: &str = "index.json";
+pub const AUTOMATION_DIR_NAME: &str = "automation";
+pub const AUTOMATION_RULES_FILE_NAME: &str = "rules.json";
+pub const AUTOMATION_PROCESSED_FILE_NAME: &str = "processed.json";
+pub const ANALYTICS_DIR_NAME: &str = "analytics";
+pub const ANALYTICS_USAGE_FILE_NAME: &str = "llm-usage.json";
+
+pub const BACKUP_SCHEMA_VERSION: u64 = 1;
+pub const BACKUP_HISTORY_MODE: &str = "light";
+
+pub fn build_backup_manifest(
     app_version: String,
     project_count: usize,
     history_item_count: usize,
@@ -347,7 +358,7 @@ fn js_truthy(value: Option<&Value>) -> bool {
 
 pub fn export_backup_archive_inner(
     app_local_data_dir: &Path,
-    db: Arc<crate::core::database::Database>,
+    db: Arc<crate::Database>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
     let config = ensure_json_object_value(request.config, "Backup config")?;
@@ -598,7 +609,7 @@ pub fn prepare_backup_import_inner(
 
 pub fn apply_prepared_history_import_inner(
     _app_local_data_dir: &Path,
-    db: Arc<crate::core::database::Database>,
+    db: Arc<crate::Database>,
     _import_id: &str,
     extraction_dir: &Path,
 ) -> Result<(), String> {
@@ -710,23 +721,19 @@ pub fn apply_prepared_history_import_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::database::Database;
-    use crate::repositories::history::fs_utils::{
+    use crate::Database;
+    use crate::history_store::SqliteHistoryStore;
+    use serde_json::{Value, json};
+    use sona_core::history::fs_utils::{
         create_tar_bz2_archive, extract_tar_bz2_archive, read_json_value, remove_path_if_exists,
         write_json_pretty_atomic,
     };
-    use crate::repositories::history::sqlite_store::SqliteHistoryStore;
-    use crate::repositories::history::state::PreparedBackupImportState;
-    use crate::repositories::history::test_support::create_valid_backup_archive;
-    use crate::repositories::history::types::TranscriptSnapshotReason;
-    use crate::repositories::history::{
-        ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
-        AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, CONFIG_DIR_NAME,
-        CONFIG_FILE_NAME, HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, HistorySaveRecordingRequest,
-        PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
+    use sona_core::history::{
+        HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistorySaveRecordingRequest,
+        TranscriptSnapshotReason,
     };
-    use serde_json::{Value, json};
     use std::fs;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use tempfile::tempdir;
 
@@ -740,6 +747,90 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    fn sample_history_item(id: &str, status: HistoryItemStatus) -> HistoryItemRecord {
+        HistoryItemRecord {
+            id: id.to_string(),
+            timestamp: 1,
+            duration: 2.0,
+            audio_path: format!("{id}.wav"),
+            audio_status: HistoryAudioStatus::Available,
+            transcript_path: format!("{id}.json"),
+            title: format!("Item {id}"),
+            preview_text: String::new(),
+            icon: None,
+            kind: HistoryItemKind::Recording,
+            search_content: String::new(),
+            project_id: None,
+            status,
+            draft_source: if status == HistoryItemStatus::Draft {
+                Some(HistoryDraftSource::LiveRecord)
+            } else {
+                None
+            },
+        }
+    }
+
+    fn create_valid_backup_archive(archive_path: &Path) -> PathBuf {
+        let staging_dir = tempdir().unwrap();
+        let history_dir = staging_dir.path().join(HISTORY_DIR_NAME);
+        let config_dir = staging_dir.path().join(CONFIG_DIR_NAME);
+        let projects_dir = staging_dir.path().join(PROJECTS_DIR_NAME);
+        let automation_dir = staging_dir.path().join(AUTOMATION_DIR_NAME);
+        let analytics_dir = staging_dir.path().join(ANALYTICS_DIR_NAME);
+
+        fs::create_dir_all(&history_dir).unwrap();
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&projects_dir).unwrap();
+        fs::create_dir_all(&automation_dir).unwrap();
+        fs::create_dir_all(&analytics_dir).unwrap();
+
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        write_json_pretty_atomic(&history_dir.join(PROJECTS_INDEX_FILE_NAME), &vec![item]).unwrap();
+        write_json_pretty_atomic(
+            &history_dir.join("history-1.json"),
+            &json!([{ "id": "seg-1", "text": "hello", "start": 0, "end": 1, "isFinal": true }]),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &history_dir.join("history-1.summary.json"),
+            &json!({ "activeTemplateId": "general" }),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &staging_dir.path().join("manifest.json"),
+            &build_backup_manifest("0.6.4".to_string(), 1, 1, 1, 1, 1, 1),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &config_dir.join(CONFIG_FILE_NAME),
+            &json!({ "theme": "auto" }),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &projects_dir.join(PROJECTS_INDEX_FILE_NAME),
+            &vec![json!({ "id": "project-1", "name": "Workspace", "defaults": {} })],
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &automation_dir.join(AUTOMATION_RULES_FILE_NAME),
+            &vec![json!({ "id": "rule-1" })],
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &automation_dir.join(AUTOMATION_PROCESSED_FILE_NAME),
+            &vec![json!({ "ruleId": "rule-1", "filePath": "C:\\watch\\file.wav" })],
+        )
+        .unwrap();
+        fs::write(
+            analytics_dir.join(ANALYTICS_USAGE_FILE_NAME),
+            r#"{"schemaVersion":1}"#,
+        )
+        .unwrap();
+
+        create_tar_bz2_archive(staging_dir.path(), archive_path).unwrap();
+        archive_path.to_path_buf()
     }
 
     #[test]
@@ -1170,11 +1261,6 @@ mod tests {
         create_valid_backup_archive(&archive_path);
 
         let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
-        let state = PreparedBackupImportState::default();
-        state
-            .insert(prepared.import_id.clone(), snapshot.clone())
-            .unwrap();
-
         apply_prepared_history_import_inner(
             app_data_dir.path(),
             Arc::clone(&db),
@@ -1195,9 +1281,8 @@ mod tests {
         let summary = store.load_summary("history-1").unwrap().unwrap();
         assert_eq!(summary["activeTemplateId"], "general");
 
-        let removed = state.remove(&prepared.import_id).unwrap().unwrap();
-        remove_path_if_exists(&removed.extraction_dir).unwrap();
-        assert!(!removed.extraction_dir.exists());
+        remove_path_if_exists(&snapshot.extraction_dir).unwrap();
+        assert!(!snapshot.extraction_dir.exists());
     }
 
     #[test]

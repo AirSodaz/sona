@@ -445,6 +445,24 @@ test('SQLite history store is owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopHistory, /^pub mod sqlite_store;/mu);
 });
 
+test('history backup archive persistence is owned by sqlite adapter', () => {
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const desktopHistory = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history.rs'), 'utf8');
+
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_backup.rs')));
+  assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_archive.rs')));
+  assert.match(sqliteLib, /^pub mod history_backup;/mu);
+  assert.match(sqliteLib, /^pub mod history_archive;/mu);
+  assert.match(desktopHistory, /pub use sona_sqlite::history_backup as backup;/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'backup.rs')), false);
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'repository.rs')),
+    false,
+  );
+  assert.doesNotMatch(desktopHistory, /^pub mod backup;/mu);
+  assert.doesNotMatch(desktopHistory, /^pub\(crate\) mod repository;/mu);
+});
+
 test('standalone CLI invokes local offline ASR through the core transcriber port', () => {
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),
