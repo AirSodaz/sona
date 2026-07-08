@@ -255,18 +255,33 @@ test('desktop api server invokes local batch ASR through the core transcriber po
 
 test('webdav network implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const systemRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
-  const coreWebdav = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'webdav.rs'), 'utf8');
   const webdavAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'webdav', 'src', 'lib.rs'), 'utf8');
+  const webdavCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'webdav', 'Cargo.toml'), 'utf8');
 
   assert.match(workspaceCargo, /"adapters\/webdav"/u);
   assert.match(tauriCargo, /sona-webdav\s*=\s*\{\s*path = "\.\.\/adapters\/webdav" \}/u);
+  assert.match(webdavCargo, /^roxmltree\s*=/mu);
+  assert.match(webdavCargo, /^urlencoding\s*=/mu);
+  assert.match(webdavCargo, /^url\s*=/mu);
+  assert.doesNotMatch(webdavCargo, /^sona-core\s*=/mu);
   assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_download_backup/u);
   assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_test_connection/u);
+  assert.match(systemRs, /use sona_webdav::\{[\s\S]*WebDavConfigPayload/u);
+  assert.doesNotMatch(systemRs, /sona_core::webdav/u);
   assert.doesNotMatch(systemRs, /sona_core::webdav::webdav_/u);
-  assert.doesNotMatch(coreWebdav, /pub async fn webdav_/u);
-  assert.doesNotMatch(coreWebdav, /reqwest::\{Client, Method, StatusCode, Url\}/u);
+  assert.doesNotMatch(coreCargo, /^roxmltree\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^urlencoding\s*=/mu);
+  assert.doesNotMatch(tauriCargo, /^urlencoding\s*=/mu);
+  assert.doesNotMatch(coreLib, /^pub mod webdav;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'webdav.rs')), false);
+  assert.match(webdavAdapter, /pub struct WebDavConfigPayload/u);
+  assert.match(webdavAdapter, /pub struct RemoteBackupEntry/u);
+  assert.match(webdavAdapter, /pub struct WebDavConnectionResult/u);
+  assert.match(webdavAdapter, /pub fn parse_propfind_entries/u);
   assert.match(webdavAdapter, /pub async fn webdav_test_connection/u);
   assert.match(webdavAdapter, /pub async fn webdav_list_backups/u);
   assert.match(webdavAdapter, /pub async fn webdav_upload_backup/u);

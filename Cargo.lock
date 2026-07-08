@@ -5430,7 +5430,6 @@ dependencies = [
  "tower",
  "tower-http",
  "unicode-normalization",
- "urlencoding",
  "uuid",
  "walkdir",
  "windows 0.61.3",
@@ -5475,7 +5474,6 @@ dependencies = [
  "hex",
  "infer 0.16.0",
  "regex",
- "roxmltree",
  "serde",
  "serde_json",
  "serde_with",
@@ -5488,7 +5486,6 @@ dependencies = [
  "toml 0.8.23",
  "unicode-normalization",
  "url",
- "urlencoding",
  "uuid",
 ]
 
@@ -5633,10 +5630,14 @@ name = "sona-webdav"
 version = "0.8.0"
 dependencies = [
  "axum",
+ "chrono",
  "reqwest 0.13.4",
- "sona-core",
+ "roxmltree",
+ "serde",
  "tempfile",
  "tokio",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]
