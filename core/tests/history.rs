@@ -1,4 +1,8 @@
 use serde_json::json;
+use sona_core::history::item_factory::{
+    HistoryItemGeneratedValues, create_imported_file_item, create_live_draft_item,
+    create_recording_item,
+};
 use sona_core::history::{
     HistoryAudioStatus, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
@@ -62,4 +66,67 @@ fn transcript_snapshot_record_uses_core_transcript_segments() {
         }
     );
     assert_eq!(record.segments[0].text, "hello");
+}
+
+#[test]
+fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
+    let item = create_recording_item(
+        HistoryItemGeneratedValues {
+            fallback_id: "recording-1".to_string(),
+            timestamp: 1_700_000_000_000,
+        },
+        12.5,
+        Some("project-1".to_string()),
+        Some(".WEBM!"),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(item.id, "recording-1");
+    assert_eq!(item.timestamp, 1_700_000_000_000);
+    assert_eq!(item.audio_path, "recording-1.webm");
+    assert_eq!(item.transcript_path, "recording-1.json");
+    assert_eq!(item.project_id.as_deref(), Some("project-1"));
+    assert_eq!(item.kind, HistoryItemKind::Recording);
+}
+
+#[test]
+fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
+    let draft = create_live_draft_item(
+        sona_core::history::HistoryCreateLiveDraftRequest {
+            id: Some("draft-request-id".to_string()),
+            audio_extension: "wav".to_string(),
+            project_id: None,
+            icon: Some("Mic".to_string()),
+        },
+        HistoryItemGeneratedValues {
+            fallback_id: "unused-fallback-id".to_string(),
+            timestamp: 42,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(draft.id, "draft-request-id");
+    assert_eq!(draft.timestamp, 42);
+    assert_eq!(draft.audio_path, "draft-request-id.wav");
+    assert_eq!(draft.status, HistoryItemStatus::Draft);
+    assert_eq!(draft.icon.as_deref(), Some("Mic"));
+
+    let imported = create_imported_file_item(
+        Some("import-request-id".to_string()),
+        "C:/audio/Meeting.MP3".to_string(),
+        None,
+        7.0,
+        None,
+        HistoryItemGeneratedValues {
+            fallback_id: "unused-import-fallback".to_string(),
+            timestamp: 43,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(imported.item.id, "import-request-id");
+    assert_eq!(imported.item.timestamp, 43);
+    assert_eq!(imported.item.audio_path, "import-request-id.mp3");
+    assert_eq!(imported.copy_source_path, "C:/audio/Meeting.MP3");
 }

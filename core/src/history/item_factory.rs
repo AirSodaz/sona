@@ -1,18 +1,23 @@
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
-use uuid::Uuid;
 
 use super::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus,
 };
-use crate::file_utils::current_time_millis;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryItemGeneratedValues {
+    pub fallback_id: String,
+    pub timestamp: u64,
+}
 
 pub fn create_live_draft_item(
     request: HistoryCreateLiveDraftRequest,
+    generated: HistoryItemGeneratedValues,
 ) -> Result<HistoryItemRecord, String> {
-    let id = request.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-    let timestamp = current_time_millis()?;
+    let id = request.id.unwrap_or(generated.fallback_id);
+    let timestamp = generated.timestamp;
     let audio_extension = sanitize_audio_extension(&request.audio_extension, "webm");
     let mut item = build_history_item_record(
         id,
@@ -30,13 +35,14 @@ pub fn create_live_draft_item(
 }
 
 pub fn create_recording_item(
+    generated: HistoryItemGeneratedValues,
     duration: f64,
     project_id: Option<String>,
     audio_extension: Option<&str>,
     native_audio_path: Option<&str>,
 ) -> Result<HistoryItemRecord, String> {
-    let timestamp = current_time_millis()?;
-    let id = Uuid::new_v4().to_string();
+    let timestamp = generated.timestamp;
+    let id = generated.fallback_id;
     let audio_extension = audio_extension
         .map(|extension| sanitize_audio_extension(extension, "webm"))
         .or_else(|| native_audio_path.map(|path| extension_from_path(path, "wav")))
@@ -65,9 +71,10 @@ pub fn create_imported_file_item(
     converted_source_path: Option<String>,
     duration: f64,
     project_id: Option<String>,
+    generated: HistoryItemGeneratedValues,
 ) -> Result<ImportedFileItem, String> {
-    let timestamp = current_time_millis()?;
-    let id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let timestamp = generated.timestamp;
+    let id = id.unwrap_or(generated.fallback_id);
     let title_file_name = file_name_from_path(&source_path, "Imported File");
     let copy_source_path = converted_source_path.unwrap_or_else(|| source_path.clone());
     let audio_extension = extension_from_path(&copy_source_path, "wav");

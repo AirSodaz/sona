@@ -6,6 +6,7 @@ use crate::history_fs_utils::{
 use crate::ports::Database as DatabasePort;
 use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
@@ -25,6 +26,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use rusqlite::types::ToSql;
@@ -34,6 +36,20 @@ const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
 const MILLIS_PER_DAY: u64 = 86_400_000;
 const HISTORY_DIR_NAME: &str = "history";
 const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
+
+fn current_time_millis() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|error| error.to_string())
+}
+
+fn new_history_item_generated_values() -> Result<HistoryItemGeneratedValues, String> {
+    Ok(HistoryItemGeneratedValues {
+        fallback_id: Uuid::new_v4().to_string(),
+        timestamp: current_time_millis()?,
+    })
+}
 
 pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
     "id",
@@ -927,7 +943,8 @@ where
         request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
         self.ensure_ready()?;
-        let item = sona_core::history::item_factory::create_live_draft_item(request)
+        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
+        let item = sona_core::history::item_factory::create_live_draft_item(request, generated)
             .map_err(DatabaseError::Internal)?;
         let audio_absolute_path = self
             .audio_path(&item.audio_path)?
@@ -1003,7 +1020,9 @@ where
 
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
         let mut item = sona_core::history::item_factory::create_recording_item(
+            generated,
             duration,
             project_id,
             audio_extension.as_deref(),
@@ -1075,12 +1094,14 @@ where
 
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
         let imported = sona_core::history::item_factory::create_imported_file_item(
             id,
             source_path,
             converted_source_path,
             duration,
             project_id,
+            generated,
         )
         .map_err(DatabaseError::Internal)?;
         let mut item = imported.item;
@@ -1248,10 +1269,9 @@ where
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let parsed_segments = normalized_transcript.segments;
 
-        let created_at =
-            sona_core::file_utils::current_time_millis().map_err(DatabaseError::Internal)?;
+        let created_at = current_time_millis().map_err(DatabaseError::Internal)?;
         let metadata = TranscriptSnapshotMetadata {
-            id: format!("{created_at}-{}", uuid::Uuid::new_v4()),
+            id: format!("{created_at}-{}", Uuid::new_v4()),
             history_id: history_id.to_string(),
             reason,
             created_at,

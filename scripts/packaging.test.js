@@ -497,6 +497,27 @@ test('core owns ASR metric helpers reused by desktop', () => {
   assert.match(desktopMetrics, /sysinfo::/u);
 });
 
+test('history item factories receive generated values from adapters', () => {
+  const coreHistoryFactory = fs.readFileSync(
+    path.join(repoRoot, 'core', 'src', 'history', 'item_factory.rs'),
+    'utf8',
+  );
+  const sqliteHistoryStore = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_store.rs'),
+    'utf8',
+  );
+
+  assert.match(coreHistoryFactory, /pub struct HistoryItemGeneratedValues/u);
+  assert.match(coreHistoryFactory, /fallback_id/u);
+  assert.match(coreHistoryFactory, /timestamp/u);
+  assert.doesNotMatch(coreHistoryFactory, /Uuid::new_v4|uuid::Uuid::new_v4/u);
+  assert.doesNotMatch(coreHistoryFactory, /current_time_millis/u);
+  assert.doesNotMatch(coreHistoryFactory, /crate::file_utils/u);
+  assert.doesNotMatch(sqliteHistoryStore, /sona_core::file_utils::current_time_millis/u);
+  assert.match(sqliteHistoryStore, /fn new_history_item_generated_values/u);
+  assert.match(sqliteHistoryStore, /HistoryItemGeneratedValues/u);
+});
+
 test('local ASR runtime pool is owned by the local ASR adapter', () => {
   const localAsrLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'lib.rs'), 'utf8');
   const localAsrRuntime = fs.readFileSync(
