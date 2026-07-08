@@ -148,6 +148,45 @@ test('standalone CLI resource staging copies the sona-cli binary into the deskto
   assert.equal(fs.existsSync(path.join(resourceDir, 'onnxruntime.dll')), false);
 });
 
+test('standalone CLI resource staging declares macOS universal CLI support', () => {
+  const stagingScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'setup-sona-cli-resource.js'),
+    'utf8',
+  );
+  const verifierScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'),
+    'utf8',
+  );
+
+  assert.match(stagingScript, /universal-apple-darwin/u);
+  assert.match(stagingScript, /aarch64-apple-darwin/u);
+  assert.match(stagingScript, /x86_64-apple-darwin/u);
+  assert.match(stagingScript, /\blipo\b/u);
+  assert.doesNotMatch(verifierScript, /Skipping standalone CLI resource check for universal Apple bundle/u);
+});
+
+test('tauri build wrapper builds and stages standalone CLI resources before desktop packaging', () => {
+  const tauriScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'tauri.js'), 'utf8');
+
+  assert.match(tauriScript, /cargo/u);
+  assert.match(tauriScript, /sona-cli/u);
+  assert.match(tauriScript, /setup-sona-cli-resource\.js/u);
+  assert.ok(
+    tauriScript.indexOf('prepareBundleResources(args);') < tauriScript.indexOf('spawnSync(tauriBinary'),
+    'sona-cli resource staging must happen before invoking the Tauri CLI',
+  );
+});
+
+test('generated standalone CLI resources are ignored by git', () => {
+  const rootIgnore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
+  const tauriIgnore = fs.readFileSync(path.join(repoRoot, 'src-tauri', '.gitignore'), 'utf8');
+  const ignoreRules = `${rootIgnore}\n${tauriIgnore}`;
+
+  assert.match(ignoreRules, /src-tauri\/resources\/cli\/sona-cli\b/u);
+  assert.match(ignoreRules, /src-tauri\/resources\/cli\/sona-cli\.exe\b/u);
+  assert.doesNotMatch(ignoreRules, /src-tauri\/resources\/cli\/\.gitkeep/u);
+});
+
 test('release workflows stage standalone CLI into the same-platform desktop installer resources', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'scripts', 'package-sona-cli.js')), false);
 
@@ -155,8 +194,10 @@ test('release workflows stage standalone CLI into the same-platform desktop inst
     const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflowName), 'utf8');
 
     assert.match(workflow, /cargo build -p sona-cli --release \$\{\{ matrix\.args \}\}/u);
+    assert.match(workflow, /cargo build -p sona-cli --release --target aarch64-apple-darwin/u);
+    assert.match(workflow, /cargo build -p sona-cli --release --target x86_64-apple-darwin/u);
     assert.match(workflow, /node scripts\/setup-sona-cli-resource\.js \$\{\{ matrix\.args \}\}/u);
-    assert.match(workflow, /matrix\.args != '--target universal-apple-darwin'/u);
+    assert.doesNotMatch(workflow, /Stage standalone CLI resource[\s\S]*matrix\.args != '--target universal-apple-darwin'/u);
     assert.doesNotMatch(workflow, /node scripts\/package-sona-cli\.js/u);
     assert.doesNotMatch(workflow, /target\/\*\*\/release\/sona-cli-\*\.tar\.gz/u);
   }

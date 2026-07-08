@@ -116,11 +116,6 @@ function verifyFfmpegSidecar(repoRoot, target) {
 }
 
 function verifyStandaloneCliResource(repoRoot, target) {
-  if (target === 'universal-apple-darwin') {
-    console.log('[bundle] Skipping standalone CLI resource check for universal Apple bundle');
-    return;
-  }
-
   const binaryName = target.includes('windows') ? 'sona-cli.exe' : 'sona-cli';
   const cliPath = path.resolve(repoRoot, 'src-tauri', 'resources', 'cli', binaryName);
 
