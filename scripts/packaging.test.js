@@ -398,6 +398,26 @@ test('core crate exposes serve runtime without cli runtime surface', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_runtime.rs')), false);
 });
 
+test('core path port default API does not expose test adapters', () => {
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'paths.rs'), 'utf8');
+  const corePathPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'path.rs'), 'utf8');
+  const tauriPlatformPaths = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'paths.rs'), 'utf8');
+
+  assert.doesNotMatch(coreCargo, /^test-utils\s*=/mu);
+  assert.match(
+    tauriCargo,
+    /^sona-core\s*=\s*\{\s*path = "\.\.\/core", features = \["specta"\]\s*\}/mu,
+  );
+  assert.doesNotMatch(tauriCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/core", features = \["test-utils"\]\s*\}/mu);
+  assert.match(corePaths, /^pub use crate::ports::path::\{PathKind, PathProvider\};$/mu);
+  assert.doesNotMatch(corePaths, /MockPathProvider/u);
+  assert.doesNotMatch(corePathPort, /MockPathProvider/u);
+  assert.match(tauriPlatformPaths, /#\[cfg\(test\)\]\s*pub struct MockPathProvider/u);
+  assert.match(tauriPlatformPaths, /impl PathProvider for MockPathProvider/u);
+});
+
 test('core crate dependency surface remains domain-only', () => {
   const coreCargoPath = path.join(repoRoot, 'core', 'Cargo.toml');
   const runtimeDependencyNames = [

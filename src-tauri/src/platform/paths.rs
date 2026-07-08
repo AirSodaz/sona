@@ -7,6 +7,9 @@ pub use sona_runtime_fs::{
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
 
+#[cfg(test)]
+use std::collections::HashMap;
+
 pub fn models_dir_status(path: &Path) -> sona_core::model_paths::ModelsDirStatus {
     sona_runtime_fs::models_dir_status(path)
 }
@@ -47,4 +50,23 @@ impl<R: Runtime> PathProvider for TauriPathProvider<R> {
 }
 
 #[cfg(test)]
-pub use sona_core::ports::path::MockPathProvider;
+pub struct MockPathProvider {
+    entries: HashMap<PathKind, Result<PathBuf, String>>,
+}
+
+#[cfg(test)]
+impl MockPathProvider {
+    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, String>>) -> Self {
+        Self { entries }
+    }
+}
+
+#[cfg(test)]
+impl PathProvider for MockPathProvider {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+        self.entries
+            .get(&kind)
+            .cloned()
+            .unwrap_or_else(|| Err(format!("path kind {:?} not configured", kind)))
+    }
+}

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -22,73 +21,67 @@ impl<T: PathProvider + ?Sized> PathProvider for Arc<T> {
     }
 }
 
-/// In-memory path provider for adapter and service tests.
-pub struct MockPathProvider {
-    entries: HashMap<PathKind, Result<PathBuf, String>>,
-}
-
-impl MockPathProvider {
-    pub fn new() -> Self {
-        let mut entries = HashMap::new();
-        entries.insert(PathKind::AppData, Ok(PathBuf::from("/sona-test/app_data")));
-        entries.insert(
-            PathKind::AppLocalData,
-            Ok(PathBuf::from("/sona-test/app_local_data")),
-        );
-        entries.insert(
-            PathKind::AppLogData,
-            Ok(PathBuf::from("/sona-test/app_log")),
-        );
-        Self { entries }
-    }
-
-    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, String>>) -> Self {
-        Self { entries }
-    }
-}
-
-impl Default for MockPathProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PathProvider for MockPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
-        self.entries
-            .get(&kind)
-            .cloned()
-            .unwrap_or_else(|| Err(format!("path kind {:?} not configured", kind)))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    struct TestPathProvider {
+        entries: HashMap<PathKind, Result<PathBuf, String>>,
+    }
+
+    impl TestPathProvider {
+        fn new() -> Self {
+            let mut entries = HashMap::new();
+            entries.insert(PathKind::AppData, Ok(PathBuf::from("/sona-test/app_data")));
+            entries.insert(
+                PathKind::AppLocalData,
+                Ok(PathBuf::from("/sona-test/app_local_data")),
+            );
+            entries.insert(
+                PathKind::AppLogData,
+                Ok(PathBuf::from("/sona-test/app_log")),
+            );
+            Self { entries }
+        }
+
+        fn from_map(entries: HashMap<PathKind, Result<PathBuf, String>>) -> Self {
+            Self { entries }
+        }
+    }
+
+    impl PathProvider for TestPathProvider {
+        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+            self.entries
+                .get(&kind)
+                .cloned()
+                .unwrap_or_else(|| Err(format!("path kind {:?} not configured", kind)))
+        }
+    }
 
     #[test]
-    fn mock_provider_resolves_configured_path() {
+    fn provider_resolves_configured_path() {
         let tmp = PathBuf::from("/sona-mock-test");
         let mut map = std::collections::HashMap::new();
         map.insert(PathKind::AppLocalData, Ok(tmp.clone()));
-        let provider = MockPathProvider::from_map(map);
+        let provider = TestPathProvider::from_map(map);
 
         let result = provider.resolve_path(PathKind::AppLocalData);
         assert_eq!(result.unwrap(), tmp);
     }
 
     #[test]
-    fn mock_provider_errors_on_unconfigured_kind() {
+    fn provider_errors_on_unconfigured_kind() {
         let map = std::collections::HashMap::new();
-        let provider = MockPathProvider::from_map(map);
+        let provider = TestPathProvider::from_map(map);
 
         let result = provider.resolve_path(PathKind::AppData);
         assert!(result.is_err());
     }
 
     #[test]
-    fn mock_provider_new_has_sensible_defaults() {
-        let provider = MockPathProvider::new();
+    fn provider_new_has_sensible_defaults() {
+        let provider = TestPathProvider::new();
         assert!(provider.resolve_path(PathKind::AppData).is_ok());
         assert!(provider.resolve_path(PathKind::AppLocalData).is_ok());
     }
