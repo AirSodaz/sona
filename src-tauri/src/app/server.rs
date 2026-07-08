@@ -1,94 +1,111 @@
-use axum::{
-    Json, Router,
-    extract::{ConnectInfo, Multipart, Path, Request, State},
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-    routing::{get, post},
+use async_trait::async_trait;
+use axum::{Router, routing::get};
+use sona_api_server::{
+    ApiServerPlatform, ApiServerRuntimeConfig, ApiServerTranscriptionDefaults,
+    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, parse_ip_whitelist, run_server,
 };
-use futures_util::stream::StreamExt;
-use hmac::{Hmac, KeyInit, Mac};
-use ipnet::IpNet;
-use sha2::Sha256;
+use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
+use sona_sqlite::{Database, DatabaseError};
+use std::any::Any;
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
-use std::path::{Path as StdPath, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{RwLock, mpsc};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    validate_request::ValidateRequestHeaderLayer,
-};
-type HmacSha256 = Hmac<Sha256>;
-
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
-use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
-use sona_core::ports::asr::{BatchTranscriber, find_online_asr_provider, online_asr_providers};
-use sona_core::transcribe_runtime::BatchTranscribeOptions;
-use sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status;
-
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-use sona_sqlite::{Database, DatabaseError};
 
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApiServerTranscriptionDefaults {
-    pub gpu_acceleration: Option<String>,
-    pub vad_model_id: Option<String>,
-    pub punctuation_model_id: Option<String>,
-}
-
-impl Default for ApiServerTranscriptionDefaults {
-    fn default() -> Self {
-        Self {
-            gpu_acceleration: Some(DEFAULT_GPU_ACCELERATION.to_string()),
-            vad_model_id: Some(
-                crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
-            ),
-            punctuation_model_id: Some(
-                crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
-            ),
-        }
-    }
-}
-
-pub struct ApiServerRuntimeConfig {
-    pub app: Option<tauri::AppHandle>,
-    pub host: String,
-    pub port: u16,
-    pub api_key: String,
-    pub temp_dir: PathBuf,
-    pub models_dir: PathBuf,
-    pub max_concurrent: usize,
-    pub max_queue_size: usize,
-    pub max_upload_size_mb: usize,
-    pub job_ttl_minutes: u64,
-    pub max_streaming: usize,
-    pub ip_whitelist: Arc<Vec<IpNet>>,
-    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
-    pub transcription_defaults: ApiServerTranscriptionDefaults,
-    pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
-}
-
 pub struct ApiServerController {
-    pub shutdown_sender: std::sync::Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
-    pub online_asr_config:
-        std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, serde_json::Value>>>,
+    pub shutdown_sender: Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
 }
 
 impl Default for ApiServerController {
     fn default() -> Self {
         Self {
-            shutdown_sender: std::sync::Arc::new(AsyncMutex::new(None)),
-            online_asr_config: std::sync::Arc::new(tokio::sync::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
+            shutdown_sender: Arc::new(AsyncMutex::new(None)),
+            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct TauriStreamingContext {
+    pub app: Option<tauri::AppHandle>,
+    pub recognizer_pool: crate::integrations::asr::RecognizerPool,
+}
+
+#[derive(Clone)]
+struct TauriApiServerPlatform {
+    streaming_context: Arc<TauriStreamingContext>,
+}
+
+impl TauriApiServerPlatform {
+    fn from_app(app: Option<tauri::AppHandle>) -> Self {
+        let recognizer_pool = app
+            .as_ref()
+            .map(|app| {
+                app.state::<crate::integrations::asr::AsrState>()
+                    .recognizer_pool
+                    .clone()
+            })
+            .unwrap_or_else(crate::integrations::asr::RecognizerPool::new);
+        Self {
+            streaming_context: Arc::new(TauriStreamingContext {
+                app,
+                recognizer_pool,
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl ApiServerPlatform for TauriApiServerPlatform {
+    async fn transcribe_online_batch(
+        &self,
+        request: OnlineBatchRequest,
+    ) -> Result<Vec<sona_core::transcript::TranscriptSegment>, String> {
+        let Some(app_handle) = self.streaming_context.app.as_ref() else {
+            return Err(ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
+        };
+        if request.config.is_null()
+            || request
+                .config
+                .get("apiKey")
+                .and_then(serde_json::Value::as_str)
+                .is_none_or(str::is_empty)
+        {
+            return Err(DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
+        }
+
+        let inner_app_clone = app_handle.clone();
+        let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
+        let asr_request = sona_api_server::online_batch_request_to_core_request(&request);
+        crate::commands::asr::process_batch_file(
+            inner_app_clone,
+            sherpa_state,
+            request.file_path.to_string_lossy().to_string(),
+            None,
+            None,
+            asr_request,
+            None,
+        )
+        .await
+        .map_err(|error| error.to_string())
+    }
+
+    async fn build_info_response(
+        &self,
+        models_dir: &std::path::Path,
+        online_asr_config: &HashMap<String, serde_json::Value>,
+    ) -> Result<sona_api_server::InfoResponse, String> {
+        sona_api_server::default_info_response(models_dir, online_asr_config).await
+    }
+
+    fn streaming_context(&self) -> Option<Arc<dyn Any + Send + Sync>> {
+        Some(self.streaming_context.clone())
     }
 }
 
@@ -128,8 +145,11 @@ impl Default for ApiServerStartupSettings {
 fn extract_app_config_value(value: serde_json::Value) -> serde_json::Value {
     value
         .get("sona-config")
+        .filter(|value| value.is_object())
         .or_else(|| value.get("sona_config"))
+        .filter(|value| value.is_object())
         .or_else(|| value.get("config"))
+        .filter(|value| value.is_object())
         .cloned()
         .unwrap_or(value)
 }
@@ -141,7 +161,7 @@ fn read_sqlite_app_config(db: &Database) -> Result<Option<serde_json::Value>, Da
         if let Some(row) = rows.next()? {
             let config_str: String = row.get(0)?;
             let config: serde_json::Value = serde_json::from_str(&config_str)?;
-            Ok(Some(config))
+            Ok(Some(extract_app_config_value(config)))
         } else {
             Ok(None)
         }
@@ -252,66 +272,58 @@ fn load_sqlite_api_server_startup_settings(
 }
 
 fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
-    let data_dir = provider.resolve_path(PathKind::AppData).ok()?;
-    let config_path = data_dir.join("settings.json");
-    match std::fs::read_to_string(&config_path) {
-        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
-            Ok(json) => Some(extract_app_config_value(json)),
-            Err(error) => {
-                log::error!("Failed to parse settings.json: {error}");
-                None
-            }
-        },
-        Err(error) => {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                log::warn!("Failed to read settings.json: {error}");
-            }
-            None
-        }
+    let app_data_dir = provider.resolve_path(PathKind::AppData).ok()?;
+    let settings_path = app_data_dir.join("settings.json");
+    if !settings_path.exists() {
+        return None;
     }
+    let contents = std::fs::read_to_string(&settings_path).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&contents)
+        .map_err(|error| {
+            log::warn!(
+                "[API Server] Failed to parse legacy settings {}: {error}",
+                settings_path.display()
+            );
+            error
+        })
+        .ok()?;
+    Some(extract_app_config_value(parsed))
 }
 
 fn load_app_config_for_server(provider: &dyn PathProvider) -> Option<serde_json::Value> {
-    load_sqlite_app_config(provider)
-        .map(extract_app_config_value)
-        .or_else(|| load_legacy_settings_config(provider))
+    load_sqlite_app_config(provider).or_else(|| load_legacy_settings_config(provider))
 }
 
-pub fn load_online_asr_config(
-    provider: &dyn PathProvider,
-) -> std::collections::HashMap<String, serde_json::Value> {
-    let mut online_asr_config = std::collections::HashMap::new();
-    if let Some(config) = load_app_config_for_server(provider)
-        && let Some(online) = config
-            .get("asr")
-            .and_then(|v| v.get("providers"))
-            .and_then(|v| v.get("online"))
-        && let Some(map) = online.as_object()
-    {
-        for (k, v) in map {
-            online_asr_config.insert(k.clone(), v.clone());
-        }
-    }
-    online_asr_config
+pub fn load_online_asr_config(provider: &dyn PathProvider) -> HashMap<String, serde_json::Value> {
+    load_app_config_for_server(provider)
+        .and_then(|config| {
+            config
+                .get("asr")
+                .and_then(|v| v.get("providers"))
+                .and_then(|v| v.get("online"))
+                .and_then(|v| v.as_object())
+                .cloned()
+        })
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
 }
 
 pub async fn refresh_online_asr_config(
     controller: &ApiServerController,
     provider: &dyn PathProvider,
 ) {
-    let new_config = load_online_asr_config(provider);
-    *controller.online_asr_config.write().await = new_config;
+    let config_map = load_online_asr_config(provider);
+    *controller.online_asr_config.write().await = config_map;
 }
 
 fn load_api_server_startup_settings(provider: &dyn PathProvider) -> ApiServerStartupSettings {
     if let Some(settings) = load_sqlite_api_server_startup_settings(provider) {
         return settings;
     }
-
-    let Some(config) = load_legacy_settings_config(provider) else {
-        return ApiServerStartupSettings::default();
-    };
-    startup_settings_from_config(&config)
+    load_app_config_for_server(provider)
+        .map(|config| startup_settings_from_config(&config))
+        .unwrap_or_default()
 }
 
 fn startup_settings_from_config(config: &serde_json::Value) -> ApiServerStartupSettings {
@@ -323,8 +335,10 @@ fn startup_settings_from_config(config: &serde_json::Value) -> ApiServerStartupS
     if let Some(host) = config.get("httpServerHost").and_then(|v| v.as_str()) {
         settings.host = host.to_string();
     }
-    if let Some(port) = config.get("httpServerPort").and_then(|v| v.as_u64()) {
-        settings.port = port as u16;
+    if let Some(port) = config.get("httpServerPort").and_then(|v| v.as_u64())
+        && let Ok(port) = u16::try_from(port)
+    {
+        settings.port = port;
     }
     if let Some(api_key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
         settings.api_key = api_key.to_string();
@@ -332,32 +346,36 @@ fn startup_settings_from_config(config: &serde_json::Value) -> ApiServerStartupS
     if let Some(max_concurrent) = config
         .get("httpServerMaxConcurrent")
         .and_then(|v| v.as_u64())
+        && let Ok(max_concurrent) = usize::try_from(max_concurrent)
     {
-        settings.max_concurrent = max_concurrent as usize;
+        settings.max_concurrent = max_concurrent;
     }
     if let Some(max_queue_size) = config
         .get("httpServerMaxQueueSize")
         .and_then(|v| v.as_u64())
+        && let Ok(max_queue_size) = usize::try_from(max_queue_size)
     {
-        settings.max_queue_size = max_queue_size as usize;
+        settings.max_queue_size = max_queue_size;
     }
-    if let Some(max_upload_size_mb) = config
+    if let Some(max_upload_size) = config
         .get("httpServerMaxUploadSizeMB")
         .and_then(|v| v.as_u64())
+        && let Ok(max_upload_size) = usize::try_from(max_upload_size)
     {
-        settings.max_upload_size_mb = max_upload_size_mb as usize;
+        settings.max_upload_size_mb = max_upload_size;
     }
-    if let Some(job_ttl_minutes) = config
+    if let Some(job_ttl) = config
         .get("httpServerJobTtlMinutes")
         .and_then(|v| v.as_u64())
     {
-        settings.job_ttl_minutes = job_ttl_minutes;
+        settings.job_ttl_minutes = job_ttl;
     }
     if let Some(max_streaming) = config
         .get("httpServerMaxStreaming")
         .and_then(|v| v.as_u64())
+        && let Ok(max_streaming) = usize::try_from(max_streaming)
     {
-        settings.max_streaming = max_streaming as usize;
+        settings.max_streaming = max_streaming;
     }
     if let Some(ip_whitelist) = config.get("httpServerIpWhitelist").and_then(|v| v.as_str()) {
         settings.ip_whitelist = ip_whitelist.to_string();
@@ -390,7 +408,7 @@ pub async fn start_api_server(
         .map(|net| net.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let parsed_arc = std::sync::Arc::new(parsed_whitelist);
+    let parsed_arc = Arc::new(parsed_whitelist);
     let transcription_defaults = ApiServerTranscriptionDefaults {
         gpu_acceleration: resolve_gpu_acceleration(Some(gpu_acceleration))
             .map_err(|e| e.to_string())?,
@@ -398,8 +416,6 @@ pub async fn start_api_server(
     };
 
     let mut sender_lock = controller.shutdown_sender.lock().await;
-
-    // Stop existing server if running
     if let Some(sender) = sender_lock.take() {
         let _ = sender.send(());
     }
@@ -417,10 +433,10 @@ pub async fn start_api_server(
 
     refresh_online_asr_config(&controller, &path_provider).await;
     let online_asr_config = controller.online_asr_config.clone();
+    let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
 
     tauri::async_runtime::spawn(async move {
         if let Err(e) = run_server(ApiServerRuntimeConfig {
-            app: Some(app.clone()),
             host,
             port,
             api_key,
@@ -434,6 +450,8 @@ pub async fn start_api_server(
             ip_whitelist: parsed_arc,
             online_asr_config,
             transcription_defaults,
+            platform,
+            streaming_router: Some(streaming_router()),
             shutdown_rx: rx,
             bind_tx: Some(bind_tx),
         })
@@ -488,7 +506,6 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                     return;
                 }
             };
-            let parsed_arc = std::sync::Arc::new(parsed_whitelist);
             let transcription_defaults =
                 match resolve_gpu_acceleration(Some(settings.gpu_acceleration)) {
                     Ok(gpu_acceleration) => ApiServerTranscriptionDefaults {
@@ -510,9 +527,9 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
 
             refresh_online_asr_config(&controller, &path_provider).await;
             let online_asr_config = controller.online_asr_config.clone();
+            let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
 
             if let Err(e) = run_server(ApiServerRuntimeConfig {
-                app: Some(app_handle.clone()),
                 host: settings.host,
                 port: settings.port,
                 api_key: settings.api_key,
@@ -523,9 +540,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 max_upload_size_mb: settings.max_upload_size_mb,
                 job_ttl_minutes: settings.job_ttl_minutes,
                 max_streaming: settings.max_streaming,
-                ip_whitelist: parsed_arc,
+                ip_whitelist: Arc::new(parsed_whitelist),
                 online_asr_config,
                 transcription_defaults,
+                platform,
+                streaming_router: Some(streaming_router()),
                 shutdown_rx: rx,
                 bind_tx: None,
             })
@@ -537,1282 +556,20 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     });
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-pub enum JobStatus {
-    Pending,
-    Processing,
-    Completed(Vec<crate::integrations::asr::TranscriptSegment>),
-    Failed(String),
-}
-
-#[derive(Clone)]
-pub struct TranscriptionJob {
-    pub job_id: String,
-    pub file_path: PathBuf,
-    pub model_id: String,
-    pub language: String,
-    pub hotwords: Option<String>,
-    pub webhook_url: Option<String>,
-    pub webhook_secret: Option<String>,
-    pub engine: String,
-    pub online_provider_id: Option<String>,
-    pub online_provider_config: Option<serde_json::Value>,
-}
-
-#[derive(Clone)]
-pub struct JobEntry {
-    pub status: JobStatus,
-    pub completed_at: Option<std::time::Instant>,
-}
-
-#[derive(Clone)]
-pub struct JobManager {
-    jobs: Arc<RwLock<HashMap<String, JobEntry>>>,
-    sender: mpsc::Sender<TranscriptionJob>,
-}
-
-impl JobManager {
-    pub fn new(sender: mpsc::Sender<TranscriptionJob>) -> Self {
-        Self {
-            jobs: Arc::new(RwLock::new(HashMap::new())),
-            sender,
-        }
-    }
-
-    pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), String> {
-        self.jobs.write().await.insert(
-            job.job_id.clone(),
-            JobEntry {
-                status: JobStatus::Pending,
-                completed_at: None,
-            },
-        );
-        self.sender.send(job).await.map_err(|e| e.to_string())
-    }
-
-    pub async fn update_job(&self, job_id: &str, status: JobStatus) {
-        if let Some(job) = self.jobs.write().await.get_mut(job_id) {
-            let is_finished = matches!(status, JobStatus::Completed(_) | JobStatus::Failed(_));
-            job.status = status;
-            if is_finished {
-                job.completed_at = Some(std::time::Instant::now());
-            }
-        }
-    }
-
-    pub async fn get_job(&self, job_id: &str) -> Option<JobStatus> {
-        self.jobs
-            .read()
-            .await
-            .get(job_id)
-            .map(|entry| entry.status.clone())
-    }
-
-    pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
-        self.jobs
-            .read()
-            .await
-            .iter()
-            .map(|(k, v)| (k.clone(), v.status.clone()))
-            .collect()
-    }
-
-    pub async fn clean_expired_jobs(&self, ttl_duration: std::time::Duration) {
-        self.jobs.write().await.retain(|_, entry| {
-            if let Some(completed_at) = entry.completed_at {
-                completed_at.elapsed() <= ttl_duration
-            } else {
-                true
-            }
-        });
-    }
-}
-
-async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
-    let Some(webhook_url) = &job.webhook_url else {
-        return;
-    };
-    if webhook_url.is_empty() {
-        return;
-    }
-
-    let mut payload = serde_json::Map::new();
-    payload.insert(
-        "job_id".to_string(),
-        serde_json::Value::String(job.job_id.clone()),
-    );
-
-    match status {
-        JobStatus::Completed(segments) => {
-            payload.insert(
-                "status".to_string(),
-                serde_json::Value::String("Completed".to_string()),
-            );
-            payload.insert(
-                "segments".to_string(),
-                serde_json::to_value(segments).unwrap_or_default(),
-            );
-        }
-        JobStatus::Failed(error) => {
-            payload.insert(
-                "status".to_string(),
-                serde_json::Value::String("Failed".to_string()),
-            );
-            payload.insert(
-                "error".to_string(),
-                serde_json::Value::String(error.clone()),
-            );
-        }
-        _ => return, // Only send on completion or failure
-    }
-
-    let payload_str = serde_json::to_string(&payload).unwrap_or_default();
-
-    static WEBHOOK_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    let client = WEBHOOK_CLIENT.get_or_init(reqwest::Client::new);
-
-    let mut request = client
-        .post(webhook_url)
-        .header("Content-Type", "application/json");
-
-    if let Some(secret) = &job.webhook_secret
-        && !secret.is_empty()
-        && let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes())
-    {
-        mac.update(payload_str.as_bytes());
-        let result = mac.finalize().into_bytes();
-        let hex_signature = hex::encode(result);
-        request = request.header("X-Sona-Signature", format!("sha256={}", hex_signature));
-    }
-
-    match request.body(payload_str).send().await {
-        Ok(response) => {
-            if !response.status().is_success() {
-                log::warn!(
-                    "[Server] webhook delivery failed: job_id={} url={} status={}",
-                    job.job_id,
-                    webhook_url,
-                    response.status()
-                );
-            }
-        }
-        Err(error) => {
-            log::warn!(
-                "[Server] webhook delivery error: job_id={} url={} error={}",
-                job.job_id,
-                webhook_url,
-                error
-            );
-        }
-    }
-}
-
-async fn start_worker_loop(
-    mut receiver: mpsc::Receiver<TranscriptionJob>,
-    job_manager: JobManager,
-    models_dir: PathBuf,
-    max_concurrent: usize,
-    app: Option<tauri::AppHandle>,
-    transcription_defaults: ApiServerTranscriptionDefaults,
-) {
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
-
-    while let Some(job) = receiver.recv().await {
-        let job_manager = job_manager.clone();
-        let models_dir = models_dir.clone();
-        let semaphore = semaphore.clone();
-        let app_for_spawn = app.clone();
-        let defaults = transcription_defaults.clone();
-
-        tokio::spawn(async move {
-            let app = app_for_spawn;
-            let _permit = match semaphore.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    job_manager
-                        .update_job(
-                            &job.job_id,
-                            JobStatus::Failed("Internal: worker pool closed".to_string()),
-                        )
-                        .await;
-                    return;
-                }
-            };
-            job_manager
-                .update_job(&job.job_id, JobStatus::Processing)
-                .await;
-
-            let final_status = if job.engine == "Online" {
-                if let Some(provider_id) = job.online_provider_id.clone() {
-                    let request = crate::integrations::asr::AsrTranscriptionRequest {
-                        engine_config: crate::integrations::asr::AsrEngineConfig::Online {
-                            provider: crate::integrations::asr::OnlineAsrProviderRequest {
-                                provider_id,
-                                profile_id: job.model_id.clone(),
-                                config: job.online_provider_config.clone().unwrap_or_default(),
-                            },
-                        },
-                        mode: crate::integrations::asr::AsrMode::Batch,
-                        enable_itn: false,
-                        language: if job.language == "auto" {
-                            "".to_string()
-                        } else {
-                            job.language.clone()
-                        },
-                        hotwords: job.hotwords.clone(),
-                        speaker_processing: None,
-                        normalization_options: Default::default(),
-                        postprocess_options: Default::default(),
-                    };
-                    if let Some(app_handle) = app.as_ref() {
-                        use tauri::Manager;
-                        let inner_app_clone = app_handle.clone();
-                        let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
-                        match crate::commands::asr::process_batch_file(
-                            inner_app_clone,
-                            sherpa_state,
-                            job.file_path.to_string_lossy().to_string(),
-                            None,
-                            None,
-                            request,
-                            None,
-                        )
-                        .await
-                        {
-                            Ok(segments) => JobStatus::Completed(segments),
-                            Err(e) => JobStatus::Failed(e.to_string()),
-                        }
-                    } else {
-                        JobStatus::Failed(DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE.to_string())
-                    }
-                } else {
-                    JobStatus::Failed("Missing online provider ID".to_string())
-                }
-            } else {
-                match build_local_transcribe_plan(&job, &models_dir, &defaults) {
-                    Ok(plan) => {
-                        let transcriber = sona_local_asr::batch::LocalBatchAsrAdapter;
-                        match transcriber.transcribe(plan).await {
-                            Ok(segments) => JobStatus::Completed(segments),
-                            Err(e) => JobStatus::Failed(e),
-                        }
-                    }
-                    Err(e) => JobStatus::Failed(e),
-                }
-            };
-
-            job_manager
-                .update_job(&job.job_id, final_status.clone())
-                .await;
-
-            if job.webhook_url.is_some() {
-                let job_clone = job.clone();
-                let status_clone = final_status.clone();
-                tokio::spawn(async move {
-                    send_webhook(&job_clone, &status_clone).await;
-                });
-            }
-
-            // Cleanup
-            let _ = tokio::fs::remove_file(&job.file_path).await;
-        });
-    }
-}
-
-pub(crate) fn build_local_transcribe_options(
-    job: &TranscriptionJob,
-    models_dir: &StdPath,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> BatchTranscribeOptions {
-    let (vad_model_id, punctuation_model_id) =
-        companion_defaults_for_model(&job.model_id, defaults);
-    BatchTranscribeOptions {
-        input: job.file_path.clone(),
-        output: None,
-        format: None,
-        language: if job.language == "auto" {
-            None
-        } else {
-            Some(job.language.clone())
-        },
-        model_id: Some(job.model_id.clone()),
-        models_dir: Some(models_dir.to_path_buf()),
-        default_models_dir: None,
-        vad_model_id,
-        punctuation_model_id,
-        threads: None,
-        enable_itn: None,
-        hotwords: job.hotwords.clone(),
-        gpu_acceleration: defaults.gpu_acceleration.clone(),
-        vad_buffer: None,
-        save_wav: None,
-        quiet: true,
-        force: true,
-    }
-}
-
-pub(crate) fn build_local_transcribe_plan(
-    job: &TranscriptionJob,
-    models_dir: &StdPath,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> Result<sona_core::transcribe_runtime::BatchTranscribePlan, String> {
-    let options = build_local_transcribe_options(job, models_dir, defaults);
-    resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
-        options,
-        None,
-        crate::platform::paths::models_dir_status,
+fn streaming_router() -> Router<sona_api_server::ServerState> {
+    Router::new().route(
+        "/v1/streaming",
+        get(crate::integrations::streaming::handle_streaming),
     )
-}
-
-fn companion_defaults_for_model(
-    model_id: &str,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> (Option<String>, Option<String>) {
-    let rules = crate::platform::preset_models::find_preset_model(model_id)
-        .map(|model| model.resolved_rules());
-
-    let vad_model_id = match defaults.vad_model_id.as_deref() {
-        Some(id)
-            if rules.map(|rules| rules.requires_vad).unwrap_or(true)
-                || id != crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    let punctuation_model_id = match defaults.punctuation_model_id.as_deref() {
-        Some(id)
-            if rules
-                .map(|rules| rules.requires_punctuation)
-                .unwrap_or(true)
-                || id != crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    (vad_model_id, punctuation_model_id)
-}
-
-#[derive(Clone)]
-pub struct ServerState {
-    pub job_manager: JobManager,
-    pub temp_dir: PathBuf,
-    pub models_dir: PathBuf,
-    pub start_time: std::time::Instant,
-    pub api_key: String,
-    pub streaming_semaphore: Arc<tokio::sync::Semaphore>,
-    pub recognizer_pool: crate::integrations::asr::RecognizerPool,
-    pub ip_whitelist: Arc<Vec<IpNet>>,
-    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
-    pub transcription_defaults: ApiServerTranscriptionDefaults,
-    pub app: Option<tauri::AppHandle>,
-}
-
-pub async fn handle_transcribe(
-    State(state): State<ServerState>,
-    mut multipart: Multipart,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let job_id = uuid::Uuid::new_v4().to_string();
-    let mut temp_file_path = None;
-    let mut model_id = None;
-    let mut language = "auto".to_string();
-    let mut hotwords = None;
-    let mut webhook_url = None;
-    let mut webhook_secret = None;
-
-    while let Some(mut field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
-    {
-        let name = field.name().unwrap_or("").to_string();
-        if name == "file" {
-            let file_path = state.temp_dir.join(format!("{}.tmp", job_id));
-            let mut file = tokio::fs::File::create(&file_path)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            while let Some(chunk) = field.next().await {
-                let data = chunk.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-                file.write_all(&data)
-                    .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            }
-            temp_file_path = Some(file_path);
-
-            if let Some(ref path) = temp_file_path
-                && !sona_media_detector::is_valid_media_file(path).await
-            {
-                let _ = tokio::fs::remove_file(path).await;
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "Unsupported file type or corrupted file".to_string(),
-                ));
-            }
-        } else if name == "model_id" {
-            model_id = Some(field.text().await.unwrap_or_default());
-        } else if name == "language" {
-            language = field.text().await.unwrap_or_default();
-        } else if name == "hotwords" {
-            hotwords = Some(field.text().await.unwrap_or_default());
-        } else if name == "webhook_url" {
-            webhook_url = Some(field.text().await.unwrap_or_default());
-        } else if name == "webhook_secret" {
-            webhook_secret = Some(field.text().await.unwrap_or_default());
-        }
-    }
-
-    let file_path = temp_file_path.ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
-    let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
-
-    let mut engine = "LocalSherpa".to_string();
-    let mut online_provider_id = None;
-    let mut online_provider_config = None;
-
-    if let Some(provider) = find_online_asr_provider(&m_id) {
-        engine = "Online".to_string();
-        online_provider_id = Some(provider.id.clone());
-        let configs = state.online_asr_config.read().await;
-        online_provider_config = configs.get(&provider.id).cloned();
-    }
-
-    let job = TranscriptionJob {
-        job_id: job_id.clone(),
-        file_path,
-        model_id: m_id,
-        language,
-        hotwords,
-        webhook_url,
-        webhook_secret,
-        engine,
-        online_provider_id,
-        online_provider_config,
-    };
-    state
-        .job_manager
-        .submit_job(job)
-        .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e))?;
-
-    Ok(Json(serde_json::json!({ "job_id": job_id })))
-}
-
-pub async fn handle_job_status(
-    State(state): State<ServerState>,
-    Path(job_id): Path<String>,
-) -> Result<Json<JobStatus>, (StatusCode, String)> {
-    let status = state
-        .job_manager
-        .get_job(&job_id)
-        .await
-        .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
-    Ok(Json(status))
-}
-
-pub async fn handle_list_jobs(
-    State(state): State<ServerState>,
-) -> Json<HashMap<String, JobStatus>> {
-    let jobs = state.job_manager.list_jobs().await;
-    Json(jobs)
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HealthResponse {
-    pub status: String,
-    pub uptime: u64,
-    pub active_jobs: usize,
-    pub pending_jobs: usize,
-    pub cache_space_bytes: u64,
-}
-
-pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
-    let uptime = state.start_time.elapsed().as_secs();
-
-    let cache_space_bytes: u64 = tokio::task::spawn_blocking({
-        let temp_dir = state.temp_dir.clone();
-        move || {
-            walkdir::WalkDir::new(&temp_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter_map(|e| e.metadata().ok())
-                .filter(|m| m.is_file())
-                .map(|m| m.len())
-                .sum()
-        }
-    })
-    .await
-    .unwrap_or(0);
-
-    let jobs = state.job_manager.list_jobs().await;
-    let mut active_jobs = 0;
-    let mut pending_jobs = 0;
-    for status in jobs.values() {
-        match status {
-            JobStatus::Pending => pending_jobs += 1,
-            JobStatus::Processing => active_jobs += 1,
-            _ => {}
-        }
-    }
-
-    Json(HealthResponse {
-        status: "ok".to_string(),
-        uptime,
-        active_jobs,
-        pending_jobs,
-        cache_space_bytes,
-    })
-}
-
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OnlineAsrProviderInfo {
-    pub id: String,
-    pub configured: bool,
-    pub supports_batch: bool,
-    pub supports_streaming: bool,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InfoResponse {
-    pub platform: String,
-    pub gpu_available: bool,
-    pub models: Vec<String>,
-    pub vad_installed: bool,
-    pub punctuation_installed: bool,
-    pub online_asr_providers: Vec<OnlineAsrProviderInfo>,
-}
-
-pub async fn handle_info(
-    State(state): State<ServerState>,
-) -> Result<Json<InfoResponse>, (StatusCode, String)> {
-    let gpu_available = crate::app::hardware::check_gpu_availability()
-        .await
-        .unwrap_or(false);
-
-    let models_dir = state.models_dir.clone();
-    let snapshot = tokio::task::spawn_blocking(move || {
-        crate::platform::preset_models::build_model_catalog_snapshot(&models_dir)
-    })
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to build model snapshot: {e}"),
-        )
-    })?;
-
-    let installed_models: Vec<String> = snapshot
-        .models
-        .iter()
-        .filter(|m| m.is_installed)
-        .map(|m| m.id.clone())
-        .collect();
-
-    let vad_installed = snapshot.models.iter().any(|m| {
-        m.id == crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed
-    });
-
-    let punctuation_installed = snapshot.models.iter().any(|m| {
-        m.id == crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
-    });
-
-    let online_providers = online_asr_providers();
-    let configs = state.online_asr_config.read().await;
-    let mut online_asr_providers = Vec::new();
-
-    for provider in online_providers {
-        let mut configured = false;
-        if let Some(config_value) = configs.get(&provider.id)
-            && let Some(api_key) = config_value.get("apiKey").and_then(|v| v.as_str())
-            && !api_key.is_empty()
-        {
-            configured = true;
-        }
-        online_asr_providers.push(OnlineAsrProviderInfo {
-            id: provider.id.clone(),
-            configured,
-            supports_batch: provider.batch.local_file_mode.supported,
-            supports_streaming: provider.streaming.supported.unwrap_or(false),
-        });
-    }
-
-    Ok(Json(InfoResponse {
-        platform: std::env::consts::OS.to_string(),
-        gpu_available,
-        models: installed_models,
-        vad_installed,
-        punctuation_installed,
-        online_asr_providers,
-    }))
-}
-
-pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, String> {
-    let rules = whitelist_str
-        .split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty());
-
-    let mut nets = Vec::new();
-
-    for rule in rules {
-        if rule == "localhost" {
-            nets.push("127.0.0.0/8".parse().unwrap());
-            nets.push("::1/128".parse().unwrap());
-        } else if let Ok(net) = rule.parse::<IpNet>() {
-            nets.push(net);
-        } else if let Ok(exact_ip) = rule.parse::<IpAddr>() {
-            nets.push(IpNet::new(exact_ip, if exact_ip.is_ipv4() { 32 } else { 128 }).unwrap());
-        } else if rule.contains('*') {
-            if rule == "*" {
-                nets.push("0.0.0.0/0".parse().unwrap());
-                nets.push("::/0".parse().unwrap());
-            } else if rule.ends_with(".*") {
-                let prefix = rule.trim_end_matches(".*");
-                let parts: Vec<&str> = prefix.split('.').collect();
-                if parts.len() == 1 {
-                    let ip_str = format!("{}.0.0.0", parts[0]);
-                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
-                        nets.push(IpNet::new(ip, 8).unwrap());
-                        continue;
-                    }
-                } else if parts.len() == 2 {
-                    let ip_str = format!("{}.{}.0.0", parts[0], parts[1]);
-                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
-                        nets.push(IpNet::new(ip, 16).unwrap());
-                        continue;
-                    }
-                } else if parts.len() == 3 {
-                    let ip_str = format!("{}.{}.{}.0", parts[0], parts[1], parts[2]);
-                    if let Ok(ip) = ip_str.parse::<IpAddr>() {
-                        nets.push(IpNet::new(ip, 24).unwrap());
-                        continue;
-                    }
-                }
-                return Err(format!("Invalid IP wildcard format: {}", rule));
-            } else {
-                return Err(format!("Invalid IP wildcard format: {}", rule));
-            }
-        } else {
-            return Err(format!("Invalid IP rule format: {}", rule));
-        }
-    }
-
-    if nets.is_empty() {
-        nets.push("127.0.0.0/8".parse().unwrap());
-        nets.push("::1/128".parse().unwrap());
-    }
-
-    Ok(nets)
-}
-
-async fn ip_whitelist_middleware(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(whitelist): State<Arc<Vec<IpNet>>>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    if whitelist.iter().any(|net| net.contains(&addr.ip())) {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
-}
-
-fn format_bind_error(e: std::io::Error, addr: &str) -> String {
-    let raw_code = e.raw_os_error();
-    let os_err_suffix = match raw_code {
-        Some(code) => format!(" (os error {code})"),
-        None => "".to_string(),
-    };
-    match e.kind() {
-        std::io::ErrorKind::AddrInUse => {
-            format!(
-                "Address already in use: {addr}. Make sure the port is not being used by another process.{os_err_suffix}"
-            )
-        }
-        std::io::ErrorKind::AddrNotAvailable => {
-            format!("Address not available: {addr}.{os_err_suffix}")
-        }
-        std::io::ErrorKind::PermissionDenied => {
-            format!("Permission denied: Failed to bind to {addr}.{os_err_suffix}")
-        }
-        _ => {
-            if let Some(code) = raw_code {
-                format!("Failed to bind to {addr} (os error {code})")
-            } else {
-                format!("Failed to bind to {addr}: {e}")
-            }
-        }
-    }
-}
-
-pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
-    let ApiServerRuntimeConfig {
-        app,
-        host,
-        port,
-        api_key,
-        temp_dir,
-        models_dir,
-        max_concurrent,
-        max_queue_size,
-        max_upload_size_mb,
-        job_ttl_minutes,
-        max_streaming,
-        ip_whitelist,
-        online_asr_config,
-        transcription_defaults,
-        shutdown_rx,
-        bind_tx,
-    } = config;
-
-    // Resource Cleanup: clean temp_dir on startup
-    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-    if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
-        let err_msg = e.to_string();
-        if let Some(tx) = bind_tx {
-            let _ = tx.send(Err(err_msg.clone()));
-        }
-        return Err(err_msg);
-    }
-
-    let actual_queue_size = if max_queue_size == 0 {
-        100_000
-    } else {
-        max_queue_size
-    };
-    let (tx, rx) = mpsc::channel(actual_queue_size);
-    let job_manager = JobManager::new(tx);
-    let job_manager_clone = job_manager.clone();
-    let models_dir_clone = models_dir.clone();
-    let app_clone = app.clone();
-    let worker_defaults = transcription_defaults.clone();
-
-    tokio::spawn(async move {
-        start_worker_loop(
-            rx,
-            job_manager_clone,
-            models_dir_clone,
-            max_concurrent,
-            app_clone,
-            worker_defaults,
-        )
-        .await;
-    });
-
-    let job_manager_ttl = job_manager.clone();
-    let (shutdown_ttl_tx, mut shutdown_ttl_rx) = tokio::sync::oneshot::channel::<()>();
-    tokio::spawn(async move {
-        let ttl_duration = std::time::Duration::from_secs(job_ttl_minutes * 60);
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    if job_ttl_minutes > 0 {
-                        job_manager_ttl.clean_expired_jobs(ttl_duration).await;
-                    }
-                }
-                _ = &mut shutdown_ttl_rx => {
-                    log::info!("TTL cleaner loop shutting down");
-                    break;
-                }
-            }
-        }
-    });
-
-    let recognizer_pool = if let Some(app_handle) = &app {
-        use tauri::Manager;
-        let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
-        sherpa_state.recognizer_pool.clone()
-    } else {
-        crate::integrations::asr::RecognizerPool::new()
-    };
-
-    let state = ServerState {
-        job_manager,
-        temp_dir: temp_dir.clone(),
-        models_dir,
-        start_time: std::time::Instant::now(),
-        api_key: api_key.clone(),
-        streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
-        recognizer_pool,
-        ip_whitelist: ip_whitelist.clone(),
-        online_asr_config,
-        transcription_defaults,
-        app,
-    };
-
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    // Create public routes
-    let router = Router::new().route("/health", get(handle_health));
-
-    // Create private/transcriptions routes
-    let mut api_router = Router::new()
-        .route("/info", get(handle_info))
-        .route("/v1/transcriptions", post(handle_transcribe))
-        .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
-        .with_state(state.clone())
-        .layer(axum::middleware::from_fn_with_state(
-            ip_whitelist,
-            ip_whitelist_middleware,
-        ));
-
-    if max_upload_size_mb == 0 {
-        api_router = api_router.layer(axum::extract::DefaultBodyLimit::disable());
-    } else {
-        api_router = api_router.layer(axum::extract::DefaultBodyLimit::max(
-            max_upload_size_mb * 1024 * 1024,
-        ));
-    }
-
-    #[allow(deprecated)]
-    if !api_key.is_empty() {
-        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(&api_key));
-    }
-
-    let ws_router = Router::new()
-        .route(
-            "/v1/streaming",
-            get(crate::integrations::streaming::handle_streaming),
-        )
-        .with_state(state.clone());
-
-    // Merge and apply CORS & state
-    let router = router
-        .merge(ws_router)
-        .merge(api_router)
-        .layer(cors)
-        .with_state(state);
-    let addr = format!("{}:{}", host, port);
-    let listener = match tokio::net::TcpListener::bind(&addr).await {
-        Ok(l) => l,
-        Err(e) => {
-            let err_msg = format_bind_error(e, &addr);
-            if let Some(tx) = bind_tx {
-                let _ = tx.send(Err(err_msg.clone()));
-            }
-            return Err(err_msg);
-        }
-    };
-    if let Some(tx) = bind_tx {
-        let _ = tx.send(Ok(()));
-    }
-
-    log::info!("Starting HTTP API server on {}", addr);
-    let clean_temp_dir = temp_dir.clone();
-    let serve_res = axum::serve(
-        listener,
-        router.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(async move {
-        let _ = shutdown_rx.await;
-        let _ = shutdown_ttl_tx.send(());
-        log::info!("HTTP API server shutting down gracefully");
-    })
-    .await
-    .map_err(|e| e.to_string());
-
-    // Clean up temporary files on shutdown
-    log::info!(
-        "Cleaning up API server temporary directory: {:?}",
-        clean_temp_dir
-    );
-    if let Err(e) = tokio::fs::remove_dir_all(&clean_temp_dir).await {
-        log::error!(
-            "Failed to clean up API server temporary directory {:?}: {}",
-            clean_temp_dir,
-            e
-        );
-    }
-
-    serve_res
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::platform::paths::{MockPathProvider, PathKind};
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
-    use sona_sqlite::Database;
     use sona_sqlite::config_store::SqliteConfigStore;
     use std::collections::HashMap as StdHashMap;
-    use std::fs;
-    use tower::ServiceExt;
-
-    fn install_preset_model(models_dir: &StdPath, model_id: &str) {
-        let model = sona_core::preset_models::find_preset_model(model_id).unwrap();
-        let install_path = model.resolve_install_path(models_dir);
-        if let Some(parent) = install_path.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(install_path, b"installed").unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_clean_expired_jobs() {
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
-        let job_manager = JobManager::new(tx);
-
-        job_manager.jobs.write().await.insert(
-            "expired-job".to_string(),
-            JobEntry {
-                status: JobStatus::Completed(vec![]),
-                completed_at: Some(std::time::Instant::now() - std::time::Duration::from_secs(120)),
-            },
-        );
-
-        job_manager.jobs.write().await.insert(
-            "fresh-job".to_string(),
-            JobEntry {
-                status: JobStatus::Completed(vec![]),
-                completed_at: Some(std::time::Instant::now()),
-            },
-        );
-
-        job_manager.jobs.write().await.insert(
-            "pending-job".to_string(),
-            JobEntry {
-                status: JobStatus::Pending,
-                completed_at: None,
-            },
-        );
-
-        job_manager
-            .clean_expired_jobs(std::time::Duration::from_secs(60))
-            .await;
-
-        let jobs = job_manager.list_jobs().await;
-        assert!(!jobs.contains_key("expired-job"));
-        assert!(jobs.contains_key("fresh-job"));
-        assert!(jobs.contains_key("pending-job"));
-    }
-
-    #[tokio::test]
-    async fn test_health_endpoint() {
-        let temp_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let models_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
-        let job_manager = JobManager::new(tx);
-
-        let state = ServerState {
-            job_manager,
-            temp_dir,
-            models_dir,
-            start_time: std::time::Instant::now(),
-            api_key: "".to_string(),
-            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
-            ip_whitelist: std::sync::Arc::new(vec![]),
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults::default(),
-            app: None,
-        };
-
-        let app = Router::new()
-            .route("/health", get(handle_health))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .expect("Failed to build request"),
-            )
-            .await
-            .expect("Failed to dispatch request");
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("Failed to read response body buffer");
-        let body: serde_json::Value =
-            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
-
-        assert_eq!(body["status"], "ok");
-        assert!(body["uptime"].is_number());
-        assert!(body["activeJobs"].is_number());
-        assert!(body["pendingJobs"].is_number());
-        assert!(body["cacheSpaceBytes"].is_number());
-    }
-
-    #[tokio::test]
-    async fn test_info_endpoint() {
-        let temp_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let models_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
-        let job_manager = JobManager::new(tx);
-
-        let state = ServerState {
-            job_manager,
-            temp_dir,
-            models_dir,
-            start_time: std::time::Instant::now(),
-            api_key: "".to_string(),
-            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
-            ip_whitelist: std::sync::Arc::new(vec![]),
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults::default(),
-            app: None,
-        };
-
-        let app = Router::new()
-            .route("/info", get(handle_info))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/info")
-                    .body(Body::empty())
-                    .expect("Failed to build request"),
-            )
-            .await
-            .expect("Failed to dispatch request");
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("Failed to read response body buffer");
-        let body: serde_json::Value =
-            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
-
-        assert!(body["platform"].is_string());
-        assert!(body["gpuAvailable"].is_boolean());
-        assert!(body["models"].is_array());
-        assert!(body["vadInstalled"].is_boolean());
-        assert!(body["punctuationInstalled"].is_boolean());
-    }
-
-    #[tokio::test]
-    async fn test_list_jobs_endpoint() {
-        let temp_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let models_dir = tempfile::tempdir()
-            .expect("Failed to create temporary directory")
-            .path()
-            .to_path_buf();
-        let (tx, _rx) = tokio::sync::mpsc::channel(1);
-        let job_manager = JobManager::new(tx);
-
-        // Add a mock job
-        job_manager.jobs.write().await.insert(
-            "test-job-id".to_string(),
-            JobEntry {
-                status: JobStatus::Pending,
-                completed_at: None,
-            },
-        );
-
-        let state = ServerState {
-            job_manager,
-            temp_dir,
-            models_dir,
-            start_time: std::time::Instant::now(),
-            api_key: "".to_string(),
-            streaming_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
-            recognizer_pool: crate::integrations::asr::RecognizerPool::new(),
-            ip_whitelist: std::sync::Arc::new(vec![]),
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults::default(),
-            app: None,
-        };
-
-        let app = Router::new()
-            .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-            .with_state(state);
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/v1/transcriptions/jobs")
-                    .body(Body::empty())
-                    .expect("Failed to build request"),
-            )
-            .await
-            .expect("Failed to dispatch request");
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("Failed to read response body buffer");
-        let body: serde_json::Value =
-            serde_json::from_slice(&body).expect("Failed to parse response body as valid JSON");
-
-        assert!(body.is_object());
-        assert_eq!(body["test-job-id"], "Pending");
-    }
-
-    #[test]
-    fn local_transcribe_request_uses_server_gpu_and_vad_defaults() {
-        let temp = tempfile::tempdir().unwrap();
-        let models_dir = temp.path().to_path_buf();
-        let input_path = temp.path().join("sample.wav");
-        fs::write(&input_path, b"audio").unwrap();
-        install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
-        install_preset_model(
-            &models_dir,
-            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
-        );
-        let job = TranscriptionJob {
-            job_id: "job-1".to_string(),
-            file_path: input_path.clone(),
-            model_id: "sherpa-onnx-whisper-turbo".to_string(),
-            language: "auto".to_string(),
-            hotwords: Some("Sona".to_string()),
-            webhook_url: None,
-            webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
-            online_provider_id: None,
-            online_provider_config: None,
-        };
-        let defaults = ApiServerTranscriptionDefaults {
-            gpu_acceleration: Some("cuda".to_string()),
-            vad_model_id: Some(
-                crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
-            ),
-            punctuation_model_id: None,
-        };
-
-        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
-
-        assert_eq!(plan.gpu_acceleration.as_deref(), Some("cuda"));
-        assert_eq!(
-            plan.vad_model.as_deref(),
-            Some(
-                models_dir
-                    .join("silero_vad.onnx")
-                    .display()
-                    .to_string()
-                    .as_str()
-            )
-        );
-        assert!(plan.punctuation_model.is_none());
-        assert_eq!(plan.input_path, input_path);
-        assert_eq!(plan.hotwords.as_deref(), Some("Sona"));
-        assert_eq!(
-            plan.model_path,
-            models_dir
-                .join("sherpa-onnx-whisper-turbo")
-                .display()
-                .to_string()
-        );
-        assert_eq!(plan.language, "auto");
-    }
-
-    #[test]
-    fn local_transcribe_request_skips_builtin_punctuation_default_when_model_does_not_require_it() {
-        let temp = tempfile::tempdir().unwrap();
-        let models_dir = temp.path().to_path_buf();
-        let input_path = temp.path().join("sample.wav");
-        fs::write(&input_path, b"audio").unwrap();
-        install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
-        install_preset_model(
-            &models_dir,
-            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
-        );
-        let job = TranscriptionJob {
-            job_id: "job-1".to_string(),
-            file_path: input_path,
-            model_id: "sherpa-onnx-whisper-turbo".to_string(),
-            language: "auto".to_string(),
-            hotwords: None,
-            webhook_url: None,
-            webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
-            online_provider_id: None,
-            online_provider_config: None,
-        };
-        let defaults = ApiServerTranscriptionDefaults::default();
-
-        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
-
-        assert_eq!(
-            plan.vad_model.as_deref(),
-            Some(
-                models_dir
-                    .join("silero_vad.onnx")
-                    .display()
-                    .to_string()
-                    .as_str()
-            )
-        );
-        assert!(plan.punctuation_model.is_none());
-    }
-
-    #[test]
-    fn local_transcribe_request_applies_builtin_punctuation_default_when_model_requires_it() {
-        let temp = tempfile::tempdir().unwrap();
-        let models_dir = temp.path().to_path_buf();
-        let input_path = temp.path().join("sample.wav");
-        fs::write(&input_path, b"audio").unwrap();
-        install_preset_model(&models_dir, "sherpa-onnx-funasr-nano-int8-2025-12-30");
-        install_preset_model(
-            &models_dir,
-            crate::platform::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
-        );
-        install_preset_model(
-            &models_dir,
-            crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID,
-        );
-        let job = TranscriptionJob {
-            job_id: "job-1".to_string(),
-            file_path: input_path,
-            model_id: "sherpa-onnx-funasr-nano-int8-2025-12-30".to_string(),
-            language: "auto".to_string(),
-            hotwords: None,
-            webhook_url: None,
-            webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
-            online_provider_id: None,
-            online_provider_config: None,
-        };
-        let defaults = ApiServerTranscriptionDefaults::default();
-
-        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
-
-        assert_eq!(
-            plan.punctuation_model.as_deref(),
-            Some(
-                models_dir
-                    .join(crate::platform::preset_models::DEFAULT_PUNCTUATION_MODEL_ID)
-                    .display()
-                    .to_string()
-                    .as_str()
-            )
-        );
-    }
+    use std::path::Path as StdPath;
 
     fn provider_for_config_test(
         app_data_dir: &StdPath,
@@ -1896,6 +653,73 @@ mod tests {
     }
 
     #[test]
+    fn load_online_asr_config_unwraps_sqlite_object_wrappers() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data = tempfile::tempdir().unwrap();
+        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
+        let db = Database::open(app_local_data.path()).unwrap();
+        let store = SqliteConfigStore::new(Arc::new(db));
+        store
+            .save_config(&serde_json::json!({
+                "sona-config": {
+                    "asr": {
+                        "providers": {
+                            "online": {
+                                "volcengine": {
+                                    "apiKey": "wrapped-sqlite-key"
+                                }
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let config = load_online_asr_config(&provider);
+
+        assert_eq!(
+            config
+                .get("volcengine")
+                .and_then(|value| value.get("apiKey"))
+                .and_then(serde_json::Value::as_str),
+            Some("wrapped-sqlite-key")
+        );
+    }
+
+    #[test]
+    fn load_online_asr_config_ignores_non_object_wrappers() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data = tempfile::tempdir().unwrap();
+        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
+        let db = Database::open(app_local_data.path()).unwrap();
+        let store = SqliteConfigStore::new(Arc::new(db));
+        store
+            .save_config(&serde_json::json!({
+                "config": null,
+                "asr": {
+                    "providers": {
+                        "online": {
+                            "volcengine": {
+                                "apiKey": "top-level-key"
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let config = load_online_asr_config(&provider);
+
+        assert_eq!(
+            config
+                .get("volcengine")
+                .and_then(|value| value.get("apiKey"))
+                .and_then(serde_json::Value::as_str),
+            Some("top-level-key")
+        );
+    }
+
+    #[test]
     fn load_api_server_startup_settings_reads_sqlite_app_config() {
         let app_data = tempfile::tempdir().unwrap();
         let app_local_data = tempfile::tempdir().unwrap();
@@ -1968,208 +792,5 @@ mod tests {
         assert_eq!(settings.max_streaming, 7);
         assert_eq!(settings.ip_whitelist, "10.0.0.0/8");
         assert_eq!(settings.gpu_acceleration, "cuda");
-    }
-
-    static TEST_LOGGER: std::sync::OnceLock<Arc<std::sync::Mutex<Vec<String>>>> =
-        std::sync::OnceLock::new();
-
-    struct SimpleTestLogger {
-        logs: Arc<std::sync::Mutex<Vec<String>>>,
-    }
-
-    impl log::Log for SimpleTestLogger {
-        fn enabled(&self, _metadata: &log::Metadata) -> bool {
-            true
-        }
-        fn log(&self, record: &log::Record) {
-            let mut logs = self.logs.lock().unwrap();
-            logs.push(format!("{}: {}", record.level(), record.args()));
-        }
-        fn flush(&self) {}
-    }
-
-    fn init_test_logger() -> Arc<std::sync::Mutex<Vec<String>>> {
-        let logs = TEST_LOGGER.get_or_init(|| {
-            let logs = Arc::new(std::sync::Mutex::new(Vec::new()));
-            let logger = SimpleTestLogger { logs: logs.clone() };
-            let _ = log::set_boxed_logger(Box::new(logger));
-            log::set_max_level(log::LevelFilter::Debug);
-            logs
-        });
-        logs.clone()
-    }
-
-    async fn wait_for_log(logs: &Arc<std::sync::Mutex<Vec<String>>>, needle: &str) {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
-        loop {
-            if logs
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|log_line| log_line.contains(needle))
-            {
-                return;
-            }
-
-            assert!(
-                tokio::time::Instant::now() < deadline,
-                "Timed out waiting for log {needle:?}. Current logs: {:?}",
-                *logs.lock().unwrap()
-            );
-
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-    }
-
-    #[tokio::test]
-    async fn test_temp_directory_cleanup_failure_logging() {
-        let logs = init_test_logger();
-        {
-            let mut logs_lock = logs.lock().unwrap();
-            logs_lock.clear();
-        }
-
-        let temp_dir_handle = tempfile::tempdir().expect("Failed to create temporary directory");
-        let temp_dir = temp_dir_handle.path().to_path_buf();
-        let models_dir_handle = tempfile::tempdir().expect("Failed to create temporary directory");
-        let models_dir = models_dir_handle.path().to_path_buf();
-
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-
-        let config = ApiServerRuntimeConfig {
-            app: None,
-            host: "127.0.0.1".to_string(),
-            port: 0,
-            api_key: "".to_string(),
-            temp_dir: temp_dir.clone(),
-            models_dir,
-            max_concurrent: 1,
-            max_queue_size: 0,
-            max_upload_size_mb: 1,
-            job_ttl_minutes: 1,
-            max_streaming: 1,
-            ip_whitelist: std::sync::Arc::new(vec![]),
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults::default(),
-            shutdown_rx,
-            bind_tx: None,
-        };
-
-        let handle = tokio::spawn(async move { run_server(config).await });
-
-        wait_for_log(&logs, "Starting HTTP API server on").await;
-
-        // Replace the directory with a file so shutdown cleanup reliably fails.
-        tokio::fs::remove_dir_all(&temp_dir)
-            .await
-            .expect("Failed to remove temp directory before shutdown");
-        tokio::fs::write(&temp_dir, b"cleanup should fail on this file")
-            .await
-            .expect("Failed to replace temp directory with a file");
-
-        let _ = shutdown_tx.send(());
-
-        let run_result = handle.await.expect("Server task panicked");
-        assert!(run_result.is_ok());
-
-        {
-            let logs_lock = logs.lock().unwrap();
-            let error_log_found = logs_lock.iter().any(|log_line| {
-                log_line.contains("Failed to clean up API server temporary directory")
-            });
-
-            assert!(
-                error_log_found,
-                "Expected error log message not found. Current logs: {:?}",
-                *logs_lock
-            );
-        }
-
-        let _ = tokio::fs::remove_file(&temp_dir).await;
-    }
-
-    #[test]
-    fn test_format_bind_error() {
-        let addr = "127.0.0.1:14200";
-
-        let in_use_err = std::io::Error::new(std::io::ErrorKind::AddrInUse, "address in use");
-        let formatted = format_bind_error(in_use_err, addr);
-        assert!(formatted.contains("Address already in use: 127.0.0.1:14200"));
-
-        let not_avail_err =
-            std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "not available");
-        let formatted = format_bind_error(not_avail_err, addr);
-        assert!(formatted.contains("Address not available: 127.0.0.1:14200"));
-
-        let permission_err =
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
-        let formatted = format_bind_error(permission_err, addr);
-        assert!(formatted.contains("Permission denied: Failed to bind to 127.0.0.1:14200"));
-
-        #[cfg(target_os = "windows")]
-        let os_code = 10048;
-        #[cfg(target_os = "macos")]
-        let os_code = 48;
-        #[cfg(target_os = "linux")]
-        let os_code = 98;
-        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-        let os_code = 98;
-
-        let custom_os_err = std::io::Error::from_raw_os_error(os_code);
-        let formatted = format_bind_error(custom_os_err, addr);
-        assert!(formatted.contains("Address already in use: 127.0.0.1:14200"));
-        assert!(formatted.contains(&format!("os error {os_code}")));
-
-        let other_err = std::io::Error::other("something went wrong");
-        let formatted = format_bind_error(other_err, addr);
-        assert!(formatted.contains("Failed to bind to 127.0.0.1:14200: something went wrong"));
-    }
-
-    #[tokio::test]
-    async fn test_start_api_server_bind_failure() {
-        // First bind to a port to occupy it
-        let addr = "127.0.0.1:0"; // bind to any ephemeral port
-        let occupier = tokio::net::TcpListener::bind(addr)
-            .await
-            .expect("Failed to bind occupier");
-        let occupied_addr = occupier.local_addr().expect("Failed to get local address");
-        let port = occupied_addr.port();
-
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
-
-        let temp_dir_handle = tempfile::tempdir().expect("Failed to create tempdir");
-        let temp_dir = temp_dir_handle.path().to_path_buf();
-        let models_dir = temp_dir.join("models");
-
-        let config = ApiServerRuntimeConfig {
-            app: None,
-            host: "127.0.0.1".to_string(),
-            port,
-            api_key: "".to_string(),
-            temp_dir,
-            models_dir,
-            max_concurrent: 1,
-            max_queue_size: 0,
-            max_upload_size_mb: 1,
-            job_ttl_minutes: 1,
-            max_streaming: 1,
-            ip_whitelist: std::sync::Arc::new(vec![]),
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults::default(),
-            shutdown_rx,
-            bind_tx: Some(bind_tx),
-        };
-
-        // Spawning run_server should return Err because the port is occupied
-        let handle = tokio::spawn(async move { run_server(config).await });
-
-        let bind_res = bind_rx.await.expect("bind_rx closed");
-        assert!(bind_res.is_err());
-        let err_msg = bind_res.unwrap_err();
-        assert!(err_msg.contains("Address already in use") || err_msg.contains("os error 10048"));
-
-        let _ = shutdown_tx.send(());
-        let _ = handle.await;
     }
 }

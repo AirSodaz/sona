@@ -52,3 +52,22 @@ fn resolve_serve_runtime_options_merges_args_config_and_defaults() {
     );
     assert_ne!(resolved.host, DEFAULT_SERVE_HOST);
 }
+
+#[test]
+fn resolve_serve_runtime_options_rejects_zero_max_concurrent() {
+    let dir = tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    fs::create_dir_all(&models_dir).unwrap();
+
+    let error = resolve_serve_runtime_options(
+        ServeRuntimeArgs {
+            models_dir: Some(models_dir),
+            max_concurrent: Some(0),
+            ..Default::default()
+        },
+        None,
+    )
+    .unwrap_err();
+
+    assert_eq!(error, "max_concurrent must be greater than 0");
+}

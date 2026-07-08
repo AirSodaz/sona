@@ -1,0 +1,31 @@
+[package]
+name = "sona-api-server"
+version.workspace = true
+description = "Reusable HTTP API server adapter for Sona platforms"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+axum = { version = "0.8", features = ["multipart", "macros", "ws"] }
+futures-util = "0.3"
+hex = "0.4"
+hmac = "0.13.0"
+ipnet = "2.10"
+log = "0.4.22"
+reqwest = { version = "0.13", features = ["stream", "rustls", "json", "multipart"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11.0"
+sona-core = { path = "../../core" }
+sona-local-asr = { path = "../local_asr" }
+sona-media-detector = { path = "../media_detector" }
+sona-runtime-fs = { path = "../runtime_fs" }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower-http = { version = "0.6", features = ["cors", "auth", "fs"] }
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+walkdir = "2.5.0"
+
+[dev-dependencies]
+tempfile = "3.20.0"
+tower = { version = "0.5", features = ["util"] }

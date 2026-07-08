@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "adapters/api_server",
     "adapters/archive",
     "adapters/export",
     "adapters/local_asr",

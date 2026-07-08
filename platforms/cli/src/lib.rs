@@ -2,6 +2,7 @@ mod config_template;
 mod desktop_paths;
 mod init_config;
 mod models;
+mod serve;
 mod transcribe;
 
 use clap::{Parser, Subcommand};
@@ -87,6 +88,8 @@ enum Commands {
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
+    /// Runs the shared local HTTP API server.
+    Serve(serve::ServeArgs),
     /// Transcribes a local audio or video file using offline ASR.
     Transcribe(transcribe::TranscribeArgs),
 }
@@ -102,6 +105,7 @@ where
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
+        Commands::Serve(args) => serve::run_serve(args),
         Commands::Transcribe(args) => transcribe::run_transcribe(args),
     }
 }

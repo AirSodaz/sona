@@ -60,6 +60,13 @@ pub fn resolve_serve_runtime_options(
     let config = config.unwrap_or_default();
     let gpu_acceleration =
         resolve_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
+    let max_concurrent = args
+        .max_concurrent
+        .or(config.max_concurrent)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT);
+    if max_concurrent == 0 {
+        return Err("max_concurrent must be greater than 0".to_string());
+    }
 
     Ok(ResolvedServeRuntimeOptions {
         host: args
@@ -81,10 +88,7 @@ pub fn resolve_serve_runtime_options(
             .max_streaming
             .or(config.max_streaming)
             .unwrap_or(DEFAULT_MAX_STREAMING),
-        max_concurrent: args
-            .max_concurrent
-            .or(config.max_concurrent)
-            .unwrap_or(DEFAULT_MAX_CONCURRENT),
+        max_concurrent,
         max_queue_size: args
             .max_queue_size
             .or(config.max_queue_size)

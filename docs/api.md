@@ -15,8 +15,14 @@ Navigate to **Settings -> API Server** (or **API 服务** in Chinese) and config
 - **Port**: TCP port for the server (default: `14200`).
 - **API Key**: Optional Bearer token to protect endpoints. Click **Generate** to create a secure key, and **Copy** to write it to your clipboard.
 
-### 2. Standalone CLI Migration Status
-The desktop app still exposes this HTTP API server, but the standalone `sona-cli` server command is not part of the currently shipped CLI surface yet. For now, start the API server from the GUI client when you need headless HTTP access.
+### 2. Standalone CLI
+The same API server adapter is available from the standalone CLI:
+
+```bash
+sona-cli serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
+```
+
+The CLI server supports local REST transcription with installed offline models. Desktop-only online ASR and streaming integrations still require the desktop app runtime.
 
 ---
 

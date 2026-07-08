@@ -5392,6 +5392,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.11.0",
+ "sona-api-server",
  "sona-archive",
  "sona-core",
  "sona-export",
@@ -5436,6 +5437,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-api-server"
+version = "0.8.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "futures-util",
+ "hex",
+ "hmac",
+ "ipnet",
+ "log",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sona-core",
+ "sona-local-asr",
+ "sona-media-detector",
+ "sona-runtime-fs",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tower-http",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "sona-archive"
 version = "0.8.0"
 dependencies = [
@@ -5454,6 +5482,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "sona-api-server",
  "sona-core",
  "sona-local-asr",
  "sona-model-downloads",

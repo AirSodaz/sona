@@ -16,7 +16,13 @@ API 服务目前通过桌面 GUI 客户端启动：
 - **安全密钥**: 用于保护接口的可选 Bearer 令牌。点击 **生成** 可以获得安全的随机密钥，点击 **复制** 写入剪贴板。
 
 ### 命令行无头模式
-独立的 `sona-cli` 目前尚未发布 HTTP API 服务命令。需要无头 HTTP 集成时，请先从桌面 GUI 客户端启动 API 服务。
+独立的 `sona-cli` 也可以通过同一个 API server adapter 启动本地 HTTP 服务：
+
+```bash
+sona-cli serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
+```
+
+CLI 服务支持使用已安装离线模型进行本地 REST 转写。依赖桌面运行时的在线 ASR 与流式集成仍需要从桌面应用启动。
 
 GPU 硬件加速通过 GUI 模型设置作为服务级默认值配置。Windows 上 `auto` 会先尝试 CUDA；当前打包运行时支持 DirectML 时再尝试 DirectML，最后回退 CPU。批量和流式 API 请求不支持按请求覆盖 GPU 配置。
 

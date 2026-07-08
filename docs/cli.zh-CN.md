@@ -9,9 +9,10 @@
 - `models list`
 - `models download`
 - `models delete`
+- `serve`
 - `transcribe`
 
-无头 HTTP API 服务目前仍是桌面应用能力；`sona-cli` 尚未发布 `serve` 命令。
+无头 HTTP API 服务由共享的 `sona-api-server` 适配器提供，可从桌面应用或 `sona-cli serve` 启动。
 
 ## 运行方式
 
@@ -24,6 +25,7 @@
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
 ```
 
@@ -94,6 +96,21 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 不会自动删除伴生模型。
+
+### `serve`
+
+从独立 CLI 启动共享的本地 HTTP API 服务。
+
+```bash
+sona-cli serve
+sona-cli serve --config ./sona-cli.toml
+sona-cli serve --host 127.0.0.1 --port 14200 --api-key local-secret
+```
+
+- 持续运行直到按 Ctrl+C
+- 复用与桌面应用相同的本地批量转写 API server adapter
+- `--config` 会读取 `init-config` 生成的 `[serve]` 配置段
+- CLI 侧支持本地 REST 转写；依赖桌面运行时的在线 ASR 与流式集成仍需要桌面应用
 
 ### `transcribe`
 

@@ -42,6 +42,7 @@ Source builds can run or build the CLI directly from the workspace:
 
 ```bash
 cargo run -p sona-cli -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
+cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 pnpm run build:sona-cli
 ```
 
@@ -49,6 +50,7 @@ Current standalone CLI scope:
 
 - Single-file offline transcription
 - Preset model listing, downloads, and deletion
+- Shared local HTTP API server via `sona-cli serve`
 - Runtime path status inspection
 - Commented `sona-cli.toml` starter generation
 

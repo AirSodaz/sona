@@ -378,7 +378,8 @@ test('CLI documentation describes standalone sona-cli packaging only', () => {
   assert.doesNotMatch(docs, /Contents\/MacOS\/Sona transcribe/u);
   assert.doesNotMatch(docs, /cargo run --manifest-path src-tauri\/Cargo\.toml/u);
   assert.doesNotMatch(docs, /not part of the current standalone surface yet/u);
-  assert.doesNotMatch(docs, /\bsona serve\b|\bsona-cli serve\b/u);
+  assert.doesNotMatch(docs, /\bsona serve\b/u);
+  assert.match(docs, /\bsona-cli serve\b/u);
 });
 
 test('core crate does not keep sona-cli config template surface', () => {
@@ -416,6 +417,57 @@ test('core path port default API does not expose test adapters', () => {
   assert.doesNotMatch(corePathPort, /MockPathProvider/u);
   assert.match(tauriPlatformPaths, /#\[cfg\(test\)\]\s*pub struct MockPathProvider/u);
   assert.match(tauriPlatformPaths, /impl PathProvider for MockPathProvider/u);
+});
+
+test('api server runtime lives in adapter crate reused by desktop and standalone CLI', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const apiCargoPath = path.join(repoRoot, 'adapters', 'api_server', 'Cargo.toml');
+  const apiLibPath = path.join(repoRoot, 'adapters', 'api_server', 'src', 'lib.rs');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
+  const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const cliLib = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'lib.rs'), 'utf8');
+  const cliTemplate = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'config_template.rs'), 'utf8');
+  const apiGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'api.md'), 'utf8');
+  const apiGuideZh = fs.readFileSync(path.join(repoRoot, 'docs', 'api.zh-CN.md'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/api_server"/u);
+  assert.equal(fs.existsSync(apiCargoPath), true);
+  assert.equal(fs.existsSync(apiLibPath), true);
+
+  const apiCargo = fs.readFileSync(apiCargoPath, 'utf8');
+  const apiLib = fs.readFileSync(apiLibPath, 'utf8');
+
+  assert.match(apiCargo, /^name\s*=\s*"sona-api-server"/mu);
+  assert.match(apiCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/\.\.\/core" \}/mu);
+  assert.match(apiCargo, /^sona-local-asr\s*=\s*\{\s*path = "\.\.\/local_asr" \}/mu);
+  assert.match(apiCargo, /^axum\s*=/mu);
+  assert.match(apiCargo, /^tower-http\s*=/mu);
+  assert.doesNotMatch(apiCargo, /^tauri\s*=/mu);
+
+  assert.match(apiLib, /pub struct ApiServerRuntimeConfig/u);
+  assert.match(apiLib, /pub trait ApiServerPlatform/u);
+  assert.match(apiLib, /pub struct JobManager/u);
+  assert.match(apiLib, /pub enum JobStatus/u);
+  assert.match(apiLib, /pub fn parse_ip_whitelist/u);
+  assert.match(apiLib, /pub fn format_bind_error/u);
+  assert.match(apiLib, /pub async fn run_server/u);
+  assert.doesNotMatch(apiLib, /\btauri::/u);
+
+  assert.match(tauriCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/adapters\/api_server" \}/mu);
+  assert.match(cliCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/api_server" \}/mu);
+  assert.match(tauriServer, /use sona_api_server::\{[\s\S]*run_server/u);
+  assert.doesNotMatch(tauriServer, /^pub async fn run_server/mu);
+  assert.doesNotMatch(tauriServer, /^pub struct JobManager/mu);
+  assert.doesNotMatch(tauriServer, /^pub enum JobStatus/mu);
+  assert.doesNotMatch(tauriServer, /^pub fn parse_ip_whitelist/mu);
+
+  assert.match(cliLib, /^mod serve;/mu);
+  assert.match(cliLib, /Commands::Serve\(args\) => serve::run_serve\(args\)/u);
+  assert.match(cliTemplate, /\[serve\]/u);
+  assert.match(cliTemplate, /sona-cli serve/u);
+  assert.match(apiGuide, /sona-cli serve/u);
+  assert.match(apiGuideZh, /sona-cli serve/u);
 });
 
 test('core crate dependency surface remains domain-only', () => {
@@ -480,14 +532,19 @@ test('core source does not call adapter runtime side effects directly', () => {
   assert.deepEqual(violations, []);
 });
 
-test('desktop api server invokes local batch ASR through the core transcriber port', () => {
+test('shared api server invokes local batch ASR through the core transcriber port', () => {
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
-  const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const apiCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'Cargo.toml'), 'utf8');
+  const apiServer = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'src', 'lib.rs'), 'utf8');
 
   assert.match(tauriCargo, /^sona-local-asr\s*=\s*\{ path = "\.\.\/adapters\/local_asr" \}/mu);
+  assert.match(apiCargo, /^sona-local-asr\s*=\s*\{\s*path = "\.\.\/local_asr" \}/mu);
   assert.match(apiServer, /use sona_core::ports::asr::\{[\s\S]*BatchTranscriber/u);
   assert.match(apiServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(apiServer, /\.transcribe\(plan\)/u);
+  assert.match(tauriServer, /use sona_api_server::\{[\s\S]*run_server/u);
+  assert.doesNotMatch(tauriServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.doesNotMatch(apiServer, /run_offline_transcription/u);
   assert.doesNotMatch(apiServer, /use crate::integrations::asr::transcribe_batch_with_progress;/u);
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
@@ -623,7 +680,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(cliCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 
   assert.doesNotMatch(coreCargo, /^glob\s*=/mu);
@@ -674,7 +731,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -1010,7 +1067,7 @@ test('online ASR provider manifest is owned by core and used directly by desktop
   const coreManifestPath = path.join(repoRoot, 'core', 'src', 'ports', 'online-asr-providers.json');
   const legacySharedManifestPath = path.join(repoRoot, 'src', 'shared', 'online-asr-providers.json');
   const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
-  const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const apiServer = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'src', 'lib.rs'), 'utf8');
   const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
   const onlineAdapterRs = ['groq.rs', 'mistral.rs', 'volcengine.rs']
     .map((file) => fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', file), 'utf8'))
@@ -1949,9 +2006,11 @@ test('media file IO detection is delegated to media detector adapter', () => {
   );
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
+  const apiCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'Cargo.toml'), 'utf8');
   const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
-  const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const apiServer = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'src', 'lib.rs'), 'utf8');
 
   assert.match(coreCargo, /^infer\s*=/mu);
   assert.match(coreLib, /^pub mod media_detector;/mu);
@@ -1969,12 +2028,14 @@ test('media file IO detection is delegated to media detector adapter', () => {
   assert.doesNotMatch(tauriCargo, /^infer\s*=/mu);
   assert.match(tauriCargo, /^sona-media-detector\s*=/mu);
   assert.doesNotMatch(cliCargo, /^sona-media-detector\s*=/mu);
+  assert.match(apiCargo, /^sona-media-detector\s*=/mu);
   assert.match(systemCommand, /sona_media_detector::check_media_formats/u);
   assert.match(apiServer, /sona_media_detector::is_valid_media_file/u);
   assert.doesNotMatch(systemCommand, /sona_core::media_detector::check_media_formats/u);
   assert.doesNotMatch(apiServer, /sona_core::media_detector::is_valid_media_file/u);
   assert.doesNotMatch(systemCommand, /crate::integrations::media_detector/u);
   assert.doesNotMatch(apiServer, /crate::integrations::media_detector/u);
+  assert.doesNotMatch(tauriServer, /sona_media_detector::is_valid_media_file/u);
 });
 
 test('desktop live VAD creation is delegated to local ASR adapter', () => {

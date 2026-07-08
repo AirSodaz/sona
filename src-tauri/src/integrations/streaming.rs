@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio;
 
-use crate::app::server::ServerState;
+use crate::app::server::TauriStreamingContext;
+use sona_api_server::ServerState;
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -144,7 +145,20 @@ async fn handle_online_streaming_socket(
     language: String,
     hotwords: Option<String>,
 ) {
-    let app_handle = match &state.app {
+    let context = match tauri_streaming_context(&state) {
+        Ok(context) => context,
+        Err(message) => {
+            let _ = socket
+                .send(Message::Text(
+                    serde_json::to_string(&ServerMessage::Error { message })
+                        .unwrap()
+                        .into(),
+                ))
+                .await;
+            return;
+        }
+    };
+    let app_handle = match &context.app {
         Some(app) => app.clone(),
         None => {
             let _ = socket
@@ -485,6 +499,7 @@ async fn load_recognizer(
     language: &str,
     hotwords: Option<String>,
 ) -> Result<Arc<crate::integrations::asr::Recognizer>, String> {
+    let context = tauri_streaming_context(state)?;
     let preset =
         crate::platform::preset_models::find_preset_model(model_id).ok_or("Model not found")?;
     let model_path = preset.resolve_install_path(&state.models_dir);
@@ -515,7 +530,7 @@ async fn load_recognizer(
     let primary_key = key.with_gpu_provider(primary_provider.clone());
 
     let (cell, _is_new) = {
-        let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+        let mut pool_guard = context.recognizer_pool.recognizers.lock().await;
         let existing = gpu_plan
             .provider_options()
             .into_iter()
@@ -552,7 +567,7 @@ async fn load_recognizer(
 
             let actual_provider = recognizer_result.provider.clone();
             if actual_provider != primary_provider {
-                let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
+                let mut pool_guard = context.recognizer_pool.recognizers.lock().await;
                 pool_guard.insert(key.with_gpu_provider(actual_provider), cell.clone());
             }
 
@@ -562,6 +577,15 @@ async fn load_recognizer(
         .clone();
 
     Ok(recognizer)
+}
+
+fn tauri_streaming_context(state: &ServerState) -> Result<Arc<TauriStreamingContext>, String> {
+    let context = state
+        .platform
+        .streaming_context()
+        .ok_or_else(|| "Tauri streaming context is not configured".to_string())?;
+    Arc::downcast::<TauriStreamingContext>(context)
+        .map_err(|_| "Tauri streaming context has unexpected type".to_string())
 }
 
 pub(crate) fn resolve_vad_model_path(models_dir: &Path, vad_model_id_or_path: &str) -> PathBuf {
