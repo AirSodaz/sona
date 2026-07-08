@@ -116,9 +116,12 @@ pub struct DiagnosticsCoreSnapshot {
     pub punctuation_required: bool,
 }
 
-pub fn build_diagnostics_core_snapshot(input: DiagnosticsCoreInput) -> DiagnosticsCoreSnapshot {
+pub fn build_diagnostics_core_snapshot_at(
+    input: DiagnosticsCoreInput,
+    scanned_at: String,
+) -> DiagnosticsCoreSnapshot {
     DiagnosticsCoreSnapshot {
-        scanned_at: now_iso_like(),
+        scanned_at,
         config: input.config,
         selected_models: input.selected_models,
         model_rules: input.model_rules,
@@ -132,10 +135,6 @@ pub fn build_diagnostics_core_snapshot(input: DiagnosticsCoreInput) -> Diagnosti
         onboarding_ready: input.onboarding_ready,
         punctuation_required: input.punctuation_required,
     }
-}
-
-fn now_iso_like() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
 fn default_microphone_id() -> String {

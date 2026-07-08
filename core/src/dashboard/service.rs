@@ -10,6 +10,12 @@ use crate::history::{HistoryItemKind, HistoryItemRecord};
 
 const RECENT_DAILY_WINDOW: i64 = 30;
 
+#[derive(Clone, Debug)]
+pub struct DashboardSnapshotTime {
+    pub generated_at: String,
+    pub today: NaiveDate,
+}
+
 pub struct DashboardService<H, P, A>
 where
     H: HistoryRepository,
@@ -35,15 +41,16 @@ where
         }
     }
 
-    pub async fn build_snapshot(
+    pub async fn build_snapshot_at(
         &self,
         deep: bool,
+        time: DashboardSnapshotTime,
     ) -> Result<DashboardSnapshotDomainModel, DashboardServiceError> {
         let history_items = self.history_repo.list_items().await?;
         let project_count = self.project_repo.count_projects().await?;
         let llm_usage = self.analytics_repo.read_dashboard_stats().await?;
 
-        let mut overview = create_overview(&history_items, project_count, deep);
+        let mut overview = create_overview(&history_items, project_count, deep, time.today);
 
         let speakers = if deep {
             let transcript_analytics = self.aggregate_transcript_analytics(&history_items).await?;
@@ -57,12 +64,10 @@ where
             None
         };
 
-        let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-
         Ok(DashboardSnapshotDomainModel {
             content: ContentStats { overview, speakers },
             llm_usage,
-            generated_at,
+            generated_at: time.generated_at,
         })
     }
 
@@ -162,6 +167,7 @@ fn create_overview(
     history_items: &[HistoryItemRecord],
     project_count: u64,
     is_deep_loaded: bool,
+    today: NaiveDate,
 ) -> OverviewStats {
     let recording_count = history_items
         .iter()
@@ -194,12 +200,15 @@ fn create_overview(
         inbox_count_display: format_number(inbox_count),
         project_assigned_count,
         project_assigned_count_display: format_number(project_assigned_count),
-        recent_daily_items: create_recent_daily_trend(history_items),
+        recent_daily_items: create_recent_daily_trend(history_items, today),
         is_deep_loaded,
     }
 }
 
-fn create_recent_daily_trend(history_items: &[HistoryItemRecord]) -> Vec<ContentTrendPoint> {
+fn create_recent_daily_trend(
+    history_items: &[HistoryItemRecord],
+    today: NaiveDate,
+) -> Vec<ContentTrendPoint> {
     let mut aggregates: HashMap<String, ContentTrendPoint> = HashMap::new();
     for item in history_items {
         let key = local_date_key_from_timestamp(item.timestamp as f64);
@@ -221,7 +230,6 @@ fn create_recent_daily_trend(history_items: &[HistoryItemRecord]) -> Vec<Content
             });
     }
 
-    let today = Local::now().date_naive();
     (0..RECENT_DAILY_WINDOW)
         .rev()
         .map(|offset| {
@@ -357,9 +365,16 @@ fn local_date_key_from_timestamp(timestamp: f64) -> String {
     Local
         .timestamp_millis_opt(millis)
         .single()
-        .unwrap_or_else(Local::now)
+        .unwrap_or_else(epoch_local_datetime)
         .format("%Y-%m-%d")
         .to_string()
+}
+
+fn epoch_local_datetime() -> chrono::DateTime<Local> {
+    Local
+        .timestamp_millis_opt(0)
+        .earliest()
+        .expect("local epoch timestamp should be representable")
 }
 
 fn format_number(value: u64) -> String {

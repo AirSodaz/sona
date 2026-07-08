@@ -3,8 +3,10 @@ use sona_core::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
-    VoiceTypingReadinessInput, build_diagnostics_core_snapshot,
+    VoiceTypingReadinessInput, build_diagnostics_core_snapshot_at,
 };
+
+const SCANNED_AT: &str = "2026-07-08T01:02:03.004Z";
 
 fn base_input() -> DiagnosticsCoreInput {
     DiagnosticsCoreInput {
@@ -78,9 +80,13 @@ fn path_status(path: &str, kind: RuntimePathKind) -> RuntimePathStatus {
     }
 }
 
+fn build_snapshot(input: DiagnosticsCoreInput) -> sona_core::diagnostics::DiagnosticsCoreSnapshot {
+    build_diagnostics_core_snapshot_at(input, SCANNED_AT.to_string())
+}
+
 #[test]
 fn core_snapshot_serializes_fact_fields_without_ui_spec() {
-    let value = serde_json::to_value(build_diagnostics_core_snapshot(base_input())).unwrap();
+    let value = serde_json::to_value(build_snapshot(base_input())).unwrap();
 
     assert!(value.get("overview").is_none());
     assert!(value.get("sections").is_none());
@@ -110,7 +116,7 @@ fn core_snapshot_preserves_fact_fields_for_frontend_ui_builder() {
     input.config.punctuation_model_path = "C:\\models\\punct.onnx".to_string();
     input.punctuation_required = true;
 
-    let snapshot = build_diagnostics_core_snapshot(input);
+    let snapshot = build_snapshot(input);
 
     assert_eq!(snapshot.permission_state, "prompt");
     assert!(!snapshot.runtime_environment.ffmpeg_exists);
@@ -167,7 +173,7 @@ fn core_snapshot_carries_asr_metrics_without_formatting() {
     };
     input.asr_runtime_metrics = metrics.clone();
 
-    let snapshot = build_diagnostics_core_snapshot(input);
+    let snapshot = build_snapshot(input);
 
     assert_eq!(snapshot.asr_runtime_metrics, metrics);
     assert_eq!(
@@ -187,4 +193,11 @@ fn core_snapshot_carries_asr_metrics_without_formatting() {
             .and_then(|metric| metric.emit_latency_ms),
         Some(60.1)
     );
+}
+
+#[test]
+fn core_snapshot_uses_supplied_scanned_at_timestamp() {
+    let snapshot = build_diagnostics_core_snapshot_at(base_input(), SCANNED_AT.to_string());
+
+    assert_eq!(snapshot.scanned_at, SCANNED_AT);
 }

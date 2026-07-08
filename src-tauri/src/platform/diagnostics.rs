@@ -11,7 +11,7 @@ pub use sona_core::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathStatus, SelectedModelsInput, VoiceTypingReadinessInput,
-    build_diagnostics_core_snapshot,
+    build_diagnostics_core_snapshot_at,
 };
 
 pub async fn get_diagnostics_core_snapshot(
@@ -20,7 +20,8 @@ pub async fn get_diagnostics_core_snapshot(
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     let input = enrich_diagnostics_core_input(provider, state.inner(), input).await?;
-    Ok(build_diagnostics_core_snapshot(input))
+    let scanned_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    Ok(build_diagnostics_core_snapshot_at(input, scanned_at))
 }
 
 async fn enrich_diagnostics_core_input(

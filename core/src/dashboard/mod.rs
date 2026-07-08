@@ -4,4 +4,4 @@ pub mod ports;
 pub mod service;
 
 pub use error::DashboardServiceError;
-pub use service::DashboardService;
+pub use service::{DashboardService, DashboardSnapshotTime};

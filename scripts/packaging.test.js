@@ -438,6 +438,34 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
   );
 });
 
+test('dashboard and diagnostics clocks are supplied by desktop adapters', () => {
+  const coreDiagnostics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'diagnostics.rs'), 'utf8');
+  const tauriDiagnostics = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    'utf8',
+  );
+  const coreDashboardService = fs.readFileSync(
+    path.join(repoRoot, 'core', 'src', 'dashboard', 'service.rs'),
+    'utf8',
+  );
+  const tauriDashboard = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'dashboard.rs'), 'utf8');
+
+  assert.match(coreDiagnostics, /pub fn build_diagnostics_core_snapshot_at/u);
+  assert.doesNotMatch(coreDiagnostics, /pub fn build_diagnostics_core_snapshot\(/u);
+  assert.doesNotMatch(coreDiagnostics, /Utc::now|chrono::Utc::now|now_iso_like/u);
+  assert.match(tauriDiagnostics, /build_diagnostics_core_snapshot_at/u);
+  assert.match(tauriDiagnostics, /chrono::Utc::now\(\)/u);
+
+  assert.match(coreDashboardService, /pub struct DashboardSnapshotTime/u);
+  assert.match(coreDashboardService, /build_snapshot_at/u);
+  assert.doesNotMatch(coreDashboardService, /pub async fn build_snapshot\(/u);
+  assert.doesNotMatch(coreDashboardService, /Utc::now|chrono::Utc::now|Local::now/u);
+  assert.match(tauriDashboard, /DashboardSnapshotTime/u);
+  assert.match(tauriDashboard, /chrono::Utc::now\(\)/u);
+  assert.match(tauriDashboard, /with_timezone\(&chrono::Local\)/u);
+  assert.doesNotMatch(tauriDashboard, /chrono::Local::now\(\)/u);
+});
+
 test('core ASR request contract is exposed through TS and UniFFI binding crates', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');

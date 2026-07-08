@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use sona_core::dashboard::models::{DashboardUsageBucket, LlmUsageDashboardStats};
 use sona_core::dashboard::ports::{AnalyticsRepository, HistoryRepository, ProjectRepository};
-use sona_core::dashboard::{DashboardService, DashboardServiceError};
+use sona_core::dashboard::{DashboardService, DashboardServiceError, DashboardSnapshotTime};
 use sona_core::history::{
     HistoryAudioStatus, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
 };
@@ -75,6 +76,13 @@ impl AnalyticsRepository for TestAnalyticsRepository {
     }
 }
 
+fn snapshot_time() -> DashboardSnapshotTime {
+    DashboardSnapshotTime {
+        generated_at: "2026-07-08T01:02:03.004Z".to_string(),
+        today: NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+    }
+}
+
 fn history_item(id: &str, kind: HistoryItemKind, project_id: Option<&str>) -> HistoryItemRecord {
     HistoryItemRecord {
         id: id.to_string(),
@@ -108,7 +116,10 @@ async fn dashboard_service_uses_core_ports_for_shallow_snapshot() {
         Arc::new(TestAnalyticsRepository),
     );
 
-    let snapshot = service.build_snapshot(false).await.unwrap();
+    let snapshot = service
+        .build_snapshot_at(false, snapshot_time())
+        .await
+        .unwrap();
 
     assert_eq!(snapshot.content.overview.item_count, 2);
     assert_eq!(snapshot.content.overview.recording_count, 1);
@@ -118,6 +129,34 @@ async fn dashboard_service_uses_core_ports_for_shallow_snapshot() {
     assert_eq!(snapshot.content.overview.project_assigned_count, 1);
     assert_eq!(snapshot.llm_usage.totals.total_tokens, 30);
     assert!(snapshot.content.speakers.is_none());
+}
+
+#[tokio::test]
+async fn dashboard_service_uses_supplied_snapshot_time() {
+    let service = DashboardService::new(
+        Arc::new(TestHistoryRepository {
+            items: vec![],
+            transcripts: vec![],
+        }),
+        Arc::new(TestProjectRepository),
+        Arc::new(TestAnalyticsRepository),
+    );
+
+    let snapshot = service
+        .build_snapshot_at(false, snapshot_time())
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.generated_at, "2026-07-08T01:02:03.004Z");
+    assert_eq!(
+        snapshot
+            .content
+            .overview
+            .recent_daily_items
+            .last()
+            .map(|point| point.date.as_str()),
+        Some("2026-07-08")
+    );
 }
 
 fn transcript_segment(
@@ -176,7 +215,10 @@ async fn dashboard_service_aggregates_deep_transcript_speaker_stats_from_core_po
         Arc::new(TestAnalyticsRepository),
     );
 
-    let snapshot = service.build_snapshot(true).await.unwrap();
+    let snapshot = service
+        .build_snapshot_at(true, snapshot_time())
+        .await
+        .unwrap();
     let analytics = snapshot.content.speakers.unwrap();
 
     assert_eq!(
