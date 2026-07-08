@@ -19,9 +19,10 @@ fn init_config_writes_commented_template_to_target_path() {
     assert!(output.stderr.contains("Created config template"));
     assert!(contents.contains("# Sona CLI config template"));
     assert!(contents.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
-    assert!(contents.contains("# api_key = \"\""));
     assert!(contents.contains("[transcribe]"));
-    assert!(contents.contains("[serve]"));
+    assert!(!contents.contains("# api_key = \"\""));
+    assert!(!contents.contains("[serve]"));
+    assert!(!contents.contains("sona-cli serve"));
 }
 
 #[test]
@@ -82,5 +83,6 @@ fn init_config_force_overwrites_existing_target() {
     assert!(output.stderr.contains("Created config template"));
     assert!(!contents.contains("existing = true"));
     assert!(contents.contains("[transcribe]"));
-    assert!(contents.contains("[serve]"));
+    assert!(!contents.contains("[serve]"));
+    assert!(!contents.contains("sona-cli serve"));
 }

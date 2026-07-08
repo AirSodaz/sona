@@ -72,7 +72,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn template_contains_shared_transcribe_and_serve_keys() {
+    fn template_contains_transcribe_keys_without_unshipped_serve_keys() {
         let content = crate::config_template::render_config_template(None);
         for key in [
             "model_id",
@@ -87,6 +87,14 @@ mod tests {
             "format",
             "quiet",
             "jobs",
+        ] {
+            assert!(
+                content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")),
+                "template should include commented key {key}"
+            );
+        }
+
+        for key in [
             "host",
             "port",
             "api_key",
@@ -98,10 +106,14 @@ mod tests {
             "job_ttl_minutes",
         ] {
             assert!(
-                content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")),
-                "template should include commented key {key}"
+                !content.contains(&format!("# {}", key))
+                    && !content.contains(&format!("# {key} = ")),
+                "template should not include unshipped serve key {key}"
             );
         }
+
+        assert!(!content.contains("[serve]"));
+        assert!(!content.contains("sona-cli serve"));
     }
 
     #[test]

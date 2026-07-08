@@ -4,6 +4,7 @@ version.workspace = true
 description = "Standalone command line interface for Sona core"
 authors.workspace = true
 edition.workspace = true
+build = "build.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "wrap_help"] }
@@ -15,6 +16,9 @@ sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-core = { path = "../../core" }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["rt-multi-thread", "signal"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_System_LibraryLoader"] }
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros"] }

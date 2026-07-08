@@ -6,10 +6,9 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # `sona-cli transcribe` requires model_id to be enabled.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
-#   sona-cli serve -c ./sona-cli.toml
 #
-# Top-level keys are shared defaults for both commands.
-# Uncomment the same key inside [transcribe] or [serve] to override it per command.
+# Top-level keys are shared defaults for CLI commands.
+# Uncomment the same key inside [transcribe] to override it for transcription.
 
 # Shared model location. If omitted, Sona tries the desktop app models directory.
 {models_dir_line}
@@ -32,21 +31,6 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # format = "srt"
 # quiet = false
 # jobs = 1
-
-[serve]
-# models_dir = "..."
-# gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
-# host = "127.0.0.1"
-# port = 14200
-# api_key = ""
-# ip_whitelist = "localhost"
-# max_streaming = 2
-# max_concurrent = 2
-# max_queue_size = 100
-# max_upload_size_mb = 50
-# job_ttl_minutes = 60
 "#;
 
 pub fn render_config_template(models_dir: Option<&Path>) -> String {
@@ -90,9 +74,10 @@ mod tests {
 
         assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
         assert!(content.contains("[transcribe]"));
-        assert!(content.contains("[serve]"));
         assert!(content.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
-        assert!(content.contains("# api_key = \"\""));
+        assert!(!content.contains("[serve]"));
+        assert!(!content.contains("sona-cli serve"));
+        assert!(!content.contains("# api_key = \"\""));
     }
 
     #[test]

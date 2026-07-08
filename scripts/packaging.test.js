@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import YAML from 'yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,89 @@ function rustFilesUnder(root) {
     }
     return entry.isFile() && entry.name.endsWith('.rs') ? [fullPath] : [];
   });
+}
+
+function readCargoDependencyNames(cargoTomlPath, sectionName) {
+  return readCargoDependencyEntries(cargoTomlPath, sectionName)
+    .flatMap(({ name, packageName }) => packageName ? [name, packageName] : [name])
+    .filter((name, index, names) => names.indexOf(name) === index)
+    .sort();
+}
+
+function readCargoDependencySpec(cargoTomlPath, sectionName, dependencyName) {
+  return readCargoDependencyEntries(cargoTomlPath, sectionName)
+    .find(({ name }) => name === dependencyName)?.spec ?? '';
+}
+
+function readCargoDependencyEntries(cargoTomlPath, sectionName) {
+  const lines = fs.readFileSync(cargoTomlPath, 'utf8').split(/\r?\n/u);
+  const entries = [];
+  let inSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const sectionMatch = trimmed.match(/^\[([^[\]]+)\]$/u);
+
+    if (sectionMatch) {
+      inSection = sectionMatch[1] === sectionName || sectionMatch[1].endsWith(`.${sectionName}`);
+      continue;
+    }
+    if (!inSection || trimmed === '' || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const dependencyMatch = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*(.+)$/u);
+    if (dependencyMatch) {
+      entries.push({
+        name: dependencyMatch[1],
+        spec: dependencyMatch[2],
+        packageName: dependencyMatch[2].match(/\bpackage\s*=\s*"([^"]+)"/u)?.[1],
+      });
+    }
+  }
+
+  return entries;
+}
+
+function scanRustSourcePolicyViolations(root, policies) {
+  return rustFilesUnder(root)
+    .sort()
+    .flatMap((filePath) => {
+      const relativePath = path.relative(repoRoot, filePath);
+      return fs.readFileSync(filePath, 'utf8')
+        .split(/\r?\n/u)
+        .flatMap((line, index) => {
+          const sourceLine = stripRustLineComment(line);
+          return policies
+            .filter(([pattern]) => pattern.test(sourceLine))
+            .map(([, label]) => `${relativePath}:${index + 1}: ${label}: ${line.trim()}`);
+        });
+    });
+}
+
+function stripRustLineComment(line) {
+  return line.replace(/\/\/.*$/u, '');
+}
+
+function readWorkflowStep(workflowName, stepName) {
+  return readWorkflowBuildTauriSteps(workflowName)
+    .find((step) => step.name === stepName) ?? assert.fail(`Missing workflow step: ${workflowName} ${stepName}`);
+}
+
+function readWorkflowStepIndex(workflowName, stepName) {
+  const index = readWorkflowBuildTauriSteps(workflowName)
+    .findIndex((step) => step.name === stepName);
+
+  return index === -1 ? assert.fail(`Missing workflow step: ${workflowName} ${stepName}`) : index;
+}
+
+function readWorkflowBuildTauriSteps(workflowName) {
+  const workflowPath = path.join(repoRoot, '.github', 'workflows', workflowName);
+  const workflow = YAML.parse(fs.readFileSync(workflowPath, 'utf8'));
+  const steps = workflow?.jobs?.['build-tauri']?.steps;
+
+  assert.ok(Array.isArray(steps), `${workflowName} must define jobs.build-tauri.steps`);
+  return steps;
 }
 
 test('tauri bundle verification requires ffmpeg sidecar and shared libraries', () => {
@@ -87,6 +171,29 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
   assert.match(result.stdout, /Verified packaged ffmpeg sidecar/);
   assert.match(result.stdout, /Verified standalone CLI resource/);
   assert.match(result.stdout, /Verified shared libraries/);
+});
+
+test('cargo dependency parser includes target dependencies and package aliases', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-cargo-parser-'));
+  const cargoPath = path.join(tempDir, 'Cargo.toml');
+  fs.writeFileSync(
+    cargoPath,
+    [
+      '[dependencies]',
+      'serde = "1"',
+      '',
+      '[target.\'cfg(windows)\'.dependencies]',
+      'sqlite-driver = { package = "rusqlite", version = "0.37" }',
+      '',
+    ].join('\n'),
+  );
+
+  assert.deepEqual(readCargoDependencyNames(cargoPath, 'dependencies'), [
+    'rusqlite',
+    'serde',
+    'sqlite-driver',
+  ]);
+  assert.match(readCargoDependencySpec(cargoPath, 'dependencies', 'sqlite-driver'), /package = "rusqlite"/u);
 });
 
 test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
@@ -177,6 +284,26 @@ test('tauri build wrapper builds and stages standalone CLI resources before desk
   );
 });
 
+test('standalone CLI resolves shared libraries from same-platform desktop resources', () => {
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
+  const cliBuild = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'build.rs'), 'utf8');
+  const cliMain = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'main.rs'), 'utf8');
+
+  assert.match(cliCargo, /^build\s*=\s*"build\.rs"/mu);
+  assert.match(cliBuild, /SHERPA_ONNX_LIB_DIR/u);
+  assert.match(cliBuild, /\$ORIGIN\/\.\.\/shared_libs/u);
+  assert.match(cliBuild, /@loader_path\/\.\.\/shared_libs/u);
+  assert.match(cliBuild, /delayimp\.lib/u);
+  assert.match(cliBuild, /\/DELAYLOAD:sherpa-onnx-c-api\.dll/u);
+  assert.ok(
+    cliMain.indexOf('init_shared_library_directory();') < cliMain.indexOf('sona_cli::run_cli_from_args'),
+    'sona-cli must configure shared library lookup before invoking ASR-backed commands',
+  );
+  assert.match(cliMain, /SetDllDirectoryW/u);
+  assert.match(cliMain, /\.\.\/shared_libs/u);
+  assert.doesNotMatch(cliMain, /tauri/u);
+});
+
 test('generated standalone CLI resources are ignored by git', () => {
   const rootIgnore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
   const tauriIgnore = fs.readFileSync(path.join(repoRoot, 'src-tauri', '.gitignore'), 'utf8');
@@ -203,11 +330,41 @@ test('release workflows stage standalone CLI into the same-platform desktop inst
   }
 });
 
+test('release workflows build CLI and desktop installer from the same job resources', () => {
+  for (const workflowName of ['release.yml', 'nightly.yml']) {
+    const buildCliStep = readWorkflowStep(workflowName, 'Build standalone CLI');
+    const buildUniversalCliStep = readWorkflowStep(workflowName, 'Build standalone CLI (macOS universal)');
+    const stageCliStep = readWorkflowStep(workflowName, 'Stage standalone CLI resource');
+    const buildAppStep = readWorkflowStep(workflowName, 'Build the app');
+    const verifyBundleStep = readWorkflowStep(workflowName, 'Verify Tauri bundle and shared libraries');
+
+    assert.equal(buildCliStep.if, "${{ matrix.args != '--target universal-apple-darwin' }}");
+    assert.match(buildCliStep.run, /cargo build -p sona-cli --release \$\{\{ matrix\.args \}\}/u);
+    assert.equal(buildCliStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
+    assert.equal(buildUniversalCliStep.if, "${{ matrix.args == '--target universal-apple-darwin' }}");
+    assert.match(buildUniversalCliStep.run, /cargo build -p sona-cli --release --target aarch64-apple-darwin/u);
+    assert.match(buildUniversalCliStep.run, /cargo build -p sona-cli --release --target x86_64-apple-darwin/u);
+    assert.equal(buildUniversalCliStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
+    assert.equal(stageCliStep.run, 'node scripts/setup-sona-cli-resource.js ${{ matrix.args }}');
+    assert.equal(buildAppStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
+    assert.equal(buildAppStep.env.SONA_SKIP_CLI_RESOURCE_PREP, '1');
+    assert.equal(buildAppStep.run, 'node scripts/tauri.js build ${{ matrix.args }}');
+    assert.equal(verifyBundleStep.run, 'node scripts/verify-tauri-bundle.js ${{ matrix.args }}');
+    assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
+    assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI (macOS universal)') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
+    assert.ok(readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource') < readWorkflowStepIndex(workflowName, 'Build the app'));
+    assert.ok(readWorkflowStepIndex(workflowName, 'Build the app') < readWorkflowStepIndex(workflowName, 'Verify Tauri bundle and shared libraries'));
+  }
+});
+
 test('CLI documentation describes standalone sona-cli packaging only', () => {
   const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
   const readmeZh = fs.readFileSync(path.join(repoRoot, 'README.zh-CN.md'), 'utf8');
   const cliGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'cli.md'), 'utf8');
-  const docs = `${readme}\n${readmeZh}\n${cliGuide}`;
+  const cliGuideZh = fs.readFileSync(path.join(repoRoot, 'docs', 'cli.zh-CN.md'), 'utf8');
+  const apiGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'api.md'), 'utf8');
+  const apiGuideZh = fs.readFileSync(path.join(repoRoot, 'docs', 'api.zh-CN.md'), 'utf8');
+  const docs = `${readme}\n${readmeZh}\n${cliGuide}\n${cliGuideZh}\n${apiGuide}\n${apiGuideZh}`;
 
   assert.match(readme, /cargo run -p sona-cli -- transcribe/u);
   assert.match(readmeZh, /cargo run -p sona-cli -- transcribe/u);
@@ -221,6 +378,7 @@ test('CLI documentation describes standalone sona-cli packaging only', () => {
   assert.doesNotMatch(docs, /Contents\/MacOS\/Sona transcribe/u);
   assert.doesNotMatch(docs, /cargo run --manifest-path src-tauri\/Cargo\.toml/u);
   assert.doesNotMatch(docs, /not part of the current standalone surface yet/u);
+  assert.doesNotMatch(docs, /\bsona serve\b|\bsona-cli serve\b/u);
 });
 
 test('core crate does not keep sona-cli config template surface', () => {
@@ -238,6 +396,68 @@ test('core crate exposes serve runtime without cli runtime surface', () => {
   assert.doesNotMatch(coreLib, /^pub mod cli_runtime;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'cli_runtime.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_runtime.rs')), false);
+});
+
+test('core crate dependency surface remains domain-only', () => {
+  const coreCargoPath = path.join(repoRoot, 'core', 'Cargo.toml');
+  const runtimeDependencyNames = [
+    'axum',
+    'base64',
+    'bzip2',
+    'cpal',
+    'directories',
+    'dirs',
+    'glob',
+    'hex',
+    'hound',
+    'hyper',
+    'rand',
+    'reqwest',
+    'rusqlite',
+    'sha2',
+    'sherpa-onnx',
+    'sqlx',
+    'tar',
+    'tauri',
+    'tokio',
+    'ureq',
+    'uuid',
+    'walkdir',
+    'zip',
+  ];
+
+  const dependencies = readCargoDependencyNames(coreCargoPath, 'dependencies');
+  const runtimeDependencies = dependencies.filter((name) => runtimeDependencyNames.includes(name));
+
+  assert.deepEqual(runtimeDependencies, []);
+  assert.doesNotMatch(readCargoDependencySpec(coreCargoPath, 'dependencies', 'chrono'), /\bclock\b/u);
+});
+
+test('core source does not call adapter runtime side effects directly', () => {
+  const violations = scanRustSourcePolicyViolations(path.join(repoRoot, 'core', 'src'), [
+    [/\.exists\(/u, 'filesystem path probing'],
+    [/\.metadata\(/u, 'filesystem metadata'],
+    [/\bstd::env\b/u, 'environment access'],
+    [/\bstd::fs\b/u, 'filesystem access'],
+    [/\bstd::process\b/u, 'process spawning'],
+    [/\btokio::fs\b/u, 'async filesystem access'],
+    [/\btokio::process\b/u, 'async process spawning'],
+    [/\breqwest::/u, 'HTTP client'],
+    [/\brusqlite::/u, 'SQLite access'],
+    [/\bsqlx::/u, 'SQL access'],
+    [/\btauri::/u, 'desktop framework'],
+    [/\bsherpa_onnx::/u, 'local ASR runtime'],
+    [/\bcpal::/u, 'audio device runtime'],
+    [/\bhound::/u, 'WAV file IO'],
+    [/\bwalkdir::/u, 'filesystem walking'],
+    [/\brand::/u, 'random generation'],
+    [/\buuid::|Uuid::new_v4/u, 'ID generation'],
+    [/\bSystemTime::now\b/u, 'system clock'],
+    [/\bInstant::now\b/u, 'monotonic clock'],
+    [/\b(?:chrono::)?(?:Utc|Local)::now\b/u, 'wall clock'],
+  ]);
+
+  assert.deepEqual(violations, []);
 });
 
 test('desktop api server invokes local batch ASR through the core transcriber port', () => {
