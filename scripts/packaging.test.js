@@ -313,6 +313,7 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
 
 test('model download runtime implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
@@ -335,6 +336,8 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.doesNotMatch(coreModelDownloads, /reqwest|tokio::fs|sha256_file|tar::|bzip2::/u);
   assert.doesNotMatch(coreModelCatalog, /std::fs::/u);
   assert.doesNotMatch(coreModelCatalog, /pub fn remove_model_install_path/u);
+  assert.doesNotMatch(coreCargo, /^hex\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^sha2\s*=/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'downloads.rs')), false);
   assert.match(adapterLib, /pub use downloads::/u);
   assert.match(adapterLib, /remove_model_install_path/u);
