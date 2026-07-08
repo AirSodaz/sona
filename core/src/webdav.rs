@@ -1,10 +1,8 @@
 use chrono::DateTime;
-use reqwest::{Client, Method, StatusCode, Url};
 use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
-const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+pub const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <propfind xmlns="DAV:">
   <prop>
     <displayname />
@@ -46,21 +44,7 @@ pub struct WebDavConnectionResult {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CollectionProbe {
-    Exists,
-    Missing,
-}
-
-fn build_client() -> Result<Client, String> {
-    Client::builder()
-        .user_agent("Sona/1.0")
-        .https_only(true)
-        .build()
-        .map_err(|error| format!("Failed to create the WebDAV client: {error}"))
-}
-
-fn trim_required(value: &str, label: &str) -> Result<String, String> {
+pub fn trim_required(value: &str, label: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(format!("{label} is required."));
@@ -69,12 +53,21 @@ fn trim_required(value: &str, label: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-fn parse_server_url(value: &str) -> Result<Url, String> {
-    let trimmed = trim_required(value, "WebDAV server URL")?;
-    let mut url =
-        Url::parse(&trimmed).map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
+pub fn normalize_config(config: &WebDavConfigPayload) -> Result<WebDavConfigPayload, String> {
+    Ok(WebDavConfigPayload {
+        server_url: parse_server_url(&config.server_url)?,
+        remote_dir: config.remote_dir.trim().to_string(),
+        username: trim_required(&config.username, "WebDAV username")?,
+        password: trim_required(&config.password, "WebDAV password")?,
+    })
+}
 
-    enforce_https_url(&url, "WebDAV server URL")?;
+pub fn parse_server_url(value: &str) -> Result<String, String> {
+    let trimmed = trim_required(value, "WebDAV server URL")?;
+    let mut url = url::Url::parse(&trimmed)
+        .map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
+
+    enforce_https_url(url.as_str(), "WebDAV server URL")?;
 
     let normalized_path = if url.path().ends_with('/') {
         url.path().to_string()
@@ -83,32 +76,24 @@ fn parse_server_url(value: &str) -> Result<Url, String> {
     };
     url.set_path(&normalized_path);
 
-    Ok(url)
+    Ok(url.to_string())
 }
 
-fn enforce_https_url(url: &Url, label: &str) -> Result<(), String> {
-    if url.scheme() != "https" {
+pub fn enforce_https_url(url: &str, label: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|error| format!("{label} is invalid: {error}"))?;
+    if parsed.scheme() != "https" {
         return Err(format!("{label} must start with https://."));
     }
 
     Ok(())
 }
 
-fn checked_webdav_request_url(url: Url, label: &str) -> Result<Url, String> {
-    enforce_https_url(&url, label)?;
-    Ok(url)
+pub fn checked_webdav_request_url(url: &str, label: &str) -> Result<String, String> {
+    enforce_https_url(url, label)?;
+    Ok(url.to_string())
 }
 
-fn normalize_config(config: &WebDavConfigPayload) -> Result<WebDavConfigPayload, String> {
-    Ok(WebDavConfigPayload {
-        server_url: parse_server_url(&config.server_url)?.to_string(),
-        remote_dir: config.remote_dir.trim().to_string(),
-        username: trim_required(&config.username, "WebDAV username")?,
-        password: trim_required(&config.password, "WebDAV password")?,
-    })
-}
-
-fn remote_dir_segments(remote_dir: &str) -> Vec<&str> {
+pub fn remote_dir_segments(remote_dir: &str) -> Vec<&str> {
     remote_dir
         .split('/')
         .map(str::trim)
@@ -116,8 +101,9 @@ fn remote_dir_segments(remote_dir: &str) -> Vec<&str> {
         .collect()
 }
 
-fn build_collection_url(base_url: &Url, remote_dir: &str) -> Result<Url, String> {
-    let mut url = base_url.clone();
+pub fn build_collection_url(base_url: &str, remote_dir: &str) -> Result<String, String> {
+    let mut url = url::Url::parse(base_url)
+        .map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
     let segments = remote_dir_segments(remote_dir);
 
     {
@@ -131,11 +117,12 @@ fn build_collection_url(base_url: &Url, remote_dir: &str) -> Result<Url, String>
         path_segments.push("");
     }
 
-    Ok(url)
+    checked_webdav_request_url(url.as_str(), "WebDAV collection URL")
 }
 
-fn build_file_url(collection_url: &Url, file_name: &str) -> Result<Url, String> {
-    let mut url = collection_url.clone();
+pub fn build_file_url(collection_url: &str, file_name: &str) -> Result<String, String> {
+    let mut url = url::Url::parse(collection_url)
+        .map_err(|error| format!("WebDAV collection URL is invalid: {error}"))?;
     {
         let mut path_segments = url
             .path_segments_mut()
@@ -143,7 +130,16 @@ fn build_file_url(collection_url: &Url, file_name: &str) -> Result<Url, String> 
         path_segments.pop_if_empty();
         path_segments.push(file_name);
     }
-    Ok(url)
+    checked_webdav_request_url(url.as_str(), "WebDAV backup URL")
+}
+
+pub fn join_backup_href(base_url: &str, href: &str) -> Result<String, String> {
+    let base = url::Url::parse(base_url)
+        .map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
+    let joined = base
+        .join(href.trim())
+        .map_err(|error| format!("WebDAV backup URL is invalid: {error}"))?;
+    checked_webdav_request_url(joined.as_str(), "WebDAV backup URL")
 }
 
 fn find_descendant_text(node: Node<'_, '_>, name: &str) -> Option<String> {
@@ -159,7 +155,7 @@ fn response_is_collection(node: Node<'_, '_>) -> bool {
         .any(|candidate| candidate.is_element() && candidate.tag_name().name() == "collection")
 }
 
-fn decode_file_name_from_href(resolved_url: &Url) -> Option<String> {
+fn decode_file_name_from_href(resolved_url: &url::Url) -> Option<String> {
     resolved_url
         .path_segments()
         .and_then(|mut segments| segments.rfind(|segment| !segment.is_empty()))
@@ -174,13 +170,15 @@ fn parse_http_date_timestamp(value: Option<&str>) -> i64 {
         .unwrap_or(0)
 }
 
-fn normalize_collection_url(url: &Url) -> Result<Url, String> {
-    build_collection_url(&parse_server_url(url.as_str())?, "")
+fn normalize_collection_url(url: &str) -> Result<url::Url, String> {
+    let normalized = build_collection_url(&parse_server_url(url)?, "")?;
+    url::Url::parse(&normalized)
+        .map_err(|error| format!("WebDAV collection URL is invalid: {error}"))
 }
 
-fn parse_propfind_entries(
+pub fn parse_propfind_entries(
     xml: &str,
-    collection_url: &Url,
+    collection_url: &str,
 ) -> Result<Vec<RemoteBackupEntry>, String> {
     let document = Document::parse(xml)
         .map_err(|error| format!("Failed to parse the WebDAV response: {error}"))?;
@@ -200,10 +198,6 @@ fn parse_propfind_entries(
             .map_err(|error| format!("Failed to resolve a WebDAV entry URL: {error}"))?;
 
         if response_is_collection(response) {
-            let resolved_collection = build_collection_url(&resolved_url, "")?;
-            if resolved_collection == normalized_collection {
-                continue;
-            }
             continue;
         }
 
@@ -238,99 +232,7 @@ fn parse_propfind_entries(
     Ok(entries)
 }
 
-async fn propfind(
-    client: &Client,
-    config: &WebDavConfigPayload,
-    url: Url,
-    depth: &str,
-) -> Result<reqwest::Response, String> {
-    let url = checked_webdav_request_url(url, "WebDAV request URL")?;
-    client
-        .request(
-            Method::from_bytes(b"PROPFIND")
-                .map_err(|error| format!("Failed to build the PROPFIND request: {error}"))?,
-            url,
-        )
-        .basic_auth(&config.username, Some(&config.password))
-        .header("Depth", depth)
-        .header("Content-Type", "application/xml; charset=utf-8")
-        .body(PROPFIND_BODY)
-        .send()
-        .await
-        .map_err(|error| format!("WebDAV request failed: {error}"))
-}
-
-async fn probe_collection(
-    client: &Client,
-    config: &WebDavConfigPayload,
-    collection_url: &Url,
-) -> Result<CollectionProbe, String> {
-    let response = propfind(client, config, collection_url.clone(), "0").await?;
-    match response.status() {
-        StatusCode::MULTI_STATUS | StatusCode::OK => Ok(CollectionProbe::Exists),
-        StatusCode::NOT_FOUND => Ok(CollectionProbe::Missing),
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Err(format!(
-            "WebDAV authentication failed with status {}.",
-            response.status()
-        )),
-        status => Err(format!(
-            "WebDAV connection check failed with status {status}."
-        )),
-    }
-}
-
-async fn ensure_remote_directory(
-    client: &Client,
-    config: &WebDavConfigPayload,
-    base_url: &Url,
-) -> Result<Url, String> {
-    let collection_url = build_collection_url(base_url, &config.remote_dir)?;
-    if probe_collection(client, config, &collection_url).await? == CollectionProbe::Exists {
-        return Ok(collection_url);
-    }
-
-    let segments = remote_dir_segments(&config.remote_dir);
-    if segments.is_empty() {
-        return Ok(collection_url);
-    }
-
-    let mut accumulated = Vec::new();
-    for segment in segments {
-        accumulated.push(segment);
-        let segment_path = accumulated.join("/");
-        let segment_url = build_collection_url(base_url, &segment_path)?;
-        if probe_collection(client, config, &segment_url).await? == CollectionProbe::Exists {
-            continue;
-        }
-
-        let response = client
-            .request(
-                Method::from_bytes(b"MKCOL")
-                    .map_err(|error| format!("Failed to build the MKCOL request: {error}"))?,
-                checked_webdav_request_url(segment_url.clone(), "WebDAV directory URL")?,
-            )
-            .basic_auth(&config.username, Some(&config.password))
-            .send()
-            .await
-            .map_err(|error| format!("Failed to create the WebDAV directory: {error}"))?;
-
-        match response.status() {
-            StatusCode::CREATED
-            | StatusCode::OK
-            | StatusCode::NO_CONTENT
-            | StatusCode::METHOD_NOT_ALLOWED => {}
-            status => {
-                return Err(format!(
-                    "Failed to create the WebDAV directory \"{segment_path}\" with status {status}."
-                ));
-            }
-        }
-    }
-
-    Ok(collection_url)
-}
-
-fn resolve_warning_message(collection_missing: bool) -> WebDavConnectionResult {
+pub fn resolve_warning_message(collection_missing: bool) -> WebDavConnectionResult {
     let mut warnings = Vec::new();
     if collection_missing {
         warnings.push("Connected to the WebDAV server, but the remote directory does not exist yet. It will be created on the first upload.".to_string());
@@ -349,142 +251,9 @@ fn resolve_warning_message(collection_missing: bool) -> WebDavConnectionResult {
     }
 }
 
-pub async fn webdav_test_connection(
-    config: WebDavConfigPayload,
-) -> Result<WebDavConnectionResult, String> {
-    let normalized = normalize_config(&config)?;
-    let client = build_client()?;
-    let base_url = parse_server_url(&normalized.server_url)?;
-    let collection_url = build_collection_url(&base_url, &normalized.remote_dir)?;
-    let probe = probe_collection(&client, &normalized, &collection_url).await?;
-
-    Ok(resolve_warning_message(probe == CollectionProbe::Missing))
-}
-
-pub async fn webdav_list_backups(
-    config: WebDavConfigPayload,
-) -> Result<Vec<RemoteBackupEntry>, String> {
-    let normalized = normalize_config(&config)?;
-    let client = build_client()?;
-    let base_url = parse_server_url(&normalized.server_url)?;
-    let collection_url = build_collection_url(&base_url, &normalized.remote_dir)?;
-
-    if probe_collection(&client, &normalized, &collection_url).await? == CollectionProbe::Missing {
-        return Ok(Vec::new());
-    }
-
-    let response = propfind(&client, &normalized, collection_url.clone(), "1").await?;
-    match response.status() {
-        StatusCode::MULTI_STATUS | StatusCode::OK => {
-            let body = response
-                .text()
-                .await
-                .map_err(|error| format!("Failed to read the WebDAV listing response: {error}"))?;
-            parse_propfind_entries(&body, &collection_url)
-        }
-        status => Err(format!(
-            "Failed to list WebDAV backups with status {status}."
-        )),
-    }
-}
-
-pub async fn webdav_upload_backup(
-    config: WebDavConfigPayload,
-    local_archive_path: String,
-) -> Result<(), String> {
-    let normalized = normalize_config(&config)?;
-    let client = build_client()?;
-    let base_url = parse_server_url(&normalized.server_url)?;
-    let collection_url = ensure_remote_directory(&client, &normalized, &base_url).await?;
-    let file_name = Path::new(&local_archive_path)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Backup archive path is missing a file name.".to_string())?;
-    let target_url = checked_webdav_request_url(
-        build_file_url(&collection_url, file_name)?,
-        "WebDAV backup URL",
-    )?;
-    let archive_bytes = tokio::fs::read(&local_archive_path)
-        .await
-        .map_err(|error| format!("Failed to read the local backup archive: {error}"))?;
-
-    let response = client
-        .put(target_url)
-        .basic_auth(&normalized.username, Some(&normalized.password))
-        .header("Content-Type", "application/x-bzip2")
-        .body(archive_bytes)
-        .send()
-        .await
-        .map_err(|error| format!("Failed to upload the backup archive to WebDAV: {error}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "WebDAV upload failed with status {}.",
-            response.status()
-        ));
-    }
-
-    Ok(())
-}
-
-pub async fn webdav_download_backup(
-    config: WebDavConfigPayload,
-    href: String,
-    output_path: String,
-) -> Result<(), String> {
-    let normalized = normalize_config(&config)?;
-    let client = build_client()?;
-    let base_url = parse_server_url(&normalized.server_url)?;
-    let backup_url = checked_webdav_request_url(
-        base_url
-            .join(href.trim())
-            .map_err(|error| format!("WebDAV backup URL is invalid: {error}"))?,
-        "WebDAV backup URL",
-    )?;
-
-    if let Some(parent) = Path::new(&output_path).parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|error| {
-            format!("Failed to prepare the temporary download directory: {error}")
-        })?;
-    }
-
-    let response = client
-        .get(backup_url)
-        .basic_auth(&normalized.username, Some(&normalized.password))
-        .send()
-        .await
-        .map_err(|error| format!("Failed to download the WebDAV backup archive: {error}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "WebDAV download failed with status {}.",
-            response.status()
-        ));
-    }
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| format!("Failed to read the WebDAV backup archive: {error}"))?;
-
-    if let Err(error) = tokio::fs::write(&output_path, &bytes).await {
-        let _ = tokio::fs::remove_file(&output_path).await;
-        return Err(format!(
-            "Failed to save the downloaded backup archive: {error}"
-        ));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        WebDavConnectionStatus, build_collection_url, parse_propfind_entries,
-        resolve_warning_message,
-    };
-    use reqwest::Url;
+    use super::{WebDavConnectionStatus, build_collection_url, parse_propfind_entries};
 
     #[test]
     fn parse_server_url_rejects_http_before_credentials_are_sent() {
@@ -503,7 +272,7 @@ mod tests {
     #[test]
     fn checked_webdav_request_url_rejects_http_before_credentials_are_sent() {
         let error = super::checked_webdav_request_url(
-            Url::parse("http://dav.example.com/backups/sona.tar.bz2").unwrap(),
+            "http://dav.example.com/backups/sona.tar.bz2",
             "WebDAV backup URL",
         )
         .unwrap_err();
@@ -513,9 +282,9 @@ mod tests {
 
     #[test]
     fn build_collection_url_appends_nested_remote_directory() {
-        let base_url = Url::parse("https://dav.example.com/remote.php/dav/files/demo/").unwrap();
+        let base_url = "https://dav.example.com/remote.php/dav/files/demo/";
 
-        let result = build_collection_url(&base_url, "/backups/sona/").unwrap();
+        let result = build_collection_url(base_url, "/backups/sona/").unwrap();
 
         assert_eq!(
             result.as_str(),
@@ -563,10 +332,9 @@ mod tests {
     </d:propstat>
   </d:response>
 </d:multistatus>"#;
-        let collection_url =
-            Url::parse("https://dav.example.com/remote.php/dav/files/demo/backups/sona/").unwrap();
+        let collection_url = "https://dav.example.com/remote.php/dav/files/demo/backups/sona/";
 
-        let result = parse_propfind_entries(xml, &collection_url).unwrap();
+        let result = parse_propfind_entries(xml, collection_url).unwrap();
 
         assert_eq!(result.len(), 2);
         assert_eq!(
@@ -580,54 +348,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_propfind_entries_falls_back_to_href_file_name_and_ties_by_file_name() {
-        let xml = r#"<?xml version="1.0"?>
-<d:multistatus xmlns:d="DAV:">
-  <d:response>
-    <d:href>/remote.php/dav/files/demo/backups/sona/zeta-backup.tar.bz2</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getcontentlength>10</d:getcontentlength>
-        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
-      </d:prop>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/remote.php/dav/files/demo/backups/sona/alpha%20backup.tar.bz2</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getcontentlength>20</d:getcontentlength>
-        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
-      </d:prop>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/remote.php/dav/files/demo/backups/sona/named-from-display.tar.bz2</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>beta-backup.tar.bz2</d:displayname>
-        <d:getcontentlength>30</d:getcontentlength>
-        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
-      </d:prop>
-    </d:propstat>
-  </d:response>
-</d:multistatus>"#;
-        let collection_url =
-            Url::parse("https://dav.example.com/remote.php/dav/files/demo/backups/sona/").unwrap();
+    fn resolve_warning_message_returns_success_when_collection_exists() {
+        let result = super::resolve_warning_message(false);
 
-        let result = parse_propfind_entries(xml, &collection_url).unwrap();
-
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0].file_name, "alpha backup.tar.bz2");
-        assert_eq!(result[1].file_name, "beta-backup.tar.bz2");
-        assert_eq!(result[2].file_name, "zeta-backup.tar.bz2");
-    }
-
-    #[test]
-    fn resolve_warning_message_marks_missing_collection_as_warning() {
-        let result = resolve_warning_message(true);
-
-        assert_eq!(result.status, WebDavConnectionStatus::Warning);
-        assert!(result.message.contains("remote directory does not exist"));
+        assert_eq!(result.status, WebDavConnectionStatus::Success);
+        assert_eq!(result.message, "WebDAV connection is ready.");
     }
 }

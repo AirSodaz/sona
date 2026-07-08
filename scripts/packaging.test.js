@@ -253,6 +253,26 @@ test('desktop api server invokes local batch ASR through the core transcriber po
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
 });
 
+test('webdav network implementation lives in a dedicated adapter crate', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const systemRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const coreWebdav = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'webdav.rs'), 'utf8');
+  const webdavAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'webdav', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/webdav"/u);
+  assert.match(tauriCargo, /sona-webdav\s*=\s*\{\s*path = "\.\.\/adapters\/webdav" \}/u);
+  assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_download_backup/u);
+  assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_test_connection/u);
+  assert.doesNotMatch(systemRs, /sona_core::webdav::webdav_/u);
+  assert.doesNotMatch(coreWebdav, /pub async fn webdav_/u);
+  assert.doesNotMatch(coreWebdav, /reqwest::\{Client, Method, StatusCode, Url\}/u);
+  assert.match(webdavAdapter, /pub async fn webdav_test_connection/u);
+  assert.match(webdavAdapter, /pub async fn webdav_list_backups/u);
+  assert.match(webdavAdapter, /pub async fn webdav_upload_backup/u);
+  assert.match(webdavAdapter, /pub async fn webdav_download_backup/u);
+});
+
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -261,7 +281,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-online-llm -p sona-online-asr -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-local-asr -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 

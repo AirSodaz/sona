@@ -26,6 +26,7 @@ sona-local-asr = { path = "../adapters/local_asr" }
 sona-online-llm = { path = "../adapters/online_llm" }
 sona-online-asr = { path = "../adapters/online_asr" }
 sona-sqlite = { path = "../adapters/sqlite" }
+sona-webdav = { path = "../adapters/webdav" }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

@@ -1,0 +1,16 @@
+[package]
+name = "sona-webdav"
+version.workspace = true
+description = "WebDAV network adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+sona-core = { path = "../../core" }
+tokio = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }

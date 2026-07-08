@@ -5398,6 +5398,7 @@ dependencies = [
  "sona-online-asr",
  "sona-online-llm",
  "sona-sqlite",
+ "sona-webdav",
  "specta",
  "specta-typescript",
  "sysinfo",
@@ -5477,6 +5478,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "unicode-normalization",
+ "url",
  "urlencoding",
  "uuid",
  "walkdir",
@@ -5563,6 +5565,17 @@ dependencies = [
  "sona-core",
  "thiserror 2.0.18",
  "uniffi",
+]
+
+[[package]]
+name = "sona-webdav"
+version = "0.8.0"
+dependencies = [
+ "axum",
+ "reqwest 0.13.4",
+ "sona-core",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

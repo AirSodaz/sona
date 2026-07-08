@@ -4,6 +4,12 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::platform::paths::{PathProvider, TauriPathProvider};
 use sona_sqlite::DatabaseError;
+use sona_webdav::{
+    webdav_download_backup as webdav_download_backup_adapter,
+    webdav_list_backups as webdav_list_backups_adapter,
+    webdav_test_connection as webdav_test_connection_adapter,
+    webdav_upload_backup as webdav_upload_backup_adapter,
+};
 
 // task_ledger helper functions (copied from core/task_ledger/commands.rs)
 use sona_core::task_ledger::types::{
@@ -181,14 +187,14 @@ pub async fn get_path_statuses(
 pub async fn webdav_test_connection(
     config: sona_core::webdav::WebDavConfigPayload,
 ) -> Result<sona_core::webdav::WebDavConnectionResult, String> {
-    sona_core::webdav::webdav_test_connection(config).await
+    webdav_test_connection_adapter(config).await
 }
 
 #[tauri::command]
 pub async fn webdav_list_backups(
     config: sona_core::webdav::WebDavConfigPayload,
 ) -> Result<Vec<sona_core::webdav::RemoteBackupEntry>, String> {
-    sona_core::webdav::webdav_list_backups(config).await
+    webdav_list_backups_adapter(config).await
 }
 
 #[tauri::command]
@@ -196,7 +202,7 @@ pub async fn webdav_upload_backup(
     config: sona_core::webdav::WebDavConfigPayload,
     local_archive_path: String,
 ) -> Result<(), String> {
-    sona_core::webdav::webdav_upload_backup(config, local_archive_path).await
+    webdav_upload_backup_adapter(config, local_archive_path).await
 }
 
 #[tauri::command]
@@ -205,7 +211,7 @@ pub async fn webdav_download_backup(
     href: String,
     output_path: String,
 ) -> Result<(), String> {
-    sona_core::webdav::webdav_download_backup(config, href, output_path).await
+    webdav_download_backup_adapter(config, href, output_path).await
 }
 
 #[tauri::command]
