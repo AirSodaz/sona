@@ -3,11 +3,11 @@ use crate::ports::Database as DatabasePort;
 use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::dashboard::ports::ProjectRepository;
-use sona_core::file_utils::current_time_millis;
 use sona_core::project::{
     ProjectCreateInput, ProjectDefaults, ProjectListOptions, ProjectRecord, normalize_defaults,
 };
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 pub struct SqliteProjectRepository<D = crate::Database>
@@ -100,6 +100,13 @@ fn project_update_sql() -> String {
         .collect::<Vec<_>>()
         .join(", ");
     format!("UPDATE projects SET {assignments} WHERE id = :id")
+}
+
+fn current_time_millis() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|error| error.to_string())
 }
 
 impl<D> SqliteProjectRepository<D>

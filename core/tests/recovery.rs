@@ -1,6 +1,7 @@
 use serde_json::json;
 use sona_core::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_value_with_source_paths,
+    snapshot_from_items_with_timestamp, snapshot_from_value_with_source_paths_at,
 };
 use sona_core::recovery::types::{
     RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveryFileStat,
@@ -92,4 +93,29 @@ fn recovery_queue_normalization_uses_injected_source_path_status() {
     assert!(!item.can_resume);
     assert_eq!(item.segments[0].start, 0.0);
     assert_eq!(item.segments[0].timing.as_ref().unwrap().level, "segment");
+}
+
+#[test]
+fn recovery_snapshot_normalization_uses_supplied_timestamps() {
+    let loaded = snapshot_from_value_with_source_paths_at(
+        json!({
+            "version": RECOVERY_VERSION,
+            "items": [{
+                "id": "recovery-1",
+                "filename": "audio.wav",
+                "filePath": "C:/audio.wav",
+                "resolution": "pending",
+                "segments": []
+            }]
+        }),
+        false,
+        &DirectorySourcePaths,
+        5000,
+    );
+
+    assert_eq!(loaded.items[0].updated_at, 5000);
+
+    let saved = snapshot_from_items_with_timestamp(loaded.items, 6000);
+
+    assert_eq!(saved.updated_at, Some(6000));
 }

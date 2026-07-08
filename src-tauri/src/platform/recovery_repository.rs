@@ -2,11 +2,12 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sona_core::recovery::normalization::{
-    empty_snapshot, now_ms, recovered_item_from_queue_value_with_source_paths,
-    recovered_item_from_saved_value_with_source_paths, snapshot_from_items,
-    snapshot_from_value_with_source_paths,
+    empty_snapshot, recovered_item_from_queue_value_with_source_paths,
+    recovered_item_from_saved_value_with_source_paths, snapshot_from_items_with_timestamp,
+    snapshot_from_value_with_source_paths_at,
 };
 use sona_core::recovery::repository::RecoveryRepository;
 use sona_core::recovery::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
@@ -52,10 +53,11 @@ impl RecoveryRepository for FsRecoveryRepository {
                 return Ok(empty_snapshot());
             }
         };
-        Ok(snapshot_from_value_with_source_paths(
+        Ok(snapshot_from_value_with_source_paths_at(
             value,
             false,
             &FsSourcePathStatusProvider,
+            now_ms(),
         ))
     }
 
@@ -73,7 +75,7 @@ impl RecoveryRepository for FsRecoveryRepository {
             })
             .filter(|item| item.resolution == "pending")
             .collect::<Vec<_>>();
-        let snapshot = snapshot_from_items(normalized_items);
+        let snapshot = snapshot_from_items_with_timestamp(normalized_items, now);
         write_json_pretty_atomic(&self.queue_recovery_path(), &snapshot)?;
         Ok(snapshot)
     }
@@ -115,10 +117,17 @@ impl RecoveryRepository for FsRecoveryRepository {
                 item.resolution == "pending" && !observed_item_ids.contains(&item.id)
             }),
         );
-        let snapshot = snapshot_from_items(items);
+        let snapshot = snapshot_from_items_with_timestamp(items, now);
         write_json_pretty_atomic(&self.queue_recovery_path(), &snapshot)?;
         Ok(snapshot)
     }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn collect_queue_recovery_ids(value: &Value) -> Vec<String> {

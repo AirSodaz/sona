@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Transaction;
 use serde_json::Value;
-use sona_core::project::{ProjectDefaults, ProjectListOptions, normalize_project_value};
+use sona_core::project::{
+    ProjectDefaults, ProjectListOptions, normalize_project_value_with_timestamp,
+};
 
 use crate::{Database, DatabaseError};
 
@@ -223,6 +226,13 @@ fn nested_bool_field(obj: &Value, parent: &str, key: &str) -> bool {
         .and_then(|value| value.get(key))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn current_time_millis() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|error| error.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -493,8 +503,14 @@ fn migrate_projects(
         }
     };
 
+    let fallback_timestamp = current_time_millis().unwrap_or(0);
+
     for (i, project_val) in projects.iter().enumerate() {
-        let mut project = normalize_project_value(project_val, &ProjectListOptions::default());
+        let mut project = normalize_project_value_with_timestamp(
+            project_val,
+            &ProjectListOptions::default(),
+            fallback_timestamp,
+        );
         if project.id.is_empty() {
             project.id = format!("_migrated_{i}");
         }

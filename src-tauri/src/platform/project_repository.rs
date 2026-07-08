@@ -2,7 +2,6 @@ use sona_sqlite::DatabaseError;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 
-pub use sona_core::file_utils::current_time_millis;
 pub use sona_core::project::{
     ACTIVE_PROJECT_SETTINGS_KEY, DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID,
     DEFAULT_TRANSLATION_LANGUAGE, active_project_id_from_value, non_empty_trimmed_string,

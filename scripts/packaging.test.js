@@ -363,10 +363,20 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     path.join(repoRoot, 'core', 'src', 'recovery', 'normalization.rs'),
     'utf8',
   );
+  const coreProject = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'project.rs'), 'utf8');
   const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
   const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
   const coreFsPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'fs.rs'), 'utf8');
   const coreFileUtils = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'file_utils.rs'), 'utf8');
+  const sqliteProject = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'project.rs'), 'utf8');
+  const sqliteLegacyMigration = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs'),
+    'utf8',
+  );
+  const tauriRecoveryRepository = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
+    'utf8',
+  );
 
   assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
   assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
@@ -384,10 +394,22 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(coreRuntime, /std::fs::metadata/u);
   assert.doesNotMatch(coreRecoveryNormalization, /std::fs::metadata/u);
   assert.doesNotMatch(coreRecoveryNormalization, /FsSourcePathStatusProvider/u);
+  assert.doesNotMatch(coreRecoveryNormalization, /SystemTime::now|pub fn now_ms/u);
+  assert.match(coreRecoveryNormalization, /snapshot_from_items_with_timestamp/u);
+  assert.match(coreRecoveryNormalization, /snapshot_from_value_with_source_paths_at/u);
+  assert.doesNotMatch(coreProject, /current_time_millis|crate::file_utils/u);
+  assert.match(coreProject, /normalize_project_value_with_timestamp/u);
+  assert.match(coreProject, /normalize_project_record_for_import_with_timestamp/u);
   assert.doesNotMatch(corePresetModels, /\.metadata\(\)|\.exists\(\)|is_preset_model_installed_at/u);
   assert.doesNotMatch(coreModelCatalog, /is_preset_model_installed_at/u);
   assert.doesNotMatch(coreFsPort, /RealFileSystem|std::fs::/u);
   assert.doesNotMatch(coreFileUtils, /FileSystem|write_json_pretty_atomic_with|remove_path_if_exists_with/u);
+  assert.doesNotMatch(coreFileUtils, /SystemTime::now|current_time_millis/u);
+  assert.doesNotMatch(sqliteProject, /sona_core::file_utils::current_time_millis/u);
+  assert.match(sqliteLegacyMigration, /normalize_project_value_with_timestamp/u);
+  assert.match(tauriRecoveryRepository, /fn now_ms\(\) -> u64/u);
+  assert.match(tauriRecoveryRepository, /snapshot_from_items_with_timestamp/u);
+  assert.match(tauriRecoveryRepository, /snapshot_from_value_with_source_paths_at/u);
   assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*write_json_pretty_atomic_with/u);
   assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*remove_path_if_exists_with/u);
 

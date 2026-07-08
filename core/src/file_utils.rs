@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 pub fn ensure_json_array_value(
     value: serde_json::Value,
     label: &str,
@@ -9,13 +7,6 @@ pub fn ensure_json_array_value(
     } else {
         Err(format!("{label} must be an array."))
     }
-}
-
-pub fn current_time_millis() -> Result<u64, String> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

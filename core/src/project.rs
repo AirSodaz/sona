@@ -1,4 +1,3 @@
-use crate::file_utils::current_time_millis;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -67,18 +66,36 @@ pub const DEFAULT_TRANSLATION_LANGUAGE: &str = "zh";
 pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
 
 pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, String> {
-    let project = normalize_project_value(input, &ProjectListOptions::default());
+    normalize_project_record_for_import_with_timestamp(input, 0)
+}
+
+pub fn normalize_project_record_for_import_with_timestamp(
+    input: &Value,
+    fallback_timestamp: u64,
+) -> Result<Value, String> {
+    let project = normalize_project_value_with_timestamp(
+        input,
+        &ProjectListOptions::default(),
+        fallback_timestamp,
+    );
     serde_json::to_value(project).map_err(|error| error.to_string())
 }
 
 pub fn normalize_project_value(input: &Value, options: &ProjectListOptions) -> ProjectRecord {
-    let now = current_time_millis().unwrap_or(0);
+    normalize_project_value_with_timestamp(input, options, 0)
+}
+
+pub fn normalize_project_value_with_timestamp(
+    input: &Value,
+    options: &ProjectListOptions,
+    fallback_timestamp: u64,
+) -> ProjectRecord {
     let source = input.as_object();
     let defaults = source
         .and_then(|object| object.get("defaults"))
         .and_then(Value::as_object);
-    let created_at =
-        positive_millis(source.and_then(|object| object.get("createdAt"))).unwrap_or(now);
+    let created_at = positive_millis(source.and_then(|object| object.get("createdAt")))
+        .unwrap_or(fallback_timestamp);
 
     ProjectRecord {
         id: string_value(source.and_then(|object| object.get("id"))).unwrap_or_default(),

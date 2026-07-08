@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use serde_json::Value;
 use serde_with::{DefaultOnError, serde_as};
-use std::time::SystemTime;
 
 use crate::recovery::types::{
     RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
@@ -223,13 +222,6 @@ impl RawRecoveredQueueItem {
     }
 }
 
-pub fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
 pub fn empty_snapshot() -> RecoverySnapshot {
     RecoverySnapshot {
         version: RECOVERY_VERSION,
@@ -239,18 +231,34 @@ pub fn empty_snapshot() -> RecoverySnapshot {
 }
 
 pub fn snapshot_from_items(items: Vec<RecoveredQueueItem>) -> RecoverySnapshot {
+    snapshot_from_items_with_timestamp(items, 0)
+}
+
+pub fn snapshot_from_items_with_timestamp(
+    items: Vec<RecoveredQueueItem>,
+    timestamp: u64,
+) -> RecoverySnapshot {
     RecoverySnapshot {
         version: RECOVERY_VERSION,
-        updated_at: (!items.is_empty()).then(now_ms),
+        updated_at: (!items.is_empty()).then_some(timestamp),
         items,
     }
 }
 
 pub fn snapshot_from_value(value: Value, include_only_pending: bool) -> RecoverySnapshot {
-    snapshot_from_value_with_source_paths(
+    snapshot_from_value_at(value, include_only_pending, 0)
+}
+
+pub fn snapshot_from_value_at(
+    value: Value,
+    include_only_pending: bool,
+    timestamp: u64,
+) -> RecoverySnapshot {
+    snapshot_from_value_with_source_paths_at(
         value,
         include_only_pending,
         &UnknownSourcePathStatusProvider,
+        timestamp,
     )
 }
 
@@ -259,13 +267,21 @@ pub fn snapshot_from_value_with_source_paths(
     include_only_pending: bool,
     source_paths: &impl SourcePathStatusProvider,
 ) -> RecoverySnapshot {
-    let now = now_ms();
+    snapshot_from_value_with_source_paths_at(value, include_only_pending, source_paths, 0)
+}
+
+pub fn snapshot_from_value_with_source_paths_at(
+    value: Value,
+    include_only_pending: bool,
+    source_paths: &impl SourcePathStatusProvider,
+    timestamp: u64,
+) -> RecoverySnapshot {
     let raw = serde_json::from_value::<RawRecoverySnapshot>(value).unwrap_or_default();
     let items = raw
         .items
         .into_iter()
         .filter_map(RawRecoveredQueueItem::from_value)
-        .filter_map(|item| item.normalize_recovered(now, source_paths))
+        .filter_map(|item| item.normalize_recovered(timestamp, source_paths))
         .filter(|item| !include_only_pending || item.resolution == "pending")
         .collect::<Vec<_>>();
 

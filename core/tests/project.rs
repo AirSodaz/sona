@@ -138,3 +138,38 @@ fn test_project_normalization_logic() {
         vec!["fallback_speaker".to_string()]
     );
 }
+
+#[test]
+fn project_normalization_uses_supplied_fallback_timestamp() {
+    use serde_json::json;
+    use sona_core::project::{
+        ProjectListOptions, normalize_project_record_for_import_with_timestamp,
+        normalize_project_value_with_timestamp,
+    };
+
+    let record = normalize_project_value_with_timestamp(
+        &json!({
+            "id": "p1",
+            "name": "Imported",
+            "defaults": {}
+        }),
+        &ProjectListOptions::default(),
+        1234,
+    );
+
+    assert_eq!(record.created_at, 1234);
+    assert_eq!(record.updated_at, 1234);
+
+    let value = normalize_project_record_for_import_with_timestamp(
+        &json!({
+            "id": "p2",
+            "name": "Imported again",
+            "defaults": {}
+        }),
+        5678,
+    )
+    .unwrap();
+
+    assert_eq!(value["createdAt"], 5678);
+    assert_eq!(value["updatedAt"], 5678);
+}

@@ -18,7 +18,7 @@ use sona_core::history::{
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::HistoryStore;
-use sona_core::project::normalize_project_record_for_import;
+use sona_core::project::normalize_project_record_for_import_with_timestamp;
 
 pub const HISTORY_DIR_NAME: &str = "history";
 pub const HISTORY_INDEX_FILE_NAME: &str = "index.json";
@@ -100,10 +100,13 @@ fn normalize_backup_projects(value: Value) -> Result<Vec<Value>, String> {
     let projects = value
         .as_array()
         .ok_or_else(|| "Backup projects must be an array.".to_string())?;
+    let fallback_timestamp = Utc::now().timestamp_millis().max(0) as u64;
 
     projects
         .iter()
-        .map(normalize_project_record_for_import)
+        .map(|project| {
+            normalize_project_record_for_import_with_timestamp(project, fallback_timestamp)
+        })
         .collect()
 }
 
