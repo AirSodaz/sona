@@ -11,6 +11,7 @@ use sona_core::serve_runtime::{
     ServeStartupSettings, app_config_payload_owned,
 };
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -205,6 +206,46 @@ where
             Ok(None)
         }
     })
+}
+
+pub fn load_app_config_payload_from_app_local_data_dir(
+    app_local_data_dir: &Path,
+) -> Result<Option<Value>, DatabaseError> {
+    with_app_local_data_database(app_local_data_dir, load_app_config_payload_from_db)
+}
+
+pub fn load_serve_startup_settings_from_app_local_data_dir(
+    app_local_data_dir: &Path,
+) -> Result<Option<ServeStartupSettings>, DatabaseError> {
+    with_app_local_data_database(app_local_data_dir, load_serve_startup_settings_from_db)
+}
+
+fn with_app_local_data_database<T>(
+    app_local_data_dir: &Path,
+    load: impl FnOnce(&crate::Database) -> Result<T, DatabaseError>,
+) -> Result<T, DatabaseError> {
+    with_app_local_data_database_or_open(
+        app_local_data_dir,
+        crate::Database::global().ok(),
+        crate::Database::open,
+        load,
+    )
+}
+
+fn with_app_local_data_database_or_open<T>(
+    app_local_data_dir: &Path,
+    global_db: Option<&crate::Database>,
+    open_database: impl FnOnce(&Path) -> Result<crate::Database, DatabaseError>,
+    load: impl FnOnce(&crate::Database) -> Result<T, DatabaseError>,
+) -> Result<T, DatabaseError> {
+    if let Some(db) = global_db
+        && db.is_for_app_local_data_dir(app_local_data_dir)
+    {
+        return load(db);
+    }
+
+    let db = open_database(app_local_data_dir)?;
+    load(&db)
 }
 
 const SUMMARY_TEMPLATES_KEY: &str = "summaryCustomTemplates";
@@ -952,6 +993,7 @@ mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
+    use std::cell::Cell;
     use std::sync::Arc;
 
     const LIBRARY_KEYS: &[&str] = &[
@@ -1103,6 +1145,39 @@ mod tests {
     }
 
     #[test]
+    fn test_load_app_config_payload_from_app_local_data_dir_opens_path_database() {
+        let app_local_data_dir = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open(app_local_data_dir.path()).unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
+
+        store
+            .save_config(&json!({
+                "sona-config": {
+                    "asr": {
+                        "providers": {
+                            "online": {
+                                "volcengine": {
+                                    "apiKey": "path-sqlite-key"
+                                }
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let payload = load_app_config_payload_from_app_local_data_dir(app_local_data_dir.path())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            payload["asr"]["providers"]["online"]["volcengine"]["apiKey"],
+            "path-sqlite-key"
+        );
+        assert!(payload.get("sona-config").is_none());
+    }
+
+    #[test]
     fn test_load_serve_startup_settings_reads_projection_columns() {
         let db = Arc::new(Database::open_in_memory().unwrap());
         let store = SqliteConfigStore::new(Arc::clone(&db));
@@ -1136,6 +1211,96 @@ mod tests {
         assert_eq!(settings.config.max_streaming, Some(7));
         assert_eq!(settings.config.ip_whitelist.as_deref(), Some("10.0.0.0/8"));
         assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("cuda"));
+    }
+
+    #[test]
+    fn test_load_serve_startup_settings_from_app_local_data_dir_opens_path_database() {
+        let app_local_data_dir = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open(app_local_data_dir.path()).unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
+
+        store
+            .save_config(&json!({
+                "httpServerEnabled": true,
+                "httpServerHost": "0.0.0.0",
+                "httpServerPort": 17777,
+                "httpServerApiKey": "path-column-secret",
+                "httpServerMaxConcurrent": 8,
+                "httpServerMaxQueueSize": 55,
+                "httpServerMaxUploadSizeMB": 512,
+                "httpServerJobTtlMinutes": 11,
+                "httpServerMaxStreaming": 9,
+                "httpServerIpWhitelist": "192.168.0.0/16",
+                "gpuAcceleration": "metal"
+            }))
+            .unwrap();
+
+        let settings =
+            load_serve_startup_settings_from_app_local_data_dir(app_local_data_dir.path())
+                .unwrap()
+                .unwrap();
+
+        assert!(settings.enabled);
+        assert_eq!(settings.config.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(settings.config.port, Some(17777));
+        assert_eq!(
+            settings.config.api_key.as_deref(),
+            Some("path-column-secret")
+        );
+        assert_eq!(settings.config.max_concurrent, Some(8));
+        assert_eq!(settings.config.max_queue_size, Some(55));
+        assert_eq!(settings.config.max_upload_size_mb, Some(512));
+        assert_eq!(settings.config.job_ttl_minutes, Some(11));
+        assert_eq!(settings.config.max_streaming, Some(9));
+        assert_eq!(
+            settings.config.ip_whitelist.as_deref(),
+            Some("192.168.0.0/16")
+        );
+        assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("metal"));
+    }
+
+    #[test]
+    fn test_app_local_data_database_selector_reuses_matching_database() {
+        let app_local_data_dir = tempfile::tempdir().unwrap();
+        let db = Database::open(app_local_data_dir.path()).unwrap();
+        let opened_fallback = Cell::new(false);
+
+        let selected_matches = with_app_local_data_database_or_open(
+            app_local_data_dir.path(),
+            Some(&db),
+            |path| {
+                opened_fallback.set(true);
+                Database::open(path)
+            },
+            |selected| Ok(selected.is_for_app_local_data_dir(app_local_data_dir.path())),
+        )
+        .unwrap();
+
+        assert!(selected_matches);
+        assert!(!opened_fallback.get());
+    }
+
+    #[test]
+    fn test_app_local_data_database_selector_opens_requested_path_when_global_mismatches() {
+        let global_app_local_data_dir = tempfile::tempdir().unwrap();
+        let requested_app_local_data_dir = tempfile::tempdir().unwrap();
+        let global_db = Database::open(global_app_local_data_dir.path()).unwrap();
+        let opened_fallback = Cell::new(false);
+
+        let selected_matches = with_app_local_data_database_or_open(
+            requested_app_local_data_dir.path(),
+            Some(&global_db),
+            |path| {
+                assert_eq!(path, requested_app_local_data_dir.path());
+                opened_fallback.set(true);
+                Database::open(path)
+            },
+            |selected| Ok(selected.is_for_app_local_data_dir(requested_app_local_data_dir.path())),
+        )
+        .unwrap();
+
+        assert!(selected_matches);
+        assert!(opened_fallback.get());
     }
 
     #[test]

@@ -8,9 +8,9 @@ use sona_core::serve_runtime::{
     ServeRuntimeArgs, ServeStartupSettings, online_asr_config_from_app_config,
     resolve_serve_runtime_options, serve_startup_settings_from_app_config,
 };
-use sona_sqlite::Database;
 use sona_sqlite::config_store::{
-    load_app_config_payload_from_db, load_serve_startup_settings_from_db,
+    load_app_config_payload_from_app_local_data_dir,
+    load_serve_startup_settings_from_app_local_data_dir,
 };
 use std::any::Any;
 use std::collections::HashMap;
@@ -117,27 +117,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
 
 fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    if let Ok(db) = Database::global()
-        && db.is_for_app_local_data_dir(&app_local_data_dir)
-    {
-        return load_app_config_payload_from_db(db)
-            .map_err(|error| {
-                log::warn!("[API Server] Failed to load SQLite app config: {error}");
-                error
-            })
-            .ok()
-            .flatten();
-    }
-
-    let db = match Database::open(&app_local_data_dir) {
-        Ok(db) => db,
-        Err(error) => {
-            log::warn!("[API Server] Failed to open SQLite config store: {error}");
-            return None;
-        }
-    };
-
-    load_app_config_payload_from_db(&db)
+    load_app_config_payload_from_app_local_data_dir(&app_local_data_dir)
         .map_err(|error| {
             log::warn!("[API Server] Failed to load SQLite app config: {error}");
             error
@@ -148,27 +128,7 @@ fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_j
 
 fn load_sqlite_serve_startup_settings(provider: &dyn PathProvider) -> Option<ServeStartupSettings> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    if let Ok(db) = Database::global()
-        && db.is_for_app_local_data_dir(&app_local_data_dir)
-    {
-        return load_serve_startup_settings_from_db(db)
-            .map_err(|error| {
-                log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
-                error
-            })
-            .ok()
-            .flatten();
-    }
-
-    let db = match Database::open(&app_local_data_dir) {
-        Ok(db) => db,
-        Err(error) => {
-            log::warn!("[API Server] Failed to open SQLite config store: {error}");
-            return None;
-        }
-    };
-
-    load_serve_startup_settings_from_db(&db)
+    load_serve_startup_settings_from_app_local_data_dir(&app_local_data_dir)
         .map_err(|error| {
             log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
             error
@@ -371,6 +331,7 @@ fn streaming_router() -> Router<sona_api_server::ServerState> {
 mod tests {
     use super::*;
     use crate::platform::paths::{MockPathProvider, PathKind};
+    use sona_sqlite::Database;
     use sona_sqlite::config_store::SqliteConfigStore;
     use std::collections::HashMap as StdHashMap;
     use std::path::Path as StdPath;
@@ -419,6 +380,30 @@ mod tests {
                 .and_then(|value| value.get("apiKey"))
                 .and_then(serde_json::Value::as_str),
             Some("sqlite-key")
+        );
+    }
+
+    #[test]
+    fn load_online_asr_config_falls_back_to_legacy_when_sqlite_open_fails() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data_parent = tempfile::tempdir().unwrap();
+        let app_local_data_file = app_local_data_parent.path().join("app-local-data-file");
+        std::fs::write(&app_local_data_file, "not a directory").unwrap();
+        let provider = provider_for_config_test(app_data.path(), &app_local_data_file);
+        std::fs::write(
+            app_data.path().join("settings.json"),
+            r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
+        )
+        .unwrap();
+
+        let config = load_online_asr_config(&provider);
+
+        assert_eq!(
+            config
+                .get("volcengine")
+                .and_then(|value| value.get("apiKey"))
+                .and_then(serde_json::Value::as_str),
+            Some("legacy-key")
         );
     }
 

@@ -442,6 +442,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
 
   const apiCargo = fs.readFileSync(apiCargoPath, 'utf8');
   const apiLib = fs.readFileSync(apiLibPath, 'utf8');
+  const tauriServerRuntime = tauriServer.split(/#\[cfg\(test\)\]/u)[0];
 
   assert.match(apiCargo, /^name\s*=\s*"sona-api-server"/mu);
   assert.match(apiCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/\.\.\/core" \}/mu);
@@ -462,17 +463,29 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
 
   assert.match(tauriCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/adapters\/api_server" \}/mu);
   assert.match(cliCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/api_server" \}/mu);
-  assert.match(tauriServer, /use sona_api_server::\{[\s\S]*run_server/u);
-  assert.doesNotMatch(tauriServer, /^pub async fn run_server/mu);
-  assert.doesNotMatch(tauriServer, /^pub struct JobManager/mu);
-  assert.doesNotMatch(tauriServer, /^pub enum JobStatus/mu);
-  assert.doesNotMatch(tauriServer, /^pub fn parse_ip_whitelist/mu);
+  assert.match(tauriServerRuntime, /use sona_api_server::\{[\s\S]*run_server/u);
+  assert.doesNotMatch(tauriServerRuntime, /^pub async fn run_server/mu);
+  assert.doesNotMatch(tauriServerRuntime, /^pub struct JobManager/mu);
+  assert.doesNotMatch(tauriServerRuntime, /^pub enum JobStatus/mu);
+  assert.doesNotMatch(tauriServerRuntime, /^pub fn parse_ip_whitelist/mu);
   assert.match(sqliteConfigStore, /pub fn load_app_config_payload_from_db/u);
   assert.match(sqliteConfigStore, /pub fn load_serve_startup_settings_from_db/u);
-  assert.doesNotMatch(tauriServer, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
-  assert.match(tauriServer, /sona_runtime_fs::load_legacy_settings_app_config/u);
-  assert.doesNotMatch(tauriServer, /std::fs::read_to_string\([^)]*settings_path/u);
-  assert.match(tauriServer, /prepare_runtime_config/u);
+  assert.match(sqliteConfigStore, /pub fn load_app_config_payload_from_app_local_data_dir/u);
+  assert.match(
+    sqliteConfigStore,
+    /pub fn load_serve_startup_settings_from_app_local_data_dir/u,
+  );
+  assert.doesNotMatch(tauriServerRuntime, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
+  assert.match(tauriServerRuntime, /load_app_config_payload_from_app_local_data_dir/u);
+  assert.match(tauriServerRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
+  assert.doesNotMatch(tauriServerRuntime, /Database::global/u);
+  assert.doesNotMatch(tauriServerRuntime, /Database::open/u);
+  assert.doesNotMatch(tauriServerRuntime, /is_for_app_local_data_dir/u);
+  assert.doesNotMatch(tauriServerRuntime, /load_app_config_payload_from_db/u);
+  assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_db/u);
+  assert.match(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.doesNotMatch(tauriServerRuntime, /std::fs::read_to_string\([^)]*settings_path/u);
+  assert.match(tauriServerRuntime, /prepare_runtime_config/u);
   assert.match(cliServe, /prepare_runtime_config/u);
   assert.doesNotMatch(tauriServer, /ApiServerRuntimeConfig\s*\{/u);
   assert.doesNotMatch(cliServe, /ApiServerRuntimeConfig\s*\{/u);
