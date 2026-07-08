@@ -3,6 +3,13 @@ use crate::ports::Database as DatabasePort;
 use rusqlite::{Connection, Transaction};
 use serde_json::{Map, Value, json};
 use sona_core::config::defaults::CURRENT_CONFIG_VERSION;
+use sona_core::gpu::DEFAULT_GPU_ACCELERATION;
+use sona_core::runtime_config::ServeConfigSection;
+use sona_core::serve_runtime::{
+    DEFAULT_JOB_TTL_MINUTES, DEFAULT_MAX_CONCURRENT, DEFAULT_MAX_QUEUE_SIZE, DEFAULT_MAX_STREAMING,
+    DEFAULT_MAX_UPLOAD_SIZE_MB, DEFAULT_SERVE_HOST, DEFAULT_SERVE_IP_WHITELIST, DEFAULT_SERVE_PORT,
+    ServeStartupSettings, app_config_payload_owned,
+};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -33,6 +40,16 @@ where
                 Ok(None)
             }
         })
+    }
+
+    pub fn load_app_config_payload(&self) -> Result<Option<Value>, DatabaseError> {
+        load_app_config_payload_from_db(self.get_db()?)
+    }
+
+    pub fn load_serve_startup_settings(
+        &self,
+    ) -> Result<Option<ServeStartupSettings>, DatabaseError> {
+        load_serve_startup_settings_from_db(self.get_db()?)
     }
 
     pub fn save_config(&self, config: &Value) -> Result<(), DatabaseError> {
@@ -115,6 +132,79 @@ where
             Ok(())
         })
     }
+}
+
+pub fn load_app_config_payload_from_db<D>(db: &D) -> Result<Option<Value>, DatabaseError>
+where
+    D: DatabasePort,
+{
+    db.with_connection(|conn| {
+        let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let config_str: String = row.get(0)?;
+            let config: Value = serde_json::from_str(&config_str)?;
+            Ok(Some(app_config_payload_owned(config)))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
+pub fn load_serve_startup_settings_from_db<D>(
+    db: &D,
+) -> Result<Option<ServeStartupSettings>, DatabaseError>
+where
+    D: DatabasePort,
+{
+    db.with_connection(|conn| {
+        let mut stmt = conn.prepare_cached(
+            "SELECT http_server_enabled, http_server_host, http_server_port,
+                    http_server_api_key, http_server_max_concurrent,
+                    http_server_max_queue_size, http_server_max_upload_size_mb,
+                    http_server_job_ttl_minutes, http_server_max_streaming,
+                    http_server_ip_whitelist, gpu_acceleration
+             FROM app_config WHERE id = 1",
+        )?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(ServeStartupSettings {
+                enabled: row.get::<_, i64>(0)? != 0,
+                config: ServeConfigSection {
+                    host: Some(row.get(1)?),
+                    port: Some(u16_or_default(row.get::<_, i64>(2)?, DEFAULT_SERVE_PORT)),
+                    api_key: Some(row.get(3)?),
+                    models_dir: None,
+                    max_concurrent: Some(usize_or_default(
+                        row.get::<_, i64>(4)?,
+                        DEFAULT_MAX_CONCURRENT,
+                    )),
+                    max_queue_size: Some(usize_or_default(
+                        row.get::<_, i64>(5)?,
+                        DEFAULT_MAX_QUEUE_SIZE,
+                    )),
+                    max_upload_size_mb: Some(usize_or_default(
+                        row.get::<_, i64>(6)?,
+                        DEFAULT_MAX_UPLOAD_SIZE_MB,
+                    )),
+                    job_ttl_minutes: Some(u64_or_default(
+                        row.get::<_, i64>(7)?,
+                        DEFAULT_JOB_TTL_MINUTES,
+                    )),
+                    max_streaming: Some(usize_or_default(
+                        row.get::<_, i64>(8)?,
+                        DEFAULT_MAX_STREAMING,
+                    )),
+                    ip_whitelist: Some(row.get(9)?),
+                    gpu_acceleration: Some(row.get(10)?),
+                    vad_model_id: None,
+                    punctuation_model_id: None,
+                },
+            }))
+        } else {
+            Ok(None)
+        }
+    })
 }
 
 const SUMMARY_TEMPLATES_KEY: &str = "summaryCustomTemplates";
@@ -618,16 +708,36 @@ impl AppConfigStartupProjection {
         let config = app_config_payload(value);
         Self {
             http_server_enabled: bool_field(config, "httpServerEnabled", false),
-            host: string_field(config, "httpServerHost", "127.0.0.1"),
-            port: integer_field(config, "httpServerPort", 14200),
+            host: string_field(config, "httpServerHost", DEFAULT_SERVE_HOST),
+            port: integer_field(config, "httpServerPort", i64::from(DEFAULT_SERVE_PORT)),
             api_key: string_field(config, "httpServerApiKey", ""),
-            max_concurrent: integer_field(config, "httpServerMaxConcurrent", 2),
-            max_queue_size: integer_field(config, "httpServerMaxQueueSize", 100),
-            max_upload_size_mb: integer_field(config, "httpServerMaxUploadSizeMB", 50),
-            job_ttl_minutes: integer_field(config, "httpServerJobTtlMinutes", 60),
-            max_streaming: integer_field(config, "httpServerMaxStreaming", 2),
-            ip_whitelist: string_field(config, "httpServerIpWhitelist", "localhost"),
-            gpu_acceleration: string_field(config, "gpuAcceleration", "auto"),
+            max_concurrent: integer_field(
+                config,
+                "httpServerMaxConcurrent",
+                DEFAULT_MAX_CONCURRENT as i64,
+            ),
+            max_queue_size: integer_field(
+                config,
+                "httpServerMaxQueueSize",
+                DEFAULT_MAX_QUEUE_SIZE as i64,
+            ),
+            max_upload_size_mb: integer_field(
+                config,
+                "httpServerMaxUploadSizeMB",
+                DEFAULT_MAX_UPLOAD_SIZE_MB as i64,
+            ),
+            job_ttl_minutes: integer_field(
+                config,
+                "httpServerJobTtlMinutes",
+                DEFAULT_JOB_TTL_MINUTES as i64,
+            ),
+            max_streaming: integer_field(
+                config,
+                "httpServerMaxStreaming",
+                DEFAULT_MAX_STREAMING as i64,
+            ),
+            ip_whitelist: string_field(config, "httpServerIpWhitelist", DEFAULT_SERVE_IP_WHITELIST),
+            gpu_acceleration: string_field(config, "gpuAcceleration", DEFAULT_GPU_ACCELERATION),
         }
     }
 }
@@ -814,6 +924,18 @@ fn integer_field(value: &Value, key: &str, default: i64) -> i64 {
         .unwrap_or(default)
 }
 
+fn u16_or_default(value: i64, default: u16) -> u16 {
+    u16::try_from(value).unwrap_or(default)
+}
+
+fn usize_or_default(value: i64, default: usize) -> usize {
+    usize::try_from(value).unwrap_or(default)
+}
+
+fn u64_or_default(value: i64, default: u64) -> u64 {
+    u64::try_from(value).unwrap_or(default)
+}
+
 fn float_field(value: &Value, key: &str, default: f64) -> f64 {
     value.get(key).and_then(Value::as_f64).unwrap_or(default)
 }
@@ -948,6 +1070,72 @@ mod tests {
             loaded["asr"]["providers"]["online"]["volcengine"]["apiKey"],
             "kept-in-json"
         );
+    }
+
+    #[test]
+    fn test_load_app_config_payload_unwraps_object_wrappers() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
+
+        store
+            .save_config(&json!({
+                "sona-config": {
+                    "asr": {
+                        "providers": {
+                            "online": {
+                                "volcengine": {
+                                    "apiKey": "sqlite-key"
+                                }
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let payload = store.load_app_config_payload().unwrap().unwrap();
+
+        assert_eq!(
+            payload["asr"]["providers"]["online"]["volcengine"]["apiKey"],
+            "sqlite-key"
+        );
+        assert!(payload.get("sona-config").is_none());
+    }
+
+    #[test]
+    fn test_load_serve_startup_settings_reads_projection_columns() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let store = SqliteConfigStore::new(Arc::clone(&db));
+
+        db.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT INTO app_config (
+                    id, config, config_version, updated_at, http_server_enabled, http_server_host,
+                    http_server_port, http_server_api_key, http_server_max_concurrent,
+                    http_server_max_queue_size, http_server_max_upload_size_mb,
+                    http_server_job_ttl_minutes, http_server_max_streaming,
+                    http_server_ip_whitelist, gpu_acceleration
+                )
+                VALUES (1, '{}', 7, 0, 1, '0.0.0.0', 16666, 'column-secret', 5, 44, 256, 9, 7, '10.0.0.0/8', 'cuda')",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let settings = store.load_serve_startup_settings().unwrap().unwrap();
+
+        assert!(settings.enabled);
+        assert_eq!(settings.config.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(settings.config.port, Some(16666));
+        assert_eq!(settings.config.api_key.as_deref(), Some("column-secret"));
+        assert_eq!(settings.config.max_concurrent, Some(5));
+        assert_eq!(settings.config.max_queue_size, Some(44));
+        assert_eq!(settings.config.max_upload_size_mb, Some(256));
+        assert_eq!(settings.config.job_ttl_minutes, Some(9));
+        assert_eq!(settings.config.max_streaming, Some(7));
+        assert_eq!(settings.config.ip_whitelist.as_deref(), Some("10.0.0.0/8"));
+        assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("cuda"));
     }
 
     #[test]

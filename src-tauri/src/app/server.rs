@@ -4,8 +4,16 @@ use sona_api_server::{
     ApiServerPlatform, ApiServerRuntimeConfig, ApiServerTranscriptionDefaults,
     ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, parse_ip_whitelist, run_server,
 };
-use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
-use sona_sqlite::{Database, DatabaseError};
+use sona_core::gpu::resolve_gpu_acceleration;
+use sona_core::serve_runtime::{
+    ServeRuntimeArgs, ServeStartupSettings, app_config_payload_owned,
+    online_asr_config_from_app_config, resolve_serve_runtime_options,
+    serve_startup_settings_from_app_config,
+};
+use sona_sqlite::Database;
+use sona_sqlite::config_store::{
+    load_app_config_payload_from_db, load_serve_startup_settings_from_db,
+};
 use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -109,110 +117,12 @@ impl ApiServerPlatform for TauriApiServerPlatform {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ApiServerStartupSettings {
-    http_server_enabled: bool,
-    host: String,
-    port: u16,
-    api_key: String,
-    max_concurrent: usize,
-    max_queue_size: usize,
-    max_upload_size_mb: usize,
-    job_ttl_minutes: u64,
-    max_streaming: usize,
-    ip_whitelist: String,
-    gpu_acceleration: String,
-}
-
-impl Default for ApiServerStartupSettings {
-    fn default() -> Self {
-        Self {
-            http_server_enabled: false,
-            host: "127.0.0.1".to_string(),
-            port: 14200,
-            api_key: String::new(),
-            max_concurrent: 2,
-            max_queue_size: 100,
-            max_upload_size_mb: 50,
-            job_ttl_minutes: 60,
-            max_streaming: 2,
-            ip_whitelist: "localhost".to_string(),
-            gpu_acceleration: DEFAULT_GPU_ACCELERATION.to_string(),
-        }
-    }
-}
-
-fn extract_app_config_value(value: serde_json::Value) -> serde_json::Value {
-    value
-        .get("sona-config")
-        .filter(|value| value.is_object())
-        .or_else(|| value.get("sona_config"))
-        .filter(|value| value.is_object())
-        .or_else(|| value.get("config"))
-        .filter(|value| value.is_object())
-        .cloned()
-        .unwrap_or(value)
-}
-
-fn read_sqlite_app_config(db: &Database) -> Result<Option<serde_json::Value>, DatabaseError> {
-    db.with_connection(|conn| {
-        let mut stmt = conn.prepare_cached("SELECT config FROM app_config WHERE id = 1")?;
-        let mut rows = stmt.query([])?;
-        if let Some(row) = rows.next()? {
-            let config_str: String = row.get(0)?;
-            let config: serde_json::Value = serde_json::from_str(&config_str)?;
-            Ok(Some(extract_app_config_value(config)))
-        } else {
-            Ok(None)
-        }
-    })
-}
-
-fn read_sqlite_api_server_startup_settings(
-    db: &Database,
-) -> Result<Option<ApiServerStartupSettings>, DatabaseError> {
-    db.with_connection(|conn| {
-        let mut stmt = conn.prepare_cached(
-            "SELECT http_server_enabled, http_server_host, http_server_port,
-                    http_server_api_key, http_server_max_concurrent,
-                    http_server_max_queue_size, http_server_max_upload_size_mb,
-                    http_server_job_ttl_minutes, http_server_max_streaming,
-                    http_server_ip_whitelist, gpu_acceleration
-             FROM app_config WHERE id = 1",
-        )?;
-        let mut rows = stmt.query([])?;
-        if let Some(row) = rows.next()? {
-            let defaults = ApiServerStartupSettings::default();
-            Ok(Some(ApiServerStartupSettings {
-                http_server_enabled: row.get::<_, i64>(0)? != 0,
-                host: row.get(1)?,
-                port: u16::try_from(row.get::<_, i64>(2)?).unwrap_or(defaults.port),
-                api_key: row.get(3)?,
-                max_concurrent: usize::try_from(row.get::<_, i64>(4)?)
-                    .unwrap_or(defaults.max_concurrent),
-                max_queue_size: usize::try_from(row.get::<_, i64>(5)?)
-                    .unwrap_or(defaults.max_queue_size),
-                max_upload_size_mb: usize::try_from(row.get::<_, i64>(6)?)
-                    .unwrap_or(defaults.max_upload_size_mb),
-                job_ttl_minutes: u64::try_from(row.get::<_, i64>(7)?)
-                    .unwrap_or(defaults.job_ttl_minutes),
-                max_streaming: usize::try_from(row.get::<_, i64>(8)?)
-                    .unwrap_or(defaults.max_streaming),
-                ip_whitelist: row.get(9)?,
-                gpu_acceleration: row.get(10)?,
-            }))
-        } else {
-            Ok(None)
-        }
-    })
-}
-
-fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
+fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
     if let Ok(db) = Database::global()
         && db.is_for_app_local_data_dir(&app_local_data_dir)
     {
-        return read_sqlite_app_config(db)
+        return load_app_config_payload_from_db(db)
             .map_err(|error| {
                 log::warn!("[API Server] Failed to load SQLite app config: {error}");
                 error
@@ -229,7 +139,7 @@ fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Val
         }
     };
 
-    read_sqlite_app_config(&db)
+    load_app_config_payload_from_db(&db)
         .map_err(|error| {
             log::warn!("[API Server] Failed to load SQLite app config: {error}");
             error
@@ -238,14 +148,12 @@ fn load_sqlite_app_config(provider: &dyn PathProvider) -> Option<serde_json::Val
         .flatten()
 }
 
-fn load_sqlite_api_server_startup_settings(
-    provider: &dyn PathProvider,
-) -> Option<ApiServerStartupSettings> {
+fn load_sqlite_serve_startup_settings(provider: &dyn PathProvider) -> Option<ServeStartupSettings> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
     if let Ok(db) = Database::global()
         && db.is_for_app_local_data_dir(&app_local_data_dir)
     {
-        return read_sqlite_api_server_startup_settings(db)
+        return load_serve_startup_settings_from_db(db)
             .map_err(|error| {
                 log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
                 error
@@ -262,7 +170,7 @@ fn load_sqlite_api_server_startup_settings(
         }
     };
 
-    read_sqlite_api_server_startup_settings(&db)
+    load_serve_startup_settings_from_db(&db)
         .map_err(|error| {
             log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
             error
@@ -287,26 +195,17 @@ fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json
             error
         })
         .ok()?;
-    Some(extract_app_config_value(parsed))
+    Some(app_config_payload_owned(parsed))
 }
 
 fn load_app_config_for_server(provider: &dyn PathProvider) -> Option<serde_json::Value> {
-    load_sqlite_app_config(provider).or_else(|| load_legacy_settings_config(provider))
+    load_sqlite_app_config_payload(provider).or_else(|| load_legacy_settings_config(provider))
 }
 
 pub fn load_online_asr_config(provider: &dyn PathProvider) -> HashMap<String, serde_json::Value> {
     load_app_config_for_server(provider)
-        .and_then(|config| {
-            config
-                .get("asr")
-                .and_then(|v| v.get("providers"))
-                .and_then(|v| v.get("online"))
-                .and_then(|v| v.as_object())
-                .cloned()
-        })
+        .map(|config| online_asr_config_from_app_config(&config))
         .unwrap_or_default()
-        .into_iter()
-        .collect()
 }
 
 pub async fn refresh_online_asr_config(
@@ -317,74 +216,13 @@ pub async fn refresh_online_asr_config(
     *controller.online_asr_config.write().await = config_map;
 }
 
-fn load_api_server_startup_settings(provider: &dyn PathProvider) -> ApiServerStartupSettings {
-    if let Some(settings) = load_sqlite_api_server_startup_settings(provider) {
+fn load_api_server_startup_settings(provider: &dyn PathProvider) -> ServeStartupSettings {
+    if let Some(settings) = load_sqlite_serve_startup_settings(provider) {
         return settings;
     }
     load_app_config_for_server(provider)
-        .map(|config| startup_settings_from_config(&config))
+        .map(|config| serve_startup_settings_from_app_config(&config))
         .unwrap_or_default()
-}
-
-fn startup_settings_from_config(config: &serde_json::Value) -> ApiServerStartupSettings {
-    let mut settings = ApiServerStartupSettings::default();
-
-    if let Some(enabled) = config.get("httpServerEnabled").and_then(|v| v.as_bool()) {
-        settings.http_server_enabled = enabled;
-    }
-    if let Some(host) = config.get("httpServerHost").and_then(|v| v.as_str()) {
-        settings.host = host.to_string();
-    }
-    if let Some(port) = config.get("httpServerPort").and_then(|v| v.as_u64())
-        && let Ok(port) = u16::try_from(port)
-    {
-        settings.port = port;
-    }
-    if let Some(api_key) = config.get("httpServerApiKey").and_then(|v| v.as_str()) {
-        settings.api_key = api_key.to_string();
-    }
-    if let Some(max_concurrent) = config
-        .get("httpServerMaxConcurrent")
-        .and_then(|v| v.as_u64())
-        && let Ok(max_concurrent) = usize::try_from(max_concurrent)
-    {
-        settings.max_concurrent = max_concurrent;
-    }
-    if let Some(max_queue_size) = config
-        .get("httpServerMaxQueueSize")
-        .and_then(|v| v.as_u64())
-        && let Ok(max_queue_size) = usize::try_from(max_queue_size)
-    {
-        settings.max_queue_size = max_queue_size;
-    }
-    if let Some(max_upload_size) = config
-        .get("httpServerMaxUploadSizeMB")
-        .and_then(|v| v.as_u64())
-        && let Ok(max_upload_size) = usize::try_from(max_upload_size)
-    {
-        settings.max_upload_size_mb = max_upload_size;
-    }
-    if let Some(job_ttl) = config
-        .get("httpServerJobTtlMinutes")
-        .and_then(|v| v.as_u64())
-    {
-        settings.job_ttl_minutes = job_ttl;
-    }
-    if let Some(max_streaming) = config
-        .get("httpServerMaxStreaming")
-        .and_then(|v| v.as_u64())
-        && let Ok(max_streaming) = usize::try_from(max_streaming)
-    {
-        settings.max_streaming = max_streaming;
-    }
-    if let Some(ip_whitelist) = config.get("httpServerIpWhitelist").and_then(|v| v.as_str()) {
-        settings.ip_whitelist = ip_whitelist.to_string();
-    }
-    if let Some(gpu_acceleration) = config.get("gpuAcceleration").and_then(|v| v.as_str()) {
-        settings.gpu_acceleration = gpu_acceleration.to_string();
-    }
-
-    settings
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -485,7 +323,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
         let path_provider = TauriPathProvider::from_app(&app_handle);
         let settings = load_api_server_startup_settings(&path_provider);
 
-        if settings.http_server_enabled {
+        if settings.enabled {
             let app_local_data_dir = match path_provider.resolve_path(PathKind::AppLocalData) {
                 Ok(dir) => dir,
                 Err(e) => {
@@ -495,8 +333,21 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             };
             let temp_dir = app_local_data_dir.join("api_temp");
             let models_dir = app_local_data_dir.join("models");
+            let resolved = match resolve_serve_runtime_options(
+                ServeRuntimeArgs {
+                    default_models_dir: Some(models_dir),
+                    ..Default::default()
+                },
+                Some(settings.config),
+            ) {
+                Ok(resolved) => resolved,
+                Err(e) => {
+                    log::error!("HTTP API Server failed to resolve startup settings: {}", e);
+                    return;
+                }
+            };
 
-            let parsed_whitelist = match parse_ip_whitelist(&settings.ip_whitelist) {
+            let parsed_whitelist = match parse_ip_whitelist(&resolved.ip_whitelist) {
                 Ok(nets) => nets,
                 Err(e) => {
                     log::error!(
@@ -506,20 +357,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                     return;
                 }
             };
-            let transcription_defaults =
-                match resolve_gpu_acceleration(Some(settings.gpu_acceleration)) {
-                    Ok(gpu_acceleration) => ApiServerTranscriptionDefaults {
-                        gpu_acceleration,
-                        ..Default::default()
-                    },
-                    Err(e) => {
-                        log::error!(
-                            "HTTP API Server failed to start due to invalid GPU acceleration: {}",
-                            e
-                        );
-                        return;
-                    }
-                };
+            let transcription_defaults = ApiServerTranscriptionDefaults {
+                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
+                vad_model_id: resolved.transcription_defaults.vad_model_id,
+                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
+            };
 
             let (tx, rx) = tokio::sync::oneshot::channel();
             let controller = app_handle.state::<ApiServerController>();
@@ -530,16 +372,16 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
 
             if let Err(e) = run_server(ApiServerRuntimeConfig {
-                host: settings.host,
-                port: settings.port,
-                api_key: settings.api_key,
+                host: resolved.host,
+                port: resolved.port,
+                api_key: resolved.api_key,
                 temp_dir,
-                models_dir,
-                max_concurrent: settings.max_concurrent,
-                max_queue_size: settings.max_queue_size,
-                max_upload_size_mb: settings.max_upload_size_mb,
-                job_ttl_minutes: settings.job_ttl_minutes,
-                max_streaming: settings.max_streaming,
+                models_dir: resolved.models_dir,
+                max_concurrent: resolved.max_concurrent,
+                max_queue_size: resolved.max_queue_size,
+                max_upload_size_mb: resolved.max_upload_size_mb,
+                job_ttl_minutes: resolved.job_ttl_minutes,
+                max_streaming: resolved.max_streaming,
                 ip_whitelist: Arc::new(parsed_whitelist),
                 online_asr_config,
                 transcription_defaults,
@@ -744,17 +586,20 @@ mod tests {
 
         let settings = load_api_server_startup_settings(&provider);
 
-        assert!(settings.http_server_enabled);
-        assert_eq!(settings.host, "0.0.0.0");
-        assert_eq!(settings.port, 15555);
-        assert_eq!(settings.api_key, "sqlite-secret");
-        assert_eq!(settings.max_concurrent, 3);
-        assert_eq!(settings.max_queue_size, 12);
-        assert_eq!(settings.max_upload_size_mb, 99);
-        assert_eq!(settings.job_ttl_minutes, 7);
-        assert_eq!(settings.max_streaming, 4);
-        assert_eq!(settings.ip_whitelist, "127.0.0.1/32");
-        assert_eq!(settings.gpu_acceleration, "cpu");
+        assert!(settings.enabled);
+        assert_eq!(settings.config.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(settings.config.port, Some(15555));
+        assert_eq!(settings.config.api_key.as_deref(), Some("sqlite-secret"));
+        assert_eq!(settings.config.max_concurrent, Some(3));
+        assert_eq!(settings.config.max_queue_size, Some(12));
+        assert_eq!(settings.config.max_upload_size_mb, Some(99));
+        assert_eq!(settings.config.job_ttl_minutes, Some(7));
+        assert_eq!(settings.config.max_streaming, Some(4));
+        assert_eq!(
+            settings.config.ip_whitelist.as_deref(),
+            Some("127.0.0.1/32")
+        );
+        assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("cpu"));
     }
 
     #[test]
@@ -781,16 +626,16 @@ mod tests {
 
         let settings = load_api_server_startup_settings(&provider);
 
-        assert!(settings.http_server_enabled);
-        assert_eq!(settings.host, "0.0.0.0");
-        assert_eq!(settings.port, 16666);
-        assert_eq!(settings.api_key, "column-secret");
-        assert_eq!(settings.max_concurrent, 5);
-        assert_eq!(settings.max_queue_size, 44);
-        assert_eq!(settings.max_upload_size_mb, 256);
-        assert_eq!(settings.job_ttl_minutes, 9);
-        assert_eq!(settings.max_streaming, 7);
-        assert_eq!(settings.ip_whitelist, "10.0.0.0/8");
-        assert_eq!(settings.gpu_acceleration, "cuda");
+        assert!(settings.enabled);
+        assert_eq!(settings.config.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(settings.config.port, Some(16666));
+        assert_eq!(settings.config.api_key.as_deref(), Some("column-secret"));
+        assert_eq!(settings.config.max_concurrent, Some(5));
+        assert_eq!(settings.config.max_queue_size, Some(44));
+        assert_eq!(settings.config.max_upload_size_mb, Some(256));
+        assert_eq!(settings.config.job_ttl_minutes, Some(9));
+        assert_eq!(settings.config.max_streaming, Some(7));
+        assert_eq!(settings.config.ip_whitelist.as_deref(), Some("10.0.0.0/8"));
+        assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("cuda"));
     }
 }

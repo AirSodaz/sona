@@ -2,6 +2,8 @@ use crate::gpu::resolve_gpu_acceleration;
 use crate::model_paths::ModelsDirStatus;
 use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use crate::runtime_config::ServeConfigSection;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub const DEFAULT_SERVE_PORT: u16 = 14200;
@@ -36,6 +38,12 @@ pub struct ServeTranscriptionDefaults {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServeStartupSettings {
+    pub enabled: bool,
+    pub config: ServeConfigSection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,4 +121,81 @@ pub fn resolve_serve_runtime_options(
                 .or_else(|| Some(DEFAULT_PUNCTUATION_MODEL_ID.to_string())),
         },
     })
+}
+
+pub fn app_config_payload(value: &Value) -> &Value {
+    value
+        .get("sona-config")
+        .filter(|value| value.is_object())
+        .or_else(|| value.get("sona_config"))
+        .filter(|value| value.is_object())
+        .or_else(|| value.get("config"))
+        .filter(|value| value.is_object())
+        .unwrap_or(value)
+}
+
+pub fn app_config_payload_owned(value: Value) -> Value {
+    app_config_payload(&value).clone()
+}
+
+pub fn online_asr_config_from_app_config(value: &Value) -> HashMap<String, Value> {
+    app_config_payload(value)
+        .get("asr")
+        .and_then(|value| value.get("providers"))
+        .and_then(|value| value.get("online"))
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
+}
+
+pub fn serve_startup_settings_from_app_config(value: &Value) -> ServeStartupSettings {
+    let config = app_config_payload(value);
+    ServeStartupSettings {
+        enabled: config
+            .get("httpServerEnabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        config: ServeConfigSection {
+            host: string_field(config, "httpServerHost"),
+            port: u16_field(config, "httpServerPort"),
+            api_key: string_field(config, "httpServerApiKey"),
+            models_dir: None,
+            ip_whitelist: string_field(config, "httpServerIpWhitelist"),
+            max_streaming: usize_field(config, "httpServerMaxStreaming"),
+            max_concurrent: usize_field(config, "httpServerMaxConcurrent"),
+            max_queue_size: usize_field(config, "httpServerMaxQueueSize"),
+            max_upload_size_mb: usize_field(config, "httpServerMaxUploadSizeMB"),
+            job_ttl_minutes: u64_field(config, "httpServerJobTtlMinutes"),
+            gpu_acceleration: string_field(config, "gpuAcceleration"),
+            vad_model_id: None,
+            punctuation_model_id: None,
+        },
+    }
+}
+
+fn string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+}
+
+fn u16_field(value: &Value, key: &str) -> Option<u16> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|value| u16::try_from(value).ok())
+}
+
+fn usize_field(value: &Value, key: &str) -> Option<usize> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+}
+
+fn u64_field(value: &Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(Value::as_u64)
 }
