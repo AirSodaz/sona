@@ -23,6 +23,7 @@ embed-resource = "3.0.9"
 [dependencies]
 sona-core = { path = "../core", features = ["specta"] }
 sona-local-asr = { path = "../adapters/local_asr" }
+sona-media-detector = { path = "../adapters/media_detector" }
 sona-model-downloads = { path = "../adapters/model_downloads" }
 sona-online-llm = { path = "../adapters/online_llm" }
 sona-online-asr = { path = "../adapters/online_asr" }

@@ -309,7 +309,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -1455,11 +1455,20 @@ test('speaker processing runtime is owned by local ASR adapter and wrapped by de
   assert.doesNotMatch(batchRs, /crate::integrations::speaker/u);
 });
 
-test('media file detection is owned by core and reused by desktop', () => {
+test('media file IO detection is delegated to media detector adapter', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreMediaDetector = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'media_detector.rs'), 'utf8');
+  const mediaDetectorCargo = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'media_detector', 'Cargo.toml'),
+    'utf8',
+  );
+  const mediaDetectorLib = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'media_detector', 'src', 'lib.rs'),
+    'utf8',
+  );
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
   const apiServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
@@ -1467,12 +1476,23 @@ test('media file detection is owned by core and reused by desktop', () => {
   assert.match(coreCargo, /^infer\s*=/mu);
   assert.match(coreLib, /^pub mod media_detector;/mu);
   assert.match(coreMediaDetector, /pub fn is_valid_media_bytes/u);
-  assert.match(coreMediaDetector, /pub async fn is_valid_media_file/u);
+  assert.doesNotMatch(coreMediaDetector, /tokio::fs::File/u);
+  assert.doesNotMatch(coreMediaDetector, /pub async fn is_valid_media_file/u);
+  assert.doesNotMatch(coreMediaDetector, /pub async fn check_media_formats/u);
+  assert.match(mediaDetectorCargo, /^sona-core\s*=/mu);
+  assert.match(mediaDetectorCargo, /^tokio\s*=/mu);
+  assert.match(mediaDetectorLib, /pub async fn is_valid_media_file/u);
+  assert.match(mediaDetectorLib, /pub async fn check_media_formats/u);
+  assert.match(mediaDetectorLib, /sona_core::media_detector::is_valid_media_bytes/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'media_detector.rs')), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod media_detector;/mu);
   assert.doesNotMatch(tauriCargo, /^infer\s*=/mu);
-  assert.match(systemCommand, /sona_core::media_detector::check_media_formats/u);
-  assert.match(apiServer, /sona_core::media_detector::is_valid_media_file/u);
+  assert.match(tauriCargo, /^sona-media-detector\s*=/mu);
+  assert.doesNotMatch(cliCargo, /^sona-media-detector\s*=/mu);
+  assert.match(systemCommand, /sona_media_detector::check_media_formats/u);
+  assert.match(apiServer, /sona_media_detector::is_valid_media_file/u);
+  assert.doesNotMatch(systemCommand, /sona_core::media_detector::check_media_formats/u);
+  assert.doesNotMatch(apiServer, /sona_core::media_detector::is_valid_media_file/u);
   assert.doesNotMatch(systemCommand, /crate::integrations::media_detector/u);
   assert.doesNotMatch(apiServer, /crate::integrations::media_detector/u);
 });

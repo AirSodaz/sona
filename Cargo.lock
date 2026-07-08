@@ -5395,6 +5395,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-core",
  "sona-local-asr",
+ "sona-media-detector",
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
@@ -5500,6 +5501,15 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "sona-media-detector"
+version = "0.8.0"
+dependencies = [
+ "sona-core",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

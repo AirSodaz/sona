@@ -1,0 +1,14 @@
+[package]
+name = "sona-media-detector"
+version.workspace = true
+description = "Media file detection adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+sona-core = { path = "../../core" }
+tokio = { version = "1", features = ["fs", "io-util"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt"] }

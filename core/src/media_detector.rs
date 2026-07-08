@@ -1,29 +1,3 @@
-use std::path::Path;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
-
-/// Checks if a file is a valid audio or video file by reading its magic numbers.
-/// Returns true if the file is recognized as audio or video.
-pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
-    let mut file = match File::open(path).await {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-
-    // Read up to 8192 bytes (enough for most magic numbers, including ID3 tags padding)
-    let mut buf = [0; 8192];
-    let n = match file.read(&mut buf).await {
-        Ok(n) => n,
-        Err(_) => return false,
-    };
-
-    if n == 0 {
-        return false;
-    }
-
-    is_valid_media_bytes(&buf[..n])
-}
-
 pub fn is_valid_media_bytes(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
         return false;
@@ -63,13 +37,4 @@ pub fn is_valid_media_bytes(bytes: &[u8]) -> bool {
     }
 
     false
-}
-
-pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
-    let mut results = Vec::with_capacity(paths.len());
-    for path in paths {
-        let is_valid = is_valid_media_file(&path).await;
-        results.push(is_valid);
-    }
-    Ok(results)
 }
