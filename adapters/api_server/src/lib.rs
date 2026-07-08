@@ -15,6 +15,7 @@ use sona_core::gpu::DEFAULT_GPU_ACCELERATION;
 use sona_core::ports::asr::{
     BatchTranscriber, OnlineAsrProviderRequest, find_online_asr_provider, online_asr_providers,
 };
+use sona_core::serve_runtime::ResolvedServeRuntimeOptions;
 use sona_core::transcribe_runtime::BatchTranscribeOptions;
 use sona_core::transcript::TranscriptSegment;
 use std::any::Any;
@@ -109,6 +110,21 @@ pub struct ApiServerRuntimeConfig {
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+}
+
+pub struct ApiServerRuntimeParts {
+    pub resolved: ResolvedServeRuntimeOptions,
+    pub temp_dir: PathBuf,
+    pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    pub platform: Arc<dyn ApiServerPlatform>,
+    pub streaming_router: Option<Router<ServerState>>,
+    pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+}
+
+pub struct PreparedApiServerRuntime {
+    pub config: ApiServerRuntimeConfig,
+    pub normalized_ip_whitelist: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -387,6 +403,53 @@ pub fn format_bind_error(e: std::io::Error, addr: &str) -> String {
             }
         }
     }
+}
+
+pub fn prepare_runtime_config(
+    parts: ApiServerRuntimeParts,
+) -> Result<PreparedApiServerRuntime, String> {
+    let ApiServerRuntimeParts {
+        resolved,
+        temp_dir,
+        online_asr_config,
+        platform,
+        streaming_router,
+        shutdown_rx,
+        bind_tx,
+    } = parts;
+    let parsed_whitelist = parse_ip_whitelist(&resolved.ip_whitelist)?;
+    let normalized_ip_whitelist = parsed_whitelist
+        .iter()
+        .map(|net| net.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    Ok(PreparedApiServerRuntime {
+        config: ApiServerRuntimeConfig {
+            host: resolved.host,
+            port: resolved.port,
+            api_key: resolved.api_key,
+            temp_dir,
+            models_dir: resolved.models_dir,
+            max_concurrent: resolved.max_concurrent,
+            max_queue_size: resolved.max_queue_size,
+            max_upload_size_mb: resolved.max_upload_size_mb,
+            job_ttl_minutes: resolved.job_ttl_minutes,
+            max_streaming: resolved.max_streaming,
+            ip_whitelist: Arc::new(parsed_whitelist),
+            online_asr_config,
+            transcription_defaults: ApiServerTranscriptionDefaults {
+                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
+                vad_model_id: resolved.transcription_defaults.vad_model_id,
+                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
+            },
+            platform,
+            streaming_router,
+            shutdown_rx,
+            bind_tx,
+        },
+        normalized_ip_whitelist,
+    })
 }
 
 async fn ip_whitelist_middleware(
@@ -1202,6 +1265,111 @@ mod tests {
         let permission_err =
             std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         assert!(format_bind_error(permission_err, addr).contains("Permission denied"));
+    }
+
+    #[test]
+    fn prepare_runtime_config_maps_resolved_options_and_normalizes_whitelist() {
+        let temp_dir = tempfile::tempdir().unwrap().path().join("api-temp");
+        let models_dir = tempfile::tempdir().unwrap().path().join("models");
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (bind_tx, _bind_rx) = tokio::sync::oneshot::channel();
+
+        let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+            resolved: sona_core::serve_runtime::ResolvedServeRuntimeOptions {
+                host: "0.0.0.0".to_string(),
+                port: 15555,
+                api_key: "secret".to_string(),
+                models_dir: models_dir.clone(),
+                ip_whitelist: "localhost,10.0.0.0/8".to_string(),
+                max_streaming: 5,
+                max_concurrent: 3,
+                max_queue_size: 44,
+                max_upload_size_mb: 256,
+                job_ttl_minutes: 9,
+                transcription_defaults: sona_core::serve_runtime::ServeTranscriptionDefaults {
+                    gpu_acceleration: Some("cuda".to_string()),
+                    vad_model_id: Some("vad-model".to_string()),
+                    punctuation_model_id: Some("punct-model".to_string()),
+                },
+            },
+            temp_dir: temp_dir.clone(),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_router: None,
+            shutdown_rx,
+            bind_tx: Some(bind_tx),
+        })
+        .unwrap();
+
+        assert_eq!(
+            prepared.normalized_ip_whitelist,
+            "127.0.0.0/8,::1/128,10.0.0.0/8"
+        );
+        assert_eq!(prepared.config.host, "0.0.0.0");
+        assert_eq!(prepared.config.port, 15555);
+        assert_eq!(prepared.config.api_key, "secret");
+        assert_eq!(prepared.config.temp_dir, temp_dir);
+        assert_eq!(prepared.config.models_dir, models_dir);
+        assert_eq!(prepared.config.max_concurrent, 3);
+        assert_eq!(prepared.config.max_queue_size, 44);
+        assert_eq!(prepared.config.max_upload_size_mb, 256);
+        assert_eq!(prepared.config.job_ttl_minutes, 9);
+        assert_eq!(prepared.config.max_streaming, 5);
+        assert_eq!(
+            prepared
+                .config
+                .transcription_defaults
+                .gpu_acceleration
+                .as_deref(),
+            Some("cuda")
+        );
+        assert_eq!(
+            prepared
+                .config
+                .transcription_defaults
+                .vad_model_id
+                .as_deref(),
+            Some("vad-model")
+        );
+        assert_eq!(
+            prepared
+                .config
+                .transcription_defaults
+                .punctuation_model_id
+                .as_deref(),
+            Some("punct-model")
+        );
+    }
+
+    #[test]
+    fn prepare_runtime_config_rejects_invalid_whitelist() {
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let error = match prepare_runtime_config(ApiServerRuntimeParts {
+            resolved: sona_core::serve_runtime::ResolvedServeRuntimeOptions {
+                host: "127.0.0.1".to_string(),
+                port: 14200,
+                api_key: String::new(),
+                models_dir: PathBuf::from("models"),
+                ip_whitelist: "not-a-rule".to_string(),
+                max_streaming: 1,
+                max_concurrent: 1,
+                max_queue_size: 1,
+                max_upload_size_mb: 1,
+                job_ttl_minutes: 1,
+                transcription_defaults: Default::default(),
+            },
+            temp_dir: PathBuf::from("temp"),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_router: None,
+            shutdown_rx,
+            bind_tx: None,
+        }) {
+            Ok(_) => panic!("invalid whitelist should be rejected"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error, "Invalid IP rule format: not-a-rule");
     }
 
     #[tokio::test]

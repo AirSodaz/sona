@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use crate::{CliError, CliOutput, CliResult};
 use sona_api_server::{
-    ApiServerRuntimeConfig, ApiServerTranscriptionDefaults, DefaultApiServerPlatform,
-    parse_ip_whitelist, run_server,
+    ApiServerRuntimeParts, DefaultApiServerPlatform, prepare_runtime_config, run_server,
 };
 use sona_core::runtime_config::ServeConfigSection;
 use sona_core::serve_runtime::{ServeRuntimeArgs, resolve_serve_runtime_options};
@@ -85,14 +84,6 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
     )
     .map_err(CliError::Validation)?;
 
-    let parsed_whitelist =
-        parse_ip_whitelist(&resolved.ip_whitelist).map_err(CliError::Validation)?;
-    let normalized_whitelist = parsed_whitelist
-        .iter()
-        .map(|net| net.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -103,29 +94,18 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
         let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
         let host = resolved.host.clone();
         let port = resolved.port;
-        let server = run_server(ApiServerRuntimeConfig {
-            host: resolved.host.clone(),
-            port: resolved.port,
-            api_key: resolved.api_key,
+        let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+            resolved,
             temp_dir,
-            models_dir: resolved.models_dir,
-            max_concurrent: resolved.max_concurrent,
-            max_queue_size: resolved.max_queue_size,
-            max_upload_size_mb: resolved.max_upload_size_mb,
-            job_ttl_minutes: resolved.job_ttl_minutes,
-            max_streaming: resolved.max_streaming,
-            ip_whitelist: Arc::new(parsed_whitelist),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            transcription_defaults: ApiServerTranscriptionDefaults {
-                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
-                vad_model_id: resolved.transcription_defaults.vad_model_id,
-                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
-            },
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
-        });
+        })
+        .map_err(CliError::Validation)?;
+        let normalized_whitelist = prepared.normalized_ip_whitelist.clone();
+        let server = run_server(prepared.config);
         let mut server = tokio::spawn(server);
 
         match bind_rx.await {

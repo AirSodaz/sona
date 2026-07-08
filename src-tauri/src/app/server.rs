@@ -1,10 +1,9 @@
 use async_trait::async_trait;
 use axum::{Router, routing::get};
 use sona_api_server::{
-    ApiServerPlatform, ApiServerRuntimeConfig, ApiServerTranscriptionDefaults,
-    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, parse_ip_whitelist, run_server,
+    ApiServerPlatform, ApiServerRuntimeParts, ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest,
+    prepare_runtime_config, run_server,
 };
-use sona_core::gpu::resolve_gpu_acceleration;
 use sona_core::serve_runtime::{
     ServeRuntimeArgs, ServeStartupSettings, app_config_payload_owned,
     online_asr_config_from_app_config, resolve_serve_runtime_options,
@@ -240,61 +239,54 @@ pub async fn start_api_server(
     ip_whitelist: String,
     gpu_acceleration: String,
 ) -> Result<String, String> {
-    let parsed_whitelist = parse_ip_whitelist(&ip_whitelist)?;
-    let normalized_whitelist = parsed_whitelist
-        .iter()
-        .map(|net| net.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let parsed_arc = Arc::new(parsed_whitelist);
-    let transcription_defaults = ApiServerTranscriptionDefaults {
-        gpu_acceleration: resolve_gpu_acceleration(Some(gpu_acceleration))
-            .map_err(|e| e.to_string())?,
-        ..Default::default()
-    };
-
-    let mut sender_lock = controller.shutdown_sender.lock().await;
-    if let Some(sender) = sender_lock.take() {
-        let _ = sender.send(());
-    }
-
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    *sender_lock = Some(tx);
-    drop(sender_lock);
-
-    let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
-
     let path_provider = TauriPathProvider::from_app(&app);
     let app_local_data_dir = path_provider.resolve_path(PathKind::AppLocalData)?;
     let temp_dir = app_local_data_dir.join("api_temp");
     let models_dir = app_local_data_dir.join("models");
 
-    refresh_online_asr_config(&controller, &path_provider).await;
     let online_asr_config = controller.online_asr_config.clone();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
+    let resolved = resolve_serve_runtime_options(
+        ServeRuntimeArgs {
+            host: Some(host),
+            port: Some(port),
+            api_key: Some(api_key),
+            default_models_dir: Some(models_dir),
+            ip_whitelist: Some(ip_whitelist),
+            max_streaming: Some(max_streaming),
+            max_concurrent: Some(max_concurrent),
+            max_queue_size: Some(max_queue_size),
+            max_upload_size_mb: Some(max_upload_size_mb),
+            job_ttl_minutes: Some(job_ttl_minutes),
+            gpu_acceleration: Some(gpu_acceleration),
+            ..Default::default()
+        },
+        None,
+    )?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
+    let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+        resolved,
+        temp_dir,
+        online_asr_config,
+        platform,
+        streaming_router: Some(streaming_router()),
+        shutdown_rx: rx,
+        bind_tx: Some(bind_tx),
+    })?;
+    let normalized_whitelist = prepared.normalized_ip_whitelist.clone();
+
+    let mut sender_lock = controller.shutdown_sender.lock().await;
+    if let Some(sender) = sender_lock.take() {
+        let _ = sender.send(());
+    }
+    *sender_lock = Some(tx);
+    drop(sender_lock);
+
+    refresh_online_asr_config(&controller, &path_provider).await;
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_server(ApiServerRuntimeConfig {
-            host,
-            port,
-            api_key,
-            temp_dir,
-            models_dir,
-            max_concurrent,
-            max_queue_size,
-            max_upload_size_mb,
-            job_ttl_minutes,
-            max_streaming,
-            ip_whitelist: parsed_arc,
-            online_asr_config,
-            transcription_defaults,
-            platform,
-            streaming_router: Some(streaming_router()),
-            shutdown_rx: rx,
-            bind_tx: Some(bind_tx),
-        })
-        .await
-        {
+        if let Err(e) = run_server(prepared.config).await {
             log::error!("HTTP API Server failed: {}", e);
         }
     });
@@ -347,51 +339,30 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 }
             };
 
-            let parsed_whitelist = match parse_ip_whitelist(&resolved.ip_whitelist) {
-                Ok(nets) => nets,
-                Err(e) => {
-                    log::error!(
-                        "HTTP API Server failed to start due to invalid IP whitelist: {}",
-                        e
-                    );
-                    return;
-                }
-            };
-            let transcription_defaults = ApiServerTranscriptionDefaults {
-                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
-                vad_model_id: resolved.transcription_defaults.vad_model_id,
-                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
-            };
-
             let (tx, rx) = tokio::sync::oneshot::channel();
             let controller = app_handle.state::<ApiServerController>();
-            *controller.shutdown_sender.lock().await = Some(tx);
-
-            refresh_online_asr_config(&controller, &path_provider).await;
             let online_asr_config = controller.online_asr_config.clone();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
-
-            if let Err(e) = run_server(ApiServerRuntimeConfig {
-                host: resolved.host,
-                port: resolved.port,
-                api_key: resolved.api_key,
+            let prepared = match prepare_runtime_config(ApiServerRuntimeParts {
+                resolved,
                 temp_dir,
-                models_dir: resolved.models_dir,
-                max_concurrent: resolved.max_concurrent,
-                max_queue_size: resolved.max_queue_size,
-                max_upload_size_mb: resolved.max_upload_size_mb,
-                job_ttl_minutes: resolved.job_ttl_minutes,
-                max_streaming: resolved.max_streaming,
-                ip_whitelist: Arc::new(parsed_whitelist),
                 online_asr_config,
-                transcription_defaults,
                 platform,
                 streaming_router: Some(streaming_router()),
                 shutdown_rx: rx,
                 bind_tx: None,
-            })
-            .await
-            {
+            }) {
+                Ok(prepared) => prepared,
+                Err(e) => {
+                    log::error!("HTTP API Server failed to prepare runtime config: {}", e);
+                    return;
+                }
+            };
+
+            *controller.shutdown_sender.lock().await = Some(tx);
+            refresh_online_asr_config(&controller, &path_provider).await;
+
+            if let Err(e) = run_server(prepared.config).await {
                 log::error!("HTTP API Server failed: {}", e);
             }
         }

@@ -431,6 +431,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
     'utf8',
   );
   const cliLib = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'lib.rs'), 'utf8');
+  const cliServe = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'serve.rs'), 'utf8');
   const cliTemplate = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'config_template.rs'), 'utf8');
   const apiGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'api.md'), 'utf8');
   const apiGuideZh = fs.readFileSync(path.join(repoRoot, 'docs', 'api.zh-CN.md'), 'utf8');
@@ -454,6 +455,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(apiLib, /pub struct JobManager/u);
   assert.match(apiLib, /pub enum JobStatus/u);
   assert.match(apiLib, /pub fn parse_ip_whitelist/u);
+  assert.match(apiLib, /pub fn prepare_runtime_config/u);
   assert.match(apiLib, /pub fn format_bind_error/u);
   assert.match(apiLib, /pub async fn run_server/u);
   assert.doesNotMatch(apiLib, /\btauri::/u);
@@ -468,6 +470,10 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(sqliteConfigStore, /pub fn load_app_config_payload_from_db/u);
   assert.match(sqliteConfigStore, /pub fn load_serve_startup_settings_from_db/u);
   assert.doesNotMatch(tauriServer, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
+  assert.match(tauriServer, /prepare_runtime_config/u);
+  assert.match(cliServe, /prepare_runtime_config/u);
+  assert.doesNotMatch(tauriServer, /ApiServerRuntimeConfig\s*\{/u);
+  assert.doesNotMatch(cliServe, /ApiServerRuntimeConfig\s*\{/u);
 
   assert.match(cliLib, /^mod serve;/mu);
   assert.match(cliLib, /Commands::Serve\(args\) => serve::run_serve\(args\)/u);
