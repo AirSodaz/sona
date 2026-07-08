@@ -1,14 +1,14 @@
 #[cfg(test)]
-pub(crate) use sona_core::llm_requests::validate_llm_config;
-pub(crate) use sona_core::llm_requests::{
+pub(crate) use sona_core::llm::requests::validate_llm_config;
+pub(crate) use sona_core::llm::requests::{
     validate_llm_generate_request, validate_polish_segments_request,
     validate_summarize_transcript_request, validate_translate_segments_request,
 };
 #[cfg(test)]
-pub(crate) use sona_core::llm_tasks::plan_segment_task_chunks;
+pub(crate) use sona_core::llm::tasks::plan_segment_task_chunks;
 #[cfg(test)]
-pub(crate) use sona_core::llm_tasks::validate_summary_strategy;
-pub(crate) use sona_core::llm_tasks::{
+pub(crate) use sona_core::llm::tasks::validate_summary_strategy;
+pub(crate) use sona_core::llm::tasks::{
     BufferedSegmentTaskConfig, SegmentTaskContext, StreamingSegmentTaskConfig, build_polish_prompt,
     build_translate_prompt, parse_polish_chunk, parse_translate_chunk, run_segment_task,
     run_streaming_segment_task, run_summary_task,

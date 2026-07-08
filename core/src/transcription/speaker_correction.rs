@@ -1,5 +1,7 @@
-use crate::speaker::SpeakerProfile;
-use crate::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment};
+use crate::transcription::speaker::SpeakerProfile;
+use crate::transcription::transcript::{
+    SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

@@ -1,9 +1,9 @@
 use crate::export::ExportFormat;
-use crate::model_paths::ModelsDirStatus;
-use crate::preset_models::{
+use crate::models::paths::ModelsDirStatus;
+use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
-use crate::runtime_config::TranscribeConfigSection;
+use crate::runtime::config::TranscribeConfigSection;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
@@ -69,7 +69,7 @@ pub struct BatchTranscribePlan {
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub model_type: String,
-    pub file_config: Option<crate::model_config::ModelFileConfig>,
+    pub file_config: Option<crate::models::config::ModelFileConfig>,
     pub hotwords: Option<String>,
     pub gpu_acceleration: Option<String>,
     pub export_format: ExportFormat,
@@ -269,10 +269,11 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
             OutputTarget::File(path) => Some(path.as_path()),
         },
     )?;
-    let gpu_acceleration =
-        crate::gpu::resolve_gpu_acceleration(options.gpu_acceleration.or(config.gpu_acceleration))?;
+    let gpu_acceleration = crate::runtime::gpu::resolve_gpu_acceleration(
+        options.gpu_acceleration.or(config.gpu_acceleration),
+    )?;
 
-    let models_dir = crate::model_paths::resolve_models_dir(
+    let models_dir = crate::models::paths::resolve_models_dir(
         options.models_dir.or(config.models_dir),
         options.default_models_dir,
         models_dir_status,

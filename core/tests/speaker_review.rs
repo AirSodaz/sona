@@ -1,7 +1,7 @@
-use sona_core::speaker_review::{
+use sona_core::transcription::speaker_review::{
     SpeakerReviewFilter, SpeakerReviewRiskReason, build_speaker_review_snapshot,
 };
-use sona_core::transcript::{SpeakerAttribution, SpeakerTag, TranscriptSegment};
+use sona_core::transcription::transcript::{SpeakerAttribution, SpeakerTag, TranscriptSegment};
 
 fn segment(id: &str, group_id: &str, state: &str, confidence: &str) -> TranscriptSegment {
     TranscriptSegment {

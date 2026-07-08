@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::preset_models::{
+use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
 

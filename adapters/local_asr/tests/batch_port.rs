@@ -1,5 +1,5 @@
 use sona_core::ports::asr::BatchTranscriber;
-use sona_core::transcribe_runtime::{BatchTranscribePlan, OutputTarget};
+use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::path::PathBuf;
 
 fn missing_input_plan() -> BatchTranscribePlan {

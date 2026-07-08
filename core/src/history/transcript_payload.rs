@@ -1,7 +1,7 @@
 use serde_json::{Map, Value, from_value};
 
-use crate::file_utils::ensure_json_array_value;
-use crate::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
+use crate::runtime::file_utils::ensure_json_array_value;
+use crate::transcription::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
 pub struct NormalizedHistoryTranscript {
     pub segments: Vec<TranscriptSegment>,

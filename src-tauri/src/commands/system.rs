@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 use crate::platform::paths::{PathProvider, TauriPathProvider};
 use sona_sqlite::DatabaseError;
@@ -352,7 +352,7 @@ pub async fn recovery_persist_queue_snapshot(
 pub async fn annotate_speaker_segments_from_file(
     file_path: String,
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
-    speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
+    speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
 ) -> Result<Vec<crate::integrations::asr::TranscriptSegment>, String> {
     crate::platform::speaker_processing::annotate_speaker_segments_from_file(
         file_path,
@@ -368,7 +368,7 @@ pub async fn import_speaker_profile_sample(
     profile_id: String,
     source_path: String,
     source_name: Option<String>,
-) -> Result<sona_core::speaker::SpeakerProfileSample, String> {
+) -> Result<sona_core::transcription::speaker::SpeakerProfileSample, String> {
     let path_provider = TauriPathProvider::from_app(&app);
     crate::platform::speaker_processing::import_speaker_profile_sample(
         &path_provider,
@@ -382,30 +382,30 @@ pub async fn import_speaker_profile_sample(
 #[tauri::command]
 pub fn build_speaker_review_snapshot(
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
-    active_filter: sona_core::speaker_review::SpeakerReviewFilter,
-) -> sona_core::speaker_review::SpeakerReviewSnapshot {
-    sona_core::speaker_review::build_speaker_review_snapshot(segments, active_filter)
+    active_filter: sona_core::transcription::speaker_review::SpeakerReviewFilter,
+) -> sona_core::transcription::speaker_review::SpeakerReviewSnapshot {
+    sona_core::transcription::speaker_review::build_speaker_review_snapshot(segments, active_filter)
 }
 
 #[tauri::command]
 pub async fn apply_speaker_profile_to_group(
-    request: sona_core::speaker_correction::ApplySpeakerProfileToGroupRequest,
-) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::speaker_correction::apply_speaker_profile_to_group(request).await
+    request: sona_core::transcription::speaker_correction::ApplySpeakerProfileToGroupRequest,
+) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::transcription::speaker_correction::apply_speaker_profile_to_group(request).await
 }
 
 #[tauri::command]
 pub async fn reset_speaker_group_to_anonymous(
-    request: sona_core::speaker_correction::SpeakerGroupRequest,
-) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::speaker_correction::reset_speaker_group_to_anonymous(request).await
+    request: sona_core::transcription::speaker_correction::SpeakerGroupRequest,
+) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::transcription::speaker_correction::reset_speaker_group_to_anonymous(request).await
 }
 
 #[tauri::command]
 pub async fn confirm_speaker_group_review(
-    request: sona_core::speaker_correction::SpeakerGroupRequest,
-) -> Result<sona_core::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::speaker_correction::confirm_speaker_group_review(request).await
+    request: sona_core::transcription::speaker_correction::SpeakerGroupRequest,
+) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
+    sona_core::transcription::speaker_correction::confirm_speaker_group_review(request).await
 }
 
 // Wrapped API server commands

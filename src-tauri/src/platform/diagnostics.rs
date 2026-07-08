@@ -7,7 +7,7 @@ use crate::platform::preset_models::{
 
 use tauri::State;
 
-pub use sona_core::diagnostics::{
+pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathStatus, SelectedModelsInput, VoiceTypingReadinessInput,

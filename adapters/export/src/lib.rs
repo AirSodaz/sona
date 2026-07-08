@@ -1,5 +1,5 @@
 use sona_core::export::{ExportFormat, ExportMode};
-use sona_core::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::TranscriptSegment;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

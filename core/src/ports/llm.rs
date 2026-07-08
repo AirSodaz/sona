@@ -1,5 +1,5 @@
-use crate::llm_provider_protocol::{LlmModelSummary, StandardLlmResponse};
-use crate::llm_requests::{LlmGenerateRequest, LlmModelsRequest};
+use crate::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
+use crate::llm::requests::{LlmGenerateRequest, LlmModelsRequest};
 use async_trait::async_trait;
 
 #[async_trait]

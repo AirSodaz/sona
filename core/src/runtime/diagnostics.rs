@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::asr_metrics::AsrRuntimeMetricsSnapshot;
-pub use crate::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
+pub use crate::runtime::environment::{
+    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
+};
+use crate::transcription::asr_metrics::AsrRuntimeMetricsSnapshot;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

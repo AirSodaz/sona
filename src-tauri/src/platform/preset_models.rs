@@ -1,5 +1,5 @@
 use crate::platform::paths::{PathKind, PathProvider};
-pub use sona_core::preset_models::*;
+pub use sona_core::models::preset_models::*;
 pub use sona_runtime_fs::{build_model_catalog_snapshot, is_preset_model_installed_at};
 use std::path::PathBuf;
 

@@ -6,30 +6,34 @@
 //! same pure Rust types without reaching into the desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
-pub use sona_core::llm_provider_protocol::{
+pub use sona_core::llm::provider_protocol::{
     LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
 };
-pub use sona_core::llm_requests::{
+pub use sona_core::llm::requests::{
     HistorySummaryPayload, LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload,
     PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
     TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
 };
-pub use sona_core::llm_tasks::{
+pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
     LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
     TranscriptSummaryResult, TranslatedSegment,
 };
-pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
-pub use sona_core::model_config::ModelFileConfig;
+pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
     OnlineAsrBatchCapability, OnlineAsrCapability, OnlineAsrLocalFileBatchMode, OnlineAsrProvider,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
 };
-pub use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
-pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
-pub use sona_core::transcript::{
+pub use sona_core::runtime::environment::{
+    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
+};
+pub use sona_core::transcription::speaker::{
+    SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
+};
+pub use sona_core::transcription::transcript::{
     SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
     TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
 };
@@ -124,9 +128,9 @@ mod tests {
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
-        assert_specta_type::<sona_core::runtime::RuntimeEnvironmentStatus>();
-        assert_specta_type::<sona_core::runtime::RuntimePathKind>();
-        assert_specta_type::<sona_core::runtime::RuntimePathStatus>();
+        assert_specta_type::<sona_core::runtime::environment::RuntimeEnvironmentStatus>();
+        assert_specta_type::<sona_core::runtime::environment::RuntimePathKind>();
+        assert_specta_type::<sona_core::runtime::environment::RuntimePathStatus>();
         assert_specta_type::<sona_core::ports::asr::AsrEngine>();
         assert_specta_type::<sona_core::ports::asr::AsrMode>();
         assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();

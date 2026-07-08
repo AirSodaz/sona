@@ -1,10 +1,10 @@
-use sona_core::llm_jobs::{
+use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments, normalized_job_history_id,
     segment_inputs_from_transcript, summary_inputs_from_transcript,
 };
-use sona_core::llm_tasks::{PolishedSegment, TranslatedSegment};
-use sona_core::transcript::{SpeakerTag, TranscriptSegment};
+use sona_core::llm::tasks::{PolishedSegment, TranslatedSegment};
+use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 fn sample_segment(id: &str, text: &str) -> TranscriptSegment {
     TranscriptSegment {

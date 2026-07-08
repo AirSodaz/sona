@@ -3,8 +3,8 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::model_catalog::{ModelListEntry, ModelListFilter, ModelSummary, select_models};
-use sona_core::model_downloads::{
+use sona_core::models::catalog::{ModelListEntry, ModelListFilter, ModelSummary, select_models};
+use sona_core::models::downloads::{
     ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
 use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
@@ -180,7 +180,7 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
     }
 
     let models_dir = resolve_models_dir(args.models_dir)?;
-    let model = sona_core::preset_models::find_preset_model(&args.model_id)
+    let model = sona_core::models::preset_models::find_preset_model(&args.model_id)
         .ok_or_else(|| CliError::Validation(format!("Unknown model id: {}", args.model_id)))?;
     let install_path = model.resolve_install_path(&models_dir);
 
@@ -296,7 +296,7 @@ fn list_models(models_dir: Option<PathBuf>) -> CliResult<Vec<ModelSummary>> {
 }
 
 fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
-    sona_core::model_paths::resolve_models_dir(
+    sona_core::models::paths::resolve_models_dir(
         configured,
         crate::desktop_paths::default_models_dir(),
         crate::desktop_paths::models_dir_status,

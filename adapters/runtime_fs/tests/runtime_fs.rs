@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use sona_core::export::ExportFormat;
+use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::FileSystem;
-use sona_core::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
-use sona_core::runtime::RuntimePathKind;
-use sona_core::transcribe_runtime::BatchInputSource;
+use sona_core::runtime::environment::RuntimePathKind;
+use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
     FsSourcePathStatusProvider, RealFileSystem, is_preset_model_installed_at,
     load_legacy_settings_app_config, load_transcribe_config_file, plan_batch_output_files,

@@ -3,7 +3,7 @@ use sona_core::ports::asr::{
     BatchTranscriptionRequest, LocalSherpaStreamingRequest, OnlineAsrProviderRequest,
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, validate_local_sherpa_mode,
 };
-use sona_core::transcript_postprocess::TranscriptPostprocessor;
+use sona_core::transcription::postprocess::TranscriptPostprocessor;
 
 #[test]
 fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {

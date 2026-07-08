@@ -19,7 +19,7 @@ use sona_core::history::{
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
-use sona_core::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fs;

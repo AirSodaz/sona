@@ -1,6 +1,6 @@
 use super::error::DashboardServiceError;
 use crate::history::HistoryItemRecord;
-use crate::transcript::TranscriptSegment;
+use crate::transcription::transcript::TranscriptSegment;
 
 #[async_trait::async_trait]
 pub trait HistoryRepository: Send + Sync {

@@ -1,5 +1,5 @@
 use sona_core::export::{ExportFormat, ExportMode, export_segments, export_segments_with_mode};
-use sona_core::transcript::{SpeakerTag, TranscriptSegment};
+use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 fn sample_segments() -> Vec<TranscriptSegment> {
     vec![

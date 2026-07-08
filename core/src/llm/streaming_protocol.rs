@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::llm_provider_protocol::join_url;
-use crate::llm_tasks::LlmProviderStrategy;
+use crate::llm::provider_protocol::join_url;
+use crate::llm::tasks::LlmProviderStrategy;
 
 /// Keeps progressively built streaming text and emits the complete accumulated
 /// text together with the latest delta for replacement-style consumers.

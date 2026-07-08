@@ -22,12 +22,12 @@ fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
-pub use sona_core::asr_metrics::{
+pub use sona_core::models::config::ModelFileConfig;
+pub use sona_core::ports::asr::SherpaError;
+pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
-pub use sona_core::model_config::ModelFileConfig;
-pub use sona_core::ports::asr::SherpaError;
-pub use sona_core::transcript_postprocess::TranscriptPostprocessor;
+pub use sona_core::transcription::postprocess::TranscriptPostprocessor;
 pub(crate) use sona_local_asr::audio::{accept_vad_samples, load_vad, vad_detected};
 pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 pub use sona_local_asr::recognizer::Recognizer;

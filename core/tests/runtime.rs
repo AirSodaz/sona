@@ -1,4 +1,6 @@
-use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
+use sona_core::runtime::environment::{
+    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
+};
 
 #[test]
 fn runtime_path_status_serializes_kind_as_frontend_contract_string() {

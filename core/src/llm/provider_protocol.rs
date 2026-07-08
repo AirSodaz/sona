@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::llm_tasks::LlmProviderStrategy;
-use crate::llm_usage::TokenUsage;
+use crate::llm::tasks::LlmProviderStrategy;
+use crate::llm::usage::TokenUsage;
 
 #[cfg(feature = "specta")]
 use specta::Type;

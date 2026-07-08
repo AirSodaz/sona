@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use chrono::SecondsFormat;
 use serde_json::to_value;
-use sona_core::llm_jobs::{
+use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments, normalized_job_history_id,
     segment_inputs_from_transcript, summary_inputs_from_transcript,

@@ -1,4 +1,4 @@
-use sona_core::llm_tasks::{
+use sona_core::llm::tasks::{
     LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig, build_polish_prompt,
     build_summary_chunk_prompt, build_summary_finalize_prompt, build_translate_prompt,
     plan_segment_task_chunks, prompt_char_count, split_summary_segments,

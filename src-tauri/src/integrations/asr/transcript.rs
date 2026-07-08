@@ -8,7 +8,7 @@ use sona_local_asr::punctuation::Punctuation;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-pub(crate) use sona_core::transcript::{
+pub(crate) use sona_core::transcription::transcript::{
     normalize_recognizer_text, select_final_transcript_text, synthesize_durations,
 };
 
@@ -20,7 +20,7 @@ pub(crate) fn apply_timeline_normalization(
     segments: Vec<TranscriptSegment>,
     options: TranscriptNormalizationOptions,
 ) -> Vec<TranscriptSegment> {
-    sona_core::transcript::apply_timeline_normalization_with_id_generator(
+    sona_core::transcription::transcript::apply_timeline_normalization_with_id_generator(
         segments,
         options,
         new_transcript_segment_id,
@@ -31,7 +31,7 @@ pub(crate) fn build_transcript_update(
     segment: TranscriptSegment,
     options: TranscriptNormalizationOptions,
 ) -> TranscriptUpdate {
-    sona_core::transcript::build_transcript_update_with_id_generator(
+    sona_core::transcription::transcript::build_transcript_update_with_id_generator(
         segment,
         options,
         new_transcript_segment_id,

@@ -1,4 +1,6 @@
-use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, GPU_ACCELERATION_VALUES, resolve_gpu_acceleration};
+use sona_core::runtime::gpu::{
+    DEFAULT_GPU_ACCELERATION, GPU_ACCELERATION_VALUES, resolve_gpu_acceleration,
+};
 
 #[test]
 fn gpu_acceleration_defaults_and_normalizes_without_cli_runtime() {

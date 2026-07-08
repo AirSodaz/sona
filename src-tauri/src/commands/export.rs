@@ -6,7 +6,7 @@ use sona_export::{
 
 #[tauri::command]
 pub async fn export_transcript_file(
-    segments: Vec<sona_core::transcript::TranscriptSegment>,
+    segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
     format: ExportFormat,
     mode: ExportMode,
     output_path: String,

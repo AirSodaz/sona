@@ -1,13 +1,13 @@
 use serde::Serialize;
 use sona_core::export::ExportFormat;
-use sona_core::model_catalog::ModelSummary;
-use sona_core::model_paths::{ModelsDirStatus, status_of};
+use sona_core::models::catalog::ModelSummary;
+use sona_core::models::paths::{ModelsDirStatus, status_of};
+use sona_core::models::preset_models::{PresetModel, preset_models};
 use sona_core::ports::fs::{FileMetadata, FileSystem};
-use sona_core::preset_models::{PresetModel, preset_models};
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
-use sona_core::runtime::{RuntimePathKind, RuntimePathStatus};
-use sona_core::runtime_config::{ServeConfigSection, TranscribeConfigSection};
-use sona_core::transcribe_runtime::{
+use sona_core::runtime::config::{ServeConfigSection, TranscribeConfigSection};
+use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
+use sona_core::transcription::runtime::{
     BatchInputSource, BatchOutputPlan, BatchTranscribeOptions, BatchTranscribePlan,
 };
 use std::collections::HashSet;
@@ -151,13 +151,13 @@ fn remove_path_if_exists_with(fs: &dyn FileSystem, path: &Path) -> Result<(), St
 pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    sona_core::runtime_config::parse_transcribe_config_file(&contents, &path.display().to_string())
+    sona_core::runtime::config::parse_transcribe_config_file(&contents, &path.display().to_string())
 }
 
 pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    sona_core::runtime_config::parse_serve_config_file(&contents, &path.display().to_string())
+    sona_core::runtime::config::parse_serve_config_file(&contents, &path.display().to_string())
 }
 
 pub fn load_legacy_settings_app_config(
@@ -172,7 +172,7 @@ pub fn load_legacy_settings_app_config(
                     settings_path.display()
                 )
             })?;
-            Ok(Some(sona_core::serve_runtime::app_config_payload_owned(
+            Ok(Some(sona_core::runtime::serve::app_config_payload_owned(
                 parsed,
             )))
         }
@@ -303,7 +303,7 @@ pub fn resolve_batch_input_source(
     }
 
     let inputs = expand_input_patterns(inputs)?;
-    let base_dir = sona_core::transcribe_runtime::common_input_parent(&inputs)?;
+    let base_dir = sona_core::transcription::runtime::common_input_parent(&inputs)?;
     Ok(BatchInputSource {
         inputs,
         base_dir,
@@ -319,7 +319,7 @@ pub fn plan_batch_output_files(
     preserve_relative_paths: bool,
     force: bool,
 ) -> Result<Vec<BatchOutputPlan>, String> {
-    let plans = sona_core::transcribe_runtime::plan_batch_output_files(
+    let plans = sona_core::transcription::runtime::plan_batch_output_files(
         inputs,
         input_dir,
         output_dir,
@@ -360,7 +360,7 @@ pub fn resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
 ) -> Result<BatchTranscribePlan, String> {
     ensure_input_file_exists(&options.input)?;
     ensure_output_can_be_written(options.output.as_ref(), options.force)?;
-    sona_core::transcribe_runtime::resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+    sona_core::transcription::runtime::resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
         config,
         is_preset_model_installed_at,
@@ -374,9 +374,9 @@ pub fn is_preset_model_installed_at(model: &PresetModel, models_dir: &Path) -> b
 
 pub fn build_model_catalog_snapshot(
     models_dir: &Path,
-) -> sona_core::preset_models::ModelCatalogSnapshot {
+) -> sona_core::models::preset_models::ModelCatalogSnapshot {
     let installed_model_ids = installed_model_ids_for_models_dir(models_dir);
-    sona_core::preset_models::build_model_catalog_snapshot_with_installed_ids(
+    sona_core::models::preset_models::build_model_catalog_snapshot_with_installed_ids(
         models_dir,
         &installed_model_ids,
     )
@@ -384,7 +384,7 @@ pub fn build_model_catalog_snapshot(
 
 pub fn list_models(models_dir: &Path) -> Vec<ModelSummary> {
     let installed_model_ids = installed_model_ids_for_models_dir(models_dir);
-    sona_core::model_catalog::list_models_with_installed_ids(models_dir, &installed_model_ids)
+    sona_core::models::catalog::list_models_with_installed_ids(models_dir, &installed_model_ids)
 }
 
 fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -441,7 +441,7 @@ fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<Pa
         let entry =
             entry.map_err(|error| format!("Failed to read {}: {error}", input_dir.display()))?;
         if entry.file_type().is_file()
-            && sona_core::transcribe_runtime::is_supported_batch_media_path(entry.path())
+            && sona_core::transcription::runtime::is_supported_batch_media_path(entry.path())
         {
             files.push(entry.path().to_path_buf());
         }

@@ -2,10 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use sona_core::export::ExportFormat;
-use sona_core::preset_models::PresetModel;
-use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
-use sona_core::runtime_config::TranscribeConfigSection;
-use sona_core::transcribe_runtime::{
+use sona_core::models::preset_models::PresetModel;
+use sona_core::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use sona_core::runtime::config::TranscribeConfigSection;
+use sona_core::transcription::runtime::{
     BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
     DEFAULT_VAD_BUFFER_SIZE, OutputTarget, plan_batch_output_files, resolve_batch_jobs,
     resolve_batch_transcribe_plan_with_install_checker, resolve_export_format,
@@ -15,7 +15,7 @@ use tempfile::tempdir;
 
 #[test]
 fn parse_transcribe_config_file_reads_shared_and_section_values() {
-    let config = sona_core::runtime_config::parse_transcribe_config_file(
+    let config = sona_core::runtime::config::parse_transcribe_config_file(
         r#"
 models_dir = "/shared/models"
 gpu_acceleration = "cuda"

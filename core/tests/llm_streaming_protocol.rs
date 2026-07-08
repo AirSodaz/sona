@@ -1,9 +1,9 @@
 use serde_json::json;
-use sona_core::llm_streaming_protocol::{
+use sona_core::llm::streaming_protocol::{
     OpenAiChatPayloadConfig, OpenAiStreamUrlConfig, SseEventBuffer, StreamTextAccumulator,
     StreamingLineBuffer, build_openai_chat_payload, build_openai_stream_url,
 };
-use sona_core::llm_tasks::LlmProviderStrategy;
+use sona_core::llm::tasks::LlmProviderStrategy;
 
 #[test]
 fn stream_text_accumulator_emits_full_text_and_delta() {

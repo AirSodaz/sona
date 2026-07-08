@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use sona_core::model_paths::ModelsDirStatus;
+use sona_core::models::paths::ModelsDirStatus;
 
 pub fn default_models_dir() -> Option<PathBuf> {
     sona_runtime_fs::default_desktop_models_dir()

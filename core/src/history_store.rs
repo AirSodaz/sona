@@ -5,7 +5,7 @@ use crate::history::{
     HistoryWorkspaceQueryResult, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
-use crate::transcript::TranscriptSegment;
+use crate::transcription::transcript::TranscriptSegment;
 use serde_json::Value;
 use thiserror::Error;
 

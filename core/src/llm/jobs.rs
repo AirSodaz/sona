@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::llm_tasks::{LlmSegmentInput, PolishedSegment, SummarySegmentInput, TranslatedSegment};
-use crate::transcript::TranscriptSegment;
+use crate::llm::tasks::{LlmSegmentInput, PolishedSegment, SummarySegmentInput, TranslatedSegment};
+use crate::transcription::transcript::TranscriptSegment;
 
 pub fn normalized_job_history_id(job_history_id: Option<&str>) -> Option<String> {
     job_history_id

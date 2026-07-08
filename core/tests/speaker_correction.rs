@@ -1,8 +1,10 @@
-use sona_core::speaker::{SpeakerProfile, SpeakerProfileSample};
-use sona_core::speaker_correction::{
+use sona_core::transcription::speaker::{SpeakerProfile, SpeakerProfileSample};
+use sona_core::transcription::speaker_correction::{
     ApplySpeakerProfileToGroupRequest, apply_speaker_profile_to_group_impl,
 };
-use sona_core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment};
+use sona_core::transcription::transcript::{
+    SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment,
+};
 
 fn sample_profile(id: &str, name: &str) -> SpeakerProfile {
     SpeakerProfile {

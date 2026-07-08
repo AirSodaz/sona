@@ -1,7 +1,7 @@
 use crate::{Database, DatabaseError};
 use chrono::{DateTime, Local};
 use serde_json::Value;
-use sona_core::llm_usage::{LlmUsageDashboardStats, LlmUsageStatsFile, UsageBucket, UsageRecord};
+use sona_core::llm::usage::{LlmUsageDashboardStats, LlmUsageStatsFile, UsageBucket, UsageRecord};
 use std::collections::BTreeMap;
 
 pub fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseError> {
@@ -341,7 +341,7 @@ fn is_date_key(value: &str) -> bool {
 
 pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, DatabaseError> {
     let stats = read_stats(db)?;
-    Ok(sona_core::llm_usage::to_dashboard_stats_at(
+    Ok(sona_core::llm::usage::to_dashboard_stats_at(
         &stats,
         Local::now().date_naive(),
     ))
@@ -385,7 +385,7 @@ mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
-    use sona_core::llm_usage::{LlmUsageCategory, TokenUsage, UsageRecord};
+    use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
 
     #[test]
     fn test_llm_usage_record_and_read_stats() {

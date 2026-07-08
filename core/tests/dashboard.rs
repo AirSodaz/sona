@@ -6,7 +6,7 @@ use sona_core::dashboard::{DashboardService, DashboardServiceError, DashboardSna
 use sona_core::history::{
     HistoryAudioStatus, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
 };
-use sona_core::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::TranscriptSegment;
 use std::sync::Arc;
 
 struct TestHistoryRepository {
@@ -173,7 +173,7 @@ async fn dashboard_service_uses_supplied_snapshot_time() {
 fn transcript_segment(
     text: &str,
     end: f64,
-    speaker: Option<sona_core::transcript::SpeakerTag>,
+    speaker: Option<sona_core::transcription::transcript::SpeakerTag>,
 ) -> TranscriptSegment {
     TranscriptSegment {
         id: format!("segment-{text}"),
@@ -191,8 +191,8 @@ fn transcript_segment(
     }
 }
 
-fn speaker(id: &str, label: &str, kind: &str) -> sona_core::transcript::SpeakerTag {
-    sona_core::transcript::SpeakerTag {
+fn speaker(id: &str, label: &str, kind: &str) -> sona_core::transcription::transcript::SpeakerTag {
+    sona_core::transcription::transcript::SpeakerTag {
         id: id.to_string(),
         label: label.to_string(),
         kind: kind.to_string(),

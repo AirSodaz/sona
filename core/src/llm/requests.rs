@@ -1,9 +1,9 @@
 use crate::domain::LlmProvider;
-use crate::llm_tasks::{
+use crate::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
 };
-use crate::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
-use crate::transcript::TranscriptSegment;
+use crate::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+use crate::transcription::transcript::TranscriptSegment;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "specta")]
@@ -121,7 +121,7 @@ pub fn validate_summarize_transcript_request(
     request: &SummarizeTranscriptRequest,
 ) -> Result<(), String> {
     validate_task_request(&request.task_id, &request.config)?;
-    crate::llm_tasks::validate_summary_strategy(request.config.strategy)
+    crate::llm::tasks::validate_summary_strategy(request.config.strategy)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

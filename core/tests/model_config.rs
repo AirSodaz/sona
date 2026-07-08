@@ -1,4 +1,4 @@
-use sona_core::model_config::ModelFileConfig;
+use sona_core::models::config::ModelFileConfig;
 
 #[test]
 fn model_file_config_transport_shape_lives_in_core() {

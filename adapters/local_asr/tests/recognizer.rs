@@ -1,4 +1,4 @@
-use sona_core::model_config::ModelFileConfig;
+use sona_core::models::config::ModelFileConfig;
 use sona_local_asr::recognizer::{
     ModelType, OfflineDecodeResult, build_model_config, build_offline_model_config,
     create_offline_recognizer,

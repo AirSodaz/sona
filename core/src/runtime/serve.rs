@@ -1,7 +1,7 @@
-use crate::gpu::resolve_gpu_acceleration;
-use crate::model_paths::ModelsDirStatus;
-use crate::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
-use crate::runtime_config::ServeConfigSection;
+use crate::models::paths::ModelsDirStatus;
+use crate::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use crate::runtime::config::ServeConfigSection;
+use crate::runtime::gpu::resolve_gpu_acceleration;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ pub fn resolve_serve_runtime_options(
             .unwrap_or_else(|| DEFAULT_SERVE_HOST.to_string()),
         port: args.port.or(config.port).unwrap_or(DEFAULT_SERVE_PORT),
         api_key: args.api_key.or(config.api_key).unwrap_or_default(),
-        models_dir: crate::model_paths::resolve_models_dir(
+        models_dir: crate::models::paths::resolve_models_dir(
             args.models_dir.or(config.models_dir),
             args.default_models_dir,
             |_| ModelsDirStatus::Missing,

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use sona_core::model_catalog::{
+use sona_core::models::catalog::{
     ModelListFilter, ModelSummary, list_models_with_installed_ids, select_models,
 };
 

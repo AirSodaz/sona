@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
+use crate::transcription::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
 use super::{TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus};
 

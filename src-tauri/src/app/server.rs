@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use axum::{Router, routing::get};
 use sona_api_server::{
-    ApiServerPlatform, ApiServerRuntimeParts, ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest,
-    prepare_runtime_config, run_server,
+    ApiServerPlatform, ApiServerServiceParts, ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest,
+    RunningApiServer, start_api_server_runtime,
 };
-use sona_core::serve_runtime::{
+use sona_core::runtime::serve::{
     ServeRuntimeArgs, ServeStartupSettings, online_asr_config_from_app_config,
     resolve_serve_runtime_options, serve_startup_settings_from_app_config,
 };
@@ -14,7 +14,6 @@ use sona_sqlite::config_store::{
 };
 use std::any::Any;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
@@ -24,14 +23,14 @@ use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
 pub struct ApiServerController {
-    pub shutdown_sender: Arc<AsyncMutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub running_server: Arc<AsyncMutex<Option<RunningApiServer>>>,
     pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
 }
 
 impl Default for ApiServerController {
     fn default() -> Self {
         Self {
-            shutdown_sender: Arc::new(AsyncMutex::new(None)),
+            running_server: Arc::new(AsyncMutex::new(None)),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
@@ -72,7 +71,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
     async fn transcribe_online_batch(
         &self,
         request: OnlineBatchRequest,
-    ) -> Result<Vec<sona_core::transcript::TranscriptSegment>, String> {
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, String> {
         let Some(app_handle) = self.streaming_context.app.as_ref() else {
             return Err(ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
         };
@@ -214,47 +213,43 @@ pub async fn start_api_server(
         },
         None,
     )?;
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
-    let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+
+    let previous_server = {
+        let mut server_lock = controller.running_server.lock().await;
+        server_lock.take()
+    };
+    if let Some(server) = previous_server {
+        if let Err(error) = server.stop().await {
+            log::warn!("Previous HTTP API Server stopped with error: {}", error);
+        }
+    }
+
+    refresh_online_asr_config(&controller, &path_provider).await;
+
+    let running_server = start_api_server_runtime(ApiServerServiceParts {
         resolved,
         temp_dir,
         online_asr_config,
         platform,
         streaming_router: Some(streaming_router()),
-        shutdown_rx: rx,
-        bind_tx: Some(bind_tx),
-    })?;
-    let normalized_whitelist = prepared.normalized_ip_whitelist.clone();
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    let normalized_whitelist = running_server.normalized_ip_whitelist.clone();
+    *controller.running_server.lock().await = Some(running_server);
 
-    let mut sender_lock = controller.shutdown_sender.lock().await;
-    if let Some(sender) = sender_lock.take() {
-        let _ = sender.send(());
-    }
-    *sender_lock = Some(tx);
-    drop(sender_lock);
-
-    refresh_online_asr_config(&controller, &path_provider).await;
-
-    tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_server(prepared.config).await {
-            log::error!("HTTP API Server failed: {}", e);
-        }
-    });
-
-    match bind_rx.await {
-        Ok(Ok(())) => Ok(normalized_whitelist),
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err("API Server failed to start: task terminated prematurely".to_string()),
-    }
+    Ok(normalized_whitelist)
 }
 
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
 ) -> Result<(), String> {
-    let mut sender_lock = controller.shutdown_sender.lock().await;
-    if let Some(sender) = sender_lock.take() {
-        let _ = sender.send(());
+    let running_server = {
+        let mut server_lock = controller.running_server.lock().await;
+        server_lock.take()
+    };
+    if let Some(server) = running_server {
+        server.stop().await?;
         log::info!("Sent shutdown signal to API server.");
     }
     Ok(())
@@ -290,32 +285,28 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 }
             };
 
-            let (tx, rx) = tokio::sync::oneshot::channel();
             let controller = app_handle.state::<ApiServerController>();
             let online_asr_config = controller.online_asr_config.clone();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
-            let prepared = match prepare_runtime_config(ApiServerRuntimeParts {
+            refresh_online_asr_config(&controller, &path_provider).await;
+
+            let running_server = match start_api_server_runtime(ApiServerServiceParts {
                 resolved,
                 temp_dir,
                 online_asr_config,
                 platform,
                 streaming_router: Some(streaming_router()),
-                shutdown_rx: rx,
-                bind_tx: None,
-            }) {
-                Ok(prepared) => prepared,
+            })
+            .await
+            {
+                Ok(running_server) => running_server,
                 Err(e) => {
-                    log::error!("HTTP API Server failed to prepare runtime config: {}", e);
+                    log::error!("HTTP API Server failed: {}", e);
                     return;
                 }
             };
 
-            *controller.shutdown_sender.lock().await = Some(tx);
-            refresh_online_asr_config(&controller, &path_provider).await;
-
-            if let Err(e) = run_server(prepared.config).await {
-                log::error!("HTTP API Server failed: {}", e);
-            }
+            *controller.running_server.lock().await = Some(running_server);
         }
     });
 }

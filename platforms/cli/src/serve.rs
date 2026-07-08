@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use crate::{CliError, CliOutput, CliResult};
 use sona_api_server::{
-    ApiServerRuntimeParts, DefaultApiServerPlatform, prepare_runtime_config, run_server,
+    ApiServerServiceParts, ApiServerStartError, DefaultApiServerPlatform, RunningApiServer,
+    start_api_server_runtime,
 };
-use sona_core::runtime_config::ServeConfigSection;
-use sona_core::serve_runtime::{ServeRuntimeArgs, resolve_serve_runtime_options};
+use sona_core::runtime::config::ServeConfigSection;
+use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
 
 #[derive(Debug, Args)]
 #[command(
@@ -90,56 +91,43 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
         .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
 
     runtime.block_on(async move {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
         let host = resolved.host.clone();
         let port = resolved.port;
-        let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+        let RunningApiServer {
+            normalized_ip_whitelist,
+            mut shutdown_tx,
+            mut join_handle,
+        } = start_api_server_runtime(ApiServerServiceParts {
             resolved,
             temp_dir,
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
-            shutdown_rx,
-            bind_tx: Some(bind_tx),
         })
-        .map_err(CliError::Validation)?;
-        let normalized_whitelist = prepared.normalized_ip_whitelist.clone();
-        let server = run_server(prepared.config);
-        let mut server = tokio::spawn(server);
-
-        match bind_rx.await {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                let _ = shutdown_tx.send(());
-                let _ = server.await;
-                return Err(CliError::Network(error));
-            }
-            Err(_) => {
-                let _ = shutdown_tx.send(());
-                let _ = server.await;
-                return Err(CliError::Other(
-                    "API server failed to start: task terminated prematurely".to_string(),
-                ));
-            }
-        }
+        .await
+        .map_err(|error| match error {
+            ApiServerStartError::Configuration(error) => CliError::Validation(error),
+            ApiServerStartError::Runtime(error) => CliError::Network(error),
+        })?;
 
         eprintln!(
             "Serving Sona API on http://{}:{} (allowed clients: {})",
-            host, port, normalized_whitelist
+            host, port, normalized_ip_whitelist
         );
 
         tokio::select! {
             ctrl_c = tokio::signal::ctrl_c() => {
                 ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
-                let _ = shutdown_tx.send(());
-                server
+                if let Some(sender) = shutdown_tx.take() {
+                    let _ = sender.send(());
+                }
+                join_handle
                     .await
                     .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
                     .map_err(CliError::Other)?;
                 Ok(CliOutput::stderr("Stopped Sona API server".to_string()))
             }
-            result = &mut server => {
+            result = &mut join_handle => {
                 result
                     .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
                     .map_err(CliError::Other)?;

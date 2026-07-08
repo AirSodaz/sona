@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use sona_core::preset_models::{
+use sona_core::models::preset_models::{
     DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID,
     ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
     build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
@@ -139,7 +139,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         .unwrap()
         .clone();
 
-    let selected = sona_core::preset_models::resolve_model_catalog_selected_ids(
+    let selected = sona_core::models::preset_models::resolve_model_catalog_selected_ids(
         &snapshot,
         &ModelSelectionPaths {
             streaming_model_path: int8_path,

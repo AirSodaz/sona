@@ -1,20 +1,20 @@
 use serde::Serialize;
 
 pub use sona_core::domain::LlmProvider;
-pub use sona_core::llm_provider_protocol::{
+pub use sona_core::llm::provider_protocol::{
     LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
 };
-pub use sona_core::llm_requests::{
+pub use sona_core::llm::requests::{
     HistorySummaryPayload, LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload,
     PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
     TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
 };
-pub use sona_core::llm_tasks::{
+pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
     LlmTaskTextPayload, LlmTaskType, PolishedSegment, SummarySegmentInput, SummaryTemplateConfig,
     TranscriptSummaryResult, TranslatedSegment,
 };
-pub use sona_core::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -392,8 +392,10 @@ test('core crate does not keep sona-cli config template surface', () => {
 
 test('core crate exposes serve runtime without cli runtime surface', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'mod.rs'), 'utf8');
 
-  assert.match(coreLib, /^pub mod serve_runtime;/mu);
+  assert.match(coreLib, /^pub mod runtime;/mu);
+  assert.match(coreRuntime, /^pub mod serve;/mu);
   assert.doesNotMatch(coreLib, /^pub mod cli_runtime;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'cli_runtime.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'tests', 'cli_runtime.rs')), false);
@@ -402,7 +404,7 @@ test('core crate exposes serve runtime without cli runtime surface', () => {
 test('core path port default API does not expose test adapters', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
-  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'paths.rs'), 'utf8');
+  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'paths.rs'), 'utf8');
   const corePathPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'path.rs'), 'utf8');
   const tauriPlatformPaths = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'paths.rs'), 'utf8');
 
@@ -457,13 +459,16 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(apiLib, /pub enum JobStatus/u);
   assert.match(apiLib, /pub fn parse_ip_whitelist/u);
   assert.match(apiLib, /pub fn prepare_runtime_config/u);
+  assert.match(apiLib, /pub struct ApiServerServiceParts/u);
+  assert.match(apiLib, /pub struct RunningApiServer/u);
+  assert.match(apiLib, /pub async fn start_api_server_runtime/u);
   assert.match(apiLib, /pub fn format_bind_error/u);
   assert.match(apiLib, /pub async fn run_server/u);
   assert.doesNotMatch(apiLib, /\btauri::/u);
 
   assert.match(tauriCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/adapters\/api_server" \}/mu);
   assert.match(cliCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/api_server" \}/mu);
-  assert.match(tauriServerRuntime, /use sona_api_server::\{[\s\S]*run_server/u);
+  assert.match(tauriServerRuntime, /use sona_api_server::\{[\s\S]*start_api_server_runtime/u);
   assert.doesNotMatch(tauriServerRuntime, /^pub async fn run_server/mu);
   assert.doesNotMatch(tauriServerRuntime, /^pub struct JobManager/mu);
   assert.doesNotMatch(tauriServerRuntime, /^pub enum JobStatus/mu);
@@ -485,8 +490,11 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_db/u);
   assert.match(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
   assert.doesNotMatch(tauriServerRuntime, /std::fs::read_to_string\([^)]*settings_path/u);
-  assert.match(tauriServerRuntime, /prepare_runtime_config/u);
-  assert.match(cliServe, /prepare_runtime_config/u);
+  assert.doesNotMatch(tauriServerRuntime, /prepare_runtime_config/u);
+  assert.doesNotMatch(cliServe, /prepare_runtime_config/u);
+  assert.doesNotMatch(tauriServerRuntime, /run_server/u);
+  assert.doesNotMatch(cliServe, /run_server/u);
+  assert.match(cliServe, /start_api_server_runtime/u);
   assert.doesNotMatch(tauriServer, /ApiServerRuntimeConfig\s*\{/u);
   assert.doesNotMatch(cliServe, /ApiServerRuntimeConfig\s*\{/u);
 
@@ -571,7 +579,7 @@ test('shared api server invokes local batch ASR through the core transcriber por
   assert.match(apiServer, /use sona_core::ports::asr::\{[\s\S]*BatchTranscriber/u);
   assert.match(apiServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(apiServer, /\.transcribe\(plan\)/u);
-  assert.match(tauriServer, /use sona_api_server::\{[\s\S]*run_server/u);
+  assert.match(tauriServer, /use sona_api_server::\{[\s\S]*start_api_server_runtime/u);
   assert.doesNotMatch(tauriServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.doesNotMatch(apiServer, /run_offline_transcription/u);
   assert.doesNotMatch(apiServer, /use crate::integrations::asr::transcribe_batch_with_progress;/u);
@@ -646,8 +654,8 @@ test('model download runtime implementation lives in a dedicated adapter crate',
     path.join(repoRoot, 'src-tauri', 'src', 'commands', 'downloads.rs'),
     'utf8',
   );
-  const coreModelDownloads = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_downloads.rs'), 'utf8');
-  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
+  const coreModelDownloads = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'downloads.rs'), 'utf8');
+  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'catalog.rs'), 'utf8');
   const adapterLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'lib.rs'), 'utf8');
   const adapterModels = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'models.rs'), 'utf8');
   const adapterDownloads = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'downloads.rs'), 'utf8');
@@ -680,19 +688,19 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     'utf8',
   );
   const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
-  const coreRuntimeConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime_config.rs'), 'utf8');
-  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcribe_runtime.rs'), 'utf8');
-  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'paths.rs'), 'utf8');
-  const coreRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime.rs'), 'utf8');
+  const coreRuntimeConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'config.rs'), 'utf8');
+  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'runtime.rs'), 'utf8');
+  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'paths.rs'), 'utf8');
+  const coreRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'environment.rs'), 'utf8');
   const coreRecoveryNormalization = fs.readFileSync(
     path.join(repoRoot, 'core', 'src', 'recovery', 'normalization.rs'),
     'utf8',
   );
-  const coreProject = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'project.rs'), 'utf8');
-  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
-  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
+  const coreProject = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'project', 'mod.rs'), 'utf8');
+  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'preset_models.rs'), 'utf8');
+  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'catalog.rs'), 'utf8');
   const coreFsPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'fs.rs'), 'utf8');
-  const coreFileUtils = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'file_utils.rs'), 'utf8');
+  const coreFileUtils = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'file_utils.rs'), 'utf8');
   const sqliteProject = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'project.rs'), 'utf8');
   const sqliteLegacyMigration = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs'),
@@ -722,7 +730,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(coreRecoveryNormalization, /SystemTime::now|pub fn now_ms/u);
   assert.match(coreRecoveryNormalization, /snapshot_from_items_with_timestamp/u);
   assert.match(coreRecoveryNormalization, /snapshot_from_value_with_source_paths_at/u);
-  assert.doesNotMatch(coreProject, /current_time_millis|crate::file_utils/u);
+  assert.doesNotMatch(coreProject, /current_time_millis|crate::(?:runtime::)?file_utils/u);
   assert.match(coreProject, /normalize_project_value_with_timestamp/u);
   assert.match(coreProject, /normalize_project_record_for_import_with_timestamp/u);
   assert.doesNotMatch(corePresetModels, /\.metadata\(\)|\.exists\(\)|is_preset_model_installed_at/u);
@@ -730,13 +738,22 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(coreFsPort, /RealFileSystem|std::fs::/u);
   assert.doesNotMatch(coreFileUtils, /FileSystem|write_json_pretty_atomic_with|remove_path_if_exists_with/u);
   assert.doesNotMatch(coreFileUtils, /SystemTime::now|current_time_millis/u);
-  assert.doesNotMatch(sqliteProject, /sona_core::file_utils::current_time_millis/u);
+  assert.doesNotMatch(
+    sqliteProject,
+    /sona_core::(?:runtime::)?file_utils::current_time_millis/u,
+  );
   assert.match(sqliteLegacyMigration, /normalize_project_value_with_timestamp/u);
   assert.match(tauriRecoveryRepository, /fn now_ms\(\) -> u64/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_items_with_timestamp/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_value_with_source_paths_at/u);
-  assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*write_json_pretty_atomic_with/u);
-  assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*remove_path_if_exists_with/u);
+  assert.doesNotMatch(
+    runtimeFsLib,
+    /sona_core::(?:runtime::)?file_utils::\{[^}]*write_json_pretty_atomic_with/u,
+  );
+  assert.doesNotMatch(
+    runtimeFsLib,
+    /sona_core::(?:runtime::)?file_utils::\{[^}]*remove_path_if_exists_with/u,
+  );
 
   assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
   assert.match(runtimeFsLib, /pub fn load_serve_config_file/u);
@@ -762,10 +779,12 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
     prWorkflow,
     /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
+  assert.match(prWorkflow, /cargo test -p sona-core --test preset_models/u);
+  assert.doesNotMatch(prWorkflow, /core::preset_models::tests/u);
 });
 
 test('dashboard and diagnostics clocks are supplied by desktop adapters', () => {
-  const coreDiagnostics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'diagnostics.rs'), 'utf8');
+  const coreDiagnostics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'diagnostics.rs'), 'utf8');
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tauriDiagnostics = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
@@ -795,7 +814,7 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
 });
 
 test('usage and workspace date windows are supplied by sqlite adapters', () => {
-  const coreLlmUsage = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_usage.rs'), 'utf8');
+  const coreLlmUsage = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'usage.rs'), 'utf8');
   const sqliteLlmUsage = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'llm_usage.rs'), 'utf8');
   const coreWorkspaceQuery = fs.readFileSync(
     path.join(repoRoot, 'core', 'src', 'history', 'workspace_query.rs'),
@@ -874,7 +893,7 @@ test('core owns ASR runtime error contract reused by desktop', () => {
 });
 
 test('core owns ASR metric helpers reused by desktop', () => {
-  const coreMetrics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'asr_metrics.rs'), 'utf8');
+  const coreMetrics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'asr_metrics.rs'), 'utf8');
   const desktopMetrics = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'metrics.rs'),
     'utf8',
@@ -891,7 +910,7 @@ test('core owns ASR metric helpers reused by desktop', () => {
     'format_optional_count',
   ]) {
     assert.match(coreMetrics, new RegExp(`pub fn ${helper}`, 'u'));
-    assert.match(desktopMetrics, new RegExp(`sona_core::asr_metrics::[\\s\\S]*${helper}`, 'u'));
+    assert.match(desktopMetrics, new RegExp(`sona_core::transcription::asr_metrics::[\\s\\S]*${helper}`, 'u'));
     assert.doesNotMatch(desktopMetrics, new RegExp(`fn ${helper}`, 'u'));
   }
 
@@ -920,8 +939,11 @@ test('history item factories receive generated values from adapters', () => {
   assert.doesNotMatch(coreHistoryFactory, /Uuid::new_v4|uuid::Uuid::new_v4/u);
   assert.doesNotMatch(coreHistoryFactory, /current_time_millis/u);
   assert.doesNotMatch(coreHistoryFactory, /chrono::Local|DateTime::<chrono::Local>|UNIX_EPOCH/u);
-  assert.doesNotMatch(coreHistoryFactory, /crate::file_utils/u);
-  assert.doesNotMatch(sqliteHistoryStore, /sona_core::file_utils::current_time_millis/u);
+  assert.doesNotMatch(coreHistoryFactory, /crate::(?:runtime::)?file_utils/u);
+  assert.doesNotMatch(
+    sqliteHistoryStore,
+    /sona_core::(?:runtime::)?file_utils::current_time_millis/u,
+  );
   assert.match(sqliteHistoryStore, /fn new_history_item_generated_values/u);
   assert.match(sqliteHistoryStore, /HistoryItemGeneratedValues/u);
   assert.match(sqliteHistoryStore, /recording_title/u);
@@ -1054,7 +1076,7 @@ test('core LLM request contracts are exposed through UniFFI binding records', ()
 });
 
 test('core owns LLM request field validation while online adapter owns API host policy', () => {
-  const coreRequests = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_requests.rs'), 'utf8');
+  const coreRequests = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'requests.rs'), 'utf8');
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const desktopTasks = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'),
@@ -1085,10 +1107,10 @@ test('core owns LLM request field validation while online adapter owns API host 
   assert.doesNotMatch(desktopCommands, /Input cannot be empty/u);
   assert.doesNotMatch(desktopCommands, /Target language cannot be empty/u);
   assert.doesNotMatch(desktopCommands, /does not support transcript polishing/u);
-  assert.match(desktopTasks, /sona_core::llm_requests(?:::\{[\s\S]*validate_llm_config|::validate_llm_config)/u);
+  assert.match(desktopTasks, /sona_core::llm::requests(?:::\{[\s\S]*validate_llm_config|::validate_llm_config)/u);
   assert.match(onlineLlm, /pub fn validate_llm_api_host/u);
   assert.match(onlineLlm, /fn is_loopback_host/u);
-  assert.doesNotMatch(onlineLlm, /sona_core::llm_requests::validate_llm_api_host/u);
+  assert.doesNotMatch(onlineLlm, /sona_core::llm::requests::validate_llm_api_host/u);
 });
 
 test('online ASR provider manifest is owned by core and used directly by desktop', () => {
@@ -1137,8 +1159,8 @@ test('online ASR provider manifest is owned by core and used directly by desktop
 });
 
 test('preset model catalog data is owned by core and reused by frontend', () => {
-  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
-  const corePresetModelsPath = path.join(repoRoot, 'core', 'src', 'preset-models.json');
+  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'preset_models.rs'), 'utf8');
+  const corePresetModelsPath = path.join(repoRoot, 'core', 'src', 'models', 'preset-models.json');
   const legacySharedPresetModelsPath = path.join(repoRoot, 'src', 'shared', 'preset-models.json');
   const modelServiceTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'modelService.ts'), 'utf8');
 
@@ -1146,15 +1168,15 @@ test('preset model catalog data is owned by core and reused by frontend', () => 
   assert.equal(fs.existsSync(legacySharedPresetModelsPath), false);
   assert.match(corePresetModels, /include_str!\("preset-models\.json"\)/u);
   assert.doesNotMatch(corePresetModels, /src\/shared\/preset-models\.json/u);
-  assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/preset-models\.json/u);
+  assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/models\/preset-models\.json/u);
 });
 
 test('core model path resolution is adapter-driven without desktop filesystem probes', () => {
-  const coreModelPaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_paths.rs'), 'utf8');
+  const coreModelPaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'models', 'paths.rs'), 'utf8');
   const cliDesktopPaths = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'desktop_paths.rs'), 'utf8');
   const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
-  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcribe_runtime.rs'), 'utf8');
-  const coreServeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'serve_runtime.rs'), 'utf8');
+  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'runtime.rs'), 'utf8');
+  const coreServeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'serve.rs'), 'utf8');
 
   assert.match(coreModelPaths, /pub enum ModelsDirStatus/u);
   assert.match(coreModelPaths, /status_of/u);
@@ -1192,9 +1214,9 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(platformPaths, /impl<R: Runtime> PathProvider for TauriPathProvider<R>/u);
   assert.match(platformEvent, /pub struct TauriEventEmitter<R: Runtime>\(pub AppHandle<R>\)/u);
   assert.match(platformEvent, /impl<R: Runtime> EventEmitter for TauriEventEmitter<R>/u);
-  assert.match(platformPresetModels, /pub use sona_core::preset_models::\*/u);
+  assert.match(platformPresetModels, /pub use sona_core::models::preset_models::\*/u);
   assert.match(platformPresetModels, /tauri::async_runtime::spawn_blocking/u);
-  assert.match(platformDiagnostics, /pub use sona_core::diagnostics::\{/u);
+  assert.match(platformDiagnostics, /pub use sona_core::runtime::diagnostics::\{/u);
   assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
 });
 
@@ -1219,7 +1241,7 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
     'utf8',
   );
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
-  const coreExport = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'export.rs'), 'utf8');
+  const coreExport = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'export', 'mod.rs'), 'utf8');
   const exportAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'export', 'src', 'lib.rs'), 'utf8');
   const exportCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'export.rs'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
@@ -1320,6 +1342,7 @@ test('desktop history repository facade lives in platform without repositories m
 
 test('app config migration and LLM provider manifest are owned by core', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
   const coreConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'mod.rs'), 'utf8');
   const coreDefaults = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'defaults.rs'), 'utf8');
   const coreMigration = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'migration.rs'), 'utf8');
@@ -1329,13 +1352,14 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   const llmProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'llm', 'providers.ts'), 'utf8');
 
   assert.match(coreLib, /^pub mod config;/mu);
-  assert.match(coreLib, /^pub mod llm_providers;/mu);
-  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm-providers.json')));
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod providers;/mu);
+  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm', 'llm-providers.json')));
   assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'shared', 'llm-providers.json')), false);
   assert.match(coreConfig, /^pub mod defaults;/mu);
   assert.match(coreConfig, /pub fn migrate_app_config/u);
   assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
-  assert.match(coreMigration, /crate::llm_providers::find_llm_provider_by_id_or_alias/u);
+  assert.match(coreMigration, /crate::llm::providers::find_llm_provider_by_id_or_alias/u);
   assert.match(desktopSystemCommand, /sona_core::config::migrate_app_config/u);
   assert.match(desktopServer, /sona_sqlite::config_store::SqliteConfigStore/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config')), false);
@@ -1345,7 +1369,7 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'error.rs')), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod llm_providers;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_providers.rs')), false);
-  assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm-providers\.json/u);
+  assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm\/llm-providers\.json/u);
 });
 
 test('SQLite database handle and schema are owned by sqlite adapter', () => {
@@ -1399,7 +1423,7 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
 
 test('SQLite automation repository is owned by sqlite adapter', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreAutomationPath = path.join(repoRoot, 'core', 'src', 'automation.rs');
+  const coreAutomationPath = path.join(repoRoot, 'core', 'src', 'automation', 'mod.rs');
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const platformAutomationRepository = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
@@ -1429,7 +1453,7 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
 });
 
 test('automation runtime path rules are owned by core and adapted by desktop', () => {
-  const coreAutomation = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'automation.rs'), 'utf8');
+  const coreAutomation = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'automation', 'mod.rs'), 'utf8');
   const desktopPlatformRuntime = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_runtime.rs'),
     'utf8',
@@ -1525,20 +1549,22 @@ test('desktop sqlite app-state access is centralized in platform database adapte
 
 test('LLM usage domain and SQLite usage store are owned by core and sqlite adapter', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const tauriLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const tauriIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const tauriLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
 
-  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm_usage.rs')));
+  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'llm', 'usage.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'llm_usage.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'analytics.rs')));
-  assert.match(coreLib, /^pub mod llm_usage;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod usage;/mu);
   assert.match(sqliteLib, /^pub mod llm_usage;/mu);
   assert.match(sqliteLib, /^pub mod analytics;/mu);
-  assert.match(tauriLlm, /pub\(crate\) use sona_core::llm_usage;/u);
+  assert.match(tauriLlm, /pub\(crate\) use sona_core::llm::usage;/u);
   assert.match(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
-  assert.match(tauriLlmTypes, /pub use sona_core::llm_usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
+  assert.match(tauriLlmTypes, /pub use sona_core::llm::usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs')), false);
@@ -1546,14 +1572,16 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
 
 test('LLM task models and prompt planning are owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreLlmTasks = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_tasks.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
+  const coreLlmTasks = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'tasks.rs'), 'utf8');
   const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
   const desktopLlmTasks = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'), 'utf8');
   const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
 
-  assert.match(coreLib, /^pub mod llm_tasks;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod tasks;/mu);
   assert.match(coreLlmTasks, /pub enum LlmTaskType/u);
   assert.match(coreLlmTasks, /pub struct LlmSegmentInput/u);
   assert.match(coreLlmTasks, /pub fn plan_segment_task_chunks/u);
@@ -1563,13 +1591,13 @@ test('LLM task models and prompt planning are owned by core and reused by deskto
   assert.match(coreLlmTasks, /pub fn build_polish_prompt/u);
   assert.match(coreLlmTasks, /pub fn build_summary_chunk_prompt/u);
   assert.match(onlineLlmLib, /pub async fn run_google_translate_free_requests_in_order/u);
-  assert.match(desktopLlm, /pub\(crate\) use sona_core::llm_tasks::\{/u);
-  assert.match(desktopLlmTypes, /pub use sona_core::llm_tasks::\{[\s\S]*LlmTaskType[\s\S]*SummarySegmentInput/u);
-  assert.match(desktopLlmTasks, /sona_core::llm_tasks::\{/u);
+  assert.match(desktopLlm, /pub\(crate\) use sona_core::llm::tasks::\{/u);
+  assert.match(desktopLlmTypes, /pub use sona_core::llm::tasks::\{[\s\S]*LlmTaskType[\s\S]*SummarySegmentInput/u);
+  assert.match(desktopLlmTasks, /sona_core::llm::tasks::\{/u);
   assert.match(desktopLlmTasks, /run_segment_task/u);
   assert.match(desktopLlmTasks, /run_streaming_segment_task/u);
   assert.match(desktopLlmTasks, /sona_online_llm::\{/u);
-  assert.match(tsBindLib, /sona_core::llm_tasks::\{/u);
+  assert.match(tsBindLib, /sona_core::llm::tasks::\{/u);
   assert.match(tsBindLib, /LlmTaskType/u);
   assert.match(tsBindLib, /TranscriptSummaryResult/u);
   assert.doesNotMatch(desktopLlmTypes, /pub enum LlmTaskType/u);
@@ -1584,15 +1612,17 @@ test('LLM task models and prompt planning are owned by core and reused by deskto
 
 test('transcript LLM job helpers are owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreLlmJobs = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_jobs.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
+  const coreLlmJobs = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'jobs.rs'), 'utf8');
   const desktopLlmJobs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'jobs.rs'), 'utf8');
 
-  assert.match(coreLib, /^pub mod llm_jobs;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod jobs;/mu);
   assert.match(coreLlmJobs, /pub fn normalized_job_history_id/u);
   assert.match(coreLlmJobs, /pub fn segment_inputs_from_transcript/u);
   assert.match(coreLlmJobs, /pub fn merge_translated_items_into_segments/u);
   assert.match(coreLlmJobs, /pub fn compute_summary_source_fingerprint/u);
-  assert.match(desktopLlmJobs, /sona_core::llm_jobs::\{/u);
+  assert.match(desktopLlmJobs, /sona_core::llm::jobs::\{/u);
   assert.doesNotMatch(desktopLlmJobs, /fn normalized_job_history_id/u);
   assert.doesNotMatch(desktopLlmJobs, /fn segment_inputs_from_transcript/u);
   assert.doesNotMatch(desktopLlmJobs, /pub\(crate\) fn merge_translated_items_into_segments/u);
@@ -1601,18 +1631,20 @@ test('transcript LLM job helpers are owned by core and reused by desktop', () =>
 
 test('LLM provider protocol mapping is owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreProviderProtocol = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_provider_protocol.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
+  const coreProviderProtocol = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'provider_protocol.rs'), 'utf8');
   const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
   const desktopLlmProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
   const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
-  assert.match(coreLib, /^pub mod llm_provider_protocol;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod provider_protocol;/mu);
   assert.match(coreProviderProtocol, /pub struct LlmModelSummary/u);
   assert.match(coreProviderProtocol, /pub struct StandardLlmRequest/u);
   assert.match(coreProviderProtocol, /pub fn format_openai_models_urls/u);
   assert.match(coreProviderProtocol, /pub fn extract_text_from_json_response/u);
-  assert.match(desktopLlmTypes, /pub use sona_core::llm_provider_protocol::\{/u);
-  assert.match(onlineLlmLib, /sona_core::llm_provider_protocol::\{/u);
+  assert.match(desktopLlmTypes, /pub use sona_core::llm::provider_protocol::\{/u);
+  assert.match(onlineLlmLib, /sona_core::llm::provider_protocol::\{/u);
   assert.match(desktopLlmProviders, /sona_online_llm::\{/u);
   assert.doesNotMatch(desktopLlmProviders, /fn strategy_uses_openai_chat_payload/u);
   assert.doesNotMatch(desktopLlmProviders, /pub\(crate\) fn clean_gemini_base_url/u);
@@ -1623,17 +1655,19 @@ test('LLM provider protocol mapping is owned by core and reused by desktop', () 
 
 test('LLM streaming protocol helpers are owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreStreaming = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_streaming_protocol.rs'), 'utf8');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
+  const coreStreaming = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'streaming_protocol.rs'), 'utf8');
   const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const desktopStreaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'streaming.rs'), 'utf8');
   const onlineLlmLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
-  assert.match(coreLib, /^pub mod llm_streaming_protocol;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod streaming_protocol;/mu);
   assert.match(coreStreaming, /pub struct StreamTextAccumulator/u);
   assert.match(coreStreaming, /pub struct StreamingLineBuffer/u);
   assert.match(coreStreaming, /pub struct SseEventBuffer/u);
   assert.match(coreStreaming, /pub fn build_openai_chat_payload/u);
-  assert.match(desktopLlm, /sona_core::llm_streaming_protocol::\{/u);
+  assert.match(desktopLlm, /sona_core::llm::streaming_protocol::\{/u);
   assert.match(onlineLlmLib, /pub async fn try_stream_text_with_provider/u);
   assert.match(desktopStreaming, /try_stream_text_with_provider/u);
   assert.doesNotMatch(desktopStreaming, /pub\(crate\) struct StreamTextAccumulator/u);
@@ -1648,7 +1682,8 @@ test('LLM streaming protocol helpers are owned by core and reused by desktop', (
 
 test('LLM request and config contracts are owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreRequestsPath = path.join(repoRoot, 'core', 'src', 'llm_requests.rs');
+  const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
+  const coreRequestsPath = path.join(repoRoot, 'core', 'src', 'llm', 'requests.rs');
   const coreRequests = fs.readFileSync(coreRequestsPath, 'utf8');
   const desktopLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
@@ -1665,15 +1700,16 @@ test('LLM request and config contracts are owned by core and reused by desktop',
     'HistorySummaryPayload',
   ];
 
-  assert.match(coreLib, /^pub mod llm_requests;/mu);
+  assert.match(coreLib, /^pub mod llm;/mu);
+  assert.match(coreLlm, /^pub mod requests;/mu);
   for (const typeName of requestTypes) {
     assert.match(coreRequests, new RegExp(`pub struct ${typeName}\\b`, 'u'));
     assert.match(desktopLlmTypes, new RegExp(`\\b${typeName}\\b`, 'u'));
     assert.match(tsBindLib, new RegExp(`\\b${typeName}\\b`, 'u'));
   }
 
-  assert.match(desktopLlmTypes, /pub use sona_core::llm_requests::\{/u);
-  assert.match(tsBindLib, /sona_core::llm_requests::\{/u);
+  assert.match(desktopLlmTypes, /pub use sona_core::llm::requests::\{/u);
+  assert.match(tsBindLib, /sona_core::llm::requests::\{/u);
   assert.doesNotMatch(desktopLlmTypes, /struct RawLlmConfig/u);
   for (const typeName of requestTypes) {
     assert.doesNotMatch(desktopLlmTypes, new RegExp(`pub struct ${typeName}\\b`, 'u'));
@@ -1821,7 +1857,7 @@ test('standalone CLI invokes local batch ASR through the core transcriber port',
 });
 
 test('recognizer transcript utilities are owned by core and reused by adapters', () => {
-  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
+  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'transcript.rs'), 'utf8');
   const asrMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'), 'utf8');
   const tauriTranscript = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
@@ -1834,16 +1870,16 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 
   assert.match(coreTranscript, /pub fn normalize_recognizer_text\(/u);
   assert.match(coreTranscript, /pub fn synthesize_durations\(/u);
-  assert.match(asrMod, /pub use sona_core::transcript_postprocess::TranscriptPostprocessor/u);
+  assert.match(asrMod, /pub use sona_core::transcription::postprocess::TranscriptPostprocessor/u);
   assert.doesNotMatch(asrMod, /^mod postprocess;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'postprocess.rs')), false);
   assert.match(
     tauriTranscript,
-    /pub\(crate\) use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
+    /pub\(crate\) use sona_core::transcription::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
   );
   assert.match(
     localBatch,
-    /use sona_core::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
+    /use sona_core::transcription::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
   );
   assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn normalize_recognizer_text/u);
   assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn synthesize_durations/u);
@@ -1853,7 +1889,7 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 
 test('timeline transcript normalization is owned by core and reused by desktop', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
-  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
+  const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'transcript.rs'), 'utf8');
   const tauriTranscript = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
@@ -2070,7 +2106,8 @@ test('speaker processing runtime is owned by local ASR adapter and wrapped by de
 test('media file IO detection is delegated to media detector adapter', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
-  const coreMediaDetector = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'media_detector.rs'), 'utf8');
+  const coreRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'mod.rs'), 'utf8');
+  const coreMediaDetector = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'media_detector.rs'), 'utf8');
   const mediaDetectorCargo = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'media_detector', 'Cargo.toml'),
     'utf8',
@@ -2088,7 +2125,8 @@ test('media file IO detection is delegated to media detector adapter', () => {
   const apiServer = fs.readFileSync(path.join(repoRoot, 'adapters', 'api_server', 'src', 'lib.rs'), 'utf8');
 
   assert.match(coreCargo, /^infer\s*=/mu);
-  assert.match(coreLib, /^pub mod media_detector;/mu);
+  assert.match(coreLib, /^pub mod runtime;/mu);
+  assert.match(coreRuntime, /^pub mod media_detector;/mu);
   assert.match(coreMediaDetector, /pub fn is_valid_media_bytes/u);
   assert.doesNotMatch(coreMediaDetector, /tokio::fs::File/u);
   assert.doesNotMatch(coreMediaDetector, /pub async fn is_valid_media_file/u);
@@ -2097,7 +2135,7 @@ test('media file IO detection is delegated to media detector adapter', () => {
   assert.match(mediaDetectorCargo, /^tokio\s*=/mu);
   assert.match(mediaDetectorLib, /pub async fn is_valid_media_file/u);
   assert.match(mediaDetectorLib, /pub async fn check_media_formats/u);
-  assert.match(mediaDetectorLib, /sona_core::media_detector::is_valid_media_bytes/u);
+  assert.match(mediaDetectorLib, /sona_core::runtime::media_detector::is_valid_media_bytes/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'media_detector.rs')), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod media_detector;/mu);
   assert.doesNotMatch(tauriCargo, /^infer\s*=/mu);
@@ -2106,8 +2144,8 @@ test('media file IO detection is delegated to media detector adapter', () => {
   assert.match(apiCargo, /^sona-media-detector\s*=/mu);
   assert.match(systemCommand, /sona_media_detector::check_media_formats/u);
   assert.match(apiServer, /sona_media_detector::is_valid_media_file/u);
-  assert.doesNotMatch(systemCommand, /sona_core::media_detector::check_media_formats/u);
-  assert.doesNotMatch(apiServer, /sona_core::media_detector::is_valid_media_file/u);
+  assert.doesNotMatch(systemCommand, /sona_core::runtime::media_detector::check_media_formats/u);
+  assert.doesNotMatch(apiServer, /sona_core::runtime::media_detector::is_valid_media_file/u);
   assert.doesNotMatch(systemCommand, /crate::integrations::media_detector/u);
   assert.doesNotMatch(apiServer, /crate::integrations::media_detector/u);
   assert.doesNotMatch(tauriServer, /sona_media_detector::is_valid_media_file/u);

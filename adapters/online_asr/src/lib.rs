@@ -7,7 +7,7 @@ use sona_core::ports::asr::{
     OnlineBatchTranscriber, OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest,
     VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
-use sona_core::transcript::{
+use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
     TranscriptTimingUnit,
 };
@@ -988,7 +988,7 @@ mod tests {
         AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
         MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
-    use sona_core::transcript_postprocess::{
+    use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     };
 

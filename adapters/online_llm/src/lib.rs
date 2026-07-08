@@ -11,7 +11,7 @@ use rig_core::providers::{anthropic, azure, copilot, gemini, ollama, openai, per
 use rig_core::streaming::StreamedAssistantContent;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sona_core::llm_provider_protocol::{
+use sona_core::llm::provider_protocol::{
     GeminiGenerateContentRequestParts as CoreGeminiGenerateContentRequestParts,
     GeminiModelsResponse, LlmModelSummary, MessageRole, OllamaTagsResponse, OpenAiModelsResponse,
     StandardLlmRequest, StandardLlmResponse, StandardMessage,
@@ -21,13 +21,13 @@ use sona_core::llm_provider_protocol::{
     gemini_model_to_summary, join_url, normalize_token_usage, ollama_model_to_summary,
     openai_model_to_summary, strategy_supports_model_listing, strategy_uses_openai_chat_payload,
 };
-use sona_core::llm_requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
-use sona_core::llm_streaming_protocol::{
+use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
+use sona_core::llm::streaming_protocol::{
     OpenAiChatPayloadConfig, OpenAiStreamUrlConfig, SseEventBuffer, StreamTextAccumulator,
     build_openai_chat_payload, build_openai_stream_url,
 };
-use sona_core::llm_tasks::LlmProviderStrategy;
-use sona_core::llm_usage::TokenUsage;
+use sona_core::llm::tasks::LlmProviderStrategy;
+use sona_core::llm::usage::TokenUsage;
 use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
 use std::future::Future;
 use std::time::Duration;
@@ -916,7 +916,7 @@ pub async fn generate_text_with_provider(
 ) -> Result<StandardLlmResponse, String> {
     let adapter = AdapterFactory::create(request.config.strategy);
     let std_req = StandardLlmRequest {
-        messages: vec![sona_core::llm_provider_protocol::StandardMessage {
+        messages: vec![sona_core::llm::provider_protocol::StandardMessage {
             role: MessageRole::User,
             content: request.input,
         }],
@@ -1781,7 +1781,7 @@ fn reasoning_level_label(reasoning_level: Option<&str>) -> &'static str {
 
 pub fn build_standard_user_input(input: impl Into<String>, temperature: f32) -> String {
     build_standard_input(&StandardLlmRequest {
-        messages: vec![sona_core::llm_provider_protocol::StandardMessage {
+        messages: vec![sona_core::llm::provider_protocol::StandardMessage {
             role: MessageRole::User,
             content: input.into(),
         }],

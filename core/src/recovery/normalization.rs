@@ -428,7 +428,7 @@ fn normalize_timing_units(
         .into_iter()
         .map(|u| (u.text, u.start, u.end))
         .collect();
-    crate::transcript::normalize_timing_units_impl(tuples, start, end)
+    crate::transcription::transcript::normalize_timing_units_impl(tuples, start, end)
         .into_iter()
         .map(|(text, start, end)| RecoveredTranscriptTimingUnit { text, start, end })
         .collect()

@@ -1,14 +1,16 @@
 use crate::platform::paths::{PathKind, PathProvider};
 
-pub use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
-pub use sona_core::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
+pub use sona_core::transcription::speaker::{
+    SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
+};
+pub use sona_core::transcription::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 pub use sona_local_asr::speaker_processing::annotate_segments_with_speakers;
 
 pub async fn annotate_speaker_segments_from_file(
     file_path: String,
-    segments: Vec<sona_core::transcript::TranscriptSegment>,
+    segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
     speaker_processing: Option<SpeakerProcessingConfig>,
-) -> Result<Vec<sona_core::transcript::TranscriptSegment>, String> {
+) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, String> {
     sona_local_asr::speaker_processing::annotate_speaker_segments_from_file(
         file_path,
         segments,

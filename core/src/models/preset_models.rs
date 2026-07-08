@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model_config::ModelFileConfig;
+use crate::models::config::ModelFileConfig;
 
 const PRESET_MODELS_JSON: &str = include_str!("preset-models.json");
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =

@@ -10,10 +10,10 @@ use crate::recognizer::{
 };
 use async_trait::async_trait;
 use sherpa_onnx::VadModelConfig;
-use sona_core::model_config::ModelFileConfig;
+use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::BatchTranscriber;
-use sona_core::transcribe_runtime::BatchTranscribePlan;
-use sona_core::transcript::{
+use sona_core::transcription::runtime::BatchTranscribePlan;
+use sona_core::transcription::transcript::{
     TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
     synthesize_durations,
 };
@@ -230,7 +230,7 @@ mod tests {
     use super::LocalBatchAsrAdapter;
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::BatchTranscriber;
-    use sona_core::transcribe_runtime::{BatchTranscribePlan, OutputTarget};
+    use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
     use std::path::PathBuf;
 
     #[tokio::test]

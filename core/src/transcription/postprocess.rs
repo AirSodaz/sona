@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
 use specta::Type;
 
-use crate::transcript::{TranscriptSegment, TranscriptUpdate};
+use crate::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
@@ -183,7 +183,9 @@ fn active_text_replacement_rules(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript::{TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource};
+    use crate::transcription::transcript::{
+        TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
+    };
 
     fn sample_segment(text: &str, start: f64, end: f64) -> TranscriptSegment {
         TranscriptSegment {

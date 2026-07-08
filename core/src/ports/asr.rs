@@ -1,11 +1,11 @@
-use crate::model_config::ModelFileConfig;
-use crate::transcribe_runtime::BatchTranscribePlan;
-use crate::transcript::TranscriptSegment;
-use crate::transcript_postprocess::TranscriptPostprocessor;
-pub use crate::transcript_postprocess::{
+use crate::models::config::ModelFileConfig;
+use crate::transcription::postprocess::TranscriptPostprocessor;
+pub use crate::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
     TranscriptTextReplacementRuleSet,
 };
+use crate::transcription::runtime::BatchTranscribePlan;
+use crate::transcription::transcript::TranscriptSegment;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -240,7 +240,7 @@ pub struct BatchTranscriptionRequest {
     pub model_type: String,
     pub file_config: Option<ModelFileConfig>,
     pub hotwords: Option<String>,
-    pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+    pub speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
     pub gpu_acceleration: Option<String>,
@@ -251,7 +251,7 @@ impl BatchTranscriptionRequest {
         file_path: PathBuf,
         save_to_path: Option<PathBuf>,
         request: AsrTranscriptionRequest,
-        speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+        speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Self, String> {
         let AsrTranscriptionRequest {
@@ -400,7 +400,7 @@ pub struct AsrTranscriptionRequest {
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
     pub hotwords: Option<String>,
-    pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+    pub speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
 
     #[serde(flatten)]
     pub engine_config: AsrEngineConfig,
@@ -452,7 +452,7 @@ impl AsrTranscriptionRequest {
         hotwords: Option<String>,
         normalization_options: TranscriptNormalizationOptions,
         postprocess_options: TranscriptPostprocessOptions,
-        speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
+        speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
         gpu_acceleration: Option<String>,
     ) -> Self {
         Self {

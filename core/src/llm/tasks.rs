@@ -1,7 +1,7 @@
 use crate::domain::{BuiltinLlmProvider, LlmProvider};
-use crate::llm_provider_protocol::StandardLlmResponse;
-use crate::llm_requests::LlmGenerateRequest;
-use crate::llm_streaming_protocol::StreamingLineBuffer;
+use crate::llm::provider_protocol::StandardLlmResponse;
+use crate::llm::requests::LlmGenerateRequest;
+use crate::llm::streaming_protocol::StreamingLineBuffer;
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 

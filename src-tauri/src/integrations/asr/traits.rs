@@ -45,7 +45,7 @@ pub trait AsrBatchProcessor: Send + Sync {
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
-        speaker_processing: Option<sona_core::speaker::SpeakerProcessingConfig>,
+        speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, SherpaError>;
 }

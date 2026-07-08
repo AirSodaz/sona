@@ -1,7 +1,7 @@
 use serde_json::json;
 use sona_core::config::{CURRENT_CONFIG_VERSION, DEFAULT_LLM_PROVIDER, default_config};
 use sona_core::config::{migrate_app_config, resolve_effective_config};
-use sona_core::llm_providers::find_llm_provider_by_id_or_alias;
+use sona_core::llm::providers::find_llm_provider_by_id_or_alias;
 
 #[test]
 fn default_config_and_llm_provider_manifest_are_core_owned() {

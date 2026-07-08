@@ -85,7 +85,7 @@ impl UsageRecorder {
         let db = crate::platform::database::sqlite_database(&self.app);
         if let Err(error) = crate::integrations::llm_usage_sqlite::record_usage(
             db.as_ref(),
-            &crate::integrations::llm::llm_usage::UsageRecord {
+            &crate::integrations::llm::usage::UsageRecord {
                 occurred_at: occurred_at.clone(),
                 provider: self.config.provider.as_str(),
                 category: self.category,

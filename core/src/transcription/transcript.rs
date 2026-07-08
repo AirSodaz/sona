@@ -1,4 +1,4 @@
-use crate::transcript_postprocess::TranscriptNormalizationOptions;
+use crate::transcription::postprocess::TranscriptNormalizationOptions;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "specta")]
@@ -213,7 +213,8 @@ fn ends_with_abbreviation(text: &str) -> bool {
 }
 
 fn contains_cjk(text: &str) -> bool {
-    text.chars().any(crate::text_alignment::is_cjk_char)
+    text.chars()
+        .any(crate::transcription::text_alignment::is_cjk_char)
 }
 
 fn is_strong_split_char(ch: char) -> bool {
@@ -745,7 +746,8 @@ fn build_aligned_timing_units(
     }
 
     let windows = build_token_windows(timestamps, durations, segment_end);
-    let aligned_units = crate::text_alignment::align_text_units_to_tokens(text, tokens)?;
+    let aligned_units =
+        crate::transcription::text_alignment::align_text_units_to_tokens(text, tokens)?;
 
     Some(
         aligned_units

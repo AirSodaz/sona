@@ -22,7 +22,7 @@ pub async fn is_valid_media_file(path: impl AsRef<Path>) -> bool {
         return false;
     }
 
-    sona_core::media_detector::is_valid_media_bytes(&buf[..n])
+    sona_core::runtime::media_detector::is_valid_media_bytes(&buf[..n])
 }
 
 pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {

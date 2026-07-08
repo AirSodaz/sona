@@ -4,7 +4,7 @@ use super::*;
 use futures_util::future::BoxFuture;
 use reqwest::{StatusCode, header::RETRY_AFTER};
 use serde_json::json;
-use sona_core::llm_jobs::{
+use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments,
 };
@@ -167,7 +167,7 @@ async fn list_llm_models_rejects_remote_http_before_requesting_models() {
 #[test]
 fn transcript_job_translation_merge_preserves_existing_segment_fields() {
     let mut first = sample_transcript_segment("1", "hello");
-    first.speaker = Some(sona_core::transcript::SpeakerTag {
+    first.speaker = Some(sona_core::transcription::transcript::SpeakerTag {
         id: "speaker-a".to_string(),
         label: "Alice".to_string(),
         kind: "identified".to_string(),
@@ -211,7 +211,7 @@ fn transcript_job_polish_merge_only_rewrites_text() {
 #[test]
 fn transcript_job_summary_fingerprint_matches_frontend_contract() {
     let mut segment = sample_transcript_segment("1", "Hello");
-    segment.speaker = Some(sona_core::transcript::SpeakerTag {
+    segment.speaker = Some(sona_core::transcription::transcript::SpeakerTag {
         id: "speaker-a".to_string(),
         label: "Alice".to_string(),
         kind: "identified".to_string(),

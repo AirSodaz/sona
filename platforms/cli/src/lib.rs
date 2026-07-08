@@ -114,3 +114,18 @@ pub fn render_path_status_json(path: &str) -> CliResult<String> {
     let status = sona_runtime_fs::resolve_runtime_path_status(path);
     serde_json::to_string_pretty(&status).map_err(|error| CliError::Serialize(error.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serve_invalid_ip_whitelist_is_validation_error() {
+        let error = run_cli_from_args(["sona-cli", "serve", "--ip-whitelist", "not-a-rule"])
+            .expect_err("invalid whitelist should fail before server startup");
+
+        assert!(matches!(error, CliError::Validation(_)));
+        assert_eq!(error.exit_code(), 2);
+        assert_eq!(error.to_string(), "Invalid IP rule format: not-a-rule");
+    }
+}

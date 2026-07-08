@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use sona_core::runtime_config::{
+use sona_core::runtime::config::{
     ServeConfigSection, TranscribeConfigSection, UnifiedConfigFile, parse_serve_config_file,
 };
 

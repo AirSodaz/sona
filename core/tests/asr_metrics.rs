@@ -1,4 +1,6 @@
-use sona_core::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
+use sona_core::transcription::asr_metrics::{
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+};
 
 #[test]
 fn asr_runtime_metrics_transport_shape_lives_in_core() {

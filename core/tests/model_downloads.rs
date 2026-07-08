@@ -1,5 +1,5 @@
-use sona_core::model_downloads::{required_companion_models, resolve_model_download};
-use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use sona_core::models::downloads::{required_companion_models, resolve_model_download};
+use sona_core::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 
 #[test]
 fn resolves_model_download_paths_and_required_companions() {

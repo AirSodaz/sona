@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use sona_core::transcribe_runtime::BatchTranscribeOptions;
+use sona_core::transcription::runtime::BatchTranscribeOptions;
 
 #[test]
 fn batch_transcribe_options_are_not_cli_specific() {

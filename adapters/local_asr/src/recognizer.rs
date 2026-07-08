@@ -3,7 +3,7 @@ use log::{debug, info};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
 };
-use sona_core::model_config::ModelFileConfig;
+use sona_core::models::config::ModelFileConfig;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]

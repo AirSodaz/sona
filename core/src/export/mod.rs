@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::transcript::{SpeakerTag, TranscriptSegment};
+use crate::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 /// Supported transcript export formats for every Sona frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -388,7 +388,7 @@ fn prefix_md_speaker_label(segment: &TranscriptSegment, text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript::SpeakerTag;
+    use crate::transcription::transcript::SpeakerTag;
 
     fn sample_segments() -> Vec<TranscriptSegment> {
         vec![

@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::transcript::TranscriptSegment;
+use crate::transcription::transcript::TranscriptSegment;
 
 #[derive(Clone, Debug)]
 pub struct PreparedBackupImportSnapshot {

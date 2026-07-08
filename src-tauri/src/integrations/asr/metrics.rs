@@ -1,5 +1,5 @@
 use log::{info, warn};
-pub use sona_core::asr_metrics::{
+pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot, calculate_rss_delta_mb,
     calculate_rtf, duration_to_ms, format_optional_count, format_optional_mb, format_optional_ms,
     format_optional_rtf, samples_to_ms,

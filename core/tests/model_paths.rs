@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use sona_core::model_paths::{ModelsDirStatus, resolve_models_dir, status_of};
+use sona_core::models::paths::{ModelsDirStatus, resolve_models_dir, status_of};
 
 #[test]
 fn resolve_models_dir_accepts_explicit_directory() {

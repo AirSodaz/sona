@@ -1,9 +1,11 @@
-use sona_core::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
-use sona_core::diagnostics::{
+use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
     VoiceTypingReadinessInput, build_diagnostics_core_snapshot_at,
+};
+use sona_core::transcription::asr_metrics::{
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 
 const SCANNED_AT: &str = "2026-07-08T01:02:03.004Z";
@@ -80,7 +82,9 @@ fn path_status(path: &str, kind: RuntimePathKind) -> RuntimePathStatus {
     }
 }
 
-fn build_snapshot(input: DiagnosticsCoreInput) -> sona_core::diagnostics::DiagnosticsCoreSnapshot {
+fn build_snapshot(
+    input: DiagnosticsCoreInput,
+) -> sona_core::runtime::diagnostics::DiagnosticsCoreSnapshot {
     build_diagnostics_core_snapshot_at(input, SCANNED_AT.to_string())
 }
 

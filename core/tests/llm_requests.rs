@@ -1,16 +1,16 @@
 use serde_json::json;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
-use sona_core::llm_requests::{
+use sona_core::llm::requests::{
     HistorySummaryPayload, LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest,
     TranscriptLlmJobRequest, TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
     validate_llm_config, validate_llm_generate_request, validate_polish_segments_request,
     validate_summarize_transcript_request, validate_task_request,
     validate_translate_segments_request,
 };
-use sona_core::llm_tasks::{
+use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
 };
-use sona_core::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::TranscriptSegment;
 
 fn sample_config() -> LlmConfig {
     LlmConfig {
@@ -120,7 +120,7 @@ fn task_request_validation_requires_a_task_id() {
 
 #[test]
 fn generate_request_validation_requires_input_text() {
-    let error = validate_llm_generate_request(&sona_core::llm_requests::LlmGenerateRequest {
+    let error = validate_llm_generate_request(&sona_core::llm::requests::LlmGenerateRequest {
         config: sample_config(),
         input: "  ".to_string(),
         source: None,

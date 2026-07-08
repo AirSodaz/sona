@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::preset_models::preset_models;
+use crate::models::preset_models::preset_models;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelSummary {

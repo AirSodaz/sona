@@ -3,7 +3,7 @@ use sona_core::ports::asr::{
     GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
     VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider, online_asr_providers,
 };
-use sona_core::transcript_postprocess::{
+use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
 
@@ -19,7 +19,7 @@ fn local_sherpa_request_builder_preserves_shared_contract_fields() {
         Some("vad".to_string()),
         3.5,
         "whisper".to_string(),
-        Some(sona_core::model_config::ModelFileConfig::default()),
+        Some(sona_core::models::config::ModelFileConfig::default()),
         Some("hotwords".to_string()),
         TranscriptNormalizationOptions {
             enable_timeline: true,

@@ -1,13 +1,13 @@
 use serde_json::json;
-use sona_core::llm_provider_protocol::{
+use sona_core::llm::provider_protocol::{
     GeminiModel, LlmModelSummary, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
     build_gemini_generate_content_request_parts, build_standard_input, clean_gemini_base_url,
     extract_text_from_json_response, extract_usage_from_json_response, format_gemini_models_url,
     format_openai_models_urls, gemini_model_to_summary, join_url, openai_model_to_summary,
     strategy_supports_model_listing, strategy_uses_openai_chat_payload,
 };
-use sona_core::llm_tasks::LlmProviderStrategy;
-use sona_core::llm_usage::TokenUsage;
+use sona_core::llm::tasks::LlmProviderStrategy;
+use sona_core::llm::usage::TokenUsage;
 
 #[test]
 fn provider_model_urls_accept_common_base_url_shapes() {

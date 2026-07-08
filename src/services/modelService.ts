@@ -1,4 +1,4 @@
-import presetModelsData from '../../core/src/preset-models.json';
+import presetModelsData from '../../core/src/models/preset-models.json';
 import {
     cancelDownload,
     downloadFile,

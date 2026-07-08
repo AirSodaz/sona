@@ -1,8 +1,8 @@
 use axum::{Router, routing::get};
 use hex::encode;
 use sha2::{Digest, Sha256};
-use sona_core::model_downloads::ResolvedModelDownload;
-use sona_core::preset_models::find_preset_model;
+use sona_core::models::downloads::ResolvedModelDownload;
+use sona_core::models::preset_models::find_preset_model;
 use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
 use tokio::net::TcpListener;
 

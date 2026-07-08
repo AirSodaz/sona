@@ -103,7 +103,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --test desktop_entry
 
       - name: Run preset model tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib core::preset_models::tests
+        run: cargo test -p sona-core --test preset_models
 
       - name: Run API server tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib app::server::tests

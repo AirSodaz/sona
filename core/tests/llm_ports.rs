@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
-use sona_core::llm_provider_protocol::{LlmModelSummary, StandardLlmResponse};
-use sona_core::llm_requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
-use sona_core::llm_tasks::LlmProviderStrategy;
+use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
+use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
+use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
 
 fn sample_config() -> LlmConfig {

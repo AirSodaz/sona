@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
 use sona_core::ports::asr::BatchTranscriber;
-use sona_core::runtime_config::TranscribeConfigSection;
-use sona_core::transcribe_runtime::{BatchTranscribeOptions, OutputTarget};
+use sona_core::runtime::config::TranscribeConfigSection;
+use sona_core::transcription::runtime::{BatchTranscribeOptions, OutputTarget};
 
 #[derive(Debug, Args)]
 #[command(

@@ -2,7 +2,7 @@ use crate::audio::SafeVad;
 use crate::punctuation::Punctuation;
 use crate::recognizer::{Recognizer, SafeStream};
 use sona_core::ports::asr::TranscriptNormalizationOptions;
-use sona_core::transcript_postprocess::TranscriptPostprocessor;
+use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

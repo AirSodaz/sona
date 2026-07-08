@@ -1433,7 +1433,7 @@ fn normalize_provider_str(provider: &str) -> String {
         return LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string();
     }
 
-    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
+    if let Some(llm_provider) = crate::llm::providers::find_llm_provider_by_id_or_alias(provider) {
         return llm_provider.id.clone();
     }
 
@@ -1501,7 +1501,7 @@ fn provider_defaults(
         return defaults;
     }
 
-    if let Some(llm_provider) = crate::llm_providers::find_llm_provider_by_id_or_alias(provider) {
+    if let Some(llm_provider) = crate::llm::providers::find_llm_provider_by_id_or_alias(provider) {
         let mut defaults = Map::new();
         defaults.insert("apiHost".to_string(), json!(llm_provider.defaults.api_host));
         defaults.insert("apiKey".to_string(), json!(""));

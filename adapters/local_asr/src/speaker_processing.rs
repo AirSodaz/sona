@@ -1,7 +1,9 @@
 use log::{debug, info};
-use sona_core::speaker::{SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample};
-use sona_core::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
-use sona_core::transcript::{
+use sona_core::transcription::speaker::{
+    SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
+};
+use sona_core::transcription::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
+use sona_core::transcription::transcript::{
     SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
     TranscriptTimingLevel, ensure_transcript_segment_timing,
 };
@@ -1172,7 +1174,7 @@ fn speaker_assignments_equal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sona_core::text_alignment::lex_text_units;
+    use sona_core::transcription::text_alignment::lex_text_units;
 
     fn speaker(id: &str, label: &str, kind: &str, score: Option<f32>) -> SpeakerTag {
         SpeakerTag {
@@ -1579,14 +1581,14 @@ mod tests {
         let mut segment = sample_segment(0.0, 2.0, "Hello there");
         segment.timing = Some(TranscriptTiming {
             level: TranscriptTimingLevel::Token,
-            source: sona_core::transcript::TranscriptTimingSource::Model,
+            source: sona_core::transcription::transcript::TranscriptTimingSource::Model,
             units: vec![
-                sona_core::transcript::TranscriptTimingUnit {
+                sona_core::transcription::transcript::TranscriptTimingUnit {
                     text: "Hello".to_string(),
                     start: 0.0,
                     end: 1.0,
                 },
-                sona_core::transcript::TranscriptTimingUnit {
+                sona_core::transcription::transcript::TranscriptTimingUnit {
                     text: " there".to_string(),
                     start: 1.0,
                     end: 2.0,

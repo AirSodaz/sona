@@ -1,13 +1,13 @@
+use sona_core::llm::requests::{
+    LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
+};
+use sona_core::llm::tasks::{
+    LlmProviderStrategy, LlmSegmentInput, SummarySegmentInput, SummaryTemplateConfig,
+};
 use sona_core::ports::asr::{
     AsrEngine, AsrMode, BatchSegmentationMode, OnlineAsrProviderRequest, VolcengineDoubaoAsrConfig,
 };
-use sona_core::runtime::{RuntimePathKind, RuntimePathStatus};
-use sona_core::{
-    llm_requests::{
-        LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
-    },
-    llm_tasks::{LlmProviderStrategy, LlmSegmentInput, SummarySegmentInput, SummaryTemplateConfig},
-};
+use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiRuntimePathKind {

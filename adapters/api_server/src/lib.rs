@@ -11,13 +11,13 @@ use futures_util::stream::StreamExt;
 use hmac::{Hmac, KeyInit, Mac};
 use ipnet::IpNet;
 use sha2::Sha256;
-use sona_core::gpu::DEFAULT_GPU_ACCELERATION;
 use sona_core::ports::asr::{
     BatchTranscriber, OnlineAsrProviderRequest, find_online_asr_provider, online_asr_providers,
 };
-use sona_core::serve_runtime::ResolvedServeRuntimeOptions;
-use sona_core::transcribe_runtime::BatchTranscribeOptions;
-use sona_core::transcript::TranscriptSegment;
+use sona_core::runtime::gpu::DEFAULT_GPU_ACCELERATION;
+use sona_core::runtime::serve::ResolvedServeRuntimeOptions;
+use sona_core::transcription::runtime::BatchTranscribeOptions;
+use sona_core::transcription::transcript::TranscriptSegment;
 use std::any::Any;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -46,9 +46,11 @@ impl Default for ApiServerTranscriptionDefaults {
     fn default() -> Self {
         Self {
             gpu_acceleration: Some(DEFAULT_GPU_ACCELERATION.to_string()),
-            vad_model_id: Some(sona_core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            vad_model_id: Some(
+                sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ),
             punctuation_model_id: Some(
-                sona_core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
+                sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
             ),
         }
     }
@@ -125,6 +127,65 @@ pub struct ApiServerRuntimeParts {
 pub struct PreparedApiServerRuntime {
     pub config: ApiServerRuntimeConfig,
     pub normalized_ip_whitelist: String,
+}
+
+pub struct ApiServerServiceParts {
+    pub resolved: ResolvedServeRuntimeOptions,
+    pub temp_dir: PathBuf,
+    pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    pub platform: Arc<dyn ApiServerPlatform>,
+    pub streaming_router: Option<Router<ServerState>>,
+}
+
+pub struct RunningApiServer {
+    pub normalized_ip_whitelist: String,
+    pub shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    pub join_handle: tokio::task::JoinHandle<Result<(), String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApiServerStartError {
+    Configuration(String),
+    Runtime(String),
+}
+
+impl std::fmt::Display for ApiServerStartError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ApiServerStartError::Configuration(error) | ApiServerStartError::Runtime(error) => {
+                f.write_str(error)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ApiServerStartError {}
+
+impl std::fmt::Debug for RunningApiServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunningApiServer")
+            .field("normalized_ip_whitelist", &self.normalized_ip_whitelist)
+            .finish_non_exhaustive()
+    }
+}
+
+impl RunningApiServer {
+    pub fn signal_shutdown(&mut self) {
+        if let Some(sender) = self.shutdown_tx.take() {
+            let _ = sender.send(());
+        }
+    }
+
+    pub async fn wait(self) -> Result<(), String> {
+        self.join_handle
+            .await
+            .map_err(|error| format!("API server task failed: {error}"))?
+    }
+
+    pub async fn stop(mut self) -> Result<(), String> {
+        self.signal_shutdown();
+        self.wait().await
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -282,14 +343,12 @@ pub async fn default_info_response(
         .filter(|m| m.is_installed)
         .map(|m| m.id.clone())
         .collect::<Vec<_>>();
-    let vad_installed = snapshot
-        .models
-        .iter()
-        .any(|m| m.id == sona_core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed);
-    let punctuation_installed = snapshot
-        .models
-        .iter()
-        .any(|m| m.id == sona_core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed);
+    let vad_installed = snapshot.models.iter().any(|m| {
+        m.id == sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed
+    });
+    let punctuation_installed = snapshot.models.iter().any(|m| {
+        m.id == sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
+    });
 
     let online_asr_providers = online_asr_providers()
         .iter()
@@ -450,6 +509,49 @@ pub fn prepare_runtime_config(
         },
         normalized_ip_whitelist,
     })
+}
+
+pub async fn start_api_server_runtime(
+    parts: ApiServerServiceParts,
+) -> Result<RunningApiServer, ApiServerStartError> {
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let (bind_tx, bind_rx) = tokio::sync::oneshot::channel();
+    let prepared = prepare_runtime_config(ApiServerRuntimeParts {
+        resolved: parts.resolved,
+        temp_dir: parts.temp_dir,
+        online_asr_config: parts.online_asr_config,
+        platform: parts.platform,
+        streaming_router: parts.streaming_router,
+        shutdown_rx,
+        bind_tx: Some(bind_tx),
+    })
+    .map_err(ApiServerStartError::Configuration)?;
+    let normalized_ip_whitelist = prepared.normalized_ip_whitelist.clone();
+    let running = RunningApiServer {
+        normalized_ip_whitelist,
+        shutdown_tx: Some(shutdown_tx),
+        join_handle: tokio::spawn(async move {
+            let result = run_server(prepared.config).await;
+            if let Err(error) = &result {
+                log::error!("HTTP API Server failed: {}", error);
+            }
+            result
+        }),
+    };
+
+    match bind_rx.await {
+        Ok(Ok(())) => Ok(running),
+        Ok(Err(error)) => {
+            let _ = running.stop().await;
+            Err(ApiServerStartError::Runtime(error))
+        }
+        Err(_) => {
+            let error = running.stop().await.err().unwrap_or_else(|| {
+                "API server failed to start: task terminated prematurely".to_string()
+            });
+            Err(ApiServerStartError::Runtime(error))
+        }
+    }
 }
 
 async fn ip_whitelist_middleware(
@@ -822,7 +924,7 @@ pub fn build_local_transcribe_plan(
     job: &TranscriptionJob,
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
-) -> Result<sona_core::transcribe_runtime::BatchTranscribePlan, String> {
+) -> Result<sona_core::transcription::runtime::BatchTranscribePlan, String> {
     let options = build_local_transcribe_options(job, models_dir, defaults);
     sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
         options,
@@ -835,13 +937,13 @@ fn companion_defaults_for_model(
     model_id: &str,
     defaults: &ApiServerTranscriptionDefaults,
 ) -> (Option<String>, Option<String>) {
-    let rules =
-        sona_core::preset_models::find_preset_model(model_id).map(|model| model.resolved_rules());
+    let rules = sona_core::models::preset_models::find_preset_model(model_id)
+        .map(|model| model.resolved_rules());
 
     let vad_model_id = match defaults.vad_model_id.as_deref() {
         Some(id)
             if rules.map(|rules| rules.requires_vad).unwrap_or(true)
-                || id != sona_core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
+                || id != sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
         {
             Some(id.to_string())
         }
@@ -853,7 +955,7 @@ fn companion_defaults_for_model(
             if rules
                 .map(|rules| rules.requires_punctuation)
                 .unwrap_or(true)
-                || id != sona_core::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
+                || id != sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
         {
             Some(id.to_string())
         }
@@ -1065,7 +1167,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn install_preset_model(models_dir: &StdPath, model_id: &str) {
-        let model = sona_core::preset_models::find_preset_model(model_id).unwrap();
+        let model = sona_core::models::preset_models::find_preset_model(model_id).unwrap();
         let install_path = model.resolve_install_path(models_dir);
         if let Some(parent) = install_path.parent() {
             fs::create_dir_all(parent).unwrap();
@@ -1214,7 +1316,7 @@ mod tests {
         install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
         install_preset_model(
             &models_dir,
-            sona_core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
+            sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
@@ -1230,7 +1332,9 @@ mod tests {
         };
         let defaults = ApiServerTranscriptionDefaults {
             gpu_acceleration: Some("cuda".to_string()),
-            vad_model_id: Some(sona_core::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string()),
+            vad_model_id: Some(
+                sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ),
             punctuation_model_id: None,
         };
 
@@ -1275,7 +1379,7 @@ mod tests {
         let (bind_tx, _bind_rx) = tokio::sync::oneshot::channel();
 
         let prepared = prepare_runtime_config(ApiServerRuntimeParts {
-            resolved: sona_core::serve_runtime::ResolvedServeRuntimeOptions {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
                 host: "0.0.0.0".to_string(),
                 port: 15555,
                 api_key: "secret".to_string(),
@@ -1286,7 +1390,7 @@ mod tests {
                 max_queue_size: 44,
                 max_upload_size_mb: 256,
                 job_ttl_minutes: 9,
-                transcription_defaults: sona_core::serve_runtime::ServeTranscriptionDefaults {
+                transcription_defaults: sona_core::runtime::serve::ServeTranscriptionDefaults {
                     gpu_acceleration: Some("cuda".to_string()),
                     vad_model_id: Some("vad-model".to_string()),
                     punctuation_model_id: Some("punct-model".to_string()),
@@ -1345,7 +1449,7 @@ mod tests {
     fn prepare_runtime_config_rejects_invalid_whitelist() {
         let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let error = match prepare_runtime_config(ApiServerRuntimeParts {
-            resolved: sona_core::serve_runtime::ResolvedServeRuntimeOptions {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
                 host: "127.0.0.1".to_string(),
                 port: 14200,
                 api_key: String::new(),
@@ -1408,5 +1512,105 @@ mod tests {
 
         let _ = shutdown_tx.send(());
         let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn start_api_server_runtime_reports_bind_failure() {
+        let occupier = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = occupier.local_addr().unwrap().port();
+        let temp_dir = tempfile::tempdir().unwrap().path().join("api-temp");
+        let models_dir = tempfile::tempdir().unwrap().path().join("models");
+
+        let result = start_api_server_runtime(ApiServerServiceParts {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
+                host: "127.0.0.1".to_string(),
+                port,
+                api_key: String::new(),
+                models_dir,
+                ip_whitelist: "localhost".to_string(),
+                max_streaming: 1,
+                max_concurrent: 1,
+                max_queue_size: 1,
+                max_upload_size_mb: 1,
+                job_ttl_minutes: 1,
+                transcription_defaults: Default::default(),
+            },
+            temp_dir,
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_router: None,
+        })
+        .await;
+
+        let error = result.expect_err("occupied port should fail to bind");
+        assert!(matches!(error, ApiServerStartError::Runtime(_)));
+        assert!(error.to_string().contains("Address already in use"));
+    }
+
+    #[tokio::test]
+    async fn start_api_server_runtime_reports_configuration_failure() {
+        let temp_dir = tempfile::tempdir().unwrap().path().join("api-temp");
+        let models_dir = tempfile::tempdir().unwrap().path().join("models");
+
+        let result = start_api_server_runtime(ApiServerServiceParts {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
+                host: "127.0.0.1".to_string(),
+                port: 14200,
+                api_key: String::new(),
+                models_dir,
+                ip_whitelist: "not-a-rule".to_string(),
+                max_streaming: 1,
+                max_concurrent: 1,
+                max_queue_size: 1,
+                max_upload_size_mb: 1,
+                job_ttl_minutes: 1,
+                transcription_defaults: Default::default(),
+            },
+            temp_dir,
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_router: None,
+        })
+        .await;
+
+        let error = result.expect_err("invalid whitelist should fail before starting");
+        assert_eq!(
+            error,
+            ApiServerStartError::Configuration("Invalid IP rule format: not-a-rule".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn start_api_server_runtime_returns_stoppable_server() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let temp_dir = tempfile::tempdir().unwrap().path().join("api-temp");
+        let models_dir = tempfile::tempdir().unwrap().path().join("models");
+
+        let server = start_api_server_runtime(ApiServerServiceParts {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
+                host: "127.0.0.1".to_string(),
+                port,
+                api_key: String::new(),
+                models_dir,
+                ip_whitelist: "localhost".to_string(),
+                max_streaming: 1,
+                max_concurrent: 1,
+                max_queue_size: 1,
+                max_upload_size_mb: 1,
+                job_ttl_minutes: 1,
+                transcription_defaults: Default::default(),
+            },
+            temp_dir,
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_router: None,
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(server.normalized_ip_whitelist, "127.0.0.0/8,::1/128");
+        server.stop().await.unwrap();
     }
 }

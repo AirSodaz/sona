@@ -5,7 +5,7 @@ pub use sona_core::ports::asr::{
     TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
 };
 
-pub use sona_core::transcript::{
+pub use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
     TranscriptTimingUnit, TranscriptUpdate,
 };

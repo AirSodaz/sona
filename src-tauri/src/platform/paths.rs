@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager, Runtime};
 #[cfg(test)]
 use std::collections::HashMap;
 
-pub fn models_dir_status(path: &Path) -> sona_core::model_paths::ModelsDirStatus {
+pub fn models_dir_status(path: &Path) -> sona_core::models::paths::ModelsDirStatus {
     sona_runtime_fs::models_dir_status(path)
 }
 
