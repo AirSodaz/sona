@@ -54,8 +54,8 @@ pub async fn download_file<R: tauri::Runtime>(
     id: String,
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
-    use sona_core::downloads::{
-        complete_download_file, download_file as core_download_file, temporary_download_path,
+    use sona_model_downloads::{
+        complete_download_file, download_file as adapter_download_file, temporary_download_path,
     };
     use tauri::Emitter;
 
@@ -80,7 +80,7 @@ pub async fn download_file<R: tauri::Runtime>(
         }
     });
 
-    let result = core_download_file(&client, &url, &temp_path, notify, Some(progress_cb)).await;
+    let result = adapter_download_file(&client, &url, &temp_path, notify, Some(progress_cb)).await;
 
     {
         let mut downloads = state.downloads.lock().await;

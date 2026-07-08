@@ -273,6 +273,34 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   assert.match(webdavAdapter, /pub async fn webdav_download_backup/u);
 });
 
+test('model download runtime implementation lives in a dedicated adapter crate', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
+  const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
+  const desktopDownloads = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'commands', 'downloads.rs'),
+    'utf8',
+  );
+  const coreModelDownloads = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_downloads.rs'), 'utf8');
+  const adapterLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'lib.rs'), 'utf8');
+  const adapterDownloads = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'downloads.rs'),
+    'utf8',
+  );
+
+  assert.match(workspaceCargo, /"adapters\/model_downloads"/u);
+  assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/adapters\/model_downloads" \}/u);
+  assert.match(cliCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
+  assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid\}/u);
+  assert.match(desktopDownloads, /use sona_model_downloads::\{[\s\S]*adapter_download_file/u);
+  assert.doesNotMatch(coreModelDownloads, /pub async fn download_model/u);
+  assert.doesNotMatch(coreModelDownloads, /reqwest|tokio::fs|sha256_file|tar::|bzip2::/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'downloads.rs')), false);
+  assert.match(adapterLib, /pub use downloads::/u);
+  assert.match(adapterDownloads, /pub async fn download_file/u);
+});
+
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -281,7 +309,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-local-asr -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 

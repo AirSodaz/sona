@@ -5,7 +5,6 @@ pub mod config;
 pub mod dashboard;
 pub mod diagnostics;
 pub mod domain;
-pub mod downloads;
 pub mod export;
 pub mod file_utils;
 pub mod gpu;

@@ -8,9 +8,9 @@ use sona_core::model_catalog::{
     remove_model_install_path, select_models,
 };
 use sona_core::model_downloads::{
-    ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
-    resolve_model_download,
+    ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
+use sona_model_downloads::{download_model, installed_model_is_valid};
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {

@@ -4,8 +4,8 @@ use crate::llm_tasks::{
 };
 use crate::llm_usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 use crate::transcript::TranscriptSegment;
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 #[cfg(feature = "specta")]
 use specta::Type;

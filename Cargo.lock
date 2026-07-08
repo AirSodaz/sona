@@ -5395,6 +5395,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-core",
  "sona-local-asr",
+ "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
  "sona-sqlite",
@@ -5445,6 +5446,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-core",
  "sona-local-asr",
+ "sona-model-downloads",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -5458,13 +5460,11 @@ dependencies = [
  "axum",
  "bzip2",
  "chrono",
- "fs3",
  "futures-util",
  "glob",
  "hex",
  "infer 0.16.0",
  "regex",
- "reqwest 0.13.4",
  "roxmltree",
  "serde",
  "serde_json",
@@ -5500,6 +5500,24 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "sona-model-downloads"
+version = "0.8.0"
+dependencies = [
+ "axum",
+ "bzip2",
+ "fs3",
+ "futures-util",
+ "hex",
+ "reqwest 0.13.4",
+ "sha2 0.11.0",
+ "sona-core",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

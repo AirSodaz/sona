@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "adapters/local_asr",
+    "adapters/model_downloads",
     "adapters/online_llm",
     "adapters/online_asr",
     "adapters/sqlite",

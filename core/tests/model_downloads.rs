@@ -1,20 +1,5 @@
-use axum::{Router, routing::get};
-use hex::encode;
-use sha2::{Digest, Sha256};
-use sona_core::model_downloads::{
-    ResolvedModelDownload, download_model, installed_model_is_valid, required_companion_models,
-    resolve_model_download,
-};
-use sona_core::preset_models::{
-    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model,
-};
-use tokio::net::TcpListener;
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    encode(hasher.finalize())
-}
+use sona_core::model_downloads::{required_companion_models, resolve_model_download};
+use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 
 #[test]
 fn resolves_model_download_paths_and_required_companions() {
@@ -40,37 +25,4 @@ fn resolves_model_download_paths_and_required_companions() {
         companions.punctuation_model_id.as_deref(),
         Some(DEFAULT_PUNCTUATION_MODEL_ID)
     );
-}
-
-#[tokio::test]
-async fn downloads_single_file_model_and_validates_existing_hash() {
-    let dir = tempfile::tempdir().unwrap();
-    let models_dir = dir.path().join("models");
-    let body = b"fake-silero-vad";
-    let hash = sha256_hex(body);
-
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let app = Router::new().route("/model.onnx", get(move || async move { body }));
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-
-    let mut model = find_preset_model("silero-vad").unwrap().clone();
-    model.url = format!("http://{addr}/model.onnx");
-    model.sha256 = Some(hash);
-    let install_path = models_dir.join("silero_vad.onnx");
-    let resolved = ResolvedModelDownload {
-        model,
-        models_dir: models_dir.clone(),
-        download_path: install_path.clone(),
-        install_path: install_path.clone(),
-    };
-
-    assert!(!installed_model_is_valid(&resolved).await.unwrap());
-
-    let downloaded = download_model(&resolved, |_, _| {}).await.unwrap();
-    assert_eq!(downloaded, install_path);
-    assert_eq!(tokio::fs::read(&downloaded).await.unwrap(), body);
-    assert!(installed_model_is_valid(&resolved).await.unwrap());
 }
