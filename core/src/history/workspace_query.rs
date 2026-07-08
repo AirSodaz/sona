@@ -1,4 +1,3 @@
-use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use unicode_normalization::UnicodeNormalization;
@@ -12,26 +11,47 @@ use super::{
 
 const DEFAULT_SNIPPET_LENGTH: usize = 72;
 
-pub fn query_workspace_items(
-    items: Vec<HistoryItemRecord>,
-    request: HistoryWorkspaceQueryRequest,
-) -> HistoryWorkspaceQueryResult {
-    let item_counts = count_items_by_project(&items);
-    query_workspace_items_impl(items, request, item_counts)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HistoryWorkspaceDateFilterThresholds {
+    pub today_start_millis: u64,
+    pub week_start_millis: u64,
+    pub month_start_millis: u64,
 }
 
-pub fn query_workspace_items_with_counts(
+impl HistoryWorkspaceDateFilterThresholds {
+    fn threshold_millis(self, date_filter: HistoryWorkspaceDateFilter) -> Option<u64> {
+        match date_filter {
+            HistoryWorkspaceDateFilter::All => None,
+            HistoryWorkspaceDateFilter::Today => Some(self.today_start_millis),
+            HistoryWorkspaceDateFilter::Week => Some(self.week_start_millis),
+            HistoryWorkspaceDateFilter::Month => Some(self.month_start_millis),
+        }
+    }
+}
+
+pub fn query_workspace_items_at(
+    items: Vec<HistoryItemRecord>,
+    request: HistoryWorkspaceQueryRequest,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
+) -> HistoryWorkspaceQueryResult {
+    let item_counts = count_items_by_project(&items);
+    query_workspace_items_impl(items, request, item_counts, date_filter_thresholds)
+}
+
+pub fn query_workspace_items_with_counts_at(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
     item_counts: HistoryWorkspaceItemCounts,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
 ) -> HistoryWorkspaceQueryResult {
-    query_workspace_items_impl(items, request, item_counts)
+    query_workspace_items_impl(items, request, item_counts, date_filter_thresholds)
 }
 
 fn query_workspace_items_impl(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
     item_counts: HistoryWorkspaceItemCounts,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
 ) -> HistoryWorkspaceQueryResult {
     let scoped_items = items
         .into_iter()
@@ -59,7 +79,7 @@ fn query_workspace_items_impl(
                 return None;
             }
 
-            if !matches_date_filter(&item, request.date_filter) {
+            if !matches_date_filter(&item, request.date_filter, date_filter_thresholds) {
                 return None;
             }
 
@@ -106,64 +126,15 @@ fn matches_filter_type(item: &HistoryItemRecord, filter_type: HistoryWorkspaceFi
     }
 }
 
-fn matches_date_filter(item: &HistoryItemRecord, date_filter: HistoryWorkspaceDateFilter) -> bool {
-    if date_filter == HistoryWorkspaceDateFilter::All {
-        return true;
+fn matches_date_filter(
+    item: &HistoryItemRecord,
+    date_filter: HistoryWorkspaceDateFilter,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
+) -> bool {
+    match date_filter_thresholds.threshold_millis(date_filter) {
+        Some(threshold) => item.timestamp >= threshold,
+        None => true,
     }
-
-    let Some(item_date) = timestamp_millis_to_local(item.timestamp) else {
-        return false;
-    };
-    let now = Local::now();
-    let today = match Local.with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0) {
-        LocalResult::Single(value) => value,
-        LocalResult::Ambiguous(earliest, _) => earliest,
-        LocalResult::None => return true,
-    };
-
-    let threshold = match date_filter {
-        HistoryWorkspaceDateFilter::Today => today,
-        HistoryWorkspaceDateFilter::Week => today - Duration::days(7),
-        HistoryWorkspaceDateFilter::Month => {
-            let (year, month) = if today.month() == 1 {
-                (today.year() - 1, 12)
-            } else {
-                (today.year(), today.month() - 1)
-            };
-            match Local.with_ymd_and_hms(
-                year,
-                month,
-                today.day().min(days_in_month(year, month)),
-                0,
-                0,
-                0,
-            ) {
-                LocalResult::Single(value) => value,
-                LocalResult::Ambiguous(earliest, _) => earliest,
-                LocalResult::None => today - Duration::days(30),
-            }
-        }
-        HistoryWorkspaceDateFilter::All => today,
-    };
-
-    item_date >= threshold
-}
-
-fn timestamp_millis_to_local(timestamp: u64) -> Option<chrono::DateTime<Local>> {
-    match Local.timestamp_millis_opt(timestamp as i64) {
-        LocalResult::Single(value) => Some(value),
-        LocalResult::Ambiguous(earliest, _) => Some(earliest),
-        LocalResult::None => None,
-    }
-}
-
-fn days_in_month(year: i32, month: u32) -> u32 {
-    let next_month = if month == 12 { 1 } else { month + 1 };
-    let next_year = if month == 12 { year + 1 } else { year };
-    let Some(first_next_month) = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1) else {
-        return 28;
-    };
-    (first_next_month - Duration::days(1)).day()
 }
 
 fn compare_items(
@@ -529,8 +500,11 @@ mod tests {
         punctuation.preview_text = "你好，世界".to_string();
         punctuation.search_content = punctuation.preview_text.clone();
 
-        let punctuation_result =
-            query_workspace_items(vec![punctuation.clone()], base_request("你好,世界"));
+        let punctuation_result = query_workspace_items_at(
+            vec![punctuation.clone()],
+            base_request("你好,世界"),
+            test_thresholds(),
+        );
         assert_eq!(punctuation_result.filtered_items, vec![punctuation.clone()]);
         let punctuation_match = punctuation_result
             .search_match_by_item_id
@@ -545,8 +519,11 @@ mod tests {
         whitespace.preview_text = "hello world".to_string();
         whitespace.search_content = whitespace.preview_text.clone();
 
-        let whitespace_result =
-            query_workspace_items(vec![whitespace.clone()], base_request("helloworld"));
+        let whitespace_result = query_workspace_items_at(
+            vec![whitespace.clone()],
+            base_request("helloworld"),
+            test_thresholds(),
+        );
         assert!(whitespace_result.filtered_items.is_empty());
 
         let mut body_priority = sample_history_item("body-priority", HistoryItemStatus::Complete);
@@ -555,8 +532,11 @@ mod tests {
             "Quarterly roadmap discussion with design and product.".to_string();
         body_priority.search_content = body_priority.preview_text.clone();
 
-        let body_result =
-            query_workspace_items(vec![body_priority.clone()], base_request("roadmap"));
+        let body_result = query_workspace_items_at(
+            vec![body_priority.clone()],
+            base_request("roadmap"),
+            test_thresholds(),
+        );
         let body_match = body_result
             .search_match_by_item_id
             .get("body-priority")
@@ -573,5 +553,36 @@ mod tests {
                 .text
                 .contains("Quarterly roadmap discussion")
         );
+    }
+
+    #[test]
+    fn workspace_date_filter_uses_supplied_thresholds() {
+        let mut before_today = sample_history_item("before-today", HistoryItemStatus::Complete);
+        before_today.timestamp = 999;
+        let mut today = sample_history_item("today", HistoryItemStatus::Complete);
+        today.timestamp = 1_000;
+
+        let mut request = base_request("");
+        request.date_filter = HistoryWorkspaceDateFilter::Today;
+
+        let result = query_workspace_items_at(
+            vec![before_today, today.clone()],
+            request,
+            HistoryWorkspaceDateFilterThresholds {
+                today_start_millis: 1_000,
+                week_start_millis: 500,
+                month_start_millis: 100,
+            },
+        );
+
+        assert_eq!(result.filtered_items, vec![today]);
+    }
+
+    fn test_thresholds() -> HistoryWorkspaceDateFilterThresholds {
+        HistoryWorkspaceDateFilterThresholds {
+            today_start_millis: 1_000,
+            week_start_millis: 500,
+            month_start_millis: 100,
+        }
     }
 }

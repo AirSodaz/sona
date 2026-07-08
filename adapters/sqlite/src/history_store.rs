@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
+use sona_core::history::workspace_query::HistoryWorkspaceDateFilterThresholds;
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
@@ -45,10 +46,18 @@ fn current_time_millis() -> Result<u64, String> {
 }
 
 fn new_history_item_generated_values() -> Result<HistoryItemGeneratedValues, String> {
+    let timestamp = current_time_millis()?;
     Ok(HistoryItemGeneratedValues {
         fallback_id: Uuid::new_v4().to_string(),
-        timestamp: current_time_millis()?,
+        timestamp,
+        recording_title: build_recording_title(timestamp),
     })
+}
+
+fn build_recording_title(timestamp: u64) -> String {
+    let local_time =
+        chrono::DateTime::<Local>::from(UNIX_EPOCH + std::time::Duration::from_millis(timestamp));
+    format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
 }
 
 pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
@@ -142,44 +151,61 @@ pub fn insert_history_item_row(
     Ok(())
 }
 
-fn compute_date_threshold_millis(date_filter: HistoryWorkspaceDateFilter) -> Option<i64> {
-    use HistoryWorkspaceDateFilter::*;
-    match date_filter {
-        All => None,
-        _ => {
-            let now = Local::now();
-            let today = match Local.with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0) {
-                LocalResult::Single(value) => value,
-                LocalResult::Ambiguous(earliest, _) => earliest,
-                LocalResult::None => return None,
-            };
-            let threshold = match date_filter {
-                Today => today,
-                Week => today - Duration::days(7),
-                Month => {
-                    let (year, month) = if today.month() == 1 {
-                        (today.year() - 1, 12)
-                    } else {
-                        (today.year(), today.month() - 1)
-                    };
-                    match Local.with_ymd_and_hms(
-                        year,
-                        month,
-                        today.day().min(days_in_month(year, month)),
-                        0,
-                        0,
-                        0,
-                    ) {
-                        LocalResult::Single(value) => value,
-                        LocalResult::Ambiguous(earliest, _) => earliest,
-                        LocalResult::None => today - Duration::days(30),
-                    }
-                }
-                _ => unreachable!(),
-            };
-            Some(threshold.timestamp_millis())
-        }
+fn current_workspace_date_filter_thresholds() -> HistoryWorkspaceDateFilterThresholds {
+    let now = Local::now();
+    let today = local_day_start(now).unwrap_or(now);
+    let month = month_threshold(today).unwrap_or_else(|| today - Duration::days(30));
+
+    HistoryWorkspaceDateFilterThresholds {
+        today_start_millis: millis_u64(today),
+        week_start_millis: millis_u64(today - Duration::days(7)),
+        month_start_millis: millis_u64(month),
     }
+}
+
+fn local_day_start(value: chrono::DateTime<Local>) -> Option<chrono::DateTime<Local>> {
+    match Local.with_ymd_and_hms(value.year(), value.month(), value.day(), 0, 0, 0) {
+        LocalResult::Single(value) => Some(value),
+        LocalResult::Ambiguous(earliest, _) => Some(earliest),
+        LocalResult::None => None,
+    }
+}
+
+fn month_threshold(today: chrono::DateTime<Local>) -> Option<chrono::DateTime<Local>> {
+    let (year, month) = if today.month() == 1 {
+        (today.year() - 1, 12)
+    } else {
+        (today.year(), today.month() - 1)
+    };
+    match Local.with_ymd_and_hms(
+        year,
+        month,
+        today.day().min(days_in_month(year, month)),
+        0,
+        0,
+        0,
+    ) {
+        LocalResult::Single(value) => Some(value),
+        LocalResult::Ambiguous(earliest, _) => Some(earliest),
+        LocalResult::None => None,
+    }
+}
+
+fn millis_u64(value: chrono::DateTime<Local>) -> u64 {
+    value.timestamp_millis().max(0) as u64
+}
+
+fn threshold_for_date_filter(
+    date_filter: HistoryWorkspaceDateFilter,
+    thresholds: HistoryWorkspaceDateFilterThresholds,
+) -> Option<i64> {
+    let threshold = match date_filter {
+        HistoryWorkspaceDateFilter::All => return None,
+        HistoryWorkspaceDateFilter::Today => thresholds.today_start_millis,
+        HistoryWorkspaceDateFilter::Week => thresholds.week_start_millis,
+        HistoryWorkspaceDateFilter::Month => thresholds.month_start_millis,
+    };
+    Some(threshold.min(i64::MAX as u64) as i64)
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
@@ -193,6 +219,7 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 
 fn add_workspace_query_conditions(
     request: &HistoryWorkspaceQueryRequest,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
     clauses: &mut Vec<String>,
     params: &mut Vec<Box<dyn ToSql>>,
 ) {
@@ -215,7 +242,8 @@ fn add_workspace_query_conditions(
             clauses.push("kind = 'batch'".to_string());
         }
     }
-    if let Some(threshold) = compute_date_threshold_millis(request.date_filter) {
+    if let Some(threshold) = threshold_for_date_filter(request.date_filter, date_filter_thresholds)
+    {
         clauses.push("timestamp >= ?".to_string());
         params.push(Box::new(threshold));
     }
@@ -830,9 +858,15 @@ where
             };
 
             // 2. Build dynamic WHERE clause + params from request filters
+            let date_filter_thresholds = current_workspace_date_filter_thresholds();
             let mut conditions: Vec<String> = Vec::new();
             let mut params: Vec<Box<dyn ToSql>> = Vec::new();
-            add_workspace_query_conditions(&request, &mut conditions, &mut params);
+            add_workspace_query_conditions(
+                &request,
+                date_filter_thresholds,
+                &mut conditions,
+                &mut params,
+            );
 
             // 3. Determine if FTS is used
             let trimmed_query = request.query.trim();
@@ -880,7 +914,12 @@ where
                 // 3b. Load ONLY matching items via JOIN with FTS table
                 let mut join_conditions = vec!["f.history_items_fts MATCH ?".to_string()];
                 let mut join_params: Vec<Box<dyn ToSql>> = vec![Box::new(fts_expr)];
-                add_workspace_query_conditions(&request, &mut join_conditions, &mut join_params);
+                add_workspace_query_conditions(
+                    &request,
+                    date_filter_thresholds,
+                    &mut join_conditions,
+                    &mut join_params,
+                );
 
                 let join_where = format!("WHERE {}", join_conditions.join(" AND "));
                 let sql = format!(
@@ -923,11 +962,13 @@ where
             };
 
             // 5. In-memory text search matching and sorting
-            let mut result = sona_core::history::workspace_query::query_workspace_items_with_counts(
-                items,
-                request,
-                item_counts,
-            );
+            let mut result =
+                sona_core::history::workspace_query::query_workspace_items_with_counts_at(
+                    items,
+                    request,
+                    item_counts,
+                    date_filter_thresholds,
+                );
 
             // If we already computed the summary in SQL, override the in-memory computed summary
             if let Some(sql_summary) = summary {

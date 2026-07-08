@@ -80,13 +80,14 @@ fn snapshot_time() -> DashboardSnapshotTime {
     DashboardSnapshotTime {
         generated_at: "2026-07-08T01:02:03.004Z".to_string(),
         today: NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+        local_utc_offset_seconds: 8 * 60 * 60,
     }
 }
 
 fn history_item(id: &str, kind: HistoryItemKind, project_id: Option<&str>) -> HistoryItemRecord {
     HistoryItemRecord {
         id: id.to_string(),
-        timestamp: 1_776_668_400_000,
+        timestamp: 1_783_441_800_000,
         duration: 120.0,
         audio_path: String::new(),
         audio_status: HistoryAudioStatus::Available,
@@ -129,6 +130,16 @@ async fn dashboard_service_uses_core_ports_for_shallow_snapshot() {
     assert_eq!(snapshot.content.overview.project_assigned_count, 1);
     assert_eq!(snapshot.llm_usage.totals.total_tokens, 30);
     assert!(snapshot.content.speakers.is_none());
+    assert_eq!(
+        snapshot
+            .content
+            .overview
+            .recent_daily_items
+            .iter()
+            .find(|point| point.item_count == 2)
+            .map(|point| point.date.as_str()),
+        Some("2026-07-08")
+    );
 }
 
 #[tokio::test]

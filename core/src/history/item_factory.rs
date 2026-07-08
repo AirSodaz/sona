@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::time::UNIX_EPOCH;
 
 use super::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
@@ -10,6 +9,7 @@ use super::{
 pub struct HistoryItemGeneratedValues {
     pub fallback_id: String,
     pub timestamp: u64,
+    pub recording_title: String,
 }
 
 pub fn create_live_draft_item(
@@ -18,13 +18,14 @@ pub fn create_live_draft_item(
 ) -> Result<HistoryItemRecord, String> {
     let id = request.id.unwrap_or(generated.fallback_id);
     let timestamp = generated.timestamp;
+    let recording_title = generated.recording_title;
     let audio_extension = sanitize_audio_extension(&request.audio_extension, "webm");
     let mut item = build_history_item_record(
         id,
         timestamp,
         0.0,
         &audio_extension,
-        build_recording_title(timestamp),
+        recording_title,
         HistoryItemKind::Recording,
         request.project_id,
         request.icon,
@@ -43,6 +44,7 @@ pub fn create_recording_item(
 ) -> Result<HistoryItemRecord, String> {
     let timestamp = generated.timestamp;
     let id = generated.fallback_id;
+    let recording_title = generated.recording_title;
     let audio_extension = audio_extension
         .map(|extension| sanitize_audio_extension(extension, "webm"))
         .or_else(|| native_audio_path.map(|path| extension_from_path(path, "wav")))
@@ -53,7 +55,7 @@ pub fn create_recording_item(
         timestamp,
         duration,
         &audio_extension,
-        build_recording_title(timestamp),
+        recording_title,
         HistoryItemKind::Recording,
         project_id,
         None,
@@ -123,13 +125,6 @@ fn file_name_from_path(path: &str, fallback: &str) -> String {
         .filter(|file_name| !file_name.trim().is_empty())
         .unwrap_or(fallback)
         .to_string()
-}
-
-fn build_recording_title(timestamp: u64) -> String {
-    let local_time = chrono::DateTime::<chrono::Local>::from(
-        UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-    );
-    format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
 }
 
 #[allow(clippy::too_many_arguments)]

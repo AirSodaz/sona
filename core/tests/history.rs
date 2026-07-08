@@ -74,6 +74,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
         HistoryItemGeneratedValues {
             fallback_id: "recording-1".to_string(),
             timestamp: 1_700_000_000_000,
+            recording_title: "Recording From Adapter".to_string(),
         },
         12.5,
         Some("project-1".to_string()),
@@ -86,6 +87,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
     assert_eq!(item.timestamp, 1_700_000_000_000);
     assert_eq!(item.audio_path, "recording-1.webm");
     assert_eq!(item.transcript_path, "recording-1.json");
+    assert_eq!(item.title, "Recording From Adapter");
     assert_eq!(item.project_id.as_deref(), Some("project-1"));
     assert_eq!(item.kind, HistoryItemKind::Recording);
 }
@@ -102,12 +104,14 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
         HistoryItemGeneratedValues {
             fallback_id: "unused-fallback-id".to_string(),
             timestamp: 42,
+            recording_title: "Draft Title From Adapter".to_string(),
         },
     )
     .unwrap();
 
     assert_eq!(draft.id, "draft-request-id");
     assert_eq!(draft.timestamp, 42);
+    assert_eq!(draft.title, "Draft Title From Adapter");
     assert_eq!(draft.audio_path, "draft-request-id.wav");
     assert_eq!(draft.status, HistoryItemStatus::Draft);
     assert_eq!(draft.icon.as_deref(), Some("Mic"));
@@ -121,6 +125,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
         HistoryItemGeneratedValues {
             fallback_id: "unused-import-fallback".to_string(),
             timestamp: 43,
+            recording_title: "Unused Imported Recording Title".to_string(),
         },
     )
     .unwrap();

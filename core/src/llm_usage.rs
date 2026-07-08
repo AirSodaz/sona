@@ -1,7 +1,7 @@
 pub use crate::dashboard::models::{
     DashboardUsageBucket, LlmUsageDashboardStats, UsageBreakdown, UsageTrendPoint,
 };
-use chrono::{DateTime, Duration, Local};
+use chrono::{DateTime, Duration, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -83,7 +83,10 @@ pub struct UsageRecord {
     pub usage: Option<TokenUsage>,
 }
 
-pub fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
+pub fn to_dashboard_stats_at(
+    stats: &LlmUsageStatsFile,
+    today: NaiveDate,
+) -> LlmUsageDashboardStats {
     let by_provider = to_sorted_breakdown(&stats.by_provider);
     let by_category = to_sorted_breakdown(&stats.by_category);
 
@@ -99,7 +102,7 @@ pub fn to_dashboard_stats(stats: &LlmUsageStatsFile) -> LlmUsageDashboardStats {
         by_category_max_value: max_breakdown_value(&by_category),
         by_category_top_rows: by_category.iter().take(6).cloned().collect(),
         by_category,
-        recent_daily: build_recent_daily_trend(&stats.daily),
+        recent_daily: build_recent_daily_trend(&stats.daily, today),
     }
 }
 
@@ -127,8 +130,10 @@ fn to_sorted_breakdown(collection: &BTreeMap<String, UsageBucket>) -> Vec<UsageB
     breakdowns
 }
 
-fn build_recent_daily_trend(daily: &BTreeMap<String, UsageBucket>) -> Vec<UsageTrendPoint> {
-    let today = Local::now().date_naive();
+fn build_recent_daily_trend(
+    daily: &BTreeMap<String, UsageBucket>,
+    today: NaiveDate,
+) -> Vec<UsageTrendPoint> {
     (0..RECENT_DAILY_WINDOW)
         .rev()
         .map(|offset| {
@@ -224,24 +229,48 @@ mod tests {
             },
         );
 
-        let stats = to_dashboard_stats(&LlmUsageStatsFile {
-            schema_version: 1,
-            started_at: Some("2026-05-01T00:00:00Z".to_string()),
-            last_updated_at: Some("2026-05-03T00:00:00Z".to_string()),
-            totals: UsageBucket {
-                call_count: 2,
-                total_tokens: 20,
-                ..UsageBucket::default()
+        let stats = to_dashboard_stats_at(
+            &LlmUsageStatsFile {
+                schema_version: 1,
+                started_at: Some("2026-05-01T00:00:00Z".to_string()),
+                last_updated_at: Some("2026-05-03T00:00:00Z".to_string()),
+                totals: UsageBucket {
+                    call_count: 2,
+                    total_tokens: 20,
+                    ..UsageBucket::default()
+                },
+                by_provider,
+                by_category,
+                daily: BTreeMap::new(),
             },
-            by_provider,
-            by_category,
-            daily: BTreeMap::new(),
-        });
+            chrono::NaiveDate::from_ymd_opt(2026, 5, 3).unwrap(),
+        );
 
         assert_eq!(stats.started_at.as_deref(), Some("2026-05-01T00:00:00Z"));
         assert_eq!(stats.by_provider[0].key, "open_ai");
         assert_eq!(stats.by_provider[1].key, "ollama");
         assert_eq!(stats.by_category[0].key, "summary");
         assert_eq!(stats.recent_daily.len(), RECENT_DAILY_WINDOW as usize);
+    }
+
+    #[test]
+    fn dashboard_stats_uses_supplied_recent_daily_today() {
+        let stats = to_dashboard_stats_at(
+            &LlmUsageStatsFile {
+                schema_version: 1,
+                started_at: None,
+                last_updated_at: None,
+                totals: UsageBucket::default(),
+                by_provider: BTreeMap::new(),
+                by_category: BTreeMap::new(),
+                daily: BTreeMap::new(),
+            },
+            chrono::NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+        );
+
+        assert_eq!(
+            stats.recent_daily.last().map(|point| point.date.as_str()),
+            Some("2026-07-08")
+        );
     }
 }

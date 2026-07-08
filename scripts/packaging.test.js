@@ -440,6 +440,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
 test('dashboard and diagnostics clocks are supplied by desktop adapters', () => {
   const coreDiagnostics = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'diagnostics.rs'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tauriDiagnostics = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
     'utf8',
@@ -459,11 +460,37 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   assert.match(coreDashboardService, /pub struct DashboardSnapshotTime/u);
   assert.match(coreDashboardService, /build_snapshot_at/u);
   assert.doesNotMatch(coreDashboardService, /pub async fn build_snapshot\(/u);
-  assert.doesNotMatch(coreDashboardService, /Utc::now|chrono::Utc::now|Local::now/u);
+  assert.doesNotMatch(coreDashboardService, /Utc::now|chrono::Utc::now|chrono::Local|\bLocal\b/u);
   assert.match(tauriDashboard, /DashboardSnapshotTime/u);
   assert.match(tauriDashboard, /chrono::Utc::now\(\)/u);
   assert.match(tauriDashboard, /with_timezone\(&chrono::Local\)/u);
   assert.doesNotMatch(tauriDashboard, /chrono::Local::now\(\)/u);
+  assert.doesNotMatch(coreCargo, /chrono = \{[^}]*"clock"/u);
+});
+
+test('usage and workspace date windows are supplied by sqlite adapters', () => {
+  const coreLlmUsage = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_usage.rs'), 'utf8');
+  const sqliteLlmUsage = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'llm_usage.rs'), 'utf8');
+  const coreWorkspaceQuery = fs.readFileSync(
+    path.join(repoRoot, 'core', 'src', 'history', 'workspace_query.rs'),
+    'utf8',
+  );
+  const sqliteHistoryStore = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_store.rs'),
+    'utf8',
+  );
+
+  assert.match(coreLlmUsage, /pub fn to_dashboard_stats_at/u);
+  assert.doesNotMatch(coreLlmUsage, /Local::now|chrono::Local::now/u);
+  assert.match(sqliteLlmUsage, /to_dashboard_stats_at/u);
+  assert.match(sqliteLlmUsage, /Local::now\(\)\.date_naive\(\)/u);
+
+  assert.match(coreWorkspaceQuery, /pub struct HistoryWorkspaceDateFilterThresholds/u);
+  assert.match(coreWorkspaceQuery, /query_workspace_items_at/u);
+  assert.match(coreWorkspaceQuery, /query_workspace_items_with_counts_at/u);
+  assert.doesNotMatch(coreWorkspaceQuery, /Local::now|chrono::Local::now|with_ymd_and_hms|timestamp_millis_opt/u);
+  assert.match(sqliteHistoryStore, /query_workspace_items_with_counts_at/u);
+  assert.match(sqliteHistoryStore, /Local::now\(\)/u);
 });
 
 test('core ASR request contract is exposed through TS and UniFFI binding crates', () => {
@@ -548,6 +575,7 @@ test('core owns ASR metric helpers reused by desktop', () => {
 });
 
 test('history item factories receive generated values from adapters', () => {
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreHistoryFactory = fs.readFileSync(
     path.join(repoRoot, 'core', 'src', 'history', 'item_factory.rs'),
     'utf8',
@@ -560,12 +588,16 @@ test('history item factories receive generated values from adapters', () => {
   assert.match(coreHistoryFactory, /pub struct HistoryItemGeneratedValues/u);
   assert.match(coreHistoryFactory, /fallback_id/u);
   assert.match(coreHistoryFactory, /timestamp/u);
+  assert.match(coreHistoryFactory, /recording_title/u);
   assert.doesNotMatch(coreHistoryFactory, /Uuid::new_v4|uuid::Uuid::new_v4/u);
   assert.doesNotMatch(coreHistoryFactory, /current_time_millis/u);
+  assert.doesNotMatch(coreHistoryFactory, /chrono::Local|DateTime::<chrono::Local>|UNIX_EPOCH/u);
   assert.doesNotMatch(coreHistoryFactory, /crate::file_utils/u);
   assert.doesNotMatch(sqliteHistoryStore, /sona_core::file_utils::current_time_millis/u);
   assert.match(sqliteHistoryStore, /fn new_history_item_generated_values/u);
   assert.match(sqliteHistoryStore, /HistoryItemGeneratedValues/u);
+  assert.match(sqliteHistoryStore, /recording_title/u);
+  assert.doesNotMatch(coreCargo, /chrono = \{[^}]*"clock"/u);
 });
 
 test('local ASR runtime pool is owned by the local ASR adapter', () => {

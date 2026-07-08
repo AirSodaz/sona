@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use chrono::{Duration, Local, NaiveDate, TimeZone};
+use chrono::{Duration, FixedOffset, NaiveDate, TimeZone};
 
 use super::error::DashboardServiceError;
 use super::models::*;
@@ -14,6 +14,7 @@ const RECENT_DAILY_WINDOW: i64 = 30;
 pub struct DashboardSnapshotTime {
     pub generated_at: String,
     pub today: NaiveDate,
+    pub local_utc_offset_seconds: i32,
 }
 
 pub struct DashboardService<H, P, A>
@@ -50,7 +51,13 @@ where
         let project_count = self.project_repo.count_projects().await?;
         let llm_usage = self.analytics_repo.read_dashboard_stats().await?;
 
-        let mut overview = create_overview(&history_items, project_count, deep, time.today);
+        let mut overview = create_overview(
+            &history_items,
+            project_count,
+            deep,
+            time.today,
+            time.local_utc_offset_seconds,
+        );
 
         let speakers = if deep {
             let transcript_analytics = self.aggregate_transcript_analytics(&history_items).await?;
@@ -168,6 +175,7 @@ fn create_overview(
     project_count: u64,
     is_deep_loaded: bool,
     today: NaiveDate,
+    local_utc_offset_seconds: i32,
 ) -> OverviewStats {
     let recording_count = history_items
         .iter()
@@ -200,7 +208,11 @@ fn create_overview(
         inbox_count_display: format_number(inbox_count),
         project_assigned_count,
         project_assigned_count_display: format_number(project_assigned_count),
-        recent_daily_items: create_recent_daily_trend(history_items, today),
+        recent_daily_items: create_recent_daily_trend(
+            history_items,
+            today,
+            local_utc_offset_seconds,
+        ),
         is_deep_loaded,
     }
 }
@@ -208,10 +220,11 @@ fn create_overview(
 fn create_recent_daily_trend(
     history_items: &[HistoryItemRecord],
     today: NaiveDate,
+    local_utc_offset_seconds: i32,
 ) -> Vec<ContentTrendPoint> {
     let mut aggregates: HashMap<String, ContentTrendPoint> = HashMap::new();
     for item in history_items {
-        let key = local_date_key_from_timestamp(item.timestamp as f64);
+        let key = local_date_key_from_timestamp(item.timestamp as f64, local_utc_offset_seconds);
         aggregates
             .entry(key.clone())
             .and_modify(|existing| {
@@ -356,25 +369,31 @@ fn refresh_speaker_view_fields(speakers: &mut SpeakerStats) {
         .fold(0.0, f64::max);
 }
 
-fn local_date_key_from_timestamp(timestamp: f64) -> String {
+fn local_date_key_from_timestamp(timestamp: f64, local_utc_offset_seconds: i32) -> String {
     let millis = if timestamp.is_finite() && timestamp >= 0.0 {
         timestamp.min(i64::MAX as f64).round() as i64
     } else {
         0
     };
-    Local
+    let offset = offset_from_seconds(local_utc_offset_seconds);
+    offset
         .timestamp_millis_opt(millis)
         .single()
-        .unwrap_or_else(epoch_local_datetime)
+        .unwrap_or_else(|| epoch_datetime(offset))
         .format("%Y-%m-%d")
         .to_string()
 }
 
-fn epoch_local_datetime() -> chrono::DateTime<Local> {
-    Local
+fn offset_from_seconds(seconds: i32) -> FixedOffset {
+    FixedOffset::east_opt(seconds)
+        .unwrap_or_else(|| FixedOffset::east_opt(0).expect("valid UTC offset"))
+}
+
+fn epoch_datetime(offset: FixedOffset) -> chrono::DateTime<FixedOffset> {
+    offset
         .timestamp_millis_opt(0)
-        .earliest()
-        .expect("local epoch timestamp should be representable")
+        .single()
+        .expect("epoch timestamp should be representable")
 }
 
 fn format_number(value: u64) -> String {

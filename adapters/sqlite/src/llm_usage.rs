@@ -341,7 +341,10 @@ fn is_date_key(value: &str) -> bool {
 
 pub fn read_dashboard_stats(db: &Database) -> Result<LlmUsageDashboardStats, DatabaseError> {
     let stats = read_stats(db)?;
-    Ok(sona_core::llm_usage::to_dashboard_stats(&stats))
+    Ok(sona_core::llm_usage::to_dashboard_stats_at(
+        &stats,
+        Local::now().date_naive(),
+    ))
 }
 
 fn create_empty_stats() -> LlmUsageStatsFile {
