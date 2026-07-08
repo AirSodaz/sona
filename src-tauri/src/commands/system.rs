@@ -24,7 +24,7 @@ where
     T: Send + 'static,
     F: FnOnce(SqliteLedgerRepository) -> Result<T, DatabaseError> + Send + 'static,
 {
-    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
+    let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
         task(SqliteLedgerRepository::new(db)).map_err(|e| e.to_string())
     })
@@ -459,23 +459,16 @@ pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String
 
 // Wrapped config commands
 
-fn sqlite_config_store<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<sona_sqlite::config_store::SqliteConfigStore, String> {
-    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
-    Ok(sona_sqlite::config_store::SqliteConfigStore::new(db))
-}
-
 #[tauri::command]
 pub fn load_app_config<R: Runtime>(app: AppHandle<R>) -> Result<Option<Value>, String> {
-    sqlite_config_store(&app)?
+    crate::platform::database::sqlite_config_store(&app)
         .load_config()
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn save_app_config<R: Runtime>(app: AppHandle<R>, config: Value) -> Result<(), String> {
-    sqlite_config_store(&app)?
+    crate::platform::database::sqlite_config_store(&app)
         .save_config(&config)
         .map_err(|error| error.to_string())
 }
@@ -485,7 +478,7 @@ pub fn get_app_setting<R: Runtime>(
     app: AppHandle<R>,
     key: String,
 ) -> Result<Option<Value>, String> {
-    sqlite_config_store(&app)?
+    crate::platform::database::sqlite_config_store(&app)
         .get_setting(&key)
         .map_err(|error| error.to_string())
 }
@@ -496,7 +489,7 @@ pub fn set_app_setting<R: Runtime>(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    sqlite_config_store(&app)?
+    crate::platform::database::sqlite_config_store(&app)
         .set_setting(&key, &value)
         .map_err(|error| error.to_string())
 }

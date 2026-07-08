@@ -1,5 +1,6 @@
 pub mod automation_repository;
 pub mod automation_runtime;
+pub mod database;
 pub mod diagnostics;
 pub mod event;
 pub mod file_storage;

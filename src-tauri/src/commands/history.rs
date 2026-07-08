@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::history_repository::SqliteHistoryStore;
@@ -49,7 +49,7 @@ where
 {
     let app_local_data_dir =
         TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(app);
     crate::platform::history_repository::llm_helpers::run_llm_db_task(app_local_data_dir, db, task)
         .await
 }
@@ -66,7 +66,7 @@ where
 {
     let app_local_data_dir =
         TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(app);
     run_history_file_task_inner(app_local_data_dir, db, state.file_lock.clone(), task).await
 }
 
@@ -407,7 +407,7 @@ pub async fn history_open_folder<R: Runtime>(
 ) -> Result<(), String> {
     let app_local_data_dir =
         TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(&app);
     {
         let _guard = state.file_lock.lock().map_err(|error| error.to_string())?;
         SqliteHistoryStore::new(app_local_data_dir.clone(), db)
@@ -432,7 +432,7 @@ pub async fn export_backup_archive<R: Runtime>(
 ) -> Result<BackupManifest, String> {
     let app_local_data_dir =
         TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(&app);
     let lock = history_state.file_lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;
@@ -471,7 +471,7 @@ pub async fn apply_prepared_history_import<R: Runtime>(
 
     let app_local_data_dir =
         TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(&app);
     let lock = history_state.file_lock.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = lock.lock().map_err(|error| error.to_string())?;

@@ -1382,6 +1382,7 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
 test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'), 'utf8');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'task_ledger.rs')));
@@ -1389,7 +1390,8 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   assert.match(sqliteLib, /^pub mod task_ledger;/mu);
   assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
   assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
-  assert.match(desktopSystemCommand, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(platformDatabase, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
   assert.match(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'sqlite_store.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
@@ -1458,6 +1460,11 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
 
 test('SQLite project repository is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformDatabasePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs');
+  const platformDatabase = fs.existsSync(platformDatabasePath)
+    ? fs.readFileSync(platformDatabasePath, 'utf8')
+    : '';
   const platformProjectRepository = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'project_repository.rs'),
     'utf8',
@@ -1467,14 +1474,53 @@ test('SQLite project repository is owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'project.rs')));
   assert.match(sqliteLib, /^pub mod project;/mu);
   assert.match(sqliteLib, /^pub use project::SqliteProjectRepository;/mu);
+  assert.ok(fs.existsSync(platformDatabasePath));
+  assert.match(platformMod, /^pub mod database;/mu);
+  assert.match(platformDatabase, /pub fn sqlite_database/u);
+  assert.match(platformDatabase, /pub fn sqlite_config_store/u);
+  assert.match(platformDatabase, /app\.state::<Arc<sona_sqlite::Database>>\(\)/u);
   assert.match(platformProjectRepository, /sona_sqlite::project::SqliteProjectRepository/u);
+  assert.match(platformProjectRepository, /crate::platform::database::sqlite_database/u);
+  assert.match(platformProjectRepository, /pub async fn get_active_project_id/u);
+  assert.match(platformProjectRepository, /pub async fn set_active_project_id/u);
   assert.match(desktopProjectCommand, /sona_core::project::\{/u);
+  assert.match(desktopProjectCommand, /get_active_project_id/u);
+  assert.match(desktopProjectCommand, /set_active_project_id/u);
+  assert.doesNotMatch(desktopProjectCommand, /tauri_plugin_store::StoreExt/u);
+  assert.doesNotMatch(desktopProjectCommand, /SqliteConfigStore/u);
+  assert.doesNotMatch(desktopProjectCommand, /SETTINGS_FILE_NAME/u);
+  assert.doesNotMatch(desktopProjectCommand, /ACTIVE_PROJECT_SETTINGS_KEY/u);
+  assert.doesNotMatch(desktopProjectCommand, /app\.state::<Arc<sona_sqlite::Database>>\(\)/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project')), false);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'project', 'sqlite_repository.rs')),
     false,
   );
+});
+
+test('desktop sqlite app-state access is centralized in platform database adapter', () => {
+  const platformDatabase = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'),
+    'utf8',
+  );
+  const allowedPath = path.join('src-tauri', 'src', 'platform', 'database.rs').replaceAll(path.sep, '/');
+  const directStateAccess = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+    .sort()
+    .flatMap((filePath) => {
+      const relativePath = path.relative(repoRoot, filePath).replaceAll(path.sep, '/');
+      if (relativePath === allowedPath) {
+        return [];
+      }
+      const content = fs.readFileSync(filePath, 'utf8');
+      return [
+        ...content.matchAll(/\.state::<(?:std::sync::)?Arc<sona_sqlite::Database>>\s*\(\s*\)/gu),
+        ...content.matchAll(/\.state::<(?:std::sync::)?Arc<Database>>\s*\(\s*\)/gu),
+      ].map((match) => `${relativePath}: direct sqlite app-state access (${match[0]})`);
+    });
+
+  assert.match(platformDatabase, /app\.state::<Arc<sona_sqlite::Database>>\(\)/u);
+  assert.deepEqual(directStateAccess, []);
 });
 
 test('LLM usage domain and SQLite usage store are owned by core and sqlite adapter', () => {

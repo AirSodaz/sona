@@ -7,8 +7,7 @@ use sona_core::automation::{
 use sona_sqlite::DatabaseError;
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
@@ -80,7 +79,7 @@ where
         + Send
         + 'static,
 {
-    let db = Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner());
+    let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
         task(sona_sqlite::automation::SqliteAutomationRepository::new(db))
     })

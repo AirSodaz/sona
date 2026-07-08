@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::{Value, to_value};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::history_repository::sqlite_store::SqliteHistoryStore;
@@ -40,7 +40,7 @@ where
 {
     let app_local_data_dir = crate::platform::paths::TauriPathProvider::from_app(app)
         .resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
-    let db = Arc::clone(app.state::<Arc<Database>>().inner());
+    let db = crate::platform::database::sqlite_database(app);
     run_llm_db_task(app_local_data_dir, db, task).await
 }
 
