@@ -332,7 +332,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-archive -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -702,7 +702,12 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
     'utf8',
   );
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const coreExport = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'export.rs'), 'utf8');
+  const exportAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'export', 'src', 'lib.rs'), 'utf8');
   const exportCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'export.rs'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
 
   assert.doesNotMatch(desktopPlatform, /^pub mod export_files;/mu);
@@ -714,8 +719,17 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'recovery.rs')), false);
   assert.match(platformStorage, /pub use sona_core::file_utils::\{/u);
   assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
-  assert.match(exportCommand, /use sona_core::export::\{[\s\S]*export_transcript_file as core_export_transcript_file/u);
-  assert.match(exportCommand, /core_export_transcript_file\(ExportTranscriptFileRequest/u);
+  assert.match(workspaceCargo, /"adapters\/export"/u);
+  assert.match(tauriCargo, /^sona-export\s*=/mu);
+  assert.doesNotMatch(cliCargo, /^sona-export\s*=/mu);
+  assert.match(coreExport, /pub fn export_segments_with_mode/u);
+  assert.doesNotMatch(coreExport, /std::fs::write/u);
+  assert.doesNotMatch(coreExport, /pub fn export_transcript_file/u);
+  assert.match(exportAdapter, /pub fn export_transcript_file/u);
+  assert.match(exportAdapter, /sona_core::export::export_segments_with_mode/u);
+  assert.match(exportCommand, /use sona_export::\{[\s\S]*export_transcript_file as adapter_export_transcript_file/u);
+  assert.match(exportCommand, /adapter_export_transcript_file\(ExportTranscriptFileRequest/u);
+  assert.doesNotMatch(exportCommand, /core_export_transcript_file/u);
   assert.doesNotMatch(exportCommand, /crate::platform::export_files/u);
   assert.match(systemCommand, /crate::platform::recovery_repository::FsRecoveryRepository/u);
 });

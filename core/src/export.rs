@@ -385,40 +385,6 @@ fn prefix_md_speaker_label(segment: &TranscriptSegment, text: &str) -> String {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportTranscriptFileRequest {
-    pub segments: Vec<TranscriptSegment>,
-    pub format: ExportFormat,
-    pub mode: ExportMode,
-    pub output_path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportTranscriptFileResult {
-    pub output_path: String,
-    pub bytes_written: u64,
-}
-
-pub fn export_transcript_file(
-    request: ExportTranscriptFileRequest,
-) -> Result<ExportTranscriptFileResult, String> {
-    let content = export_segments_with_mode(&request.segments, request.format, request.mode)?;
-    let bytes_written = content.len() as u64;
-    std::fs::write(&request.output_path, content).map_err(|error| {
-        format!(
-            "Failed to write transcript export to {}: {error}",
-            std::path::Path::new(&request.output_path).display()
-        )
-    })?;
-
-    Ok(ExportTranscriptFileResult {
-        output_path: request.output_path,
-        bytes_written,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,25 +426,5 @@ mod tests {
                 speaker_attribution: None,
             },
         ]
-    }
-
-    #[test]
-    fn export_transcript_file_writes_core_content_and_reports_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let output_path = dir.path().join("sample.vtt");
-
-        let result = export_transcript_file(ExportTranscriptFileRequest {
-            segments: sample_segments(),
-            format: ExportFormat::Vtt,
-            mode: ExportMode::Bilingual,
-            output_path: output_path.to_string_lossy().into_owned(),
-        })
-        .unwrap();
-
-        let written = std::fs::read_to_string(&output_path).unwrap();
-        assert_eq!(result.output_path, output_path.to_string_lossy());
-        assert_eq!(result.bytes_written, written.len() as u64);
-        assert!(written.starts_with("WEBVTT"));
-        assert!(written.contains("Alice: Bonjour\nHello"));
     }
 }

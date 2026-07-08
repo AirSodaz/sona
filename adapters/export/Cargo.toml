@@ -1,0 +1,13 @@
+[package]
+name = "sona-export"
+version.workspace = true
+description = "Transcript export filesystem adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+sona-core = { path = "../../core" }
+
+[dev-dependencies]
+tempfile = "3"

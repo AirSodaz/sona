@@ -5394,6 +5394,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-archive",
  "sona-core",
+ "sona-export",
  "sona-local-asr",
  "sona-media-detector",
  "sona-model-downloads",
@@ -5489,6 +5490,15 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "sona-export"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "sona-core",
+ "tempfile",
 ]
 
 [[package]]

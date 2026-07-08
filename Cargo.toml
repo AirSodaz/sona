@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "adapters/archive",
+    "adapters/export",
     "adapters/local_asr",
     "adapters/media_detector",
     "adapters/model_downloads",
