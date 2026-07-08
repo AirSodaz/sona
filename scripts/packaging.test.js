@@ -555,7 +555,6 @@ test('core owns ASR metric helpers reused by desktop', () => {
   );
 
   for (const helper of [
-    'current_time_millis',
     'duration_to_ms',
     'samples_to_ms',
     'calculate_rtf',
@@ -570,6 +569,9 @@ test('core owns ASR metric helpers reused by desktop', () => {
     assert.doesNotMatch(desktopMetrics, new RegExp(`fn ${helper}`, 'u'));
   }
 
+  assert.doesNotMatch(coreMetrics, /SystemTime::now|UNIX_EPOCH|current_time_millis/u);
+  assert.match(desktopMetrics, /pub\(crate\) fn current_time_millis/u);
+  assert.match(desktopMetrics, /SystemTime::now/u);
   assert.match(desktopMetrics, /pub\(crate\) fn capture_process_memory_mb/u);
   assert.match(desktopMetrics, /sysinfo::/u);
 });

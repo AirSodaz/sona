@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -43,13 +43,6 @@ pub struct AsrInferenceMetric {
     pub rtf: Option<f64>,
     pub segment_count: Option<usize>,
     pub process_rss_mb: Option<f64>,
-}
-
-pub fn current_time_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 pub fn duration_to_ms(duration: Duration) -> f64 {

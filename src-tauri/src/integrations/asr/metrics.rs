@@ -1,10 +1,11 @@
 use log::{info, warn};
 pub use sona_core::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot, calculate_rss_delta_mb,
-    calculate_rtf, current_time_millis, duration_to_ms, format_optional_count, format_optional_mb,
-    format_optional_ms, format_optional_rtf, samples_to_ms,
+    calculate_rtf, duration_to_ms, format_optional_count, format_optional_mb, format_optional_ms,
+    format_optional_rtf, samples_to_ms,
 };
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use sysinfo::{ProcessesToUpdate, System};
 
 const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
@@ -13,6 +14,13 @@ pub(crate) type AsrMetricsStore = Arc<Mutex<AsrRuntimeMetricsSnapshot>>;
 
 pub(crate) fn new_metrics_store() -> AsrMetricsStore {
     Arc::new(Mutex::new(AsrRuntimeMetricsSnapshot::default()))
+}
+
+pub(crate) fn current_time_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 pub(crate) fn capture_process_memory_mb() -> Option<f64> {
