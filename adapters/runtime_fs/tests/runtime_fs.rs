@@ -8,8 +8,8 @@ use sona_core::runtime::RuntimePathKind;
 use sona_core::transcribe_runtime::BatchInputSource;
 use sona_runtime_fs::{
     FsSourcePathStatusProvider, RealFileSystem, is_preset_model_installed_at,
-    load_transcribe_config_file, plan_batch_output_files, remove_path_if_exists,
-    resolve_batch_input_source, resolve_runtime_path_status,
+    load_legacy_settings_app_config, load_transcribe_config_file, plan_batch_output_files,
+    remove_path_if_exists, resolve_batch_input_source, resolve_runtime_path_status,
     select_desktop_models_dir_from_app_roots, write_json_pretty_atomic,
 };
 
@@ -36,6 +36,35 @@ language = "ja"
     assert_eq!(config.gpu_acceleration.as_deref(), Some("cuda"));
     assert_eq!(config.model_id.as_deref(), Some("legacy-model"));
     assert_eq!(config.language.as_deref(), Some("ja"));
+}
+
+#[test]
+fn load_legacy_settings_app_config_unwraps_object_payloads() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
+    )
+    .unwrap();
+
+    let config = load_legacy_settings_app_config(dir.path())
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        config["asr"]["providers"]["online"]["volcengine"]["apiKey"],
+        "legacy-key"
+    );
+    assert!(config.get("sona-config").is_none());
+}
+
+#[test]
+fn load_legacy_settings_app_config_returns_none_for_missing_file() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let config = load_legacy_settings_app_config(dir.path()).unwrap();
+
+    assert!(config.is_none());
 }
 
 #[test]

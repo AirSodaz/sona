@@ -160,6 +160,30 @@ pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String>
     sona_core::runtime_config::parse_serve_config_file(&contents, &path.display().to_string())
 }
 
+pub fn load_legacy_settings_app_config(
+    app_data_dir: &Path,
+) -> Result<Option<serde_json::Value>, String> {
+    let settings_path = app_data_dir.join("settings.json");
+    match fs::read_to_string(&settings_path) {
+        Ok(contents) => {
+            let parsed = serde_json::from_str(&contents).map_err(|error| {
+                format!(
+                    "Failed to parse legacy settings {}: {error}",
+                    settings_path.display()
+                )
+            })?;
+            Ok(Some(sona_core::serve_runtime::app_config_payload_owned(
+                parsed,
+            )))
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!(
+            "Failed to read legacy settings {}: {error}",
+            settings_path.display()
+        )),
+    }
+}
+
 pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {

@@ -470,6 +470,8 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(sqliteConfigStore, /pub fn load_app_config_payload_from_db/u);
   assert.match(sqliteConfigStore, /pub fn load_serve_startup_settings_from_db/u);
   assert.doesNotMatch(tauriServer, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
+  assert.match(tauriServer, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.doesNotMatch(tauriServer, /std::fs::read_to_string\([^)]*settings_path/u);
   assert.match(tauriServer, /prepare_runtime_config/u);
   assert.match(cliServe, /prepare_runtime_config/u);
   assert.doesNotMatch(tauriServer, /ApiServerRuntimeConfig\s*\{/u);
@@ -725,6 +727,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
 
   assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
   assert.match(runtimeFsLib, /pub fn load_serve_config_file/u);
+  assert.match(runtimeFsLib, /pub fn load_legacy_settings_app_config/u);
   assert.match(runtimeFsLib, /pub fn default_desktop_models_dir/u);
   assert.match(runtimeFsLib, /pub fn resolve_runtime_path_status/u);
   assert.match(runtimeFsLib, /pub struct FsSourcePathStatusProvider/u);

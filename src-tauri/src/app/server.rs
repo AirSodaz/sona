@@ -5,9 +5,8 @@ use sona_api_server::{
     prepare_runtime_config, run_server,
 };
 use sona_core::serve_runtime::{
-    ServeRuntimeArgs, ServeStartupSettings, app_config_payload_owned,
-    online_asr_config_from_app_config, resolve_serve_runtime_options,
-    serve_startup_settings_from_app_config,
+    ServeRuntimeArgs, ServeStartupSettings, online_asr_config_from_app_config,
+    resolve_serve_runtime_options, serve_startup_settings_from_app_config,
 };
 use sona_sqlite::Database;
 use sona_sqlite::config_store::{
@@ -180,21 +179,13 @@ fn load_sqlite_serve_startup_settings(provider: &dyn PathProvider) -> Option<Ser
 
 fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_data_dir = provider.resolve_path(PathKind::AppData).ok()?;
-    let settings_path = app_data_dir.join("settings.json");
-    if !settings_path.exists() {
-        return None;
-    }
-    let contents = std::fs::read_to_string(&settings_path).ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&contents)
+    sona_runtime_fs::load_legacy_settings_app_config(&app_data_dir)
         .map_err(|error| {
-            log::warn!(
-                "[API Server] Failed to parse legacy settings {}: {error}",
-                settings_path.display()
-            );
+            log::warn!("[API Server] Failed to load legacy settings: {error}");
             error
         })
-        .ok()?;
-    Some(app_config_payload_owned(parsed))
+        .ok()
+        .flatten()
 }
 
 fn load_app_config_for_server(provider: &dyn PathProvider) -> Option<serde_json::Value> {
