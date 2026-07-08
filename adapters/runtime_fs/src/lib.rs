@@ -1,6 +1,5 @@
 use serde::Serialize;
 use sona_core::export::ExportFormat;
-use sona_core::file_utils::{remove_path_if_exists_with, write_json_pretty_atomic_with};
 use sona_core::model_catalog::ModelSummary;
 use sona_core::model_paths::{ModelsDirStatus, status_of};
 use sona_core::ports::fs::{FileMetadata, FileSystem};
@@ -15,6 +14,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
 
@@ -73,6 +73,79 @@ pub fn write_json_pretty_atomic<T: Serialize + ?Sized>(
 
 pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     remove_path_if_exists_with(&RealFileSystem, path)
+}
+
+fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
+    fs: &dyn FileSystem,
+    path: &Path,
+    value: &T,
+) -> Result<(), String> {
+    let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
+    write_binary_atomic(fs, path, &serialized)
+}
+
+fn write_binary_atomic(fs: &dyn FileSystem, path: &Path, contents: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs.create_dir_all(parent)?;
+    }
+
+    let temp_path = path.with_extension(format!(
+        "{}.tmp-{}",
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("json"),
+        Uuid::new_v4()
+    ));
+
+    fs.write_file(&temp_path, contents)?;
+
+    replace_path_atomically(fs, &temp_path, path)
+}
+
+fn replace_path_atomically(
+    fs: &dyn FileSystem,
+    temp_path: &Path,
+    final_path: &Path,
+) -> Result<(), String> {
+    let backup_name = format!(
+        "{}.bak-{}",
+        final_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("tmp"),
+        Uuid::new_v4()
+    );
+    let backup_path = final_path.with_extension(&backup_name);
+    let had_existing = fs.metadata(final_path)?.is_some();
+
+    if had_existing {
+        fs.rename(final_path, &backup_path)?;
+    }
+
+    match fs.rename(temp_path, final_path) {
+        Ok(()) => {
+            if had_existing {
+                // Best-effort: stray .bak-* is harmless, never fail a successful write.
+                let _ = remove_path_if_exists_with(fs, &backup_path);
+            }
+            Ok(())
+        }
+        Err(error) => {
+            if had_existing && fs.metadata(final_path).ok().flatten().is_none() {
+                let _ = fs.rename(&backup_path, final_path);
+            }
+            let _ = remove_path_if_exists_with(fs, temp_path);
+            Err(error)
+        }
+    }
+}
+
+fn remove_path_if_exists_with(fs: &dyn FileSystem, path: &Path) -> Result<(), String> {
+    match fs.metadata(path)? {
+        Some(meta) if meta.is_dir => fs.remove_dir_all(path),
+        Some(_) => fs.remove_file(path),
+        None => Ok(()),
+    }
 }
 
 pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {

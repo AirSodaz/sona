@@ -8,9 +8,9 @@ use sona_core::runtime::RuntimePathKind;
 use sona_core::transcribe_runtime::BatchInputSource;
 use sona_runtime_fs::{
     FsSourcePathStatusProvider, RealFileSystem, is_preset_model_installed_at,
-    load_transcribe_config_file, plan_batch_output_files, resolve_batch_input_source,
-    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    write_json_pretty_atomic,
+    load_transcribe_config_file, plan_batch_output_files, remove_path_if_exists,
+    resolve_batch_input_source, resolve_runtime_path_status,
+    select_desktop_models_dir_from_app_roots, write_json_pretty_atomic,
 };
 
 #[test]
@@ -187,4 +187,29 @@ fn real_file_system_supports_atomic_json_helpers() {
     let contents = fs.read_to_string(path.as_path()).unwrap();
     assert!(contents.contains("\"key\""));
     assert!(fs.metadata(&path).unwrap().unwrap().is_file);
+}
+
+#[test]
+fn real_file_system_atomic_json_helpers_overwrite_existing_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data.json");
+    std::fs::write(&path, "{\"key\":\"old\"}").unwrap();
+
+    write_json_pretty_atomic(&path, &serde_json::json!({"key": "new"})).unwrap();
+
+    let contents = std::fs::read_to_string(&path).unwrap();
+    assert!(contents.contains("\"new\""));
+    assert!(!contents.contains("\"old\""));
+}
+
+#[test]
+fn real_file_system_remove_path_if_exists_handles_files_and_missing_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data.bin");
+    std::fs::write(&path, b"data").unwrap();
+
+    remove_path_if_exists(&path).unwrap();
+    assert!(!path.exists());
+
+    remove_path_if_exists(&path).unwrap();
 }

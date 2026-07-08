@@ -366,6 +366,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
   const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
   const coreFsPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'fs.rs'), 'utf8');
+  const coreFileUtils = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'file_utils.rs'), 'utf8');
 
   assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
   assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
@@ -386,6 +387,9 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(corePresetModels, /\.metadata\(\)|\.exists\(\)|is_preset_model_installed_at/u);
   assert.doesNotMatch(coreModelCatalog, /is_preset_model_installed_at/u);
   assert.doesNotMatch(coreFsPort, /RealFileSystem|std::fs::/u);
+  assert.doesNotMatch(coreFileUtils, /FileSystem|write_json_pretty_atomic_with|remove_path_if_exists_with/u);
+  assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*write_json_pretty_atomic_with/u);
+  assert.doesNotMatch(runtimeFsLib, /sona_core::file_utils::\{[^}]*remove_path_if_exists_with/u);
 
   assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
   assert.match(runtimeFsLib, /pub fn load_serve_config_file/u);
@@ -396,6 +400,8 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(runtimeFsLib, /pub fn plan_batch_output_files/u);
   assert.match(runtimeFsLib, /pub fn is_preset_model_installed_at/u);
   assert.match(runtimeFsLib, /pub struct RealFileSystem/u);
+  assert.match(runtimeFsLib, /fn write_binary_atomic/u);
+  assert.match(runtimeFsLib, /fn replace_path_atomically/u);
 });
 
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
