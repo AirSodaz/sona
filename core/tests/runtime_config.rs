@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use sona_core::runtime_config::{
-    ServeConfigSection, TranscribeConfigSection, UnifiedConfigFile, load_serve_config_file,
+    ServeConfigSection, TranscribeConfigSection, UnifiedConfigFile, parse_serve_config_file,
 };
 
 #[test]
@@ -45,11 +45,8 @@ fn runtime_config_sections_default_cleanly() {
 }
 
 #[test]
-fn load_serve_config_file_reads_shared_and_section_values() {
-    let dir = tempfile::tempdir().unwrap();
-    let config_path = dir.path().join("sona-cli.toml");
-    std::fs::write(
-        &config_path,
+fn parse_serve_config_file_reads_shared_and_section_values() {
+    let serve = parse_serve_config_file(
         r#"
 models_dir = "/shared/models"
 gpu_acceleration = "cuda"
@@ -58,10 +55,9 @@ host = "0.0.0.0"
 [serve]
 port = 15000
 "#,
+        "sona-cli.toml",
     )
     .unwrap();
-
-    let serve = load_serve_config_file(&config_path).unwrap();
 
     assert_eq!(serve.models_dir, Some(PathBuf::from("/shared/models")));
     assert_eq!(serve.gpu_acceleration.as_deref(), Some("cuda"));

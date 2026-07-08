@@ -27,11 +27,8 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use sona_core::gpu::{DEFAULT_GPU_ACCELERATION, resolve_gpu_acceleration};
 use sona_core::ports::asr::{BatchTranscriber, find_online_asr_provider, online_asr_providers};
-use sona_core::preset_models::is_preset_model_installed_at;
-use sona_core::transcribe_runtime::{
-    BatchTranscribeOptions,
-    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status,
-};
+use sona_core::transcribe_runtime::BatchTranscribeOptions;
+use sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status;
 
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use sona_sqlite::{Database, DatabaseError};
@@ -861,10 +858,9 @@ pub(crate) fn build_local_transcribe_plan(
     defaults: &ApiServerTranscriptionDefaults,
 ) -> Result<sona_core::transcribe_runtime::BatchTranscribePlan, String> {
     let options = build_local_transcribe_options(job, models_dir, defaults);
-    resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+    resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
         options,
         None,
-        is_preset_model_installed_at,
         crate::platform::paths::models_dir_status,
     )
 }
@@ -1682,6 +1678,8 @@ mod tests {
     fn local_transcribe_request_uses_server_gpu_and_vad_defaults() {
         let temp = tempfile::tempdir().unwrap();
         let models_dir = temp.path().to_path_buf();
+        let input_path = temp.path().join("sample.wav");
+        fs::write(&input_path, b"audio").unwrap();
         install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
         install_preset_model(
             &models_dir,
@@ -1689,7 +1687,7 @@ mod tests {
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
-            file_path: PathBuf::from("sample.wav"),
+            file_path: input_path.clone(),
             model_id: "sherpa-onnx-whisper-turbo".to_string(),
             language: "auto".to_string(),
             hotwords: Some("Sona".to_string()),
@@ -1721,7 +1719,7 @@ mod tests {
             )
         );
         assert!(plan.punctuation_model.is_none());
-        assert_eq!(plan.input_path, PathBuf::from("sample.wav"));
+        assert_eq!(plan.input_path, input_path);
         assert_eq!(plan.hotwords.as_deref(), Some("Sona"));
         assert_eq!(
             plan.model_path,
@@ -1737,6 +1735,8 @@ mod tests {
     fn local_transcribe_request_skips_builtin_punctuation_default_when_model_does_not_require_it() {
         let temp = tempfile::tempdir().unwrap();
         let models_dir = temp.path().to_path_buf();
+        let input_path = temp.path().join("sample.wav");
+        fs::write(&input_path, b"audio").unwrap();
         install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
         install_preset_model(
             &models_dir,
@@ -1744,7 +1744,7 @@ mod tests {
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
-            file_path: PathBuf::from("sample.wav"),
+            file_path: input_path,
             model_id: "sherpa-onnx-whisper-turbo".to_string(),
             language: "auto".to_string(),
             hotwords: None,
@@ -1775,6 +1775,8 @@ mod tests {
     fn local_transcribe_request_applies_builtin_punctuation_default_when_model_requires_it() {
         let temp = tempfile::tempdir().unwrap();
         let models_dir = temp.path().to_path_buf();
+        let input_path = temp.path().join("sample.wav");
+        fs::write(&input_path, b"audio").unwrap();
         install_preset_model(&models_dir, "sherpa-onnx-funasr-nano-int8-2025-12-30");
         install_preset_model(
             &models_dir,
@@ -1786,7 +1788,7 @@ mod tests {
         );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
-            file_path: PathBuf::from("sample.wav"),
+            file_path: input_path,
             model_id: "sherpa-onnx-funasr-nano-int8-2025-12-30".to_string(),
             language: "auto".to_string(),
             hotwords: None,

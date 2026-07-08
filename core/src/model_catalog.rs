@@ -1,8 +1,9 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::preset_models::{is_preset_model_installed_at, preset_models};
+use crate::preset_models::preset_models;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelSummary {
@@ -37,7 +38,10 @@ pub struct ModelListEntry {
     pub install_path: String,
 }
 
-pub fn list_models(models_dir: &Path) -> Vec<ModelSummary> {
+pub fn list_models_with_installed_ids(
+    models_dir: &Path,
+    installed_model_ids: &HashSet<String>,
+) -> Vec<ModelSummary> {
     preset_models()
         .iter()
         .map(|model| {
@@ -49,7 +53,7 @@ pub fn list_models(models_dir: &Path) -> Vec<ModelSummary> {
                 language: model.language.clone(),
                 size: model.size.clone(),
                 modes: model.modes.clone().unwrap_or_default(),
-                installed: is_preset_model_installed_at(model, models_dir),
+                installed: installed_model_ids.contains(&model.id),
                 install_path,
             }
         })

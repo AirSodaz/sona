@@ -1,0 +1,403 @@
+use serde::Serialize;
+use sona_core::export::ExportFormat;
+use sona_core::file_utils::{remove_path_if_exists_with, write_json_pretty_atomic_with};
+use sona_core::model_catalog::ModelSummary;
+use sona_core::model_paths::{ModelsDirStatus, status_of};
+use sona_core::ports::fs::{FileMetadata, FileSystem};
+use sona_core::preset_models::{PresetModel, preset_models};
+use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
+use sona_core::runtime::{RuntimePathKind, RuntimePathStatus};
+use sona_core::runtime_config::{ServeConfigSection, TranscribeConfigSection};
+use sona_core::transcribe_runtime::{
+    BatchInputSource, BatchOutputPlan, BatchTranscribeOptions, BatchTranscribePlan,
+};
+use std::collections::HashSet;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+
+const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
+
+pub struct RealFileSystem;
+
+impl FileSystem for RealFileSystem {
+    fn create_dir_all(&self, path: &Path) -> Result<(), String> {
+        fs::create_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            self.create_dir_all(parent)?;
+        }
+        fs::write(path, contents).map_err(|error| error.to_string())
+    }
+
+    fn read_file(&self, path: &Path) -> Result<Vec<u8>, String> {
+        fs::read(path).map_err(|error| error.to_string())
+    }
+
+    fn read_to_string(&self, path: &Path) -> Result<String, String> {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
+
+    fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
+        fs::rename(from, to).map_err(|error| error.to_string())
+    }
+
+    fn remove_file(&self, path: &Path) -> Result<(), String> {
+        fs::remove_file(path).map_err(|error| error.to_string())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
+        fs::remove_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, String> {
+        match fs::metadata(path) {
+            Ok(metadata) => Ok(Some(FileMetadata {
+                is_file: metadata.is_file(),
+                is_dir: metadata.is_dir(),
+            })),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+}
+
+pub fn write_json_pretty_atomic<T: Serialize + ?Sized>(
+    path: &Path,
+    value: &T,
+) -> Result<(), String> {
+    write_json_pretty_atomic_with(&RealFileSystem, path, value)
+}
+
+pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+    remove_path_if_exists_with(&RealFileSystem, path)
+}
+
+pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
+    sona_core::runtime_config::parse_transcribe_config_file(&contents, &path.display().to_string())
+}
+
+pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
+    sona_core::runtime_config::parse_serve_config_file(&contents, &path.display().to_string())
+}
+
+pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
+            return Vec::new();
+        };
+        vec![base.join("com.asoda.sona"), base.join("Sona")]
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return Vec::new();
+        };
+        let base = home.join("Library").join("Application Support");
+        vec![base.join("com.asoda.sona"), base.join("Sona")]
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(data_home) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
+            return vec![data_home.join("com.asoda.sona"), data_home.join("Sona")];
+        }
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return Vec::new();
+        };
+        let base = home.join(".local").join("share");
+        vec![base.join("com.asoda.sona"), base.join("Sona")]
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Vec::new()
+    }
+}
+
+pub fn select_desktop_models_dir_from_app_roots<I>(app_roots: I) -> Option<PathBuf>
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    let app_roots = app_roots.into_iter().collect::<Vec<_>>();
+
+    app_roots
+        .iter()
+        .map(|path| path.join("models"))
+        .find(|path| path.exists())
+        .or_else(|| app_roots.into_iter().next().map(|path| path.join("models")))
+}
+
+pub fn default_desktop_models_dir() -> Option<PathBuf> {
+    select_desktop_models_dir_from_app_roots(default_desktop_app_data_roots())
+}
+
+pub fn models_dir_status(path: &Path) -> ModelsDirStatus {
+    match path.metadata() {
+        Ok(metadata) => status_of(true, metadata.is_dir()),
+        Err(_) => status_of(false, false),
+    }
+}
+
+pub fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::File,
+            error: None,
+        },
+        Ok(metadata) if metadata.is_dir() => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Directory,
+            error: None,
+        },
+        Ok(_) => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Unknown,
+            error: Some("Path exists but is neither a regular file nor directory.".to_string()),
+        },
+        Err(error) if error.kind() == ErrorKind::NotFound => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Missing,
+            error: None,
+        },
+        Err(error) => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Unknown,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FsSourcePathStatusProvider;
+
+impl SourcePathStatusProvider for FsSourcePathStatusProvider {
+    fn status_for_path(&self, path: &str) -> SourcePathStatus {
+        match fs::metadata(path) {
+            Ok(metadata) if metadata.is_file() => SourcePathStatus::File,
+            Ok(metadata) if metadata.is_dir() => SourcePathStatus::Directory,
+            Ok(_) => SourcePathStatus::Unknown,
+            Err(error) if error.kind() == ErrorKind::NotFound => SourcePathStatus::Missing,
+            Err(_) => SourcePathStatus::Unknown,
+        }
+    }
+}
+
+pub fn resolve_batch_input_source(
+    input_dir: Option<&Path>,
+    inputs: &[PathBuf],
+    recursive: bool,
+) -> Result<BatchInputSource, String> {
+    if let Some(input_dir) = input_dir {
+        return Ok(BatchInputSource {
+            inputs: collect_batch_input_files(input_dir, recursive)?,
+            base_dir: input_dir.to_path_buf(),
+            preserve_relative_paths: recursive,
+        });
+    }
+
+    let inputs = expand_input_patterns(inputs)?;
+    let base_dir = sona_core::transcribe_runtime::common_input_parent(&inputs)?;
+    Ok(BatchInputSource {
+        inputs,
+        base_dir,
+        preserve_relative_paths: false,
+    })
+}
+
+pub fn plan_batch_output_files(
+    inputs: &[PathBuf],
+    input_dir: &Path,
+    output_dir: &Path,
+    format: ExportFormat,
+    preserve_relative_paths: bool,
+    force: bool,
+) -> Result<Vec<BatchOutputPlan>, String> {
+    let plans = sona_core::transcribe_runtime::plan_batch_output_files(
+        inputs,
+        input_dir,
+        output_dir,
+        format,
+        preserve_relative_paths,
+        force,
+    )?;
+
+    if !force {
+        for plan in &plans {
+            if plan.output_path.exists() {
+                return Err(format!(
+                    "Output file already exists: {}. Use --force to overwrite.",
+                    plan.output_path.display()
+                ));
+            }
+        }
+    }
+
+    Ok(plans)
+}
+
+pub fn resolve_batch_transcribe_plan_with_runtime_paths(
+    options: BatchTranscribeOptions,
+    config: Option<TranscribeConfigSection>,
+) -> Result<BatchTranscribePlan, String> {
+    resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+        options,
+        config,
+        models_dir_status,
+    )
+}
+
+pub fn resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+    options: BatchTranscribeOptions,
+    config: Option<TranscribeConfigSection>,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<BatchTranscribePlan, String> {
+    ensure_input_file_exists(&options.input)?;
+    ensure_output_can_be_written(options.output.as_ref(), options.force)?;
+    sona_core::transcribe_runtime::resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+        options,
+        config,
+        is_preset_model_installed_at,
+        models_dir_status,
+    )
+}
+
+pub fn is_preset_model_installed_at(model: &PresetModel, models_dir: &Path) -> bool {
+    is_preset_model_install_path_complete(model, &model.resolve_install_path(models_dir))
+}
+
+pub fn build_model_catalog_snapshot(
+    models_dir: &Path,
+) -> sona_core::preset_models::ModelCatalogSnapshot {
+    let installed_model_ids = installed_model_ids_for_models_dir(models_dir);
+    sona_core::preset_models::build_model_catalog_snapshot_with_installed_ids(
+        models_dir,
+        &installed_model_ids,
+    )
+}
+
+pub fn list_models(models_dir: &Path) -> Vec<ModelSummary> {
+    let installed_model_ids = installed_model_ids_for_models_dir(models_dir);
+    sona_core::model_catalog::list_models_with_installed_ids(models_dir, &installed_model_ids)
+}
+
+fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut expanded = Vec::new();
+
+    for input in inputs {
+        if path_contains_glob_pattern(input) {
+            let pattern = input.to_string_lossy().to_string();
+            let mut matches = glob::glob(&pattern)
+                .map_err(|error| format!("Invalid glob pattern {}: {error}", input.display()))?
+                .map(|entry| {
+                    entry.map_err(|error| {
+                        format!("Failed to read glob match for {}: {error}", input.display())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            matches.retain(|path| path.is_file());
+            matches.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+            if matches.is_empty() {
+                return Err(format!(
+                    "No input files matched glob pattern: {}",
+                    input.display()
+                ));
+            }
+            expanded.extend(matches);
+        } else {
+            ensure_input_file_exists(input)?;
+            expanded.push(input.clone());
+        }
+    }
+
+    expanded.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    expanded.dedup_by(|left, right| {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    });
+    Ok(expanded)
+}
+
+fn collect_batch_input_files(input_dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, String> {
+    if !input_dir.is_dir() {
+        return Err(format!(
+            "--input-dir must be an existing directory: {}",
+            input_dir.display()
+        ));
+    }
+
+    let walker = walkdir::WalkDir::new(input_dir)
+        .min_depth(1)
+        .max_depth(if recursive { usize::MAX } else { 1 });
+    let mut files = Vec::new();
+
+    for entry in walker {
+        let entry =
+            entry.map_err(|error| format!("Failed to read {}: {error}", input_dir.display()))?;
+        if entry.file_type().is_file()
+            && sona_core::transcribe_runtime::is_supported_batch_media_path(entry.path())
+        {
+            files.push(entry.path().to_path_buf());
+        }
+    }
+
+    files.sort_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    Ok(files)
+}
+
+fn path_contains_glob_pattern(path: &Path) -> bool {
+    path.to_string_lossy()
+        .chars()
+        .any(|character| GLOB_PATTERN_CHARS.contains(&character))
+}
+
+fn ensure_input_file_exists(input: &Path) -> Result<(), String> {
+    if input.is_file() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Input file must be an existing file: {}",
+            input.display()
+        ))
+    }
+}
+
+fn ensure_output_can_be_written(output: Option<&PathBuf>, force: bool) -> Result<(), String> {
+    match output {
+        None => Ok(()),
+        Some(path) if force || !path.exists() => Ok(()),
+        Some(path) => Err(format!(
+            "Output file already exists: {}. Use --force to overwrite.",
+            path.display()
+        )),
+    }
+}
+
+fn installed_model_ids_for_models_dir(models_dir: &Path) -> HashSet<String> {
+    preset_models()
+        .iter()
+        .filter(|model| is_preset_model_installed_at(model, models_dir))
+        .map(|model| model.id.clone())
+        .collect()
+}
+
+fn is_preset_model_install_path_complete(model: &PresetModel, install_path: &Path) -> bool {
+    let Ok(metadata) = install_path.metadata() else {
+        return false;
+    };
+
+    if model.is_archive() {
+        return true;
+    }
+
+    metadata.is_file() && metadata.len() > 0
+}

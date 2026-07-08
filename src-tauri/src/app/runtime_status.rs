@@ -1,8 +1,7 @@
 use tauri::Manager;
 
-pub use sona_core::runtime::{
-    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, resolve_runtime_path_status,
-};
+pub use sona_core::runtime::{RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus};
+pub use sona_runtime_fs::resolve_runtime_path_status;
 
 pub(crate) async fn open_log_folder<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,

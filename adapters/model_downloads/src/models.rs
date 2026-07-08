@@ -4,7 +4,7 @@ use crate::downloads::{
     DownloadError, download_file, publish_download_file, sha256_file, temporary_download_path,
 };
 use sona_core::model_downloads::ResolvedModelDownload;
-use sona_core::preset_models::is_preset_model_installed_at;
+use sona_runtime_fs::is_preset_model_installed_at;
 
 pub async fn installed_model_is_valid(resolved: &ResolvedModelDownload) -> Result<bool, String> {
     if !is_preset_model_installed_at(&resolved.model, &resolved.models_dir) {

@@ -3,13 +3,12 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
-use sona_core::model_catalog::{
-    ModelListEntry, ModelListFilter, ModelSummary, list_models as list_model_catalog, select_models,
-};
+use sona_core::model_catalog::{ModelListEntry, ModelListFilter, ModelSummary, select_models};
 use sona_core::model_downloads::{
     ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
 use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
+use sona_runtime_fs::{is_preset_model_installed_at, list_models as list_model_catalog};
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -185,9 +184,7 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
         .ok_or_else(|| CliError::Validation(format!("Unknown model id: {}", args.model_id)))?;
     let install_path = model.resolve_install_path(&models_dir);
 
-    if !sona_core::preset_models::is_preset_model_installed_at(model, &models_dir)
-        && !install_path.exists()
-    {
+    if !is_preset_model_installed_at(model, &models_dir) && !install_path.exists() {
         return Ok(CliOutput::stderr(format!(
             "Model {} is not installed at {}",
             model.id,

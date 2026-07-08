@@ -6,20 +6,16 @@ use sona_core::preset_models::PresetModel;
 use sona_core::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use sona_core::runtime_config::TranscribeConfigSection;
 use sona_core::transcribe_runtime::{
-    BatchInputSource, BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE,
-    DEFAULT_THREADS, DEFAULT_VAD_BUFFER_SIZE, OutputTarget, load_transcribe_config_file,
-    plan_batch_output_files, resolve_batch_input_source, resolve_batch_jobs,
+    BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
+    DEFAULT_VAD_BUFFER_SIZE, OutputTarget, plan_batch_output_files, resolve_batch_jobs,
     resolve_batch_transcribe_plan_with_install_checker, resolve_export_format,
     resolve_output_target, should_run_path_batch,
 };
 use tempfile::tempdir;
 
 #[test]
-fn load_transcribe_config_file_reads_shared_and_section_values() {
-    let dir = tempdir().unwrap();
-    let config_path = dir.path().join("sona-cli.toml");
-    fs::write(
-        &config_path,
+fn parse_transcribe_config_file_reads_shared_and_section_values() {
+    let config = sona_core::runtime_config::parse_transcribe_config_file(
         r#"
 models_dir = "/shared/models"
 gpu_acceleration = "cuda"
@@ -28,10 +24,9 @@ model_id = "legacy-model"
 [transcribe]
 language = "ja"
 "#,
+        "sona-cli.toml",
     )
     .unwrap();
-
-    let config = load_transcribe_config_file(&config_path).unwrap();
 
     assert_eq!(config.models_dir, Some(PathBuf::from("/shared/models")));
     assert_eq!(config.gpu_acceleration.as_deref(), Some("cuda"));
@@ -76,48 +71,6 @@ fn should_run_path_batch_detects_multiple_inputs_and_globs() {
         PathBuf::from("second.wav")
     ]));
     assert!(should_run_path_batch(&[PathBuf::from("*.wav")]));
-}
-
-#[test]
-fn resolve_batch_input_source_expands_globs_and_finds_common_parent() {
-    let dir = tempdir().unwrap();
-    let a = dir.path().join("a.wav");
-    let b = dir.path().join("b.wav");
-    fs::write(&a, "").unwrap();
-    fs::write(&b, "").unwrap();
-
-    let source = resolve_batch_input_source(None, &[dir.path().join("*.wav")], false).unwrap();
-
-    assert_eq!(
-        source,
-        BatchInputSource {
-            inputs: vec![a, b],
-            base_dir: dir.path().to_path_buf(),
-            preserve_relative_paths: false,
-        }
-    );
-}
-
-#[test]
-fn resolve_batch_input_source_collects_recursive_directory_inputs() {
-    let dir = tempdir().unwrap();
-    let input_dir = dir.path().join("input");
-    fs::create_dir_all(input_dir.join("nested")).unwrap();
-    let top = input_dir.join("meeting.wav");
-    let nested = input_dir.join("nested").join("call.mp3");
-    fs::write(&top, "").unwrap();
-    fs::write(&nested, "").unwrap();
-
-    let source = resolve_batch_input_source(Some(&input_dir), &[], true).unwrap();
-
-    assert_eq!(
-        source,
-        BatchInputSource {
-            inputs: vec![top, nested],
-            base_dir: input_dir,
-            preserve_relative_paths: true,
-        }
-    );
 }
 
 #[test]

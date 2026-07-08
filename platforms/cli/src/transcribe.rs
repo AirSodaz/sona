@@ -5,9 +5,7 @@ use std::path::PathBuf;
 use crate::{CliError, CliOutput, CliResult};
 use sona_core::ports::asr::BatchTranscriber;
 use sona_core::runtime_config::TranscribeConfigSection;
-use sona_core::transcribe_runtime::{
-    BatchTranscribeOptions, OutputTarget, resolve_batch_transcribe_plan_with_models_dir_status,
-};
+use sona_core::transcribe_runtime::{BatchTranscribeOptions, OutputTarget};
 
 #[derive(Debug, Args)]
 #[command(
@@ -90,12 +88,13 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         force: args.force,
     };
 
-    let plan = resolve_batch_transcribe_plan_with_models_dir_status(
-        options,
-        config,
-        crate::desktop_paths::models_dir_status,
-    )
-    .map_err(CliError::Validation)?;
+    let plan =
+        sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+            options,
+            config,
+            crate::desktop_paths::models_dir_status,
+        )
+        .map_err(CliError::Validation)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -135,7 +134,7 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeConfigSecti
     let Some(path) = path else {
         return Ok(None);
     };
-    sona_core::transcribe_runtime::load_transcribe_config_file(path)
+    sona_runtime_fs::load_transcribe_config_file(path)
         .map(Some)
         .map_err(CliError::Validation)
 }

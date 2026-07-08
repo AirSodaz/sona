@@ -29,14 +29,16 @@ pub struct MockPathProvider {
 
 impl MockPathProvider {
     pub fn new() -> Self {
-        let tmp = std::env::temp_dir();
         let mut entries = HashMap::new();
-        entries.insert(PathKind::AppData, Ok(tmp.join("sona-test/app_data")));
+        entries.insert(PathKind::AppData, Ok(PathBuf::from("/sona-test/app_data")));
         entries.insert(
             PathKind::AppLocalData,
-            Ok(tmp.join("sona-test/app_local_data")),
+            Ok(PathBuf::from("/sona-test/app_local_data")),
         );
-        entries.insert(PathKind::AppLogData, Ok(tmp.join("sona-test/app_log")));
+        entries.insert(
+            PathKind::AppLogData,
+            Ok(PathBuf::from("/sona-test/app_log")),
+        );
         Self { entries }
     }
 
@@ -66,7 +68,7 @@ mod tests {
 
     #[test]
     fn mock_provider_resolves_configured_path() {
-        let tmp = std::env::temp_dir().join("sona-mock-test");
+        let tmp = PathBuf::from("/sona-mock-test");
         let mut map = std::collections::HashMap::new();
         map.insert(PathKind::AppLocalData, Ok(tmp.clone()));
         let provider = MockPathProvider::from_map(map);

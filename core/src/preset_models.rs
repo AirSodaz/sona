@@ -271,41 +271,6 @@ pub fn build_model_catalog_snapshot_with_installed_ids(
     }
 }
 
-/// Builds model metadata and settings-page grouping using filesystem install status.
-pub fn build_model_catalog_snapshot(models_dir: &Path) -> ModelCatalogSnapshot {
-    let installed_model_ids = installed_model_ids_for_models_dir(models_dir);
-    build_model_catalog_snapshot_with_installed_ids(models_dir, &installed_model_ids)
-}
-
-fn installed_model_ids_for_models_dir(models_dir: &Path) -> HashSet<String> {
-    preset_models()
-        .iter()
-        .filter(|model| is_preset_model_installed_at(model, models_dir))
-        .map(|model| model.id.clone())
-        .collect()
-}
-
-/// Returns true when the preset's install path contains a complete installed model.
-pub fn is_preset_model_installed_at(model: &PresetModel, models_dir: &Path) -> bool {
-    is_preset_model_install_path_complete(model, &model.resolve_install_path(models_dir))
-}
-
-fn is_preset_model_install_path_complete(model: &PresetModel, install_path: &Path) -> bool {
-    let Ok(metadata) = install_path.metadata() else {
-        return false;
-    };
-
-    if model.is_archive() {
-        return install_path.exists();
-    }
-
-    if !metadata.is_file() {
-        return false;
-    }
-
-    metadata.len() > 0
-}
-
 pub fn resolve_model_catalog_selected_ids(
     snapshot: &ModelCatalogSnapshot,
     paths: &ModelSelectionPaths,

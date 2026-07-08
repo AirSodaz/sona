@@ -94,7 +94,7 @@ jobs:
         run: cargo build -p sona-cli --release
 
       - name: Run core, adapters, bindings, and standalone CLI tests
-        run: cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
+        run: cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
 
       - name: Compile Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-run

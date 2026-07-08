@@ -1,15 +1,8 @@
-use crate::ports::fs::{FileSystem, RealFileSystem};
+use crate::ports::fs::FileSystem;
 use serde::Serialize;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-
-pub fn write_json_pretty_atomic<T: Serialize + ?Sized>(
-    path: &Path,
-    value: &T,
-) -> Result<(), String> {
-    write_json_pretty_atomic_with(&RealFileSystem, path, value)
-}
 
 pub fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
     fs: &dyn FileSystem,
@@ -74,10 +67,6 @@ fn replace_path_atomically(
             Err(error)
         }
     }
-}
-
-pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
-    remove_path_if_exists_with(&RealFileSystem, path)
 }
 
 pub fn remove_path_if_exists_with(fs: &dyn FileSystem, path: &Path) -> Result<(), String> {

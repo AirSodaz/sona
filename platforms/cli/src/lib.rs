@@ -107,6 +107,6 @@ where
 }
 
 pub fn render_path_status_json(path: &str) -> CliResult<String> {
-    let status = sona_core::runtime::resolve_runtime_path_status(path);
+    let status = sona_runtime_fs::resolve_runtime_path_status(path);
     serde_json::to_string_pretty(&status).map_err(|error| CliError::Serialize(error.to_string()))
 }

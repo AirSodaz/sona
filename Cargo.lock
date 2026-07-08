@@ -5400,6 +5400,7 @@ dependencies = [
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
+ "sona-runtime-fs",
  "sona-sqlite",
  "sona-webdav",
  "specta",
@@ -5457,6 +5458,7 @@ dependencies = [
  "sona-core",
  "sona-local-asr",
  "sona-model-downloads",
+ "sona-runtime-fs",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -5470,7 +5472,6 @@ dependencies = [
  "axum",
  "chrono",
  "futures-util",
- "glob",
  "hex",
  "infer 0.16.0",
  "regex",
@@ -5489,7 +5490,6 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -5540,6 +5540,7 @@ dependencies = [
  "reqwest 0.13.4",
  "sha2 0.11.0",
  "sona-core",
+ "sona-runtime-fs",
  "tar",
  "tempfile",
  "thiserror 2.0.18",
@@ -5576,6 +5577,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-runtime-fs"
+version = "0.8.0"
+dependencies = [
+ "glob",
+ "serde",
+ "serde_json",
+ "sona-core",
+ "tempfile",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "sona-sqlite"
 version = "0.8.0"
 dependencies = [
@@ -5609,6 +5623,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sona-core",
+ "sona-runtime-fs",
  "thiserror 2.0.18",
  "uniffi",
 ]

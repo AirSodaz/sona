@@ -327,6 +327,59 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.match(adapterModels, /pub fn remove_model_install_path/u);
 });
 
+test('runtime filesystem operations live in a dedicated adapter crate', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
+  const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
+  const coreRuntimeConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime_config.rs'), 'utf8');
+  const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcribe_runtime.rs'), 'utf8');
+  const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'paths.rs'), 'utf8');
+  const coreRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime.rs'), 'utf8');
+  const coreRecoveryNormalization = fs.readFileSync(
+    path.join(repoRoot, 'core', 'src', 'recovery', 'normalization.rs'),
+    'utf8',
+  );
+  const corePresetModels = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'preset_models.rs'), 'utf8');
+  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
+  const coreFsPort = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'ports', 'fs.rs'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
+  assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
+  assert.match(cliCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
+  assert.match(
+    prWorkflow,
+    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+  );
+
+  assert.doesNotMatch(coreCargo, /^glob\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^walkdir\s*=/mu);
+  assert.doesNotMatch(coreRuntimeConfig, /std::fs::read_to_string/u);
+  assert.doesNotMatch(coreTranscribeRuntime, /glob::|walkdir::|\.is_file\(\)|\.exists\(\)/u);
+  assert.doesNotMatch(corePaths, /std::env|\.exists\(\)/u);
+  assert.doesNotMatch(coreRuntime, /std::fs::metadata/u);
+  assert.doesNotMatch(coreRecoveryNormalization, /std::fs::metadata/u);
+  assert.doesNotMatch(coreRecoveryNormalization, /FsSourcePathStatusProvider/u);
+  assert.doesNotMatch(corePresetModels, /\.metadata\(\)|\.exists\(\)|is_preset_model_installed_at/u);
+  assert.doesNotMatch(coreModelCatalog, /is_preset_model_installed_at/u);
+  assert.doesNotMatch(coreFsPort, /RealFileSystem|std::fs::/u);
+
+  assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
+  assert.match(runtimeFsLib, /pub fn load_serve_config_file/u);
+  assert.match(runtimeFsLib, /pub fn default_desktop_models_dir/u);
+  assert.match(runtimeFsLib, /pub fn resolve_runtime_path_status/u);
+  assert.match(runtimeFsLib, /pub struct FsSourcePathStatusProvider/u);
+  assert.match(runtimeFsLib, /pub fn resolve_batch_input_source/u);
+  assert.match(runtimeFsLib, /pub fn plan_batch_output_files/u);
+  assert.match(runtimeFsLib, /pub fn is_preset_model_installed_at/u);
+  assert.match(runtimeFsLib, /pub struct RealFileSystem/u);
+});
+
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -335,7 +388,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -720,7 +773,7 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'export.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'storage.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'recovery.rs')), false);
-  assert.match(platformStorage, /pub use sona_core::file_utils::\{/u);
+  assert.match(platformStorage, /pub use sona_runtime_fs::\{/u);
   assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
   assert.match(workspaceCargo, /"adapters\/export"/u);
   assert.match(tauriCargo, /^sona-export\s*=/mu);

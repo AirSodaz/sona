@@ -1,17 +1,14 @@
-pub use sona_core::paths::{
+pub use sona_core::ports::path::{PathKind, PathProvider};
+pub use sona_runtime_fs::{
     default_desktop_app_data_roots, default_desktop_models_dir,
     select_desktop_models_dir_from_app_roots,
 };
-pub use sona_core::ports::path::{PathKind, PathProvider};
 
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
 
 pub fn models_dir_status(path: &Path) -> sona_core::model_paths::ModelsDirStatus {
-    match path.metadata() {
-        Ok(metadata) => sona_core::model_paths::status_of(true, metadata.is_dir()),
-        Err(_) => sona_core::model_paths::status_of(false, false),
-    }
+    sona_runtime_fs::models_dir_status(path)
 }
 
 /// Tauri adapter for the pure `sona-core` path provider port.

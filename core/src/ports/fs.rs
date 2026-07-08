@@ -17,52 +17,6 @@ pub trait FileSystem: Send + Sync {
     fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, String>;
 }
 
-pub struct RealFileSystem;
-
-impl FileSystem for RealFileSystem {
-    fn create_dir_all(&self, path: &Path) -> Result<(), String> {
-        std::fs::create_dir_all(path).map_err(|e| e.to_string())
-    }
-
-    fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
-        if let Some(parent) = path.parent() {
-            self.create_dir_all(parent)?;
-        }
-        std::fs::write(path, contents).map_err(|e| e.to_string())
-    }
-
-    fn read_file(&self, path: &Path) -> Result<Vec<u8>, String> {
-        std::fs::read(path).map_err(|e| e.to_string())
-    }
-
-    fn read_to_string(&self, path: &Path) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| e.to_string())
-    }
-
-    fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
-        std::fs::rename(from, to).map_err(|e| e.to_string())
-    }
-
-    fn remove_file(&self, path: &Path) -> Result<(), String> {
-        std::fs::remove_file(path).map_err(|e| e.to_string())
-    }
-
-    fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
-        std::fs::remove_dir_all(path).map_err(|e| e.to_string())
-    }
-
-    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, String> {
-        match std::fs::metadata(path) {
-            Ok(m) => Ok(Some(FileMetadata {
-                is_file: m.is_file(),
-                is_dir: m.is_dir(),
-            })),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-}
-
 #[cfg(test)]
 pub struct MockFileSystem {
     pub files: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
@@ -93,7 +47,7 @@ impl FileSystem for MockFileSystem {
     fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
         let key = path.to_string_lossy().to_string();
         let mut files = self.files.lock().map_err(|e| e.to_string())?;
-        // Simulate parent directory creation like RealFileSystem does
+        // Simulate parent directory creation like the runtime filesystem adapter does.
         if let Some(parent) = path.parent() {
             let parent_key = parent.to_string_lossy().to_string();
             files.entry(parent_key).or_insert_with(Vec::new);

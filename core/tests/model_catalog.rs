@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use sona_core::model_catalog::{ModelListFilter, ModelSummary, list_models, select_models};
+use sona_core::model_catalog::{
+    ModelListFilter, ModelSummary, list_models_with_installed_ids, select_models,
+};
 
 fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
     ModelSummary {
@@ -16,12 +18,13 @@ fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) ->
 }
 
 #[test]
-fn lists_models_with_install_status_from_models_dir() {
-    let dir = tempfile::tempdir().unwrap();
-    let models_dir = dir.path().join("models");
-    std::fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+fn lists_models_with_injected_install_status() {
+    let models_dir = PathBuf::from("C:/models");
 
-    let models = list_models(&models_dir);
+    let models = list_models_with_installed_ids(
+        &models_dir,
+        &std::collections::HashSet::from(["sherpa-onnx-whisper-turbo".to_string()]),
+    );
 
     assert!(models.iter().any(|model| {
         model.id == "sherpa-onnx-whisper-turbo"

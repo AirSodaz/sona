@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct UnifiedConfigFile {
@@ -114,18 +114,26 @@ impl UnifiedConfigFile {
     }
 }
 
-pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSection, String> {
-    let contents = std::fs::read_to_string(path)
-        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    let unified: UnifiedConfigFile = toml::from_str(&contents)
-        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))?;
+pub fn parse_unified_config_file(
+    contents: &str,
+    source_label: &str,
+) -> Result<UnifiedConfigFile, String> {
+    toml::from_str(contents)
+        .map_err(|error| format!("Failed to parse config file {source_label}: {error}"))
+}
+
+pub fn parse_transcribe_config_file(
+    contents: &str,
+    source_label: &str,
+) -> Result<TranscribeConfigSection, String> {
+    let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_transcribe_config())
 }
 
-pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {
-    let contents = std::fs::read_to_string(path)
-        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
-    let unified: UnifiedConfigFile = toml::from_str(&contents)
-        .map_err(|error| format!("Failed to parse config file {}: {error}", path.display()))?;
+pub fn parse_serve_config_file(
+    contents: &str,
+    source_label: &str,
+) -> Result<ServeConfigSection, String> {
+    let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_serve_config())
 }

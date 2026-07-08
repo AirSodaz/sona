@@ -29,21 +29,6 @@ impl SourcePathStatusProvider for UnknownSourcePathStatusProvider {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct FsSourcePathStatusProvider;
-
-impl SourcePathStatusProvider for FsSourcePathStatusProvider {
-    fn status_for_path(&self, path: &str) -> SourcePathStatus {
-        match std::fs::metadata(path) {
-            Ok(metadata) if metadata.is_file() => SourcePathStatus::File,
-            Ok(metadata) if metadata.is_dir() => SourcePathStatus::Directory,
-            Ok(_) => SourcePathStatus::Unknown,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => SourcePathStatus::Missing,
-            Err(_) => SourcePathStatus::Unknown,
-        }
-    }
-}
-
 #[serde_as]
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
