@@ -1,8 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use sona_core::model_catalog::{
-    ModelListFilter, ModelSummary, list_models, remove_model_install_path, select_models,
-};
+use sona_core::model_catalog::{ModelListFilter, ModelSummary, list_models, select_models};
 
 fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
     ModelSummary {
@@ -66,28 +64,4 @@ fn selects_models_by_mode_type_language_and_install_status() {
 
     assert_eq!(selected.len(), 1);
     assert_eq!(selected[0].id, "whisper-zh");
-}
-
-#[test]
-fn removes_file_and_directory_install_paths() {
-    let dir = tempfile::tempdir().unwrap();
-    let file_path = dir.path().join("silero_vad.onnx");
-    let directory_path = dir.path().join("sherpa-onnx-whisper-turbo");
-
-    std::fs::write(&file_path, "fake").unwrap();
-    std::fs::create_dir_all(&directory_path).unwrap();
-    std::fs::write(directory_path.join("model.onnx"), "fake").unwrap();
-
-    remove_model_install_path(&file_path).unwrap();
-    remove_model_install_path(&directory_path).unwrap();
-
-    assert!(!file_path.exists());
-    assert!(!directory_path.exists());
-}
-
-#[test]
-fn removing_missing_install_path_is_a_noop() {
-    let missing = Path::new("C:/definitely/not/present/model.onnx");
-
-    remove_model_install_path(missing).unwrap();
 }

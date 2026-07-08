@@ -3,13 +3,31 @@ use hex::encode;
 use sha2::{Digest, Sha256};
 use sona_core::model_downloads::ResolvedModelDownload;
 use sona_core::preset_models::find_preset_model;
-use sona_model_downloads::{download_model, installed_model_is_valid};
+use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
 use tokio::net::TcpListener;
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     encode(hasher.finalize())
+}
+
+#[test]
+fn remove_model_install_path_removes_files_and_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("silero_vad.onnx");
+    let directory_path = dir.path().join("sherpa-onnx-whisper-turbo");
+
+    std::fs::write(&file_path, "fake").unwrap();
+    std::fs::create_dir_all(&directory_path).unwrap();
+    std::fs::write(directory_path.join("model.onnx"), "fake").unwrap();
+
+    remove_model_install_path(&file_path).unwrap();
+    remove_model_install_path(&directory_path).unwrap();
+    remove_model_install_path(&dir.path().join("missing-model")).unwrap();
+
+    assert!(!file_path.exists());
+    assert!(!directory_path.exists());
 }
 
 #[tokio::test]

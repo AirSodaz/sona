@@ -306,22 +306,25 @@ test('model download runtime implementation lives in a dedicated adapter crate',
     'utf8',
   );
   const coreModelDownloads = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_downloads.rs'), 'utf8');
+  const coreModelCatalog = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'model_catalog.rs'), 'utf8');
   const adapterLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'lib.rs'), 'utf8');
-  const adapterDownloads = fs.readFileSync(
-    path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'downloads.rs'),
-    'utf8',
-  );
+  const adapterModels = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'models.rs'), 'utf8');
+  const adapterDownloads = fs.readFileSync(path.join(repoRoot, 'adapters', 'model_downloads', 'src', 'downloads.rs'), 'utf8');
 
   assert.match(workspaceCargo, /"adapters\/model_downloads"/u);
   assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
-  assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid\}/u);
+  assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid, remove_model_install_path\}/u);
   assert.match(desktopDownloads, /use sona_model_downloads::\{[\s\S]*adapter_download_file/u);
   assert.doesNotMatch(coreModelDownloads, /pub async fn download_model/u);
   assert.doesNotMatch(coreModelDownloads, /reqwest|tokio::fs|sha256_file|tar::|bzip2::/u);
+  assert.doesNotMatch(coreModelCatalog, /std::fs::/u);
+  assert.doesNotMatch(coreModelCatalog, /pub fn remove_model_install_path/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'downloads.rs')), false);
   assert.match(adapterLib, /pub use downloads::/u);
+  assert.match(adapterLib, /remove_model_install_path/u);
   assert.match(adapterDownloads, /pub async fn download_file/u);
+  assert.match(adapterModels, /pub fn remove_model_install_path/u);
 });
 
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {

@@ -89,35 +89,6 @@ pub fn select_models(models: Vec<ModelSummary>, filter: &ModelListFilter) -> Vec
         .collect()
 }
 
-pub fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
-    let metadata = match std::fs::symlink_metadata(install_path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(format!(
-                "Failed to inspect model path {}: {error}",
-                install_path.display()
-            ));
-        }
-    };
-
-    if metadata.file_type().is_dir() {
-        std::fs::remove_dir_all(install_path).map_err(|error| {
-            format!(
-                "Failed to delete model directory {}: {error}",
-                install_path.display()
-            )
-        })
-    } else {
-        std::fs::remove_file(install_path).map_err(|error| {
-            format!(
-                "Failed to delete model file {}: {error}",
-                install_path.display()
-            )
-        })
-    }
-}
-
 impl From<ModelSummary> for ModelListEntry {
     fn from(model: ModelSummary) -> Self {
         Self {

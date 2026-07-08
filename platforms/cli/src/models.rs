@@ -4,13 +4,12 @@ use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
 use sona_core::model_catalog::{
-    ModelListEntry, ModelListFilter, ModelSummary, list_models as list_model_catalog,
-    remove_model_install_path, select_models,
+    ModelListEntry, ModelListFilter, ModelSummary, list_models as list_model_catalog, select_models,
 };
 use sona_core::model_downloads::{
     ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
-use sona_model_downloads::{download_model, installed_model_is_valid};
+use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
