@@ -38,12 +38,32 @@ const GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS: [u64; GOOGLE_TRANSLATE_FREE_MAX_RET
 
 pub fn parse_llm_api_host(base_url: &str) -> Result<Url, String> {
     let trimmed = base_url.trim();
-    sona_core::llm_requests::validate_llm_api_host(trimmed)?;
+    validate_llm_api_host(trimmed)?;
     Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))
 }
 
 pub fn validate_llm_api_host(base_url: &str) -> Result<(), String> {
-    sona_core::llm_requests::validate_llm_api_host(base_url)
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return Err("LLM API host cannot be empty".to_string());
+    }
+
+    let url = Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))?;
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback_host(&url) => Ok(()),
+        "http" => Err("LLM API host must use https:// unless it points to localhost.".to_string()),
+        _ => Err("LLM API host must start with https:// or localhost http://.".to_string()),
+    }
+}
+
+fn is_loopback_host(url: &Url) -> bool {
+    url.host_str()
+        .map(|host| {
+            let normalized = host.trim_matches(['[', ']']).to_ascii_lowercase();
+            normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
+        })
+        .unwrap_or(false)
 }
 
 #[derive(Clone, Debug)]

@@ -24,7 +24,6 @@ uuid = { version = "1", features = ["v4"] }
 futures-util = "0.3"
 hex = "0.4"
 sha2 = "0.11"
-url = "2"
 toml = "0.8.20"
 infer = "0.16"
 

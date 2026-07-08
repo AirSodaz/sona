@@ -613,8 +613,9 @@ test('core LLM request contracts are exposed through UniFFI binding records', ()
   assert.match(uniffiMapper, /pub fn summarize_transcript_request_to_ffi/u);
 });
 
-test('core owns LLM request validation reused by desktop and online adapter', () => {
+test('core owns LLM request field validation while online adapter owns API host policy', () => {
   const coreRequests = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm_requests.rs'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const desktopTasks = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'),
     'utf8',
@@ -625,7 +626,10 @@ test('core owns LLM request validation reused by desktop and online adapter', ()
   );
   const onlineLlm = fs.readFileSync(path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs'), 'utf8');
 
-  assert.match(coreRequests, /pub fn validate_llm_api_host/u);
+  assert.doesNotMatch(coreCargo, /^url\s*=/mu);
+  assert.doesNotMatch(coreRequests, /use url::Url/u);
+  assert.doesNotMatch(coreRequests, /pub fn validate_llm_api_host/u);
+  assert.doesNotMatch(coreRequests, /fn is_loopback_host/u);
   assert.match(coreRequests, /pub fn validate_llm_config/u);
   assert.match(coreRequests, /pub fn validate_task_request/u);
   assert.match(coreRequests, /pub fn validate_llm_generate_request/u);
@@ -642,8 +646,9 @@ test('core owns LLM request validation reused by desktop and online adapter', ()
   assert.doesNotMatch(desktopCommands, /Target language cannot be empty/u);
   assert.doesNotMatch(desktopCommands, /does not support transcript polishing/u);
   assert.match(desktopTasks, /sona_core::llm_requests(?:::\{[\s\S]*validate_llm_config|::validate_llm_config)/u);
-  assert.match(onlineLlm, /sona_core::llm_requests::validate_llm_api_host/u);
-  assert.doesNotMatch(onlineLlm, /fn is_loopback_host/u);
+  assert.match(onlineLlm, /pub fn validate_llm_api_host/u);
+  assert.match(onlineLlm, /fn is_loopback_host/u);
+  assert.doesNotMatch(onlineLlm, /sona_core::llm_requests::validate_llm_api_host/u);
 });
 
 test('online ASR provider manifest is owned by core and used directly by desktop', () => {

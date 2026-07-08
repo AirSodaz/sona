@@ -103,8 +103,9 @@ fn sample_llm_config(base_url: &str) -> LlmConfig {
 }
 
 #[test]
-fn validate_llm_config_rejects_remote_http_api_hosts() {
-    let error = validate_llm_config(&sample_llm_config("http://api.example.com/v1")).unwrap_err();
+fn llm_api_host_validation_rejects_remote_http_api_hosts() {
+    let error =
+        LlmApiUrl::parse(&sample_llm_config("http://api.example.com/v1").base_url).unwrap_err();
 
     assert_eq!(
         error,
@@ -113,11 +114,11 @@ fn validate_llm_config_rejects_remote_http_api_hosts() {
 }
 
 #[test]
-fn validate_llm_config_accepts_https_and_loopback_http_api_hosts() {
-    assert!(validate_llm_config(&sample_llm_config("https://api.example.com/v1")).is_ok());
-    assert!(validate_llm_config(&sample_llm_config("http://localhost:1234/v1")).is_ok());
-    assert!(validate_llm_config(&sample_llm_config("http://127.0.0.1:11434")).is_ok());
-    assert!(validate_llm_config(&sample_llm_config("http://[::1]:11434")).is_ok());
+fn llm_api_host_validation_accepts_https_and_loopback_http_api_hosts() {
+    assert!(LlmApiUrl::parse(&sample_llm_config("https://api.example.com/v1").base_url).is_ok());
+    assert!(LlmApiUrl::parse(&sample_llm_config("http://localhost:1234/v1").base_url).is_ok());
+    assert!(LlmApiUrl::parse(&sample_llm_config("http://127.0.0.1:11434").base_url).is_ok());
+    assert!(LlmApiUrl::parse(&sample_llm_config("http://[::1]:11434").base_url).is_ok());
 }
 
 #[test]

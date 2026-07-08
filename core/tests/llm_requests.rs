@@ -83,25 +83,24 @@ fn llm_config_accepts_custom_provider_with_explicit_strategy() {
 }
 
 #[test]
-fn llm_config_validation_rejects_remote_http_hosts() {
+fn llm_config_validation_rejects_empty_model_names() {
     let mut config = sample_config();
-    config.base_url = "http://api.example.com/v1".to_string();
+    config.model = "  ".to_string();
 
     let error = validate_llm_config(&config).unwrap_err();
 
-    assert_eq!(
-        error,
-        "LLM API host must use https:// unless it points to localhost."
-    );
+    assert_eq!(error, "Model name cannot be empty");
 }
 
 #[test]
-fn llm_config_validation_accepts_https_and_loopback_http_hosts() {
+fn llm_config_validation_leaves_api_host_policy_to_online_adapter() {
     for base_url in [
         "https://api.example.com/v1",
+        "http://api.example.com/v1",
         "http://localhost:1234/v1",
         "http://127.0.0.1:11434",
         "http://[::1]:11434",
+        "not a url",
     ] {
         let mut config = sample_config();
         config.base_url = base_url.to_string();
