@@ -1396,23 +1396,25 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 });
 
 test('timeline transcript normalization is owned by core and reused by desktop', () => {
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcript.rs'), 'utf8');
   const tauriTranscript = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
 
-  assert.match(coreTranscript, /pub fn apply_timeline_normalization\(/u);
-  assert.match(coreTranscript, /pub fn build_transcript_update\(/u);
-  assert.match(
-    tauriTranscript,
-    /pub\(crate\) use sona_core::transcript::\{[\s\S]*apply_timeline_normalization[\s\S]*build_transcript_update[\s\S]*\};/u,
-  );
+  assert.match(coreTranscript, /pub fn apply_timeline_normalization_with_id_generator/u);
+  assert.match(coreTranscript, /pub fn build_transcript_update_with_id_generator/u);
+  assert.doesNotMatch(coreTranscript, /Uuid::new_v4|uuid::Uuid::new_v4/u);
+  assert.doesNotMatch(coreCargo, /^uuid\s*=/mu);
+  assert.match(tauriTranscript, /pub\(crate\)\s+fn apply_timeline_normalization\(/u);
+  assert.match(tauriTranscript, /pub\(crate\)\s+fn build_transcript_update\(/u);
+  assert.match(tauriTranscript, /apply_timeline_normalization_with_id_generator/u);
+  assert.match(tauriTranscript, /build_transcript_update_with_id_generator/u);
+  assert.match(tauriTranscript, /uuid::Uuid::new_v4\(\)\.to_string\(\)/u);
   assert.doesNotMatch(tauriTranscript, /struct TokenMap/u);
   assert.doesNotMatch(tauriTranscript, /struct SplitterState/u);
   assert.doesNotMatch(tauriTranscript, /fn split_segment_by_parts/u);
-  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn apply_timeline_normalization/u);
-  assert.doesNotMatch(tauriTranscript, /pub\(crate\)\s+fn build_transcript_update/u);
   assert.match(tauriTranscript, /pub\(crate\)\s+fn emit_transcript_update/u);
 });
 

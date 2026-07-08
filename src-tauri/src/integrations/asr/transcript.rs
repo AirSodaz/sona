@@ -1,17 +1,42 @@
 use super::recognizer_output_event;
 use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
-use super::types::TranscriptUpdate;
+use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
 #[cfg(test)]
-use super::types::{TranscriptSegment, TranscriptTimingLevel, TranscriptTimingSource};
+use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
 use log::info;
 use sona_local_asr::punctuation::Punctuation;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 pub(crate) use sona_core::transcript::{
-    apply_timeline_normalization, build_transcript_update, normalize_recognizer_text,
-    select_final_transcript_text, synthesize_durations,
+    normalize_recognizer_text, select_final_transcript_text, synthesize_durations,
 };
+
+fn new_transcript_segment_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+pub(crate) fn apply_timeline_normalization(
+    segments: Vec<TranscriptSegment>,
+    options: TranscriptNormalizationOptions,
+) -> Vec<TranscriptSegment> {
+    sona_core::transcript::apply_timeline_normalization_with_id_generator(
+        segments,
+        options,
+        new_transcript_segment_id,
+    )
+}
+
+pub(crate) fn build_transcript_update(
+    segment: TranscriptSegment,
+    options: TranscriptNormalizationOptions,
+) -> TranscriptUpdate {
+    sona_core::transcript::build_transcript_update_with_id_generator(
+        segment,
+        options,
+        new_transcript_segment_id,
+    )
+}
 
 pub(crate) fn emit_transcript_update(
     emitter: &dyn crate::platform::event::EventEmitter,

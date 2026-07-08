@@ -346,22 +346,25 @@ fn finalize_split_segment(
     mut segment: TranscriptSegment,
     is_first: bool,
     original_id: &str,
+    next_id: &mut impl FnMut() -> String,
 ) -> TranscriptSegment {
     if !is_first {
-        segment.id = uuid::Uuid::new_v4().to_string();
+        segment.id = next_id();
     } else {
         segment.id = original_id.to_string();
     }
     segment
 }
 
-fn split_segment_by_parts<F>(
+fn split_segment_by_parts<F, G>(
     segment: &TranscriptSegment,
     is_delimiter: F,
     check_abbreviations: bool,
+    next_id: &mut G,
 ) -> Vec<TranscriptSegment>
 where
     F: Fn(char) -> bool + Copy,
+    G: FnMut() -> String,
 {
     let parts = split_text_parts(&segment.text, is_delimiter);
     if parts.len() <= 1 {
@@ -476,6 +479,7 @@ where
                     child,
                     results.is_empty(),
                     &original_id,
+                    next_id,
                 ));
             }
 
@@ -546,6 +550,7 @@ where
                 child,
                 results.is_empty(),
                 &original_id,
+                next_id,
             ));
         }
     }
@@ -557,8 +562,14 @@ where
     }
 }
 
-fn split_segment_by_punctuation_rules(segment: &TranscriptSegment) -> Vec<TranscriptSegment> {
-    let first_pass = split_segment_by_parts(segment, is_strong_split_char, true);
+fn split_segment_by_punctuation_rules<G>(
+    segment: &TranscriptSegment,
+    next_id: &mut G,
+) -> Vec<TranscriptSegment>
+where
+    G: FnMut() -> String,
+{
+    let first_pass = split_segment_by_parts(segment, is_strong_split_char, true, next_id);
     let mut final_segments = Vec::new();
 
     for segment in first_pass {
@@ -569,7 +580,12 @@ fn split_segment_by_punctuation_rules(segment: &TranscriptSegment) -> Vec<Transc
         };
 
         if segment.text.chars().count() > limit {
-            final_segments.extend(split_segment_by_parts(&segment, is_weak_split_char, false));
+            final_segments.extend(split_segment_by_parts(
+                &segment,
+                is_weak_split_char,
+                false,
+                next_id,
+            ));
         } else {
             final_segments.push(segment);
         }
@@ -578,10 +594,14 @@ fn split_segment_by_punctuation_rules(segment: &TranscriptSegment) -> Vec<Transc
     final_segments
 }
 
-pub fn apply_timeline_normalization(
+pub fn apply_timeline_normalization_with_id_generator<F>(
     segments: Vec<TranscriptSegment>,
     options: TranscriptNormalizationOptions,
-) -> Vec<TranscriptSegment> {
+    mut next_id: F,
+) -> Vec<TranscriptSegment>
+where
+    F: FnMut() -> String,
+{
     if !options.enable_timeline {
         return normalize_transcript_segments(segments);
     }
@@ -589,7 +609,7 @@ pub fn apply_timeline_normalization(
     let mut results = Vec::new();
     for segment in segments {
         if segment.is_final {
-            results.extend(split_segment_by_punctuation_rules(&segment));
+            results.extend(split_segment_by_punctuation_rules(&segment, &mut next_id));
         } else {
             results.push(segment);
         }
@@ -609,10 +629,14 @@ pub fn apply_timeline_normalization(
     normalize_transcript_segments(results)
 }
 
-pub fn build_transcript_update(
+pub fn build_transcript_update_with_id_generator<F>(
     segment: TranscriptSegment,
     options: TranscriptNormalizationOptions,
-) -> TranscriptUpdate {
+    next_id: F,
+) -> TranscriptUpdate
+where
+    F: FnMut() -> String,
+{
     let remove_ids = if options.enable_timeline && segment.is_final {
         vec![segment.id.clone()]
     } else {
@@ -621,7 +645,11 @@ pub fn build_transcript_update(
 
     TranscriptUpdate {
         remove_ids,
-        upsert_segments: apply_timeline_normalization(vec![segment], options),
+        upsert_segments: apply_timeline_normalization_with_id_generator(
+            vec![segment],
+            options,
+            next_id,
+        ),
     }
 }
 
@@ -982,7 +1010,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_timeline_normalization_splits_token_level_segments_with_model_timing() {
+    fn apply_timeline_normalization_splits_token_level_segments_with_supplied_ids() {
         let segment = TranscriptSegment {
             text: "Hello. World.".to_string(),
             tokens: Some(vec![
@@ -995,19 +1023,21 @@ mod tests {
             durations: Some(vec![0.5; 4]),
             ..sample_segment("Hello. World.", 0.0, 2.0)
         };
+        let mut generated_ids = ["split-segment-2"].into_iter();
 
-        let results = apply_timeline_normalization(
+        let results = apply_timeline_normalization_with_id_generator(
             vec![segment],
             TranscriptNormalizationOptions {
                 enable_timeline: true,
             },
+            || generated_ids.next().expect("split id").to_string(),
         );
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].text, "Hello.");
         assert_eq!(results[1].text, "World.");
         assert_eq!(results[0].id, "segment-1");
-        assert_ne!(results[1].id, "segment-1");
+        assert_eq!(results[1].id, "split-segment-2");
         assert_eq!(
             results[0].timing.as_ref().map(|timing| timing.level),
             Some(TranscriptTimingLevel::Token)
@@ -1021,16 +1051,20 @@ mod tests {
 
     #[test]
     fn build_transcript_update_replaces_final_segments_atomically_when_timeline_enabled() {
-        let update = build_transcript_update(
+        let mut generated_ids = ["split-segment-2"].into_iter();
+
+        let update = build_transcript_update_with_id_generator(
             sample_segment("Hello. World.", 0.0, 2.0),
             TranscriptNormalizationOptions {
                 enable_timeline: true,
             },
+            || generated_ids.next().expect("split id").to_string(),
         );
 
         assert_eq!(update.remove_ids, vec!["segment-1".to_string()]);
         assert_eq!(update.upsert_segments.len(), 2);
         assert_eq!(update.upsert_segments[0].id, "segment-1");
+        assert_eq!(update.upsert_segments[1].id, "split-segment-2");
     }
 
     #[test]

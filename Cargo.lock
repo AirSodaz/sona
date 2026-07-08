@@ -5483,7 +5483,6 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "unicode-normalization",
- "uuid",
 ]
 
 [[package]]
