@@ -6,12 +6,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::history_archive::{HistoryRepository, normalize_history_item_value};
-use crate::history_store::{SqliteHistoryStore, insert_history_item_row};
-use sona_core::history::fs_utils::{
+use crate::history_fs_utils::{
     create_tar_bz2_archive, create_temp_directory, ensure_json_array_value,
     ensure_json_object_value, ensure_safe_file_name, extract_tar_bz2_archive, read_json_value,
     remove_path_if_exists, write_json_pretty_atomic,
 };
+use crate::history_store::{SqliteHistoryStore, insert_history_item_row};
 use sona_core::history::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
     HistoryItemRecord, HistoryItemStatus, PreparedBackupImport, PreparedBackupImportSnapshot,
@@ -722,12 +722,12 @@ pub fn apply_prepared_history_import_inner(
 mod tests {
     use super::*;
     use crate::Database;
-    use crate::history_store::SqliteHistoryStore;
-    use serde_json::{Value, json};
-    use sona_core::history::fs_utils::{
+    use crate::history_fs_utils::{
         create_tar_bz2_archive, extract_tar_bz2_archive, read_json_value, remove_path_if_exists,
         write_json_pretty_atomic,
     };
+    use crate::history_store::SqliteHistoryStore;
+    use serde_json::{Value, json};
     use sona_core::history::{
         HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistorySaveRecordingRequest,
         TranscriptSnapshotReason,

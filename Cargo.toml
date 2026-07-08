@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "adapters/archive",
     "adapters/local_asr",
     "adapters/media_detector",
     "adapters/model_downloads",

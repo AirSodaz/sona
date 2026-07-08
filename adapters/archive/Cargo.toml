@@ -1,0 +1,13 @@
+[package]
+name = "sona-archive"
+version.workspace = true
+description = "Archive filesystem adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+bzip2 = "0.4"
+tar = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

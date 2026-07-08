@@ -21,6 +21,7 @@ embed-resource = "3.0.9"
 
 
 [dependencies]
+sona-archive = { path = "../adapters/archive" }
 sona-core = { path = "../core", features = ["specta"] }
 sona-local-asr = { path = "../adapters/local_asr" }
 sona-media-detector = { path = "../adapters/media_detector" }
@@ -38,8 +39,6 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-http = "2"
-tar = "0.4"
-bzip2 = "0.4"
 toml = "0.8.20"
 async-trait = "0.1"
 reqwest = { version = "0.13", features = ["stream", "rustls", "json", "multipart"] }

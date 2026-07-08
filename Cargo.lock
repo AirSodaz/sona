@@ -5369,7 +5369,6 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bytes",
- "bzip2",
  "chrono",
  "cpal",
  "embed-resource",
@@ -5393,6 +5392,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.11.0",
+ "sona-archive",
  "sona-core",
  "sona-local-asr",
  "sona-media-detector",
@@ -5404,7 +5404,6 @@ dependencies = [
  "specta",
  "specta-typescript",
  "sysinfo",
- "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -5436,6 +5435,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-archive"
+version = "0.8.0"
+dependencies = [
+ "bzip2",
+ "tar",
+ "tempfile",
+]
+
+[[package]]
 name = "sona-cli"
 version = "0.8.0"
 dependencies = [
@@ -5459,7 +5467,6 @@ version = "0.8.0"
 dependencies = [
  "async-trait",
  "axum",
- "bzip2",
  "chrono",
  "futures-util",
  "glob",
@@ -5473,7 +5480,6 @@ dependencies = [
  "sha2 0.11.0",
  "specta",
  "strum",
- "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -5564,12 +5570,14 @@ name = "sona-sqlite"
 version = "0.8.0"
 dependencies = [
  "async-trait",
+ "bzip2",
  "chrono",
  "log",
  "rusqlite",
  "serde",
  "serde_json",
  "sona-core",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
  "uuid",

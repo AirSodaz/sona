@@ -273,6 +273,29 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   assert.match(webdavAdapter, /pub async fn webdav_download_backup/u);
 });
 
+test('tar.bz2 archive filesystem operations live in archive adapter', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const archiveCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'archive.rs'), 'utf8');
+  const archiveAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'archive', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(workspaceCargo, /"adapters\/archive"/u);
+  assert.match(tauriCargo, /sona-archive\s*=\s*\{\s*path = "\.\.\/adapters\/archive" \}/u);
+  assert.doesNotMatch(tauriCargo, /^bzip2\s*=/mu);
+  assert.doesNotMatch(tauriCargo, /^tar\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^bzip2\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^tar\s*=/mu);
+  assert.doesNotMatch(coreLib, /^pub mod archive;/mu);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'archive.rs')), false);
+  assert.match(archiveCommand, /sona_archive::extract_tar_bz2/u);
+  assert.match(archiveCommand, /sona_archive::create_tar_bz2/u);
+  assert.doesNotMatch(archiveCommand, /sona_core::archive/u);
+  assert.match(archiveAdapter, /pub fn extract_tar_bz2/u);
+  assert.match(archiveAdapter, /pub fn create_tar_bz2/u);
+});
+
 test('model download runtime implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
@@ -309,7 +332,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-archive -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 });
 
@@ -1148,16 +1171,27 @@ test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', (
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'storage_usage.rs')), false);
 });
 
-test('history filesystem helpers are owned by core history module', () => {
+test('history filesystem helpers are owned by sqlite adapter', () => {
   const coreHistory = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'history', 'mod.rs'), 'utf8');
+  const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
+  const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const sqliteHistoryFs = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_fs_utils.rs'),
+    'utf8',
+  );
   const platformHistory = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
     'utf8',
   );
 
-  assert.ok(fs.existsSync(path.join(repoRoot, 'core', 'src', 'history', 'fs_utils.rs')));
-  assert.match(coreHistory, /^pub mod fs_utils;/mu);
-  assert.match(platformHistory, /pub\(crate\) use sona_core::history::fs_utils;/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'history', 'fs_utils.rs')), false);
+  assert.doesNotMatch(coreHistory, /^pub mod fs_utils;/mu);
+  assert.doesNotMatch(coreCargo, /^bzip2\s*=/mu);
+  assert.doesNotMatch(coreCargo, /^tar\s*=/mu);
+  assert.match(sqliteLib, /^pub mod history_fs_utils;/mu);
+  assert.match(platformHistory, /pub\(crate\) use sona_sqlite::history_fs_utils as fs_utils;/u);
+  assert.match(sqliteHistoryFs, /pub fn create_tar_bz2_archive/u);
+  assert.match(sqliteHistoryFs, /pub fn extract_tar_bz2_archive/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'history', 'fs_utils.rs')), false);
   assert.doesNotMatch(platformHistory, /^pub\(crate\) mod fs_utils;/mu);
 });

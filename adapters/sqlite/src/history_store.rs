@@ -1,10 +1,11 @@
 use crate::DatabaseError;
+use crate::history_fs_utils::{
+    ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
+    remove_path_if_exists,
+};
 use crate::ports::Database as DatabasePort;
 use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
-use sona_core::history::fs_utils::{
-    ensure_json_array_value, ensure_safe_file_name, optional_history_child_path,
-};
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
@@ -239,11 +240,11 @@ impl StagedHistoryAudio {
     }
 
     fn cleanup_staging(&self) {
-        let _ = sona_core::file_utils::remove_path_if_exists(&self.staging_path);
+        let _ = remove_path_if_exists(&self.staging_path);
     }
 
     fn cleanup_final(&self) {
-        let _ = sona_core::file_utils::remove_path_if_exists(&self.target_path);
+        let _ = remove_path_if_exists(&self.target_path);
     }
 }
 
@@ -301,7 +302,7 @@ where
             Ok(())
         })();
         if write_result.is_err() {
-            let _ = sona_core::file_utils::remove_path_if_exists(&staging_path);
+            let _ = remove_path_if_exists(&staging_path);
         }
         write_result?;
         Ok(StagedHistoryAudio {
@@ -324,7 +325,7 @@ where
             .map(|_| ())
             .map_err(|error| DatabaseError::Internal(error.to_string()));
         if copy_result.is_err() {
-            let _ = sona_core::file_utils::remove_path_if_exists(&staging_path);
+            let _ = remove_path_if_exists(&staging_path);
         }
         copy_result?;
         Ok(StagedHistoryAudio {
@@ -345,8 +346,7 @@ where
             let entry = entry.map_err(|e| DatabaseError::Internal(e.to_string()))?;
             let file_name = entry.file_name();
             if file_name.to_string_lossy().contains(STAGED_AUDIO_MARKER) {
-                sona_core::file_utils::remove_path_if_exists(&entry.path())
-                    .map_err(DatabaseError::Internal)?;
+                remove_path_if_exists(&entry.path()).map_err(DatabaseError::Internal)?;
             }
         }
 
@@ -464,9 +464,7 @@ where
                             continue;
                         }
 
-                        if let Err(error) =
-                            sona_core::file_utils::remove_path_if_exists(&audio_path)
-                        {
+                        if let Err(error) = remove_path_if_exists(&audio_path) {
                             log::warn!(
                                 "Failed to clean history audio {}: {}",
                                 audio_path.display(),
@@ -1151,7 +1149,7 @@ where
 
         for audio_path_str in audio_paths {
             if let Some(path) = optional_history_child_path(&self.history_dir(), &audio_path_str)
-                && let Err(error) = sona_core::file_utils::remove_path_if_exists(&path)
+                && let Err(error) = remove_path_if_exists(&path)
             {
                 log::warn!(
                     "Failed to remove history audio after deleting DB row {}: {}",
@@ -1518,7 +1516,7 @@ where
     ) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        let summary_payload = sona_core::history::fs_utils::ensure_json_object_value(
+        let summary_payload = crate::history_fs_utils::ensure_json_object_value(
             summary_payload,
             "History summary payload",
         )

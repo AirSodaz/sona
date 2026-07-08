@@ -1,7 +1,7 @@
 use serde_json::{Value, to_value};
 use std::path::PathBuf;
 
-use sona_core::history::fs_utils::{ensure_safe_file_name, read_json_value};
+use crate::history_fs_utils::{ensure_safe_file_name, read_json_value};
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
     HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
@@ -179,8 +179,8 @@ pub(crate) fn normalize_history_item_value(value: &Value) -> HistoryItemRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::history_fs_utils::write_json_pretty_atomic;
     use serde_json::json;
-    use sona_core::history::fs_utils::write_json_pretty_atomic;
     use tempfile::tempdir;
 
     #[test]
