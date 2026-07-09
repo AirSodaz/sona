@@ -2749,6 +2749,30 @@ test('LLM generation and model listing use core ports with desktop adapters', ()
   assert.doesNotMatch(desktopCommands, /generate_with_rig/u);
 });
 
+test('desktop LLM timestamps are supplied by platform time adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformTimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'time.rs');
+  const desktopLlmCommands = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'),
+    'utf8',
+  );
+  const desktopLlmJobs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'jobs.rs'),
+    'utf8',
+  );
+  const desktopLlmIntegration = `${desktopLlmCommands}\n${desktopLlmJobs}`;
+
+  assert.equal(fs.existsSync(platformTimePath), true);
+  const platformTime = fs.readFileSync(platformTimePath, 'utf8');
+
+  assert.match(platformMod, /^pub mod time;/mu);
+  assert.match(platformTime, /pub fn utc_now_rfc3339\(/u);
+  assert.match(platformTime, /pub fn utc_now_rfc3339_millis\(/u);
+  assert.match(desktopLlmCommands, /crate::platform::time::utc_now_rfc3339\(\)/u);
+  assert.match(desktopLlmJobs, /crate::platform::time::utc_now_rfc3339_millis\(\)/u);
+  assert.doesNotMatch(desktopLlmIntegration, /chrono::Utc::now\(\)/u);
+});
+
 test('online LLM provider implementation lives in adapter crate', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');

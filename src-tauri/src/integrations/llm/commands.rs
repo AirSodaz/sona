@@ -81,7 +81,7 @@ impl UsageRecorder {
     }
 
     fn record(&self, response: &StandardLlmResponse) {
-        let occurred_at = chrono::Utc::now().to_rfc3339();
+        let occurred_at = crate::platform::time::utc_now_rfc3339();
         let db = crate::platform::database::sqlite_database(&self.app);
         if let Err(error) = crate::integrations::llm_usage_sqlite::record_usage(
             db.as_ref(),

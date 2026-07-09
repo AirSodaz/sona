@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use chrono::SecondsFormat;
 use serde_json::to_value;
 use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
@@ -225,7 +224,7 @@ async fn run_summary_job(
         record: Some(TranscriptSummaryRecordPayload {
             template_id: result.template_id,
             content: result.content.trim().to_string(),
-            generated_at: chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+            generated_at: crate::platform::time::utc_now_rfc3339_millis(),
             source_fingerprint: compute_summary_source_fingerprint(&request.segments),
         }),
     };
