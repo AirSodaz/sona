@@ -3341,6 +3341,9 @@ test('desktop hardware GPU adapter lives in platform layer', () => {
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
   const desktopAudio = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'audio.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformAudioStoragePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'audio_storage.rs');
+  const platformAudioStorage = fs.existsSync(platformAudioStoragePath) ? fs.readFileSync(platformAudioStoragePath, 'utf8') : '';
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const localAsrSpeakerProcessing = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
@@ -3361,8 +3364,14 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.match(localAsrSpeakerProcessing, /crate::audio::extract_and_resample_audio/u);
   assert.match(localAsrSpeakerProcessing, /crate::audio::save_wav_file/u);
   assert.match(runtimeStatusRs, /sona_local_asr::audio::resolve_ffmpeg_sidecar_path/u);
-  assert.match(desktopAudio, /sona_runtime_fs::ensure_directory_exists\(&history_dir\)/u);
+  assert.equal(fs.existsSync(platformAudioStoragePath), true);
+  assert.match(platformMod, /^pub mod audio_storage;/mu);
+  assert.match(platformAudioStorage, /pub fn create_history_recording_path_for_app/u);
+  assert.match(platformAudioStorage, /sona_runtime_fs::ensure_directory_exists\(&history_dir\)/u);
+  assert.match(desktopAudio, /crate::platform::audio_storage::create_history_recording_path_for_app\(&app\)/u);
   assert.match(desktopAudio, /sona_local_asr::audio::LiveWavRecorder/u);
+  assert.doesNotMatch(desktopAudio, /sona_runtime_fs::ensure_directory_exists/u);
+  assert.doesNotMatch(desktopAudio, /TauriPathProvider|PathKind|PathProvider/u);
   assert.doesNotMatch(desktopAudio, /std::fs::create_dir_all/u);
   assert.doesNotMatch(desktopAudio, /\bhound::/u);
   assert.doesNotMatch(tauriCargo, /^hound\s*=/mu);

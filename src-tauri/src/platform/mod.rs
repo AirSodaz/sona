@@ -1,5 +1,6 @@
 pub mod app_config;
 pub mod archive;
+pub mod audio_storage;
 pub mod automation_repository;
 pub mod automation_runtime;
 pub mod database;

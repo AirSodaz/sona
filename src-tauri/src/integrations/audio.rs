@@ -1,4 +1,3 @@
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
@@ -360,16 +359,6 @@ fn requested_device_label(device_name: &Option<String>) -> String {
     device_name.as_deref().unwrap_or("default").to_string()
 }
 
-fn create_history_recording_path(provider: &dyn PathProvider) -> Result<String, String> {
-    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
-    let history_dir = app_data_dir.join("history");
-    sona_runtime_fs::ensure_directory_exists(&history_dir)?;
-
-    let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
-    let wav_filepath = history_dir.join(&wav_filename);
-    Ok(wav_filepath.to_string_lossy().into_owned())
-}
-
 fn resolve_recording_output_path<F>(
     output_path: Option<String>,
     fallback: F,
@@ -384,12 +373,12 @@ where
 }
 
 fn queue_recording_start(
-    provider: &dyn PathProvider,
     recorder_tx: Option<&tokio::sync::mpsc::Sender<RecorderCommand>>,
     should_record: bool,
     capture_label: &str,
     instance_id: &str,
     output_path: Option<String>,
+    fallback_path: impl FnOnce() -> Result<String, String>,
 ) -> Result<(), String> {
     if !should_record {
         return Ok(());
@@ -406,8 +395,7 @@ fn queue_recording_start(
         return Ok(());
     };
 
-    let wav_filepath =
-        resolve_recording_output_path(output_path, || create_history_recording_path(provider))?;
+    let wav_filepath = resolve_recording_output_path(output_path, fallback_path)?;
     if let Err(err) = tx.try_send(RecorderCommand::Start(wav_filepath.clone())) {
         eprintln!(
             "[Audio] Failed to queue {} recorder start for instance {} at {}: {}",
@@ -610,7 +598,6 @@ fn start_shared_capture(
 ) -> Result<(), String> {
     let _start_guard = kind.start_guard(state).lock().map_err(|e| e.to_string())?;
     let requested_device = requested_device_label(&device_name);
-    let path_provider = TauriPathProvider::from_app(&app);
 
     {
         let mut capture = kind.capture(state).lock().map_err(|e| e.to_string())?;
@@ -628,12 +615,12 @@ fn start_shared_capture(
             );
             drop(capture);
             queue_recording_start(
-                &path_provider,
                 recorder_tx.as_ref(),
                 kind.should_record(&instance_id),
                 kind.label(),
                 &instance_id,
                 output_path.clone(),
+                || crate::platform::audio_storage::create_history_recording_path_for_app(&app),
             )?;
             return Ok(());
         }
@@ -690,12 +677,12 @@ fn start_shared_capture(
     }
 
     queue_recording_start(
-        &path_provider,
         Some(&recorder_tx),
         kind.should_record(&instance_id),
         kind.label(),
         &instance_id,
         output_path,
+        || crate::platform::audio_storage::create_history_recording_path_for_app(&app),
     )?;
 
     Ok(())
