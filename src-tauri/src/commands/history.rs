@@ -1,10 +1,8 @@
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Runtime, State};
 
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::history_repository::SqliteHistoryStore;
 use crate::platform::history_repository::backup::{
     apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
 };
@@ -20,55 +18,7 @@ use crate::platform::history_repository::{
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-use sona_core::history_store::{HistoryStore, HistoryStoreError};
-use sona_sqlite::Database;
-
-async fn run_history_file_task_inner<T, F>(
-    app_local_data_dir: PathBuf,
-    db: Arc<Database>,
-    lock: Arc<Mutex<()>>,
-    task: F,
-) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
-        task(SqliteHistoryStore::new(app_local_data_dir, db)).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
-async fn run_history_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
-where
-    R: Runtime,
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
-{
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
-    let db = crate::platform::database::sqlite_database(app);
-    crate::platform::history_repository::llm_helpers::run_llm_db_task(app_local_data_dir, db, task)
-        .await
-}
-
-async fn run_history_file_task<R, T, F>(
-    app: &AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
-    task: F,
-) -> Result<T, String>
-where
-    R: Runtime,
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
-{
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
-    let db = crate::platform::database::sqlite_database(app);
-    run_history_file_task_inner(app_local_data_dir, db, state.file_lock.clone(), task).await
-}
+use sona_core::history_store::HistoryStore;
 
 #[tauri::command]
 pub async fn history_list_items<R: Runtime>(
@@ -78,9 +28,11 @@ pub async fn history_list_items<R: Runtime>(
     offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
     let opts = HistoryListOptions { limit, offset };
-    run_history_file_task(&app, state, move |repository| {
-        repository.list_items_with_reconciled_live_drafts_paginated(opts)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.list_items_with_reconciled_live_drafts_paginated(opts),
+    )
     .await
 }
 
@@ -101,9 +53,11 @@ pub async fn history_query_workspace<R: Runtime>(
         date_filter,
         sort_order,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.query_workspace(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.query_workspace(request),
+    )
     .await
 }
 
@@ -122,9 +76,11 @@ pub async fn history_create_live_draft<R: Runtime>(
         project_id,
         icon,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.create_live_draft(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.create_live_draft(request),
+    )
     .await
 }
 
@@ -135,7 +91,7 @@ pub async fn history_complete_live_draft<R: Runtime>(
     segments: Value,
     duration: f64,
 ) -> Result<HistoryItemRecord, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.complete_live_draft(&history_id, segments, duration)
     })
     .await
@@ -161,9 +117,11 @@ pub async fn history_save_recording<R: Runtime>(
         native_audio_path,
         audio_extension,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.save_recording(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.save_recording(request),
+    )
     .await
 }
 
@@ -187,9 +145,11 @@ pub async fn history_save_imported_file<R: Runtime>(
         project_id,
         converted_source_path,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.save_imported_file(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.save_imported_file(request),
+    )
     .await
 }
 
@@ -199,7 +159,12 @@ pub async fn history_delete_items<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     ids: Vec<String>,
 ) -> Result<(), String> {
-    run_history_file_task(&app, state, move |repository| repository.delete_items(&ids)).await
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.delete_items(&ids),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -207,7 +172,7 @@ pub async fn history_load_transcript<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<Option<Vec<TranscriptSegment>>, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.load_transcript(&history_id)
     })
     .await
@@ -219,7 +184,7 @@ pub async fn history_update_transcript<R: Runtime>(
     history_id: String,
     segments: Value,
 ) -> Result<HistoryItemRecord, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.update_transcript(&history_id, segments)
     })
     .await
@@ -232,7 +197,7 @@ pub async fn history_create_transcript_snapshot<R: Runtime>(
     reason: TranscriptSnapshotReason,
     segments: Value,
 ) -> Result<TranscriptSnapshotMetadata, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.create_transcript_snapshot(&history_id, reason, segments)
     })
     .await
@@ -243,7 +208,7 @@ pub async fn history_list_transcript_snapshots<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.list_transcript_snapshots(&history_id)
     })
     .await
@@ -255,7 +220,7 @@ pub async fn history_load_transcript_snapshot<R: Runtime>(
     history_id: String,
     snapshot_id: String,
 ) -> Result<Option<TranscriptSnapshotRecord>, String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.load_transcript_snapshot(&history_id, &snapshot_id)
     })
     .await
@@ -293,7 +258,7 @@ pub async fn history_update_item_meta<R: Runtime>(
     history_id: String,
     updates: Value,
 ) -> Result<(), String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.update_item_meta(&history_id, updates)
     })
     .await
@@ -305,7 +270,7 @@ pub async fn history_update_project_assignments<R: Runtime>(
     ids: Vec<String>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.update_project_assignments(&ids, project_id)
     })
     .await
@@ -317,7 +282,7 @@ pub async fn history_reassign_project<R: Runtime>(
     current_project_id: String,
     next_project_id: Option<String>,
 ) -> Result<(), String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.reassign_project(current_project_id, next_project_id)
     })
     .await
@@ -328,7 +293,10 @@ pub async fn history_load_summary<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<Option<Value>, String> {
-    run_history_db_task(&app, move |repository| repository.load_summary(&history_id)).await
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
+        repository.load_summary(&history_id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -337,7 +305,7 @@ pub async fn history_save_summary<R: Runtime>(
     history_id: String,
     summary_payload: Value,
 ) -> Result<(), String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.save_summary(&history_id, summary_payload)
     })
     .await
@@ -348,7 +316,7 @@ pub async fn history_delete_summary<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<(), String> {
-    run_history_db_task(&app, move |repository| {
+    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.delete_summary(&history_id)
     })
     .await
@@ -360,9 +328,11 @@ pub async fn history_resolve_audio_path<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     history_id: String,
 ) -> Result<Option<String>, String> {
-    run_history_file_task(&app, state, move |repository| {
-        repository.resolve_audio_path(&history_id)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.resolve_audio_path(&history_id),
+    )
     .await
 }
 
@@ -377,9 +347,11 @@ pub async fn history_preview_audio_cleanup<R: Runtime>(
         retention_days,
         exclude_history_id,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.preview_audio_cleanup(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.preview_audio_cleanup(request),
+    )
     .await
 }
 
@@ -394,9 +366,11 @@ pub async fn history_cleanup_audio<R: Runtime>(
         retention_days,
         exclude_history_id,
     };
-    run_history_file_task(&app, state, move |repository| {
-        repository.cleanup_audio(request)
-    })
+    crate::platform::history_repository::run_history_file_task(
+        &app,
+        state.inner(),
+        move |repository| repository.cleanup_audio(request),
+    )
     .await
 }
 

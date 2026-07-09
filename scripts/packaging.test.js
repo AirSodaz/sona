@@ -2433,10 +2433,18 @@ test('desktop history repository facade lives in platform without repositories m
   assert.deepEqual(historyTypeShimReferences, []);
   assert.deepEqual(desktopRust, []);
   assert.match(platformHistory, /pub use sona_core::history::\{/u);
+  assert.match(platformHistory, /pub async fn run_history_db_task/u);
+  assert.match(platformHistory, /pub async fn run_history_file_task/u);
   assert.match(platformHistory, /pub async fn open_history_folder/u);
   assert.match(platformHistory, /SqliteHistoryStore::new\(app_local_data_dir\.clone\(\), db\)/u);
   assert.match(platformHistory, /app\.opener\(\)[\s\S]*\.open_path\(/u);
+  assert.match(historyCommand, /crate::platform::history_repository::run_history_file_task\(\s*&app,\s*state\.inner\(\),/u);
+  assert.match(historyCommand, /crate::platform::history_repository::run_history_db_task\(\s*&app,/u);
   assert.match(historyCommand, /crate::platform::history_repository::open_history_folder\(&app, state\.inner\(\)\)\.await/u);
+  assert.doesNotMatch(historyCommand, /run_history_file_task_inner/u);
+  assert.doesNotMatch(historyCommand, /sona_sqlite::Database/u);
+  assert.doesNotMatch(historyCommand, /SqliteHistoryStore/u);
+  assert.doesNotMatch(historyCommand, /HistoryStoreError/u);
   assert.doesNotMatch(historyCommand, /tauri_plugin_opener::OpenerExt|\.open_path\(/u);
   assert.match(dashboardApp, /use crate::platform::history_repository::SqliteHistoryStore;/u);
   assert.match(dashboardApp, /use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
