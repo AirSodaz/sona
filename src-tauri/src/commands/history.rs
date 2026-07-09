@@ -10,7 +10,7 @@ use crate::platform::history_repository::backup::{
 };
 use crate::platform::history_repository::fs_utils::remove_path_if_exists;
 use crate::platform::history_repository::{
-    BackupManifest, ExportBackupArchiveRequest, HISTORY_DIR_NAME, HistoryAudioCleanupReport,
+    BackupManifest, ExportBackupArchiveRequest, HistoryAudioCleanupReport,
     HistoryAudioCleanupRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
     HistoryListOptions, HistoryRepositoryState, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
@@ -405,23 +405,7 @@ pub async fn history_open_folder<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
 ) -> Result<(), String> {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = crate::platform::database::sqlite_database(&app);
-    {
-        let _guard = state.file_lock.lock().map_err(|error| error.to_string())?;
-        SqliteHistoryStore::new(app_local_data_dir.clone(), db)
-            .ensure_ready()
-            .map_err(|e| e.to_string())?;
-    }
-
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_path(
-            app_local_data_dir.join(HISTORY_DIR_NAME).to_string_lossy(),
-            None::<&str>,
-        )
-        .map_err(|error| error.to_string())
+    crate::platform::history_repository::open_history_folder(&app, state.inner()).await
 }
 
 #[tauri::command]
