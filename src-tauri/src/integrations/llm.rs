@@ -18,7 +18,7 @@ pub(crate) use sona_core::llm::tasks::{
     DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET, build_summary_chunk_prompt, build_summary_finalize_prompt,
     clean_json_response, prompt_char_count, split_summary_segments,
 };
-pub(crate) use sona_core::llm::usage;
+pub(crate) use sona_core::llm::usage::UsageRecord;
 mod network;
 mod providers;
 mod streaming;

@@ -84,7 +84,7 @@ impl UsageRecorder {
         let occurred_at = crate::platform::time::utc_now_rfc3339();
         if let Err(error) = crate::platform::llm_usage::record_usage(
             &self.app,
-            &crate::integrations::llm::usage::UsageRecord {
+            &UsageRecord {
                 occurred_at: occurred_at.clone(),
                 provider: self.config.provider.as_str(),
                 category: self.category,
