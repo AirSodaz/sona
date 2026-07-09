@@ -2963,10 +2963,28 @@ test('online LLM provider implementation lives in adapter crate', () => {
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopStorageCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'storage.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformStorageUsagePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'storage_usage.rs');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'storage_usage.rs')));
+  assert.equal(fs.existsSync(platformStorageUsagePath), true);
+  const platformStorageUsage = fs.readFileSync(platformStorageUsagePath, 'utf8');
   assert.match(sqliteLib, /^pub mod storage_usage;/mu);
-  assert.match(desktopStorageCommand, /sona_sqlite::storage_usage::\{/u);
+  assert.match(platformMod, /^pub mod storage_usage;/mu);
+  assert.match(platformStorageUsage, /pub use sona_sqlite::storage_usage::\{[\s\S]*StorageUsageSnapshot/u);
+  assert.match(platformStorageUsage, /pub use sona_sqlite::storage_usage::\{[\s\S]*WebviewBrowsingDataClearResult/u);
+  assert.match(platformStorageUsage, /collect_storage_usage_snapshot/u);
+  assert.match(platformStorageUsage, /observable_webview_cache_bytes/u);
+  assert.match(platformStorageUsage, /build_webview_clear_result/u);
+  assert.match(platformStorageUsage, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(platformStorageUsage, /get_webview_window\("main"\)/u);
+  assert.match(platformStorageUsage, /clear_all_browsing_data/u);
+  assert.match(desktopStorageCommand, /crate::platform::storage_usage::get_usage_snapshot\(&app\)\.await/u);
+  assert.match(desktopStorageCommand, /crate::platform::storage_usage::clear_webview_browsing_data\(&app\)\.await/u);
+  assert.doesNotMatch(desktopStorageCommand, /sona_sqlite::storage_usage/u);
+  assert.doesNotMatch(desktopStorageCommand, /PathKind::AppLocalData/u);
+  assert.doesNotMatch(desktopStorageCommand, /tauri::async_runtime::spawn_blocking/u);
+  assert.doesNotMatch(desktopStorageCommand, /observable_webview_cache_bytes/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'storage_usage.rs')), false);
 });
 
