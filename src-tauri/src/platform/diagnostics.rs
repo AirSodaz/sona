@@ -33,12 +33,7 @@ async fn enrich_diagnostics_core_input(
         .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?
         .join("models");
-    std::fs::create_dir_all(&models_dir).map_err(|error| {
-        format!(
-            "Failed to create models directory {}: {error}",
-            models_dir.display()
-        )
-    })?;
+    sona_runtime_fs::ensure_directory_exists(&models_dir)?;
 
     let catalog = build_model_catalog_snapshot(&models_dir);
     let selected = resolve_model_catalog_selected_ids(

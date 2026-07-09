@@ -32,12 +32,7 @@ async fn build_model_catalog_snapshot_for_models_dir(
     models_dir: PathBuf,
 ) -> Result<ModelCatalogSnapshot, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        std::fs::create_dir_all(&models_dir).map_err(|error| {
-            format!(
-                "Failed to create models directory {}: {error}",
-                models_dir.display()
-            )
-        })?;
+        sona_runtime_fs::ensure_directory_exists(&models_dir)?;
 
         Ok(build_model_catalog_snapshot(&models_dir))
     })

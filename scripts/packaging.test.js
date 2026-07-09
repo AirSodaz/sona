@@ -755,6 +755,14 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'),
     'utf8',
   );
+  const desktopPresetModels = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'preset_models.rs'),
+    'utf8',
+  );
+  const desktopDiagnostics = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    'utf8',
+  );
 
   assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
   assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
@@ -785,6 +793,10 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(runtimeFsLib, /pub fn ensure_directory_exists/u);
   assert.match(desktopRuntimeStatus, /sona_runtime_fs::ensure_directory_exists\(&log_dir\)/u);
   assert.doesNotMatch(desktopRuntimeStatus, /std::fs::create_dir_all/u);
+  assert.match(desktopPresetModels, /sona_runtime_fs::ensure_directory_exists\(&models_dir\)/u);
+  assert.doesNotMatch(desktopPresetModels, /std::fs::create_dir_all/u);
+  assert.match(desktopDiagnostics, /sona_runtime_fs::ensure_directory_exists\(&models_dir\)/u);
+  assert.doesNotMatch(desktopDiagnostics, /std::fs::create_dir_all/u);
   assert.doesNotMatch(coreFileUtils, /SystemTime::now|current_time_millis/u);
   assert.doesNotMatch(
     sqliteProject,
