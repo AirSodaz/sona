@@ -243,8 +243,8 @@ fn run_offline_inference(
 use crate::integrations::asr::SherpaError;
 use async_trait::async_trait;
 
-pub struct LocalSherpaSession {
-    pub instance: tokio::sync::Mutex<SherpaInstance>,
+pub(crate) struct LocalSherpaSession {
+    instance: tokio::sync::Mutex<SherpaInstance>,
 }
 
 #[async_trait]
@@ -326,7 +326,7 @@ pub async fn resolve_punctuation(
     .cloned()
 }
 
-pub async fn init_recognizer_impl(
+pub(crate) async fn init_recognizer_impl(
     state: &AsrState,
     request: LocalSherpaStreamingRequest,
 ) -> Result<Arc<LocalSherpaSession>, String> {

@@ -1513,6 +1513,11 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     assert.doesNotMatch(desktopSherpa, new RegExp(`pub struct ${symbol}`, 'u'));
   }
 
+  assert.match(desktopSherpa, /pub\(crate\) struct LocalSherpaSession/u);
+  assert.match(desktopSherpa, /pub\(crate\) async fn init_recognizer_impl/u);
+  assert.doesNotMatch(desktopSherpa, /pub struct LocalSherpaSession/u);
+  assert.doesNotMatch(desktopSherpa, /pub instance:/u);
+
   for (const helper of [
     'buffered_sample_count',
     'start_instance_runtime',
