@@ -11,7 +11,7 @@ pub async fn generate_llm_text(
     app: AppHandle,
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
-    crate::integrations::llm::commands::generate_llm_text_command(app, request).await
+    crate::integrations::llm::generate_llm_text_command(app, request).await
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn polish_transcript_segments(
     app: AppHandle,
     request: PolishSegmentsRequest,
 ) -> Result<Vec<PolishedSegment>, String> {
-    crate::integrations::llm::commands::polish_transcript_segments_command(app, request).await
+    crate::integrations::llm::polish_transcript_segments_command(app, request).await
 }
 
 #[tauri::command]
@@ -27,7 +27,7 @@ pub async fn translate_transcript_segments(
     app: AppHandle,
     request: TranslateSegmentsRequest,
 ) -> Result<Vec<TranslatedSegment>, String> {
-    crate::integrations::llm::commands::translate_transcript_segments_command(app, request).await
+    crate::integrations::llm::translate_transcript_segments_command(app, request).await
 }
 
 #[tauri::command]
@@ -35,7 +35,7 @@ pub async fn summarize_transcript(
     app: AppHandle,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
-    crate::integrations::llm::commands::summarize_transcript_command(app, request).await
+    crate::integrations::llm::summarize_transcript_command(app, request).await
 }
 
 #[tauri::command]
@@ -44,12 +44,12 @@ pub async fn run_transcript_llm_job(
     state: State<'_, HistoryRepositoryState>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
-    crate::integrations::llm::jobs::run_transcript_llm_job_command(app, state, request).await
+    crate::integrations::llm::run_transcript_llm_job_command(app, state, request).await
 }
 
 #[tauri::command]
 pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
-    crate::integrations::llm::commands::list_llm_models_command(request).await
+    crate::integrations::llm::list_llm_models_command(request).await
 }
 
 #[tauri::command]

@@ -2939,6 +2939,25 @@ test('transcript LLM job helpers are owned by core and reused by desktop', () =>
   assert.doesNotMatch(desktopLlmJobs, /pub\(crate\) fn compute_summary_source_fingerprint/u);
 });
 
+test('desktop LLM commands use the integration facade instead of implementation submodules', () => {
+  const desktopLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
+  const desktopLlmCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'llm.rs'), 'utf8');
+
+  assert.match(desktopLlm, /^mod commands;/mu);
+  assert.match(desktopLlm, /^mod jobs;/mu);
+  assert.match(
+    desktopLlm,
+    /pub\(crate\) use commands::\{[\s\S]*generate_llm_text_command[\s\S]*list_llm_models_command[\s\S]*polish_transcript_segments_command[\s\S]*summarize_transcript_command[\s\S]*translate_transcript_segments_command[\s\S]*\};/u,
+  );
+  assert.match(desktopLlm, /pub\(crate\) use jobs::run_transcript_llm_job_command;/u);
+  assert.doesNotMatch(desktopLlm, /^pub\(crate\) mod commands;/mu);
+  assert.doesNotMatch(desktopLlm, /^pub\(crate\) mod jobs;/mu);
+  assert.match(desktopLlmCommands, /crate::integrations::llm::generate_llm_text_command\(/u);
+  assert.match(desktopLlmCommands, /crate::integrations::llm::run_transcript_llm_job_command\(/u);
+  assert.match(desktopLlmCommands, /crate::integrations::llm::list_llm_models_command\(/u);
+  assert.doesNotMatch(desktopLlmCommands, /integrations::llm::(?:commands|jobs)::/u);
+});
+
 test('LLM provider protocol mapping is owned by core and reused by desktop', () => {
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');

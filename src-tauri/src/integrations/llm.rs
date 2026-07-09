@@ -1,5 +1,5 @@
-pub(crate) mod commands;
-pub(crate) mod jobs;
+mod commands;
+mod jobs;
 #[cfg(test)]
 pub(crate) use sona_core::llm::provider_protocol::{
     GeminiModel, OpenAiModel, clean_gemini_base_url, extract_text_from_json_response,
@@ -34,6 +34,11 @@ const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";
 const LLM_TRANSCRIPT_JOB_UPDATE_EVENT: &str = "llm-transcript-job-update";
 const LLM_USAGE_RECORDED_EVENT: &str = "llm-usage-recorded";
 
+pub(crate) use commands::{
+    generate_llm_text_command, list_llm_models_command, polish_transcript_segments_command,
+    summarize_transcript_command, translate_transcript_segments_command,
+};
+pub(crate) use jobs::run_transcript_llm_job_command;
 pub(crate) use providers::*;
 pub(crate) use streaming::*;
 pub(crate) use tasks::*;
