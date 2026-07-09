@@ -1,10 +1,10 @@
+use super::AsrState;
 use super::BATCH_PROGRESS_EVENT;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
     log_model_load_metric, samples_to_ms, set_batch_inference_metric, set_model_load_metric,
 };
-use super::state::AsrState;
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
     format_transcript, synthesize_durations,

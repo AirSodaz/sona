@@ -1,10 +1,9 @@
 use super::SherpaError;
-use super::state::AsrState;
-use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::types::{
     AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, LocalSherpaStreamingRequest,
     TranscriptSegment,
 };
+use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
 use async_trait::async_trait;
 use sona_core::ports::asr::validate_local_sherpa_mode;
 

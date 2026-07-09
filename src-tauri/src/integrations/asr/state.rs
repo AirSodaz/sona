@@ -1,9 +1,9 @@
+use super::AsrStreamingSession;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
-use super::traits::AsrStreamingSession;
 use super::types::AsrEngine;
 use sona_local_asr::runtime::RecognizerPool;
 use std::collections::HashMap;

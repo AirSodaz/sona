@@ -3754,14 +3754,23 @@ test('desktop ASR modules use a local runtime facade instead of sherpa implement
   );
 
   assert.match(asrMod, /^mod sherpa_onnx;$/mu);
+  assert.match(asrMod, /^mod state;$/mu);
+  assert.match(asrMod, /^mod traits;$/mu);
   assert.doesNotMatch(asrMod, /^pub mod sherpa_onnx;$/mu);
+  assert.doesNotMatch(asrMod, /^pub mod state;$/mu);
+  assert.doesNotMatch(asrMod, /^pub mod traits;$/mu);
   assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*init_recognizer_impl/u);
   assert.match(asrMod, /#\[cfg\(test\)\]\s*pub\(crate\) use sherpa_onnx::resolve_punctuation/u);
   assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*diagnostics_instance_label/u);
   assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*log_segment_emit_diagnostics/u);
   assert.match(adapterRs, /super::init_recognizer_impl/u);
+  assert.doesNotMatch(adapterRs, /super::state::AsrState/u);
+  assert.doesNotMatch(adapterRs, /super::traits::/u);
   assert.match(stateRs, /crate::integrations::asr::resolve_punctuation/u);
+  assert.doesNotMatch(stateRs, /super::traits::/u);
   assert.match(transcriptRs, /use super::\{[\s\S]*diagnostics_instance_label[\s\S]*log_segment_emit_diagnostics/u);
+  assert.doesNotMatch(stateRs, /crate::integrations::asr::state::/u);
+  assert.doesNotMatch(transcriptRs, /crate::integrations::asr::traits::/u);
   assert.doesNotMatch(adapterRs, /sherpa_onnx::/u);
   assert.doesNotMatch(stateRs, /sherpa_onnx::/u);
   assert.doesNotMatch(transcriptRs, /sherpa_onnx::/u);

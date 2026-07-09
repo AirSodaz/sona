@@ -3,12 +3,11 @@ use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
-use super::state::AsrState;
-use super::traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 use super::transcript::{
     apply_timeline_normalization, build_transcript_update, emit_transcript_update,
 };
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
+use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};

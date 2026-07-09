@@ -12,8 +12,7 @@ use super::transcript::{
 use super::types::{
     LocalSherpaStreamingRequest, TranscriptNormalizationOptions, TranscriptSegment,
 };
-use crate::integrations::asr::ModelConfigKey;
-use crate::integrations::asr::state::AsrState;
+use crate::integrations::asr::{AsrState, AsrStreamingSession, ModelConfigKey};
 use log::{debug, info, trace};
 use sona_local_asr::audio::{accept_vad_samples, load_vad, reset_vad, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
@@ -249,7 +248,7 @@ pub struct LocalSherpaSession {
 }
 
 #[async_trait]
-impl crate::integrations::asr::traits::AsrStreamingSession for LocalSherpaSession {
+impl AsrStreamingSession for LocalSherpaSession {
     async fn start(
         &self,
         _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
