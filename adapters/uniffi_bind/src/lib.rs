@@ -1,141 +1,38 @@
-use sona_core::export::ExportFormat;
-use sona_core::llm::requests::{
-    LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
-};
-use sona_core::models::preset_models::{
-    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model,
-};
-use sona_core::ports::asr::{
-    BatchSegmentationMode, OnlineAsrProviderRequest, VolcengineDoubaoAsrConfig,
-};
-use sona_runtime_fs::resolve_runtime_path_status;
-
+mod asr_bridge;
+mod config_bridge;
+mod facade;
+mod json_bridge;
+mod llm_bridge;
 mod mapper;
+mod model_bridge;
+mod runtime_bridge;
+pub use facade::SonaCoreFacade;
 pub use mapper::{
-    FfiAsrEngine, FfiAsrMode, FfiBatchSegmentationMode, FfiLlmConfig, FfiLlmProviderStrategy,
-    FfiLlmSegmentInput, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiRuntimePathKind,
-    FfiRuntimePathStatus, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
-    FfiSummaryTemplateConfig, FfiTranslateSegmentsRequest, FfiVolcengineDoubaoAsrConfig,
+    FfiAsrEngine, FfiAsrMode, FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiLlmConfig,
+    FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy,
+    FfiLlmSegmentInput, FfiModelCatalogGroup, FfiModelCatalogModel, FfiModelCatalogPathMatchToken,
+    FfiModelCatalogRestoreDefaults, FfiModelCatalogSection, FfiModelCatalogSectionType,
+    FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions, FfiModelCatalogSnapshot,
+    FfiModelDependencyConfigKey, FfiModelDependencyRequest, FfiModelDependencyRequestsForModel,
+    FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption,
+    FfiModelSelectionPaths, FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability,
+    FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
+    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel, FfiRequiredCompanionModels,
+    FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus,
+    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiSummaryTemplateConfig,
+    FfiTimestampSupportHint, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiVolcengineDoubaoAsrConfig,
 };
 
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum SonaCoreBindingError {
-    #[error("{message}")]
-    InvalidInput { message: String },
+    #[error("{reason}")]
+    InvalidInput { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
-
-/// Rust facade used by tests and by the top-level UniFFI exports.
-pub struct SonaCoreFacade;
-
-impl SonaCoreFacade {
-    pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
-        let format = ExportFormat::parse(&value)
-            .map_err(|message| SonaCoreBindingError::InvalidInput { message })?;
-        Ok(match format {
-            ExportFormat::Json => "json",
-            ExportFormat::Txt => "txt",
-            ExportFormat::Srt => "srt",
-            ExportFormat::Vtt => "vtt",
-            ExportFormat::Md => "md",
-        }
-        .to_string())
-    }
-
-    pub fn default_vad_model_id() -> String {
-        DEFAULT_SILERO_VAD_MODEL_ID.to_string()
-    }
-
-    pub fn default_punctuation_model_id() -> String {
-        DEFAULT_PUNCTUATION_MODEL_ID.to_string()
-    }
-
-    pub fn preset_model_name(model_id: String) -> Option<String> {
-        find_preset_model(&model_id).map(|model| model.name.clone())
-    }
-
-    pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
-        mapper::runtime_path_status_to_ffi(resolve_runtime_path_status(&path))
-    }
-
-    pub fn default_batch_segmentation_mode() -> FfiBatchSegmentationMode {
-        mapper::batch_segmentation_mode_to_ffi(BatchSegmentationMode::default())
-    }
-
-    pub fn online_asr_provider_request(
-        provider_id: String,
-        profile_id: String,
-        config_json: String,
-    ) -> SonaCoreBindingResult<FfiOnlineAsrProviderRequest> {
-        let config = serde_json::from_str(&config_json).map_err(|error| {
-            SonaCoreBindingError::InvalidInput {
-                message: format!("Invalid ASR provider config JSON: {error}"),
-            }
-        })?;
-
-        Ok(mapper::online_asr_provider_request_to_ffi(
-            OnlineAsrProviderRequest {
-                provider_id,
-                profile_id,
-                config,
-            },
-        ))
-    }
-
-    pub fn volcengine_doubao_asr_config_from_json(
-        config_json: String,
-    ) -> SonaCoreBindingResult<FfiVolcengineDoubaoAsrConfig> {
-        let config: VolcengineDoubaoAsrConfig =
-            serde_json::from_str(&config_json).map_err(|error| {
-                SonaCoreBindingError::InvalidInput {
-                    message: format!("Invalid Volcengine Doubao ASR config JSON: {error}"),
-                }
-            })?;
-
-        Ok(mapper::volcengine_doubao_asr_config_to_ffi(config))
-    }
-
-    pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
-        let config: LlmConfig = parse_core_json(&config_json, "LLM config")?;
-        Ok(mapper::llm_config_to_ffi(config))
-    }
-
-    pub fn polish_segments_request_from_json(
-        request_json: String,
-    ) -> SonaCoreBindingResult<FfiPolishSegmentsRequest> {
-        let request: PolishSegmentsRequest =
-            parse_core_json(&request_json, "polish segments request")?;
-        Ok(mapper::polish_segments_request_to_ffi(request))
-    }
-
-    pub fn translate_segments_request_from_json(
-        request_json: String,
-    ) -> SonaCoreBindingResult<FfiTranslateSegmentsRequest> {
-        let request: TranslateSegmentsRequest =
-            parse_core_json(&request_json, "translate segments request")?;
-        Ok(mapper::translate_segments_request_to_ffi(request))
-    }
-
-    pub fn summarize_transcript_request_from_json(
-        request_json: String,
-    ) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
-        let request: SummarizeTranscriptRequest =
-            parse_core_json(&request_json, "summarize transcript request")?;
-        Ok(mapper::summarize_transcript_request_to_ffi(request))
-    }
-}
-
-fn parse_core_json<T>(json: &str, label: &str) -> SonaCoreBindingResult<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    serde_json::from_str(json).map_err(|error| SonaCoreBindingError::InvalidInput {
-        message: format!("Invalid {label} JSON: {error}"),
-    })
-}
 
 #[uniffi::export]
 pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
@@ -158,6 +55,67 @@ pub fn preset_model_name(model_id: String) -> Option<String> {
 }
 
 #[uniffi::export]
+pub fn preset_models() -> Vec<FfiPresetModel> {
+    SonaCoreFacade::preset_models()
+}
+
+#[uniffi::export]
+pub fn model_catalog_snapshot(
+    models_dir: String,
+    installed_model_ids: Vec<String>,
+) -> FfiModelCatalogSnapshot {
+    SonaCoreFacade::model_catalog_snapshot(models_dir, installed_model_ids)
+}
+
+#[uniffi::export]
+pub fn model_catalog_selected_ids(
+    models_dir: String,
+    installed_model_ids: Vec<String>,
+    paths: FfiModelSelectionPaths,
+) -> FfiModelCatalogSelectedIds {
+    SonaCoreFacade::model_catalog_selected_ids(models_dir, installed_model_ids, paths)
+}
+
+#[uniffi::export]
+pub fn resolve_model_download(
+    model_id: String,
+    models_dir: String,
+) -> SonaCoreBindingResult<FfiResolvedModelDownload> {
+    SonaCoreFacade::resolve_model_download(model_id, models_dir)
+}
+
+#[uniffi::export]
+pub fn resolve_gpu_acceleration(value: Option<String>) -> SonaCoreBindingResult<Option<String>> {
+    SonaCoreFacade::resolve_gpu_acceleration(value)
+}
+
+#[uniffi::export]
+pub fn default_config_json() -> String {
+    SonaCoreFacade::default_config_json()
+}
+
+#[uniffi::export]
+pub fn migrate_app_config_json(
+    saved_config_json: Option<String>,
+    legacy_config_json: Option<String>,
+    default_rule_set_name: String,
+) -> SonaCoreBindingResult<FfiConfigMigrationResult> {
+    SonaCoreFacade::migrate_app_config_json(
+        saved_config_json,
+        legacy_config_json,
+        default_rule_set_name,
+    )
+}
+
+#[uniffi::export]
+pub fn resolve_effective_config_json(
+    global_config_json: String,
+    project_json: Option<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::resolve_effective_config_json(global_config_json, project_json)
+}
+
+#[uniffi::export]
 pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
     SonaCoreFacade::runtime_path_status(path)
 }
@@ -165,6 +123,16 @@ pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
 #[uniffi::export]
 pub fn default_batch_segmentation_mode() -> FfiBatchSegmentationMode {
     SonaCoreFacade::default_batch_segmentation_mode()
+}
+
+#[uniffi::export]
+pub fn online_asr_providers() -> Vec<FfiOnlineAsrProvider> {
+    SonaCoreFacade::online_asr_providers()
+}
+
+#[uniffi::export]
+pub fn find_online_asr_provider(provider_id: String) -> Option<FfiOnlineAsrProvider> {
+    SonaCoreFacade::find_online_asr_provider(provider_id)
 }
 
 #[uniffi::export]
@@ -184,8 +152,188 @@ pub fn volcengine_doubao_asr_config_from_json(
 }
 
 #[uniffi::export]
+pub fn llm_providers() -> Vec<FfiLlmProvider> {
+    SonaCoreFacade::llm_providers()
+}
+
+#[uniffi::export]
+pub fn find_llm_provider_by_id_or_alias(id_or_alias: String) -> Option<FfiLlmProvider> {
+    SonaCoreFacade::find_llm_provider_by_id_or_alias(id_or_alias)
+}
+
+#[uniffi::export]
 pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
     SonaCoreFacade::llm_config_from_json(config_json)
+}
+
+#[uniffi::export]
+pub fn validate_llm_config_json(config_json: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::validate_llm_config_json(config_json)
+}
+
+#[uniffi::export]
+pub fn validate_llm_generate_request_json(request_json: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::validate_llm_generate_request_json(request_json)
+}
+
+#[uniffi::export]
+pub fn validate_polish_segments_request_json(request_json: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::validate_polish_segments_request_json(request_json)
+}
+
+#[uniffi::export]
+pub fn validate_translate_segments_request_json(request_json: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::validate_translate_segments_request_json(request_json)
+}
+
+#[uniffi::export]
+pub fn validate_summarize_transcript_request_json(
+    request_json: String,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::validate_summarize_transcript_request_json(request_json)
+}
+
+#[uniffi::export]
+pub fn llm_segment_inputs_from_transcript_json(
+    segments_json: String,
+) -> SonaCoreBindingResult<Vec<FfiLlmSegmentInput>> {
+    SonaCoreFacade::llm_segment_inputs_from_transcript_json(segments_json)
+}
+
+#[uniffi::export]
+pub fn summary_segment_inputs_from_transcript_json(
+    segments_json: String,
+) -> SonaCoreBindingResult<Vec<FfiSummarySegmentInput>> {
+    SonaCoreFacade::summary_segment_inputs_from_transcript_json(segments_json)
+}
+
+#[uniffi::export]
+pub fn merge_translated_items_into_transcript_json(
+    segments_json: String,
+    items_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::merge_translated_items_into_transcript_json(segments_json, items_json)
+}
+
+#[uniffi::export]
+pub fn merge_polished_items_into_transcript_json(
+    segments_json: String,
+    items_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::merge_polished_items_into_transcript_json(segments_json, items_json)
+}
+
+#[uniffi::export]
+pub fn summary_source_fingerprint_from_transcript_json(
+    segments_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::summary_source_fingerprint_from_transcript_json(segments_json)
+}
+
+#[uniffi::export]
+pub fn build_polish_prompt_json(
+    segments_json: String,
+    context: Option<String>,
+    keywords: Option<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::build_polish_prompt_json(segments_json, context, keywords)
+}
+
+#[uniffi::export]
+pub fn build_translate_prompt_json(
+    segments_json: String,
+    target_language: String,
+    target_language_name: Option<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::build_translate_prompt_json(
+        segments_json,
+        target_language,
+        target_language_name,
+    )
+}
+
+#[uniffi::export]
+pub fn build_summary_chunk_prompt_json(
+    template_json: String,
+    segments_json: String,
+    chunk_number: u64,
+    total_chunks: u64,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::build_summary_chunk_prompt_json(
+        template_json,
+        segments_json,
+        chunk_number,
+        total_chunks,
+    )
+}
+
+#[uniffi::export]
+pub fn build_summary_finalize_prompt_json(
+    template_json: String,
+    partial_summaries: Vec<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::build_summary_finalize_prompt_json(template_json, partial_summaries)
+}
+
+#[uniffi::export]
+pub fn plan_polish_prompt_chunks_json(
+    segments_json: String,
+    context: Option<String>,
+    keywords: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    SonaCoreFacade::plan_polish_prompt_chunks_json(
+        segments_json,
+        context,
+        keywords,
+        chunk_size,
+        prompt_char_budget,
+    )
+}
+
+#[uniffi::export]
+pub fn plan_translate_prompt_chunks_json(
+    segments_json: String,
+    target_language: String,
+    target_language_name: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    SonaCoreFacade::plan_translate_prompt_chunks_json(
+        segments_json,
+        target_language,
+        target_language_name,
+        chunk_size,
+        prompt_char_budget,
+    )
+}
+
+#[uniffi::export]
+pub fn plan_summary_prompt_chunks_json(
+    template_json: String,
+    segments_json: String,
+    chunk_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    SonaCoreFacade::plan_summary_prompt_chunks_json(template_json, segments_json, chunk_char_budget)
+}
+
+#[uniffi::export]
+pub fn parse_polish_chunk_json(
+    response_text: String,
+    expected_segments_json: String,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiPolishedSegment>> {
+    SonaCoreFacade::parse_polish_chunk_json(response_text, expected_segments_json, chunk_number)
+}
+
+#[uniffi::export]
+pub fn parse_translate_chunk_json(
+    response_text: String,
+    expected_segments_json: String,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiTranslatedSegment>> {
+    SonaCoreFacade::parse_translate_chunk_json(response_text, expected_segments_json, chunk_number)
 }
 
 #[uniffi::export]
@@ -212,6 +360,10 @@ pub fn summarize_transcript_request_from_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sona_core::models::preset_models::{
+        DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model,
+    };
+    use sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID;
 
     #[test]
     fn facade_returns_owned_binding_safe_values_from_core() {
@@ -230,6 +382,57 @@ mod tests {
     fn facade_maps_core_errors_to_binding_errors() {
         let error = SonaCoreFacade::normalize_export_format("docx".to_string()).unwrap_err();
         assert_eq!(error.to_string(), "Unsupported export format: docx");
+    }
+
+    #[test]
+    fn facade_resolves_gpu_acceleration_config_values() {
+        assert_eq!(
+            SonaCoreFacade::resolve_gpu_acceleration(None)
+                .unwrap()
+                .as_deref(),
+            Some("auto")
+        );
+        assert_eq!(
+            SonaCoreFacade::resolve_gpu_acceleration(Some(" CUDA ".to_string()))
+                .unwrap()
+                .as_deref(),
+            Some("cuda")
+        );
+
+        let error =
+            SonaCoreFacade::resolve_gpu_acceleration(Some("metal".to_string())).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("gpu_acceleration must be one of")
+        );
+    }
+
+    #[test]
+    fn facade_exposes_llm_provider_manifest_for_mobile() {
+        let providers = SonaCoreFacade::llm_providers();
+        let open_ai = providers
+            .iter()
+            .find(|provider| provider.id == "open_ai")
+            .expect("OpenAI provider should be exported");
+
+        assert_eq!(open_ai.aliases, vec!["openai"]);
+        assert_eq!(open_ai.defaults.api_host, "https://api.openai.com");
+        assert_eq!(open_ai.defaults.api_path, None);
+        assert_eq!(open_ai.defaults.api_version, None);
+
+        let by_alias = SonaCoreFacade::find_llm_provider_by_id_or_alias("openai".to_string())
+            .expect("OpenAI provider should be found by alias");
+        assert_eq!(by_alias.id, open_ai.id);
+
+        let azure = SonaCoreFacade::find_llm_provider_by_id_or_alias("azure_openai".to_string())
+            .expect("Azure OpenAI provider should be found by id");
+        assert_eq!(azure.defaults.api_host, "");
+        assert_eq!(azure.defaults.api_version.as_deref(), Some("2024-10-21"));
+        assert!(
+            SonaCoreFacade::find_llm_provider_by_id_or_alias("missing-provider".to_string())
+                .is_none()
+        );
     }
 
     #[test]
@@ -273,6 +476,43 @@ mod tests {
         assert_eq!(provider.provider_id, "volcengine");
         assert_eq!(provider.profile_id, "default");
         assert_eq!(provider.config_json, r#"{"apiKey":"secret"}"#);
+    }
+
+    #[test]
+    fn facade_exposes_online_asr_provider_manifest_for_mobile() {
+        let providers = SonaCoreFacade::online_asr_providers();
+        let volcengine = providers
+            .iter()
+            .find(|provider| provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID)
+            .expect("Volcengine Doubao provider should be exported");
+
+        assert_eq!(volcengine.profile_id, "volcengine-doubao-default");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&volcengine.defaults_json).unwrap()["apiKey"],
+            serde_json::json!("")
+        );
+        assert_eq!(volcengine.streaming.supported, None);
+        assert!(volcengine.streaming.requires_api_key);
+        assert_eq!(
+            volcengine.streaming.required_config_fields,
+            vec!["streamingEndpoint", "streamingResourceId"]
+        );
+        assert!(volcengine.batch.requires_api_key);
+        assert!(volcengine.batch.local_file_mode.supported);
+        assert_eq!(
+            volcengine.batch.local_file_mode.endpoint,
+            "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
+        );
+        assert_eq!(
+            volcengine.batch.local_file_mode.resource_id,
+            "volc.bigasr.auc_turbo"
+        );
+
+        let found = SonaCoreFacade::find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID.into())
+            .expect("Volcengine Doubao provider should be found by id");
+        assert_eq!(found.id, volcengine.id);
+        assert_eq!(found.defaults_json, volcengine.defaults_json);
+        assert!(SonaCoreFacade::find_online_asr_provider("missing".to_string()).is_none());
     }
 
     #[test]
@@ -410,5 +650,677 @@ mod tests {
         assert_eq!(summary.template.id, "general");
         assert_eq!(summary.segments[0].end, 1.5);
         assert_eq!(summary.chunk_char_budget, Some(1200));
+    }
+
+    #[test]
+    fn facade_validates_llm_request_json_with_core_rules() {
+        let config_error = SonaCoreFacade::validate_llm_config_json(
+            r#"{
+                "provider": "open_ai",
+                "baseUrl": "https://api.openai.com",
+                "apiKey": "secret",
+                "model": "  "
+            }"#
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(config_error.to_string(), "Model name cannot be empty");
+
+        let generate_error = SonaCoreFacade::validate_llm_generate_request_json(
+            r#"{
+                "config": {
+                    "provider": "open_ai",
+                    "baseUrl": "https://api.openai.com",
+                    "apiKey": "secret",
+                    "model": "gpt-4o-mini"
+                },
+                "input": "  "
+            }"#
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(generate_error.to_string(), "Input cannot be empty");
+
+        let polish_error = SonaCoreFacade::validate_polish_segments_request_json(
+            r#"{
+                "taskId": "polish-1",
+                "config": {
+                    "provider": "google_translate_free",
+                    "baseUrl": "https://translate.googleapis.com/translate_a/single",
+                    "apiKey": "",
+                    "model": "translate"
+                },
+                "segments": []
+            }"#
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            polish_error.to_string(),
+            "Google Translate does not support transcript polishing"
+        );
+
+        let translate_error = SonaCoreFacade::validate_translate_segments_request_json(
+            r#"{
+                "taskId": "translate-1",
+                "config": {
+                    "provider": "open_ai",
+                    "baseUrl": "https://api.openai.com",
+                    "apiKey": "secret",
+                    "model": "gpt-4o-mini"
+                },
+                "segments": [],
+                "targetLanguage": "  "
+            }"#
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            translate_error.to_string(),
+            "Target language cannot be empty"
+        );
+
+        let summary_error = SonaCoreFacade::validate_summarize_transcript_request_json(
+            r#"{
+                "taskId": "summary-1",
+                "config": {
+                    "provider": "google_translate",
+                    "baseUrl": "https://translation.googleapis.com/language/translate/v2",
+                    "apiKey": "secret",
+                    "model": "translate"
+                },
+                "template": {
+                    "id": "general",
+                    "name": "General",
+                    "instructions": "Summarize."
+                },
+                "segments": []
+            }"#
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            summary_error.to_string(),
+            "Google Translate does not support transcript summaries"
+        );
+
+        SonaCoreFacade::validate_translate_segments_request_json(
+            r#"{
+                "taskId": "translate-ok",
+                "config": {
+                    "provider": "google_translate_free",
+                    "baseUrl": "https://translate.googleapis.com/translate_a/single",
+                    "apiKey": "",
+                    "model": "translate"
+                },
+                "segments": [{"id": "s1", "text": "hello"}],
+                "targetLanguage": "ja"
+            }"#
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn facade_exposes_transcript_llm_job_helpers_for_mobile() {
+        let segments_json = r#"[
+            {
+                "id": "s1",
+                "text": "Hello",
+                "start": 0.0,
+                "end": 1.5,
+                "isFinal": true,
+                "speaker": {
+                    "id": "speaker-a",
+                    "label": "Alice",
+                    "kind": "identified",
+                    "score": 0.91
+                }
+            },
+            {
+                "id": "s2",
+                "text": "world",
+                "start": 1.5,
+                "end": 2.0,
+                "isFinal": true,
+                "translation": "old"
+            }
+        ]"#
+        .to_string();
+
+        let segment_inputs =
+            SonaCoreFacade::llm_segment_inputs_from_transcript_json(segments_json.clone()).unwrap();
+        assert_eq!(segment_inputs[0].id, "s1");
+        assert_eq!(segment_inputs[0].text, "Hello");
+
+        let summary_inputs =
+            SonaCoreFacade::summary_segment_inputs_from_transcript_json(segments_json.clone())
+                .unwrap();
+        assert_eq!(summary_inputs[0].text, "Alice: Hello");
+        assert_eq!(summary_inputs[0].start, 0.0);
+        assert_eq!(summary_inputs[0].end, 1.5);
+        assert!(summary_inputs[0].is_final);
+
+        let translated_json = SonaCoreFacade::merge_translated_items_into_transcript_json(
+            segments_json.clone(),
+            r#"[{"id":"s1","translation":"konnichiwa"}]"#.to_string(),
+        )
+        .unwrap();
+        let translated: serde_json::Value = serde_json::from_str(&translated_json).unwrap();
+        assert_eq!(
+            translated[0]["translation"],
+            serde_json::json!("konnichiwa")
+        );
+        assert_eq!(
+            translated[0]["speaker"]["label"],
+            serde_json::json!("Alice")
+        );
+        assert_eq!(translated[1]["translation"], serde_json::json!("old"));
+
+        let polished_json = SonaCoreFacade::merge_polished_items_into_transcript_json(
+            segments_json.clone(),
+            r#"[{"id":"s2","text":"World."}]"#.to_string(),
+        )
+        .unwrap();
+        let polished: serde_json::Value = serde_json::from_str(&polished_json).unwrap();
+        assert_eq!(polished[1]["text"], serde_json::json!("World."));
+        assert_eq!(polished[1]["translation"], serde_json::json!("old"));
+
+        assert_eq!(
+            SonaCoreFacade::summary_source_fingerprint_from_transcript_json(segments_json).unwrap(),
+            "s1:Hello:0:1.5:true:speaker-a:Alice:identified:0.91|s2:world:1.5:2:true::::"
+        );
+    }
+
+    #[test]
+    fn facade_exposes_llm_prompt_and_chunk_parsing_helpers_for_mobile() {
+        let segment_inputs_json = r#"[
+            {"id":"s1","text":"hello world"},
+            {"id":"s2","text":"next step"}
+        ]"#
+        .to_string();
+
+        let polish_prompt = SonaCoreFacade::build_polish_prompt_json(
+            segment_inputs_json.clone(),
+            Some("product review".to_string()),
+            Some("Sona".to_string()),
+        )
+        .unwrap();
+        assert!(polish_prompt.contains("[User Context]"));
+        assert!(polish_prompt.contains("product review"));
+        assert!(polish_prompt.contains("[User Keywords]"));
+        assert!(polish_prompt.contains("Sona"));
+        assert!(polish_prompt.contains("\"id\":\"s1\""));
+        assert!(polish_prompt.contains("Output newline-delimited JSON"));
+
+        let translate_prompt = SonaCoreFacade::build_translate_prompt_json(
+            segment_inputs_json.clone(),
+            "es".to_string(),
+            Some("Spanish".to_string()),
+        )
+        .unwrap();
+        assert!(translate_prompt.contains("into Spanish"));
+        assert!(translate_prompt.contains("\"id\":\"s2\""));
+        assert!(translate_prompt.contains("replace 'text' with 'translation'"));
+
+        let summary_prompt = SonaCoreFacade::build_summary_chunk_prompt_json(
+            r#"{
+                "id":"meeting",
+                "name":"Meeting",
+                "instructions":"- Decisions\n- Actions"
+            }"#
+            .to_string(),
+            r#"[
+                {
+                    "id":"s1",
+                    "text":"Alice: hello",
+                    "start":1.0,
+                    "end":3.0,
+                    "isFinal":true
+                }
+            ]"#
+            .to_string(),
+            2,
+            3,
+        )
+        .unwrap();
+        assert!(summary_prompt.contains("Meeting"));
+        assert!(summary_prompt.contains("chunk 2 of 3"));
+        assert!(summary_prompt.contains("[00:00:01 - 00:00:03] Alice: hello"));
+
+        let finalize_prompt = SonaCoreFacade::build_summary_finalize_prompt_json(
+            r#"{
+                "id":"meeting",
+                "name":"Meeting",
+                "instructions":"- Decisions\n- Actions"
+            }"#
+            .to_string(),
+            vec!["First summary".to_string(), "Second summary".to_string()],
+        )
+        .unwrap();
+        assert!(finalize_prompt.contains("[Chunk 1]"));
+        assert!(finalize_prompt.contains("First summary"));
+        assert!(finalize_prompt.contains("[Chunk 2]"));
+
+        let polished = SonaCoreFacade::parse_polish_chunk_json(
+            "{\"id\":\"s1\",\"text\":\"Hello world.\"}\n{\"id\":\"s2\",\"text\":\"Next step.\"}"
+                .to_string(),
+            segment_inputs_json.clone(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(
+            polished,
+            vec![
+                FfiPolishedSegment {
+                    id: "s1".to_string(),
+                    text: "Hello world.".to_string(),
+                },
+                FfiPolishedSegment {
+                    id: "s2".to_string(),
+                    text: "Next step.".to_string(),
+                },
+            ]
+        );
+
+        let translated = SonaCoreFacade::parse_translate_chunk_json(
+            r#"[
+                {"id":"s1","translation":"Hola mundo."},
+                {"id":"s2","translation":"Siguiente paso."}
+            ]"#
+            .to_string(),
+            segment_inputs_json,
+            2,
+        )
+        .unwrap();
+        assert_eq!(translated[0].id, "s1");
+        assert_eq!(translated[0].translation, "Hola mundo.");
+
+        let error = SonaCoreFacade::parse_translate_chunk_json(
+            r#"[{"id":"wrong","translation":"Hola"}]"#.to_string(),
+            r#"[{"id":"s1","text":"hello"}]"#.to_string(),
+            7,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "translate chunk 7 failed: segment 1 expected id 's1' but received 'wrong'"
+        );
+    }
+
+    #[test]
+    fn facade_exposes_llm_prompt_chunk_planning_helpers_for_mobile() {
+        let segment_inputs_json = r#"[
+            {"id":"s1","text":"first"},
+            {"id":"s2","text":"second"},
+            {"id":"s3","text":"third"}
+        ]"#
+        .to_string();
+
+        let polish_chunks = SonaCoreFacade::plan_polish_prompt_chunks_json(
+            segment_inputs_json.clone(),
+            Some("planning context".to_string()),
+            None,
+            Some(2),
+            None,
+        )
+        .unwrap();
+        assert_eq!(polish_chunks.len(), 2);
+        assert_eq!(polish_chunks[0].start, 0);
+        assert_eq!(polish_chunks[0].end, 2);
+        assert_eq!(polish_chunks[0].chunk_number, 1);
+        assert_eq!(polish_chunks[0].total_chunks, 2);
+        assert!(polish_chunks[0].prompt.contains("planning context"));
+        assert!(polish_chunks[0].prompt.contains("\"id\":\"s1\""));
+        assert!(polish_chunks[0].prompt.contains("\"id\":\"s2\""));
+        assert!(!polish_chunks[0].prompt.contains("\"id\":\"s3\""));
+        assert_eq!(polish_chunks[1].start, 2);
+        assert_eq!(polish_chunks[1].end, 3);
+
+        let translate_chunks = SonaCoreFacade::plan_translate_prompt_chunks_json(
+            segment_inputs_json,
+            "es".to_string(),
+            Some("Spanish".to_string()),
+            Some(1),
+            None,
+        )
+        .unwrap();
+        assert_eq!(translate_chunks.len(), 3);
+        assert_eq!(translate_chunks[2].chunk_number, 3);
+        assert_eq!(translate_chunks[2].total_chunks, 3);
+        assert!(translate_chunks[2].prompt.contains("into Spanish"));
+        assert!(translate_chunks[2].prompt.contains("\"id\":\"s3\""));
+
+        let long_text = "a".repeat(1300);
+        let summary_segments_json = format!(
+            r#"[
+                {{
+                    "id":"s1",
+                    "text":"{}",
+                    "start":0.0,
+                    "end":2.0,
+                    "isFinal":true
+                }},
+                {{
+                    "id":"s2",
+                    "text":"{}",
+                    "start":2.0,
+                    "end":4.0,
+                    "isFinal":true
+                }}
+            ]"#,
+            long_text, long_text
+        );
+
+        let summary_chunks = SonaCoreFacade::plan_summary_prompt_chunks_json(
+            r#"{
+                "id":"meeting",
+                "name":"Meeting",
+                "instructions":"- Decisions\n- Actions"
+            }"#
+            .to_string(),
+            summary_segments_json,
+            Some(1200),
+        )
+        .unwrap();
+        assert_eq!(summary_chunks.len(), 2);
+        assert_eq!(summary_chunks[0].start, 0);
+        assert_eq!(summary_chunks[0].end, 1);
+        assert_eq!(summary_chunks[0].chunk_number, 1);
+        assert_eq!(summary_chunks[0].total_chunks, 2);
+        assert!(summary_chunks[0].prompt.contains("chunk 1 of 2"));
+        assert_eq!(summary_chunks[1].start, 1);
+        assert_eq!(summary_chunks[1].end, 2);
+        assert!(summary_chunks[1].prompt.contains("chunk 2 of 2"));
+    }
+
+    #[test]
+    fn facade_exposes_binding_safe_preset_model_records() {
+        let models = SonaCoreFacade::preset_models();
+
+        let vad = models
+            .iter()
+            .find(|model| model.id == DEFAULT_SILERO_VAD_MODEL_ID)
+            .expect("VAD preset should be exported");
+
+        assert_eq!(vad.model_type, "vad");
+        assert_eq!(vad.engine, "sherpa-onnx");
+        assert!(
+            vad.filename
+                .as_deref()
+                .unwrap_or_default()
+                .ends_with(".onnx")
+        );
+        assert!(vad.modes.is_empty());
+        assert!(vad.rules.requires_vad);
+        assert_eq!(vad.rules.timestamp_support_hint, None);
+    }
+
+    #[test]
+    fn facade_exposes_binding_safe_model_catalog_snapshot() {
+        let snapshot = SonaCoreFacade::model_catalog_snapshot(
+            "C:/models".to_string(),
+            vec![
+                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
+                DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ],
+        );
+
+        let installed_asr = snapshot
+            .models
+            .iter()
+            .find(|model| model.id == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .expect("installed ASR model should be exported");
+        assert!(installed_asr.is_installed);
+        assert_eq!(installed_asr.rules.timestamp_support_hint, None);
+        assert!(installed_asr.install_path.ends_with("2024-07-17"));
+
+        let streaming_option = snapshot
+            .selection_options
+            .streaming
+            .iter()
+            .find(|option| option.id == installed_asr.id)
+            .expect("installed ASR model should be selectable for streaming");
+        assert!(streaming_option.is_installed);
+
+        let path_entry = snapshot
+            .model_path_by_id
+            .iter()
+            .find(|entry| entry.id == installed_asr.id)
+            .expect("model path index should be exported");
+        assert_eq!(path_entry.path, installed_asr.install_path);
+
+        let normalized_path_entry = snapshot
+            .model_id_by_normalized_path
+            .iter()
+            .find(|entry| entry.id == installed_asr.id)
+            .expect("normalized path reverse index should be exported");
+        assert_eq!(
+            normalized_path_entry.normalized_path,
+            installed_asr.install_path.replace('\\', "/").to_lowercase()
+        );
+
+        let token = snapshot
+            .path_match_tokens
+            .iter()
+            .find(|token| token.id == installed_asr.id)
+            .expect("path match token should be exported");
+        assert_eq!(token.token, installed_asr.id.to_lowercase());
+
+        let asr_section = snapshot
+            .sections
+            .iter()
+            .find(|section| section.section_type == FfiModelCatalogSectionType::Asr)
+            .expect("ASR section should be exported");
+        let sensevoice_group = asr_section
+            .groups
+            .iter()
+            .find(|group| group.key == "sensevoice")
+            .expect("SenseVoice models should stay grouped by core");
+        assert!(
+            sensevoice_group
+                .models
+                .iter()
+                .any(|model| model.id == installed_asr.id)
+        );
+
+        let dependencies = snapshot
+            .dependency_requests_by_model_id
+            .iter()
+            .find(|entry| entry.model_id == installed_asr.id)
+            .expect("recognition model dependencies should be exported");
+        assert_eq!(dependencies.requests.len(), 1);
+        assert_eq!(
+            dependencies.requests[0].config_key,
+            FfiModelDependencyConfigKey::VadModelPath
+        );
+        assert_eq!(
+            dependencies.requests[0].model_id,
+            DEFAULT_SILERO_VAD_MODEL_ID
+        );
+        assert!(dependencies.requests[0].is_installed);
+
+        assert_eq!(
+            snapshot.restore_defaults.streaming_model_path,
+            Some(installed_asr.install_path.clone())
+        );
+        assert_eq!(
+            snapshot.restore_defaults.vad_model_path,
+            snapshot
+                .models
+                .iter()
+                .find(|model| model.id == DEFAULT_SILERO_VAD_MODEL_ID)
+                .map(|model| model.install_path.clone())
+        );
+    }
+
+    #[test]
+    fn facade_exposes_default_config_json_for_mobile_bootstrap() {
+        let config: serde_json::Value =
+            serde_json::from_str(&SonaCoreFacade::default_config_json()).unwrap();
+
+        assert_eq!(config["configVersion"], 7);
+        assert_eq!(
+            config["asr"]["selections"]["batch"]["mode"],
+            serde_json::json!("batch")
+        );
+        assert_eq!(
+            config["llmSettings"]["activeProvider"],
+            serde_json::json!("google_translate_free")
+        );
+    }
+
+    #[test]
+    fn facade_migrates_config_json_and_resolves_effective_config_json() {
+        let migrated = SonaCoreFacade::migrate_app_config_json(
+            Some(
+                r#"{
+                    "configVersion": 6,
+                    "summaryEnabled": null,
+                    "summaryTemplateId": "meeting",
+                    "summaryCustomTemplates": [],
+                    "polishPresetId": "meeting",
+                    "polishCustomPresets": [],
+                    "polishKeywordSets": [],
+                    "speakerProfiles": [],
+                    "speakerSegmentationModelPath": "",
+                    "speakerEmbeddingModelPath": "",
+                    "logLevel": "info",
+                    "llmSettings": {
+                        "activeProvider": "google_translate_free",
+                        "providers": {
+                            "google_translate_free": {
+                                "apiHost": "https://translate.googleapis.com/translate_a/single",
+                                "apiKey": ""
+                            }
+                        },
+                        "models": {},
+                        "modelOrder": [],
+                        "selections": {}
+                    }
+                }"#
+                .to_string(),
+            ),
+            None,
+            "Default Rules".to_string(),
+        )
+        .unwrap();
+        let migrated_config: serde_json::Value =
+            serde_json::from_str(&migrated.config_json).unwrap();
+
+        assert!(migrated.migrated);
+        assert_eq!(migrated_config["configVersion"], 7);
+        assert_eq!(migrated_config["summaryEnabled"], true);
+
+        let effective = SonaCoreFacade::resolve_effective_config_json(
+            migrated.config_json,
+            Some(
+                r#"{
+                    "defaults": {
+                        "summaryTemplateId": "meeting",
+                        "translationLanguage": "ja",
+                        "polishPresetId": "meeting"
+                    }
+                }"#
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        let effective_config: serde_json::Value = serde_json::from_str(&effective).unwrap();
+
+        assert_eq!(effective_config["summaryTemplateId"], "meeting");
+        assert_eq!(effective_config["translationLanguage"], "ja");
+        assert_eq!(
+            effective_config["polishPresetId"],
+            serde_json::json!({ "Builtin": "meeting" })
+        );
+    }
+
+    #[test]
+    fn facade_rejects_invalid_config_json() {
+        let error = SonaCoreFacade::migrate_app_config_json(
+            Some("{bad-json".to_string()),
+            None,
+            "Default Rules".to_string(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("Invalid saved config JSON"));
+    }
+
+    #[test]
+    fn facade_resolves_model_catalog_selected_ids_for_mobile_paths() {
+        let selected = SonaCoreFacade::model_catalog_selected_ids(
+            "C:/models".to_string(),
+            vec![
+                "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
+                "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string(),
+            ],
+            FfiModelSelectionPaths {
+                streaming_model_path:
+                    "C:/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
+                batch_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
+                    .to_string(),
+                speaker_segmentation_model_path: String::new(),
+                speaker_embedding_model_path:
+                    "D:/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+                        .to_string(),
+            },
+        );
+
+        assert_eq!(
+            selected.streaming,
+            Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string())
+        );
+        assert_eq!(
+            selected.batch,
+            Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string())
+        );
+        assert_eq!(selected.speaker_segmentation, None);
+        assert_eq!(
+            selected.speaker_embedding,
+            Some("3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string())
+        );
+    }
+
+    #[test]
+    fn facade_resolves_model_download_plan_for_mobile() {
+        let download = SonaCoreFacade::resolve_model_download(
+            "sherpa-onnx-funasr-nano-int8-2025-12-30".to_string(),
+            "C:/models".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(download.model.id, "sherpa-onnx-funasr-nano-int8-2025-12-30");
+        assert_eq!(download.models_dir, "C:/models");
+        assert!(
+            download
+                .download_path
+                .ends_with("sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2")
+        );
+        assert!(
+            download
+                .install_path
+                .ends_with("sherpa-onnx-funasr-nano-int8-2025-12-30")
+        );
+        assert_eq!(
+            download.required_companions.vad_model_id.as_deref(),
+            Some(DEFAULT_SILERO_VAD_MODEL_ID)
+        );
+        assert_eq!(
+            download.required_companions.punctuation_model_id.as_deref(),
+            Some(DEFAULT_PUNCTUATION_MODEL_ID)
+        );
+    }
+
+    #[test]
+    fn facade_rejects_unknown_model_download_id() {
+        let error = SonaCoreFacade::resolve_model_download(
+            "missing-model".to_string(),
+            "C:/models".to_string(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "Unknown model id: missing-model");
     }
 }

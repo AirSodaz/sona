@@ -1,0 +1,10 @@
+[package]
+name = "sona-uniffi-bindgen"
+version.workspace = true
+description = "Workspace-pinned UniFFI bindgen runner for Sona mobile bindings"
+authors.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+uniffi = { version = "0.32", features = ["cli"] }

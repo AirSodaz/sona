@@ -17,6 +17,7 @@ members = [
     "core",
     "platforms/cli",
     "src-tauri",
+    "tools/uniffi_bindgen",
 ]
 
 [workspace.package]
