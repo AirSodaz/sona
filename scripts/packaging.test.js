@@ -451,6 +451,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   const platformApiServerConfig = fs.existsSync(platformApiServerConfigPath)
     ? fs.readFileSync(platformApiServerConfigPath, 'utf8')
     : '';
+  const platformApiServerConfigRuntime = platformApiServerConfig.split(/#\[cfg\(test\)\]/u)[0];
   const platformApiServerRuntime = fs.existsSync(platformApiServerRuntimePath)
     ? fs.readFileSync(platformApiServerRuntimePath, 'utf8')
     : '';
@@ -472,6 +473,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   const apiCargo = fs.readFileSync(apiCargoPath, 'utf8');
   const apiLib = fs.readFileSync(apiLibPath, 'utf8');
   const tauriServerRuntime = tauriServer.split(/#\[cfg\(test\)\]/u)[0];
+  const tauriServerTests = tauriServer.split(/#\[cfg\(test\)\]/u)[1] ?? '';
 
   assert.match(apiCargo, /^name\s*=\s*"sona-api-server"/mu);
   assert.match(apiCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/\.\.\/core" \}/mu);
@@ -514,15 +516,23 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
     sqliteConfigStore,
     /pub fn load_serve_startup_settings_from_app_local_data_dir/u,
   );
-  assert.doesNotMatch(platformApiServerConfig, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
-  assert.match(platformApiServerConfig, /load_app_config_payload_from_app_local_data_dir/u);
-  assert.match(platformApiServerConfig, /load_serve_startup_settings_from_app_local_data_dir/u);
-  assert.doesNotMatch(platformApiServerConfig, /Database::global/u);
-  assert.doesNotMatch(platformApiServerConfig, /Database::open/u);
-  assert.doesNotMatch(platformApiServerConfig, /is_for_app_local_data_dir/u);
-  assert.doesNotMatch(platformApiServerConfig, /load_app_config_payload_from_db/u);
-  assert.doesNotMatch(platformApiServerConfig, /load_serve_startup_settings_from_db/u);
-  assert.match(platformApiServerConfig, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.doesNotMatch(platformApiServerConfigRuntime, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
+  assert.match(platformApiServerConfigRuntime, /load_app_config_payload_from_app_local_data_dir/u);
+  assert.match(platformApiServerConfigRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
+  assert.match(
+    platformApiServerConfig,
+    /load_online_asr_config_reads_sqlite_app_config_before_legacy_settings_file/u,
+  );
+  assert.match(
+    platformApiServerConfig,
+    /load_api_server_startup_settings_reads_sqlite_projection_columns/u,
+  );
+  assert.doesNotMatch(platformApiServerConfigRuntime, /Database::global/u);
+  assert.doesNotMatch(platformApiServerConfigRuntime, /Database::open/u);
+  assert.doesNotMatch(platformApiServerConfigRuntime, /is_for_app_local_data_dir/u);
+  assert.doesNotMatch(platformApiServerConfigRuntime, /load_app_config_payload_from_db/u);
+  assert.doesNotMatch(platformApiServerConfigRuntime, /load_serve_startup_settings_from_db/u);
+  assert.match(platformApiServerConfigRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
   assert.match(platformApiServerRuntime, /pub struct ApiServerRuntimeDirs/u);
   assert.match(platformApiServerRuntime, /pub fn resolve_api_server_runtime_dirs/u);
   assert.match(platformApiServerRuntime, /pub fn resolve_api_server_runtime_dirs_for_app/u);
@@ -537,6 +547,10 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
   assert.doesNotMatch(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
   assert.doesNotMatch(tauriServerRuntime, /sona_sqlite::config_store/u);
+  assert.doesNotMatch(tauriServerTests, /load_online_asr_config_reads_sqlite/u);
+  assert.doesNotMatch(tauriServerTests, /load_api_server_startup_settings_reads_sqlite/u);
+  assert.doesNotMatch(tauriServerTests, /sona_sqlite::/u);
+  assert.doesNotMatch(tauriServerTests, /MockPathProvider|PathKind::AppData|PathKind::AppLocalData/u);
   assert.doesNotMatch(tauriServerRuntime, /TauriPathProvider/u);
   assert.doesNotMatch(tauriServerRuntime, /PathKind::AppLocalData/u);
   assert.doesNotMatch(tauriServerRuntime, /\.join\("api_temp"\)/u);
