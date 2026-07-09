@@ -324,6 +324,17 @@ impl Recognizer {
         }
     }
 
+    pub fn is_offline(&self) -> bool {
+        matches!(&self.inner, RecognizerInner::Offline(_))
+    }
+
+    pub fn offline(&self) -> Option<&SafeOfflineRecognizer> {
+        match &self.inner {
+            RecognizerInner::Offline(recognizer) => Some(recognizer),
+            RecognizerInner::Online(_) => None,
+        }
+    }
+
     pub fn new(
         model_type: ModelType,
         num_threads: i32,

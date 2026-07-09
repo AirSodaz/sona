@@ -513,10 +513,7 @@ async fn load_recognizer(
                 );
             }
             let r = Arc::new(recognizer_result.recognizer);
-            if !matches!(
-                r.inner,
-                crate::integrations::asr::RecognizerInner::Offline(_)
-            ) {
+            if !r.is_offline() {
                 return Err("Only offline models are supported for streaming API".to_string());
             }
 
@@ -561,7 +558,7 @@ fn run_offline_inference_standalone(
     if speech_buffer.is_empty() {
         return None;
     }
-    let crate::integrations::asr::RecognizerInner::Offline(r) = &recognizer.inner else {
+    let Some(r) = recognizer.offline() else {
         return None;
     };
 

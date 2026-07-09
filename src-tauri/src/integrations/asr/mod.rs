@@ -37,7 +37,7 @@ pub(crate) use sona_local_asr::audio::{accept_vad_samples, load_vad, vad_detecte
 pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 pub use sona_local_asr::recognizer::Recognizer;
 pub(crate) use sona_local_asr::recognizer::{
-    RecognizerInner, build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
+    build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
 };
 pub(crate) use sona_local_asr::runtime::ModelConfigKey;
 pub use sona_local_asr::runtime::RecognizerPool;

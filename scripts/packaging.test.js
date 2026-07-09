@@ -1536,6 +1536,15 @@ test('desktop streaming handler uses Tauri streaming context accessors', () => {
   assert.doesNotMatch(streaming, /context\.recognizer_pool(?!\()/u);
 });
 
+test('desktop standalone streaming uses local ASR recognizer accessors', () => {
+  const streaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
+  const asrMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'), 'utf8');
+
+  assert.doesNotMatch(streaming, /RecognizerInner/u);
+  assert.doesNotMatch(streaming, /\b(?:recognizer|r)\.inner\b/u);
+  assert.doesNotMatch(asrMod, /\bRecognizerInner\b/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),
