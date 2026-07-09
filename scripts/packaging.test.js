@@ -2754,7 +2754,7 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.doesNotMatch(desktopLlmCommands, /llm_usage_sqlite::read_raw/u);
   assert.doesNotMatch(desktopLlmCommands, /llm_usage_sqlite::replace_raw/u);
   assert.match(tauriLlm, /pub\(crate\) use sona_core::llm::usage;/u);
-  assert.match(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
+  assert.doesNotMatch(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
   assert.match(tauriLlmTypes, /pub use sona_core::llm::usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'analytics.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm_usage.rs')), false);
