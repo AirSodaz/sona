@@ -11,6 +11,7 @@ use tokio;
 
 use crate::app::server::TauriStreamingContext;
 use sona_api_server::{ServerState, authorize_streaming_request};
+use sona_local_asr::audio::pcm_s16le_bytes_to_f32;
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -277,7 +278,7 @@ async fn handle_online_streaming_socket(
             msg = socket.recv(), if !stopping => {
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
-                        let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
+                        let samples = pcm_s16le_bytes_to_f32(&pcm);
                         if let Err(e) = crate::integrations::asr::feed_audio_samples(
                             &app_handle,
                             sherpa_state.inner(),
@@ -380,7 +381,7 @@ async fn handle_local_streaming_socket(
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
-                        let samples = pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0).collect::<Vec<f32>>();
+                        let samples = pcm_s16le_bytes_to_f32(&pcm);
                         total_samples += samples.len();
 
                         crate::integrations::asr::accept_vad_samples(&vad, &samples);

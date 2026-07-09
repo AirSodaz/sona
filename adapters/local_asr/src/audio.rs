@@ -97,13 +97,11 @@ pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
     data.iter().map(|&sample| sample as f32 / 32768.0).collect()
 }
 
-fn pcm_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
+pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
     bytes
         .chunks_exact(2)
         .map(|chunk| {
-            let lo = chunk[0] as i16;
-            let hi = (chunk[1] as i16) << 8;
-            let sample = lo | hi;
+            let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
             sample as f32 / 32768.0
         })
         .collect()
@@ -161,7 +159,7 @@ pub async fn extract_and_resample_audio(
         return Err(format!("FFmpeg exited with {:?}: {stderr}", output.status));
     }
 
-    Ok(pcm_bytes_to_f32(&output.stdout))
+    Ok(pcm_s16le_bytes_to_f32(&output.stdout))
 }
 
 pub fn fixed_chunk_audio(
@@ -378,7 +376,7 @@ mod tests {
     use super::{
         resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path, segment_batch_audio,
     };
-    use crate::audio::pcm_i16_to_f32;
+    use crate::audio::{pcm_i16_to_f32, pcm_s16le_bytes_to_f32};
     use sona_core::ports::asr::BatchSegmentationMode;
     use std::fs;
     use std::path::Path;
@@ -398,6 +396,16 @@ mod tests {
     #[test]
     fn converts_pcm_i16_to_f32_samples() {
         let samples = pcm_i16_to_f32(&[0, 16384, -32768]);
+        assert_eq!(samples[0], 0.0);
+        assert!((samples[1] - 0.5).abs() < 0.01);
+        assert_eq!(samples[2], -1.0);
+    }
+
+    #[test]
+    fn converts_pcm_s16le_bytes_to_f32_samples() {
+        let samples = pcm_s16le_bytes_to_f32(&[0x00, 0x00, 0x00, 0x40, 0x00, 0x80, 0xff]);
+
+        assert_eq!(samples.len(), 3);
         assert_eq!(samples[0], 0.0);
         assert!((samples[1] - 0.5).abs() < 0.01);
         assert_eq!(samples[2], -1.0);
