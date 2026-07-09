@@ -1443,11 +1443,23 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(localAsrRuntime, /pub struct ModelConfigKey/u);
   assert.match(localAsrRuntime, /pub recognizers:/u);
   assert.match(localAsrRuntime, /pub punctuations:/u);
+  assert.match(localAsrRuntime, /pub async fn recognizer_cell_for_gpu_plan/u);
+  assert.match(localAsrRuntime, /pub async fn register_recognizer_gpu_provider/u);
   assert.match(desktopAsrState, /use sona_local_asr::runtime::RecognizerPool;/u);
   assert.doesNotMatch(desktopAsrState, /pub struct RecognizerPool/u);
   assert.doesNotMatch(desktopAsrState, /pub struct ModelConfigKey/u);
   assert.match(desktopAsrMod, /pub use sona_local_asr::runtime::RecognizerPool;/u);
   assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
+
+  for (const desktopFile of [
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+  ]) {
+    const content = fs.readFileSync(desktopFile, 'utf8');
+    assert.doesNotMatch(content, /\.recognizers\.lock\(\)/u);
+    assert.doesNotMatch(content, /\.recognizers\.insert/u);
+    assert.doesNotMatch(content, /\.recognizers\.get/u);
+  }
 });
 
 test('desktop API server obtains ASR recognizer pools through integration facade', () => {
@@ -1474,7 +1486,8 @@ test('desktop streaming handler uses Tauri streaming context accessors', () => {
   assert.doesNotMatch(appServer, /pub app:/u);
   assert.doesNotMatch(appServer, /pub recognizer_pool:/u);
   assert.match(streaming, /context\.app_handle\(\)/u);
-  assert.match(streaming, /context\.recognizer_pool\(\)/u);
+  assert.match(streaming, /recognizer_cell_for_gpu_plan/u);
+  assert.match(streaming, /register_recognizer_gpu_provider/u);
   assert.doesNotMatch(streaming, /context\.app\b/u);
   assert.doesNotMatch(streaming, /context\.recognizer_pool(?!\()/u);
 });

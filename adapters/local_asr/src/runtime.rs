@@ -9,7 +9,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use tokio::sync::{Mutex, OnceCell};
 
-type RecognizerCell = Arc<OnceCell<Arc<Recognizer>>>;
+pub type RecognizerCell = Arc<OnceCell<Arc<Recognizer>>>;
 type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 
 #[derive(Clone)]
@@ -30,6 +30,38 @@ impl RecognizerPool {
             recognizers: Arc::new(Mutex::new(HashMap::new())),
             punctuations: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub async fn recognizer_cell_for_gpu_plan(
+        &self,
+        key: &ModelConfigKey,
+        provider_options: Vec<Option<String>>,
+        primary_provider: Option<String>,
+    ) -> (RecognizerCell, bool) {
+        let mut recognizers = self.recognizers.lock().await;
+        let existing = provider_options
+            .into_iter()
+            .find_map(|provider| recognizers.get(&key.with_gpu_provider(provider)).cloned());
+
+        if let Some(cell) = existing {
+            (cell, false)
+        } else {
+            let cell = Arc::new(OnceCell::new());
+            recognizers.insert(key.with_gpu_provider(primary_provider), cell.clone());
+            (cell, true)
+        }
+    }
+
+    pub async fn register_recognizer_gpu_provider(
+        &self,
+        key: &ModelConfigKey,
+        provider: Option<String>,
+        cell: RecognizerCell,
+    ) {
+        self.recognizers
+            .lock()
+            .await
+            .insert(key.with_gpu_provider(provider), cell);
     }
 }
 
@@ -165,6 +197,36 @@ mod tests {
         assert_ne!(key(Some("cpu")), key(Some("cuda")));
         assert_ne!(key(Some("cpu")), key(None));
         assert_eq!(key(Some("cpu")), key(Some("cpu")));
+    }
+
+    #[tokio::test]
+    async fn recognizer_pool_reuses_cells_across_gpu_fallback_aliases() {
+        let pool = RecognizerPool::new();
+        let base_key = key(None);
+
+        let (cell, is_new) = pool
+            .recognizer_cell_for_gpu_plan(
+                &base_key,
+                vec![Some("cuda".to_string()), Some("cpu".to_string())],
+                Some("cuda".to_string()),
+            )
+            .await;
+
+        assert!(is_new);
+
+        pool.register_recognizer_gpu_provider(&base_key, Some("cpu".to_string()), cell.clone())
+            .await;
+
+        let (fallback_cell, fallback_is_new) = pool
+            .recognizer_cell_for_gpu_plan(
+                &base_key,
+                vec![Some("cpu".to_string()), Some("cuda".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+
+        assert!(!fallback_is_new);
+        assert!(Arc::ptr_eq(&cell, &fallback_cell));
     }
 
     #[test]

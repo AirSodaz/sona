@@ -509,23 +509,10 @@ async fn load_recognizer(
     );
 
     let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
-    let primary_key = key.with_gpu_provider(primary_provider.clone());
-
-    let (cell, _is_new) = {
-        let mut pool_guard = context.recognizer_pool().recognizers.lock().await;
-        let existing = gpu_plan
-            .provider_options()
-            .into_iter()
-            .find_map(|provider| pool_guard.get(&key.with_gpu_provider(provider)).cloned());
-
-        if let Some(c) = existing {
-            (c, false)
-        } else {
-            let cell = Arc::new(tokio::sync::OnceCell::new());
-            pool_guard.insert(primary_key.clone(), cell.clone());
-            (cell, true)
-        }
-    };
+    let (cell, _is_new) = context
+        .recognizer_pool()
+        .recognizer_cell_for_gpu_plan(&key, gpu_plan.provider_options(), primary_provider.clone())
+        .await;
 
     let recognizer = cell
         .get_or_try_init(|| async {
@@ -549,8 +536,10 @@ async fn load_recognizer(
 
             let actual_provider = recognizer_result.provider.clone();
             if actual_provider != primary_provider {
-                let mut pool_guard = context.recognizer_pool().recognizers.lock().await;
-                pool_guard.insert(key.with_gpu_provider(actual_provider), cell.clone());
+                context
+                    .recognizer_pool()
+                    .register_recognizer_gpu_provider(&key, actual_provider, cell.clone())
+                    .await;
             }
 
             Ok::<Arc<crate::integrations::asr::Recognizer>, String>(r)

@@ -375,27 +375,14 @@ pub async fn init_recognizer_impl(
     let mut reused_from_pool = false;
 
     let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
-    let primary_key = config_key.with_gpu_provider(primary_provider.clone());
-
-    let (cell, is_new) = {
-        let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
-        let existing = gpu_plan
-            .provider_options()
-            .into_iter()
-            .find_map(|provider| {
-                pool_guard
-                    .get(&config_key.with_gpu_provider(provider))
-                    .cloned()
-            });
-
-        if let Some(c) = existing {
-            (c, false)
-        } else {
-            let cell = Arc::new(tokio::sync::OnceCell::new());
-            pool_guard.insert(primary_key.clone(), cell.clone());
-            (cell, true)
-        }
-    };
+    let (cell, is_new) = state
+        .recognizer_pool
+        .recognizer_cell_for_gpu_plan(
+            &config_key,
+            gpu_plan.provider_options(),
+            primary_provider.clone(),
+        )
+        .await;
 
     // A cell may exist in the pool but still be uninitialized if a prior
     // `get_or_try_init` failed. Only count it as reused when it actually holds
@@ -433,8 +420,10 @@ pub async fn init_recognizer_impl(
             let r = Arc::new(create_result.recognizer);
 
             if actual_provider != primary_provider {
-                let mut pool_guard = state.recognizer_pool.recognizers.lock().await;
-                pool_guard.insert(config_key.with_gpu_provider(actual_provider), cell.clone());
+                state
+                    .recognizer_pool
+                    .register_recognizer_gpu_provider(&config_key, actual_provider, cell.clone())
+                    .await;
             }
 
             Ok::<Arc<Recognizer>, String>(r)
