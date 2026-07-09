@@ -288,20 +288,37 @@ test('standalone CLI resolves shared libraries from same-platform desktop resour
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const cliBuild = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'build.rs'), 'utf8');
   const cliMain = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'main.rs'), 'utf8');
+  const runtimeFsCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'Cargo.toml'), 'utf8');
+  const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
 
   assert.match(cliCargo, /^build\s*=\s*"build\.rs"/mu);
+  assert.doesNotMatch(cliCargo, /Win32_System_LibraryLoader/u);
+  assert.match(runtimeFsCargo, /Win32_System_LibraryLoader/u);
   assert.match(cliBuild, /SHERPA_ONNX_LIB_DIR/u);
   assert.match(cliBuild, /\$ORIGIN\/\.\.\/shared_libs/u);
   assert.match(cliBuild, /@loader_path\/\.\.\/shared_libs/u);
   assert.match(cliBuild, /delayimp\.lib/u);
   assert.match(cliBuild, /\/DELAYLOAD:sherpa-onnx-c-api\.dll/u);
   assert.ok(
-    cliMain.indexOf('init_shared_library_directory();') < cliMain.indexOf('sona_cli::run_cli_from_args'),
+    cliMain.indexOf('sona_runtime_fs::init_cli_shared_library_directory();') < cliMain.indexOf('sona_cli::run_cli_from_args'),
     'sona-cli must configure shared library lookup before invoking ASR-backed commands',
   );
-  assert.match(cliMain, /SetDllDirectoryW/u);
-  assert.match(cliMain, /\.\.\/shared_libs/u);
+  assert.match(runtimeFsLib, /pub fn init_cli_shared_library_directory/u);
+  assert.match(runtimeFsLib, /pub fn init_tauri_shared_library_directory/u);
+  assert.match(runtimeFsLib, /SetDllDirectoryW/u);
+  assert.match(runtimeFsLib, /\.\.\/shared_libs/u);
+  assert.doesNotMatch(cliMain, /SetDllDirectoryW|PCWSTR|OsStrExt|\.\.\/shared_libs/u);
   assert.doesNotMatch(cliMain, /tauri/u);
+});
+
+test('desktop Tauri DLL directory setup is delegated to the runtime filesystem adapter', () => {
+  const tauriLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(tauriLib, /pub fn init_dll_directory\(\)\s*\{\s*sona_runtime_fs::init_tauri_shared_library_directory\(\);\s*\}/u);
+  assert.doesNotMatch(tauriLib, /SetDllDirectoryW|PCWSTR|OsStrExt|resources"\)\.join\("shared_libs/u);
+  assert.match(runtimeFsLib, /pub fn tauri_shared_library_directory_candidates/u);
+  assert.match(runtimeFsLib, /pub fn init_tauri_shared_library_directory/u);
 });
 
 test('generated standalone CLI resources are ignored by git', () => {
@@ -428,6 +445,7 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
   const sqliteConfigStore = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs'),
     'utf8',
@@ -462,6 +480,9 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(apiLib, /pub struct ApiServerServiceParts/u);
   assert.match(apiLib, /pub struct RunningApiServer/u);
   assert.match(apiLib, /pub async fn start_api_server_runtime/u);
+  assert.match(apiLib, /pub fn build_streaming_router/u);
+  assert.match(apiLib, /pub fn authorize_streaming_request/u);
+  assert.match(apiLib, /route\("\/v1\/streaming"/u);
   assert.match(apiLib, /pub fn format_bind_error/u);
   assert.match(apiLib, /pub async fn run_server/u);
   assert.doesNotMatch(apiLib, /\btauri::/u);
@@ -494,6 +515,16 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.doesNotMatch(cliServe, /prepare_runtime_config/u);
   assert.doesNotMatch(tauriServerRuntime, /run_server/u);
   assert.doesNotMatch(cliServe, /run_server/u);
+  assert.match(
+    tauriServerRuntime,
+    /build_streaming_router\(\s*crate::integrations::streaming::handle_streaming,?\s*\)/u,
+  );
+  assert.doesNotMatch(tauriServerRuntime, /use axum::\{[\s\S]*Router/u);
+  assert.doesNotMatch(tauriServerRuntime, /Router::new\(\)\.route\("\/v1\/streaming"/u);
+  assert.match(streamingRs, /authorize_streaming_request\(&state, addr, token\)/u);
+  assert.doesNotMatch(streamingRs, /state\.ip_whitelist\.iter\(\)\.any/u);
+  assert.doesNotMatch(streamingRs, /token != state\.api_key/u);
+  assert.doesNotMatch(streamingRs, /try_acquire_owned/u);
   assert.match(cliServe, /start_api_server_runtime/u);
   assert.doesNotMatch(tauriServer, /ApiServerRuntimeConfig\s*\{/u);
   assert.doesNotMatch(cliServe, /ApiServerRuntimeConfig\s*\{/u);
@@ -664,7 +695,13 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid, remove_model_install_path\}/u);
-  assert.match(desktopDownloads, /use sona_model_downloads::\{[\s\S]*adapter_download_file/u);
+  assert.match(desktopDownloads, /DownloadClient/u);
+  assert.match(desktopDownloads, /client: DownloadClient/u);
+  assert.match(
+    desktopDownloads,
+    /state\s*\.client\s*\.download_file\(&url, &temp_path, notify, Some\(progress_cb\)\)/u,
+  );
+  assert.doesNotMatch(desktopDownloads, /reqwest::Client|Client::builder|adapter_download_file/u);
   assert.doesNotMatch(coreModelDownloads, /pub async fn download_model/u);
   assert.doesNotMatch(coreModelDownloads, /reqwest|tokio::fs|sha256_file|tar::|bzip2::/u);
   assert.doesNotMatch(coreModelCatalog, /std::fs::/u);
@@ -673,7 +710,11 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.doesNotMatch(coreCargo, /^sha2\s*=/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'downloads.rs')), false);
   assert.match(adapterLib, /pub use downloads::/u);
+  assert.match(adapterLib, /DownloadClient/u);
   assert.match(adapterLib, /remove_model_install_path/u);
+  assert.match(adapterDownloads, /pub struct DownloadClient/u);
+  assert.match(adapterDownloads, /impl DownloadClient/u);
+  assert.match(adapterDownloads, /user_agent\("Sona\/1\.0"\)/u);
   assert.match(adapterDownloads, /pub async fn download_file/u);
   assert.match(adapterModels, /pub fn remove_model_install_path/u);
 });
@@ -780,7 +821,119 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
     /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
   assert.match(prWorkflow, /cargo test -p sona-core --test preset_models/u);
+  assert.match(prWorkflow, /rustup target add aarch64-linux-android/u);
+  assert.match(prWorkflow, /yes \| sdkmanager --licenses/u);
+  assert.match(prWorkflow, /sdkmanager "ndk;29\.0\.14206865"/u);
+  assert.match(prWorkflow, /ANDROID_NDK_HOME=\$ANDROID_HOME\/ndk\/29\.0\.14206865/u);
+  assert.match(prWorkflow, /SONA_ANDROID_ABIS:\s*arm64-v8a/u);
+  assert.match(prWorkflow, /pnpm run verify:android-uniffi:gradle/u);
   assert.doesNotMatch(prWorkflow, /core::preset_models::tests/u);
+});
+
+test('android uniffi sample publishes a consumable local Maven artifact', () => {
+  const sampleLibraryGradle = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'build.gradle.kts'),
+    'utf8',
+  );
+  const verifierScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'),
+    'utf8',
+  );
+  const androidReadme = fs.readFileSync(path.join(repoRoot, 'platforms', 'android', 'README.md'), 'utf8');
+
+  assert.match(sampleLibraryGradle, /id\("maven-publish"\)/u);
+  assert.match(sampleLibraryGradle, /from\(components\["debug"\]\)/u);
+  assert.match(sampleLibraryGradle, /groupId\s*=\s*"com\.sona"/u);
+  assert.match(sampleLibraryGradle, /artifactId\s*=\s*"sona-uniffi-bindings"/u);
+  assert.match(sampleLibraryGradle, /version\s*=\s*project\.version\.toString\(\)/u);
+  assert.match(sampleLibraryGradle, /url\s*=\s*uri\(layout\.buildDirectory\.dir\("repo"\)\)/u);
+
+  assert.match(verifierScript, /:sample-library:publishDebugPublicationToSonaAndroidSampleRepository/u);
+  assert.match(verifierScript, /verifyAndroidSampleMavenPublication/u);
+  assert.match(verifierScript, /com\/sona\/sona-uniffi-bindings\/0\.8\.0/u);
+  assert.match(verifierScript, /sona-uniffi-bindings-\$\{samplePublicationVersion\}\.module/u);
+  assert.match(verifierScript, /verifyAndroidSampleGradleModuleMetadata/u);
+  assert.match(verifierScript, /net\.java\.dev\.jna:jna/u);
+  assert.match(verifierScript, /org\.jetbrains\.kotlinx:kotlinx-coroutines-core/u);
+
+  assert.match(androidReadme, /publishDebugPublicationToSonaAndroidSampleRepository/u);
+  assert.match(androidReadme, /com\.sona:sona-uniffi-bindings:0\.8\.0/u);
+});
+
+test('android uniffi sample includes a separate Maven consumer module', () => {
+  const settingsGradle = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'settings.gradle.kts'),
+    'utf8',
+  );
+  const consumerGradlePath = path.join(
+    repoRoot,
+    'platforms',
+    'android',
+    'sample-consumer',
+    'consumer-library',
+    'build.gradle.kts',
+  );
+  const consumerSmokePath = path.join(
+    repoRoot,
+    'platforms',
+    'android',
+    'sample-consumer',
+    'consumer-library',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'uniffi',
+    'consumer',
+    'SonaUniffiConsumerSmoke.kt',
+  );
+  const verifierScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'),
+    'utf8',
+  );
+  const androidReadme = fs.readFileSync(path.join(repoRoot, 'platforms', 'android', 'README.md'), 'utf8');
+
+  assert.match(settingsGradle, /include\(":consumer-library"\)/u);
+  assert.match(settingsGradle, /maven\s*\{\s*url\s*=\s*uri\("sample-library\/build\/repo"\)/u);
+
+  assert.equal(fs.existsSync(consumerGradlePath), true);
+  const consumerGradle = fs.readFileSync(consumerGradlePath, 'utf8');
+  assert.match(consumerGradle, /id\("com\.android\.library"\)/u);
+  assert.match(consumerGradle, /namespace\s*=\s*"com\.sona\.uniffi\.consumer"/u);
+  assert.match(consumerGradle, /implementation\("com\.sona:sona-uniffi-bindings:0\.8\.0"\)/u);
+  assert.doesNotMatch(consumerGradle, /sona-uniffi-bindings\.gradle\.kts/u);
+  assert.doesNotMatch(consumerGradle, /generateSonaUniffiKotlin|buildSonaUniffiAndroidLibraries/u);
+
+  assert.equal(fs.existsSync(consumerSmokePath), true);
+  const consumerSmoke = fs.readFileSync(consumerSmokePath, 'utf8');
+  assert.match(consumerSmoke, /import com\.sona\.uniffi\.sample\.SonaUniffiSmoke/u);
+  assert.match(consumerSmoke, /import uniffi\.sona_uniffi_bind\.defaultConfigJson/u);
+
+  assert.match(verifierScript, /:consumer-library:assembleDebug/u);
+  assert.match(verifierScript, /verifyAndroidConsumerAar/u);
+  assert.match(verifierScript, /com\/sona\/uniffi\/consumer\/SonaUniffiConsumerSmoke/u);
+
+  assert.match(androidReadme, /consumer-library/u);
+  assert.match(androidReadme, /implementation\("com\.sona:sona-uniffi-bindings:0\.8\.0"\)/u);
+});
+
+test('android uniffi JNI staging clears stale ABI outputs before packaging', () => {
+  const buildAndroidLibsScript = fs.readFileSync(
+    path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
+    'utf8',
+  );
+  const androidBindingsGradle = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sona-uniffi-bindings.gradle.kts'),
+    'utf8',
+  );
+
+  assert.match(androidBindingsGradle, /jniLibs\.directories\.add\(generatedJniLibsDir\.get\(\)\.asFile\.path\)/u);
+  assert.match(
+    buildAndroidLibsScript,
+    /function prepareOutputDirectory\(outDir\)\s*\{\s*fs\.rmSync\(outDir,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\);\s*fs\.mkdirSync\(outDir,\s*\{\s*recursive:\s*true\s*\}\);\s*\}/u,
+  );
+  assert.match(buildAndroidLibsScript, /if \(!dryRun\)\s*\{\s*prepareOutputDirectory\(outDir\);\s*\}/u);
 });
 
 test('dashboard and diagnostics clocks are supplied by desktop adapters', () => {
@@ -842,7 +995,10 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tsBindLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'ts_bind', 'src', 'lib.rs'), 'utf8');
   const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
-  const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');
+  const uniffiAsrMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'asr_mapper.rs'),
+    'utf8',
+  );
 
   assert.match(coreCargo, /specta = \{[^}]*features = \["derive", "serde_json"\]/u);
 
@@ -861,11 +1017,173 @@ test('core ASR request contract is exposed through TS and UniFFI binding crates'
   assert.match(uniffiLib, /default_batch_segmentation_mode/u);
   assert.match(uniffiLib, /online_asr_provider_request/u);
   assert.match(uniffiLib, /volcengine_doubao_asr_config_from_json/u);
-  assert.match(uniffiMapper, /pub enum FfiAsrEngine/u);
-  assert.match(uniffiMapper, /pub enum FfiAsrMode/u);
-  assert.match(uniffiMapper, /pub enum FfiBatchSegmentationMode/u);
-  assert.match(uniffiMapper, /pub struct FfiOnlineAsrProviderRequest/u);
-  assert.match(uniffiMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
+  assert.match(uniffiAsrMapper, /pub enum FfiAsrEngine/u);
+  assert.match(uniffiAsrMapper, /pub enum FfiAsrMode/u);
+  assert.match(uniffiAsrMapper, /pub enum FfiBatchSegmentationMode/u);
+  assert.match(uniffiAsrMapper, /pub struct FfiOnlineAsrProviderRequest/u);
+  assert.match(uniffiAsrMapper, /pub struct FfiVolcengineDoubaoAsrConfig/u);
+});
+
+test('core online ASR provider manifest is exposed through UniFFI for mobile bindings', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiAsrBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_bridge.rs'), 'utf8');
+  const uniffiAsrMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'asr_mapper.rs'),
+    'utf8',
+  );
+
+  assert.match(uniffiAsrBridge, /online_asr_providers as core_online_asr_providers/u);
+  assert.match(uniffiAsrBridge, /find_online_asr_provider as core_find_online_asr_provider/u);
+  assert.match(uniffiLib, /pub fn online_asr_providers\(\) -> Vec<FfiOnlineAsrProvider>/u);
+  assert.match(
+    uniffiLib,
+    /pub fn find_online_asr_provider\(\s*provider_id: String,?\s*\) -> Option<FfiOnlineAsrProvider>/u,
+  );
+  assert.match(uniffiAsrBridge, /core_online_asr_providers\(\)\s*\.iter\(\)\s*\.map\(mapper::online_asr_provider_to_ffi\)/u);
+  assert.match(uniffiAsrBridge, /core_find_online_asr_provider\(&provider_id\)\s*\.map\(mapper::online_asr_provider_to_ffi\)/u);
+
+  for (const typeName of [
+    'FfiOnlineAsrProvider',
+    'FfiOnlineAsrCapability',
+    'FfiOnlineAsrBatchCapability',
+    'FfiOnlineAsrLocalFileBatchMode',
+  ]) {
+    assert.match(uniffiAsrMapper, new RegExp(`pub struct ${typeName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`\\b${typeName}\\b`, 'u'));
+  }
+  assert.match(uniffiAsrMapper, /pub fn online_asr_provider_to_ffi/u);
+});
+
+test('UniFFI ASR bridge is isolated from the top-level binding facade', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs'), 'utf8');
+  const uniffiAsrBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_bridge.rs');
+
+  assert.match(uniffiLib, /^mod asr_bridge;/mu);
+  assert.equal(fs.existsSync(uniffiAsrBridgePath), true);
+  assert.match(uniffiLib, /SonaCoreFacade::default_batch_segmentation_mode\(\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::online_asr_providers\(\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::online_asr_provider_request\(provider_id, profile_id, config_json\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::volcengine_doubao_asr_config_from_json\(config_json\)/u);
+  assert.doesNotMatch(uniffiLib, /asr_bridge::/u);
+  assert.doesNotMatch(uniffiLib, /online_asr_providers as core_online_asr_providers/u);
+  assert.doesNotMatch(uniffiLib, /find_online_asr_provider as core_find_online_asr_provider/u);
+  assert.doesNotMatch(uniffiLib, /serde_json::from_str\(&config_json\)/u);
+  assert.match(uniffiFacade, /asr_bridge::default_batch_segmentation_mode\(\)/u);
+  assert.match(uniffiFacade, /asr_bridge::online_asr_providers\(\)/u);
+  assert.match(uniffiFacade, /asr_bridge::online_asr_provider_request\(provider_id, profile_id, config_json\)/u);
+  assert.match(uniffiFacade, /asr_bridge::volcengine_doubao_asr_config_from_json\(config_json\)/u);
+
+  const uniffiAsrBridge = fs.readFileSync(uniffiAsrBridgePath, 'utf8');
+  assert.match(uniffiAsrBridge, /online_asr_providers as core_online_asr_providers/u);
+  assert.match(uniffiAsrBridge, /find_online_asr_provider as core_find_online_asr_provider/u);
+  assert.match(uniffiAsrBridge, /parse_core_json\(&config_json, "ASR provider config"\)/u);
+  assert.match(uniffiAsrBridge, /pub\(crate\) fn volcengine_doubao_asr_config_from_json/u);
+});
+
+test('UniFFI runtime bridge is isolated from the top-level binding facade', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs'), 'utf8');
+  const uniffiRuntimeBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'runtime_bridge.rs');
+
+  assert.match(uniffiLib, /^mod runtime_bridge;/mu);
+  assert.equal(fs.existsSync(uniffiRuntimeBridgePath), true);
+  assert.match(uniffiLib, /SonaCoreFacade::normalize_export_format\(value\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::runtime_path_status\(path\)/u);
+  assert.doesNotMatch(uniffiLib, /runtime_bridge::/u);
+  assert.doesNotMatch(uniffiLib, /use sona_core::export::ExportFormat/u);
+  assert.doesNotMatch(uniffiLib, /use sona_runtime_fs::resolve_runtime_path_status/u);
+  assert.match(uniffiFacade, /runtime_bridge::normalize_export_format\(value\)/u);
+  assert.match(uniffiFacade, /runtime_bridge::runtime_path_status\(path\)/u);
+
+  const uniffiRuntimeBridge = fs.readFileSync(uniffiRuntimeBridgePath, 'utf8');
+  assert.match(uniffiRuntimeBridge, /use sona_core::export::ExportFormat/u);
+  assert.match(uniffiRuntimeBridge, /use sona_runtime_fs::resolve_runtime_path_status/u);
+  assert.match(uniffiRuntimeBridge, /mapper::runtime_path_status_to_ffi\(resolve_runtime_path_status\(&path\)\)/u);
+  assert.match(uniffiRuntimeBridge, /pub\(crate\) fn normalize_export_format/u);
+});
+
+test('UniFFI facade delegates bridge adapters outside the top-level export module', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacadePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs');
+
+  assert.match(uniffiLib, /^mod facade;/mu);
+  assert.match(uniffiLib, /^pub use facade::SonaCoreFacade;/mu);
+  assert.match(uniffiLib, /SonaCoreFacade::normalize_export_format\(value\)/u);
+  assert.doesNotMatch(uniffiLib, /pub struct SonaCoreFacade/u);
+  assert.doesNotMatch(uniffiLib, /impl SonaCoreFacade/u);
+  assert.equal(fs.existsSync(uniffiFacadePath), true);
+
+  const uniffiFacade = fs.readFileSync(uniffiFacadePath, 'utf8');
+  assert.match(uniffiFacade, /pub struct SonaCoreFacade/u);
+  assert.match(uniffiFacade, /impl SonaCoreFacade/u);
+  assert.match(uniffiFacade, /runtime_bridge::normalize_export_format\(value\)/u);
+  assert.match(uniffiFacade, /model_bridge::model_catalog_snapshot\(models_dir, installed_model_ids\)/u);
+  assert.match(uniffiFacade, /llm_bridge::plan_summary_prompt_chunks_json/u);
+  assert.match(uniffiFacade, /asr_bridge::online_asr_provider_request\(provider_id, profile_id, config_json\)/u);
+  assert.match(uniffiFacade, /config_bridge::resolve_effective_config_json\(global_config_json, project_json\)/u);
+  assert.doesNotMatch(uniffiFacade, /#\[uniffi::export\]/u);
+});
+
+test('UniFFI mapper facade re-exports focused domain mappers', () => {
+  const mapperFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');
+
+  for (const mapperName of [
+    'runtime_mapper',
+    'asr_mapper',
+    'llm_mapper',
+    'model_mapper',
+    'config_mapper',
+  ]) {
+    assert.match(mapperFacade, new RegExp(`#\\[path = "mapper/${mapperName}\\.rs"\\]\\s*mod ${mapperName};`, 'u'));
+    assert.match(mapperFacade, new RegExp(`pub use ${mapperName}::\\*;`, 'u'));
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', `${mapperName}.rs`)),
+      true,
+    );
+  }
+
+  assert.doesNotMatch(mapperFacade, /use sona_core::/u);
+  assert.doesNotMatch(mapperFacade, /pub (?:enum|struct) Ffi/u);
+});
+
+test('UniFFI root re-exports nested public model catalog records', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiModelMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'model_mapper.rs'),
+    'utf8',
+  );
+  const mapperExports = uniffiLib.match(/pub use mapper::\{([\s\S]*?)\};/u)?.[1] ?? '';
+
+  assert.match(uniffiModelMapper, /pub struct FfiModelCatalogGroup/u);
+  assert.match(uniffiModelMapper, /pub groups: Vec<FfiModelCatalogGroup>/u);
+  assert.match(mapperExports, /\bFfiModelCatalogGroup\b/u);
+});
+
+test('core LLM provider manifest is exposed through UniFFI for mobile bindings', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiLlmBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs'), 'utf8');
+  const uniffiLlmMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'llm_mapper.rs'),
+    'utf8',
+  );
+
+  assert.match(uniffiLlmBridge, /llm_providers as core_llm_providers/u);
+  assert.match(uniffiLlmBridge, /find_llm_provider_by_id_or_alias as core_find_llm_provider_by_id_or_alias/u);
+  assert.match(uniffiLib, /pub fn llm_providers\(\) -> Vec<FfiLlmProvider>/u);
+  assert.match(
+    uniffiLib,
+    /pub fn find_llm_provider_by_id_or_alias\(\s*id_or_alias: String,?\s*\) -> Option<FfiLlmProvider>/u,
+  );
+  assert.match(uniffiLlmBridge, /core_llm_providers\(\)\s*\.iter\(\)\s*\.map\(mapper::llm_provider_to_ffi\)/u);
+  assert.match(
+    uniffiLlmBridge,
+    /core_find_llm_provider_by_id_or_alias\(&id_or_alias\)\s*\.map\(mapper::llm_provider_to_ffi\)/u,
+  );
+
+  assert.match(uniffiLlmMapper, /pub struct FfiLlmProviderDefaults/u);
+  assert.match(uniffiLlmMapper, /pub struct FfiLlmProvider/u);
+  assert.match(uniffiLlmMapper, /pub fn llm_provider_to_ffi/u);
 });
 
 test('core owns ASR runtime error contract reused by desktop', () => {
@@ -1044,7 +1362,10 @@ test('core owns local batch ASR request contract reused by desktop', () => {
 
 test('core LLM request contracts are exposed through UniFFI binding records', () => {
   const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
-  const uniffiMapper = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper.rs'), 'utf8');
+  const uniffiLlmMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'llm_mapper.rs'),
+    'utf8',
+  );
 
   for (const exportName of [
     'llm_config_from_json',
@@ -1066,13 +1387,628 @@ test('core LLM request contracts are exposed through UniFFI binding records', ()
     'FfiTranslateSegmentsRequest',
     'FfiSummarizeTranscriptRequest',
   ]) {
-    assert.match(uniffiMapper, new RegExp(`pub (?:enum|struct) ${typeName}`, 'u'));
+    assert.match(uniffiLlmMapper, new RegExp(`pub (?:enum|struct) ${typeName}`, 'u'));
   }
 
-  assert.match(uniffiMapper, /pub fn llm_config_to_ffi/u);
-  assert.match(uniffiMapper, /pub fn polish_segments_request_to_ffi/u);
-  assert.match(uniffiMapper, /pub fn translate_segments_request_to_ffi/u);
-  assert.match(uniffiMapper, /pub fn summarize_transcript_request_to_ffi/u);
+  assert.match(uniffiLlmMapper, /pub fn llm_config_to_ffi/u);
+  assert.match(uniffiLlmMapper, /pub fn polish_segments_request_to_ffi/u);
+  assert.match(uniffiLlmMapper, /pub fn translate_segments_request_to_ffi/u);
+  assert.match(uniffiLlmMapper, /pub fn summarize_transcript_request_to_ffi/u);
+});
+
+test('UniFFI LLM JSON bridge is isolated from the top-level binding facade', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs'), 'utf8');
+  const uniffiLlmBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs');
+
+  assert.match(uniffiLib, /^mod llm_bridge;/mu);
+  assert.equal(fs.existsSync(uniffiLlmBridgePath), true);
+  assert.match(uniffiLib, /SonaCoreFacade::validate_llm_config_json\(config_json\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::llm_segment_inputs_from_transcript_json\(segments_json\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::plan_polish_prompt_chunks_json\(/u);
+  assert.doesNotMatch(uniffiLib, /llm_bridge::/u);
+  assert.doesNotMatch(uniffiLib, /validate_llm_config as core_validate_llm_config/u);
+  assert.doesNotMatch(uniffiLib, /segment_inputs_from_transcript as core_segment_inputs_from_transcript/u);
+  assert.doesNotMatch(uniffiLib, /plan_segment_task_chunks as core_plan_segment_task_chunks/u);
+  assert.match(uniffiFacade, /llm_bridge::validate_llm_config_json\(config_json\)/u);
+  assert.match(uniffiFacade, /llm_bridge::llm_segment_inputs_from_transcript_json\(segments_json\)/u);
+  assert.match(uniffiFacade, /llm_bridge::plan_polish_prompt_chunks_json\(/u);
+
+  const uniffiLlmBridge = fs.readFileSync(uniffiLlmBridgePath, 'utf8');
+  assert.match(uniffiLlmBridge, /use crate::json_bridge::\{[\s\S]*map_core_validation_result[\s\S]*parse_core_json[\s\S]*serialize_core_json[\s\S]*\};/u);
+  assert.match(uniffiLlmBridge, /validate_llm_config as core_validate_llm_config/u);
+  assert.match(uniffiLlmBridge, /segment_inputs_from_transcript as core_segment_inputs_from_transcript/u);
+  assert.match(uniffiLlmBridge, /plan_segment_task_chunks as core_plan_segment_task_chunks/u);
+  assert.match(uniffiLlmBridge, /pub\(crate\) fn plan_polish_prompt_chunks_json/u);
+});
+
+test('core LLM request validation is exposed through UniFFI JSON bridge', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiJsonBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'json_bridge.rs');
+  const uniffiLlmBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs'), 'utf8');
+
+  for (const validationName of [
+    'validate_llm_config_json',
+    'validate_llm_generate_request_json',
+    'validate_polish_segments_request_json',
+    'validate_translate_segments_request_json',
+    'validate_summarize_transcript_request_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${validationName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${validationName}`, 'u'));
+  }
+
+  for (const coreValidationName of [
+    'validate_llm_config',
+    'validate_llm_generate_request',
+    'validate_polish_segments_request',
+    'validate_translate_segments_request',
+    'validate_summarize_transcript_request',
+  ]) {
+    assert.match(uniffiLlmBridge, new RegExp(`${coreValidationName} as core_${coreValidationName}`, 'u'));
+    assert.match(uniffiLlmBridge, new RegExp(`core_${coreValidationName}\\(&`, 'u'));
+  }
+
+  assert.match(uniffiLib, /^mod json_bridge;/mu);
+  assert.doesNotMatch(uniffiLib, /use json_bridge::/u);
+  assert.match(uniffiLlmBridge, /use crate::json_bridge::\{[\s\S]*map_core_validation_result[\s\S]*parse_core_json[\s\S]*serialize_core_json[\s\S]*\};/u);
+  assert.doesNotMatch(uniffiLib, /fn map_core_validation_result\(result: Result<\(\), String>\) -> SonaCoreBindingResult<\(\)>/u);
+  assert.equal(fs.existsSync(uniffiJsonBridgePath), true);
+  const uniffiJsonBridge = fs.readFileSync(uniffiJsonBridgePath, 'utf8');
+  assert.match(uniffiJsonBridge, /pub\(crate\) fn map_core_validation_result\([\s\S]*result: Result<\(\), String>[\s\S]*\) -> SonaCoreBindingResult<\(\)>/u);
+  assert.match(uniffiJsonBridge, /pub\(crate\) fn parse_core_json</u);
+  assert.match(uniffiJsonBridge, /pub\(crate\) fn parse_optional_core_json</u);
+  assert.match(uniffiJsonBridge, /pub\(crate\) fn serialize_core_json</u);
+});
+
+test('core transcript LLM job helpers are exposed through UniFFI JSON bridge', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiLlmBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs'), 'utf8');
+
+  for (const exportName of [
+    'llm_segment_inputs_from_transcript_json',
+    'summary_segment_inputs_from_transcript_json',
+    'merge_translated_items_into_transcript_json',
+    'merge_polished_items_into_transcript_json',
+    'summary_source_fingerprint_from_transcript_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}`, 'u'));
+  }
+
+  for (const coreHelperName of [
+    'segment_inputs_from_transcript',
+    'summary_inputs_from_transcript',
+    'merge_translated_items_into_segments',
+    'merge_polished_items_into_segments',
+    'compute_summary_source_fingerprint',
+  ]) {
+    assert.match(uniffiLlmBridge, new RegExp(`${coreHelperName} as core_${coreHelperName}`, 'u'));
+    assert.match(uniffiLlmBridge, new RegExp(`core_${coreHelperName}\\(`, 'u'));
+  }
+
+  assert.match(uniffiLlmBridge, /parse_core_json\(&segments_json, "transcript segments"\)/u);
+  assert.match(uniffiLlmBridge, /serialize_core_json\(&merged, "merged transcript segments"\)/u);
+});
+
+test('core LLM prompt and chunk parsing helpers are exposed through UniFFI JSON bridge', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiLlmBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs'), 'utf8');
+  const uniffiLlmMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'llm_mapper.rs'),
+    'utf8',
+  );
+
+  for (const exportName of [
+    'build_polish_prompt_json',
+    'build_translate_prompt_json',
+    'build_summary_chunk_prompt_json',
+    'build_summary_finalize_prompt_json',
+    'parse_polish_chunk_json',
+    'parse_translate_chunk_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}`, 'u'));
+  }
+
+  for (const coreHelperName of [
+    'build_polish_prompt',
+    'build_translate_prompt',
+    'build_summary_chunk_prompt',
+    'build_summary_finalize_prompt',
+    'parse_polish_chunk',
+    'parse_translate_chunk',
+  ]) {
+    assert.match(uniffiLlmBridge, new RegExp(`${coreHelperName} as core_${coreHelperName}`, 'u'));
+    assert.match(uniffiLlmBridge, new RegExp(`core_${coreHelperName}\\(`, 'u'));
+  }
+
+  for (const typeName of [
+    'FfiPolishedSegment',
+    'FfiTranslatedSegment',
+  ]) {
+    assert.match(uniffiLlmMapper, new RegExp(`pub struct ${typeName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`\\b${typeName}\\b`, 'u'));
+  }
+
+  assert.match(uniffiLlmMapper, /pub fn polished_segment_to_ffi/u);
+  assert.match(uniffiLlmMapper, /pub fn translated_segment_to_ffi/u);
+  assert.match(uniffiLlmBridge, /parse_core_json\(&segments_json, "LLM segment inputs"\)/u);
+  assert.match(uniffiLlmBridge, /parse_core_json\(&template_json, "summary template"\)/u);
+});
+
+test('core LLM prompt chunk planning is exposed through UniFFI JSON bridge', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiLlmBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'llm_bridge.rs'), 'utf8');
+  const uniffiLlmMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'llm_mapper.rs'),
+    'utf8',
+  );
+
+  for (const exportName of [
+    'plan_polish_prompt_chunks_json',
+    'plan_translate_prompt_chunks_json',
+    'plan_summary_prompt_chunks_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}`, 'u'));
+  }
+
+  assert.match(uniffiLlmMapper, /pub struct FfiLlmPromptChunk/u);
+  assert.match(uniffiLlmMapper, /pub fn llm_prompt_chunk_to_ffi/u);
+  assert.match(uniffiLlmBridge, /plan_segment_task_chunks as core_plan_segment_task_chunks/u);
+  assert.match(uniffiLlmBridge, /split_summary_segments as core_split_summary_segments/u);
+  assert.match(uniffiLlmBridge, /core_plan_segment_task_chunks\(/u);
+  assert.match(uniffiLlmBridge, /core_split_summary_segments\(/u);
+  assert.match(uniffiLlmBridge, /DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET/u);
+  assert.match(uniffiLlmBridge, /DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET/u);
+  assert.match(uniffiLlmBridge, /MIN_SUMMARY_CHUNK_CHAR_BUDGET/u);
+});
+
+test('core config migration surface is exposed through UniFFI JSON bridge', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiConfigBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'config_bridge.rs'), 'utf8');
+  const uniffiConfigMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'config_mapper.rs'),
+    'utf8',
+  );
+
+  for (const exportName of [
+    'default_config_json',
+    'migrate_app_config_json',
+    'resolve_effective_config_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}`, 'u'));
+  }
+
+  assert.match(uniffiConfigBridge, /core_migrate_app_config/u);
+  assert.match(uniffiConfigBridge, /core_resolve_effective_config/u);
+  assert.match(uniffiConfigMapper, /pub struct FfiConfigMigrationResult/u);
+  assert.match(uniffiConfigMapper, /pub config_json: String/u);
+  assert.match(uniffiConfigMapper, /pub migrated: bool/u);
+});
+
+test('UniFFI config bridge is isolated from the top-level binding facade', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs'), 'utf8');
+  const uniffiConfigBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'config_bridge.rs');
+
+  assert.match(uniffiLib, /^mod config_bridge;/mu);
+  assert.equal(fs.existsSync(uniffiConfigBridgePath), true);
+  assert.match(uniffiLib, /SonaCoreFacade::default_config_json\(\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::migrate_app_config_json\(/u);
+  assert.match(uniffiLib, /SonaCoreFacade::resolve_effective_config_json\(global_config_json, project_json\)/u);
+  assert.doesNotMatch(uniffiLib, /config_bridge::/u);
+  assert.doesNotMatch(uniffiLib, /migrate_app_config as core_migrate_app_config/u);
+  assert.doesNotMatch(uniffiLib, /resolve_effective_config as core_resolve_effective_config/u);
+  assert.doesNotMatch(uniffiLib, /parse_optional_core_json\(saved_config_json\.as_deref\(\), "saved config"\)/u);
+  assert.match(uniffiFacade, /config_bridge::default_config_json\(\)/u);
+  assert.match(uniffiFacade, /config_bridge::migrate_app_config_json\(/u);
+  assert.match(uniffiFacade, /config_bridge::resolve_effective_config_json\(global_config_json, project_json\)/u);
+
+  const uniffiConfigBridge = fs.readFileSync(uniffiConfigBridgePath, 'utf8');
+  assert.match(uniffiConfigBridge, /default_config/u);
+  assert.match(uniffiConfigBridge, /migrate_app_config as core_migrate_app_config/u);
+  assert.match(uniffiConfigBridge, /resolve_effective_config as core_resolve_effective_config/u);
+  assert.match(uniffiConfigBridge, /parse_optional_core_json\(saved_config_json\.as_deref\(\), "saved config"\)/u);
+  assert.match(uniffiConfigBridge, /pub\(crate\) fn resolve_effective_config_json/u);
+});
+
+test('UniFFI model bridge is isolated from the top-level binding facade', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiFacade = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs'), 'utf8');
+  const uniffiModelBridgePath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'model_bridge.rs');
+
+  assert.match(uniffiLib, /^mod model_bridge;/mu);
+  assert.equal(fs.existsSync(uniffiModelBridgePath), true);
+  assert.match(uniffiLib, /SonaCoreFacade::preset_models\(\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::model_catalog_selected_ids\(/u);
+  assert.match(uniffiLib, /SonaCoreFacade::resolve_model_download\(model_id, models_dir\)/u);
+  assert.match(uniffiLib, /SonaCoreFacade::resolve_gpu_acceleration\(value\)/u);
+  assert.doesNotMatch(uniffiLib, /model_bridge::/u);
+  assert.doesNotMatch(uniffiLib, /preset_models as core_preset_models/u);
+  assert.doesNotMatch(uniffiLib, /resolve_model_download as core_resolve_model_download/u);
+  assert.doesNotMatch(uniffiLib, /resolve_gpu_acceleration as core_resolve_gpu_acceleration/u);
+  assert.match(uniffiFacade, /model_bridge::preset_models\(\)/u);
+  assert.match(uniffiFacade, /model_bridge::model_catalog_selected_ids\(/u);
+  assert.match(uniffiFacade, /model_bridge::resolve_model_download\(model_id, models_dir\)/u);
+  assert.match(uniffiFacade, /model_bridge::resolve_gpu_acceleration\(value\)/u);
+
+  const uniffiModelBridge = fs.readFileSync(uniffiModelBridgePath, 'utf8');
+  assert.match(uniffiModelBridge, /preset_models as core_preset_models/u);
+  assert.match(uniffiModelBridge, /resolve_model_catalog_selected_ids/u);
+  assert.match(uniffiModelBridge, /resolve_model_download as core_resolve_model_download/u);
+  assert.match(uniffiModelBridge, /resolve_gpu_acceleration as core_resolve_gpu_acceleration/u);
+  assert.match(uniffiModelBridge, /pub\(crate\) fn model_catalog_snapshot/u);
+});
+
+test('core model catalog selected id resolution is exposed through UniFFI bindings', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiModelBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'model_bridge.rs'), 'utf8');
+  const uniffiModelMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'model_mapper.rs'),
+    'utf8',
+  );
+
+  assert.match(uniffiModelBridge, /resolve_model_catalog_selected_ids/u);
+  assert.match(uniffiLib, /pub fn model_catalog_selected_ids/u);
+  assert.match(uniffiLib, /SonaCoreFacade::model_catalog_selected_ids/u);
+  assert.match(uniffiModelMapper, /pub struct FfiModelSelectionPaths/u);
+  assert.match(uniffiModelMapper, /pub struct FfiModelCatalogSelectedIds/u);
+  assert.match(uniffiModelMapper, /pub fn model_selection_paths_from_ffi/u);
+  assert.match(uniffiModelMapper, /pub fn model_catalog_selected_ids_to_ffi/u);
+});
+
+test('core model catalog grouping and dependency requests are exposed through UniFFI snapshot', () => {
+  const uniffiModelMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'model_mapper.rs'),
+    'utf8',
+  );
+
+  for (const typeName of [
+    'FfiModelCatalogSectionType',
+    'FfiModelCatalogGroup',
+    'FfiModelCatalogSection',
+    'FfiModelDependencyConfigKey',
+    'FfiModelDependencyRequest',
+    'FfiModelDependencyRequestsForModel',
+  ]) {
+    assert.match(uniffiModelMapper, new RegExp(`pub (?:enum|struct) ${typeName}`, 'u'));
+  }
+
+  assert.match(uniffiModelMapper, /pub sections: Vec<FfiModelCatalogSection>/u);
+  assert.match(uniffiModelMapper, /pub dependency_requests_by_model_id: Vec<FfiModelDependencyRequestsForModel>/u);
+  assert.match(uniffiModelMapper, /pub fn model_catalog_section_to_ffi/u);
+  assert.match(uniffiModelMapper, /pub fn model_dependency_requests_by_model_id_to_ffi/u);
+});
+
+test('core model catalog path indexes are exposed through UniFFI snapshot', () => {
+  const uniffiModelMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'model_mapper.rs'),
+    'utf8',
+  );
+
+  for (const typeName of [
+    'FfiModelPathByIdEntry',
+    'FfiModelIdByNormalizedPathEntry',
+    'FfiModelCatalogPathMatchToken',
+  ]) {
+    assert.match(uniffiModelMapper, new RegExp(`pub struct ${typeName}`, 'u'));
+  }
+
+  assert.match(uniffiModelMapper, /pub model_path_by_id: Vec<FfiModelPathByIdEntry>/u);
+  assert.match(uniffiModelMapper, /pub model_id_by_normalized_path: Vec<FfiModelIdByNormalizedPathEntry>/u);
+  assert.match(uniffiModelMapper, /pub path_match_tokens: Vec<FfiModelCatalogPathMatchToken>/u);
+  assert.match(uniffiModelMapper, /pub fn model_path_by_id_to_ffi/u);
+  assert.match(uniffiModelMapper, /pub fn model_id_by_normalized_path_to_ffi/u);
+  assert.match(uniffiModelMapper, /pub fn model_catalog_path_match_token_to_ffi/u);
+});
+
+test('core model download planning is exposed through UniFFI bindings', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiModelBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'model_bridge.rs'), 'utf8');
+  const uniffiModelMapper = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'mapper', 'model_mapper.rs'),
+    'utf8',
+  );
+
+  assert.match(uniffiModelBridge, /core_resolve_model_download/u);
+  assert.match(uniffiModelBridge, /required_companion_models/u);
+  assert.match(uniffiLib, /pub fn resolve_model_download/u);
+  assert.match(uniffiLib, /SonaCoreFacade::resolve_model_download/u);
+  assert.match(uniffiModelMapper, /pub struct FfiRequiredCompanionModels/u);
+  assert.match(uniffiModelMapper, /pub struct FfiResolvedModelDownload/u);
+  assert.match(uniffiModelMapper, /pub fn resolved_model_download_to_ffi/u);
+});
+
+test('core GPU acceleration config validation is exposed through UniFFI bindings', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+  const uniffiModelBridge = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'model_bridge.rs'), 'utf8');
+
+  assert.match(uniffiModelBridge, /resolve_gpu_acceleration as core_resolve_gpu_acceleration/u);
+  assert.match(uniffiLib, /pub fn resolve_gpu_acceleration/u);
+  assert.match(uniffiLib, /SonaCoreFacade::resolve_gpu_acceleration/u);
+});
+
+test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integration', () => {
+  const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
+  const uniffiCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml'), 'utf8');
+  const bindgenCargo = fs.readFileSync(
+    path.join(repoRoot, 'tools', 'uniffi_bindgen', 'Cargo.toml'),
+    'utf8',
+  );
+  const bindgenMain = fs.readFileSync(path.join(repoRoot, 'tools', 'uniffi_bindgen', 'src', 'main.rs'), 'utf8');
+  const generateScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'generate-uniffi-kotlin.js'), 'utf8');
+  const gradleIntegration = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sona-uniffi-bindings.gradle.kts'),
+    'utf8',
+  );
+
+  assert.match(workspaceCargo, /"tools\/uniffi_bindgen"/u);
+  assert.match(uniffiCargo, /^uniffi\s*=\s*"0\.32"/mu);
+  assert.match(bindgenCargo, /name\s*=\s*"sona-uniffi-bindgen"/u);
+  assert.match(bindgenCargo, /^uniffi\s*=\s*\{\s*version\s*=\s*"0\.32",\s*features\s*=\s*\["cli"\]\s*\}/mu);
+  assert.match(bindgenMain, /uniffi::uniffi_bindgen_main\(\)/u);
+  assert.match(generateScript, /cargo/u);
+  assert.match(generateScript, /sona-uniffi-bind/u);
+  assert.match(generateScript, /sona-uniffi-bindgen/u);
+  assert.match(generateScript, /generate/u);
+  assert.match(generateScript, /--library/u);
+  assert.match(generateScript, /--language/u);
+  assert.match(generateScript, /kotlin/u);
+  assert.match(gradleIntegration, /generateSonaUniffiKotlin/u);
+  assert.match(gradleIntegration, /scripts\/generate-uniffi-kotlin\.js/u);
+  assert.match(gradleIntegration, /generated\/source\/uniffi\/main\/kotlin/u);
+  assert.match(gradleIntegration, /com\.android\.build\.api\.dsl\.LibraryExtension/u);
+  assert.match(gradleIntegration, /java\.directories\.add\(generatedKotlinDir\.get\(\)\.asFile\.path\)/u);
+  assert.match(gradleIntegration, /net\.java\.dev\.jna:jna:5\.12\.0@aar/u);
+  assert.match(gradleIntegration, /org\.jetbrains\.kotlinx:kotlinx-coroutines-core:1\.6\.4/u);
+});
+
+test('UniFFI Android Gradle integration builds ABI-scoped native libraries', () => {
+  const buildScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'), 'utf8');
+  const gradleIntegration = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sona-uniffi-bindings.gradle.kts'),
+    'utf8',
+  );
+  const androidReadme = fs.readFileSync(path.join(repoRoot, 'platforms', 'android', 'README.md'), 'utf8');
+
+  for (const [abi, target] of [
+    ['arm64-v8a', 'aarch64-linux-android'],
+    ['armeabi-v7a', 'armv7-linux-androideabi'],
+    ['x86', 'i686-linux-android'],
+    ['x86_64', 'x86_64-linux-android'],
+  ]) {
+    assert.match(buildScript, new RegExp(`['"]${abi}['"]:\\s*['"]${target}['"]`, 'u'));
+  }
+
+  assert.match(buildScript, /cargo/u);
+  assert.match(buildScript, /build/u);
+  assert.match(buildScript, /--target/u);
+  assert.match(buildScript, /sona-uniffi-bind/u);
+  assert.match(buildScript, /libsona_uniffi_bind\.so/u);
+  assert.match(buildScript, /jniLibs/u);
+  assert.match(buildScript, /SONA_ANDROID_ABIS/u);
+  assert.match(buildScript, /SONA_ANDROID_MIN_SDK/u);
+  assert.match(gradleIntegration, /buildSonaUniffiAndroidLibraries/u);
+  assert.match(gradleIntegration, /scripts\/build-uniffi-android-libs\.js/u);
+  assert.match(gradleIntegration, /providers\.environmentVariable\("SONA_ANDROID_ABIS"\)/u);
+  assert.match(gradleIntegration, /providers\.gradleProperty\("SONA_REPO_ROOT"\)/u);
+  assert.match(gradleIntegration, /providers\.environmentVariable\("SONA_REPO_ROOT"\)/u);
+  assert.match(gradleIntegration, /inputs\.property\("sonaAndroidAbis"/u);
+  assert.match(gradleIntegration, /"--abis"/u);
+  assert.match(gradleIntegration, /providers\.environmentVariable\("SONA_ANDROID_MIN_SDK"\)/u);
+  assert.match(gradleIntegration, /inputs\.property\("sonaAndroidMinSdk"/u);
+  assert.match(gradleIntegration, /"--min-sdk"/u);
+  assert.match(gradleIntegration, /generated\/jniLibs\/main/u);
+  assert.match(gradleIntegration, /jniLibs\.directories\.add\(generatedJniLibsDir\.get\(\)\.asFile\.path\)/u);
+  assert.match(gradleIntegration, /dependsOn\(buildSonaUniffiAndroidLibraries\)/u);
+  assert.match(androidReadme, /buildSonaUniffiAndroidLibraries/u);
+  assert.match(androidReadme, /SONA_ANDROID_ABIS/u);
+});
+
+test('UniFFI Android Gradle integration tracks build inputs for incremental reruns', () => {
+  const gradleIntegration = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sona-uniffi-bindings.gradle.kts'),
+    'utf8',
+  );
+
+  for (const inputPath of [
+    'Cargo.toml',
+    'Cargo.lock',
+    'scripts/generate-uniffi-kotlin.js',
+    'scripts/build-uniffi-android-libs.js',
+    'tools/uniffi_bindgen/Cargo.toml',
+    'tools/uniffi_bindgen/src',
+    'adapters/runtime_fs/Cargo.toml',
+    'adapters/runtime_fs/src',
+  ]) {
+    assert.match(gradleIntegration, new RegExp(`inputs\\.(?:file|dir)\\(File\\(repoRoot, "${inputPath.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}"\\)\\)`, 'u'));
+  }
+});
+
+test('UniFFI Android Gradle integration avoids Gradle 10 deprecation warnings', () => {
+  const gradleIntegration = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sona-uniffi-bindings.gradle.kts'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(gradleIntegration, /by tasks\.registering/u);
+  assert.match(gradleIntegration, /val buildSonaUniffiAndroidLibraries = tasks\.register<Exec>\("buildSonaUniffiAndroidLibraries"\)/u);
+  assert.match(gradleIntegration, /val generateSonaUniffiKotlin = tasks\.register<Exec>\("generateSonaUniffiKotlin"\)/u);
+  assert.match(gradleIntegration, /KotlinCompile/u);
+  assert.doesNotMatch(gradleIntegration, /println\(/u);
+  assert.doesNotMatch(gradleIntegration, /\.srcDir\(/u);
+  assert.match(gradleIntegration, /java\.directories\.add\(generatedKotlinDir\.get\(\)\.asFile\.path\)/u);
+  assert.match(gradleIntegration, /jniLibs\.directories\.add\(generatedJniLibsDir\.get\(\)\.asFile\.path\)/u);
+  assert.match(gradleIntegration, /tasks\.withType<KotlinCompile>\(\)/u);
+  assert.match(gradleIntegration, /source\(generatedKotlinDir\)/u);
+  assert.match(gradleIntegration, /it\.name\.startsWith\("extract"\) && it\.name\.endsWith\("Annotations"\)/u);
+  assert.match(gradleIntegration, /dependsOn\(generateSonaUniffiKotlin\)/u);
+});
+
+test('UniFFI Android sample consumer imports generated Kotlin bindings', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'), 'utf8');
+  const sampleSettings = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'settings.gradle.kts'),
+    'utf8',
+  );
+  const sampleRootGradle = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'build.gradle.kts'),
+    'utf8',
+  );
+  const sampleProperties = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'gradle.properties'),
+    'utf8',
+  );
+  const sampleGradle = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'build.gradle.kts'),
+    'utf8',
+  );
+  const sampleKotlin = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin', 'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt'),
+    'utf8',
+  );
+
+  assert.equal(packageJson.scripts['verify:android-uniffi'], 'node scripts/verify-uniffi-android-sample.js');
+  assert.match(verifyScript, /generate-uniffi-kotlin\.js/u);
+  assert.match(verifyScript, /build-uniffi-android-libs\.js/u);
+  assert.match(verifyScript, /sample-consumer/u);
+  assert.match(verifyScript, /--require-gradle/u);
+  assert.match(verifyScript, /SONA_ANDROID_ABIS/u);
+  assert.match(verifyScript, /gradle\.bat|gradle/u);
+  assert.match(verifyScript, /:sample-library:assembleDebug/u);
+  assert.doesNotMatch(verifyScript, /:sample-library:tasks/u);
+
+  assert.match(sampleSettings, /pluginManagement/u);
+  assert.match(sampleSettings, /id\("com\.android\.library"\) version "9\.2\.1" apply false/u);
+  assert.match(sampleSettings, /include\(":sample-library"\)/u);
+  assert.match(sampleRootGradle, /tasks\.register\("clean", Delete::class\)/u);
+  assert.match(sampleProperties, /^SONA_REPO_ROOT=\.\.\/\.\.\/\.\.\/\.\.$/mu);
+  assert.match(sampleGradle, /id\("com\.android\.library"\)/u);
+  assert.doesNotMatch(sampleGradle, /org\.jetbrains\.kotlin\.android|kotlin-android/u);
+  assert.match(sampleGradle, /namespace = "com\.sona\.uniffi\.sample"/u);
+  assert.match(sampleGradle, /compileSdk = 36/u);
+  assert.match(sampleGradle, /compileOptions\s*\{/u);
+  assert.match(sampleGradle, /sourceCompatibility = JavaVersion\.VERSION_17/u);
+  assert.match(sampleGradle, /targetCompatibility = JavaVersion\.VERSION_17/u);
+  assert.match(sampleGradle, /compilerOptions/u);
+  assert.match(sampleGradle, /JvmTarget\.JVM_17/u);
+  assert.match(sampleGradle, /apply\(from = "\.\.\/\.\.\/sona-uniffi-bindings\.gradle\.kts"\)/u);
+
+  for (const generatedImport of [
+    'FfiLlmPromptChunk',
+    'FfiPolishedSegment',
+    'SonaCoreBindingException',
+    'defaultConfigJson',
+    'parsePolishChunkJson',
+    'planPolishPromptChunksJson',
+  ]) {
+    assert.match(sampleKotlin, new RegExp(`import uniffi\\.sona_uniffi_bind\\.${generatedImport}`, 'u'));
+  }
+
+  assert.match(sampleKotlin, /object SonaUniffiSmoke/u);
+  assert.match(sampleKotlin, /planPolishPromptChunksJson\(/u);
+  assert.match(sampleKotlin, /parsePolishChunkJson\(/u);
+});
+
+test('UniFFI binding errors avoid Kotlin Throwable message conflicts', () => {
+  const uniffiLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs'), 'utf8');
+
+  assert.match(uniffiLib, /InvalidInput\s*\{\s*reason: String\s*\}/u);
+  assert.doesNotMatch(uniffiLib, /InvalidInput\s*\{\s*message: String\s*\}/u);
+});
+
+test('UniFFI Android Gradle smoke verifies assembled AAR contents', () => {
+  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'), 'utf8');
+  const androidReadme = fs.readFileSync(path.join(repoRoot, 'platforms', 'android', 'README.md'), 'utf8');
+
+  assert.match(verifyScript, /function readZipEntries/u);
+  assert.match(verifyScript, /function verifyAndroidSampleAar/u);
+  assert.match(verifyScript, /sample-library-debug\.aar/u);
+  assert.match(verifyScript, /jni\/arm64-v8a\/libsona_uniffi_bind\.so/u);
+  assert.match(verifyScript, /classes\.jar/u);
+  assert.match(verifyScript, /uniffi\/sona_uniffi_bind\//u);
+  assert.match(verifyScript, /com\/sona\/uniffi\/sample\/SonaUniffiSmoke/u);
+  assert.match(androidReadme, /assembles the sample debug AAR/u);
+  assert.match(androidReadme, /jni\/arm64-v8a\/libsona_uniffi_bind\.so/u);
+});
+
+test('UniFFI Android sample ignores generated Gradle outputs', () => {
+  const androidIgnorePath = path.join(repoRoot, 'platforms', 'android', '.gitignore');
+
+  assert.equal(fs.existsSync(androidIgnorePath), true);
+  const androidIgnore = fs.readFileSync(androidIgnorePath, 'utf8');
+  const ignoreRules = androidIgnore.split(/\r?\n/u);
+
+  for (const ignoreRule of [
+    '/generated/',
+    '/sample-consumer/.gradle/',
+    '/sample-consumer/build/',
+    '/sample-consumer/**/build/',
+  ]) {
+    assert.ok(ignoreRules.includes(ignoreRule), `${androidIgnorePath} must include ${ignoreRule}`);
+  }
+});
+
+test('UniFFI Android sample can use a repo-managed Gradle distribution', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'), 'utf8');
+  const androidReadme = fs.readFileSync(path.join(repoRoot, 'platforms', 'android', 'README.md'), 'utf8');
+  const gradleRunnerPath = path.join(repoRoot, 'scripts', 'run-managed-gradle.js');
+
+  assert.equal(
+    packageJson.scripts['verify:android-uniffi:gradle'],
+    'node scripts/verify-uniffi-android-sample.js --download-gradle --require-gradle',
+  );
+  assert.match(verifyScript, /--download-gradle/u);
+  assert.match(verifyScript, /run-managed-gradle\.js/u);
+  assert.ok(fs.existsSync(gradleRunnerPath), 'scripts/run-managed-gradle.js should exist');
+
+  const gradleRunner = fs.readFileSync(gradleRunnerPath, 'utf8');
+  assert.match(gradleRunner, /DEFAULT_GRADLE_VERSION\s*=\s*'9\.6\.1'/u);
+  assert.match(gradleRunner, /MAX_DOWNLOAD_ATTEMPTS\s*=\s*3/u);
+  assert.match(gradleRunner, /9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14/u);
+  assert.match(gradleRunner, /https:\/\/services\.gradle\.org\/distributions\/gradle-\$\{gradleVersion\}-bin\.zip/u);
+  assert.match(gradleRunner, /https:\/\/downloads\.gradle\.org\/distributions\/gradle-\$\{gradleVersion\}-bin\.zip/u);
+  assert.match(gradleRunner, /--distribution-zip/u);
+  assert.match(gradleRunner, /SONA_GRADLE_DISTRIBUTION_ZIP/u);
+  assert.match(gradleRunner, /fs\.copyFileSync\(distributionZip/u);
+  assert.match(gradleRunner, /function curlDownloadFile/u);
+  assert.match(gradleRunner, /--location/u);
+  assert.match(gradleRunner, /--retry/u);
+  assert.match(gradleRunner, /attempt < MAX_DOWNLOAD_ATTEMPTS/u);
+  assert.match(gradleRunner, /target[u]?['"], ['"]managed-gradle/u);
+  assert.match(gradleRunner, /Expand-Archive/u);
+  assert.match(gradleRunner, /spawnSync\(gradleExecutable/u);
+  assert.match(gradleRunner, /shell:\s*process\.platform === 'win32'/u);
+  assert.match(gradleRunner, /result\.error/u);
+  assert.match(androidReadme, /verify:android-uniffi:gradle/u);
+  assert.match(androidReadme, /SONA_GRADLE_DISTRIBUTION_ZIP/u);
+  assert.match(androidReadme, /target\/managed-gradle/u);
+});
+
+test('UniFFI Android native build script supports a no-toolchain dry run', () => {
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
+      '--dry-run',
+      '--abis',
+      'arm64-v8a',
+      '--out-dir',
+      path.join(os.tmpdir(), 'sona-uniffi-android-dry-run'),
+    ],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /arm64-v8a/u);
+  assert.match(result.stdout, /aarch64-linux-android/u);
+  assert.match(result.stdout, /libsona_uniffi_bind\.so/u);
+  assert.doesNotMatch(result.stdout, /cargo build/u);
 });
 
 test('core owns LLM request field validation while online adapter owns API host policy', () => {
@@ -1454,6 +2390,8 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
 
 test('automation runtime path rules are owned by core and adapted by desktop', () => {
   const coreAutomation = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'automation', 'mod.rs'), 'utf8');
+  const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
   const desktopPlatformRuntime = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_runtime.rs'),
     'utf8',
@@ -1470,9 +2408,14 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.match(desktopPlatformRuntime, /sona_core::automation::\{/u);
   assert.match(desktopPlatformRuntime, /collect_runtime_rule_path_result/u);
   assert.match(desktopPlatformRuntime, /should_consider_runtime_candidate_path/u);
+  assert.match(runtimeFsLib, /pub fn automation_runtime_path_metadata/u);
+  assert.match(runtimeFsLib, /pub fn collect_automation_runtime_candidate_paths/u);
+  assert.match(desktopPlatformRuntime, /sona_runtime_fs::automation_runtime_path_metadata/u);
+  assert.match(desktopPlatformRuntime, /sona_runtime_fs::collect_automation_runtime_candidate_paths/u);
   assert.match(desktopLib, /^pub mod platform;/mu);
   assert.match(desktopLib, /crate::platform::automation_runtime::AutomationRuntimeState/u);
   assert.match(desktopCommands, /crate::platform::automation_runtime::\{/u);
+  assert.doesNotMatch(tauriCargo, /^walkdir\s*=/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'automation.rs')), false);
   assert.doesNotMatch(desktopPlatformRuntime, /const SUPPORTED_MEDIA_EXTENSIONS/u);
   assert.doesNotMatch(desktopPlatformRuntime, /pub struct AutomationRuntimeRuleConfig/u);
@@ -1480,6 +2423,7 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.doesNotMatch(desktopPlatformRuntime, /pub enum AutomationRuntimePathCollectionOutcome/u);
   assert.doesNotMatch(desktopPlatformRuntime, /fn is_supported_media_path/u);
   assert.doesNotMatch(desktopPlatformRuntime, /fn is_path_within_watch_scope/u);
+  assert.doesNotMatch(desktopPlatformRuntime, /walkdir::|WalkDir::|std::fs::metadata/u);
 });
 
 test('SQLite project repository is owned by sqlite adapter', () => {
@@ -2251,12 +3195,19 @@ test('desktop batch offline decode is delegated to local ASR adapter', () => {
 });
 
 test('desktop streaming offline decode is delegated to local ASR adapter', () => {
+  const localAsrAudio = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'),
+    'utf8',
+  );
   const streamingRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
     'utf8',
   );
 
+  assert.match(localAsrAudio, /pub fn pcm_s16le_bytes_to_f32/u);
+  assert.match(streamingRs, /pcm_s16le_bytes_to_f32\(&pcm\)/u);
   assert.match(streamingRs, /decode_offline_samples/u);
+  assert.doesNotMatch(streamingRs, /chunks_exact\(2\).*i16::from_le_bytes/u);
   assert.doesNotMatch(streamingRs, /let stream = r\.0\.create_stream\(\)/u);
   assert.doesNotMatch(streamingRs, /stream\.accept_waveform\(16000, &full_audio\)/u);
   assert.doesNotMatch(streamingRs, /r\.0\.decode\(&stream\)/u);
