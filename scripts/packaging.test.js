@@ -3441,6 +3441,27 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.deepEqual(desktopPipelineReferences, []);
 });
 
+test('desktop ASR blocking task scheduling is delegated to platform layer', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformAsrRuntimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'asr_runtime.rs');
+  const platformAsrRuntime = fs.existsSync(platformAsrRuntimePath)
+    ? fs.readFileSync(platformAsrRuntimePath, 'utf8')
+    : '';
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+
+  assert.equal(fs.existsSync(platformAsrRuntimePath), true);
+  assert.match(platformMod, /^pub mod asr_runtime;/mu);
+  assert.match(platformAsrRuntime, /pub async fn run_blocking_asr_task/u);
+  assert.match(platformAsrRuntime, /pub fn spawn_blocking_asr_task/u);
+  assert.match(platformAsrRuntime, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(sherpaRs, /crate::platform::asr_runtime::run_blocking_asr_task/u);
+  assert.match(sherpaRs, /crate::platform::asr_runtime::spawn_blocking_asr_task/u);
+  assert.doesNotMatch(sherpaRs, /tauri::async_runtime::spawn_blocking/u);
+});
+
 test('desktop system audio mute command is owned by platform adapter', () => {
   const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const commandAudio = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'audio.rs'), 'utf8');

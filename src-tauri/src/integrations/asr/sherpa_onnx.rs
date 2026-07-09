@@ -605,7 +605,7 @@ async fn flush_recognizer_impl_inner(
 
             // Offline decoding can be CPU-heavy, so the final utterance pass
             // runs on a blocking worker and then emits one final segment.
-            tauri::async_runtime::spawn_blocking(move || {
+            crate::platform::asr_runtime::run_blocking_asr_task(move || {
                 if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                     run_offline_inference(
                         &offline_copy,
@@ -893,7 +893,7 @@ async fn feed_audio_samples_inner(
                         );
                     }
 
-                    tauri::async_runtime::spawn_blocking(move || {
+                    crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
                         if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                             run_offline_inference(
                                 &offline_copy,
@@ -961,7 +961,7 @@ async fn feed_audio_samples_inner(
                         );
                     }
 
-                    tauri::async_runtime::spawn_blocking(move || {
+                    crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
                         if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                             run_offline_inference(
                                 &offline_copy,
