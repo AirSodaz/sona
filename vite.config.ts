@@ -95,14 +95,7 @@ export default defineConfig(async () => ({
               name: "i18n-locales",
               test: (id) => id.replace(/\\/g, "/").includes("/src/locales/"),
             },
-            {
-              name: "settings-surface",
-              test: (id) => {
-                const normalizedId = id.replace(/\\/g, "/");
-                return normalizedId.includes("/src/components/DiagnosticsModal.tsx")
-                  || normalizedId.includes("/src/components/RecoveryCenterModal.tsx");
-              },
-            },
+
             {
               name: "projects-surface",
               test: (id) => {

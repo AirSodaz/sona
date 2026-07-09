@@ -167,8 +167,7 @@ describe('SettingsStorageTab', () => {
     render(<SettingsStorageTab />);
 
     expect(screen.getByText('Data & Storage')).toBeTruthy();
-    expect(await screen.findByText('Data Usage')).toBeTruthy();
-    expect(screen.getByText('Audio')).toBeTruthy();
+    expect(await screen.findByText('Audio')).toBeTruthy();
     expect(screen.getByText('Database')).toBeTruthy();
     expect(screen.getByText('SQLite indexes')).toBeTruthy();
     expect(screen.getByText('WebView Cache')).toBeTruthy();
@@ -187,8 +186,8 @@ describe('SettingsStorageTab', () => {
   it('refreshes the storage usage snapshot on demand', async () => {
     render(<SettingsStorageTab />);
 
-    await screen.findByText('Data Usage');
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const refreshButton = await screen.findByRole('button', { name: 'Refresh' });
+    fireEvent.click(refreshButton);
 
     await waitFor(() => {
       expect(mocks.getUsageSnapshot).toHaveBeenCalledTimes(2);
@@ -235,6 +234,7 @@ describe('SettingsStorageTab', () => {
 
   it('saves the selected history audio retention preset', async () => {
     render(<SettingsStorageTab />);
+    await screen.findByRole('button', { name: 'Refresh' });
 
     fireEvent.click(screen.getByLabelText('Audio retention'));
     fireEvent.click(await screen.findByRole('option', { name: '30 days' }));
@@ -262,6 +262,7 @@ describe('SettingsStorageTab', () => {
     }));
 
     render(<SettingsStorageTab />);
+    await screen.findByRole('button', { name: 'Refresh' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
@@ -285,6 +286,7 @@ describe('SettingsStorageTab', () => {
     mocks.previewAudioCleanup.mockResolvedValue(report());
 
     render(<SettingsStorageTab />);
+    await screen.findByRole('button', { name: 'Refresh' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
@@ -304,6 +306,7 @@ describe('SettingsStorageTab', () => {
     mocks.cleanupAudio.mockRejectedValue(new Error('delete failed'));
 
     render(<SettingsStorageTab />);
+    await screen.findByRole('button', { name: 'Refresh' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
