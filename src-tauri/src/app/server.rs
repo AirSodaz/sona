@@ -13,8 +13,8 @@ use tokio::sync::Mutex as AsyncMutex;
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
 pub struct ApiServerController {
-    pub running_server: Arc<AsyncMutex<Option<RunningApiServer>>>,
-    pub online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
+    running_server: Arc<AsyncMutex<Option<RunningApiServer>>>,
+    online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
 }
 
 impl Default for ApiServerController {
@@ -23,6 +23,29 @@ impl Default for ApiServerController {
             running_server: Arc::new(AsyncMutex::new(None)),
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl ApiServerController {
+    pub(crate) fn online_asr_config(
+        &self,
+    ) -> Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>> {
+        self.online_asr_config.clone()
+    }
+
+    pub(crate) async fn replace_online_asr_config(
+        &self,
+        config_map: HashMap<String, serde_json::Value>,
+    ) {
+        *self.online_asr_config.write().await = config_map;
+    }
+
+    pub(crate) async fn take_running_server(&self) -> Option<RunningApiServer> {
+        self.running_server.lock().await.take()
+    }
+
+    pub(crate) async fn set_running_server(&self, running_server: RunningApiServer) {
+        *self.running_server.lock().await = Some(running_server);
     }
 }
 
@@ -111,7 +134,7 @@ pub async fn refresh_online_asr_config(
     controller: &ApiServerController,
     config_map: HashMap<String, serde_json::Value>,
 ) {
-    *controller.online_asr_config.write().await = config_map;
+    controller.replace_online_asr_config(config_map).await;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -134,7 +157,7 @@ pub async fn start_api_server(
     let temp_dir = runtime_dirs.temp_dir;
     let models_dir = runtime_dirs.models_dir;
 
-    let online_asr_config = controller.online_asr_config.clone();
+    let online_asr_config = controller.online_asr_config();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
     let resolved = resolve_serve_runtime_options(
         ServeRuntimeArgs {
@@ -154,10 +177,7 @@ pub async fn start_api_server(
         None,
     )?;
 
-    let previous_server = {
-        let mut server_lock = controller.running_server.lock().await;
-        server_lock.take()
-    };
+    let previous_server = controller.take_running_server().await;
     if let Some(server) = previous_server {
         if let Err(error) = server.stop().await {
             log::warn!("Previous HTTP API Server stopped with error: {}", error);
@@ -182,7 +202,7 @@ pub async fn start_api_server(
     .await
     .map_err(|error| error.to_string())?;
     let normalized_whitelist = running_server.normalized_ip_whitelist.clone();
-    *controller.running_server.lock().await = Some(running_server);
+    controller.set_running_server(running_server).await;
 
     Ok(normalized_whitelist)
 }
@@ -190,10 +210,7 @@ pub async fn start_api_server(
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
 ) -> Result<(), String> {
-    let running_server = {
-        let mut server_lock = controller.running_server.lock().await;
-        server_lock.take()
-    };
+    let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
         server.stop().await?;
         log::info!("Sent shutdown signal to API server.");
@@ -236,7 +253,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             };
 
             let controller = app_handle.state::<ApiServerController>();
-            let online_asr_config = controller.online_asr_config.clone();
+            let online_asr_config = controller.online_asr_config();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
             refresh_online_asr_config(
                 &controller,
@@ -262,7 +279,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 }
             };
 
-            *controller.running_server.lock().await = Some(running_server);
+            controller.set_running_server(running_server).await;
         }
     });
 }
@@ -285,7 +302,8 @@ mod tests {
 
         refresh_online_asr_config(&controller, config_map).await;
 
-        let config = controller.online_asr_config.read().await;
+        let config_handle = controller.online_asr_config();
+        let config = config_handle.read().await;
         assert_eq!(
             config
                 .get("volcengine")

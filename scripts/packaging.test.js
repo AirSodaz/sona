@@ -1477,6 +1477,19 @@ test('desktop API server obtains ASR recognizer pools through integration facade
   assert.doesNotMatch(appServer, /RecognizerPool::new/u);
 });
 
+test('desktop API server controller owns runtime handles', () => {
+  const appServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const appSetup = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
+
+  assert.match(appServer, /pub\(crate\) fn online_asr_config/u);
+  assert.match(appServer, /pub\(crate\) async fn replace_online_asr_config/u);
+  assert.match(appServer, /pub\(crate\) async fn take_running_server/u);
+  assert.match(appServer, /pub\(crate\) async fn set_running_server/u);
+  assert.doesNotMatch(appServer, /pub running_server:/u);
+  assert.doesNotMatch(appServer, /pub online_asr_config:/u);
+  assert.doesNotMatch(appSetup, /online_asr_config\.clone\(\)/u);
+});
+
 test('desktop ASR session maps are owned by AsrState', () => {
   const stateRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'), 'utf8');
   const commandsAsr = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'asr.rs'), 'utf8');
