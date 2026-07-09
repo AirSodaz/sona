@@ -22,8 +22,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let config_for_listener = config_for_listener.clone();
         let app_handle = listener_app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let path_provider = crate::platform::paths::TauriPathProvider::from_app(&app_handle);
-            let new_config_map = crate::app::server::load_online_asr_config(&path_provider);
+            let new_config_map =
+                crate::platform::api_server_config::load_online_asr_config_for_app(&app_handle);
             *config_for_listener.write().await = new_config_map;
         });
     });

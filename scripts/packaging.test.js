@@ -445,6 +445,11 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformApiServerConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'api_server_config.rs');
+  const platformApiServerConfig = fs.existsSync(platformApiServerConfigPath)
+    ? fs.readFileSync(platformApiServerConfigPath, 'utf8')
+    : '';
   const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
   const sqliteConfigStore = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs'),
@@ -489,6 +494,8 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
 
   assert.match(tauriCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/adapters\/api_server" \}/mu);
   assert.match(cliCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/api_server" \}/mu);
+  assert.equal(fs.existsSync(platformApiServerConfigPath), true);
+  assert.match(platformMod, /^pub mod api_server_config;/mu);
   assert.match(tauriServerRuntime, /use sona_api_server::\{[\s\S]*start_api_server_runtime/u);
   assert.doesNotMatch(tauriServerRuntime, /^pub async fn run_server/mu);
   assert.doesNotMatch(tauriServerRuntime, /^pub struct JobManager/mu);
@@ -501,15 +508,21 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
     sqliteConfigStore,
     /pub fn load_serve_startup_settings_from_app_local_data_dir/u,
   );
-  assert.doesNotMatch(tauriServerRuntime, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
-  assert.match(tauriServerRuntime, /load_app_config_payload_from_app_local_data_dir/u);
-  assert.match(tauriServerRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
-  assert.doesNotMatch(tauriServerRuntime, /Database::global/u);
-  assert.doesNotMatch(tauriServerRuntime, /Database::open/u);
-  assert.doesNotMatch(tauriServerRuntime, /is_for_app_local_data_dir/u);
-  assert.doesNotMatch(tauriServerRuntime, /load_app_config_payload_from_db/u);
-  assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_db/u);
-  assert.match(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.doesNotMatch(platformApiServerConfig, /prepare_cached\(\s*"SELECT[\s\S]*FROM app_config/u);
+  assert.match(platformApiServerConfig, /load_app_config_payload_from_app_local_data_dir/u);
+  assert.match(platformApiServerConfig, /load_serve_startup_settings_from_app_local_data_dir/u);
+  assert.doesNotMatch(platformApiServerConfig, /Database::global/u);
+  assert.doesNotMatch(platformApiServerConfig, /Database::open/u);
+  assert.doesNotMatch(platformApiServerConfig, /is_for_app_local_data_dir/u);
+  assert.doesNotMatch(platformApiServerConfig, /load_app_config_payload_from_db/u);
+  assert.doesNotMatch(platformApiServerConfig, /load_serve_startup_settings_from_db/u);
+  assert.match(platformApiServerConfig, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_api_server_startup_settings/u);
+  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_online_asr_config/u);
+  assert.doesNotMatch(tauriServerRuntime, /load_app_config_payload_from_app_local_data_dir/u);
+  assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
+  assert.doesNotMatch(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
+  assert.doesNotMatch(tauriServerRuntime, /sona_sqlite::config_store/u);
   assert.doesNotMatch(tauriServerRuntime, /std::fs::read_to_string\([^)]*settings_path/u);
   assert.doesNotMatch(tauriServerRuntime, /prepare_runtime_config/u);
   assert.doesNotMatch(cliServe, /prepare_runtime_config/u);
@@ -2493,6 +2506,11 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   const coreMigration = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'config', 'migration.rs'), 'utf8');
   const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
   const desktopServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const desktopServerRuntime = desktopServer.split(/#\[cfg\(test\)\]/u)[0];
+  const platformApiServerConfig = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'api_server_config.rs'),
+    'utf8',
+  );
   const desktopIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const llmProvidersTs = fs.readFileSync(path.join(repoRoot, 'src', 'services', 'llm', 'providers.ts'), 'utf8');
 
@@ -2506,7 +2524,8 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
   assert.match(coreMigration, /crate::llm::providers::find_llm_provider_by_id_or_alias/u);
   assert.match(desktopSystemCommand, /sona_core::config::migrate_app_config/u);
-  assert.match(desktopServer, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(platformApiServerConfig, /sona_sqlite::config_store::\{/u);
+  assert.doesNotMatch(desktopServerRuntime, /sona_sqlite::config_store/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'defaults.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'migration.rs')), false);
