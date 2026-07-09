@@ -127,6 +127,20 @@ pub fn collect_rule_path_result(
     )
 }
 
+pub async fn collect_rule_path_results(
+    rule: AutomationRuntimeRuleConfig,
+    file_paths: Vec<String>,
+) -> Result<Vec<AutomationRuntimePathCollectionResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        file_paths
+            .into_iter()
+            .map(|file_path| collect_rule_path_result(&rule, &file_path))
+            .collect()
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
 fn collect_candidate_paths(rule: &AutomationRuntimeRuleConfig) -> Result<Vec<String>, String> {
     sona_runtime_fs::collect_automation_runtime_candidate_paths(rule)
 }

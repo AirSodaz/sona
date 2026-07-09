@@ -2606,6 +2606,7 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   assert.match(platformAutomationRepository, /pub async fn persist_rules/u);
   assert.match(platformAutomationRepository, /pub async fn persist_processed_entries/u);
   assert.match(platformAutomationRepository, /pub async fn persist_repository_state/u);
+  assert.match(platformAutomationRepository, /pub async fn validate_rule_activation/u);
   assert.match(platformAutomationRepository, /validate_rule_activation/u);
   assert.match(desktopAutomationCommand, /sona_core::automation::\{/u);
   assert.match(desktopAutomationCommand, /crate::platform::automation_repository::load_repository_state\(&app\)\.await/u);
@@ -2615,8 +2616,10 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
     desktopAutomationCommand,
     /crate::platform::automation_repository::persist_repository_state\(\s*&app,\s*rules,\s*processed_entries\s*,?\s*\)\s*\.await/u,
   );
+  assert.match(desktopAutomationCommand, /crate::platform::automation_repository::validate_rule_activation\(/u);
   assert.doesNotMatch(desktopAutomationCommand, /sona_sqlite::automation::AutomationRepositoryState/u);
   assert.doesNotMatch(desktopAutomationCommand, /run_automation_task/u);
+  assert.doesNotMatch(desktopAutomationCommand, /validate_rule_activation_inner/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation')), false);
   assert.doesNotMatch(platformAutomationRepository, /is_feature_llm_config_complete/u);
@@ -2648,6 +2651,7 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.match(coreAutomation, /pub fn collect_runtime_rule_path_result/u);
   assert.match(desktopPlatformRuntime, /sona_core::automation::\{/u);
   assert.match(desktopPlatformRuntime, /collect_runtime_rule_path_result/u);
+  assert.match(desktopPlatformRuntime, /pub async fn collect_rule_path_results/u);
   assert.match(desktopPlatformRuntime, /should_consider_runtime_candidate_path/u);
   assert.match(runtimeFsLib, /pub fn automation_runtime_path_metadata/u);
   assert.match(runtimeFsLib, /pub fn collect_automation_runtime_candidate_paths/u);
@@ -2656,6 +2660,9 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.match(desktopLib, /^pub mod platform;/mu);
   assert.match(desktopLib, /crate::platform::automation_runtime::AutomationRuntimeState/u);
   assert.match(desktopCommands, /crate::platform::automation_runtime::\{/u);
+  assert.match(desktopCommands, /collect_rule_path_results\(rule, file_paths\)\.await/u);
+  assert.doesNotMatch(desktopCommands, /collect_rule_path_result\(/u);
+  assert.doesNotMatch(desktopCommands, /tauri::async_runtime::spawn_blocking/u);
   assert.doesNotMatch(tauriCargo, /^walkdir\s*=/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'automation.rs')), false);
   assert.doesNotMatch(desktopPlatformRuntime, /const SUPPORTED_MEDIA_EXTENSIONS/u);

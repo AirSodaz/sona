@@ -1,7 +1,6 @@
-use crate::platform::automation_repository::validate_rule_activation_inner;
 use crate::platform::automation_runtime::{
     AutomationRuntimePathCollectionResult, AutomationRuntimeReplaceResult,
-    AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_rule_path_result,
+    AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_rule_path_results,
     create_event_sink, replace_rule_runtimes_with, scan_rule_runtime, start_rule_runtime,
 };
 use serde_json::Value;
@@ -47,15 +46,8 @@ pub async fn automation_validate_rule_activation(
     global_config: Value,
     project: Option<Value>,
 ) -> Result<AutomationRuleValidationResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(validate_rule_activation_inner(
-            &rule,
-            &global_config,
-            project.as_ref(),
-        ))
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    crate::platform::automation_repository::validate_rule_activation(rule, global_config, project)
+        .await
 }
 
 #[tauri::command]
@@ -87,12 +79,5 @@ pub async fn collect_automation_runtime_rule_paths(
     rule: AutomationRuntimeRuleConfig,
     file_paths: Vec<String>,
 ) -> Result<Vec<AutomationRuntimePathCollectionResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(file_paths
-            .into_iter()
-            .map(|file_path| collect_rule_path_result(&rule, &file_path))
-            .collect())
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    collect_rule_path_results(rule, file_paths).await
 }

@@ -2,7 +2,7 @@ use serde_json::Value;
 use sona_core::automation::{
     AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleValidationResult,
     is_virtual_automation_project, normalize_automation_path, resolve_batch_model_path,
-    validate_rule_activation,
+    validate_rule_activation as validate_rule_activation_with_environment,
 };
 use sona_sqlite::DatabaseError;
 use std::fs;
@@ -36,7 +36,7 @@ pub fn validate_rule_activation_inner(
         .map(|path| Path::new(path).exists())
         .unwrap_or(false);
 
-    validate_rule_activation(
+    validate_rule_activation_with_environment(
         rule,
         global_config,
         project,
@@ -71,6 +71,18 @@ fn prepare_export_directory(export_directory: &str) -> bool {
             false
         }
     }
+}
+
+pub async fn validate_rule_activation(
+    rule: AutomationRule,
+    global_config: Value,
+    project: Option<Value>,
+) -> Result<AutomationRuleValidationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_rule_activation_inner(&rule, &global_config, project.as_ref())
+    })
+    .await
+    .map_err(|error| error.to_string())
 }
 
 pub async fn run_automation_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
