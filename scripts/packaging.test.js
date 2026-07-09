@@ -2773,6 +2773,15 @@ test('desktop LLM timestamps are supplied by platform time adapter', () => {
   assert.doesNotMatch(desktopLlmIntegration, /chrono::Utc::now\(\)/u);
 });
 
+test('desktop app log timestamps are supplied by platform time adapter', () => {
+  const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const platformTime = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'time.rs'), 'utf8');
+
+  assert.match(platformTime, /pub fn unix_timestamp_secs\(/u);
+  assert.match(desktopLib, /crate::platform::time::unix_timestamp_secs\(\)/u);
+  assert.doesNotMatch(desktopLib, /SystemTime::now|UNIX_EPOCH/u);
+});
+
 test('online LLM provider implementation lives in adapter crate', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');

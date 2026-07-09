@@ -70,10 +70,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
                     out.finish(format_args!(
                         "{}",
                         serde_json::json!({
-                            "time": std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs(),
+                            "time": crate::platform::time::unix_timestamp_secs(),
                             "level": record.level().to_string(),
                             "target": record.target(),
                             "file": record.file(),
