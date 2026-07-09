@@ -3164,6 +3164,24 @@ test('desktop startup console setup is owned by platform adapter', () => {
   assert.doesNotMatch(desktopMain, /fn fix_console|AllocConsole|AttachConsole|SetStdHandle|OpenOptions/u);
 });
 
+test('desktop startup test-exit environment switch is owned by platform adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const desktopMain = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');
+  const startupEnvPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_env.rs');
+
+  assert.equal(fs.existsSync(startupEnvPath), true);
+  const startupEnv = fs.readFileSync(startupEnvPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod startup_env;/mu);
+  assert.match(
+    desktopMain,
+    /tauri_appsona_lib::platform::startup_env::should_exit_before_app\(\)/u,
+  );
+  assert.match(startupEnv, /pub fn should_exit_before_app\(\) -> bool/u);
+  assert.match(startupEnv, /std::env::var_os\("SONA_TEST_EXIT_BEFORE_APP"\)\.is_some\(\)/u);
+  assert.doesNotMatch(desktopMain, /std::env::var_os|SONA_TEST_EXIT_BEFORE_APP/u);
+});
+
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
 

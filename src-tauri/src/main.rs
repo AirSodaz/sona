@@ -27,7 +27,7 @@ fn setup_panic_hook() {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    if std::env::var_os("SONA_TEST_EXIT_BEFORE_APP").is_some() {
+    if tauri_appsona_lib::platform::startup_env::should_exit_before_app() {
         println!("desktop-entry");
         return ExitCode::SUCCESS;
     }
