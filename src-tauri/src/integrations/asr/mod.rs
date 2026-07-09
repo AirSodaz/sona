@@ -7,7 +7,7 @@ mod batch;
 mod groq;
 mod metrics;
 mod mistral;
-pub mod sherpa_onnx;
+mod sherpa_onnx;
 pub mod state;
 pub mod traits;
 mod transcript;

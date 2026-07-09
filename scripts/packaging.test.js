@@ -3753,6 +3753,8 @@ test('desktop ASR modules use a local runtime facade instead of sherpa implement
     'utf8',
   );
 
+  assert.match(asrMod, /^mod sherpa_onnx;$/mu);
+  assert.doesNotMatch(asrMod, /^pub mod sherpa_onnx;$/mu);
   assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*init_recognizer_impl/u);
   assert.match(asrMod, /#\[cfg\(test\)\]\s*pub\(crate\) use sherpa_onnx::resolve_punctuation/u);
   assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*diagnostics_instance_label/u);
