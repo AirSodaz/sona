@@ -3146,6 +3146,24 @@ test('desktop startup error dialog is owned by platform adapter', () => {
   assert.doesNotMatch(desktopMain, /std::process::Command|Command::new|MessageBoxW/u);
 });
 
+test('desktop startup console setup is owned by platform adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const desktopMain = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');
+  const startupConsolePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_console.rs');
+
+  assert.equal(fs.existsSync(startupConsolePath), true);
+  const startupConsole = fs.readFileSync(startupConsolePath, 'utf8');
+
+  assert.match(platformMod, /^pub mod startup_console;/mu);
+  assert.match(desktopMain, /tauri_appsona_lib::platform::startup_console::fix_console\(false\)/u);
+  assert.match(startupConsole, /pub fn fix_console\(show_new_console: bool\)/u);
+  assert.match(startupConsole, /fn AllocConsole\(\) -> i32/u);
+  assert.match(startupConsole, /fn AttachConsole\(dwProcessId: u32\) -> i32/u);
+  assert.match(startupConsole, /OpenOptions::new\(\)\.write\(true\)\.open\("CONOUT\$"\)/u);
+  assert.match(startupConsole, /OpenOptions::new\(\)\.read\(true\)\.open\("CONIN\$"\)/u);
+  assert.doesNotMatch(desktopMain, /fn fix_console|AllocConsole|AttachConsole|SetStdHandle|OpenOptions/u);
+});
+
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
 

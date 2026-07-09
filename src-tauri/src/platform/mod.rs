@@ -10,6 +10,7 @@ pub mod preset_models;
 pub mod project_repository;
 pub mod recovery_repository;
 pub mod speaker_processing;
+pub mod startup_console;
 pub mod startup_dialog;
 pub mod system_audio;
 pub mod time;
