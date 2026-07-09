@@ -53,7 +53,7 @@ jobs:
   rust-backend:
     name: Rust Backend
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -107,3 +107,17 @@ jobs:
 
       - name: Run API server tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib app::server::tests
+
+      - name: Install Android Rust target
+        run: rustup target add aarch64-linux-android
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Run Android UniFFI Gradle smoke
+        env:
+          SONA_ANDROID_ABIS: arm64-v8a
+        run: pnpm run verify:android-uniffi:gradle

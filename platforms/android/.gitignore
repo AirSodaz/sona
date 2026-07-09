@@ -1,0 +1,4 @@
+/generated/
+/sample-consumer/.gradle/
+/sample-consumer/build/
+/sample-consumer/**/build/
