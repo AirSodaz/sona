@@ -369,7 +369,7 @@ pub async fn stop_api_server(
 
 #[tauri::command]
 pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
-    sona_media_detector::check_media_formats(paths).await
+    crate::platform::media_detector::check_media_formats(paths).await
 }
 
 // Wrapped config commands
