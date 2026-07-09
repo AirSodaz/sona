@@ -2,7 +2,6 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime, State};
 
-use crate::platform::paths::TauriPathProvider;
 use crate::platform::webdav::{RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult};
 
 use sona_core::recovery::types::RecoverySnapshot;
@@ -165,8 +164,7 @@ pub async fn webdav_download_backup(
 pub async fn get_model_catalog_snapshot(
     app: AppHandle,
 ) -> Result<crate::platform::preset_models::ModelCatalogSnapshot, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::preset_models::get_model_catalog_snapshot(&path_provider).await
+    crate::platform::preset_models::get_model_catalog_snapshot_for_app(&app).await
 }
 
 #[tauri::command(rename = "resolve_model_catalog_selected_ids")]
@@ -174,12 +172,7 @@ pub async fn resolve_model_catalog_selected_ids_command(
     app: AppHandle,
     paths: crate::platform::preset_models::ModelSelectionPaths,
 ) -> Result<crate::platform::preset_models::ModelCatalogSelectedIds, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::preset_models::resolve_model_catalog_selected_ids_command(
-        &path_provider,
-        paths,
-    )
-    .await
+    crate::platform::preset_models::resolve_model_catalog_selected_ids_for_app(&app, paths).await
 }
 
 #[tauri::command]
@@ -188,8 +181,7 @@ pub async fn get_diagnostics_core_snapshot(
     state: State<'_, crate::integrations::asr::AsrState>,
     input: crate::platform::diagnostics::DiagnosticsCoreInput,
 ) -> Result<crate::platform::diagnostics::DiagnosticsCoreSnapshot, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::diagnostics::get_diagnostics_core_snapshot(&path_provider, state, input).await
+    crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app(&app, state, input).await
 }
 
 // Relocated task_ledger commands
@@ -233,8 +225,7 @@ pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnap
 
 #[tauri::command]
 pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::recovery_repository::load_snapshot(&path_provider).await
+    crate::platform::recovery_repository::load_snapshot_for_app(&app).await
 }
 
 #[tauri::command]
@@ -242,8 +233,7 @@ pub async fn recovery_save_snapshot(
     app: AppHandle,
     items: Vec<Value>,
 ) -> Result<RecoverySnapshot, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::recovery_repository::save_snapshot(&path_provider, items).await
+    crate::platform::recovery_repository::save_snapshot_for_app(&app, items).await
 }
 
 #[tauri::command]
@@ -252,9 +242,8 @@ pub async fn recovery_persist_queue_snapshot(
     queue_items: Vec<Value>,
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::recovery_repository::persist_queue_snapshot(
-        &path_provider,
+    crate::platform::recovery_repository::persist_queue_snapshot_for_app(
+        &app,
         queue_items,
         resolved_ids,
     )
@@ -284,9 +273,8 @@ pub async fn import_speaker_profile_sample(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<sona_core::transcription::speaker::SpeakerProfileSample, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    crate::platform::speaker_processing::import_speaker_profile_sample(
-        &path_provider,
+    crate::platform::speaker_processing::import_speaker_profile_sample_for_app(
+        &app,
         profile_id,
         source_path,
         source_name,

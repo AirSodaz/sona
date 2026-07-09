@@ -2255,6 +2255,7 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
     'utf8',
   );
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
 
   assert.match(desktopPlatform, /^pub mod paths;/mu);
   assert.match(desktopPlatform, /^pub mod event;/mu);
@@ -2270,8 +2271,15 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(platformEvent, /impl<R: Runtime> EventEmitter for TauriEventEmitter<R>/u);
   assert.match(platformPresetModels, /pub use sona_core::models::preset_models::\*/u);
   assert.match(platformPresetModels, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(platformPresetModels, /pub async fn get_model_catalog_snapshot_for_app/u);
+  assert.match(platformPresetModels, /pub async fn resolve_model_catalog_selected_ids_for_app/u);
   assert.match(platformDiagnostics, /pub use sona_core::runtime::diagnostics::\{/u);
   assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
+  assert.match(platformDiagnostics, /pub async fn get_diagnostics_core_snapshot_for_app/u);
+  assert.match(systemCommand, /crate::platform::preset_models::get_model_catalog_snapshot_for_app\(&app\)\.await/u);
+  assert.match(systemCommand, /crate::platform::preset_models::resolve_model_catalog_selected_ids_for_app\(&app, paths\)\.await/u);
+  assert.match(systemCommand, /crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app\(&app, state, input\)\.await/u);
+  assert.doesNotMatch(systemCommand, /TauriPathProvider/u);
 });
 
 test('desktop runtime status adapter lives in platform layer', () => {
@@ -2358,11 +2366,14 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.match(platformRecovery, /pub async fn load_snapshot/u);
   assert.match(platformRecovery, /pub async fn save_snapshot/u);
   assert.match(platformRecovery, /pub async fn persist_queue_snapshot/u);
-  assert.match(systemCommand, /crate::platform::recovery_repository::load_snapshot\(&path_provider\)\.await/u);
-  assert.match(systemCommand, /crate::platform::recovery_repository::save_snapshot\(&path_provider, items\)\.await/u);
+  assert.match(platformRecovery, /pub async fn load_snapshot_for_app/u);
+  assert.match(platformRecovery, /pub async fn save_snapshot_for_app/u);
+  assert.match(platformRecovery, /pub async fn persist_queue_snapshot_for_app/u);
+  assert.match(systemCommand, /crate::platform::recovery_repository::load_snapshot_for_app\(&app\)\.await/u);
+  assert.match(systemCommand, /crate::platform::recovery_repository::save_snapshot_for_app\(&app, items\)\.await/u);
   assert.match(
     systemCommand,
-    /crate::platform::recovery_repository::persist_queue_snapshot\(\s*&path_provider,\s*queue_items,\s*resolved_ids,\s*\)\s*\.await/u,
+    /crate::platform::recovery_repository::persist_queue_snapshot_for_app\(\s*&app,\s*queue_items,\s*resolved_ids\s*,?\s*\)\s*\.await/u,
   );
   assert.doesNotMatch(systemCommand, /FsRecoveryRepository/u);
   assert.doesNotMatch(systemCommand, /run_recovery_repository_task/u);
@@ -3515,8 +3526,9 @@ test('speaker processing runtime is owned by local ASR adapter and wrapped by de
   assert.doesNotMatch(localAsrProcessing, /SpeakerEmbeddingManager/u);
   assert.match(platformSpeaker, /sona_local_asr::speaker_processing::annotate_speaker_segments_from_file/u);
   assert.match(platformSpeaker, /sona_local_asr::speaker_processing::import_speaker_profile_sample/u);
+  assert.match(platformSpeaker, /pub async fn import_speaker_profile_sample_for_app/u);
   assert.match(systemCommand, /crate::platform::speaker_processing::annotate_speaker_segments_from_file/u);
-  assert.match(systemCommand, /crate::platform::speaker_processing::import_speaker_profile_sample/u);
+  assert.match(systemCommand, /crate::platform::speaker_processing::import_speaker_profile_sample_for_app\(\s*&app,\s*profile_id,\s*source_path,\s*source_name\s*,?\s*\)\s*\.await/u);
   assert.match(batchRs, /sona_local_asr::speaker_processing::annotate_segments_with_speakers/u);
   assert.doesNotMatch(batchRs, /crate::integrations::speaker/u);
 });

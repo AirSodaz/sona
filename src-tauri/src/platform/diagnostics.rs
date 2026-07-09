@@ -24,6 +24,15 @@ pub async fn get_diagnostics_core_snapshot(
     Ok(build_diagnostics_core_snapshot_at(input, scanned_at))
 }
 
+pub async fn get_diagnostics_core_snapshot_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    state: State<'_, AsrState>,
+    input: DiagnosticsCoreInput,
+) -> Result<DiagnosticsCoreSnapshot, String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    get_diagnostics_core_snapshot(&provider, state, input).await
+}
+
 async fn enrich_diagnostics_core_input(
     provider: &dyn PathProvider,
     state: &AsrState,

@@ -34,3 +34,13 @@ pub async fn import_speaker_profile_sample(
     )
     .await
 }
+
+pub async fn import_speaker_profile_sample_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    profile_id: String,
+    source_path: String,
+    source_name: Option<String>,
+) -> Result<SpeakerProfileSample, String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    import_speaker_profile_sample(&provider, profile_id, source_path, source_name).await
+}

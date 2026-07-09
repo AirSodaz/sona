@@ -144,11 +144,26 @@ pub async fn load_snapshot(provider: &dyn PathProvider) -> Result<RecoverySnapsh
     run_recovery_repository_task(provider, |repository| repository.load_snapshot()).await
 }
 
+pub async fn load_snapshot_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<RecoverySnapshot, String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    load_snapshot(&provider).await
+}
+
 pub async fn save_snapshot(
     provider: &dyn PathProvider,
     items: Vec<Value>,
 ) -> Result<RecoverySnapshot, String> {
     run_recovery_repository_task(provider, move |repository| repository.save_snapshot(items)).await
+}
+
+pub async fn save_snapshot_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    items: Vec<Value>,
+) -> Result<RecoverySnapshot, String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    save_snapshot(&provider, items).await
 }
 
 pub async fn persist_queue_snapshot(
@@ -162,6 +177,15 @@ pub async fn persist_queue_snapshot(
             .map(|_| ())
     })
     .await
+}
+
+pub async fn persist_queue_snapshot_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    queue_items: Vec<Value>,
+    resolved_ids: Option<Vec<String>>,
+) -> Result<(), String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    persist_queue_snapshot(&provider, queue_items, resolved_ids).await
 }
 
 fn now_ms() -> u64 {
