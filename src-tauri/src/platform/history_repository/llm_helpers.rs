@@ -4,11 +4,11 @@ use std::sync::Arc;
 use serde_json::{Value, to_value};
 use tauri::{AppHandle, Runtime};
 
-use crate::integrations::asr::TranscriptSegment;
-use crate::platform::history_repository::sqlite_store::SqliteHistoryStore;
-use crate::platform::history_repository::{
-    HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+use super::{
+    HistoryItemRecord, HistoryItemStatus, SqliteHistoryStore, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason,
 };
+use crate::integrations::asr::TranscriptSegment;
 use crate::platform::paths::PathProvider;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_sqlite::Database;
@@ -101,7 +101,6 @@ pub(crate) fn save_llm_summary_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::history_repository::sqlite_store::SqliteHistoryStore;
     use crate::platform::history_repository::{
         HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest,
     };

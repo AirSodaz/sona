@@ -2466,6 +2466,10 @@ test('desktop history repository facade lives in platform without repositories m
   const dashboardApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'dashboard.rs'), 'utf8');
   const setupApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
   const historyCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'history.rs'), 'utf8');
+  const historyLlmHelpers = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'llm_helpers.rs'),
+    'utf8',
+  );
   const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
     .map((filePath) => ({
       filePath,
@@ -2504,6 +2508,8 @@ test('desktop history repository facade lives in platform without repositories m
     platformHistory,
     /pub use sona_core::history::transcript_diff::\{[\s\S]*build_transcript_diff[\s\S]*restore_transcript_diff_rows[\s\S]*\};/u,
   );
+  assert.match(historyLlmHelpers, /use super::\{[\s\S]*SqliteHistoryStore[\s\S]*\};/u);
+  assert.doesNotMatch(historyLlmHelpers, /crate::platform::history_repository::sqlite_store::SqliteHistoryStore/u);
   assert.match(platformHistory, /SqliteHistoryStore::new\(app_local_data_dir\.clone\(\), db\)/u);
   assert.match(platformHistory, /app\.opener\(\)[\s\S]*\.open_path\(/u);
   assert.match(historyCommand, /crate::platform::history_repository::run_history_file_task\(\s*&app,\s*state\.inner\(\),/u);
