@@ -1,4 +1,8 @@
 use serde::Serialize;
+use sona_core::automation::{
+    AutomationRuntimePathMetadata, AutomationRuntimeRuleConfig,
+    should_consider_runtime_candidate_path,
+};
 use sona_core::export::ExportFormat;
 use sona_core::models::catalog::ModelSummary;
 use sona_core::models::paths::{ModelsDirStatus, status_of};
@@ -14,6 +18,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 use uuid::Uuid;
 
 const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
@@ -74,6 +79,73 @@ pub fn write_json_pretty_atomic<T: Serialize + ?Sized>(
 pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     remove_path_if_exists_with(&RealFileSystem, path)
 }
+
+pub fn cli_shared_library_directory_candidates(exe_dir: &Path) -> Vec<PathBuf> {
+    vec![
+        exe_dir.join("../shared_libs"),
+        exe_dir.join("shared_libs"),
+        exe_dir.join("../resources/shared_libs"),
+        exe_dir.join("resources/shared_libs"),
+    ]
+}
+
+pub fn tauri_shared_library_directory_candidates(exe_dir: &Path) -> Vec<PathBuf> {
+    vec![
+        exe_dir.join("resources").join("shared_libs"),
+        exe_dir.join("..").join("resources").join("shared_libs"),
+        exe_dir
+            .join("..")
+            .join("..")
+            .join("resources")
+            .join("shared_libs"),
+        exe_dir
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("resources")
+            .join("shared_libs"),
+    ]
+}
+
+pub fn init_cli_shared_library_directory() {
+    init_shared_library_directory_with(cli_shared_library_directory_candidates);
+}
+
+pub fn init_tauri_shared_library_directory() {
+    init_shared_library_directory_with(tauri_shared_library_directory_candidates);
+}
+
+fn init_shared_library_directory_with(candidates_for_exe_dir: fn(&Path) -> Vec<PathBuf>) {
+    let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+    else {
+        return;
+    };
+
+    set_first_existing_shared_library_directory(candidates_for_exe_dir(&exe_dir));
+}
+
+#[cfg(target_os = "windows")]
+fn set_first_existing_shared_library_directory(candidates: Vec<PathBuf>) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::System::LibraryLoader::SetDllDirectoryW;
+    use windows::core::PCWSTR;
+
+    for path in candidates {
+        if path.exists() {
+            let mut path_u16: Vec<u16> = path.as_os_str().encode_wide().collect();
+            path_u16.push(0);
+            unsafe {
+                let _ = SetDllDirectoryW(PCWSTR(path_u16.as_ptr()));
+            }
+            break;
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_first_existing_shared_library_directory(_candidates: Vec<PathBuf>) {}
 
 fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
     fs: &dyn FileSystem,
@@ -272,6 +344,59 @@ pub fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
             error: Some(error.to_string()),
         },
     }
+}
+
+pub fn automation_runtime_path_metadata(
+    file_path: &str,
+) -> Result<Option<AutomationRuntimePathMetadata>, String> {
+    let metadata = match fs::metadata(file_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+
+    let mtime_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0);
+
+    Ok(Some(AutomationRuntimePathMetadata {
+        is_file: metadata.is_file(),
+        size: metadata.len(),
+        mtime_ms,
+    }))
+}
+
+pub fn collect_automation_runtime_candidate_paths(
+    rule: &AutomationRuntimeRuleConfig,
+) -> Result<Vec<String>, String> {
+    let watch_directory = rule.watch_directory.trim();
+    if watch_directory.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut walker = walkdir::WalkDir::new(watch_directory).follow_links(false);
+    if !rule.recursive {
+        walker = walker.max_depth(1);
+    }
+
+    let mut paths = Vec::new();
+
+    for entry in walker.into_iter() {
+        let entry = entry.map_err(|error| error.to_string())?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let file_path = entry.path().to_string_lossy().into_owned();
+        if should_consider_runtime_candidate_path(rule, &file_path) {
+            paths.push(file_path);
+        }
+    }
+
+    Ok(paths)
 }
 
 #[derive(Clone, Copy, Debug, Default)]

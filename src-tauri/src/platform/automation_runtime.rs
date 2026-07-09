@@ -2,18 +2,17 @@ use log::warn;
 use notify::{Config as NotifyConfig, Event, RecommendedWatcher, RecursiveMode, Watcher};
 pub use sona_core::automation::{
     AutomationRuntimeCandidatePayload, AutomationRuntimePathCollectionOutcome,
-    AutomationRuntimePathCollectionResult, AutomationRuntimePathMetadata,
-    AutomationRuntimeReplaceResult, AutomationRuntimeRuleConfig, collect_runtime_rule_path_result,
-    normalize_automation_path, should_consider_runtime_candidate_path,
+    AutomationRuntimePathCollectionResult, AutomationRuntimeReplaceResult,
+    AutomationRuntimeRuleConfig, collect_runtime_rule_path_result, normalize_automation_path,
+    should_consider_runtime_candidate_path,
 };
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, Runtime};
-use walkdir::WalkDir;
 
 const AUTOMATION_RUNTIME_CANDIDATE_EVENT: &str = "automation-runtime-candidate";
 
@@ -96,33 +95,15 @@ fn build_pending_candidate_key(rule_id: &str, normalized_path: &str) -> String {
     format!("{}::{}", rule_id, normalized_path)
 }
 
-fn runtime_path_metadata(file_path: &str) -> Result<Option<AutomationRuntimePathMetadata>, String> {
-    let metadata = match std::fs::metadata(file_path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.to_string()),
-    };
-
-    let mtime_ms = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0);
-
-    Ok(Some(AutomationRuntimePathMetadata {
-        is_file: metadata.is_file(),
-        size: metadata.len(),
-        mtime_ms,
-    }))
-}
-
 fn candidate_payload_for_rule(
     rule: &AutomationRuntimeRuleConfig,
     file_path: &str,
 ) -> Result<Option<AutomationRuntimeCandidatePayload>, String> {
-    let result =
-        collect_runtime_rule_path_result(rule, file_path, runtime_path_metadata(file_path));
+    let result = collect_runtime_rule_path_result(
+        rule,
+        file_path,
+        sona_runtime_fs::automation_runtime_path_metadata(file_path),
+    );
     match result.outcome {
         AutomationRuntimePathCollectionOutcome::Candidate => Ok(result.candidate),
         AutomationRuntimePathCollectionOutcome::Error => {
@@ -139,35 +120,15 @@ pub fn collect_rule_path_result(
     rule: &AutomationRuntimeRuleConfig,
     file_path: &str,
 ) -> AutomationRuntimePathCollectionResult {
-    collect_runtime_rule_path_result(rule, file_path, runtime_path_metadata(file_path))
+    collect_runtime_rule_path_result(
+        rule,
+        file_path,
+        sona_runtime_fs::automation_runtime_path_metadata(file_path),
+    )
 }
 
 fn collect_candidate_paths(rule: &AutomationRuntimeRuleConfig) -> Result<Vec<String>, String> {
-    let watch_directory = rule.watch_directory.trim();
-    if watch_directory.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut walker = WalkDir::new(watch_directory).follow_links(false);
-    if !rule.recursive {
-        walker = walker.max_depth(1);
-    }
-
-    let mut paths = Vec::new();
-
-    for entry in walker.into_iter() {
-        let entry = entry.map_err(|error| error.to_string())?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-
-        let file_path = entry.path().to_string_lossy().into_owned();
-        if should_consider_runtime_candidate_path(rule, &file_path) {
-            paths.push(file_path);
-        }
-    }
-
-    Ok(paths)
+    sona_runtime_fs::collect_automation_runtime_candidate_paths(rule)
 }
 
 fn schedule_candidate(

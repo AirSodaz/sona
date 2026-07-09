@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use sona_core::automation::{AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig};
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::FileSystem;
@@ -7,10 +8,12 @@ use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvi
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, RealFileSystem, is_preset_model_installed_at,
+    FsSourcePathStatusProvider, RealFileSystem, cli_shared_library_directory_candidates,
+    collect_automation_runtime_candidate_paths, is_preset_model_installed_at,
     load_legacy_settings_app_config, load_transcribe_config_file, plan_batch_output_files,
     remove_path_if_exists, resolve_batch_input_source, resolve_runtime_path_status,
-    select_desktop_models_dir_from_app_roots, write_json_pretty_atomic,
+    select_desktop_models_dir_from_app_roots, tauri_shared_library_directory_candidates,
+    write_json_pretty_atomic,
 };
 
 #[test]
@@ -176,6 +179,61 @@ fn fs_source_path_status_provider_reports_missing_directories_as_not_resumable()
 }
 
 #[test]
+fn automation_runtime_metadata_reports_file_snapshot_and_missing_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("audio.wav");
+    std::fs::write(&file_path, b"sample").unwrap();
+
+    let metadata =
+        sona_runtime_fs::automation_runtime_path_metadata(file_path.to_string_lossy().as_ref())
+            .unwrap()
+            .unwrap();
+    let missing = sona_runtime_fs::automation_runtime_path_metadata(
+        dir.path().join("missing.wav").to_string_lossy().as_ref(),
+    )
+    .unwrap();
+
+    assert!(metadata.is_file);
+    assert_eq!(metadata.size, 6);
+    assert!(metadata.mtime_ms > 0);
+    assert_eq!(missing, None);
+}
+
+#[test]
+fn automation_runtime_candidate_paths_skip_excluded_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = watch_dir.join("exports");
+    std::fs::create_dir_all(&export_dir).unwrap();
+    let candidate = watch_dir.join("meeting.wav");
+    std::fs::write(&candidate, b"one").unwrap();
+    std::fs::write(export_dir.join("skip.wav"), b"two").unwrap();
+    std::fs::write(watch_dir.join("notes.txt"), b"three").unwrap();
+
+    let rule = AutomationRuntimeRuleConfig {
+        rule_id: "rule-1".to_string(),
+        watch_directory: watch_dir.to_string_lossy().into_owned(),
+        recursive: true,
+        exclude_directory: export_dir.to_string_lossy().into_owned(),
+        debounce_ms: 5,
+        stable_window_ms: 10,
+    };
+
+    let paths = collect_automation_runtime_candidate_paths(&rule).unwrap();
+    let result = sona_core::automation::collect_runtime_rule_path_result(
+        &rule,
+        paths[0].as_str(),
+        sona_runtime_fs::automation_runtime_path_metadata(paths[0].as_str()),
+    );
+
+    assert_eq!(paths, vec![candidate.to_string_lossy().into_owned()]);
+    assert_eq!(
+        result.outcome,
+        AutomationRuntimePathCollectionOutcome::Candidate
+    );
+}
+
+#[test]
 fn preset_model_install_status_uses_filesystem_shape() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path();
@@ -241,4 +299,47 @@ fn real_file_system_remove_path_if_exists_handles_files_and_missing_paths() {
     assert!(!path.exists());
 
     remove_path_if_exists(&path).unwrap();
+}
+
+#[test]
+fn cli_shared_library_candidates_match_standalone_resource_layouts() {
+    let exe_dir = PathBuf::from("/opt/sona/bin");
+
+    let candidates = cli_shared_library_directory_candidates(&exe_dir);
+
+    assert_eq!(
+        candidates,
+        vec![
+            exe_dir.join("../shared_libs"),
+            exe_dir.join("shared_libs"),
+            exe_dir.join("../resources/shared_libs"),
+            exe_dir.join("resources/shared_libs"),
+        ]
+    );
+}
+
+#[test]
+fn tauri_shared_library_candidates_match_desktop_bundle_layouts() {
+    let exe_dir = PathBuf::from("/opt/sona/bin");
+
+    let candidates = tauri_shared_library_directory_candidates(&exe_dir);
+
+    assert_eq!(
+        candidates,
+        vec![
+            exe_dir.join("resources").join("shared_libs"),
+            exe_dir.join("..").join("resources").join("shared_libs"),
+            exe_dir
+                .join("..")
+                .join("..")
+                .join("resources")
+                .join("shared_libs"),
+            exe_dir
+                .join("..")
+                .join("..")
+                .join("..")
+                .join("resources")
+                .join("shared_libs"),
+        ]
+    );
 }

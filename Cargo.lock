@@ -5471,7 +5471,6 @@ dependencies = [
  "tower-http",
  "unicode-normalization",
  "uuid",
- "walkdir",
  "windows 0.61.3",
 ]
 
@@ -5529,7 +5528,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "windows 0.61.3",
 ]
 
 [[package]]
@@ -5649,6 +5647,7 @@ dependencies = [
  "tempfile",
  "uuid",
  "walkdir",
+ "windows 0.61.3",
 ]
 
 [[package]]
