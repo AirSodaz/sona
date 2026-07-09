@@ -2727,6 +2727,7 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   const platformLlmUsagePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'llm_usage.rs');
   const desktopLlmCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'llm.rs'), 'utf8');
   const tauriLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
+  const tauriLlmCommandImpl = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'), 'utf8');
   const tauriIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const tauriLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
 
@@ -2740,10 +2741,14 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.equal(fs.existsSync(platformLlmUsagePath), true);
   const platformLlmUsage = fs.readFileSync(platformLlmUsagePath, 'utf8');
   assert.match(platformMod, /^pub mod llm_usage;/mu);
+  assert.match(platformLlmUsage, /pub fn record_usage/u);
   assert.match(platformLlmUsage, /pub fn read_raw/u);
   assert.match(platformLlmUsage, /pub fn replace_raw/u);
+  assert.match(platformLlmUsage, /sona_sqlite::llm_usage::record_usage/u);
   assert.match(platformLlmUsage, /sona_sqlite::llm_usage::read_raw/u);
   assert.match(platformLlmUsage, /sona_sqlite::llm_usage::replace_raw/u);
+  assert.match(tauriLlmCommandImpl, /crate::platform::llm_usage::record_usage\(\s*&self\.app,/u);
+  assert.doesNotMatch(tauriLlmCommandImpl, /llm_usage_sqlite::record_usage/u);
   assert.match(desktopLlmCommands, /crate::platform::llm_usage::read_raw\(&app\)/u);
   assert.match(desktopLlmCommands, /crate::platform::llm_usage::replace_raw\(&app, content\)/u);
   assert.doesNotMatch(desktopLlmCommands, /llm_usage_sqlite::read_raw/u);
