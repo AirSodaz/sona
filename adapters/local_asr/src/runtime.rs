@@ -194,11 +194,46 @@ impl OfflineState {
         self.speech_buffer.clear();
     }
 
+    pub fn buffered_speech_chunk_count(&self) -> usize {
+        self.speech_buffer.len()
+    }
+
+    pub fn buffered_speech_sample_count(&self) -> usize {
+        buffered_sample_count(&self.speech_buffer)
+    }
+
     pub fn push_ring_chunk(&mut self, samples: Vec<f32>, max_chunks: usize) {
         self.ring_buffer.push_back(samples);
         while self.ring_buffer.len() > max_chunks {
             self.ring_buffer.pop_front();
         }
+    }
+
+    pub fn push_ring_chunk_with_sample_limit(
+        &mut self,
+        samples: Vec<f32>,
+        max_samples: usize,
+        trim_slack_samples: usize,
+    ) {
+        self.ring_buffer.push_back(samples);
+        let mut ring_len = self.ring_sample_count();
+        while ring_len > max_samples + trim_slack_samples {
+            if let Some(first) = self.ring_buffer.front() {
+                let first_len = first.len();
+                if ring_len.saturating_sub(first_len) >= max_samples {
+                    self.ring_buffer.pop_front();
+                    ring_len = ring_len.saturating_sub(first_len);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn ring_sample_count(&self) -> usize {
+        self.ring_buffer.iter().map(Vec::len).sum()
     }
 
     pub fn speech_chunks(&self) -> &[Vec<f32>] {
@@ -207,6 +242,14 @@ impl OfflineState {
 
     pub fn utterance_start_seconds(&self, sample_rate: f64) -> f64 {
         self.utterance_start_sample as f64 / sample_rate
+    }
+
+    pub fn should_run_inference(&self, now: Instant, min_interval_ms: u128) -> bool {
+        now.duration_since(self.last_inference_time).as_millis() > min_interval_ms
+    }
+
+    pub fn mark_inference_time(&mut self, now: Instant) {
+        self.last_inference_time = now;
     }
 
     fn ring_context(&self, samples_to_keep: usize) -> Vec<f32> {
@@ -381,5 +424,30 @@ mod tests {
         state.clear_speech_buffer();
 
         assert!(state.speech_chunks().is_empty());
+    }
+
+    #[test]
+    fn offline_state_trims_ring_buffer_by_sample_budget() {
+        let mut state = OfflineState::default();
+
+        state.push_ring_chunk_with_sample_limit(vec![1.0; 3_000], 4_800, 4_000);
+        state.push_ring_chunk_with_sample_limit(vec![2.0; 3_000], 4_800, 4_000);
+        state.push_ring_chunk_with_sample_limit(vec![3.0; 3_000], 4_800, 4_000);
+
+        assert_eq!(state.ring_sample_count(), 6_000);
+    }
+
+    #[test]
+    fn offline_state_tracks_inference_interval() {
+        let mut state = OfflineState::default();
+        let now = Instant::now();
+
+        state.mark_inference_time(now - std::time::Duration::from_millis(250));
+
+        assert!(state.should_run_inference(now, 200));
+
+        state.mark_inference_time(now);
+
+        assert!(!state.should_run_inference(now, 200));
     }
 }

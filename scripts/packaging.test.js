@@ -1563,10 +1563,18 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
   for (const helper of [
     'buffered_sample_count',
     'begin_speech',
+    'buffered_speech_chunk_count',
+    'buffered_speech_sample_count',
+    'clear_speech_buffer',
     'push_speech_chunk',
     'finish_speech_with_chunk',
     'push_ring_chunk',
+    'push_ring_chunk_with_sample_limit',
+    'ring_sample_count',
     'speech_chunks',
+    'should_run_inference',
+    'mark_inference_time',
+    'utterance_start_seconds',
     'start_instance_runtime',
     'stop_instance_runtime',
   ]) {
@@ -1576,6 +1584,10 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
 
   assert.match(desktopSherpa, /use sona_local_asr::runtime::\{[\s\S]*SherpaInstance/u);
   assert.match(desktopStreaming, /sona_local_asr::runtime::OfflineState/u);
+  assert.doesNotMatch(
+    desktopSherpa,
+    /offline_state\.(?:is_speaking|ring_buffer|speech_buffer|utterance_start_sample|last_inference_time)\b/u,
+  );
   assert.doesNotMatch(
     desktopStreaming,
     /offline_state\.(?:is_speaking|ring_buffer|speech_buffer|utterance_start_sample)\b/u,

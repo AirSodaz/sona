@@ -518,8 +518,8 @@ async fn stop_recognizer_impl_inner(
                 "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
                 instance.is_running,
                 instance.total_samples,
-                instance.offline_state.speech_buffer.len(),
-                buffered_sample_count(&instance.offline_state.speech_buffer),
+                instance.offline_state.buffered_speech_chunk_count(),
+                instance.offline_state.buffered_speech_sample_count(),
                 instance.current_segment_id.as_deref().unwrap_or("none"),
                 instance
                     .record_diagnostics
@@ -545,25 +545,25 @@ async fn flush_recognizer_impl_inner(
             "[Sherpa] flush_recognizer({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
             instance.is_running,
             instance.total_samples,
-            instance.offline_state.speech_buffer.len(),
-            buffered_sample_count(&instance.offline_state.speech_buffer),
+            instance.offline_state.buffered_speech_chunk_count(),
+            instance.offline_state.buffered_speech_sample_count(),
             instance.current_segment_id.as_deref().unwrap_or("none"),
-            instance.offline_state.is_speaking
+            instance.offline_state.is_speech_active()
         );
     }
 
     if let Some(recognizer) = instance.recognizer.clone()
         && let RecognizerInner::Offline(_) = &recognizer.inner
     {
-        if !instance.offline_state.speech_buffer.is_empty() {
+        if !instance.offline_state.speech_chunks().is_empty() {
             let seg_id = instance
                 .current_segment_id
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            let global_start = instance.offline_state.utterance_start_sample as f64 / 16000.0;
+            let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
-            let offline_copy = instance.offline_state.speech_buffer.clone();
+            let offline_copy = instance.offline_state.speech_chunks().to_vec();
             let emitter_copy = emitter.clone();
             let recognizer_copy = recognizer.clone();
             let punct_copy = instance.punctuation.clone();
@@ -611,8 +611,7 @@ async fn flush_recognizer_impl_inner(
             .await
             .map_err(|e| e.to_string())?;
 
-            instance.offline_state.speech_buffer.clear();
-            instance.offline_state.is_speaking = false;
+            instance.offline_state.clear_speech_buffer();
         } else if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] {label} flush found no pending offline speech buffer.");
         }
@@ -791,14 +790,9 @@ async fn feed_audio_samples_inner(
             }
             let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
-            if currently_speaking && !instance.offline_state.is_speaking {
+            if currently_speaking && !instance.offline_state.is_speech_active() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    let ring_buffer_samples: usize = instance
-                        .offline_state
-                        .ring_buffer
-                        .iter()
-                        .map(|chunk| chunk.len())
-                        .sum();
+                    let ring_buffer_samples = instance.offline_state.ring_sample_count();
                     println!(
                         "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
                         seg_id, instance.total_samples, ring_buffer_samples
@@ -806,45 +800,21 @@ async fn feed_audio_samples_inner(
                 } else {
                     println!("[Sherpa] Instance {} detected speech start.", instance_id);
                 }
-                instance.offline_state.is_speaking = true;
 
                 let samples_to_keep = (16000.0 * 0.3) as usize;
-                let mut context_len = 0;
-
-                if !instance.offline_state.ring_buffer.is_empty() {
-                    let ring_flat: Vec<f32> = instance
-                        .offline_state
-                        .ring_buffer
-                        .iter()
-                        .flatten()
-                        .copied()
-                        .collect();
-
-                    let keep_start = ring_flat.len().saturating_sub(samples_to_keep);
-
-                    let context = ring_flat[keep_start..].to_vec();
-                    context_len = context.len();
-                    instance.offline_state.speech_buffer.push(context);
-                }
-
-                instance.offline_state.utterance_start_sample =
-                    instance.total_samples - context_len;
-                instance.offline_state.ring_buffer.clear();
+                instance
+                    .offline_state
+                    .begin_speech(instance.total_samples, samples_to_keep);
             }
 
             if currently_speaking {
-                instance.offline_state.speech_buffer.push(samples.to_vec());
+                instance.offline_state.push_speech_chunk(samples.to_vec());
 
                 let now = std::time::Instant::now();
-                if now
-                    .duration_since(instance.offline_state.last_inference_time)
-                    .as_millis()
-                    > 200
-                {
-                    let global_start =
-                        instance.offline_state.utterance_start_sample as f64 / 16000.0;
+                if instance.offline_state.should_run_inference(now, 200) {
+                    let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
-                    let offline_copy = instance.offline_state.speech_buffer.clone();
+                    let offline_copy = instance.offline_state.speech_chunks().to_vec();
                     let emitter_copy = emitter.clone();
                     let punct_copy = instance.punctuation.clone();
                     let seg_id_copy = seg_id.clone();
@@ -896,31 +866,30 @@ async fn feed_audio_samples_inner(
                             );
                         }
                     });
-                    instance.offline_state.last_inference_time = now;
+                    instance.offline_state.mark_inference_time(now);
                 }
             }
 
             if !currently_speaking {
-                if instance.offline_state.is_speaking {
+                if instance.offline_state.is_speech_active() {
                     if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
                             "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
                             seg_id,
                             instance.total_samples,
-                            instance.offline_state.speech_buffer.len() + 1,
-                            buffered_sample_count(&instance.offline_state.speech_buffer)
-                                + samples.len()
+                            instance.offline_state.buffered_speech_chunk_count() + 1,
+                            instance.offline_state.buffered_speech_sample_count() + samples.len()
                         );
                     } else {
                         println!("[Sherpa] Instance {} detected speech end.", instance_id);
                     }
-                    instance.offline_state.is_speaking = false;
-                    instance.offline_state.speech_buffer.push(samples.to_vec());
+                    instance
+                        .offline_state
+                        .finish_speech_with_chunk(samples.to_vec());
 
-                    let global_start =
-                        instance.offline_state.utterance_start_sample as f64 / 16000.0;
+                    let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
-                    let offline_copy = instance.offline_state.speech_buffer.clone();
+                    let offline_copy = instance.offline_state.speech_chunks().to_vec();
                     let emitter_copy = emitter.clone();
                     let punct_copy = instance.punctuation.clone();
                     let seg_id_copy = seg_id.clone();
@@ -965,36 +934,17 @@ async fn feed_audio_samples_inner(
                         }
                     });
 
-                    instance.offline_state.speech_buffer.clear();
+                    instance.offline_state.clear_speech_buffer();
                     instance.last_partial_metric_sample = 0;
                     instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
                 }
 
-                instance
-                    .offline_state
-                    .ring_buffer
-                    .push_back(samples.to_vec());
                 let max_ring_samples = (16000.0 * 0.3) as usize;
-
-                let mut ring_len: usize = instance
-                    .offline_state
-                    .ring_buffer
-                    .iter()
-                    .map(|v| v.len())
-                    .sum();
-                while ring_len > max_ring_samples + 4000 {
-                    if let Some(first) = instance.offline_state.ring_buffer.front() {
-                        let first_len = first.len();
-                        if ring_len - first_len >= max_ring_samples {
-                            instance.offline_state.ring_buffer.pop_front();
-                            ring_len -= first_len;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
+                instance.offline_state.push_ring_chunk_with_sample_limit(
+                    samples.to_vec(),
+                    max_ring_samples,
+                    4_000,
+                );
             }
 
             instance.total_samples += samples.len();
