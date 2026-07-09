@@ -8,6 +8,7 @@ pub mod event;
 pub mod file_storage;
 pub mod hardware;
 pub mod history_repository;
+pub mod llm_usage;
 pub mod media_detector;
 pub mod model_downloads;
 pub mod paths;

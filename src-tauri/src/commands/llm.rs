@@ -59,13 +59,10 @@ pub async fn llm_usage_ensure_storage(_app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn llm_usage_read_raw(app: AppHandle) -> Result<String, String> {
-    let db = crate::platform::database::sqlite_database(&app);
-    crate::integrations::llm_usage_sqlite::read_raw(db.as_ref()).map_err(|e| e.to_string())
+    crate::platform::llm_usage::read_raw(&app)
 }
 
 #[tauri::command]
 pub async fn llm_usage_replace_raw(app: AppHandle, content: String) -> Result<(), String> {
-    let db = crate::platform::database::sqlite_database(&app);
-    crate::integrations::llm_usage_sqlite::replace_raw(db.as_ref(), &content)
-        .map_err(|e| e.to_string())
+    crate::platform::llm_usage::replace_raw(&app, content)
 }

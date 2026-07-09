@@ -2723,6 +2723,9 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const coreLlm = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'mod.rs'), 'utf8');
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformLlmUsagePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'llm_usage.rs');
+  const desktopLlmCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'llm.rs'), 'utf8');
   const tauriLlm = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm.rs'), 'utf8');
   const tauriIntegrations = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'mod.rs'), 'utf8');
   const tauriLlmTypes = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'types.rs'), 'utf8');
@@ -2734,6 +2737,17 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.match(coreLlm, /^pub mod usage;/mu);
   assert.match(sqliteLib, /^pub mod llm_usage;/mu);
   assert.match(sqliteLib, /^pub mod analytics;/mu);
+  assert.equal(fs.existsSync(platformLlmUsagePath), true);
+  const platformLlmUsage = fs.readFileSync(platformLlmUsagePath, 'utf8');
+  assert.match(platformMod, /^pub mod llm_usage;/mu);
+  assert.match(platformLlmUsage, /pub fn read_raw/u);
+  assert.match(platformLlmUsage, /pub fn replace_raw/u);
+  assert.match(platformLlmUsage, /sona_sqlite::llm_usage::read_raw/u);
+  assert.match(platformLlmUsage, /sona_sqlite::llm_usage::replace_raw/u);
+  assert.match(desktopLlmCommands, /crate::platform::llm_usage::read_raw\(&app\)/u);
+  assert.match(desktopLlmCommands, /crate::platform::llm_usage::replace_raw\(&app, content\)/u);
+  assert.doesNotMatch(desktopLlmCommands, /llm_usage_sqlite::read_raw/u);
+  assert.doesNotMatch(desktopLlmCommands, /llm_usage_sqlite::replace_raw/u);
   assert.match(tauriLlm, /pub\(crate\) use sona_core::llm::usage;/u);
   assert.match(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
   assert.match(tauriLlmTypes, /pub use sona_core::llm::usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
