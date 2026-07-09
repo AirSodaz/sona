@@ -225,12 +225,10 @@ pub fn history_build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptDiffResult, String> {
-    Ok(
-        crate::platform::history_repository::transcript_diff::build_transcript_diff(
-            snapshot_segments,
-            current_segments,
-        ),
-    )
+    Ok(crate::platform::history_repository::build_transcript_diff(
+        snapshot_segments,
+        current_segments,
+    ))
 }
 
 #[tauri::command]
@@ -238,12 +236,7 @@ pub fn history_restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    Ok(
-        crate::platform::history_repository::transcript_diff::restore_transcript_diff_rows(
-            rows,
-            selected_row_ids,
-        ),
-    )
+    Ok(crate::platform::history_repository::restore_transcript_diff_rows(rows, selected_row_ids))
 }
 
 #[tauri::command]

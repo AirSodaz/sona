@@ -2500,6 +2500,10 @@ test('desktop history repository facade lives in platform without repositories m
   assert.match(platformHistory, /pub async fn apply_prepared_history_import/u);
   assert.match(platformHistory, /pub async fn dispose_prepared_backup_import/u);
   assert.match(platformHistory, /pub async fn open_history_folder/u);
+  assert.match(
+    platformHistory,
+    /pub use sona_core::history::transcript_diff::\{[\s\S]*build_transcript_diff[\s\S]*restore_transcript_diff_rows[\s\S]*\};/u,
+  );
   assert.match(platformHistory, /SqliteHistoryStore::new\(app_local_data_dir\.clone\(\), db\)/u);
   assert.match(platformHistory, /app\.opener\(\)[\s\S]*\.open_path\(/u);
   assert.match(historyCommand, /crate::platform::history_repository::run_history_file_task\(\s*&app,\s*state\.inner\(\),/u);
@@ -2509,7 +2513,10 @@ test('desktop history repository facade lives in platform without repositories m
   assert.match(historyCommand, /crate::platform::history_repository::apply_prepared_history_import\(\s*&app,\s*history_state\.inner\(\),\s*prepared_state\.inner\(\),\s*import_id\s*,?\s*\)\s*\.await/u);
   assert.match(historyCommand, /crate::platform::history_repository::dispose_prepared_backup_import\(\s*state\.inner\(\),\s*import_id\s*,?\s*\)\s*\.await/u);
   assert.match(historyCommand, /crate::platform::history_repository::open_history_folder\(&app, state\.inner\(\)\)\.await/u);
+  assert.match(historyCommand, /crate::platform::history_repository::build_transcript_diff\(/u);
+  assert.match(historyCommand, /crate::platform::history_repository::restore_transcript_diff_rows\(/u);
   assert.doesNotMatch(historyCommand, /run_history_file_task_inner/u);
+  assert.doesNotMatch(historyCommand, /crate::platform::history_repository::transcript_diff::/u);
   assert.doesNotMatch(historyCommand, /sona_sqlite::Database/u);
   assert.doesNotMatch(historyCommand, /SqliteHistoryStore/u);
   assert.doesNotMatch(historyCommand, /HistoryStoreError/u);

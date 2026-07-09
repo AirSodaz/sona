@@ -13,7 +13,10 @@ use tauri::{AppHandle, Runtime};
 pub(crate) mod test_support;
 
 // Re-exports from history platform adapter modules
-pub use sona_core::history::{item_factory, transcript_diff, transcript_payload, workspace_query};
+pub use sona_core::history::transcript_diff::{
+    build_transcript_diff, restore_transcript_diff_rows,
+};
+pub use sona_core::history::{item_factory, transcript_payload, workspace_query};
 pub(crate) use sona_sqlite::history_fs_utils as fs_utils;
 
 pub use sona_core::history::{
