@@ -293,6 +293,38 @@ pub struct ServerState {
     pub platform: Arc<dyn ApiServerPlatform>,
 }
 
+pub fn build_streaming_router<H, T>(handler: H) -> Router<ServerState>
+where
+    H: axum::handler::Handler<T, ServerState>,
+    T: 'static,
+{
+    Router::new().route("/v1/streaming", get(handler))
+}
+
+pub fn authorize_streaming_request(
+    state: &ServerState,
+    addr: SocketAddr,
+    token: Option<&str>,
+) -> Result<tokio::sync::OwnedSemaphorePermit, StatusCode> {
+    if !state
+        .ip_whitelist
+        .iter()
+        .any(|net| net.contains(&addr.ip()))
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    if !state.api_key.is_empty() && token.unwrap_or_default() != state.api_key {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    state
+        .streaming_semaphore
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
@@ -1175,6 +1207,26 @@ mod tests {
         fs::write(install_path, b"installed").unwrap();
     }
 
+    fn streaming_authorization_state(
+        api_key: &str,
+        max_streaming: usize,
+        ip_whitelist: &str,
+    ) -> ServerState {
+        let (tx, _rx) = mpsc::channel(1);
+        ServerState {
+            job_manager: JobManager::new(tx),
+            temp_dir: PathBuf::from("temp"),
+            models_dir: PathBuf::from("models"),
+            start_time: std::time::Instant::now(),
+            api_key: api_key.to_string(),
+            streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(max_streaming)),
+            ip_whitelist: Arc::new(parse_ip_whitelist(ip_whitelist).unwrap()),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            platform: Arc::new(DefaultApiServerPlatform),
+        }
+    }
+
     #[tokio::test]
     async fn clean_expired_jobs() {
         let (tx, _rx) = mpsc::channel(1);
@@ -1369,6 +1421,56 @@ mod tests {
         let permission_err =
             std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         assert!(format_bind_error(permission_err, addr).contains("Permission denied"));
+    }
+
+    #[test]
+    fn authorize_streaming_request_rejects_non_whitelisted_clients() {
+        let state = streaming_authorization_state("secret", 1, "127.0.0.0/8");
+
+        let error = match authorize_streaming_request(
+            &state,
+            "10.0.0.1:14200".parse().unwrap(),
+            Some("secret"),
+        ) {
+            Ok(_) => panic!("non-whitelisted streaming client should be rejected"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn authorize_streaming_request_rejects_invalid_tokens() {
+        let state = streaming_authorization_state("secret", 1, "127.0.0.0/8");
+
+        let error = match authorize_streaming_request(
+            &state,
+            "127.0.0.1:14200".parse().unwrap(),
+            Some("wrong"),
+        ) {
+            Ok(_) => panic!("invalid streaming token should be rejected"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error, StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn authorize_streaming_request_holds_streaming_capacity_permit() {
+        let state = streaming_authorization_state("", 1, "127.0.0.0/8");
+
+        let permit =
+            authorize_streaming_request(&state, "127.0.0.1:14200".parse().unwrap(), None).unwrap();
+        let error =
+            match authorize_streaming_request(&state, "127.0.0.1:14200".parse().unwrap(), None) {
+                Ok(_) => panic!("streaming capacity should be exhausted"),
+                Err(error) => error,
+            };
+        drop(permit);
+        let next = authorize_streaming_request(&state, "127.0.0.1:14200".parse().unwrap(), None);
+
+        assert_eq!(error, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(next.is_ok());
     }
 
     #[test]

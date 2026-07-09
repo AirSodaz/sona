@@ -1,8 +1,7 @@
 use async_trait::async_trait;
-use axum::{Router, routing::get};
 use sona_api_server::{
     ApiServerPlatform, ApiServerServiceParts, ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest,
-    RunningApiServer, start_api_server_runtime,
+    RunningApiServer, build_streaming_router, start_api_server_runtime,
 };
 use sona_core::runtime::serve::{
     ServeRuntimeArgs, ServeStartupSettings, online_asr_config_from_app_config,
@@ -231,7 +230,9 @@ pub async fn start_api_server(
         temp_dir,
         online_asr_config,
         platform,
-        streaming_router: Some(streaming_router()),
+        streaming_router: Some(build_streaming_router(
+            crate::integrations::streaming::handle_streaming,
+        )),
     })
     .await
     .map_err(|error| error.to_string())?;
@@ -295,7 +296,9 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 temp_dir,
                 online_asr_config,
                 platform,
-                streaming_router: Some(streaming_router()),
+                streaming_router: Some(build_streaming_router(
+                    crate::integrations::streaming::handle_streaming,
+                )),
             })
             .await
             {
@@ -309,13 +312,6 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             *controller.running_server.lock().await = Some(running_server);
         }
     });
-}
-
-fn streaming_router() -> Router<sona_api_server::ServerState> {
-    Router::new().route(
-        "/v1/streaming",
-        get(crate::integrations::streaming::handle_streaming),
-    )
 }
 
 #[cfg(test)]

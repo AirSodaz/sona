@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio;
 
 use crate::app::server::TauriStreamingContext;
-use sona_api_server::ServerState;
+use sona_api_server::{ServerState, authorize_streaming_request};
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -54,27 +54,8 @@ pub async fn handle_streaming(
     State(state): State<ServerState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, StatusCode> {
-    // 1. Check IP whitelist
-    let ip = addr.ip();
-    let is_whitelisted = state.ip_whitelist.iter().any(|net| net.contains(&ip));
-    if !is_whitelisted {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    // 2. Check token if api_key is configured
-    if !state.api_key.is_empty() {
-        let token = params.get("token").map(|s| s.as_str()).unwrap_or("");
-        if token != state.api_key {
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    }
-
-    // 3. Acquire semaphore for concurrency limit
-    let permit = state
-        .streaming_semaphore
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let token = params.get("token").map(|s| s.as_str());
+    let permit = authorize_streaming_request(&state, addr, token)?;
 
     Ok(ws.on_upgrade(move |socket| async move {
         handle_streaming_socket(socket, state, permit).await;
