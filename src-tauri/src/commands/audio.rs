@@ -94,5 +94,5 @@ pub fn set_microphone_boost(state: State<'_, AudioState>, boost: f32) -> Result<
 
 #[tauri::command]
 pub async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
-    crate::integrations::audio::set_system_audio_mute(mute).await
+    crate::platform::system_audio::set_system_audio_mute(mute).await
 }

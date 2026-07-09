@@ -3068,6 +3068,26 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.deepEqual(desktopPipelineReferences, []);
 });
 
+test('desktop system audio mute command is owned by platform adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const commandAudio = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'audio.rs'), 'utf8');
+  const desktopAudio = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'audio.rs'), 'utf8');
+  const platformSystemAudioPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'system_audio.rs');
+
+  assert.equal(fs.existsSync(platformSystemAudioPath), true);
+  const platformSystemAudio = fs.readFileSync(platformSystemAudioPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod system_audio;/mu);
+  assert.match(commandAudio, /crate::platform::system_audio::set_system_audio_mute\(mute\)\.await/u);
+  assert.match(platformSystemAudio, /pub async fn set_system_audio_mute/u);
+  assert.match(platformSystemAudio, /set_mute_windows/u);
+  assert.match(platformSystemAudio, /set_mute_macos/u);
+  assert.match(platformSystemAudio, /set_mute_linux/u);
+  assert.doesNotMatch(desktopAudio, /pub async fn set_system_audio_mute/u);
+  assert.doesNotMatch(desktopAudio, /set_mute_windows|set_mute_macos|set_mute_linux/u);
+  assert.doesNotMatch(desktopAudio, /std::process::Command|Command::new|IAudioEndpointVolume/u);
+});
+
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
 
