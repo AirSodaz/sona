@@ -804,11 +804,16 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.match(desktopLib, /crate::platform::model_downloads::DownloadState::new\(\)/u);
   assert.match(platformModelDownloads, /pub struct DownloadState/u);
   assert.match(platformModelDownloads, /DownloadClient/u);
-  assert.match(platformModelDownloads, /client: DownloadClient/u);
+  assert.doesNotMatch(platformModelDownloads, /pub downloads:/u);
+  assert.doesNotMatch(platformModelDownloads, /pub client:/u);
+  assert.match(platformModelDownloads, /fn client\(&self\) -> &DownloadClient/u);
+  assert.match(platformModelDownloads, /async fn insert_download/u);
+  assert.match(platformModelDownloads, /async fn remove_download/u);
+  assert.match(platformModelDownloads, /async fn notify_download/u);
   assert.match(platformModelDownloads, /const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress"/u);
   assert.match(
     platformModelDownloads,
-    /state\s*\.client\s*\.download_file\(&url, &temp_path, notify, Some\(progress_cb\)\)/u,
+    /state\s*\.client\(\)\s*\.download_file\(&url, &temp_path, notify, Some\(progress_cb\)\)/u,
   );
   assert.match(platformModelDownloads, /complete_download_file/u);
   assert.match(platformModelDownloads, /temporary_download_path/u);
