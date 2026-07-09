@@ -5417,7 +5417,6 @@ dependencies = [
  "glob",
  "hex",
  "hmac",
- "hound",
  "ipnet",
  "log",
  "notify",

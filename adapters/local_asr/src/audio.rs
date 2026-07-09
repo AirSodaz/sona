@@ -107,17 +107,60 @@ pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
-pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &Path) -> hound::Result<()> {
-    let spec = WavSpec {
+fn mono_pcm16_wav_spec(sample_rate: u32) -> WavSpec {
+    WavSpec {
         channels: 1,
         sample_rate,
         bits_per_sample: 16,
         sample_format: SampleFormat::Int,
-    };
-    let mut writer = WavWriter::create(filepath, spec)?;
+    }
+}
+
+fn f32_to_i16_sample(sample: f32) -> i16 {
+    (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
+}
+
+pub struct LiveWavRecorder {
+    writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
+    filepath: PathBuf,
+}
+
+impl LiveWavRecorder {
+    pub fn create(filepath: &Path, sample_rate: u32) -> hound::Result<Self> {
+        let writer = WavWriter::create(filepath, mono_pcm16_wav_spec(sample_rate))?;
+        Ok(Self {
+            writer: Some(writer),
+            filepath: filepath.to_path_buf(),
+        })
+    }
+
+    pub fn filepath(&self) -> &Path {
+        &self.filepath
+    }
+
+    pub fn write_samples(&mut self, data: &[f32]) -> hound::Result<()> {
+        if let Some(writer) = self.writer.as_mut() {
+            for &sample in data {
+                writer.write_sample(f32_to_i16_sample(sample))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn finalize(mut self) -> hound::Result<PathBuf> {
+        if let Some(writer) = self.writer.take() {
+            writer.finalize()?;
+        }
+
+        Ok(self.filepath)
+    }
+}
+
+pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &Path) -> hound::Result<()> {
+    let mut writer = WavWriter::create(filepath, mono_pcm16_wav_spec(sample_rate))?;
     for &sample in data {
-        let amplitude = i16::MAX as f32;
-        writer.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16)?;
+        writer.write_sample(f32_to_i16_sample(sample))?;
     }
     writer.finalize()
 }
@@ -374,7 +417,8 @@ fn extract_vad_segments(
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path, segment_batch_audio,
+        LiveWavRecorder, resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path,
+        segment_batch_audio,
     };
     use crate::audio::{pcm_i16_to_f32, pcm_s16le_bytes_to_f32};
     use sona_core::ports::asr::BatchSegmentationMode;
@@ -409,6 +453,33 @@ mod tests {
         assert_eq!(samples[0], 0.0);
         assert!((samples[1] - 0.5).abs() < 0.01);
         assert_eq!(samples[2], -1.0);
+    }
+
+    #[test]
+    fn live_wav_recorder_writes_clamped_samples_and_reports_path() {
+        let filepath =
+            std::env::temp_dir().join(format!("sona-live-recorder-{}.wav", uuid::Uuid::new_v4()));
+        let mut recorder = LiveWavRecorder::create(&filepath, 16000).unwrap();
+
+        recorder.write_samples(&[-2.0, 0.0, 0.5, 2.0]).unwrap();
+        assert_eq!(recorder.filepath(), filepath.as_path());
+        let finalized_path = recorder.finalize().unwrap();
+
+        assert_eq!(finalized_path, filepath);
+        let mut reader = hound::WavReader::open(&filepath).unwrap();
+        let spec = reader.spec();
+        assert_eq!(spec.channels, 1);
+        assert_eq!(spec.sample_rate, 16000);
+        assert_eq!(spec.bits_per_sample, 16);
+        assert_eq!(
+            reader
+                .samples::<i16>()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![-32767, 0, 16383, 32767]
+        );
+
+        fs::remove_file(filepath).unwrap();
     }
 
     #[test]

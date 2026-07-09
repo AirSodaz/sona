@@ -4,6 +4,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use rubato::{FftFixedOut, Resampler};
+use sona_local_asr::audio::LiveWavRecorder;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::sync::mpsc::{Sender, channel};
@@ -470,7 +471,7 @@ fn spawn_capture_worker_task(
     mut recorder_rx: tokio::sync::mpsc::Receiver<RecorderCommand>,
 ) {
     tauri::async_runtime::spawn(async move {
-        let mut writer: Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>> = None;
+        let mut writer: Option<LiveWavRecorder> = None;
         let mut current_filepath = String::new();
         let mut pull_buffer = vec![0.0; 16000];
         let mut recorder_paused = false;
@@ -484,13 +485,7 @@ fn spawn_capture_worker_task(
                             if let Some(w) = writer.take() {
                                 let _ = w.finalize();
                             }
-                            let spec = hound::WavSpec {
-                                channels: 1,
-                                sample_rate: 16000,
-                                bits_per_sample: 16,
-                                sample_format: hound::SampleFormat::Int,
-                            };
-                            match hound::WavWriter::create(&path, spec) {
+                            match LiveWavRecorder::create(std::path::Path::new(&path), 16000) {
                                 Ok(w) => {
                                     writer = Some(w);
                                     current_filepath = path;
@@ -561,7 +556,7 @@ async fn drain_capture_worker_chunk(
     kind: CaptureKind,
     task_consumer: &mut impl Consumer<Item = f32>,
     pull_buffer: &mut [f32],
-    writer: &mut Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>>,
+    writer: &mut Option<LiveWavRecorder>,
     recorder_paused: bool,
 ) -> bool {
     let len = task_consumer.pop_slice(pull_buffer);
@@ -571,9 +566,12 @@ async fn drain_capture_worker_chunk(
 
     let chunk = &pull_buffer[..len];
     if !recorder_paused && let Some(w) = writer.as_mut() {
-        let amplitude = i16::MAX as f32;
-        for &sample in chunk {
-            let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+        if let Err(e) = w.write_samples(chunk) {
+            eprintln!(
+                "[Audio] Failed to write {} WAV samples: {}",
+                kind.log_name(),
+                e
+            );
         }
     }
 
