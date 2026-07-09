@@ -1,12 +1,7 @@
 use serde_json::Value;
-use std::path::PathBuf;
 use tauri::{AppHandle, Runtime, State};
 
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::history_repository::backup::{
-    apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
-};
-use crate::platform::history_repository::fs_utils::remove_path_if_exists;
 use crate::platform::history_repository::{
     BackupManifest, ExportBackupArchiveRequest, HistoryAudioCleanupReport,
     HistoryAudioCleanupRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
@@ -17,7 +12,6 @@ use crate::platform::history_repository::{
     PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 use sona_core::history_store::HistoryStore;
 
 #[tauri::command]
@@ -388,16 +382,8 @@ pub async fn export_backup_archive<R: Runtime>(
     history_state: State<'_, HistoryRepositoryState>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = crate::platform::database::sqlite_database(&app);
-    let lock = history_state.file_lock.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
-        export_backup_archive_inner(&app_local_data_dir, db, request)
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    crate::platform::history_repository::export_backup_archive(&app, history_state.inner(), request)
+        .await
 }
 
 #[tauri::command]
@@ -405,15 +391,7 @@ pub async fn prepare_backup_import(
     state: State<'_, PreparedBackupImportState>,
     archive_path: String,
 ) -> Result<PreparedBackupImport, String> {
-    let archive_path_buf = PathBuf::from(&archive_path);
-    let (prepared, snapshot) = tauri::async_runtime::spawn_blocking(move || {
-        prepare_backup_import_inner(&archive_path_buf)
-    })
-    .await
-    .map_err(|error| error.to_string())??;
-
-    state.insert(prepared.import_id.clone(), snapshot)?;
-    Ok(prepared)
+    crate::platform::history_repository::prepare_backup_import(state.inner(), archive_path).await
 }
 
 #[tauri::command]
@@ -423,25 +401,13 @@ pub async fn apply_prepared_history_import<R: Runtime>(
     prepared_state: State<'_, PreparedBackupImportState>,
     import_id: String,
 ) -> Result<(), String> {
-    let Some(snapshot) = prepared_state.get(&import_id)? else {
-        return Err(format!("Prepared backup import not found: {import_id}"));
-    };
-
-    let app_local_data_dir =
-        TauriPathProvider::from_app(&app).resolve_path(PathKind::AppLocalData)?;
-    let db = crate::platform::database::sqlite_database(&app);
-    let lock = history_state.file_lock.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
-        apply_prepared_history_import_inner(
-            &app_local_data_dir,
-            db,
-            &import_id,
-            &snapshot.extraction_dir,
-        )
-    })
+    crate::platform::history_repository::apply_prepared_history_import(
+        &app,
+        history_state.inner(),
+        prepared_state.inner(),
+        import_id,
+    )
     .await
-    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -449,14 +415,6 @@ pub async fn dispose_prepared_backup_import(
     state: State<'_, PreparedBackupImportState>,
     import_id: String,
 ) -> Result<(), String> {
-    let Some(snapshot) = state.remove(&import_id)? else {
-        return Ok(());
-    };
-
-    tauri::async_runtime::spawn_blocking(move || {
-        let _archive_path = snapshot.archive_path;
-        remove_path_if_exists(&snapshot.extraction_dir)
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    crate::platform::history_repository::dispose_prepared_backup_import(state.inner(), import_id)
+        .await
 }
