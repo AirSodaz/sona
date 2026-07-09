@@ -66,6 +66,7 @@ if (!fs.existsSync(libraryPath)) {
   throw new Error(`Missing UniFFI library at ${libraryPath}. Run cargo build -p sona-uniffi-bind first.`);
 }
 
+fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 run(cargo, [
   'run',

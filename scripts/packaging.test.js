@@ -1925,6 +1925,7 @@ test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integ
   assert.match(generateScript, /--library/u);
   assert.match(generateScript, /--language/u);
   assert.match(generateScript, /kotlin/u);
+  assert.match(generateScript, /fs\.rmSync\(outDir,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/u);
   assert.match(gradleIntegration, /generateSonaUniffiKotlin/u);
   assert.match(gradleIntegration, /scripts\/generate-uniffi-kotlin\.js/u);
   assert.match(gradleIntegration, /generated\/source\/uniffi\/main\/kotlin/u);
