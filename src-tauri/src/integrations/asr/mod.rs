@@ -44,7 +44,8 @@ pub use sona_local_asr::runtime::RecognizerPool;
 pub use state::AsrState;
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
 pub(crate) use transcript::{
-    finalize_transcript_text, normalize_recognizer_text, synthesize_durations,
+    apply_timeline_normalization, finalize_transcript_text, normalize_recognizer_text,
+    synthesize_durations,
 };
 pub use types::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,

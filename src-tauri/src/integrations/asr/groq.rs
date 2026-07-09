@@ -1,11 +1,11 @@
 use super::SherpaError;
+use super::apply_timeline_normalization;
 use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
 use super::types::{AsrTranscriptionRequest, TranscriptSegment};
 use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
-use crate::integrations::asr::transcript::apply_timeline_normalization;
 use async_trait::async_trait;
 use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
 use sona_core::transcription::postprocess::TranscriptPostprocessor;

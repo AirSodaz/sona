@@ -3277,15 +3277,19 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 test('timeline transcript normalization is owned by core and reused by desktop', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreTranscript = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'transcript.rs'), 'utf8');
+  const asrMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'), 'utf8');
   const tauriTranscript = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
+  const groqRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'groq.rs'), 'utf8');
+  const mistralRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mistral.rs'), 'utf8');
 
   assert.match(coreTranscript, /pub fn apply_timeline_normalization_with_id_generator/u);
   assert.match(coreTranscript, /pub fn build_transcript_update_with_id_generator/u);
   assert.doesNotMatch(coreTranscript, /Uuid::new_v4|uuid::Uuid::new_v4/u);
   assert.doesNotMatch(coreCargo, /^uuid\s*=/mu);
+  assert.match(asrMod, /pub\(crate\) use transcript::\{[\s\S]*apply_timeline_normalization[\s\S]*\};/u);
   assert.match(tauriTranscript, /pub\(crate\)\s+fn apply_timeline_normalization\(/u);
   assert.match(tauriTranscript, /pub\(crate\)\s+fn build_transcript_update\(/u);
   assert.match(tauriTranscript, /apply_timeline_normalization_with_id_generator/u);
@@ -3295,6 +3299,10 @@ test('timeline transcript normalization is owned by core and reused by desktop',
   assert.doesNotMatch(tauriTranscript, /struct SplitterState/u);
   assert.doesNotMatch(tauriTranscript, /fn split_segment_by_parts/u);
   assert.match(tauriTranscript, /pub\(crate\)\s+fn emit_transcript_update/u);
+  assert.match(groqRs, /use super::apply_timeline_normalization;/u);
+  assert.match(mistralRs, /use super::apply_timeline_normalization;/u);
+  assert.doesNotMatch(groqRs, /crate::integrations::asr::transcript::apply_timeline_normalization/u);
+  assert.doesNotMatch(mistralRs, /crate::integrations::asr::transcript::apply_timeline_normalization/u);
 });
 
 test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR adapter', () => {
