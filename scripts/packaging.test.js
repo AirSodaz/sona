@@ -1459,8 +1459,22 @@ test('desktop API server obtains ASR recognizer pools through integration facade
 
   assert.match(desktopAsrMod, /pub\(crate\) fn recognizer_pool_for_app/u);
   assert.match(appServer, /crate::integrations::asr::recognizer_pool_for_app\(app\.as_ref\(\)\)/u);
-  assert.doesNotMatch(appServer, /\.recognizer_pool\b/u);
+  assert.doesNotMatch(appServer, /state::<crate::integrations::asr::AsrState>\(\)\s*\.recognizer_pool/u);
   assert.doesNotMatch(appServer, /RecognizerPool::new/u);
+});
+
+test('desktop streaming handler uses Tauri streaming context accessors', () => {
+  const appServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const streaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
+
+  assert.match(appServer, /pub\(crate\) fn app_handle\(&self\)/u);
+  assert.match(appServer, /pub\(crate\) fn recognizer_pool\(&self\)/u);
+  assert.doesNotMatch(appServer, /pub app:/u);
+  assert.doesNotMatch(appServer, /pub recognizer_pool:/u);
+  assert.match(streaming, /context\.app_handle\(\)/u);
+  assert.match(streaming, /context\.recognizer_pool\(\)/u);
+  assert.doesNotMatch(streaming, /context\.app\b/u);
+  assert.doesNotMatch(streaming, /context\.recognizer_pool(?!\()/u);
 });
 
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {

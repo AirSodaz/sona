@@ -140,7 +140,7 @@ async fn handle_online_streaming_socket(
             return;
         }
     };
-    let app_handle = match &context.app {
+    let app_handle = match context.app_handle() {
         Some(app) => app.clone(),
         None => {
             let _ = socket
@@ -512,7 +512,7 @@ async fn load_recognizer(
     let primary_key = key.with_gpu_provider(primary_provider.clone());
 
     let (cell, _is_new) = {
-        let mut pool_guard = context.recognizer_pool.recognizers.lock().await;
+        let mut pool_guard = context.recognizer_pool().recognizers.lock().await;
         let existing = gpu_plan
             .provider_options()
             .into_iter()
@@ -549,7 +549,7 @@ async fn load_recognizer(
 
             let actual_provider = recognizer_result.provider.clone();
             if actual_provider != primary_provider {
-                let mut pool_guard = context.recognizer_pool.recognizers.lock().await;
+                let mut pool_guard = context.recognizer_pool().recognizers.lock().await;
                 pool_guard.insert(key.with_gpu_provider(actual_provider), cell.clone());
             }
 

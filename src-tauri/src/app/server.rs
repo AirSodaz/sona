@@ -28,8 +28,18 @@ impl Default for ApiServerController {
 
 #[derive(Clone)]
 pub struct TauriStreamingContext {
-    pub app: Option<tauri::AppHandle>,
-    pub recognizer_pool: crate::integrations::asr::RecognizerPool,
+    app: Option<tauri::AppHandle>,
+    recognizer_pool: crate::integrations::asr::RecognizerPool,
+}
+
+impl TauriStreamingContext {
+    pub(crate) fn app_handle(&self) -> Option<&tauri::AppHandle> {
+        self.app.as_ref()
+    }
+
+    pub(crate) fn recognizer_pool(&self) -> &crate::integrations::asr::RecognizerPool {
+        &self.recognizer_pool
+    }
 }
 
 #[derive(Clone)]
@@ -55,7 +65,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         &self,
         request: OnlineBatchRequest,
     ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, String> {
-        let Some(app_handle) = self.streaming_context.app.as_ref() else {
+        let Some(app_handle) = self.streaming_context.app_handle() else {
             return Err(ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
         };
         if request.config.is_null()
