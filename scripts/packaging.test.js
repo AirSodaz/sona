@@ -2462,22 +2462,48 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
   const platformDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'), 'utf8');
+  const platformAppConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'app_config.rs');
   const taskLedgerRepositoryPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'task_ledger_repository.rs');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'task_ledger.rs')));
+  assert.equal(fs.existsSync(platformAppConfigPath), true);
   assert.equal(fs.existsSync(taskLedgerRepositoryPath), true);
+  const platformAppConfig = fs.readFileSync(platformAppConfigPath, 'utf8');
   const platformTaskLedgerRepository = fs.readFileSync(taskLedgerRepositoryPath, 'utf8');
   assert.match(sqliteLib, /^pub mod config_store;/mu);
   assert.match(sqliteLib, /^pub mod task_ledger;/mu);
   assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
   assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
   assert.match(platformDatabase, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(platformAppConfig, /crate::platform::database::sqlite_config_store/u);
   assert.match(platformTaskLedgerRepository, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
-  assert.match(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
+  assert.doesNotMatch(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
   assert.doesNotMatch(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'sqlite_store.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
+});
+
+test('desktop app config store commands delegate to platform adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformAppConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'app_config.rs');
+
+  assert.equal(fs.existsSync(platformAppConfigPath), true);
+  const platformAppConfig = fs.readFileSync(platformAppConfigPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod app_config;/mu);
+  assert.match(platformAppConfig, /pub fn load_config/u);
+  assert.match(platformAppConfig, /pub fn save_config/u);
+  assert.match(platformAppConfig, /pub fn get_setting/u);
+  assert.match(platformAppConfig, /pub fn set_setting/u);
+  assert.match(platformAppConfig, /crate::platform::database::sqlite_config_store/u);
+  assert.match(systemCommand, /crate::platform::app_config::load_config\(&app\)/u);
+  assert.match(systemCommand, /crate::platform::app_config::save_config\(&app, config\)/u);
+  assert.match(systemCommand, /crate::platform::app_config::get_setting\(&app, key\)/u);
+  assert.match(systemCommand, /crate::platform::app_config::set_setting\(&app, key, value\)/u);
+  assert.doesNotMatch(systemCommand, /sqlite_config_store/u);
+  assert.doesNotMatch(systemCommand, /SqliteConfigStore/u);
 });
 
 test('desktop task ledger repository adapter lives in platform layer', () => {

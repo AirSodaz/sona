@@ -382,16 +382,12 @@ pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String
 
 #[tauri::command]
 pub fn load_app_config<R: Runtime>(app: AppHandle<R>) -> Result<Option<Value>, String> {
-    crate::platform::database::sqlite_config_store(&app)
-        .load_config()
-        .map_err(|error| error.to_string())
+    crate::platform::app_config::load_config(&app)
 }
 
 #[tauri::command]
 pub fn save_app_config<R: Runtime>(app: AppHandle<R>, config: Value) -> Result<(), String> {
-    crate::platform::database::sqlite_config_store(&app)
-        .save_config(&config)
-        .map_err(|error| error.to_string())
+    crate::platform::app_config::save_config(&app, config)
 }
 
 #[tauri::command]
@@ -399,9 +395,7 @@ pub fn get_app_setting<R: Runtime>(
     app: AppHandle<R>,
     key: String,
 ) -> Result<Option<Value>, String> {
-    crate::platform::database::sqlite_config_store(&app)
-        .get_setting(&key)
-        .map_err(|error| error.to_string())
+    crate::platform::app_config::get_setting(&app, key)
 }
 
 #[tauri::command]
@@ -410,9 +404,7 @@ pub fn set_app_setting<R: Runtime>(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    crate::platform::database::sqlite_config_store(&app)
-        .set_setting(&key, &value)
-        .map_err(|error| error.to_string())
+    crate::platform::app_config::set_setting(&app, key, value)
 }
 
 #[tauri::command(rename_all = "camelCase")]

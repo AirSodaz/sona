@@ -1,3 +1,4 @@
+pub mod app_config;
 pub mod automation_repository;
 pub mod automation_runtime;
 pub mod database;
