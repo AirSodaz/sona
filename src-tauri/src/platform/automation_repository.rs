@@ -9,6 +9,8 @@ use std::fs;
 use std::path::Path;
 use tauri::{AppHandle, Runtime};
 
+pub use sona_sqlite::automation::AutomationRepositoryState;
+
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
     global_config: &Value,
@@ -86,4 +88,38 @@ where
     .await
     .map_err(|error| error.to_string())?
     .map_err(|e| e.to_string())
+}
+
+pub async fn load_repository_state<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<AutomationRepositoryState, String> {
+    run_automation_task(app, |repository| repository.load_state()).await
+}
+
+pub async fn persist_rules<R: Runtime>(
+    app: &AppHandle<R>,
+    rules: Vec<Value>,
+) -> Result<(), String> {
+    run_automation_task(app, move |repository| repository.persist_rules(rules)).await
+}
+
+pub async fn persist_processed_entries<R: Runtime>(
+    app: &AppHandle<R>,
+    processed_entries: Vec<Value>,
+) -> Result<(), String> {
+    run_automation_task(app, move |repository| {
+        repository.persist_processed_entries(processed_entries)
+    })
+    .await
+}
+
+pub async fn persist_repository_state<R: Runtime>(
+    app: &AppHandle<R>,
+    rules: Vec<Value>,
+    processed_entries: Vec<Value>,
+) -> Result<(), String> {
+    run_automation_task(app, move |repository| {
+        repository.persist_state(rules, processed_entries)
+    })
+    .await
 }

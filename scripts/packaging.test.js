@@ -2392,7 +2392,7 @@ test('desktop automation and project repository task adapters live in platform',
   assert.match(platformAutomation, /pub fn validate_rule_activation_inner/u);
   assert.match(platformAutomation, /sona_sqlite::automation::SqliteAutomationRepository/u);
   assert.match(platformProject, /sona_sqlite::project::SqliteProjectRepository/u);
-  assert.match(automationCommand, /crate::platform::automation_repository::\{/u);
+  assert.match(automationCommand, /crate::platform::automation_repository::load_repository_state/u);
   assert.match(projectCommand, /crate::platform::project_repository::\{/u);
   assert.match(automationCommand, /sona_core::automation::\{/u);
   assert.match(projectCommand, /sona_core::project::\{/u);
@@ -2600,10 +2600,23 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'automation.rs')));
   assert.match(sqliteLib, /^pub mod automation;/mu);
   assert.match(sqliteLib, /^pub use automation::\{AutomationRepositoryState, SqliteAutomationRepository\};/mu);
+  assert.match(platformAutomationRepository, /pub use sona_sqlite::automation::AutomationRepositoryState/u);
   assert.match(platformAutomationRepository, /sona_sqlite::automation::SqliteAutomationRepository/u);
+  assert.match(platformAutomationRepository, /pub async fn load_repository_state/u);
+  assert.match(platformAutomationRepository, /pub async fn persist_rules/u);
+  assert.match(platformAutomationRepository, /pub async fn persist_processed_entries/u);
+  assert.match(platformAutomationRepository, /pub async fn persist_repository_state/u);
   assert.match(platformAutomationRepository, /validate_rule_activation/u);
   assert.match(desktopAutomationCommand, /sona_core::automation::\{/u);
-  assert.match(desktopAutomationCommand, /sona_sqlite::automation::AutomationRepositoryState/u);
+  assert.match(desktopAutomationCommand, /crate::platform::automation_repository::load_repository_state\(&app\)\.await/u);
+  assert.match(desktopAutomationCommand, /crate::platform::automation_repository::persist_rules\(&app, rules\)\.await/u);
+  assert.match(desktopAutomationCommand, /crate::platform::automation_repository::persist_processed_entries\(&app, processed_entries\)\.await/u);
+  assert.match(
+    desktopAutomationCommand,
+    /crate::platform::automation_repository::persist_repository_state\(\s*&app,\s*rules,\s*processed_entries\s*,?\s*\)\s*\.await/u,
+  );
+  assert.doesNotMatch(desktopAutomationCommand, /sona_sqlite::automation::AutomationRepositoryState/u);
+  assert.doesNotMatch(desktopAutomationCommand, /run_automation_task/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories', 'automation')), false);
   assert.doesNotMatch(platformAutomationRepository, /is_feature_llm_config_complete/u);

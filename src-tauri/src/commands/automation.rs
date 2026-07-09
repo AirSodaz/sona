@@ -1,4 +1,4 @@
-use crate::platform::automation_repository::{run_automation_task, validate_rule_activation_inner};
+use crate::platform::automation_repository::validate_rule_activation_inner;
 use crate::platform::automation_runtime::{
     AutomationRuntimePathCollectionResult, AutomationRuntimeReplaceResult,
     AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_rule_path_result,
@@ -6,14 +6,13 @@ use crate::platform::automation_runtime::{
 };
 use serde_json::Value;
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
-use sona_sqlite::automation::AutomationRepositoryState;
 use tauri::{AppHandle, Runtime, State};
 
 #[tauri::command]
 pub async fn automation_load_repository_state<R: Runtime>(
     app: AppHandle<R>,
-) -> Result<AutomationRepositoryState, String> {
-    run_automation_task(&app, |repository| repository.load_state()).await
+) -> Result<crate::platform::automation_repository::AutomationRepositoryState, String> {
+    crate::platform::automation_repository::load_repository_state(&app).await
 }
 
 #[tauri::command]
@@ -21,7 +20,7 @@ pub async fn automation_persist_rules<R: Runtime>(
     app: AppHandle<R>,
     rules: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(&app, move |repository| repository.persist_rules(rules)).await
+    crate::platform::automation_repository::persist_rules(&app, rules).await
 }
 
 #[tauri::command]
@@ -29,10 +28,7 @@ pub async fn automation_persist_processed_entries<R: Runtime>(
     app: AppHandle<R>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(&app, move |repository| {
-        repository.persist_processed_entries(processed_entries)
-    })
-    .await
+    crate::platform::automation_repository::persist_processed_entries(&app, processed_entries).await
 }
 
 #[tauri::command]
@@ -41,10 +37,8 @@ pub async fn automation_persist_repository_state<R: Runtime>(
     rules: Vec<Value>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(&app, move |repository| {
-        repository.persist_state(rules, processed_entries)
-    })
-    .await
+    crate::platform::automation_repository::persist_repository_state(&app, rules, processed_entries)
+        .await
 }
 
 #[tauri::command]
