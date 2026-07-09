@@ -10,8 +10,6 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
 pub struct ApiServerController {
@@ -108,9 +106,8 @@ impl ApiServerPlatform for TauriApiServerPlatform {
 
 pub async fn refresh_online_asr_config(
     controller: &ApiServerController,
-    provider: &dyn PathProvider,
+    config_map: HashMap<String, serde_json::Value>,
 ) {
-    let config_map = crate::platform::api_server_config::load_online_asr_config(provider);
     *controller.online_asr_config.write().await = config_map;
 }
 
@@ -129,10 +126,10 @@ pub async fn start_api_server(
     ip_whitelist: String,
     gpu_acceleration: String,
 ) -> Result<String, String> {
-    let path_provider = TauriPathProvider::from_app(&app);
-    let app_local_data_dir = path_provider.resolve_path(PathKind::AppLocalData)?;
-    let temp_dir = app_local_data_dir.join("api_temp");
-    let models_dir = app_local_data_dir.join("models");
+    let runtime_dirs =
+        crate::platform::api_server_runtime::resolve_api_server_runtime_dirs_for_app(&app)?;
+    let temp_dir = runtime_dirs.temp_dir;
+    let models_dir = runtime_dirs.models_dir;
 
     let online_asr_config = controller.online_asr_config.clone();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
@@ -164,7 +161,11 @@ pub async fn start_api_server(
         }
     }
 
-    refresh_online_asr_config(&controller, &path_provider).await;
+    refresh_online_asr_config(
+        &controller,
+        crate::platform::api_server_config::load_online_asr_config_for_app(&app),
+    )
+    .await;
 
     let running_server = start_api_server_runtime(ApiServerServiceParts {
         resolved,
@@ -200,20 +201,23 @@ pub async fn stop_api_server(
 pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let path_provider = TauriPathProvider::from_app(&app_handle);
-        let settings =
-            crate::platform::api_server_config::load_api_server_startup_settings(&path_provider);
+        let settings = crate::platform::api_server_config::load_api_server_startup_settings_for_app(
+            &app_handle,
+        );
 
         if settings.enabled {
-            let app_local_data_dir = match path_provider.resolve_path(PathKind::AppLocalData) {
-                Ok(dir) => dir,
-                Err(e) => {
-                    log::error!("Failed to get app_local_data_dir: {}", e);
-                    return;
-                }
-            };
-            let temp_dir = app_local_data_dir.join("api_temp");
-            let models_dir = app_local_data_dir.join("models");
+            let runtime_dirs =
+                match crate::platform::api_server_runtime::resolve_api_server_runtime_dirs_for_app(
+                    &app_handle,
+                ) {
+                    Ok(dirs) => dirs,
+                    Err(e) => {
+                        log::error!("Failed to get app_local_data_dir: {}", e);
+                        return;
+                    }
+                };
+            let temp_dir = runtime_dirs.temp_dir;
+            let models_dir = runtime_dirs.models_dir;
             let resolved = match resolve_serve_runtime_options(
                 ServeRuntimeArgs {
                     default_models_dir: Some(models_dir),
@@ -231,7 +235,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let controller = app_handle.state::<ApiServerController>();
             let online_asr_config = controller.online_asr_config.clone();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
-            refresh_online_asr_config(&controller, &path_provider).await;
+            refresh_online_asr_config(
+                &controller,
+                crate::platform::api_server_config::load_online_asr_config_for_app(&app_handle),
+            )
+            .await;
 
             let running_server = match start_api_server_runtime(ApiServerServiceParts {
                 resolved,
@@ -341,27 +349,16 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_online_asr_config_updates_controller_before_server_start() {
-        let app_data = tempfile::tempdir().unwrap();
-        let app_local_data = tempfile::tempdir().unwrap();
-        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
-        let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::new(Arc::new(db));
-        store
-            .save_config(&serde_json::json!({
-                "asr": {
-                    "providers": {
-                        "online": {
-                            "volcengine": {
-                                "apiKey": "sqlite-key"
-                            }
-                        }
-                    }
-                }
-            }))
-            .unwrap();
         let controller = ApiServerController::default();
+        let mut config_map = StdHashMap::new();
+        config_map.insert(
+            "volcengine".to_string(),
+            serde_json::json!({
+                "apiKey": "sqlite-key"
+            }),
+        );
 
-        refresh_online_asr_config(&controller, &provider).await;
+        refresh_online_asr_config(&controller, config_map).await;
 
         let config = controller.online_asr_config.read().await;
         assert_eq!(

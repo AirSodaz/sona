@@ -447,8 +447,12 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   const tauriServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
   const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const platformApiServerConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'api_server_config.rs');
+  const platformApiServerRuntimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'api_server_runtime.rs');
   const platformApiServerConfig = fs.existsSync(platformApiServerConfigPath)
     ? fs.readFileSync(platformApiServerConfigPath, 'utf8')
+    : '';
+  const platformApiServerRuntime = fs.existsSync(platformApiServerRuntimePath)
+    ? fs.readFileSync(platformApiServerRuntimePath, 'utf8')
     : '';
   const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
   const sqliteConfigStore = fs.readFileSync(
@@ -495,7 +499,9 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.match(tauriCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/adapters\/api_server" \}/mu);
   assert.match(cliCargo, /^sona-api-server\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/api_server" \}/mu);
   assert.equal(fs.existsSync(platformApiServerConfigPath), true);
+  assert.equal(fs.existsSync(platformApiServerRuntimePath), true);
   assert.match(platformMod, /^pub mod api_server_config;/mu);
+  assert.match(platformMod, /^pub mod api_server_runtime;/mu);
   assert.match(tauriServerRuntime, /use sona_api_server::\{[\s\S]*start_api_server_runtime/u);
   assert.doesNotMatch(tauriServerRuntime, /^pub async fn run_server/mu);
   assert.doesNotMatch(tauriServerRuntime, /^pub struct JobManager/mu);
@@ -517,12 +523,24 @@ test('api server runtime lives in adapter crate reused by desktop and standalone
   assert.doesNotMatch(platformApiServerConfig, /load_app_config_payload_from_db/u);
   assert.doesNotMatch(platformApiServerConfig, /load_serve_startup_settings_from_db/u);
   assert.match(platformApiServerConfig, /sona_runtime_fs::load_legacy_settings_app_config/u);
-  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_api_server_startup_settings/u);
-  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_online_asr_config/u);
+  assert.match(platformApiServerRuntime, /pub struct ApiServerRuntimeDirs/u);
+  assert.match(platformApiServerRuntime, /pub fn resolve_api_server_runtime_dirs/u);
+  assert.match(platformApiServerRuntime, /pub fn resolve_api_server_runtime_dirs_for_app/u);
+  assert.match(platformApiServerRuntime, /TauriPathProvider::from_app/u);
+  assert.match(platformApiServerRuntime, /PathKind::AppLocalData/u);
+  assert.match(platformApiServerRuntime, /\.join\("api_temp"\)/u);
+  assert.match(platformApiServerRuntime, /\.join\("models"\)/u);
+  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_api_server_startup_settings_for_app/u);
+  assert.match(tauriServerRuntime, /crate::platform::api_server_config::load_online_asr_config_for_app/u);
+  assert.match(tauriServerRuntime, /crate::platform::api_server_runtime::resolve_api_server_runtime_dirs_for_app/u);
   assert.doesNotMatch(tauriServerRuntime, /load_app_config_payload_from_app_local_data_dir/u);
   assert.doesNotMatch(tauriServerRuntime, /load_serve_startup_settings_from_app_local_data_dir/u);
   assert.doesNotMatch(tauriServerRuntime, /sona_runtime_fs::load_legacy_settings_app_config/u);
   assert.doesNotMatch(tauriServerRuntime, /sona_sqlite::config_store/u);
+  assert.doesNotMatch(tauriServerRuntime, /TauriPathProvider/u);
+  assert.doesNotMatch(tauriServerRuntime, /PathKind::AppLocalData/u);
+  assert.doesNotMatch(tauriServerRuntime, /\.join\("api_temp"\)/u);
+  assert.doesNotMatch(tauriServerRuntime, /\.join\("models"\)/u);
   assert.doesNotMatch(tauriServerRuntime, /std::fs::read_to_string\([^)]*settings_path/u);
   assert.doesNotMatch(tauriServerRuntime, /prepare_runtime_config/u);
   assert.doesNotMatch(cliServe, /prepare_runtime_config/u);
