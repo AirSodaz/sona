@@ -1,48 +1,12 @@
 use std::sync::Arc;
 use tauri::{Listener, Manager};
 
-use crate::platform::paths::{PathProvider, TauriPathProvider};
-
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
     let controller = app_handle_for_listener.state::<crate::app::server::ApiServerController>();
 
-    let path_provider = TauriPathProvider::from_app(&app_handle_for_listener);
-    let app_local_data_dir = path_provider
-        .resolve_path(crate::platform::paths::PathKind::AppLocalData)
-        .expect("Failed to get app_local_data_dir");
-
-    // Initialize the SQLite database
-    let db = Arc::new(sona_sqlite::Database::open(&app_local_data_dir)?);
-    sona_sqlite::Database::set_global(Arc::clone(&db))?;
-
-    // Migrate legacy JSON data to SQLite
-    let migration_result =
-        sona_sqlite::legacy_migration::migrate_legacy_to_sqlite(db.as_ref(), &app_local_data_dir)?;
-    if migration_result.migrated {
-        log::info!(
-            "Migrated legacy data: {} history items, {} projects",
-            migration_result.history_count,
-            migration_result.project_count,
-        );
-
-        if !migration_result.errors.is_empty() {
-            for err in &migration_result.errors {
-                log::error!("[Migration] {err}");
-            }
-            log::warn!(
-                "[Migration] {} error(s) occurred; legacy data preserved at original location",
-                migration_result.errors.len(),
-            );
-        }
-
-        if migration_result.errors.is_empty() {
-            sona_sqlite::legacy_migration::move_legacy_domains_to_backup(
-                &app_local_data_dir,
-                migration_result.domains,
-            )?;
-        }
-    }
+    let (db, app_local_data_dir) =
+        crate::platform::database::open_and_migrate_sqlite_for_app(&app_handle_for_listener)?;
 
     let dashboard_service = crate::platform::dashboard::create_dashboard_service(
         app_local_data_dir.clone(),

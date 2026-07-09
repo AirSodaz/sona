@@ -2521,6 +2521,7 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
   const desktopSetup = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
+  const platformDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'), 'utf8');
   const sqliteCargoPath = path.join(repoRoot, 'adapters', 'sqlite', 'Cargo.toml');
   const sqliteLibPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs');
   const sqliteMigrationPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs');
@@ -2532,8 +2533,14 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(sqliteMigrationPath));
   assert.match(sqliteLib, /^pub mod legacy_migration;/mu);
   assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/adapters\/sqlite"/u);
-  assert.match(desktopSetup, /sona_sqlite::Database::open/u);
-  assert.match(desktopSetup, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
+  assert.match(platformDatabase, /pub fn open_and_migrate_sqlite_for_app/u);
+  assert.match(platformDatabase, /sona_sqlite::Database::open/u);
+  assert.match(platformDatabase, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
+  assert.match(platformDatabase, /sona_sqlite::legacy_migration::move_legacy_domains_to_backup/u);
+  assert.match(desktopSetup, /crate::platform::database::open_and_migrate_sqlite_for_app\(&app_handle_for_listener\)\?/u);
+  assert.doesNotMatch(desktopSetup, /sona_sqlite::Database::open/u);
+  assert.doesNotMatch(desktopSetup, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
+  assert.doesNotMatch(desktopSetup, /sona_sqlite::legacy_migration::move_legacy_domains_to_backup/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database')), false);
   assert.equal(
     fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'database', 'legacy_migration.rs')),
