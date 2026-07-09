@@ -52,7 +52,21 @@ function selectedAbis() {
   return abis;
 }
 
-function findAndroidNdkHome() {
+function androidHostTag() {
+  return process.platform === 'win32'
+    ? 'windows-x86_64'
+    : process.platform === 'darwin'
+      ? 'darwin-x86_64'
+      : 'linux-x86_64';
+}
+
+function linkerPathForNdk(ndkHome, target, minSdk) {
+  const extension = process.platform === 'win32' ? '.cmd' : '';
+  const linkerName = `${LINKER_PREFIXES[target]}${minSdk}-clang${extension}`;
+  return path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', androidHostTag(), 'bin', linkerName);
+}
+
+function findAndroidNdkHome(target, minSdk) {
   const explicit = process.env.ANDROID_NDK_HOME ?? process.env.ANDROID_NDK_ROOT;
   if (explicit) {
     return explicit;
@@ -71,23 +85,18 @@ function findAndroidNdkHome() {
   const versions = fs.readdirSync(ndkRoot)
     .filter((entry) => fs.statSync(path.join(ndkRoot, entry)).isDirectory())
     .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
-  return versions.length > 0 ? path.join(ndkRoot, versions[0]) : null;
+  return versions
+    .map((version) => path.join(ndkRoot, version))
+    .find((ndkHome) => fs.existsSync(linkerPathForNdk(ndkHome, target, minSdk))) ?? null;
 }
 
 function linkerEnvForTarget(target, minSdk) {
-  const ndkHome = findAndroidNdkHome();
+  const ndkHome = findAndroidNdkHome(target, minSdk);
   if (!ndkHome) {
     return {};
   }
 
-  const hostTag = process.platform === 'win32'
-    ? 'windows-x86_64'
-    : process.platform === 'darwin'
-      ? 'darwin-x86_64'
-      : 'linux-x86_64';
-  const extension = process.platform === 'win32' ? '.cmd' : '';
-  const linkerName = `${LINKER_PREFIXES[target]}${minSdk}-clang${extension}`;
-  const linkerPath = path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', hostTag, 'bin', linkerName);
+  const linkerPath = linkerPathForNdk(ndkHome, target, minSdk);
   if (!fs.existsSync(linkerPath)) {
     throw new Error(`Missing Android NDK linker at ${linkerPath}`);
   }
@@ -145,13 +154,21 @@ const outDir = path.resolve(
   readOption('--out-dir', path.join(repoRoot, 'platforms', 'android', 'generated', 'jniLibs', 'main')),
 );
 const dryRun = args.includes('--dry-run');
+const printLinkerEnv = args.includes('--print-linker-env');
 
-if (!dryRun) {
+if (!dryRun && !printLinkerEnv) {
   prepareOutputDirectory(outDir);
 }
 
 for (const abi of selectedAbis()) {
   const target = ABI_TARGETS[abi];
+  if (printLinkerEnv) {
+    const linkerEnv = linkerEnvForTarget(target, minSdk);
+    for (const [name, value] of Object.entries(linkerEnv)) {
+      console.log(`${name}=${value}`);
+    }
+    continue;
+  }
   if (dryRun) {
     const source = androidLibraryPath(targetDir, target, profile);
     const destination = path.join(outDir, abi, 'libsona_uniffi_bind.so');
@@ -162,4 +179,6 @@ for (const abi of selectedAbis()) {
   copyAndroidLibrary(targetDir, target, profile, abi, outDir);
 }
 
-console.log(`${dryRun ? 'Planned' : 'Staged'} Sona UniFFI Android JNI libraries in ${outDir}`);
+if (!printLinkerEnv) {
+  console.log(`${dryRun ? 'Planned' : 'Staged'} Sona UniFFI Android JNI libraries in ${outDir}`);
+}

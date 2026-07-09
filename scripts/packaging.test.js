@@ -933,7 +933,7 @@ test('android uniffi JNI staging clears stale ABI outputs before packaging', () 
     buildAndroidLibsScript,
     /function prepareOutputDirectory\(outDir\)\s*\{\s*fs\.rmSync\(outDir,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\);\s*fs\.mkdirSync\(outDir,\s*\{\s*recursive:\s*true\s*\}\);\s*\}/u,
   );
-  assert.match(buildAndroidLibsScript, /if \(!dryRun\)\s*\{\s*prepareOutputDirectory\(outDir\);\s*\}/u);
+  assert.match(buildAndroidLibsScript, /if \(!dryRun && !printLinkerEnv\)\s*\{\s*prepareOutputDirectory\(outDir\);\s*\}/u);
 });
 
 test('dashboard and diagnostics clocks are supplied by desktop adapters', () => {
@@ -2009,6 +2009,51 @@ test('UniFFI Android native build script supports a no-toolchain dry run', () =>
   assert.match(result.stdout, /aarch64-linux-android/u);
   assert.match(result.stdout, /libsona_uniffi_bind\.so/u);
   assert.doesNotMatch(result.stdout, /cargo build/u);
+});
+
+test('UniFFI Android native build script skips incomplete auto-discovered NDK installs', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-ndk-'));
+  const sdkRoot = path.join(tempRoot, 'sdk');
+  const validNdk = path.join(sdkRoot, 'ndk', '29.0.14206865');
+  const incompleteNdk = path.join(sdkRoot, 'ndk', '30.0.15729638');
+  const linkerRelativePath = path.join(
+    'toolchains',
+    'llvm',
+    'prebuilt',
+    process.platform === 'win32' ? 'windows-x86_64' : process.platform === 'darwin' ? 'darwin-x86_64' : 'linux-x86_64',
+    'bin',
+    `aarch64-linux-android23-clang${process.platform === 'win32' ? '.cmd' : ''}`,
+  );
+
+  fs.mkdirSync(path.join(validNdk, path.dirname(linkerRelativePath)), { recursive: true });
+  fs.mkdirSync(incompleteNdk, { recursive: true });
+  fs.writeFileSync(path.join(validNdk, linkerRelativePath), '');
+
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
+      '--print-linker-env',
+      '--abis',
+      'arm64-v8a',
+    ],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ANDROID_HOME: sdkRoot,
+        ANDROID_SDK_ROOT: '',
+        ANDROID_NDK_HOME: '',
+        ANDROID_NDK_ROOT: '',
+      },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/u);
+  assert.match(result.stdout, /29\.0\.14206865/u);
+  assert.doesNotMatch(result.stdout, /30\.0\.15729638/u);
 });
 
 test('core owns LLM request field validation while online adapter owns API host policy', () => {
