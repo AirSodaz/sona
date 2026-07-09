@@ -3186,6 +3186,33 @@ test('desktop system audio mute command is owned by platform adapter', () => {
   assert.doesNotMatch(desktopAudio, /std::process::Command|Command::new|IAudioEndpointVolume/u);
 });
 
+test('desktop system input adapter lives in platform layer', () => {
+  const appMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'mod.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformSystemPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'system.rs');
+
+  assert.equal(fs.existsSync(platformSystemPath), true);
+  const platformSystem = fs.readFileSync(platformSystemPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod system;/mu);
+  assert.doesNotMatch(appMod, /^pub mod system;/mu);
+  assert.match(platformSystem, /pub enum ShortcutModifier/u);
+  assert.match(platformSystem, /pub fn inject_text/u);
+  assert.match(platformSystem, /pub fn get_mouse_position/u);
+  assert.match(platformSystem, /pub fn get_text_cursor_position/u);
+  assert.match(platformSystem, /pub fn force_exit/u);
+  assert.match(platformSystem, /Enigo::new/u);
+  assert.match(platformSystem, /SendInput/u);
+  assert.match(systemCommand, /crate::platform::system::greet\(name\)/u);
+  assert.match(systemCommand, /crate::platform::system::force_exit\(app\)/u);
+  assert.match(systemCommand, /Option<Vec<crate::platform::system::ShortcutModifier>>/u);
+  assert.match(systemCommand, /crate::platform::system::inject_text\(text, shortcut_modifiers\)/u);
+  assert.match(systemCommand, /crate::platform::system::get_mouse_position\(\)/u);
+  assert.match(systemCommand, /crate::platform::system::get_text_cursor_position\(\)/u);
+  assert.doesNotMatch(systemCommand, /crate::app::system/u);
+});
+
 test('desktop startup error dialog is owned by platform adapter', () => {
   const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const desktopMain = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');

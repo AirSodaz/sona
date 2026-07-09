@@ -66,30 +66,30 @@ where
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
-    crate::app::system::greet(name)
+    crate::platform::system::greet(name)
 }
 
 #[tauri::command]
 pub fn force_exit(app: AppHandle) {
-    crate::app::system::force_exit(app);
+    crate::platform::system::force_exit(app);
 }
 
 #[tauri::command]
 pub fn inject_text(
     text: String,
-    shortcut_modifiers: Option<Vec<crate::app::system::ShortcutModifier>>,
+    shortcut_modifiers: Option<Vec<crate::platform::system::ShortcutModifier>>,
 ) -> Result<(), String> {
-    crate::app::system::inject_text(text, shortcut_modifiers)
+    crate::platform::system::inject_text(text, shortcut_modifiers)
 }
 
 #[tauri::command]
 pub fn get_mouse_position() -> Result<(i32, i32), String> {
-    crate::app::system::get_mouse_position()
+    crate::platform::system::get_mouse_position()
 }
 
 #[tauri::command]
 pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
-    crate::app::system::get_text_cursor_position()
+    crate::platform::system::get_text_cursor_position()
 }
 
 #[tauri::command]
