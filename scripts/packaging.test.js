@@ -972,7 +972,8 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   assert.doesNotMatch(coreDiagnostics, /pub fn build_diagnostics_core_snapshot\(/u);
   assert.doesNotMatch(coreDiagnostics, /Utc::now|chrono::Utc::now|now_iso_like/u);
   assert.match(tauriDiagnostics, /build_diagnostics_core_snapshot_at/u);
-  assert.match(tauriDiagnostics, /chrono::Utc::now\(\)/u);
+  assert.match(tauriDiagnostics, /crate::platform::time::utc_now_rfc3339_millis\(\)/u);
+  assert.doesNotMatch(tauriDiagnostics, /chrono::Utc::now\(\)/u);
 
   assert.match(coreDashboardService, /pub struct DashboardSnapshotTime/u);
   assert.match(coreDashboardService, /build_snapshot_at/u);
