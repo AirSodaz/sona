@@ -37,7 +37,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         )
         .map_err(SherpaError::Generic)?;
 
-        let session = super::sherpa_onnx::init_recognizer_impl(state, request)
+        let session = super::init_recognizer_impl(state, request)
             .await
             .map_err(SherpaError::Generic)?;
         Ok(Some(session))

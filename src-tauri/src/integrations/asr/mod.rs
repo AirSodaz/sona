@@ -22,6 +22,11 @@ fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
+#[cfg(test)]
+pub(crate) use sherpa_onnx::resolve_punctuation;
+pub(crate) use sherpa_onnx::{
+    diagnostics_instance_label, init_recognizer_impl, log_segment_emit_diagnostics,
+};
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::ports::asr::SherpaError;
 pub use sona_core::transcription::asr_metrics::{

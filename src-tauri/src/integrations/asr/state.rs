@@ -154,18 +154,16 @@ mod tests {
         let pool = RecognizerPool::new();
 
         // 1. None should return None
-        let res_none =
-            crate::integrations::asr::sherpa_onnx::resolve_punctuation(&pool, None).await;
+        let res_none = crate::integrations::asr::resolve_punctuation(&pool, None).await;
         assert!(res_none.is_none());
 
         // 2. Empty path should return None
         let res_empty =
-            crate::integrations::asr::sherpa_onnx::resolve_punctuation(&pool, Some("".to_string()))
-                .await;
+            crate::integrations::asr::resolve_punctuation(&pool, Some("".to_string())).await;
         assert!(res_empty.is_none());
 
         // 3. Non-existent path should return None
-        let res_nonexistent = crate::integrations::asr::sherpa_onnx::resolve_punctuation(
+        let res_nonexistent = crate::integrations::asr::resolve_punctuation(
             &pool,
             Some("nonexistent_path_123".to_string()),
         )

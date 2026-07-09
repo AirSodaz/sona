@@ -3731,11 +3731,38 @@ test('desktop recognizer construction is delegated to local ASR adapter', () => 
   );
 
   assert.match(asrMod, /pub use sona_local_asr::recognizer::/u);
-  assert.doesNotMatch(asrMod, /use sherpa_onnx::/u);
+  assert.doesNotMatch(asrMod, /^use sherpa_onnx::/mu);
   assert.doesNotMatch(asrMod, /OfflineRecognizerConfig/u);
   assert.doesNotMatch(asrMod, /OnlineRecognizerConfig/u);
   assert.doesNotMatch(asrMod, /pub enum ModelType/u);
   assert.doesNotMatch(asrMod, /impl Recognizer/u);
+});
+
+test('desktop ASR modules use a local runtime facade instead of sherpa implementation paths', () => {
+  const asrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    'utf8',
+  );
+  const adapterRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    'utf8',
+  );
+  const stateRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'), 'utf8');
+  const transcriptRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    'utf8',
+  );
+
+  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*init_recognizer_impl/u);
+  assert.match(asrMod, /#\[cfg\(test\)\]\s*pub\(crate\) use sherpa_onnx::resolve_punctuation/u);
+  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*diagnostics_instance_label/u);
+  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*log_segment_emit_diagnostics/u);
+  assert.match(adapterRs, /super::init_recognizer_impl/u);
+  assert.match(stateRs, /crate::integrations::asr::resolve_punctuation/u);
+  assert.match(transcriptRs, /use super::\{[\s\S]*diagnostics_instance_label[\s\S]*log_segment_emit_diagnostics/u);
+  assert.doesNotMatch(adapterRs, /sherpa_onnx::/u);
+  assert.doesNotMatch(stateRs, /sherpa_onnx::/u);
+  assert.doesNotMatch(transcriptRs, /sherpa_onnx::/u);
 });
 
 test('local batch transcription reuses local ASR recognizer model construction', () => {

@@ -1,8 +1,7 @@
-use super::recognizer_output_event;
-use super::sherpa_onnx::{diagnostics_instance_label, log_segment_emit_diagnostics};
 use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
+use super::{diagnostics_instance_label, log_segment_emit_diagnostics, recognizer_output_event};
 use log::info;
 use sona_local_asr::punctuation::Punctuation;
 use std::sync::Arc;
