@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 
-use crate::integrations::asr::AsrState;
-use crate::integrations::asr::SherpaError;
-use crate::integrations::asr::TranscriptSegment;
-use crate::integrations::asr::types::AsrTranscriptionRequest;
+use super::{AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment};
 
 #[async_trait]
 pub trait AsrStreamingSession: Send + Sync {

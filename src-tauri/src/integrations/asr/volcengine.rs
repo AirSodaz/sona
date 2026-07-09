@@ -472,7 +472,10 @@ pub async fn process_batch_file_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::{TranscriptNormalizationOptions, TranscriptPostprocessOptions};
+    use super::super::{
+        AsrEngineConfig, OnlineAsrProviderRequest, TranscriptNormalizationOptions,
+        TranscriptPostprocessOptions,
+    };
     use super::*;
 
     fn config(api_key: &str) -> serde_json::Value {
@@ -494,8 +497,8 @@ mod tests {
             postprocess_options: TranscriptPostprocessOptions::default(),
             hotwords: None,
             speaker_processing: None,
-            engine_config: crate::integrations::asr::types::AsrEngineConfig::Online {
-                provider: crate::integrations::asr::types::OnlineAsrProviderRequest {
+            engine_config: AsrEngineConfig::Online {
+                provider: OnlineAsrProviderRequest {
                     provider_id: sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID.to_string(),
                     profile_id: "volcengine-doubao-default".to_string(),
                     config,

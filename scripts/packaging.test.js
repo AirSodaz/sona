@@ -3786,6 +3786,11 @@ test('desktop ASR modules use a local runtime facade instead of sherpa implement
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
+  const traitsRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'traits.rs'), 'utf8');
+  const volcengineRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    'utf8',
+  );
 
   assert.match(asrMod, /^mod sherpa_onnx;$/mu);
   assert.match(asrMod, /^mod state;$/mu);
@@ -3803,8 +3808,12 @@ test('desktop ASR modules use a local runtime facade instead of sherpa implement
   assert.match(stateRs, /crate::integrations::asr::resolve_punctuation/u);
   assert.doesNotMatch(stateRs, /super::traits::/u);
   assert.match(transcriptRs, /use super::\{[\s\S]*diagnostics_instance_label[\s\S]*log_segment_emit_diagnostics/u);
+  assert.match(traitsRs, /use super::\{[\s\S]*AsrTranscriptionRequest[\s\S]*\};/u);
   assert.doesNotMatch(stateRs, /crate::integrations::asr::state::/u);
   assert.doesNotMatch(transcriptRs, /crate::integrations::asr::traits::/u);
+  assert.doesNotMatch(traitsRs, /crate::integrations::asr::types::/u);
+  assert.doesNotMatch(volcengineRs, /crate::integrations::asr::types::/u);
+  assert.doesNotMatch(volcengineRs, /super::super::types::/u);
   assert.doesNotMatch(adapterRs, /sherpa_onnx::/u);
   assert.doesNotMatch(stateRs, /sherpa_onnx::/u);
   assert.doesNotMatch(transcriptRs, /sherpa_onnx::/u);
