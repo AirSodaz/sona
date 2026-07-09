@@ -14,9 +14,7 @@ pub(crate) async fn open_log_folder<R: tauri::Runtime>(
         .app_log_dir()
         .map_err(|e: tauri::Error| e.to_string())?;
 
-    if !log_dir.exists() {
-        std::fs::create_dir_all(&log_dir).map_err(|e: std::io::Error| e.to_string())?;
-    }
+    sona_runtime_fs::ensure_directory_exists(&log_dir)?;
 
     app.opener()
         .open_path(log_dir.to_string_lossy(), None::<&str>)

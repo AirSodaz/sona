@@ -9,11 +9,11 @@ use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
     FsSourcePathStatusProvider, RealFileSystem, cli_shared_library_directory_candidates,
-    collect_automation_runtime_candidate_paths, is_preset_model_installed_at,
-    load_legacy_settings_app_config, load_transcribe_config_file, plan_batch_output_files,
-    remove_path_if_exists, resolve_batch_input_source, resolve_runtime_path_status,
-    select_desktop_models_dir_from_app_roots, tauri_shared_library_directory_candidates,
-    write_json_pretty_atomic,
+    collect_automation_runtime_candidate_paths, ensure_directory_exists,
+    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
+    plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
+    tauri_shared_library_directory_candidates, write_json_pretty_atomic,
 };
 
 #[test]
@@ -154,6 +154,17 @@ fn runtime_path_status_detects_file_directory_and_missing_paths() {
     assert_eq!(directory_status.error, None);
     assert_eq!(missing_status.kind, RuntimePathKind::Missing);
     assert_eq!(missing_status.error, None);
+}
+
+#[test]
+fn ensure_directory_exists_creates_nested_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let nested = dir.path().join("logs").join("current");
+
+    ensure_directory_exists(&nested).unwrap();
+    ensure_directory_exists(&nested).unwrap();
+
+    assert!(nested.is_dir());
 }
 
 #[test]

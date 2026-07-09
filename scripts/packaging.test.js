@@ -751,6 +751,10 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
     'utf8',
   );
+  const desktopRuntimeStatus = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'),
+    'utf8',
+  );
 
   assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
   assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
@@ -778,6 +782,9 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(coreModelCatalog, /is_preset_model_installed_at/u);
   assert.doesNotMatch(coreFsPort, /RealFileSystem|std::fs::/u);
   assert.doesNotMatch(coreFileUtils, /FileSystem|write_json_pretty_atomic_with|remove_path_if_exists_with/u);
+  assert.match(runtimeFsLib, /pub fn ensure_directory_exists/u);
+  assert.match(desktopRuntimeStatus, /sona_runtime_fs::ensure_directory_exists\(&log_dir\)/u);
+  assert.doesNotMatch(desktopRuntimeStatus, /std::fs::create_dir_all/u);
   assert.doesNotMatch(coreFileUtils, /SystemTime::now|current_time_millis/u);
   assert.doesNotMatch(
     sqliteProject,

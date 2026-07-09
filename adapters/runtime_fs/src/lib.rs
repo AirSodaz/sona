@@ -80,6 +80,10 @@ pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     remove_path_if_exists_with(&RealFileSystem, path)
 }
 
+pub fn ensure_directory_exists(path: &Path) -> Result<(), String> {
+    fs::create_dir_all(path).map_err(|error| error.to_string())
+}
+
 pub fn cli_shared_library_directory_candidates(exe_dir: &Path) -> Vec<PathBuf> {
     vec![
         exe_dir.join("../shared_libs"),
