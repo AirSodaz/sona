@@ -4,6 +4,7 @@ pub mod database;
 pub mod diagnostics;
 pub mod event;
 pub mod file_storage;
+pub mod hardware;
 pub mod history_repository;
 pub mod paths;
 pub mod preset_models;

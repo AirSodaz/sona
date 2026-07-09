@@ -102,7 +102,7 @@ pub async fn get_dashboard_snapshot(
 
 #[tauri::command]
 pub async fn check_gpu_availability() -> Result<bool, String> {
-    crate::app::hardware::check_gpu_availability().await
+    crate::platform::hardware::check_gpu_availability().await
 }
 
 #[tauri::command]

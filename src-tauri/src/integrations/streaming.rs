@@ -494,7 +494,7 @@ async fn load_recognizer(
         hotwords.clone(),
     )?;
 
-    let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(
+    let gpu_plan = crate::platform::hardware::resolve_gpu_acceleration_plan(
         state.transcription_defaults.gpu_acceleration.as_deref(),
     )
     .await;

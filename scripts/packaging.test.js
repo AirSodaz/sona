@@ -3086,15 +3086,37 @@ test('desktop Volcengine config and response helpers are owned by online ASR ada
   assert.doesNotMatch(volcengineRs, /pub fn map_status_error/u);
 });
 
-test('desktop hardware module reuses local ASR adapter GPU planning', () => {
-  const hardwareRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'hardware.rs'), 'utf8');
+test('desktop hardware GPU adapter lives in platform layer', () => {
+  const appMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'mod.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
+  const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
+  const sherpaRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+  const hardwarePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'hardware.rs');
 
+  assert.equal(fs.existsSync(hardwarePath), true);
+  const hardwareRs = fs.readFileSync(hardwarePath, 'utf8');
+
+  assert.match(platformMod, /^pub mod hardware;/mu);
+  assert.doesNotMatch(appMod, /^pub mod hardware;/mu);
   assert.match(hardwareRs, /pub\(crate\) use sona_local_asr::gpu::\{/u);
   assert.match(hardwareRs, /sona_local_asr::gpu::check_gpu_availability\(\)\.await/u);
   assert.match(hardwareRs, /sona_local_asr::gpu::resolve_gpu_acceleration_plan/u);
+  assert.match(systemCommand, /crate::platform::hardware::check_gpu_availability\(\)\.await/u);
+  assert.match(batchRs, /crate::platform::hardware::resolve_gpu_acceleration_plan/u);
+  assert.match(streamingRs, /crate::platform::hardware::resolve_gpu_acceleration_plan/u);
+  assert.match(sherpaRs, /crate::platform::hardware::resolve_gpu_acceleration/u);
   assert.doesNotMatch(hardwareRs, /tokio::process::Command/u);
   assert.doesNotMatch(hardwareRs, /struct GpuAccelerationPlan/u);
   assert.doesNotMatch(hardwareRs, /struct GpuFallbackNotice/u);
+  assert.doesNotMatch(systemCommand, /crate::app::hardware/u);
+  assert.doesNotMatch(batchRs, /crate::app::hardware/u);
+  assert.doesNotMatch(streamingRs, /crate::app::hardware/u);
+  assert.doesNotMatch(sherpaRs, /crate::app::hardware/u);
 });
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {

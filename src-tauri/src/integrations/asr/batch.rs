@@ -93,7 +93,7 @@ async fn transcribe_batch_with_progress_and_metrics_inner<F, N>(
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
-    N: FnMut(&crate::app::hardware::GpuFallbackNotice),
+    N: FnMut(&crate::platform::hardware::GpuFallbackNotice),
 {
     let total_started = Instant::now();
     let audio_extract_started = Instant::now();
@@ -119,7 +119,7 @@ where
             &request.language,
             request.hotwords.clone(),
         )?;
-        let gpu_plan = crate::app::hardware::resolve_gpu_acceleration_plan(
+        let gpu_plan = crate::platform::hardware::resolve_gpu_acceleration_plan(
             request.gpu_acceleration.as_deref(),
         )
         .await;

@@ -354,7 +354,7 @@ pub async fn init_recognizer_impl(
     } = request;
 
     let gpu_plan =
-        crate::app::hardware::resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
+        crate::platform::hardware::resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
 
     info!(
         "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} gpu_plan={:?}",

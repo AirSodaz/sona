@@ -1,6 +1,6 @@
 pub(crate) use sona_local_asr::gpu::{GpuAccelerationPlan, GpuFallbackNotice};
 
-/// Checks whether the local ASR adapter can use a compatible GPU backend.
+/// Checks whether the local ASR adapter runtime can use a compatible GPU backend.
 pub async fn check_gpu_availability() -> Result<bool, String> {
     sona_local_asr::gpu::check_gpu_availability().await
 }
