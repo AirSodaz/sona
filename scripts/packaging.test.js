@@ -1442,9 +1442,10 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(localAsrRuntime, /pub struct RecognizerPool/u);
   assert.match(localAsrRuntime, /pub struct ModelConfigKey/u);
   assert.doesNotMatch(localAsrRuntime, /pub recognizers:/u);
-  assert.match(localAsrRuntime, /pub punctuations:/u);
+  assert.doesNotMatch(localAsrRuntime, /pub punctuations:/u);
   assert.match(localAsrRuntime, /pub async fn recognizer_cell_for_gpu_plan/u);
   assert.match(localAsrRuntime, /pub async fn register_recognizer_gpu_provider/u);
+  assert.match(localAsrRuntime, /pub async fn punctuation_cell_for_path/u);
   assert.match(desktopAsrState, /use sona_local_asr::runtime::RecognizerPool;/u);
   assert.doesNotMatch(desktopAsrState, /pub struct RecognizerPool/u);
   assert.doesNotMatch(desktopAsrState, /pub struct ModelConfigKey/u);
@@ -1459,6 +1460,7 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
     assert.doesNotMatch(content, /\.recognizers\.lock\(\)/u);
     assert.doesNotMatch(content, /\.recognizers\.insert/u);
     assert.doesNotMatch(content, /\.recognizers\.get/u);
+    assert.doesNotMatch(content, /\.punctuations\.lock\(\)/u);
   }
 });
 

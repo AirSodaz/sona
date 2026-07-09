@@ -315,12 +315,7 @@ pub async fn resolve_punctuation(
     if p_path.is_empty() || !Path::new(&p_path).exists() {
         return None;
     }
-    let cell = {
-        let mut map = pool.punctuations.lock().await;
-        map.entry(p_path.clone())
-            .or_insert_with(|| Arc::new(tokio::sync::OnceCell::new()))
-            .clone()
-    };
+    let cell = pool.punctuation_cell_for_path(p_path.clone()).await;
     cell.get_or_try_init(|| async {
         load_punctuation(Some(p_path.clone()))
             .map(Arc::new)

@@ -10,12 +10,12 @@ use std::time::Instant;
 use tokio::sync::{Mutex, OnceCell};
 
 pub type RecognizerCell = Arc<OnceCell<Arc<Recognizer>>>;
-type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
+pub type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 
 #[derive(Clone)]
 pub struct RecognizerPool {
     recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
-    pub punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
+    punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
 }
 
 impl Default for RecognizerPool {
@@ -62,6 +62,14 @@ impl RecognizerPool {
             .lock()
             .await
             .insert(key.with_gpu_provider(provider), cell);
+    }
+
+    pub async fn punctuation_cell_for_path(&self, path: String) -> PunctuationCell {
+        let mut punctuations = self.punctuations.lock().await;
+        punctuations
+            .entry(path)
+            .or_insert_with(|| Arc::new(OnceCell::new()))
+            .clone()
     }
 }
 
@@ -227,6 +235,20 @@ mod tests {
 
         assert!(!fallback_is_new);
         assert!(Arc::ptr_eq(&cell, &fallback_cell));
+    }
+
+    #[tokio::test]
+    async fn recognizer_pool_reuses_punctuation_cells_by_path() {
+        let pool = RecognizerPool::new();
+
+        let first = pool
+            .punctuation_cell_for_path("C:/models/punctuation.onnx".to_string())
+            .await;
+        let second = pool
+            .punctuation_cell_for_path("C:/models/punctuation.onnx".to_string())
+            .await;
+
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[test]
