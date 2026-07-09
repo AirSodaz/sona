@@ -158,11 +158,11 @@ pub struct SherpaInstance {
 }
 
 pub struct OfflineState {
-    pub speech_buffer: Vec<Vec<f32>>,
-    pub ring_buffer: VecDeque<Vec<f32>>,
-    pub is_speaking: bool,
-    pub last_inference_time: Instant,
-    pub utterance_start_sample: usize,
+    speech_buffer: Vec<Vec<f32>>,
+    ring_buffer: VecDeque<Vec<f32>>,
+    is_speaking: bool,
+    last_inference_time: Instant,
+    utterance_start_sample: usize,
 }
 
 impl OfflineState {
@@ -365,16 +365,16 @@ mod tests {
             },
             ..Default::default()
         };
-        instance.offline_state.speech_buffer.push(vec![1.0, 2.0]);
-        instance.offline_state.ring_buffer.push_back(vec![3.0]);
+        instance.offline_state.push_speech_chunk(vec![1.0, 2.0]);
+        instance.offline_state.push_ring_chunk(vec![3.0], 10);
 
         start_instance_runtime(&mut instance, None);
 
         assert!(instance.is_running);
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.segment_start_time, 0.0);
-        assert!(instance.offline_state.speech_buffer.is_empty());
-        assert!(instance.offline_state.ring_buffer.is_empty());
+        assert!(instance.offline_state.speech_chunks().is_empty());
+        assert_eq!(instance.offline_state.ring_sample_count(), 0);
         assert_eq!(instance.current_segment_id, None);
         assert_eq!(instance.last_partial_metric_sample, 0);
         assert!(!instance.record_diagnostics.first_sample_logged);
