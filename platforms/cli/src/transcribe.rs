@@ -1,5 +1,4 @@
 use clap::Args;
-use std::fs;
 use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
@@ -116,12 +115,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     match output_target {
         OutputTarget::Stdout => Ok(CliOutput::stdout(output)),
         OutputTarget::File(path) => {
-            fs::write(&path, output).map_err(|error| {
-                CliError::Io(format!(
-                    "Failed to write transcript {}: {error}",
-                    path.display()
-                ))
-            })?;
+            sona_runtime_fs::write_transcript_output_file(&path, &output).map_err(CliError::Io)?;
             Ok(CliOutput::stderr(format!(
                 "Wrote transcript to {}",
                 path.display()

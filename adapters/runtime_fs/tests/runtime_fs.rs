@@ -14,7 +14,21 @@ use sona_runtime_fs::{
     plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
     resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
     tauri_shared_library_directory_candidates, write_json_pretty_atomic,
+    write_transcript_output_file,
 };
+
+#[test]
+fn write_transcript_output_file_creates_parent_directory_and_writes_contents() {
+    let dir = tempfile::tempdir().unwrap();
+    let output_path = dir.path().join("nested").join("transcript.srt");
+
+    write_transcript_output_file(&output_path, "hello transcript").unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output_path).unwrap(),
+        "hello transcript"
+    );
+}
 
 #[test]
 fn load_transcribe_config_file_reads_shared_and_section_values() {

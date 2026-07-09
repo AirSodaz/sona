@@ -84,6 +84,12 @@ pub fn ensure_directory_exists(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|error| error.to_string())
 }
 
+pub fn write_transcript_output_file(path: &Path, output: &str) -> Result<(), String> {
+    RealFileSystem
+        .write_file(path, output.as_bytes())
+        .map_err(|error| format!("Failed to write transcript {}: {error}", path.display()))
+}
+
 pub fn cli_shared_library_directory_candidates(exe_dir: &Path) -> Vec<PathBuf> {
     vec![
         exe_dir.join("../shared_libs"),

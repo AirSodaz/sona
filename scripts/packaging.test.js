@@ -823,6 +823,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     'utf8',
   );
   const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
+  const cliTranscribe = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'), 'utf8');
   const coreRuntimeConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'config.rs'), 'utf8');
   const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'runtime.rs'), 'utf8');
   const corePaths = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'paths.rs'), 'utf8');
@@ -914,6 +915,9 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   );
 
   assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
+  assert.match(runtimeFsLib, /pub fn write_transcript_output_file/u);
+  assert.match(cliTranscribe, /sona_runtime_fs::write_transcript_output_file\(&path, &output\)/u);
+  assert.doesNotMatch(cliTranscribe, /fs::write\(/u);
   assert.match(runtimeFsLib, /pub fn load_serve_config_file/u);
   assert.match(runtimeFsLib, /pub fn load_legacy_settings_app_config/u);
   assert.match(runtimeFsLib, /pub fn default_desktop_models_dir/u);
