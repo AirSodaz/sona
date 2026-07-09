@@ -1441,7 +1441,7 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(localAsrLib, /^pub mod runtime;/mu);
   assert.match(localAsrRuntime, /pub struct RecognizerPool/u);
   assert.match(localAsrRuntime, /pub struct ModelConfigKey/u);
-  assert.match(localAsrRuntime, /pub recognizers:/u);
+  assert.doesNotMatch(localAsrRuntime, /pub recognizers:/u);
   assert.match(localAsrRuntime, /pub punctuations:/u);
   assert.match(localAsrRuntime, /pub async fn recognizer_cell_for_gpu_plan/u);
   assert.match(localAsrRuntime, /pub async fn register_recognizer_gpu_provider/u);

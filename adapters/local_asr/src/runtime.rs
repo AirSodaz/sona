@@ -14,7 +14,7 @@ type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 
 #[derive(Clone)]
 pub struct RecognizerPool {
-    pub recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
+    recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
     pub punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
 }
 
