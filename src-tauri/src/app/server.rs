@@ -27,7 +27,7 @@ impl Default for ApiServerController {
 }
 
 #[derive(Clone)]
-pub struct TauriStreamingContext {
+pub(crate) struct TauriStreamingContext {
     app: Option<tauri::AppHandle>,
     recognizer_pool: crate::integrations::asr::RecognizerPool,
 }

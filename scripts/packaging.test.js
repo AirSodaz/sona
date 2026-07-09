@@ -1467,6 +1467,8 @@ test('desktop streaming handler uses Tauri streaming context accessors', () => {
   const appServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
   const streaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
 
+  assert.match(appServer, /pub\(crate\) struct TauriStreamingContext/u);
+  assert.doesNotMatch(appServer, /pub struct TauriStreamingContext/u);
   assert.match(appServer, /pub\(crate\) fn app_handle\(&self\)/u);
   assert.match(appServer, /pub\(crate\) fn recognizer_pool\(&self\)/u);
   assert.doesNotMatch(appServer, /pub app:/u);
