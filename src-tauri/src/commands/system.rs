@@ -1,9 +1,8 @@
 use serde_json::Value;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Runtime, State};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::platform::paths::{PathProvider, TauriPathProvider};
-use sona_sqlite::DatabaseError;
 use sona_webdav::{
     RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult,
     webdav_download_backup as webdav_download_backup_adapter,
@@ -12,33 +11,7 @@ use sona_webdav::{
     webdav_upload_backup as webdav_upload_backup_adapter,
 };
 
-// task_ledger helper functions (copied from core/task_ledger/commands.rs)
-use sona_core::task_ledger::types::{
-    TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
-};
-use sona_sqlite::task_ledger::SqliteLedgerRepository;
-
-async fn run_task_ledger_repository_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
-where
-    R: Runtime,
-    T: Send + 'static,
-    F: FnOnce(SqliteLedgerRepository) -> Result<T, DatabaseError> + Send + 'static,
-{
-    let db = crate::platform::database::sqlite_database(app);
-    tauri::async_runtime::spawn_blocking(move || {
-        task(SqliteLedgerRepository::new(db)).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
-fn emit_task_ledger_snapshot<R: Runtime>(
-    app: &AppHandle<R>,
-    snapshot: &TaskLedgerSnapshot,
-) -> Result<(), String> {
-    app.emit(TASK_LEDGER_UPDATED_EVENT, snapshot)
-        .map_err(|error| error.to_string())
-}
+use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
 
 // recovery helper functions (copied from core/recovery/commands.rs)
 use crate::platform::recovery_repository::FsRecoveryRepository;
@@ -250,7 +223,7 @@ pub async fn get_diagnostics_core_snapshot(
 
 #[tauri::command]
 pub async fn task_ledger_load_snapshot(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app, |repository| repository.load_snapshot()).await
+    crate::platform::task_ledger_repository::load_snapshot(&app).await
 }
 
 #[tauri::command]
@@ -258,14 +231,7 @@ pub async fn task_ledger_upsert_task(
     app: AppHandle,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app, move |repository| {
-        repository.upsert_task(record)?;
-        repository.load_snapshot()
-    })
-    .await
-    .inspect(|snapshot| {
-        let _ = emit_task_ledger_snapshot(&app, snapshot);
-    })
+    crate::platform::task_ledger_repository::upsert_task(&app, record).await
 }
 
 #[tauri::command]
@@ -274,14 +240,7 @@ pub async fn task_ledger_patch_task(
     id: String,
     patch: Value,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app, move |repository| {
-        repository.patch_task(&id, patch)?;
-        repository.load_snapshot()
-    })
-    .await
-    .inspect(|snapshot| {
-        let _ = emit_task_ledger_snapshot(&app, snapshot);
-    })
+    crate::platform::task_ledger_repository::patch_task(&app, id, patch).await
 }
 
 #[tauri::command]
@@ -289,26 +248,12 @@ pub async fn task_ledger_remove_task(
     app: AppHandle,
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app, move |repository| {
-        repository.remove_task(&id)?;
-        repository.load_snapshot()
-    })
-    .await
-    .inspect(|snapshot| {
-        let _ = emit_task_ledger_snapshot(&app, snapshot);
-    })
+    crate::platform::task_ledger_repository::remove_task(&app, id).await
 }
 
 #[tauri::command]
 pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_repository_task(&app, |repository| {
-        repository.clear_resolved()?;
-        repository.load_snapshot()
-    })
-    .await
-    .inspect(|snapshot| {
-        let _ = emit_task_ledger_snapshot(&app, snapshot);
-    })
+    crate::platform::task_ledger_repository::clear_resolved(&app).await
 }
 
 // Relocated recovery commands

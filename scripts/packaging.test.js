@@ -2447,18 +2447,52 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   const sqliteLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs'), 'utf8');
   const desktopSystemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
   const platformDatabase = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'), 'utf8');
+  const taskLedgerRepositoryPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'task_ledger_repository.rs');
 
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'config_store.rs')));
   assert.ok(fs.existsSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'task_ledger.rs')));
+  assert.equal(fs.existsSync(taskLedgerRepositoryPath), true);
+  const platformTaskLedgerRepository = fs.readFileSync(taskLedgerRepositoryPath, 'utf8');
   assert.match(sqliteLib, /^pub mod config_store;/mu);
   assert.match(sqliteLib, /^pub mod task_ledger;/mu);
   assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
   assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
   assert.match(platformDatabase, /sona_sqlite::config_store::SqliteConfigStore/u);
+  assert.match(platformTaskLedgerRepository, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.match(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
-  assert.match(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
+  assert.doesNotMatch(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'config', 'sqlite_store.rs')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs')), false);
+});
+
+test('desktop task ledger repository adapter lives in platform layer', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformTaskLedgerPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'task_ledger_repository.rs');
+
+  assert.equal(fs.existsSync(platformTaskLedgerPath), true);
+  const platformTaskLedger = fs.readFileSync(platformTaskLedgerPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod task_ledger_repository;/mu);
+  assert.match(platformTaskLedger, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
+  assert.match(platformTaskLedger, /TASK_LEDGER_UPDATED_EVENT/u);
+  assert.match(platformTaskLedger, /async fn run_task_ledger_repository_task/u);
+  assert.match(platformTaskLedger, /fn emit_task_ledger_snapshot/u);
+  assert.match(platformTaskLedger, /app\.emit\(TASK_LEDGER_UPDATED_EVENT, snapshot\)/u);
+  assert.match(platformTaskLedger, /pub async fn load_snapshot/u);
+  assert.match(platformTaskLedger, /pub async fn upsert_task/u);
+  assert.match(platformTaskLedger, /pub async fn patch_task/u);
+  assert.match(platformTaskLedger, /pub async fn remove_task/u);
+  assert.match(platformTaskLedger, /pub async fn clear_resolved/u);
+  assert.match(systemCommand, /crate::platform::task_ledger_repository::load_snapshot\(&app\)\.await/u);
+  assert.match(systemCommand, /crate::platform::task_ledger_repository::upsert_task\(&app, record\)\.await/u);
+  assert.match(systemCommand, /crate::platform::task_ledger_repository::patch_task\(&app, id, patch\)\.await/u);
+  assert.match(systemCommand, /crate::platform::task_ledger_repository::remove_task\(&app, id\)\.await/u);
+  assert.match(systemCommand, /crate::platform::task_ledger_repository::clear_resolved\(&app\)\.await/u);
+  assert.doesNotMatch(systemCommand, /TASK_LEDGER_UPDATED_EVENT/u);
+  assert.doesNotMatch(systemCommand, /SqliteLedgerRepository/u);
+  assert.doesNotMatch(systemCommand, /run_task_ledger_repository_task/u);
+  assert.doesNotMatch(systemCommand, /emit_task_ledger_snapshot/u);
 });
 
 test('SQLite automation repository is owned by sqlite adapter', () => {
