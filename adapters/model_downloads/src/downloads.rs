@@ -32,6 +32,39 @@ pub fn temporary_download_path(path: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
+#[derive(Clone)]
+pub struct DownloadClient {
+    client: reqwest::Client,
+}
+
+impl Default for DownloadClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DownloadClient {
+    pub fn new() -> Self {
+        Self::try_new().expect("failed to create Sona download HTTP client")
+    }
+
+    pub fn try_new() -> Result<Self, reqwest::Error> {
+        Ok(Self {
+            client: reqwest::Client::builder().user_agent("Sona/1.0").build()?,
+        })
+    }
+
+    pub async fn download_file(
+        &self,
+        url: &str,
+        temp_path: &Path,
+        notify: Arc<Notify>,
+        on_progress: Option<Box<dyn FnMut(u64, u64) + Send>>,
+    ) -> Result<(), DownloadError> {
+        download_file(&self.client, url, temp_path, notify, on_progress).await
+    }
+}
+
 pub async fn remove_download_file(temp_path: &Path) {
     let _ = tokio::fs::remove_file(temp_path).await;
 }
@@ -386,5 +419,48 @@ mod tests {
         let result = download_file(&client, &url, &temp_path, notify, None).await;
 
         assert!(matches!(result, Err(DownloadError::AlreadyInProgress)));
+    }
+
+    #[tokio::test]
+    async fn download_client_sets_sona_user_agent() {
+        use axum::http::{HeaderMap, header::USER_AGENT};
+        use axum::{Router, routing::get};
+        use std::sync::{Arc, Mutex};
+        use tokio::net::TcpListener;
+
+        let seen_user_agent = Arc::new(Mutex::new(None));
+        let seen_user_agent_for_route = seen_user_agent.clone();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let url = format!("http://{addr}/model.onnx");
+        let app = Router::new().route(
+            "/model.onnx",
+            get(move |headers: HeaderMap| {
+                let seen_user_agent = seen_user_agent_for_route.clone();
+                async move {
+                    *seen_user_agent.lock().unwrap() = headers
+                        .get(USER_AGENT)
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::to_string);
+                    "model bytes"
+                }
+            }),
+        );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let temp_path = dir.path().join("model.onnx.download");
+        let notify = Arc::new(Notify::new());
+        let client = DownloadClient::new();
+
+        client
+            .download_file(&url, &temp_path, notify, None)
+            .await
+            .unwrap();
+
+        assert_eq!(seen_user_agent.lock().unwrap().as_deref(), Some("Sona/1.0"));
     }
 }

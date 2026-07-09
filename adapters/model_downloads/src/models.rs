@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::downloads::{
-    DownloadError, download_file, publish_download_file, sha256_file, temporary_download_path,
+    DownloadClient, DownloadError, publish_download_file, sha256_file, temporary_download_path,
 };
 use sona_core::models::downloads::ResolvedModelDownload;
 use sona_runtime_fs::is_preset_model_installed_at;
@@ -74,11 +74,6 @@ where
             )
         })?;
 
-    let client = reqwest::Client::builder()
-        .user_agent("Sona/1.0")
-        .build()
-        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
-
     let temp_download_path = temporary_download_path(&resolved.download_path);
     let notify = std::sync::Arc::new(tokio::sync::Notify::new());
     let notify_clone = notify.clone();
@@ -88,14 +83,16 @@ where
         }
     });
 
-    let result = download_file(
-        &client,
-        &resolved.model.url,
-        &temp_download_path,
-        notify,
-        Some(Box::new(on_progress)),
-    )
-    .await;
+    let client = DownloadClient::try_new()
+        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
+    let result = client
+        .download_file(
+            &resolved.model.url,
+            &temp_download_path,
+            notify,
+            Some(Box::new(on_progress)),
+        )
+        .await;
 
     ctrl_c_task.abort();
 

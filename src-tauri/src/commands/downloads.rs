@@ -1,3 +1,4 @@
+use sona_model_downloads::DownloadClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
@@ -6,7 +7,7 @@ const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress";
 
 pub struct DownloadState {
     pub downloads: Mutex<HashMap<String, Arc<Notify>>>,
-    pub client: reqwest::Client,
+    pub client: DownloadClient,
 }
 
 impl Default for DownloadState {
@@ -19,10 +20,7 @@ impl DownloadState {
     pub fn new() -> Self {
         Self {
             downloads: Mutex::new(HashMap::new()),
-            client: reqwest::Client::builder()
-                .user_agent("Sona/1.0")
-                .build()
-                .unwrap(),
+            client: DownloadClient::new(),
         }
     }
 }
@@ -54,9 +52,7 @@ pub async fn download_file<R: tauri::Runtime>(
     id: String,
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
-    use sona_model_downloads::{
-        complete_download_file, download_file as adapter_download_file, temporary_download_path,
-    };
+    use sona_model_downloads::{complete_download_file, temporary_download_path};
     use tauri::Emitter;
 
     let final_path = std::path::PathBuf::from(&output_path);
@@ -68,8 +64,6 @@ pub async fn download_file<R: tauri::Runtime>(
         downloads.insert(id.clone(), notify.clone());
     }
 
-    let client = state.client.clone();
-
     let app_clone = app.clone();
     let id_clone = id.clone();
     let mut last_emit = std::time::Instant::now();
@@ -80,7 +74,10 @@ pub async fn download_file<R: tauri::Runtime>(
         }
     });
 
-    let result = adapter_download_file(&client, &url, &temp_path, notify, Some(progress_cb)).await;
+    let result = state
+        .client
+        .download_file(&url, &temp_path, notify, Some(progress_cb))
+        .await;
 
     {
         let mut downloads = state.downloads.lock().await;
