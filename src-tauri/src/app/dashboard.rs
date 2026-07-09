@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::platform::history_repository::SqliteHistoryStore;
-use sona_core::dashboard::{DashboardService, DashboardSnapshotTime};
+use sona_core::dashboard::DashboardService;
 use sona_sqlite::analytics::SqliteAnalyticsRepository;
 use sona_sqlite::project::SqliteProjectRepository;
 
@@ -21,13 +21,7 @@ pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<AppDashboardService>>,
     request: DashboardSnapshotRequest,
 ) -> Result<Value, String> {
-    let now = chrono::Utc::now();
-    let local_now = now.with_timezone(&chrono::Local);
-    let time = DashboardSnapshotTime {
-        generated_at: now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-        today: local_now.date_naive(),
-        local_utc_offset_seconds: local_now.offset().local_minus_utc(),
-    };
+    let time = crate::platform::time::dashboard_snapshot_time_now();
     let snapshot = service
         .build_snapshot_at(request.deep, time)
         .await

@@ -979,10 +979,9 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   assert.match(coreDashboardService, /build_snapshot_at/u);
   assert.doesNotMatch(coreDashboardService, /pub async fn build_snapshot\(/u);
   assert.doesNotMatch(coreDashboardService, /Utc::now|chrono::Utc::now|chrono::Local|\bLocal\b/u);
-  assert.match(tauriDashboard, /DashboardSnapshotTime/u);
-  assert.match(tauriDashboard, /chrono::Utc::now\(\)/u);
-  assert.match(tauriDashboard, /with_timezone\(&chrono::Local\)/u);
-  assert.doesNotMatch(tauriDashboard, /chrono::Local::now\(\)/u);
+  assert.match(tauriDashboard, /crate::platform::time::dashboard_snapshot_time_now\(\)/u);
+  assert.doesNotMatch(tauriDashboard, /DashboardSnapshotTime/u);
+  assert.doesNotMatch(tauriDashboard, /chrono::Utc::now|chrono::Local|chrono::SecondsFormat|with_timezone\(&chrono::Local\)/u);
   assert.doesNotMatch(coreCargo, /chrono = \{[^}]*"clock"/u);
 });
 
