@@ -1,27 +1,13 @@
-use tauri::Emitter;
-
-const EXTRACT_PROGRESS_EVENT: &str = "extract-progress";
-
 #[tauri::command]
 pub async fn extract_tar_bz2<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     archive_path: String,
     target_dir: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        sona_archive::extract_tar_bz2(&archive_path, &target_dir, |path_str| {
-            let _ = app.emit(EXTRACT_PROGRESS_EVENT, path_str);
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    crate::platform::archive::extract_tar_bz2(app, archive_path, target_dir).await
 }
 
 #[tauri::command]
 pub async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        sona_archive::create_tar_bz2(&source_dir, &archive_path)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    crate::platform::archive::create_tar_bz2(source_dir, archive_path).await
 }

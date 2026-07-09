@@ -673,6 +673,8 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformArchivePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'archive.rs');
   const archiveCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'archive.rs'), 'utf8');
   const archiveAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'archive', 'src', 'lib.rs'), 'utf8');
 
@@ -684,8 +686,21 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
   assert.doesNotMatch(coreCargo, /^tar\s*=/mu);
   assert.doesNotMatch(coreLib, /^pub mod archive;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'core', 'src', 'archive.rs')), false);
-  assert.match(archiveCommand, /sona_archive::extract_tar_bz2/u);
-  assert.match(archiveCommand, /sona_archive::create_tar_bz2/u);
+  assert.equal(fs.existsSync(platformArchivePath), true);
+  const platformArchive = fs.readFileSync(platformArchivePath, 'utf8');
+  assert.match(platformMod, /^pub mod archive;/mu);
+  assert.match(platformArchive, /const EXTRACT_PROGRESS_EVENT: &str = "extract-progress"/u);
+  assert.match(platformArchive, /pub async fn extract_tar_bz2/u);
+  assert.match(platformArchive, /pub async fn create_tar_bz2/u);
+  assert.match(platformArchive, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(platformArchive, /sona_archive::extract_tar_bz2/u);
+  assert.match(platformArchive, /sona_archive::create_tar_bz2/u);
+  assert.match(platformArchive, /app\.emit\(EXTRACT_PROGRESS_EVENT, path_str\)/u);
+  assert.match(archiveCommand, /crate::platform::archive::extract_tar_bz2\(app, archive_path, target_dir\)\.await/u);
+  assert.match(archiveCommand, /crate::platform::archive::create_tar_bz2\(source_dir, archive_path\)\.await/u);
+  assert.doesNotMatch(archiveCommand, /sona_archive/u);
+  assert.doesNotMatch(archiveCommand, /tauri::async_runtime::spawn_blocking/u);
+  assert.doesNotMatch(archiveCommand, /EXTRACT_PROGRESS_EVENT/u);
   assert.doesNotMatch(archiveCommand, /sona_core::archive/u);
   assert.match(archiveAdapter, /pub fn extract_tar_bz2/u);
   assert.match(archiveAdapter, /pub fn create_tar_bz2/u);
