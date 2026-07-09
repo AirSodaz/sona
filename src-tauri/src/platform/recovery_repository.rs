@@ -2,7 +2,6 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use sona_core::recovery::normalization::{
     empty_snapshot, recovered_item_from_queue_value_with_source_paths,
@@ -124,10 +123,7 @@ impl RecoveryRepository for FsRecoveryRepository {
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    crate::platform::time::unix_timestamp_millis()
 }
 
 fn collect_queue_recovery_ids(value: &Value) -> Vec<String> {

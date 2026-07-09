@@ -804,6 +804,8 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   );
   assert.match(sqliteLegacyMigration, /normalize_project_value_with_timestamp/u);
   assert.match(tauriRecoveryRepository, /fn now_ms\(\) -> u64/u);
+  assert.match(tauriRecoveryRepository, /crate::platform::time::unix_timestamp_millis\(\)/u);
+  assert.doesNotMatch(tauriRecoveryRepository, /SystemTime::now|UNIX_EPOCH/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_items_with_timestamp/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_value_with_source_paths_at/u);
   assert.doesNotMatch(
