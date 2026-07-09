@@ -86,8 +86,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
                 let state = app.state::<crate::app::settings::AppSettings>();
-                // Default to true if lock fails (safe fallback)
-                let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
+                let minimize = state.minimize_to_tray();
 
                 match crate::app::settings::resolve_main_window_close_action(
                     window.label(),

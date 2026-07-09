@@ -1125,6 +1125,17 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   assert.doesNotMatch(coreCargo, /chrono = \{[^}]*"clock"/u);
 });
 
+test('desktop app settings owns minimize-to-tray state', () => {
+  const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const appSettings = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'settings.rs'), 'utf8');
+
+  assert.match(appSettings, /pub\(crate\) fn minimize_to_tray\(&self\) -> bool/u);
+  assert.match(appSettings, /fn set_minimize_to_tray_enabled\(&self, enabled: bool\)/u);
+  assert.doesNotMatch(appSettings, /pub\(crate\) minimize_to_tray:/u);
+  assert.match(desktopLib, /state\.minimize_to_tray\(\)/u);
+  assert.doesNotMatch(desktopLib, /minimize_to_tray\.lock\(\)/u);
+});
+
 test('usage and workspace date windows are supplied by sqlite adapters', () => {
   const coreLlmUsage = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'llm', 'usage.rs'), 'utf8');
   const sqliteLlmUsage = fs.readFileSync(path.join(repoRoot, 'adapters', 'sqlite', 'src', 'llm_usage.rs'), 'utf8');

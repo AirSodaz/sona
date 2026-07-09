@@ -56,7 +56,7 @@ impl RuntimeLogLevel {
 }
 
 pub struct AppSettings {
-    pub(crate) minimize_to_tray: Mutex<bool>,
+    minimize_to_tray: Mutex<bool>,
     log_level: RuntimeLogLevel,
 }
 
@@ -70,6 +70,19 @@ impl AppSettings {
 
     pub(crate) fn log_level_filter(&self) -> RuntimeLogLevel {
         self.log_level.clone()
+    }
+
+    pub(crate) fn minimize_to_tray(&self) -> bool {
+        self.minimize_to_tray
+            .lock()
+            .map(|value| *value)
+            .unwrap_or(true)
+    }
+
+    fn set_minimize_to_tray_enabled(&self, enabled: bool) {
+        if let Ok(mut minimize) = self.minimize_to_tray.lock() {
+            *minimize = enabled;
+        }
     }
 
     #[cfg(test)]
@@ -90,9 +103,7 @@ pub(crate) enum MainWindowCloseAction {
 }
 
 pub(crate) fn set_minimize_to_tray(state: tauri::State<'_, AppSettings>, enabled: bool) {
-    if let Ok(mut minimize) = state.minimize_to_tray.lock() {
-        *minimize = enabled;
-    }
+    state.set_minimize_to_tray_enabled(enabled);
 }
 
 pub(crate) fn set_log_level(
@@ -178,6 +189,17 @@ mod tests {
         let settings = AppSettings::new();
 
         assert_eq!(settings.current_log_level(), AppLogLevel::Info);
+    }
+
+    #[test]
+    fn app_settings_tracks_minimize_to_tray_via_methods() {
+        let settings = AppSettings::new();
+
+        assert!(settings.minimize_to_tray());
+
+        settings.set_minimize_to_tray_enabled(false);
+
+        assert!(!settings.minimize_to_tray());
     }
 
     #[test]
