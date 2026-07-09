@@ -3126,6 +3126,26 @@ test('desktop system audio mute command is owned by platform adapter', () => {
   assert.doesNotMatch(desktopAudio, /std::process::Command|Command::new|IAudioEndpointVolume/u);
 });
 
+test('desktop startup error dialog is owned by platform adapter', () => {
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const desktopMain = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'main.rs'), 'utf8');
+  const startupDialogPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_dialog.rs');
+
+  assert.equal(fs.existsSync(startupDialogPath), true);
+  const startupDialog = fs.readFileSync(startupDialogPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod startup_dialog;/mu);
+  assert.match(desktopMain, /tauri_appsona_lib::platform::startup_dialog::show_error_dialog/u);
+  assert.match(startupDialog, /pub fn show_error_dialog\(message: &str\)/u);
+  assert.match(startupDialog, /fn escape_applescript_text\(message: &str\)/u);
+  assert.match(startupDialog, /MessageBoxW/u);
+  assert.match(startupDialog, /Command::new\("osascript"\)/u);
+  assert.match(startupDialog, /Command::new\("zenity"\)/u);
+  assert.match(startupDialog, /Command::new\("kdialog"\)/u);
+  assert.doesNotMatch(desktopMain, /fn show_error_dialog|escape_applescript_text/u);
+  assert.doesNotMatch(desktopMain, /std::process::Command|Command::new|MessageBoxW/u);
+});
+
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
 
