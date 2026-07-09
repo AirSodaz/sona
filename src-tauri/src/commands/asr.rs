@@ -17,8 +17,7 @@ pub async fn init_recognizer(
         .create_streaming_session(&state, &instance_id, &asr_request)
         .await?;
     if let Some(session) = session {
-        let mut active = state.active_sessions.lock().await;
-        active.insert(instance_id.clone(), session);
+        state.insert_session(&instance_id, session).await;
         state
             .set_instance_engine(&instance_id, asr_request.engine())
             .await;
@@ -36,12 +35,10 @@ pub async fn start_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
+    let session = state
+        .session(&instance_id)
+        .await
+        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session.start(emitter, &state, &instance_id).await
 }
@@ -64,12 +61,10 @@ pub async fn flush_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
+    let session = state
+        .session(&instance_id)
+        .await
+        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session.flush(emitter, &state, &instance_id).await
 }
@@ -81,12 +76,10 @@ pub async fn feed_audio_chunk(
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(&instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
+    let session = state
+        .session(&instance_id)
+        .await
+        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
     session
         .feed_audio_chunk(emitter, &state, &instance_id, samples)

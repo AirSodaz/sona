@@ -1477,6 +1477,19 @@ test('desktop API server obtains ASR recognizer pools through integration facade
   assert.doesNotMatch(appServer, /RecognizerPool::new/u);
 });
 
+test('desktop ASR session maps are owned by AsrState', () => {
+  const stateRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'), 'utf8');
+  const commandsAsr = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'asr.rs'), 'utf8');
+  const asrMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'), 'utf8');
+
+  assert.match(stateRs, /pub async fn insert_session/u);
+  assert.match(stateRs, /pub async fn session/u);
+  assert.doesNotMatch(stateRs, /pub active_sessions:/u);
+  assert.doesNotMatch(stateRs, /pub instance_engines:/u);
+  assert.doesNotMatch(commandsAsr, /active_sessions\.lock\(\)/u);
+  assert.doesNotMatch(asrMod, /active_sessions\.lock\(\)/u);
+});
+
 test('desktop streaming handler uses Tauri streaming context accessors', () => {
   const appServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
   const streaming = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');

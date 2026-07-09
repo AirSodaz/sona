@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct AsrState {
-    pub active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
-    pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
+    active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
+    instance_engines: Mutex<HashMap<String, AsrEngine>>,
     pub(crate) recognizer_pool: RecognizerPool,
     pub(crate) metrics: AsrMetricsStore,
 }
@@ -39,6 +39,17 @@ impl AsrState {
 
     pub async fn has_online_session(&self, instance_id: &str) -> bool {
         self.active_sessions.lock().await.contains_key(instance_id)
+    }
+
+    pub async fn insert_session(&self, instance_id: &str, session: Arc<dyn AsrStreamingSession>) {
+        self.active_sessions
+            .lock()
+            .await
+            .insert(instance_id.to_string(), session);
+    }
+
+    pub async fn session(&self, instance_id: &str) -> Option<Arc<dyn AsrStreamingSession>> {
+        self.active_sessions.lock().await.get(instance_id).cloned()
     }
 
     pub async fn remove_session(&self, instance_id: &str) -> Option<Arc<dyn AsrStreamingSession>> {
@@ -128,14 +139,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_lookup_returns_inserted_session() {
+        let state = AsrState::new();
+        let instance_id = "test_instance";
+        let session: Arc<dyn AsrStreamingSession> = Arc::new(DummySession);
+
+        state.insert_session(instance_id, session.clone()).await;
+
+        let stored = state.session(instance_id).await.expect("session exists");
+        assert!(Arc::ptr_eq(&session, &stored));
+    }
+
+    #[tokio::test]
     async fn test_remove_session() {
         let state = AsrState::new();
         let instance_id = "test_instance";
 
-        {
-            let mut active = state.active_sessions.lock().await;
-            active.insert(instance_id.to_string(), Arc::new(DummySession));
-        }
+        state
+            .insert_session(instance_id, Arc::new(DummySession))
+            .await;
         state
             .set_instance_engine(instance_id, AsrEngine::LocalSherpa)
             .await;

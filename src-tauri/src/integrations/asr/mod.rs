@@ -102,12 +102,10 @@ pub async fn feed_audio_samples(
     instance_id: &str,
     samples: &[f32],
 ) -> Result<(), SherpaError> {
-    let session = {
-        let sessions = state.active_sessions.lock().await;
-        sessions.get(instance_id).cloned().ok_or_else(|| {
-            SherpaError::Generic(format!("ASR instance {} not found", instance_id))
-        })?
-    };
+    let session = state
+        .session(instance_id)
+        .await
+        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     let emitter = std::sync::Arc::new(crate::platform::event::TauriEventEmitter(app.clone()))
         as std::sync::Arc<dyn crate::platform::event::EventEmitter>;
     session
