@@ -100,7 +100,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         .enable_all()
         .build()
         .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
-    let transcriber = sona_local_asr::batch::LocalBatchAsrAdapter;
+    let transcriber = crate::asr_adapter::local_batch_transcriber();
     let segments = runtime
         .block_on(transcriber.transcribe(plan))
         .map_err(CliError::Other)?;

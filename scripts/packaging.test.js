@@ -311,6 +311,30 @@ test('standalone CLI resolves shared libraries from same-platform desktop resour
   assert.doesNotMatch(cliMain, /tauri/u);
 });
 
+test('standalone CLI keeps local ASR implementation behind its adapter boundary', () => {
+  const cliSrcRoot = path.join(repoRoot, 'platforms', 'cli', 'src');
+  const adapterPath = path.join(cliSrcRoot, 'asr_adapter.rs');
+  const cliLib = fs.readFileSync(path.join(cliSrcRoot, 'lib.rs'), 'utf8');
+  const adapter = fs.existsSync(adapterPath) ? fs.readFileSync(adapterPath, 'utf8') : '';
+  const localAsrReferencesOutsideAdapter = rustFilesUnder(cliSrcRoot)
+    .filter((filePath) => filePath !== adapterPath)
+    .flatMap((filePath) => {
+      const relativePath = path.relative(repoRoot, filePath);
+      return fs.readFileSync(filePath, 'utf8')
+        .split(/\r?\n/u)
+        .flatMap((line, index) => {
+          const sourceLine = stripRustLineComment(line);
+          return /sona_local_asr::|LocalBatchAsrAdapter|sherpa_onnx::/u.test(sourceLine)
+            ? [`${relativePath}:${index + 1}: ${line.trim()}`]
+            : [];
+        });
+    });
+
+  assert.deepEqual(localAsrReferencesOutsideAdapter, []);
+  assert.match(cliLib, /\bmod asr_adapter;/u);
+  assert.match(adapter, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
+});
+
 test('desktop Tauri DLL directory setup is delegated to the runtime filesystem adapter', () => {
   const tauriLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
   const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
@@ -3258,13 +3282,19 @@ test('history backup archive persistence is owned by sqlite adapter', () => {
 });
 
 test('standalone CLI invokes local batch ASR through the core transcriber port', () => {
+  const cliAsrAdapterRs = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'cli', 'src', 'asr_adapter.rs'),
+    'utf8',
+  );
   const cliTranscribeRs = fs.readFileSync(
     path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'),
     'utf8',
   );
 
+  assert.match(cliAsrAdapterRs, /use sona_core::ports::asr::BatchTranscriber;/u);
+  assert.match(cliAsrAdapterRs, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
   assert.match(cliTranscribeRs, /use sona_core::ports::asr::BatchTranscriber;/u);
-  assert.match(cliTranscribeRs, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
+  assert.match(cliTranscribeRs, /crate::asr_adapter::local_batch_transcriber\(\)/u);
   assert.match(cliTranscribeRs, /\.transcribe\(plan\)/u);
   assert.doesNotMatch(cliTranscribeRs, /run_offline_transcription/u);
 });
