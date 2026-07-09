@@ -3,13 +3,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Runtime, State};
 
 use crate::platform::paths::TauriPathProvider;
-use sona_webdav::{
-    RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult,
-    webdav_download_backup as webdav_download_backup_adapter,
-    webdav_list_backups as webdav_list_backups_adapter,
-    webdav_test_connection as webdav_test_connection_adapter,
-    webdav_upload_backup as webdav_upload_backup_adapter,
-};
+use crate::platform::webdav::{RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult};
 
 use sona_core::recovery::types::RecoverySnapshot;
 use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
@@ -140,14 +134,14 @@ pub async fn get_path_statuses(
 pub async fn webdav_test_connection(
     config: WebDavConfigPayload,
 ) -> Result<WebDavConnectionResult, String> {
-    webdav_test_connection_adapter(config).await
+    crate::platform::webdav::test_connection(config).await
 }
 
 #[tauri::command]
 pub async fn webdav_list_backups(
     config: WebDavConfigPayload,
 ) -> Result<Vec<RemoteBackupEntry>, String> {
-    webdav_list_backups_adapter(config).await
+    crate::platform::webdav::list_backups(config).await
 }
 
 #[tauri::command]
@@ -155,7 +149,7 @@ pub async fn webdav_upload_backup(
     config: WebDavConfigPayload,
     local_archive_path: String,
 ) -> Result<(), String> {
-    webdav_upload_backup_adapter(config, local_archive_path).await
+    crate::platform::webdav::upload_backup(config, local_archive_path).await
 }
 
 #[tauri::command]
@@ -164,7 +158,7 @@ pub async fn webdav_download_backup(
     href: String,
     output_path: String,
 ) -> Result<(), String> {
-    webdav_download_backup_adapter(config, href, output_path).await
+    crate::platform::webdav::download_backup(config, href, output_path).await
 }
 
 #[tauri::command]

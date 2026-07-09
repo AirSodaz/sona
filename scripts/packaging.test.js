@@ -622,7 +622,9 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const coreLib = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'lib.rs'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const systemRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformWebdavPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'webdav.rs');
   const webdavAdapter = fs.readFileSync(path.join(repoRoot, 'adapters', 'webdav', 'src', 'lib.rs'), 'utf8');
   const webdavCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'webdav', 'Cargo.toml'), 'utf8');
 
@@ -632,9 +634,23 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   assert.match(webdavCargo, /^urlencoding\s*=/mu);
   assert.match(webdavCargo, /^url\s*=/mu);
   assert.doesNotMatch(webdavCargo, /^sona-core\s*=/mu);
-  assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_download_backup/u);
-  assert.match(systemRs, /use sona_webdav::\{[\s\S]*webdav_test_connection/u);
-  assert.match(systemRs, /use sona_webdav::\{[\s\S]*WebDavConfigPayload/u);
+  assert.equal(fs.existsSync(platformWebdavPath), true);
+  const platformWebdav = fs.readFileSync(platformWebdavPath, 'utf8');
+  assert.match(platformMod, /^pub mod webdav;/mu);
+  assert.match(platformWebdav, /pub use sona_webdav::\{[\s\S]*RemoteBackupEntry/u);
+  assert.match(platformWebdav, /pub use sona_webdav::\{[\s\S]*WebDavConfigPayload/u);
+  assert.match(platformWebdav, /pub use sona_webdav::\{[\s\S]*WebDavConnectionResult/u);
+  assert.match(platformWebdav, /pub async fn test_connection/u);
+  assert.match(platformWebdav, /pub async fn list_backups/u);
+  assert.match(platformWebdav, /pub async fn upload_backup/u);
+  assert.match(platformWebdav, /pub async fn download_backup/u);
+  assert.match(platformWebdav, /sona_webdav::webdav_test_connection/u);
+  assert.match(platformWebdav, /sona_webdav::webdav_download_backup/u);
+  assert.doesNotMatch(systemRs, /sona_webdav/u);
+  assert.match(systemRs, /crate::platform::webdav::test_connection\(config\)\.await/u);
+  assert.match(systemRs, /crate::platform::webdav::list_backups\(config\)\.await/u);
+  assert.match(systemRs, /crate::platform::webdav::upload_backup\(config, local_archive_path\)\.await/u);
+  assert.match(systemRs, /crate::platform::webdav::download_backup\(config, href, output_path\)\.await/u);
   assert.doesNotMatch(systemRs, /sona_core::webdav/u);
   assert.doesNotMatch(systemRs, /sona_core::webdav::webdav_/u);
   assert.doesNotMatch(coreCargo, /^roxmltree\s*=/mu);
