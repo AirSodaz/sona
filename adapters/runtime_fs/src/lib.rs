@@ -90,6 +90,35 @@ pub fn write_transcript_output_file(path: &Path, output: &str) -> Result<(), Str
         .map_err(|error| format!("Failed to write transcript {}: {error}", path.display()))
 }
 
+pub fn write_cli_config_template_file(
+    path: &Path,
+    content: &str,
+    force: bool,
+) -> Result<(), String> {
+    let fs = RealFileSystem;
+
+    if fs.metadata(path)?.is_some() && !force {
+        return Err(format!(
+            "Config file already exists: {}. Use --force to overwrite.",
+            path.display()
+        ));
+    }
+
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs.create_dir_all(parent).map_err(|error| {
+            format!(
+                "Failed to create config directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+
+    fs.write_file(path, content.as_bytes())
+        .map_err(|error| format!("Failed to write config file {}: {error}", path.display()))
+}
+
 pub fn cli_shared_library_directory_candidates(exe_dir: &Path) -> Vec<PathBuf> {
     vec![
         exe_dir.join("../shared_libs"),

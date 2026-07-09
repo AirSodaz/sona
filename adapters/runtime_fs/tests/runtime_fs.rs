@@ -13,9 +13,25 @@ use sona_runtime_fs::{
     is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
     plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
     resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    tauri_shared_library_directory_candidates, write_json_pretty_atomic,
-    write_transcript_output_file,
+    tauri_shared_library_directory_candidates, write_cli_config_template_file,
+    write_json_pretty_atomic, write_transcript_output_file,
 };
+
+#[test]
+fn write_cli_config_template_file_creates_parent_and_respects_force() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("nested").join("sona-cli.toml");
+
+    write_cli_config_template_file(&config_path, "first", false).unwrap();
+    let error = write_cli_config_template_file(&config_path, "second", false).unwrap_err();
+
+    assert!(error.contains("--force"));
+    assert_eq!(std::fs::read_to_string(&config_path).unwrap(), "first");
+
+    write_cli_config_template_file(&config_path, "second", true).unwrap();
+
+    assert_eq!(std::fs::read_to_string(config_path).unwrap(), "second");
+}
 
 #[test]
 fn write_transcript_output_file_creates_parent_directory_and_writes_contents() {

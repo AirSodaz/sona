@@ -1,6 +1,5 @@
 use clap::Args;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::{CliError, CliOutput, CliResult};
 
@@ -27,7 +26,9 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {
     let path = args
         .path
         .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
-    write_config_template(&path, args.force)?;
+    let content = generate_config_content();
+    sona_runtime_fs::write_cli_config_template_file(&path, &content, args.force)
+        .map_err(CliError::Io)?;
     Ok(CliOutput::stderr(format!(
         "Created config template at {}",
         path.display()
@@ -38,33 +39,6 @@ fn generate_config_content() -> String {
     crate::config_template::render_config_template(
         crate::desktop_paths::default_models_dir().as_deref(),
     )
-}
-
-fn write_config_template(path: &Path, force: bool) -> CliResult<()> {
-    if path.exists() && !force {
-        return Err(CliError::Io(format!(
-            "Config file already exists: {}. Use --force to overwrite.",
-            path.display()
-        )));
-    }
-
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).map_err(|error| {
-            CliError::Io(format!(
-                "Failed to create config directory {}: {error}",
-                parent.display()
-            ))
-        })?;
-    }
-
-    fs::write(path, generate_config_content()).map_err(|error| {
-        CliError::Io(format!(
-            "Failed to write config file {}: {error}",
-            path.display()
-        ))
-    })
 }
 
 #[cfg(test)]
