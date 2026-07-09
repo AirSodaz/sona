@@ -3020,6 +3020,7 @@ test('desktop hardware module reuses local ASR adapter GPU planning', () => {
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
+  const desktopAudio = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'audio.rs'), 'utf8');
   const localAsrSpeakerProcessing = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
     'utf8',
@@ -3036,6 +3037,8 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.match(localAsrSpeakerProcessing, /crate::audio::extract_and_resample_audio/u);
   assert.match(localAsrSpeakerProcessing, /crate::audio::save_wav_file/u);
   assert.match(runtimeStatusRs, /sona_local_asr::audio::resolve_ffmpeg_sidecar_path/u);
+  assert.match(desktopAudio, /sona_runtime_fs::ensure_directory_exists\(&history_dir\)/u);
+  assert.doesNotMatch(desktopAudio, /std::fs::create_dir_all/u);
   assert.doesNotMatch(prWorkflow, /core::pipeline::tests/u);
 
   const desktopPipelineReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
