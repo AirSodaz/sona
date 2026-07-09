@@ -710,6 +710,9 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
   const coreCargo = fs.readFileSync(path.join(repoRoot, 'core', 'Cargo.toml'), 'utf8');
   const tauriCargo = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'Cargo.toml'), 'utf8');
+  const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const platformModelDownloadsPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'model_downloads.rs');
   const cliCargo = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml'), 'utf8');
   const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
   const desktopDownloads = fs.readFileSync(
@@ -726,12 +729,27 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid, remove_model_install_path\}/u);
-  assert.match(desktopDownloads, /DownloadClient/u);
-  assert.match(desktopDownloads, /client: DownloadClient/u);
+  assert.equal(fs.existsSync(platformModelDownloadsPath), true);
+  const platformModelDownloads = fs.readFileSync(platformModelDownloadsPath, 'utf8');
+  assert.match(platformMod, /^pub mod model_downloads;/mu);
+  assert.match(desktopLib, /crate::platform::model_downloads::DownloadState::new\(\)/u);
+  assert.match(platformModelDownloads, /pub struct DownloadState/u);
+  assert.match(platformModelDownloads, /DownloadClient/u);
+  assert.match(platformModelDownloads, /client: DownloadClient/u);
+  assert.match(platformModelDownloads, /const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress"/u);
   assert.match(
-    desktopDownloads,
+    platformModelDownloads,
     /state\s*\.client\s*\.download_file\(&url, &temp_path, notify, Some\(progress_cb\)\)/u,
   );
+  assert.match(platformModelDownloads, /complete_download_file/u);
+  assert.match(platformModelDownloads, /temporary_download_path/u);
+  assert.match(desktopDownloads, /crate::platform::model_downloads::cancel_download\(state, id\)\.await/u);
+  assert.match(desktopDownloads, /crate::platform::model_downloads::has_active_downloads\(state\)\.await/u);
+  assert.match(desktopDownloads, /crate::platform::model_downloads::download_file\(/u);
+  assert.doesNotMatch(desktopDownloads, /sona_model_downloads/u);
+  assert.doesNotMatch(desktopDownloads, /DownloadClient/u);
+  assert.doesNotMatch(desktopDownloads, /DOWNLOAD_PROGRESS_EVENT/u);
+  assert.doesNotMatch(desktopDownloads, /temporary_download_path|complete_download_file/u);
   assert.doesNotMatch(desktopDownloads, /reqwest::Client|Client::builder|adapter_download_file/u);
   assert.doesNotMatch(coreModelDownloads, /pub async fn download_model/u);
   assert.doesNotMatch(coreModelDownloads, /reqwest|tokio::fs|sha256_file|tar::|bzip2::/u);

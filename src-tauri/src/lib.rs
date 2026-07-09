@@ -114,7 +114,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 let _ = window.set_focus();
             }
         }))
-        .manage(crate::commands::downloads::DownloadState::new())
+        .manage(crate::platform::model_downloads::DownloadState::new())
         .manage(crate::app::server::ApiServerController::default())
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())

@@ -9,6 +9,7 @@ pub mod file_storage;
 pub mod hardware;
 pub mod history_repository;
 pub mod media_detector;
+pub mod model_downloads;
 pub mod paths;
 pub mod preset_models;
 pub mod project_repository;
