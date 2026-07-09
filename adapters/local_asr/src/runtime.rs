@@ -165,6 +165,61 @@ pub struct OfflineState {
     pub utterance_start_sample: usize,
 }
 
+impl OfflineState {
+    pub fn is_speech_active(&self) -> bool {
+        self.is_speaking
+    }
+
+    pub fn begin_speech(&mut self, total_samples: usize, samples_to_keep: usize) {
+        self.is_speaking = true;
+        let context = self.ring_context(samples_to_keep);
+        let context_len = context.len();
+        if !context.is_empty() {
+            self.speech_buffer.push(context);
+        }
+        self.utterance_start_sample = total_samples.saturating_sub(context_len);
+        self.ring_buffer.clear();
+    }
+
+    pub fn push_speech_chunk(&mut self, samples: Vec<f32>) {
+        self.speech_buffer.push(samples);
+    }
+
+    pub fn finish_speech_with_chunk(&mut self, samples: Vec<f32>) {
+        self.is_speaking = false;
+        self.push_speech_chunk(samples);
+    }
+
+    pub fn clear_speech_buffer(&mut self) {
+        self.speech_buffer.clear();
+    }
+
+    pub fn push_ring_chunk(&mut self, samples: Vec<f32>, max_chunks: usize) {
+        self.ring_buffer.push_back(samples);
+        while self.ring_buffer.len() > max_chunks {
+            self.ring_buffer.pop_front();
+        }
+    }
+
+    pub fn speech_chunks(&self) -> &[Vec<f32>] {
+        &self.speech_buffer
+    }
+
+    pub fn utterance_start_seconds(&self, sample_rate: f64) -> f64 {
+        self.utterance_start_sample as f64 / sample_rate
+    }
+
+    fn ring_context(&self, samples_to_keep: usize) -> Vec<f32> {
+        if self.ring_buffer.is_empty() {
+            return Vec::new();
+        }
+
+        let ring_flat: Vec<f32> = self.ring_buffer.iter().flatten().copied().collect();
+        let keep_start = ring_flat.len().saturating_sub(samples_to_keep);
+        ring_flat[keep_start..].to_vec()
+    }
+}
+
 #[derive(Default)]
 pub struct RecordDiagnosticsState {
     pub first_sample_logged: bool,
@@ -300,5 +355,31 @@ mod tests {
             buffered_sample_count(&[vec![0.0, 1.0], vec![2.0], vec![]]),
             3
         );
+    }
+
+    #[test]
+    fn offline_state_moves_ring_context_into_speech_buffer() {
+        let mut state = OfflineState::default();
+        state.push_ring_chunk(vec![1.0, 2.0], 10);
+        state.push_ring_chunk(vec![3.0, 4.0, 5.0], 10);
+
+        state.begin_speech(100, 3);
+
+        assert!(state.is_speech_active());
+        assert_eq!(state.speech_chunks(), &[vec![3.0, 4.0, 5.0]]);
+        assert!((state.utterance_start_seconds(10.0) - 9.7).abs() < f64::EPSILON);
+
+        state.push_speech_chunk(vec![6.0]);
+        state.finish_speech_with_chunk(vec![7.0]);
+
+        assert!(!state.is_speech_active());
+        assert_eq!(
+            state.speech_chunks(),
+            &[vec![3.0, 4.0, 5.0], vec![6.0], vec![7.0]]
+        );
+
+        state.clear_speech_buffer();
+
+        assert!(state.speech_chunks().is_empty());
     }
 }

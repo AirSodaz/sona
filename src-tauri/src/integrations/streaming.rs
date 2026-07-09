@@ -391,28 +391,18 @@ async fn handle_local_streaming_socket(
                             current_segment_id = Some(uuid::Uuid::new_v4().to_string());
                         }
 
-                        if currently_speaking && !offline_state.is_speaking {
-                            offline_state.is_speaking = true;
+                        if currently_speaking && !offline_state.is_speech_active() {
                             let samples_to_keep = (16000.0 * 0.3) as usize;
-                            let mut context_len = 0;
-                            if !offline_state.ring_buffer.is_empty() {
-                                let ring_flat: Vec<f32> = offline_state.ring_buffer.iter().flatten().copied().collect();
-                                let keep_start = ring_flat.len().saturating_sub(samples_to_keep);
-                                let context = ring_flat[keep_start..].to_vec();
-                                context_len = context.len();
-                                offline_state.speech_buffer.push(context);
-                            }
-                            offline_state.utterance_start_sample = total_samples - context_len;
-                            offline_state.ring_buffer.clear();
+                            offline_state.begin_speech(total_samples, samples_to_keep);
                         }
 
                         if currently_speaking {
-                            offline_state.speech_buffer.push(samples.to_vec());
+                            offline_state.push_speech_chunk(samples);
                             let now = std::time::Instant::now();
                             if now.duration_since(last_inference_time).as_millis() > 200 {
-                                let global_start = offline_state.utterance_start_sample as f64 / 16000.0;
+                                let global_start = offline_state.utterance_start_seconds(16000.0);
                                 if let Some(segment) = run_offline_inference_standalone(
-                                    &offline_state.speech_buffer,
+                                    offline_state.speech_chunks(),
                                     &recognizer,
                                     current_segment_id.as_deref().unwrap(),
                                     global_start,
@@ -423,12 +413,11 @@ async fn handle_local_streaming_socket(
                                 last_inference_time = now;
                             }
                         } else {
-                            if offline_state.is_speaking {
-                                offline_state.is_speaking = false;
-                                offline_state.speech_buffer.push(samples.to_vec());
-                                let global_start = offline_state.utterance_start_sample as f64 / 16000.0;
+                            if offline_state.is_speech_active() {
+                                offline_state.finish_speech_with_chunk(samples.clone());
+                                let global_start = offline_state.utterance_start_seconds(16000.0);
                                 if let Some(segment) = run_offline_inference_standalone(
-                                    &offline_state.speech_buffer,
+                                    offline_state.speech_chunks(),
                                     &recognizer,
                                     current_segment_id.as_deref().unwrap(),
                                     global_start,
@@ -436,21 +425,18 @@ async fn handle_local_streaming_socket(
                                 ) {
                                     let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
                                 }
-                                offline_state.speech_buffer.clear();
+                                offline_state.clear_speech_buffer();
                                 current_segment_id = None;
                             }
-                            offline_state.ring_buffer.push_back(samples);
-                            if offline_state.ring_buffer.len() > 10 {
-                                offline_state.ring_buffer.pop_front();
-                            }
+                            offline_state.push_ring_chunk(samples, 10);
                         }
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            if offline_state.is_speaking {
-                                let global_start = offline_state.utterance_start_sample as f64 / 16000.0;
+                            if offline_state.is_speech_active() {
+                                let global_start = offline_state.utterance_start_seconds(16000.0);
                                 if let Some(segment) = run_offline_inference_standalone(
-                                    &offline_state.speech_buffer,
+                                    offline_state.speech_chunks(),
                                     &recognizer,
                                     current_segment_id.as_deref().unwrap(),
                                     global_start,

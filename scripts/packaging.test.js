@@ -1562,6 +1562,11 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
 
   for (const helper of [
     'buffered_sample_count',
+    'begin_speech',
+    'push_speech_chunk',
+    'finish_speech_with_chunk',
+    'push_ring_chunk',
+    'speech_chunks',
     'start_instance_runtime',
     'stop_instance_runtime',
   ]) {
@@ -1571,6 +1576,10 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
 
   assert.match(desktopSherpa, /use sona_local_asr::runtime::\{[\s\S]*SherpaInstance/u);
   assert.match(desktopStreaming, /sona_local_asr::runtime::OfflineState/u);
+  assert.doesNotMatch(
+    desktopStreaming,
+    /offline_state\.(?:is_speaking|ring_buffer|speech_buffer|utterance_start_sample)\b/u,
+  );
 });
 
 test('core owns local batch ASR request contract reused by desktop', () => {
