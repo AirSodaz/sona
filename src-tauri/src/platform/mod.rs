@@ -9,6 +9,7 @@ pub mod paths;
 pub mod preset_models;
 pub mod project_repository;
 pub mod recovery_repository;
+pub mod runtime_status;
 pub mod speaker_processing;
 pub mod startup_console;
 pub mod startup_dialog;

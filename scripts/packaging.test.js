@@ -752,7 +752,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     'utf8',
   );
   const desktopRuntimeStatus = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'),
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs'),
     'utf8',
   );
   const desktopPresetModels = fs.readFileSync(
@@ -2225,6 +2225,35 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
 });
 
+test('desktop runtime status adapter lives in platform layer', () => {
+  const appMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'mod.rs'), 'utf8');
+  const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
+  const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
+  const platformDiagnostics = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    'utf8',
+  );
+  const platformRuntimeStatusPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs');
+
+  assert.equal(fs.existsSync(platformRuntimeStatusPath), true);
+  const platformRuntimeStatus = fs.readFileSync(platformRuntimeStatusPath, 'utf8');
+
+  assert.match(platformMod, /^pub mod runtime_status;/mu);
+  assert.doesNotMatch(appMod, /^pub mod runtime_status;/mu);
+  assert.match(platformRuntimeStatus, /pub async fn open_log_folder/u);
+  assert.match(platformRuntimeStatus, /pub fn resolve_runtime_environment_status/u);
+  assert.match(platformRuntimeStatus, /pub async fn get_runtime_environment_status/u);
+  assert.match(platformRuntimeStatus, /pub async fn get_path_statuses/u);
+  assert.match(platformRuntimeStatus, /sona_runtime_fs::ensure_directory_exists\(&log_dir\)/u);
+  assert.match(systemCommand, /crate::platform::runtime_status::open_log_folder\(app\)\.await/u);
+  assert.match(systemCommand, /crate::platform::runtime_status::get_runtime_environment_status\(app\)\.await/u);
+  assert.match(systemCommand, /crate::platform::runtime_status::get_path_statuses\(paths\)\.await/u);
+  assert.match(platformDiagnostics, /crate::platform::runtime_status::resolve_runtime_environment_status\(provider\)/u);
+  assert.match(platformDiagnostics, /crate::platform::runtime_status::resolve_runtime_path_status\(path\)/u);
+  assert.doesNotMatch(systemCommand, /crate::app::runtime_status/u);
+  assert.doesNotMatch(platformDiagnostics, /crate::app::runtime_status/u);
+});
+
 test('desktop tauri crate imports core crates directly without a local core shim', () => {
   const desktopLib = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'lib.rs'), 'utf8');
   const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
@@ -3076,7 +3105,10 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
     'utf8',
   );
-  const runtimeStatusRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'runtime_status.rs'), 'utf8');
+  const runtimeStatusRs = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs'),
+    'utf8',
+  );
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',

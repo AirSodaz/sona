@@ -167,21 +167,21 @@ pub fn clear_aux_window_state(
 
 #[tauri::command]
 pub async fn open_log_folder(app: AppHandle) -> Result<(), String> {
-    crate::app::runtime_status::open_log_folder(app).await
+    crate::platform::runtime_status::open_log_folder(app).await
 }
 
 #[tauri::command]
 pub async fn get_runtime_environment_status(
     app: AppHandle,
-) -> Result<crate::app::runtime_status::RuntimeEnvironmentStatus, String> {
-    crate::app::runtime_status::get_runtime_environment_status(app).await
+) -> Result<crate::platform::runtime_status::RuntimeEnvironmentStatus, String> {
+    crate::platform::runtime_status::get_runtime_environment_status(app).await
 }
 
 #[tauri::command]
 pub async fn get_path_statuses(
     paths: Vec<String>,
-) -> Result<Vec<crate::app::runtime_status::RuntimePathStatus>, String> {
-    crate::app::runtime_status::get_path_statuses(paths).await
+) -> Result<Vec<crate::platform::runtime_status::RuntimePathStatus>, String> {
+    crate::platform::runtime_status::get_path_statuses(paths).await
 }
 
 #[tauri::command]

@@ -5,9 +5,7 @@ pub use sona_core::runtime::environment::{
 };
 pub use sona_runtime_fs::resolve_runtime_path_status;
 
-pub(crate) async fn open_log_folder<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-) -> Result<(), String> {
+pub async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let log_dir = app
         .path()
@@ -22,7 +20,7 @@ pub(crate) async fn open_log_folder<R: tauri::Runtime>(
     Ok(())
 }
 
-pub(crate) fn resolve_runtime_environment_status(
+pub fn resolve_runtime_environment_status(
     provider: &dyn crate::platform::paths::PathProvider,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let ffmpeg_path = sona_local_asr::audio::resolve_ffmpeg_sidecar_path()?;
@@ -37,16 +35,14 @@ pub(crate) fn resolve_runtime_environment_status(
     })
 }
 
-pub(crate) async fn get_runtime_environment_status(
+pub async fn get_runtime_environment_status(
     app: tauri::AppHandle,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let provider = crate::platform::paths::TauriPathProvider::from_app(&app);
     resolve_runtime_environment_status(&provider)
 }
 
-pub(crate) async fn get_path_statuses(
-    paths: Vec<String>,
-) -> Result<Vec<RuntimePathStatus>, String> {
+pub async fn get_path_statuses(paths: Vec<String>) -> Result<Vec<RuntimePathStatus>, String> {
     Ok(paths
         .into_iter()
         .map(|path| resolve_runtime_path_status(&path))

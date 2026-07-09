@@ -70,7 +70,7 @@ async fn enrich_diagnostics_core_input(
         punctuation: resolve_core_path_status(input.config.punctuation_model_path.trim()),
     };
     input.runtime_environment = runtime_environment_input(
-        crate::app::runtime_status::resolve_runtime_environment_status(provider)?,
+        crate::platform::runtime_status::resolve_runtime_environment_status(provider)?,
     );
     input.asr_runtime_metrics = state.metrics_snapshot().await;
     input.onboarding_ready = !input.config.streaming_model_path.trim().is_empty()
@@ -105,18 +105,18 @@ fn resolve_core_path_status(path: &str) -> Option<RuntimePathStatus> {
     }
 
     Some(runtime_path_status_input(
-        crate::app::runtime_status::resolve_runtime_path_status(path),
+        crate::platform::runtime_status::resolve_runtime_path_status(path),
     ))
 }
 
 fn runtime_path_status_input(
-    status: crate::app::runtime_status::RuntimePathStatus,
+    status: crate::platform::runtime_status::RuntimePathStatus,
 ) -> RuntimePathStatus {
     status
 }
 
 fn runtime_environment_input(
-    status: crate::app::runtime_status::RuntimeEnvironmentStatus,
+    status: crate::platform::runtime_status::RuntimeEnvironmentStatus,
 ) -> RuntimeEnvironmentStatus {
     status
 }
