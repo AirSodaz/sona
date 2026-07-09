@@ -806,6 +806,8 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(tauriRecoveryRepository, /fn now_ms\(\) -> u64/u);
   assert.match(tauriRecoveryRepository, /crate::platform::time::unix_timestamp_millis\(\)/u);
   assert.doesNotMatch(tauriRecoveryRepository, /SystemTime::now|UNIX_EPOCH/u);
+  assert.match(tauriRecoveryRepository, /sona_runtime_fs::ensure_directory_exists\(&recovery_dir\)/u);
+  assert.doesNotMatch(tauriRecoveryRepository, /fs::create_dir_all|std::fs::create_dir_all/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_items_with_timestamp/u);
   assert.match(tauriRecoveryRepository, /snapshot_from_value_with_source_paths_at/u);
   assert.doesNotMatch(

@@ -33,8 +33,9 @@ impl FsRecoveryRepository {
 
 impl RecoveryRepository for FsRecoveryRepository {
     fn ensure_ready(&self) -> Result<(), String> {
-        fs::create_dir_all(self.recovery_dir()).map_err(|error| error.to_string())?;
-        let recovery_path = self.queue_recovery_path();
+        let recovery_dir = self.recovery_dir();
+        sona_runtime_fs::ensure_directory_exists(&recovery_dir)?;
+        let recovery_path = recovery_dir.join(QUEUE_RECOVERY_FILE_NAME);
         if !recovery_path.exists() {
             write_json_pretty_atomic(&recovery_path, &empty_snapshot())?;
         }
