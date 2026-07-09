@@ -18,6 +18,6 @@ pub(crate) use sona_online_llm::{
     GoogleTranslateFreeAttemptError, parse_google_translate_free_retry_after,
 };
 pub(crate) use sona_online_llm::{
-    execute_google_translate_free_request, fetch_google_translate_free_translation,
-    run_google_translate_free_requests_in_order,
+    execute_google_translate_free_request, execute_google_translate_request,
+    fetch_google_translate_free_translation, run_google_translate_free_requests_in_order,
 };

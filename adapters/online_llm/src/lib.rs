@@ -189,6 +189,37 @@ pub struct GoogleTranslateResponse {
     pub data: GoogleTranslateData,
 }
 
+pub async fn execute_google_translate_request(
+    client: &Client,
+    url: &LlmApiUrl,
+    api_key: &str,
+    texts: Vec<String>,
+    target_language: String,
+) -> Result<String, String> {
+    let payload = GoogleTranslateRequest {
+        q: texts,
+        target: target_language,
+        format: "text".to_string(),
+    };
+
+    let response = client
+        .post(url.reqwest_url())
+        .header("x-goog-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        return Err(format!("Google Translate API Error: {} {}", status, text));
+    }
+
+    Ok(text)
+}
+
 #[derive(Debug, Clone)]
 pub enum GoogleTranslateFreeAttemptError {
     HttpStatus {

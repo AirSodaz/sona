@@ -3125,6 +3125,7 @@ test('online LLM provider implementation lives in adapter crate', () => {
   const onlineLlmCargoPath = path.join(repoRoot, 'adapters', 'online_llm', 'Cargo.toml');
   const onlineLlmLibPath = path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs');
   const onlineLlmLib = fs.readFileSync(onlineLlmLibPath, 'utf8');
+  const desktopCommands = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'), 'utf8');
   const desktopProviders = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'providers.rs'), 'utf8');
   const desktopNetwork = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'network.rs'), 'utf8');
   const desktopTasks = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'), 'utf8');
@@ -3139,8 +3140,11 @@ test('online LLM provider implementation lives in adapter crate', () => {
   assert.match(desktopProviders, /sona_online_llm::\{/u);
   assert.match(desktopNetwork, /sona_online_llm(?:::\{[\s\S]*LlmApiUrl|::LlmApiUrl)/u);
   assert.match(desktopTasks, /sona_online_llm::\{/u);
+  assert.match(onlineLlmLib, /pub async fn execute_google_translate_request/u);
+  assert.match(desktopCommands, /execute_google_translate_request\(/u);
   assert.match(onlineLlmLib, /pub async fn execute_google_translate_free_request/u);
   assert.match(onlineLlmLib, /pub async fn fetch_google_translate_free_translation/u);
+  assert.doesNotMatch(desktopCommands, /\.post\(url\.reqwest_url\(\)\)/u);
   assert.doesNotMatch(desktopProviders, /pub(?:\(crate\))? trait LlmAdapter/u);
   assert.doesNotMatch(desktopProviders, /struct AdapterFactory/u);
   assert.doesNotMatch(desktopProviders, /pub\(crate\) async fn get_openai_models/u);

@@ -305,35 +305,17 @@ where
                     let base_url = base_url.clone();
                     let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
                         Box::pin(async move {
-                            let texts: Vec<String> =
-                                serde_json::from_str(&prompt).unwrap_or_default();
+                            let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
 
                             if config.strategy == LlmProviderStrategy::GoogleTranslate {
-                                let payload = GoogleTranslateRequest {
-                                    q: texts,
-                                    target: target_language,
-                                    format: "text".to_string(),
-                                };
-
-                                let url = base_url.clone();
-                                let response = client
-                                    .post(url.reqwest_url())
-                                    .header("x-goog-api-key", config.api_key)
-                                    .json(&payload)
-                                    .send()
-                                    .await
-                                    .map_err(|e| e.to_string())?;
-
-                                let status = response.status();
-                                let text = response.text().await.unwrap_or_default();
-
-                                if !status.is_success() {
-                                    return Err(format!(
-                                        "Google Translate API Error: {} {}",
-                                        status, text
-                                    ));
-                                }
-
+                                let text = execute_google_translate_request(
+                                    &client,
+                                    &base_url,
+                                    config.api_key.as_str(),
+                                    texts,
+                                    target_language,
+                                )
+                                .await?;
                                 Ok(StandardLlmResponse { text, usage: None })
                             } else {
                                 info!(
