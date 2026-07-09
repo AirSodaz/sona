@@ -2416,6 +2416,8 @@ test('desktop history repository facade lives in platform without repositories m
     path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
     'utf8',
   );
+  const platformDashboardPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'dashboard.rs');
+  const platformDashboard = fs.existsSync(platformDashboardPath) ? fs.readFileSync(platformDashboardPath, 'utf8') : '';
   const dashboardApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'dashboard.rs'), 'utf8');
   const setupApp = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'setup.rs'), 'utf8');
   const historyCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'history.rs'), 'utf8');
@@ -2435,6 +2437,8 @@ test('desktop history repository facade lives in platform without repositories m
     .map(({ filePath }) => path.relative(repoRoot, filePath));
 
   assert.doesNotMatch(desktopLib, /^pub mod repositories;/mu);
+  assert.equal(fs.existsSync(platformDashboardPath), true);
+  assert.match(desktopPlatform, /^pub mod dashboard;/mu);
   assert.match(desktopPlatform, /^pub mod history_repository;/mu);
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'repositories')), false);
   assert.ok(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'llm_helpers.rs')));
@@ -2470,10 +2474,15 @@ test('desktop history repository facade lives in platform without repositories m
   assert.doesNotMatch(historyCommand, /export_backup_archive_inner|prepare_backup_import_inner|apply_prepared_history_import_inner/u);
   assert.doesNotMatch(historyCommand, /remove_path_if_exists/u);
   assert.doesNotMatch(historyCommand, /tauri_plugin_opener::OpenerExt|\.open_path\(/u);
-  assert.match(dashboardApp, /use crate::platform::history_repository::SqliteHistoryStore;/u);
-  assert.match(dashboardApp, /use sona_sqlite::analytics::SqliteAnalyticsRepository;/u);
-  assert.match(setupApp, /crate::platform::history_repository::SqliteHistoryStore::new/u);
-  assert.match(setupApp, /sona_sqlite::analytics::SqliteAnalyticsRepository::new/u);
+  assert.match(platformDashboard, /DashboardService<SqliteHistoryStore, SqliteProjectRepository, SqliteAnalyticsRepository>/u);
+  assert.match(platformDashboard, /pub fn create_dashboard_service/u);
+  assert.match(platformDashboard, /SqliteHistoryStore::new/u);
+  assert.match(dashboardApp, /pub use crate::platform::dashboard::AppDashboardService/u);
+  assert.doesNotMatch(dashboardApp, /sona_sqlite::|SqliteHistoryStore|SqliteProjectRepository|SqliteAnalyticsRepository/u);
+  assert.match(setupApp, /crate::platform::dashboard::create_dashboard_service/u);
+  assert.doesNotMatch(setupApp, /crate::platform::history_repository::SqliteHistoryStore::new/u);
+  assert.doesNotMatch(setupApp, /sona_sqlite::project::SqliteProjectRepository::new/u);
+  assert.doesNotMatch(setupApp, /sona_sqlite::analytics::SqliteAnalyticsRepository::new/u);
 });
 
 test('app config migration and LLM provider manifest are owned by core', () => {

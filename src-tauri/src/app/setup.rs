@@ -44,24 +44,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let history_repo = Arc::new(
-        crate::platform::history_repository::SqliteHistoryStore::new(
-            app_local_data_dir.clone(),
-            Arc::clone(&db),
-        ),
+    let dashboard_service = crate::platform::dashboard::create_dashboard_service(
+        app_local_data_dir.clone(),
+        Arc::clone(&db),
     );
-    let project_repo = Arc::new(sona_sqlite::project::SqliteProjectRepository::new(
-        Arc::clone(&db),
-    ));
-    let analytics_repo = Arc::new(sona_sqlite::analytics::SqliteAnalyticsRepository::new(
-        Arc::clone(&db),
-    ));
-
-    let dashboard_service = Arc::new(crate::app::dashboard::AppDashboardService::new(
-        history_repo,
-        project_repo,
-        analytics_repo,
-    ));
 
     app.manage(dashboard_service);
     app.manage(db);
