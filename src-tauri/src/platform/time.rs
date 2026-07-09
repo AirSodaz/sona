@@ -13,6 +13,10 @@ pub fn unix_timestamp_secs() -> u64 {
     unix_timestamp_secs_at(Utc::now())
 }
 
+pub fn unix_timestamp_millis() -> u64 {
+    unix_timestamp_millis_at(Utc::now())
+}
+
 pub fn dashboard_snapshot_time_now() -> DashboardSnapshotTime {
     let now = Utc::now();
     let local_now = now.with_timezone(&Local);
@@ -33,6 +37,10 @@ fn format_utc_rfc3339_millis(timestamp: DateTime<Utc>) -> String {
 
 fn unix_timestamp_secs_at(timestamp: DateTime<Utc>) -> u64 {
     u64::try_from(timestamp.timestamp()).unwrap_or_default()
+}
+
+fn unix_timestamp_millis_at(timestamp: DateTime<Utc>) -> u64 {
+    u64::try_from(timestamp.timestamp_millis()).unwrap_or_default()
 }
 
 fn dashboard_snapshot_time_from_parts(
@@ -79,6 +87,17 @@ mod tests {
         let timestamp = Utc.with_ymd_and_hms(2026, 7, 9, 6, 30, 15).unwrap();
 
         assert_eq!(unix_timestamp_secs_at(timestamp), 1_783_578_615);
+    }
+
+    #[test]
+    fn converts_utc_timestamp_to_unix_milliseconds() {
+        let timestamp = Utc
+            .with_ymd_and_hms(2026, 7, 9, 6, 30, 15)
+            .unwrap()
+            .with_nanosecond(123_000_000)
+            .unwrap();
+
+        assert_eq!(unix_timestamp_millis_at(timestamp), 1_783_578_615_123);
     }
 
     #[test]

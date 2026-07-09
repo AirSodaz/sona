@@ -5,7 +5,6 @@ pub use sona_core::transcription::asr_metrics::{
     format_optional_rtf, samples_to_ms,
 };
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 use sysinfo::{ProcessesToUpdate, System};
 
 const BYTES_PER_MB: f64 = 1024.0 * 1024.0;
@@ -17,10 +16,7 @@ pub(crate) fn new_metrics_store() -> AsrMetricsStore {
 }
 
 pub(crate) fn current_time_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    crate::platform::time::unix_timestamp_millis()
 }
 
 pub(crate) fn capture_process_memory_mb() -> Option<f64> {

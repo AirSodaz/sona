@@ -1253,7 +1253,8 @@ test('core owns ASR metric helpers reused by desktop', () => {
 
   assert.doesNotMatch(coreMetrics, /SystemTime::now|UNIX_EPOCH|current_time_millis/u);
   assert.match(desktopMetrics, /pub\(crate\) fn current_time_millis/u);
-  assert.match(desktopMetrics, /SystemTime::now/u);
+  assert.match(desktopMetrics, /crate::platform::time::unix_timestamp_millis\(\)/u);
+  assert.doesNotMatch(desktopMetrics, /SystemTime::now|UNIX_EPOCH/u);
   assert.match(desktopMetrics, /pub\(crate\) fn capture_process_memory_mb/u);
   assert.match(desktopMetrics, /sysinfo::/u);
 });
