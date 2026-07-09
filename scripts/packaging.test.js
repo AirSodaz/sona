@@ -824,6 +824,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   );
   const runtimeFsLib = fs.readFileSync(path.join(repoRoot, 'adapters', 'runtime_fs', 'src', 'lib.rs'), 'utf8');
   const cliInitConfig = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'init_config.rs'), 'utf8');
+  const cliModels = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'models.rs'), 'utf8');
   const cliTranscribe = fs.readFileSync(path.join(repoRoot, 'platforms', 'cli', 'src', 'transcribe.rs'), 'utf8');
   const coreRuntimeConfig = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'runtime', 'config.rs'), 'utf8');
   const coreTranscribeRuntime = fs.readFileSync(path.join(repoRoot, 'core', 'src', 'transcription', 'runtime.rs'), 'utf8');
@@ -917,8 +918,12 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
 
   assert.match(runtimeFsLib, /pub fn load_transcribe_config_file/u);
   assert.match(runtimeFsLib, /pub fn write_cli_config_template_file/u);
+  assert.match(runtimeFsLib, /pub fn path_exists/u);
   assert.match(cliInitConfig, /sona_runtime_fs::write_cli_config_template_file\(&path, &content, args\.force\)/u);
   assert.doesNotMatch(cliInitConfig, /std::fs|\bfs::write\(|create_dir_all|\.exists\(\)/u);
+  assert.match(cliModels, /sona_runtime_fs::path_exists\(&install_path\)/u);
+  assert.match(cliModels, /sona_runtime_fs::path_exists\(&resolved\.install_path\)/u);
+  assert.doesNotMatch(cliModels, /\.exists\(\)/u);
   assert.match(runtimeFsLib, /pub fn write_transcript_output_file/u);
   assert.match(cliTranscribe, /sona_runtime_fs::write_transcript_output_file\(&path, &output\)/u);
   assert.doesNotMatch(cliTranscribe, /fs::write\(/u);

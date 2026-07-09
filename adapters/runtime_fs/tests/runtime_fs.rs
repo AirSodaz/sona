@@ -11,11 +11,23 @@ use sona_runtime_fs::{
     FsSourcePathStatusProvider, RealFileSystem, cli_shared_library_directory_candidates,
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
-    plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
     resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
     tauri_shared_library_directory_candidates, write_cli_config_template_file,
     write_json_pretty_atomic, write_transcript_output_file,
 };
+
+#[test]
+fn path_exists_reports_existing_files_and_missing_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("model.onnx");
+
+    assert!(!path_exists(&file_path).unwrap());
+
+    std::fs::write(&file_path, "model").unwrap();
+
+    assert!(path_exists(&file_path).unwrap());
+}
 
 #[test]
 fn write_cli_config_template_file_creates_parent_and_respects_force() {

@@ -84,6 +84,12 @@ pub fn ensure_directory_exists(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|error| error.to_string())
 }
 
+pub fn path_exists(path: &Path) -> Result<bool, String> {
+    RealFileSystem
+        .metadata(path)
+        .map(|metadata| metadata.is_some())
+}
+
 pub fn write_transcript_output_file(path: &Path, output: &str) -> Result<(), String> {
     RealFileSystem
         .write_file(path, output.as_bytes())

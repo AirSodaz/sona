@@ -183,8 +183,9 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
     let model = sona_core::models::preset_models::find_preset_model(&args.model_id)
         .ok_or_else(|| CliError::Validation(format!("Unknown model id: {}", args.model_id)))?;
     let install_path = model.resolve_install_path(&models_dir);
+    let install_path_exists = sona_runtime_fs::path_exists(&install_path).map_err(CliError::Io)?;
 
-    if !is_preset_model_installed_at(model, &models_dir) && !install_path.exists() {
+    if !is_preset_model_installed_at(model, &models_dir) && !install_path_exists {
         return Ok(CliOutput::stderr(format!(
             "Model {} is not installed at {}",
             model.id,
@@ -219,7 +220,9 @@ async fn download_one_model(
         return Ok(());
     }
 
-    if resolved.install_path.exists()
+    let install_path_exists =
+        sona_runtime_fs::path_exists(&resolved.install_path).map_err(CliError::Io)?;
+    if install_path_exists
         && !yes
         && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)?
     {
