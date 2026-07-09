@@ -1450,6 +1450,19 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
 });
 
+test('desktop API server obtains ASR recognizer pools through integration facade', () => {
+  const appServer = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'app', 'server.rs'), 'utf8');
+  const desktopAsrMod = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    'utf8',
+  );
+
+  assert.match(desktopAsrMod, /pub\(crate\) fn recognizer_pool_for_app/u);
+  assert.match(appServer, /crate::integrations::asr::recognizer_pool_for_app\(app\.as_ref\(\)\)/u);
+  assert.doesNotMatch(appServer, /\.recognizer_pool\b/u);
+  assert.doesNotMatch(appServer, /RecognizerPool::new/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),

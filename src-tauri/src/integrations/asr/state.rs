@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 pub struct AsrState {
     pub active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
     pub instance_engines: Mutex<HashMap<String, AsrEngine>>,
-    pub recognizer_pool: RecognizerPool,
+    pub(crate) recognizer_pool: RecognizerPool,
     pub(crate) metrics: AsrMetricsStore,
 }
 
@@ -31,6 +31,10 @@ impl AsrState {
             recognizer_pool: RecognizerPool::new(),
             metrics: new_metrics_store(),
         }
+    }
+
+    pub fn recognizer_pool(&self) -> RecognizerPool {
+        self.recognizer_pool.clone()
     }
 
     pub async fn has_online_session(&self, instance_id: &str) -> bool {

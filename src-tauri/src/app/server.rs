@@ -39,14 +39,7 @@ struct TauriApiServerPlatform {
 
 impl TauriApiServerPlatform {
     fn from_app(app: Option<tauri::AppHandle>) -> Self {
-        let recognizer_pool = app
-            .as_ref()
-            .map(|app| {
-                app.state::<crate::integrations::asr::AsrState>()
-                    .recognizer_pool
-                    .clone()
-            })
-            .unwrap_or_else(crate::integrations::asr::RecognizerPool::new);
+        let recognizer_pool = crate::integrations::asr::recognizer_pool_for_app(app.as_ref());
         Self {
             streaming_context: Arc::new(TauriStreamingContext {
                 app,

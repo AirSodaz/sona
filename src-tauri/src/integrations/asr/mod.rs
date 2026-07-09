@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 mod adapter;
 mod batch;
@@ -85,6 +85,11 @@ pub(crate) fn ensure_adapter(
         .ok_or_else(|| SherpaError::UnsupportedOnlineProvider {
             provider_id: provider_id.to_string(),
         })
+}
+
+pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {
+    app.map(|app| app.state::<AsrState>().recognizer_pool())
+        .unwrap_or_else(RecognizerPool::new)
 }
 
 /// Feed f32 audio samples from the hardware capture worker to the correct
