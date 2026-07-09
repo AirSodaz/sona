@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::platform::paths::{PathKind, PathProvider};
 use sona_core::recovery::normalization::{
     empty_snapshot, recovered_item_from_queue_value_with_source_paths,
     recovered_item_from_saved_value_with_source_paths, snapshot_from_items_with_timestamp,
@@ -121,6 +122,46 @@ impl RecoveryRepository for FsRecoveryRepository {
         write_json_pretty_atomic(&self.queue_recovery_path(), &snapshot)?;
         Ok(snapshot)
     }
+}
+
+async fn run_recovery_repository_task<T, F>(
+    provider: &dyn PathProvider,
+    task: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(FsRecoveryRepository) -> Result<T, String> + Send + 'static,
+{
+    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        task(FsRecoveryRepository::new(app_local_data_dir))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub async fn load_snapshot(provider: &dyn PathProvider) -> Result<RecoverySnapshot, String> {
+    run_recovery_repository_task(provider, |repository| repository.load_snapshot()).await
+}
+
+pub async fn save_snapshot(
+    provider: &dyn PathProvider,
+    items: Vec<Value>,
+) -> Result<RecoverySnapshot, String> {
+    run_recovery_repository_task(provider, move |repository| repository.save_snapshot(items)).await
+}
+
+pub async fn persist_queue_snapshot(
+    provider: &dyn PathProvider,
+    queue_items: Vec<Value>,
+    resolved_ids: Option<Vec<String>>,
+) -> Result<(), String> {
+    run_recovery_repository_task(provider, move |repository| {
+        repository
+            .persist_queue_snapshot_with_resolved_ids(queue_items, resolved_ids.unwrap_or_default())
+            .map(|_| ())
+    })
+    .await
 }
 
 fn now_ms() -> u64 {

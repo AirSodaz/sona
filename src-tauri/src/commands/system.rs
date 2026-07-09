@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime, State};
 
-use crate::platform::paths::{PathProvider, TauriPathProvider};
+use crate::platform::paths::TauriPathProvider;
 use sona_webdav::{
     RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult,
     webdav_download_backup as webdav_download_backup_adapter,
@@ -11,29 +11,8 @@ use sona_webdav::{
     webdav_upload_backup as webdav_upload_backup_adapter,
 };
 
-use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
-
-// recovery helper functions (copied from core/recovery/commands.rs)
-use crate::platform::recovery_repository::FsRecoveryRepository;
-use sona_core::recovery::repository::RecoveryRepository;
 use sona_core::recovery::types::RecoverySnapshot;
-
-async fn run_recovery_repository_task<T, F>(
-    provider: &dyn PathProvider,
-    task: F,
-) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(FsRecoveryRepository) -> Result<T, String> + Send + 'static,
-{
-    let app_local_data_dir =
-        provider.resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        task(FsRecoveryRepository::new(app_local_data_dir))
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
+use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
 
 // Command wrappers & implementations
 
@@ -261,7 +240,7 @@ pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnap
 #[tauri::command]
 pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    run_recovery_repository_task(&path_provider, |repository| repository.load_snapshot()).await
+    crate::platform::recovery_repository::load_snapshot(&path_provider).await
 }
 
 #[tauri::command]
@@ -270,10 +249,7 @@ pub async fn recovery_save_snapshot(
     items: Vec<Value>,
 ) -> Result<RecoverySnapshot, String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    run_recovery_repository_task(&path_provider, move |repository| {
-        repository.save_snapshot(items)
-    })
-    .await
+    crate::platform::recovery_repository::save_snapshot(&path_provider, items).await
 }
 
 #[tauri::command]
@@ -283,11 +259,11 @@ pub async fn recovery_persist_queue_snapshot(
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
     let path_provider = TauriPathProvider::from_app(&app);
-    run_recovery_repository_task(&path_provider, move |repository| {
-        repository
-            .persist_queue_snapshot_with_resolved_ids(queue_items, resolved_ids.unwrap_or_default())
-            .map(|_| ())
-    })
+    crate::platform::recovery_repository::persist_queue_snapshot(
+        &path_provider,
+        queue_items,
+        resolved_ids,
+    )
     .await
 }
 

@@ -2303,7 +2303,22 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.match(exportCommand, /adapter_export_transcript_file\(ExportTranscriptFileRequest/u);
   assert.doesNotMatch(exportCommand, /core_export_transcript_file/u);
   assert.doesNotMatch(exportCommand, /crate::platform::export_files/u);
-  assert.match(systemCommand, /crate::platform::recovery_repository::FsRecoveryRepository/u);
+  assert.match(platformRecovery, /async fn run_recovery_repository_task/u);
+  assert.match(platformRecovery, /PathKind::AppLocalData/u);
+  assert.match(platformRecovery, /tauri::async_runtime::spawn_blocking/u);
+  assert.match(platformRecovery, /pub async fn load_snapshot/u);
+  assert.match(platformRecovery, /pub async fn save_snapshot/u);
+  assert.match(platformRecovery, /pub async fn persist_queue_snapshot/u);
+  assert.match(systemCommand, /crate::platform::recovery_repository::load_snapshot\(&path_provider\)\.await/u);
+  assert.match(systemCommand, /crate::platform::recovery_repository::save_snapshot\(&path_provider, items\)\.await/u);
+  assert.match(
+    systemCommand,
+    /crate::platform::recovery_repository::persist_queue_snapshot\(\s*&path_provider,\s*queue_items,\s*resolved_ids,\s*\)\s*\.await/u,
+  );
+  assert.doesNotMatch(systemCommand, /FsRecoveryRepository/u);
+  assert.doesNotMatch(systemCommand, /run_recovery_repository_task/u);
+  assert.doesNotMatch(systemCommand, /PathKind::AppLocalData/u);
+  assert.doesNotMatch(systemCommand, /tauri::async_runtime::spawn_blocking/u);
 });
 
 test('desktop automation and project repository task adapters live in platform', () => {
