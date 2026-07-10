@@ -3,6 +3,7 @@ use super::types::{TranscriptNormalizationOptions, TranscriptSegment, Transcript
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
 use super::{diagnostics_instance_label, log_segment_emit_diagnostics, recognizer_output_event};
 use log::info;
+use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_local_asr::punctuation::Punctuation;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -49,6 +50,23 @@ pub(crate) fn emit_transcript_update(
         log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
     }
     let _ = emitter.emit(&event_name, serde_json::to_value(update).unwrap());
+}
+
+pub(crate) fn observe_streaming_transcript_update(
+    observer: &dyn AsrRuntimeObserver,
+    instance_id: &str,
+    update: &TranscriptUpdate,
+    stage: &str,
+    first_segment_emitted: Option<&Arc<AtomicBool>>,
+) {
+    for segment in &update.upsert_segments {
+        log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
+    }
+    observer.on_transcript_update(&AsrTranscriptUpdateEvent {
+        instance_id: instance_id.to_string(),
+        stage: stage.to_string(),
+        update: update.clone(),
+    });
 }
 
 pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {

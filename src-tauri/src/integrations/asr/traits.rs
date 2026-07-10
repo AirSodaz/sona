@@ -1,37 +1,8 @@
 use async_trait::async_trait;
+use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
+use std::sync::Arc;
 
 use super::{AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment};
-
-#[async_trait]
-pub trait AsrStreamingSession: Send + Sync {
-    async fn start(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-    ) -> Result<(), SherpaError>;
-    async fn stop(&self, state: &AsrState, instance_id: &str) -> Result<(), SherpaError>;
-    async fn flush(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-    ) -> Result<(), SherpaError>;
-    async fn feed_audio_chunk(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-        samples: Vec<u8>,
-    ) -> Result<(), SherpaError>;
-    async fn feed_audio_samples(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-        samples: &[f32],
-    ) -> Result<(), SherpaError>;
-}
 
 #[async_trait]
 pub trait AsrBatchProcessor: Send + Sync {
@@ -61,5 +32,6 @@ pub trait AsrProviderAdapter: Send + Sync {
         state: &AsrState,
         instance_id: &str,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError>;
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError>;
 }

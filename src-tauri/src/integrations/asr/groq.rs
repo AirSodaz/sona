@@ -5,10 +5,14 @@ use super::metrics::{
     set_batch_inference_metric,
 };
 use super::types::{AsrTranscriptionRequest, TranscriptSegment};
-use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
+use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
-use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
+use sona_core::ports::asr::{
+    AsrRuntimeObserver, AsrStreamingSession, OnlineBatchTranscriber,
+    OnlineBatchTranscriptionRequest,
+};
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
+use std::sync::Arc;
 use std::time::Instant;
 
 pub struct GroqWhisperAdapter;
@@ -31,7 +35,8 @@ impl AsrProviderAdapter for GroqWhisperAdapter {
         _state: &AsrState,
         _instance_id: &str,
         _request: &AsrTranscriptionRequest,
-    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
+        _observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError> {
         Ok(None)
     }
 }

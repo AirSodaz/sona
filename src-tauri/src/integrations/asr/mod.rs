@@ -30,6 +30,7 @@ pub(crate) use sherpa_onnx::{
     diagnostics_instance_label, init_recognizer_impl, log_segment_emit_diagnostics,
 };
 pub use sona_core::models::config::ModelFileConfig;
+pub use sona_core::ports::asr::AsrStreamingSession;
 pub use sona_core::ports::asr::SherpaError;
 pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
@@ -44,7 +45,7 @@ pub(crate) use sona_local_asr::recognizer::{
 pub(crate) use sona_local_asr::runtime::ModelConfigKey;
 pub use sona_local_asr::runtime::RecognizerPool;
 pub use state::AsrState;
-pub use traits::{AsrBatchProcessor, AsrProviderAdapter, AsrStreamingSession};
+pub use traits::{AsrBatchProcessor, AsrProviderAdapter};
 pub(crate) use transcript::{
     apply_timeline_normalization, finalize_transcript_text, normalize_recognizer_text,
     synthesize_durations,
@@ -99,7 +100,6 @@ pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool
 /// expected online recognizer cannot silently fall through to local Sherpa when
 /// the online session is missing or failed.
 pub async fn feed_audio_samples(
-    app: &AppHandle,
     state: &AsrState,
     instance_id: &str,
     samples: &[f32],
@@ -108,9 +108,5 @@ pub async fn feed_audio_samples(
         .session(instance_id)
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
-    let emitter = std::sync::Arc::new(crate::platform::event::TauriEventEmitter(app.clone()))
-        as std::sync::Arc<dyn crate::platform::event::EventEmitter>;
-    session
-        .feed_audio_samples(emitter, state, instance_id, samples)
-        .await
+    session.feed_audio_samples(samples).await
 }

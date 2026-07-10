@@ -1,19 +1,20 @@
 use super::TranscriptPostprocessor;
 use super::metrics::{
-    AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
+    AsrInferenceMetric, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
     capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
-    log_model_load_metric, samples_to_ms, set_live_inference_metric,
+    log_model_load_metric, samples_to_ms,
 };
 use super::transcript::{
-    build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
-    log_text_transform_diagnostics, normalize_recognizer_text, preview_text_for_log,
-    synthesize_durations,
+    build_transcript_update, finalize_transcript_text, format_transcript,
+    log_text_transform_diagnostics, normalize_recognizer_text, observe_streaming_transcript_update,
+    preview_text_for_log, synthesize_durations,
 };
 use super::types::{
     LocalSherpaStreamingRequest, TranscriptNormalizationOptions, TranscriptSegment,
 };
-use crate::integrations::asr::{AsrState, AsrStreamingSession, ModelConfigKey};
+use crate::integrations::asr::{AsrState, ModelConfigKey};
 use log::{debug, info, trace};
+use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
 use sona_local_asr::audio::{accept_vad_samples, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
@@ -33,8 +34,8 @@ use std::time::Instant;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
 
-fn record_live_metric(metrics_store: &AsrMetricsStore, metric: AsrInferenceMetric) {
-    set_live_inference_metric(metrics_store, metric.clone());
+fn record_live_metric(observer: &dyn AsrRuntimeObserver, metric: AsrInferenceMetric) {
+    observer.on_live_inference(&metric);
     log_inference_metric(&metric);
 }
 
@@ -70,7 +71,7 @@ fn build_live_metric(
 #[allow(clippy::too_many_arguments)]
 fn run_offline_inference(
     speech_buffer: &[Vec<f32>],
-    emitter: &dyn crate::platform::event::EventEmitter,
+    observer: &dyn AsrRuntimeObserver,
     r: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
     segment_id: &str,
@@ -81,7 +82,7 @@ fn run_offline_inference(
     first_segment_emitted: Option<Arc<AtomicBool>>,
     normalization_options: TranscriptNormalizationOptions,
     postprocessor: TranscriptPostprocessor,
-    metrics_store: Option<AsrMetricsStore>,
+    record_metrics: bool,
     triggered_at: Instant,
 ) {
     if speech_buffer.is_empty() {
@@ -110,9 +111,9 @@ fn run_offline_inference(
     let decode_ms = duration_to_ms(decode_started.elapsed());
 
     let record_metric = |emit_latency_ms: Option<f64>| {
-        if let Some(metrics_store) = metrics_store.as_ref() {
+        if record_metrics {
             record_live_metric(
-                metrics_store,
+                observer,
                 build_live_metric(
                     instance_id,
                     stage,
@@ -216,8 +217,8 @@ fn run_offline_inference(
             };
             let update = postprocessor
                 .process_update(build_transcript_update(segment, normalization_options));
-            emit_transcript_update(
-                emitter,
+            observe_streaming_transcript_update(
+                observer,
                 instance_id,
                 &update,
                 stage,
@@ -244,66 +245,56 @@ use crate::integrations::asr::SherpaError;
 use async_trait::async_trait;
 
 pub(crate) struct LocalSherpaSession {
+    instance_id: String,
+    observer: Arc<dyn AsrRuntimeObserver>,
     instance: tokio::sync::Mutex<SherpaInstance>,
 }
 
 #[async_trait]
 impl AsrStreamingSession for LocalSherpaSession {
-    async fn start(
-        &self,
-        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        _state: &AsrState,
-        instance_id: &str,
-    ) -> Result<(), SherpaError> {
+    async fn start(&self) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        start_recognizer_impl_inner(instance_id, &mut instance)
+        start_recognizer_impl_inner(&self.instance_id, &mut instance)
             .await
             .map_err(SherpaError::Generic)
     }
 
-    async fn stop(&self, _state: &AsrState, instance_id: &str) -> Result<(), SherpaError> {
+    async fn stop(&self) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        stop_recognizer_impl_inner(instance_id, &mut instance)
+        stop_recognizer_impl_inner(&self.instance_id, &mut instance)
             .await
             .map_err(SherpaError::Generic)
     }
 
-    async fn flush(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-    ) -> Result<(), SherpaError> {
+    async fn flush(&self) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        flush_recognizer_impl_inner(emitter, state, instance_id, &mut instance)
+        flush_recognizer_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
             .await
             .map_err(SherpaError::Generic)
     }
 
-    async fn feed_audio_chunk(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-        samples: Vec<u8>,
-    ) -> Result<(), SherpaError> {
+    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        feed_audio_chunk_impl_inner(emitter, state, instance_id, &mut instance, samples)
-            .await
-            .map_err(SherpaError::Generic)
+        feed_audio_chunk_impl_inner(
+            self.observer.clone(),
+            &self.instance_id,
+            &mut instance,
+            samples,
+        )
+        .await
+        .map_err(SherpaError::Generic)
     }
 
-    async fn feed_audio_samples(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        state: &AsrState,
-        instance_id: &str,
-        samples: &[f32],
-    ) -> Result<(), SherpaError> {
+    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
-        feed_audio_samples_inner(emitter, state, instance_id, &mut instance, samples)
-            .await
-            .map_err(SherpaError::Generic)
+        feed_audio_samples_inner(
+            self.observer.clone(),
+            &self.instance_id,
+            &mut instance,
+            samples,
+        )
+        .await
+        .map_err(SherpaError::Generic)
     }
 }
 
@@ -329,6 +320,7 @@ pub async fn resolve_punctuation(
 pub(crate) async fn init_recognizer_impl(
     state: &AsrState,
     request: LocalSherpaStreamingRequest,
+    observer: Arc<dyn AsrRuntimeObserver>,
 ) -> Result<Arc<LocalSherpaSession>, String> {
     let LocalSherpaStreamingRequest {
         instance_id,
@@ -441,9 +433,7 @@ pub(crate) async fn init_recognizer_impl(
         rss_delta_mb: calculate_rss_delta_mb(rss_before_mb, rss_after_mb, reused_from_pool),
         process_rss_mb: rss_after_mb,
     };
-    state
-        .record_model_load_metric(model_load_metric.clone())
-        .await;
+    observer.on_model_load(&model_load_metric);
     log_model_load_metric(&model_load_metric);
 
     let punctuation = resolve_punctuation(&state.recognizer_pool, punctuation_model).await;
@@ -455,6 +445,8 @@ pub(crate) async fn init_recognizer_impl(
     session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)?;
 
     let session = std::sync::Arc::new(LocalSherpaSession {
+        instance_id,
+        observer,
         instance: tokio::sync::Mutex::new(session_instance),
     });
 
@@ -515,8 +507,7 @@ async fn stop_recognizer_impl_inner(
 }
 
 async fn flush_recognizer_impl_inner(
-    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-    state: &AsrState,
+    observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
 ) -> Result<(), String> {
@@ -546,7 +537,7 @@ async fn flush_recognizer_impl_inner(
             let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
             let offline_copy = instance.offline_state.speech_chunks().to_vec();
-            let emitter_copy = emitter.clone();
+            let observer_copy = observer.clone();
             let recognizer_copy = recognizer.clone();
             let punct_copy = instance.punctuation_clone();
             let seg_id_copy = seg_id.clone();
@@ -560,7 +551,6 @@ async fn flush_recognizer_impl_inner(
                 });
             let normalization_options = instance.normalization_options;
             let postprocessor = instance.postprocessor.clone();
-            let metrics_store = state.metrics.clone();
             let triggered_at = Instant::now();
 
             if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -578,7 +568,7 @@ async fn flush_recognizer_impl_inner(
                 if let Some(safe_r) = recognizer_copy.offline() {
                     run_offline_inference(
                         &offline_copy,
-                        emitter_copy.as_ref(),
+                        observer_copy.as_ref(),
                         safe_r,
                         punct_copy.as_deref(),
                         &seg_id_copy,
@@ -589,7 +579,7 @@ async fn flush_recognizer_impl_inner(
                         first_segment_emitted,
                         normalization_options,
                         postprocessor,
-                        Some(metrics_store),
+                        true,
                         triggered_at,
                     );
                 }
@@ -615,7 +605,6 @@ async fn flush_recognizer_impl_inner(
     {
         let st = &stream;
         let inference_started = Instant::now();
-        let metrics_store = state.metrics.clone();
         let current_time = instance.total_samples as f64 / 16000.0;
         let buffered_samples =
             ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
@@ -668,8 +657,8 @@ async fn flush_recognizer_impl_inner(
                     segment,
                     instance.normalization_options,
                 ));
-            emit_transcript_update(
-                emitter.as_ref(),
+            observe_streaming_transcript_update(
+                observer.as_ref(),
                 instance_id,
                 &update,
                 "flush_online",
@@ -678,7 +667,7 @@ async fn flush_recognizer_impl_inner(
         }
 
         record_live_metric(
-            &metrics_store,
+            observer.as_ref(),
             build_live_metric(
                 instance_id,
                 "flush_online",
@@ -703,8 +692,7 @@ async fn flush_recognizer_impl_inner(
 }
 
 async fn feed_audio_samples_inner(
-    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-    state: &AsrState,
+    observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
     samples: &[f32],
@@ -806,7 +794,7 @@ async fn feed_audio_samples_inner(
                 let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
                 let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                let emitter_copy = emitter.clone();
+                let observer_copy = observer.clone();
                 let punct_copy = instance.punctuation_clone();
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
@@ -822,10 +810,9 @@ async fn feed_audio_samples_inner(
                 let postprocessor = instance.postprocessor.clone();
                 let should_record_partial_metric =
                     instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
-                let metrics_store = should_record_partial_metric.then(|| {
+                if should_record_partial_metric {
                     instance.mark_partial_metric_sample();
-                    state.metrics.clone()
-                });
+                }
                 let triggered_at = Instant::now();
 
                 if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -842,7 +829,7 @@ async fn feed_audio_samples_inner(
                     if let Some(safe_r) = recognizer_copy.offline() {
                         run_offline_inference(
                             &offline_copy,
-                            emitter_copy.as_ref(),
+                            observer_copy.as_ref(),
                             safe_r,
                             punct_copy.as_deref(),
                             &seg_id_copy,
@@ -853,7 +840,7 @@ async fn feed_audio_samples_inner(
                             first_segment_emitted,
                             normalization_options,
                             postprocessor,
-                            metrics_store,
+                            should_record_partial_metric,
                             triggered_at,
                         );
                     }
@@ -882,7 +869,7 @@ async fn feed_audio_samples_inner(
                 let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
                 let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                let emitter_copy = emitter.clone();
+                let observer_copy = observer.clone();
                 let punct_copy = instance.punctuation_clone();
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
@@ -896,7 +883,6 @@ async fn feed_audio_samples_inner(
                     });
                 let normalization_options = instance.normalization_options;
                 let postprocessor = instance.postprocessor.clone();
-                let metrics_store = state.metrics.clone();
                 let triggered_at = Instant::now();
 
                 if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -913,7 +899,7 @@ async fn feed_audio_samples_inner(
                     if let Some(safe_r) = recognizer_copy.offline() {
                         run_offline_inference(
                             &offline_copy,
-                            emitter_copy.as_ref(),
+                            observer_copy.as_ref(),
                             safe_r,
                             punct_copy.as_deref(),
                             &seg_id_copy,
@@ -924,7 +910,7 @@ async fn feed_audio_samples_inner(
                             first_segment_emitted,
                             normalization_options,
                             postprocessor,
-                            Some(metrics_store),
+                            true,
                             triggered_at,
                         );
                     }
@@ -947,7 +933,6 @@ async fn feed_audio_samples_inner(
         Ok(())
     } else if let Some(r) = recognizer.online() {
         let inference_started = Instant::now();
-        let metrics_store = state.metrics.clone();
         let stream = instance
             .take_stream()
             .ok_or("Stream not initialized for online model")?;
@@ -1000,8 +985,8 @@ async fn feed_audio_samples_inner(
                         segment,
                         instance.normalization_options,
                     ));
-                emit_transcript_update(
-                    emitter.as_ref(),
+                observe_streaming_transcript_update(
+                    observer.as_ref(),
                     instance_id,
                     &update,
                     "online_partial",
@@ -1015,7 +1000,7 @@ async fn feed_audio_samples_inner(
                     let buffered_samples =
                         ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
                     record_live_metric(
-                        &metrics_store,
+                        observer.as_ref(),
                         build_live_metric(
                             instance_id,
                             "online_partial",
@@ -1081,8 +1066,8 @@ async fn feed_audio_samples_inner(
                         segment,
                         instance.normalization_options,
                     ));
-                emit_transcript_update(
-                    emitter.as_ref(),
+                observe_streaming_transcript_update(
+                    observer.as_ref(),
                     instance_id,
                     &update,
                     "online_final",
@@ -1091,7 +1076,7 @@ async fn feed_audio_samples_inner(
             }
 
             record_live_metric(
-                &metrics_store,
+                observer.as_ref(),
                 build_live_metric(
                     instance_id,
                     "online_final",
@@ -1122,8 +1107,7 @@ async fn feed_audio_samples_inner(
 }
 
 async fn feed_audio_chunk_impl_inner(
-    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-    state: &AsrState,
+    observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
     samples: Vec<u8>,
@@ -1138,7 +1122,7 @@ async fn feed_audio_chunk_impl_inner(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples_inner(emitter, state, instance_id, instance, &float_samples).await
+    feed_audio_samples_inner(observer, instance_id, instance, &float_samples).await
 }
 
 pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {

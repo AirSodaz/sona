@@ -199,9 +199,13 @@ async fn handle_online_streaming_socket(
 
     let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
 
-    if let Err(e) =
-        crate::commands::asr::init_recognizer(sherpa_state.clone(), session_id.clone(), request)
-            .await
+    if let Err(e) = crate::commands::asr::init_recognizer(
+        app_handle.clone(),
+        sherpa_state.clone(),
+        session_id.clone(),
+        request,
+    )
+    .await
     {
         let _ = socket
             .send(Message::Text(
@@ -215,12 +219,8 @@ async fn handle_online_streaming_socket(
         return;
     }
 
-    if let Err(e) = crate::commands::asr::start_recognizer(
-        app_handle.clone(),
-        sherpa_state.clone(),
-        session_id.clone(),
-    )
-    .await
+    if let Err(e) =
+        crate::commands::asr::start_recognizer(sherpa_state.clone(), session_id.clone()).await
     {
         let _ = socket
             .send(Message::Text(
@@ -280,7 +280,6 @@ async fn handle_online_streaming_socket(
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm_s16le_bytes_to_f32(&pcm);
                         if let Err(e) = crate::integrations::asr::feed_audio_samples(
-                            &app_handle,
                             sherpa_state.inner(),
                             &session_id,
                             &samples,
@@ -290,7 +289,7 @@ async fn handle_online_streaming_socket(
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            let _ = crate::commands::asr::flush_recognizer(app_handle.clone(), sherpa_state.clone(), session_id.clone()).await;
+                            let _ = crate::commands::asr::flush_recognizer(sherpa_state.clone(), session_id.clone()).await;
                             stopping = true;
                         }
                     }

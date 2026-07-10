@@ -1,10 +1,10 @@
-use super::AsrStreamingSession;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
 use super::types::AsrEngine;
+use sona_core::ports::asr::AsrStreamingSession;
 use sona_local_asr::runtime::RecognizerPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,6 +35,10 @@ impl AsrState {
 
     pub fn recognizer_pool(&self) -> RecognizerPool {
         self.recognizer_pool.clone()
+    }
+
+    pub(crate) fn metrics_store(&self) -> AsrMetricsStore {
+        self.metrics.clone()
     }
 
     pub async fn has_online_session(&self, instance_id: &str) -> bool {
@@ -95,43 +99,23 @@ mod tests {
 
     #[async_trait::async_trait]
     impl AsrStreamingSession for DummySession {
-        async fn start(
-            &self,
-            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-            _state: &AsrState,
-            _instance_id: &str,
-        ) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn start(&self) -> Result<(), crate::integrations::asr::SherpaError> {
             Ok(())
         }
-        async fn stop(
-            &self,
-            _state: &AsrState,
-            _instance_id: &str,
-        ) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn stop(&self) -> Result<(), crate::integrations::asr::SherpaError> {
             Ok(())
         }
-        async fn flush(
-            &self,
-            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-            _state: &AsrState,
-            _instance_id: &str,
-        ) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn flush(&self) -> Result<(), crate::integrations::asr::SherpaError> {
             Ok(())
         }
         async fn feed_audio_chunk(
             &self,
-            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-            _state: &AsrState,
-            _instance_id: &str,
             _samples: Vec<u8>,
         ) -> Result<(), crate::integrations::asr::SherpaError> {
             Ok(())
         }
         async fn feed_audio_samples(
             &self,
-            _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-            _state: &AsrState,
-            _instance_id: &str,
             _samples: &[f32],
         ) -> Result<(), crate::integrations::asr::SherpaError> {
             Ok(())

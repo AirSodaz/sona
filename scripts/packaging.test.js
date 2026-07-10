@@ -1575,6 +1575,39 @@ test('local ASR recognizer internals stay behind accessors', () => {
   assert.doesNotMatch(localAsrRecognizer, /pub inner: RecognizerInner/u);
 });
 
+test('streaming ASR session contract is core-owned and platform-neutral', () => {
+  const coreAsr = fs.readFileSync(
+    path.join(repoRoot, 'core', 'src', 'ports', 'asr.rs'),
+    'utf8',
+  );
+  const tauriTraits = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'traits.rs'),
+    'utf8',
+  );
+  const tauriState = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'),
+    'utf8',
+  );
+  const tauriCommands = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'commands', 'asr.rs'),
+    'utf8',
+  );
+
+  assert.match(coreAsr, /pub trait AsrStreamingSession/u);
+  assert.match(coreAsr, /pub trait AsrRuntimeObserver/u);
+  assert.doesNotMatch(
+    coreAsr,
+    /AppHandle|AsrState|TauriEventEmitter|crate::platform/u,
+  );
+  assert.doesNotMatch(tauriTraits, /trait AsrStreamingSession/u);
+  assert.match(
+    tauriState,
+    /sona_core::ports::asr::AsrStreamingSession/u,
+  );
+  assert.match(tauriCommands, /session\.start\(\)\.await/u);
+  assert.match(tauriCommands, /session\.flush\(\)\.await/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),

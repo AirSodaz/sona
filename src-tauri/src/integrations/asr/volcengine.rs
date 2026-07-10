@@ -4,14 +4,17 @@ use super::metrics::{
     set_batch_inference_metric,
 };
 use super::transcript::{
-    apply_timeline_normalization, build_transcript_update, emit_transcript_update,
+    apply_timeline_normalization, build_transcript_update, observe_streaming_transcript_update,
 };
 use super::types::{AsrMode, AsrTranscriptionRequest, TranscriptSegment};
-use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
+use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
-use sona_core::ports::asr::{OnlineBatchTranscriber, OnlineBatchTranscriptionRequest};
+use sona_core::ports::asr::{
+    AsrRuntimeObserver, AsrStreamingSession, OnlineBatchTranscriber,
+    OnlineBatchTranscriptionRequest,
+};
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::{
     Arc,
@@ -25,6 +28,8 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 
 #[derive(Clone)]
 pub struct VolcengineStreamingSession {
+    instance_id: String,
+    observer: Arc<dyn AsrRuntimeObserver>,
     request: AsrTranscriptionRequest,
     writer: Arc<Mutex<Option<VolcengineWriter>>>,
     flushing: Arc<AtomicBool>,
@@ -122,14 +127,17 @@ impl AsrProviderAdapter for VolcengineAdapter {
     async fn create_streaming_session(
         &self,
         _state: &AsrState,
-        _instance_id: &str,
+        instance_id: &str,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError> {
         if request.mode != AsrMode::Streaming {
             return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
         }
         config_from_request(request, sona_online_asr::VolcengineMode::Streaming)?;
         Ok(Some(std::sync::Arc::new(VolcengineStreamingSession {
+            instance_id: instance_id.to_string(),
+            observer,
             request: request.clone(),
             writer: Arc::new(Mutex::new(None)),
             flushing: Arc::new(AtomicBool::new(false)),
@@ -158,51 +166,29 @@ impl AsrBatchProcessor for VolcengineBatchProcessor {
 
 #[async_trait]
 impl AsrStreamingSession for VolcengineStreamingSession {
-    async fn start(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        _state: &AsrState,
-        instance_id: &str,
-    ) -> Result<(), SherpaError> {
-        start_streaming_recognizer_impl(emitter, self, instance_id).await
+    async fn start(&self) -> Result<(), SherpaError> {
+        start_streaming_recognizer_impl(self.observer.clone(), self, &self.instance_id).await
     }
 
-    async fn stop(&self, _state: &AsrState, _instance_id: &str) -> Result<(), SherpaError> {
+    async fn stop(&self) -> Result<(), SherpaError> {
         stop_streaming_recognizer_impl(self).await
     }
 
-    async fn flush(
-        &self,
-        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        _state: &AsrState,
-        _instance_id: &str,
-    ) -> Result<(), SherpaError> {
+    async fn flush(&self) -> Result<(), SherpaError> {
         flush_streaming_recognizer_impl(self).await
     }
 
-    async fn feed_audio_chunk(
-        &self,
-        _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        _state: &AsrState,
-        _instance_id: &str,
-        samples: Vec<u8>,
-    ) -> Result<(), SherpaError> {
+    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError> {
         feed_audio_chunk_impl(self, samples).await
     }
 
-    async fn feed_audio_samples(
-        &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
-        _state: &AsrState,
-        _instance_id: &str,
-        samples: &[f32],
-    ) -> Result<(), SherpaError> {
-        feed_audio_samples_impl(emitter, self, samples).await
+    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError> {
+        feed_audio_samples_impl(self, samples).await
     }
 }
 
 async fn start_streaming_recognizer_impl(
-    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
+    observer: Arc<dyn AsrRuntimeObserver>,
     session: &VolcengineStreamingSession,
     instance_id: &str,
 ) -> Result<(), SherpaError> {
@@ -266,7 +252,7 @@ async fn start_streaming_recognizer_impl(
         TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
     let flushing = session.flushing.clone();
     let final_response_received = session.final_response_received.clone();
-    let emitter_for_task = emitter.clone();
+    let observer_for_task = observer.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
@@ -293,8 +279,8 @@ async fn start_streaming_recognizer_impl(
                             for segment in processed {
                                 let update =
                                     build_transcript_update(segment, normalization_options);
-                                emit_transcript_update(
-                                    emitter_for_task.as_ref(),
+                                observe_streaming_transcript_update(
+                                    observer_for_task.as_ref(),
                                     &instance_id_for_task,
                                     &update,
                                     "volcengine_streaming",
@@ -363,7 +349,6 @@ async fn feed_audio_chunk_impl(
 /// Feed f32 audio samples from the hardware capture worker to a Volcengine
 /// streaming session. Converts f32 → i16 PCM bytes and sends via WebSocket.
 async fn feed_audio_samples_impl(
-    _emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
     session: &VolcengineStreamingSession,
     samples: &[f32],
 ) -> Result<(), SherpaError> {

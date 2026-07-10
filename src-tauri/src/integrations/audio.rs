@@ -914,8 +914,7 @@ async fn feed_system_audio_to_instances(app: &AppHandle, chunk: &[f32]) {
             continue;
         }
         if let Err(e) =
-            crate::integrations::asr::feed_audio_samples(app, &sherpa_state, &instance_id, chunk)
-                .await
+            crate::integrations::asr::feed_audio_samples(&sherpa_state, &instance_id, chunk).await
         {
             eprintln!(
                 "[Audio] Failed to feed system audio to Sherpa instance {}: {}",
@@ -978,8 +977,7 @@ async fn feed_mic_audio_to_instances(app: &AppHandle, chunk: &[f32]) {
             continue;
         }
         if let Err(e) =
-            crate::integrations::asr::feed_audio_samples(app, &sherpa_state, &instance_id, chunk)
-                .await
+            crate::integrations::asr::feed_audio_samples(&sherpa_state, &instance_id, chunk).await
         {
             eprintln!(
                 "[Audio] Failed to feed mic audio to Sherpa instance {}: {}",

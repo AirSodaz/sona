@@ -3,9 +3,10 @@ use super::types::{
     AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, LocalSherpaStreamingRequest,
     TranscriptSegment,
 };
-use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, AsrStreamingSession};
+use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
-use sona_core::ports::asr::validate_local_sherpa_mode;
+use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession, validate_local_sherpa_mode};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalSherpaAdapter;
@@ -29,14 +30,15 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         state: &AsrState,
         instance_id: &str,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<std::sync::Arc<dyn AsrStreamingSession>>, SherpaError> {
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError> {
         let request = LocalSherpaStreamingRequest::from_local_sherpa_request(
             instance_id.to_string(),
             request.clone(),
         )
         .map_err(SherpaError::Generic)?;
 
-        let session = super::init_recognizer_impl(state, request)
+        let session = super::init_recognizer_impl(state, request, observer)
             .await
             .map_err(SherpaError::Generic)?;
         Ok(Some(session))

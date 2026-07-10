@@ -1,20 +1,25 @@
 use crate::integrations::asr::{
-    AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment,
-    ensure_adapter, get_provider_id,
+    AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError,
+    TauriAsrRuntimeObserver, TranscriptSegment, ensure_adapter, get_provider_id,
 };
 use crate::platform::event::{EventEmitter, TauriEventEmitter};
+use sona_core::ports::asr::AsrRuntimeObserver;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn init_recognizer(
+    app: AppHandle,
     state: State<'_, AsrState>,
     instance_id: String,
     asr_request: AsrTranscriptionRequest,
 ) -> Result<(), SherpaError> {
     let adapter = ensure_adapter(&asr_request)?;
+    let emitter = Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>;
+    let observer = Arc::new(TauriAsrRuntimeObserver::new(emitter, state.metrics_store()))
+        as Arc<dyn AsrRuntimeObserver>;
     let session = adapter
-        .create_streaming_session(&state, &instance_id, &asr_request)
+        .create_streaming_session(&state, &instance_id, &asr_request, observer)
         .await?;
     if let Some(session) = session {
         state.insert_session(&instance_id, session).await;
@@ -31,7 +36,6 @@ pub async fn init_recognizer(
 
 #[tauri::command]
 pub async fn start_recognizer(
-    app: AppHandle,
     state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
@@ -39,8 +43,7 @@ pub async fn start_recognizer(
         .session(&instance_id)
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
-    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
-    session.start(emitter, &state, &instance_id).await
+    session.start().await
 }
 
 #[tauri::command]
@@ -52,12 +55,11 @@ pub async fn stop_recognizer(
         .remove_session(&instance_id)
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
-    session.stop(&state, &instance_id).await
+    session.stop().await
 }
 
 #[tauri::command]
 pub async fn flush_recognizer(
-    app: AppHandle,
     state: State<'_, AsrState>,
     instance_id: String,
 ) -> Result<(), SherpaError> {
@@ -65,13 +67,11 @@ pub async fn flush_recognizer(
         .session(&instance_id)
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
-    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
-    session.flush(emitter, &state, &instance_id).await
+    session.flush().await
 }
 
 #[tauri::command]
 pub async fn feed_audio_chunk(
-    app: AppHandle,
     state: State<'_, AsrState>,
     instance_id: String,
     samples: Vec<u8>,
@@ -80,10 +80,7 @@ pub async fn feed_audio_chunk(
         .session(&instance_id)
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
-    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
-    session
-        .feed_audio_chunk(emitter, &state, &instance_id, samples)
-        .await
+    session.feed_audio_chunk(samples).await
 }
 
 #[tauri::command]
