@@ -828,13 +828,10 @@ async fn feed_audio_samples_inner(
                     });
                 let normalization_options = instance.normalization_options;
                 let postprocessor = instance.postprocessor.clone();
-                let should_record_partial_metric = instance.last_partial_metric_sample == 0
-                    || instance
-                        .total_samples
-                        .saturating_sub(instance.last_partial_metric_sample)
-                        >= PARTIAL_METRIC_INTERVAL_SAMPLES;
+                let should_record_partial_metric =
+                    instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
                 let metrics_store = should_record_partial_metric.then(|| {
-                    instance.last_partial_metric_sample = instance.total_samples;
+                    instance.mark_partial_metric_sample();
                     state.metrics.clone()
                 });
                 let triggered_at = Instant::now();
@@ -942,7 +939,7 @@ async fn feed_audio_samples_inner(
                 });
 
                 instance.offline_state.clear_speech_buffer();
-                instance.last_partial_metric_sample = 0;
+                instance.clear_partial_metric_sample();
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
             }
 
@@ -973,6 +970,7 @@ async fn feed_audio_samples_inner(
 
         let current_time = instance.total_samples as f64 / 16000.0;
         let endpoint_detected = is_online_endpoint(r, st);
+        let mut did_record_partial_metric = false;
 
         if let Some(result) = online_stream_result(r, st) {
             let has_text = !result.text.trim().is_empty();
@@ -1019,11 +1017,7 @@ async fn feed_audio_samples_inner(
                 );
 
                 let should_record_partial_metric = !endpoint_detected
-                    && (instance.last_partial_metric_sample == 0
-                        || instance
-                            .total_samples
-                            .saturating_sub(instance.last_partial_metric_sample)
-                            >= PARTIAL_METRIC_INTERVAL_SAMPLES);
+                    && instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
 
                 if should_record_partial_metric {
                     let buffered_samples =
@@ -1040,7 +1034,7 @@ async fn feed_audio_samples_inner(
                             None,
                         ),
                     );
-                    instance.last_partial_metric_sample = instance.total_samples;
+                    did_record_partial_metric = true;
                 }
             }
         }
@@ -1118,9 +1112,13 @@ async fn feed_audio_samples_inner(
             );
 
             instance.current_segment_id = None;
-            instance.last_partial_metric_sample = 0;
             reset_online_stream(r, st);
+            instance.clear_partial_metric_sample();
             instance.segment_start_time = current_time;
+        }
+
+        if did_record_partial_metric {
+            instance.mark_partial_metric_sample();
         }
 
         Ok(())

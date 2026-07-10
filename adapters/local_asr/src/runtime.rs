@@ -134,7 +134,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     instance.segment_start_time = 0.0;
     instance.offline_state = OfflineState::default();
     instance.current_segment_id = None;
-    instance.last_partial_metric_sample = 0;
+    instance.clear_partial_metric_sample();
     instance.record_diagnostics = RecordDiagnosticsState::default();
 }
 
@@ -150,7 +150,7 @@ pub struct SherpaInstance {
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub current_segment_id: Option<String>,
-    pub last_partial_metric_sample: usize,
+    last_partial_metric_sample: usize,
     is_running: bool,
     pub record_diagnostics: RecordDiagnosticsState,
     pub normalization_options: TranscriptNormalizationOptions,
@@ -160,6 +160,22 @@ pub struct SherpaInstance {
 impl SherpaInstance {
     pub fn is_running(&self) -> bool {
         self.is_running
+    }
+
+    pub fn should_record_partial_metric(&self, interval_samples: usize) -> bool {
+        self.last_partial_metric_sample == 0
+            || self
+                .total_samples
+                .saturating_sub(self.last_partial_metric_sample)
+                >= interval_samples
+    }
+
+    pub fn mark_partial_metric_sample(&mut self) {
+        self.last_partial_metric_sample = self.total_samples;
+    }
+
+    pub fn clear_partial_metric_sample(&mut self) {
+        self.last_partial_metric_sample = 0;
     }
 }
 
@@ -378,13 +394,31 @@ mod tests {
     }
 
     #[test]
+    fn partial_metric_sample_tracking_is_interval_based() {
+        let mut instance = SherpaInstance::default();
+
+        assert!(instance.should_record_partial_metric(16_000));
+
+        instance.total_samples = 8_000;
+        instance.mark_partial_metric_sample();
+
+        instance.total_samples = 23_999;
+        assert!(!instance.should_record_partial_metric(16_000));
+
+        instance.total_samples = 24_000;
+        assert!(instance.should_record_partial_metric(16_000));
+
+        instance.clear_partial_metric_sample();
+        assert!(instance.should_record_partial_metric(16_000));
+    }
+
+    #[test]
     fn start_and_stop_reset_per_run_state_without_dropping_attachments() {
         let mut instance = SherpaInstance {
             total_samples: 42,
             segment_start_time: 1.25,
             vad_model: Some("vad.onnx".to_string()),
             current_segment_id: Some("segment-1".to_string()),
-            last_partial_metric_sample: 24,
             record_diagnostics: RecordDiagnosticsState {
                 first_sample_logged: true,
                 skipped_while_stopped_logged: true,
@@ -392,6 +426,9 @@ mod tests {
             },
             ..Default::default()
         };
+        instance.total_samples = 24;
+        instance.mark_partial_metric_sample();
+        instance.total_samples = 42;
         instance.offline_state.push_speech_chunk(vec![1.0, 2.0]);
         instance.offline_state.push_ring_chunk(vec![3.0], 10);
 
@@ -403,7 +440,7 @@ mod tests {
         assert!(instance.offline_state.speech_chunks().is_empty());
         assert_eq!(instance.offline_state.ring_sample_count(), 0);
         assert_eq!(instance.current_segment_id, None);
-        assert_eq!(instance.last_partial_metric_sample, 0);
+        assert!(instance.should_record_partial_metric(1));
         assert!(instance.record_diagnostics.should_log_first_sample());
         assert!(
             instance
