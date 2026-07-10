@@ -13,6 +13,10 @@ use sona_core::transcription::transcript::{
 };
 use std::fmt;
 
+mod volcengine;
+
+pub use volcengine::streaming::create_volcengine_streaming_session;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WhisperCompatibleProvider {
     GroqWhisper,

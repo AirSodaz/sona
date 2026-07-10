@@ -5464,7 +5464,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tokio-tungstenite 0.23.1",
  "toml 0.8.23",
  "tower",
  "tower-http",
@@ -5613,10 +5612,13 @@ version = "0.8.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "futures-util",
+ "log",
  "reqwest 0.13.4",
  "serde_json",
  "sona-core",
  "tokio",
+ "tokio-tungstenite 0.23.1",
  "uuid",
 ]
 

@@ -3713,6 +3713,10 @@ test('desktop Volcengine streaming protocol helpers are owned by online ASR adap
     path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs'),
     'utf8',
   );
+  const onlineStreaming = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'online_asr', 'src', 'volcengine', 'streaming.rs'),
+    'utf8',
+  );
   const volcengineRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
@@ -3723,11 +3727,54 @@ test('desktop Volcengine streaming protocol helpers are owned by online ASR adap
   assert.match(onlineAsrLib, /parse_volcengine_server_response_frame/u);
   assert.match(onlineAsrLib, /volcengine_streaming_segments_from_response/u);
   assert.match(onlineAsrLib, /f32_samples_to_i16_pcm_bytes/u);
-  assert.match(volcengineRs, /sona_online_asr::build_volcengine_full_client_request_frame/u);
-  assert.match(volcengineRs, /sona_online_asr::parse_volcengine_server_response_frame/u);
+  assert.match(onlineStreaming, /crate::build_volcengine_full_client_request_frame/u);
+  assert.match(onlineStreaming, /crate::parse_volcengine_server_response_frame/u);
+  assert.doesNotMatch(volcengineRs, /build_volcengine_full_client_request_frame/u);
+  assert.doesNotMatch(volcengineRs, /parse_volcengine_server_response_frame/u);
   assert.doesNotMatch(volcengineRs, /pub fn build_audio_frame/u);
   assert.doesNotMatch(volcengineRs, /fn parse_server_response_frame/u);
   assert.doesNotMatch(volcengineRs, /fn f32_samples_to_i16_pcm_bytes/u);
+});
+
+test('Volcengine streaming session is implemented by the online ASR adapter', () => {
+  const onlineStreamingPath = path.join(
+    repoRoot, 'adapters', 'online_asr', 'src', 'volcengine', 'streaming.rs',
+  );
+  const onlineCargo = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'online_asr', 'Cargo.toml'),
+    'utf8',
+  );
+  const desktopCargo = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'Cargo.toml'),
+    'utf8',
+  );
+  const desktopVolcengine = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    'utf8',
+  );
+  const desktopAsr = rustFilesUnder(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr'),
+  )
+    .map((filePath) => fs.readFileSync(filePath, 'utf8'))
+    .join('\n');
+
+  assert.equal(fs.existsSync(onlineStreamingPath), true);
+  const onlineStreaming = fs.readFileSync(onlineStreamingPath, 'utf8');
+  assert.match(onlineStreaming, /impl AsrStreamingSession for VolcengineStreamingSession/u);
+  assert.match(onlineStreaming, /tokio_tungstenite::connect_async/u);
+  assert.match(onlineStreaming, /tokio::spawn/u);
+  assert.doesNotMatch(onlineStreaming, /tauri::|AsrState|crate::platform/u);
+  assert.match(
+    desktopVolcengine,
+    /sona_online_asr::create_volcengine_streaming_session/u,
+  );
+  assert.doesNotMatch(
+    desktopVolcengine,
+    /VolcengineWriter|connect_async|tauri::async_runtime::spawn|parse_volcengine_server_response_frame/u,
+  );
+  assert.doesNotMatch(desktopAsr, /observe_streaming_transcript_update/u);
+  assert.match(onlineCargo, /^tokio-tungstenite\s*=/mu);
+  assert.doesNotMatch(desktopCargo, /^tokio-tungstenite\s*=/mu);
 });
 
 test('desktop Volcengine config and response helpers are owned by online ASR adapter', () => {
