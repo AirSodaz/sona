@@ -449,16 +449,14 @@ pub(crate) async fn init_recognizer_impl(
     let punctuation = resolve_punctuation(&state.recognizer_pool, punctuation_model).await;
     let vad = load_vad(vad_model.clone());
 
-    let session_instance = SherpaInstance {
-        recognizer: Some(recognizer),
-        vad,
-        punctuation,
-        vad_model: vad_model.clone(),
-        vad_buffer,
-        normalization_options,
-        postprocessor: TranscriptPostprocessor::compile(postprocess_options)?,
-        ..Default::default()
-    };
+    let mut session_instance = SherpaInstance::default();
+    session_instance.recognizer = Some(recognizer);
+    session_instance.vad = vad;
+    session_instance.punctuation = punctuation;
+    session_instance.vad_model = vad_model.clone();
+    session_instance.vad_buffer = vad_buffer;
+    session_instance.normalization_options = normalization_options;
+    session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)?;
 
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance: tokio::sync::Mutex::new(session_instance),
@@ -510,7 +508,7 @@ async fn stop_recognizer_impl_inner(
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!(
                 "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
-                instance.is_running,
+                instance.is_running(),
                 instance.total_samples,
                 instance.offline_state.buffered_speech_chunk_count(),
                 instance.offline_state.buffered_speech_sample_count(),
@@ -537,7 +535,7 @@ async fn flush_recognizer_impl_inner(
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] flush_recognizer({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
-            instance.is_running,
+            instance.is_running(),
             instance.total_samples,
             instance.offline_state.buffered_speech_chunk_count(),
             instance.offline_state.buffered_speech_sample_count(),
@@ -721,7 +719,7 @@ async fn feed_audio_samples_inner(
     // instances removed
     // instances lookup removed
 
-    if !instance.is_running {
+    if !instance.is_running() {
         if let Some(label) = diagnostics_instance_label(instance_id)
             && instance
                 .record_diagnostics

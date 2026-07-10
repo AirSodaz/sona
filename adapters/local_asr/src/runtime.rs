@@ -151,10 +151,16 @@ pub struct SherpaInstance {
     pub vad_buffer: f32,
     pub current_segment_id: Option<String>,
     pub last_partial_metric_sample: usize,
-    pub is_running: bool,
+    is_running: bool,
     pub record_diagnostics: RecordDiagnosticsState,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
+}
+
+impl SherpaInstance {
+    pub fn is_running(&self) -> bool {
+        self.is_running
+    }
 }
 
 pub struct OfflineState {
@@ -379,7 +385,6 @@ mod tests {
             vad_model: Some("vad.onnx".to_string()),
             current_segment_id: Some("segment-1".to_string()),
             last_partial_metric_sample: 24,
-            is_running: false,
             record_diagnostics: RecordDiagnosticsState {
                 first_sample_logged: true,
                 skipped_while_stopped_logged: true,
@@ -392,7 +397,7 @@ mod tests {
 
         start_instance_runtime(&mut instance, None);
 
-        assert!(instance.is_running);
+        assert!(instance.is_running());
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.segment_start_time, 0.0);
         assert!(instance.offline_state.speech_chunks().is_empty());
@@ -411,7 +416,7 @@ mod tests {
         instance.current_segment_id = Some("segment-2".to_string());
         stop_instance_runtime(&mut instance);
 
-        assert!(!instance.is_running);
+        assert!(!instance.is_running());
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.current_segment_id, None);
         assert!(instance.stream.is_none());
