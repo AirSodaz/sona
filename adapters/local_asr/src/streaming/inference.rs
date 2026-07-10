@@ -1,14 +1,19 @@
+use super::telemetry::{build_live_metric, record_live_metric};
 use crate::punctuation::Punctuation;
-use log::info;
+use crate::recognizer::{SafeOfflineRecognizer, decode_offline_samples};
+use log::{debug, info};
 use sona_core::ports::asr::{
     AsrRuntimeObserver, AsrTranscriptUpdateEvent, TranscriptNormalizationOptions,
 };
+use sona_core::transcription::asr_metrics::duration_to_ms;
+use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, build_transcript_update_with_id_generator,
     select_final_transcript_text,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 pub use sona_core::transcription::transcript::{normalize_recognizer_text, synthesize_durations};
 
@@ -143,6 +148,179 @@ pub fn log_text_transform_diagnostics(
         preview_text_for_log(cleaned_text),
         preview_text_for_log(final_text)
     );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_offline_inference(
+    speech_buffer: &[Vec<f32>],
+    observer: &dyn AsrRuntimeObserver,
+    r: &SafeOfflineRecognizer,
+    punctuation: Option<&Punctuation>,
+    segment_id: &str,
+    global_start: f64,
+    is_final: bool,
+    instance_id: &str,
+    stage: &'static str,
+    first_segment_emitted: Option<Arc<AtomicBool>>,
+    normalization_options: TranscriptNormalizationOptions,
+    postprocessor: TranscriptPostprocessor,
+    record_metrics: bool,
+    triggered_at: Instant,
+) {
+    if speech_buffer.is_empty() {
+        if let Some(label) = diagnostics_instance_label(instance_id) {
+            info!(
+                "[Sherpa] {label} offline inference skipped because the speech buffer is empty. stage={stage}"
+            );
+        }
+        return;
+    }
+
+    // Offline models decode one aggregated utterance at a time, so we flatten
+    // the buffered speech chunks into one continuous waveform before calling
+    // Sherpa.
+    let mut full_audio = Vec::new();
+    for chunk in speech_buffer {
+        full_audio.extend_from_slice(chunk);
+    }
+    let decode_started = Instant::now();
+    debug!(
+        "[Offline] FFI: Calling decode_offline_samples with {} samples",
+        full_audio.len()
+    );
+    let decode_result = decode_offline_samples(r, &full_audio);
+    debug!("[Offline] FFI: Decode finished");
+    let decode_ms = duration_to_ms(decode_started.elapsed());
+
+    let record_metric = |emit_latency_ms: Option<f64>| {
+        if record_metrics {
+            record_live_metric(
+                observer,
+                build_live_metric(
+                    instance_id,
+                    stage,
+                    is_final,
+                    full_audio.len(),
+                    decode_ms,
+                    emit_latency_ms,
+                    None,
+                ),
+            );
+        }
+    };
+
+    if let Some(label) = diagnostics_instance_label(instance_id) {
+        info!(
+            "[Sherpa] {label} offline inference finished. stage={} segment_id={} final={} buffered_chunks={} buffered_samples={}",
+            stage,
+            segment_id,
+            is_final,
+            speech_buffer.len(),
+            full_audio.len()
+        );
+    }
+
+    if let Some(result) = decode_result {
+        let raw_text = result.text.trim();
+        if !raw_text.is_empty() {
+            // The offline path emits only meaningful text: raw recognizer output
+            // is normalized first, then final-only formatting/punctuation is
+            // applied when this segment closes an utterance.
+            let cleaned_text = normalize_recognizer_text(&result.text);
+            if cleaned_text.is_empty() {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    info!(
+                        "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
+                        stage,
+                        segment_id,
+                        is_final,
+                        preview_text_for_log(raw_text)
+                    );
+                }
+                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
+                return;
+            }
+
+            let text = if is_final {
+                finalize_transcript_text(&cleaned_text, punctuation)
+            } else {
+                cleaned_text.clone()
+            };
+
+            if text.is_empty() {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    info!(
+                        "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
+                        stage,
+                        segment_id,
+                        is_final,
+                        preview_text_for_log(raw_text),
+                        preview_text_for_log(&cleaned_text)
+                    );
+                }
+                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
+                return;
+            }
+
+            log_text_transform_diagnostics(
+                instance_id,
+                stage,
+                segment_id,
+                is_final,
+                raw_text,
+                &cleaned_text,
+                &text,
+            );
+
+            let global_end = global_start + (full_audio.len() as f64 / 16000.0);
+            // Sherpa timestamps are relative to the decoded utterance, so we
+            // shift them into the global recording timeline before emitting.
+            let timestamps_abs: Option<Vec<f32>> = result
+                .timestamps
+                .as_ref()
+                .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, global_end as f32));
+
+            let segment = TranscriptSegment {
+                id: segment_id.to_string(),
+                text,
+                start: global_start,
+                end: global_end,
+                is_final,
+                timing: None,
+                tokens: Some(result.tokens),
+                timestamps: timestamps_abs,
+                durations,
+                translation: None,
+                speaker: None,
+                speaker_attribution: None,
+            };
+            let update = postprocessor
+                .process_update(build_transcript_update(segment, normalization_options));
+            observe_streaming_transcript_update(
+                observer,
+                instance_id,
+                &update,
+                stage,
+                first_segment_emitted.as_ref(),
+            );
+            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
+        } else if let Some(label) = diagnostics_instance_label(instance_id) {
+            info!(
+                "[Sherpa] {label} offline inference produced empty text after formatting. stage={} segment_id={} final={}",
+                stage, segment_id, is_final
+            );
+            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
+        }
+    } else if let Some(label) = diagnostics_instance_label(instance_id) {
+        info!(
+            "[Sherpa] {label} offline inference produced no recognizer result. stage={} segment_id={} final={}",
+            stage, segment_id, is_final
+        );
+        record_metric(Some(duration_to_ms(triggered_at.elapsed())));
+    }
 }
 
 #[cfg(test)]

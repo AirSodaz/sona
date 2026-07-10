@@ -38,9 +38,13 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         )
         .map_err(SherpaError::Generic)?;
 
-        let session = super::init_recognizer_impl(state, request, observer)
-            .await
-            .map_err(SherpaError::Generic)?;
+        let session = sona_local_asr::streaming::create_streaming_session(
+            state.recognizer_pool(),
+            request,
+            observer,
+        )
+        .await
+        .map_err(SherpaError::Generic)?;
         Ok(Some(session))
     }
 }

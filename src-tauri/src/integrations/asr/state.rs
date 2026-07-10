@@ -158,26 +158,4 @@ mod tests {
         assert!(!state.has_online_session(instance_id).await);
         assert_eq!(state.instance_engine(instance_id).await, None);
     }
-
-    #[tokio::test]
-    async fn test_resolve_punctuation_behavior() {
-        let pool = RecognizerPool::new();
-
-        // 1. None should return None
-        let res_none = crate::integrations::asr::resolve_punctuation(&pool, None).await;
-        assert!(res_none.is_none());
-
-        // 2. Empty path should return None
-        let res_empty =
-            crate::integrations::asr::resolve_punctuation(&pool, Some("".to_string())).await;
-        assert!(res_empty.is_none());
-
-        // 3. Non-existent path should return None
-        let res_nonexistent = crate::integrations::asr::resolve_punctuation(
-            &pool,
-            Some("nonexistent_path_123".to_string()),
-        )
-        .await;
-        assert!(res_nonexistent.is_none());
-    }
 }

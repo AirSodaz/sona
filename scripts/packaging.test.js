@@ -1469,7 +1469,7 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
 
   for (const desktopFile of [
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    ...rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr')),
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
   ]) {
     const content = fs.readFileSync(desktopFile, 'utf8');
@@ -1552,14 +1552,14 @@ test('desktop batch ASR uses local ASR recognizer accessors', () => {
   assert.doesNotMatch(batch, /\brecognizer\.inner\b/u);
 });
 
-test('desktop live sherpa ASR uses local ASR recognizer accessors', () => {
-  const desktopSherpa = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+test('local streaming ASR uses local ASR recognizer accessors', () => {
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
 
-  assert.doesNotMatch(desktopSherpa, /RecognizerInner/u);
-  assert.doesNotMatch(desktopSherpa, /\b(?:recognizer|recognizer_copy)\.inner\b/u);
+  assert.doesNotMatch(adapterSession, /RecognizerInner/u);
+  assert.doesNotMatch(adapterSession, /\b(?:recognizer|recognizer_copy)\.inner\b/u);
 });
 
 test('local ASR recognizer internals stay behind accessors', () => {
@@ -1608,15 +1608,44 @@ test('streaming ASR session contract is core-owned and platform-neutral', () => 
   assert.match(tauriCommands, /session\.flush\(\)\.await/u);
 });
 
+test('local streaming ASR session is implemented by the local adapter', () => {
+  const adapterSessionPath = path.join(
+    repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs',
+  );
+  const desktopSessionPath = path.join(
+    repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs',
+  );
+  const desktopSchedulerPath = path.join(
+    repoRoot, 'src-tauri', 'src', 'platform', 'asr_runtime.rs',
+  );
+  const provider = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    'utf8',
+  );
+
+  assert.equal(fs.existsSync(adapterSessionPath), true);
+  assert.equal(fs.existsSync(desktopSessionPath), false);
+  assert.equal(fs.existsSync(desktopSchedulerPath), false);
+  const adapterSession = fs.readFileSync(adapterSessionPath, 'utf8');
+  assert.match(adapterSession, /impl AsrStreamingSession for LocalSherpaSession/u);
+  assert.doesNotMatch(adapterSession, /tauri::|crate::platform|AsrState/u);
+  assert.match(provider, /sona_local_asr::streaming::create_streaming_session/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),
     'utf8',
   );
-  const desktopSherpa = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
+  const desktopAsr = rustFilesUnder(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr'),
+  )
+    .map((filePath) => fs.readFileSync(filePath, 'utf8'))
+    .join('\n');
   const desktopStreaming = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
     'utf8',
@@ -1624,7 +1653,7 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
 
   for (const symbol of ['SherpaInstance', 'OfflineState', 'RecordDiagnosticsState']) {
     assert.match(localAsrRuntime, new RegExp(`pub struct ${symbol}`, 'u'));
-    assert.doesNotMatch(desktopSherpa, new RegExp(`pub struct ${symbol}`, 'u'));
+    assert.doesNotMatch(desktopAsr, new RegExp(`pub struct ${symbol}`, 'u'));
   }
 
   for (const field of ['vad', 'vad_model', 'vad_buffer']) {
@@ -1663,7 +1692,7 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
   ]) {
     assert.doesNotMatch(localAsrRuntime, new RegExp(`pub ${field}:`, 'u'));
     assert.doesNotMatch(
-      desktopSherpa,
+      adapterSession,
       field === 'is_running'
         ? /\binstance\.is_running(?!\()/u
         : field === 'recognizer'
@@ -1678,10 +1707,9 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     );
   }
 
-  assert.match(desktopSherpa, /pub\(crate\) struct LocalSherpaSession/u);
-  assert.match(desktopSherpa, /pub\(crate\) async fn init_recognizer_impl/u);
-  assert.doesNotMatch(desktopSherpa, /pub struct LocalSherpaSession/u);
-  assert.doesNotMatch(desktopSherpa, /pub instance:/u);
+  assert.match(adapterSession, /pub struct LocalSherpaSession/u);
+  assert.match(adapterSession, /pub async fn create_streaming_session/u);
+  assert.doesNotMatch(adapterSession, /pub instance:/u);
 
   for (const helper of [
     'buffered_sample_count',
@@ -1721,13 +1749,13 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'clear_partial_metric_sample',
   ]) {
     assert.match(localAsrRuntime, new RegExp(`pub fn ${helper}`, 'u'));
-    assert.doesNotMatch(desktopSherpa, new RegExp(`pub fn ${helper}`, 'u'));
+    assert.doesNotMatch(adapterSession, new RegExp(`pub fn ${helper}`, 'u'));
   }
 
-  assert.match(desktopSherpa, /use sona_local_asr::runtime::\{[\s\S]*SherpaInstance/u);
+  assert.match(adapterSession, /use crate::runtime::\{[\s\S]*SherpaInstance/u);
   assert.match(desktopStreaming, /sona_local_asr::runtime::OfflineState/u);
   assert.doesNotMatch(
-    desktopSherpa,
+    adapterSession,
     /offline_state\.(?:is_speaking|ring_buffer|speech_buffer|utterance_start_sample|last_inference_time)\b/u,
   );
   assert.doesNotMatch(
@@ -3723,8 +3751,8 @@ test('desktop hardware GPU adapter lives in platform layer', () => {
   const systemCommand = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'commands', 'system.rs'), 'utf8');
   const batchRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'), 'utf8');
   const streamingRs = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'), 'utf8');
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
   const hardwarePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'hardware.rs');
@@ -3740,14 +3768,14 @@ test('desktop hardware GPU adapter lives in platform layer', () => {
   assert.match(systemCommand, /crate::platform::hardware::check_gpu_availability\(\)\.await/u);
   assert.match(batchRs, /crate::platform::hardware::resolve_gpu_acceleration_plan/u);
   assert.match(streamingRs, /crate::platform::hardware::resolve_gpu_acceleration_plan/u);
-  assert.match(sherpaRs, /crate::platform::hardware::resolve_gpu_acceleration/u);
+  assert.match(adapterSession, /use crate::gpu::resolve_gpu_acceleration_plan/u);
   assert.doesNotMatch(hardwareRs, /tokio::process::Command/u);
   assert.doesNotMatch(hardwareRs, /struct GpuAccelerationPlan/u);
   assert.doesNotMatch(hardwareRs, /struct GpuFallbackNotice/u);
   assert.doesNotMatch(systemCommand, /crate::app::hardware/u);
   assert.doesNotMatch(batchRs, /crate::app::hardware/u);
   assert.doesNotMatch(streamingRs, /crate::app::hardware/u);
-  assert.doesNotMatch(sherpaRs, /crate::app::hardware/u);
+  assert.doesNotMatch(adapterSession, /crate::app::hardware/u);
 });
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
@@ -3800,25 +3828,19 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.deepEqual(desktopPipelineReferences, []);
 });
 
-test('desktop ASR blocking task scheduling is delegated to platform layer', () => {
+test('local ASR blocking tasks are owned by the local adapter', () => {
   const platformMod = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'mod.rs'), 'utf8');
   const platformAsrRuntimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'asr_runtime.rs');
-  const platformAsrRuntime = fs.existsSync(platformAsrRuntimePath)
-    ? fs.readFileSync(platformAsrRuntimePath, 'utf8')
-    : '';
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
 
-  assert.equal(fs.existsSync(platformAsrRuntimePath), true);
-  assert.match(platformMod, /^pub mod asr_runtime;/mu);
-  assert.match(platformAsrRuntime, /pub async fn run_blocking_asr_task/u);
-  assert.match(platformAsrRuntime, /pub fn spawn_blocking_asr_task/u);
-  assert.match(platformAsrRuntime, /tauri::async_runtime::spawn_blocking/u);
-  assert.match(sherpaRs, /crate::platform::asr_runtime::run_blocking_asr_task/u);
-  assert.match(sherpaRs, /crate::platform::asr_runtime::spawn_blocking_asr_task/u);
-  assert.doesNotMatch(sherpaRs, /tauri::async_runtime::spawn_blocking/u);
+  assert.equal(fs.existsSync(platformAsrRuntimePath), false);
+  assert.doesNotMatch(platformMod, /^pub mod asr_runtime;/mu);
+  assert.match(adapterSession, /tokio::task::spawn_blocking\(task\)/u);
+  assert.match(adapterSession, /drop\(tokio::task::spawn_blocking\(task\)\)/u);
+  assert.doesNotMatch(adapterSession, /tauri::async_runtime::spawn_blocking/u);
 });
 
 test('desktop system audio mute command is owned by platform adapter', () => {
@@ -4031,13 +4053,13 @@ test('media file IO detection is delegated to media detector adapter', () => {
   assert.doesNotMatch(tauriServer, /sona_media_detector::is_valid_media_file/u);
 });
 
-test('desktop live VAD creation is delegated to local ASR adapter', () => {
+test('local streaming ASR VAD creation is delegated to local ASR adapter', () => {
   const asrMod = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
   const localAsrRuntime = fs.readFileSync(
@@ -4050,9 +4072,9 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
   assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bload_vad\b/u);
   assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bSafeVad\b/u);
   assert.match(localAsrRuntime, /pub fn configure_vad\(&mut self/u);
-  assert.match(sherpaRs, /session_instance\.configure_vad\(/u);
+  assert.match(adapterSession, /session_instance\.configure_vad\(/u);
   assert.doesNotMatch(asrMod, /\bload_vad\b/u);
-  assert.doesNotMatch(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*SafeVad/u);
+  assert.doesNotMatch(adapterSession, /use crate::audio::\{[\s\S]*SafeVad/u);
   assert.doesNotMatch(asrMod, /create_vad_detector/u);
   assert.doesNotMatch(asrMod, /pub struct SafeVad/u);
   assert.doesNotMatch(asrMod, /SileroVadModelConfig/u);
@@ -4106,22 +4128,18 @@ test('desktop ASR modules use a local runtime facade instead of sherpa implement
     'utf8',
   );
 
-  assert.match(asrMod, /^mod sherpa_onnx;$/mu);
+  assert.doesNotMatch(asrMod, /^mod sherpa_onnx;$/mu);
   assert.match(asrMod, /^mod state;$/mu);
   assert.match(asrMod, /^mod traits;$/mu);
-  assert.doesNotMatch(asrMod, /^pub mod sherpa_onnx;$/mu);
   assert.doesNotMatch(asrMod, /^pub mod state;$/mu);
   assert.doesNotMatch(asrMod, /^pub mod traits;$/mu);
-  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*init_recognizer_impl/u);
-  assert.match(asrMod, /#\[cfg\(test\)\]\s*pub\(crate\) use sherpa_onnx::resolve_punctuation/u);
-  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*diagnostics_instance_label/u);
-  assert.match(asrMod, /pub\(crate\) use sherpa_onnx::\{[\s\S]*log_segment_emit_diagnostics/u);
-  assert.match(adapterRs, /super::init_recognizer_impl/u);
+  assert.match(adapterRs, /sona_local_asr::streaming::create_streaming_session/u);
   assert.doesNotMatch(adapterRs, /super::state::AsrState/u);
   assert.doesNotMatch(adapterRs, /super::traits::/u);
-  assert.match(stateRs, /crate::integrations::asr::resolve_punctuation/u);
+  assert.doesNotMatch(stateRs, /resolve_punctuation/u);
   assert.doesNotMatch(stateRs, /super::traits::/u);
-  assert.match(transcriptRs, /use super::\{[\s\S]*diagnostics_instance_label[\s\S]*log_segment_emit_diagnostics/u);
+  assert.match(transcriptRs, /pub\(crate\) fn diagnostics_instance_label/u);
+  assert.match(transcriptRs, /pub\(crate\) fn log_segment_emit_diagnostics/u);
   assert.match(traitsRs, /use super::\{[\s\S]*AsrTranscriptionRequest[\s\S]*\};/u);
   assert.doesNotMatch(stateRs, /crate::integrations::asr::state::/u);
   assert.doesNotMatch(transcriptRs, /crate::integrations::asr::traits::/u);
@@ -4158,15 +4176,15 @@ test('local batch transcription reuses local ASR recognizer model construction',
   assert.doesNotMatch(batchRs, /fn create_recognizer/u);
 });
 
-test('desktop live offline decode is delegated to local ASR adapter', () => {
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+test('local streaming ASR offline decode is delegated to recognizer helpers', () => {
+  const adapterInference = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'inference.rs'),
     'utf8',
   );
 
-  assert.match(sherpaRs, /decode_offline_samples/u);
-  assert.doesNotMatch(sherpaRs, /use sherpa_onnx::OfflineRecognizer/u);
-  assert.doesNotMatch(sherpaRs, /let stream = r\.create_stream\(\)/u);
+  assert.match(adapterInference, /decode_offline_samples/u);
+  assert.doesNotMatch(adapterInference, /use sherpa_onnx::OfflineRecognizer/u);
+  assert.doesNotMatch(adapterInference, /let stream = r\.create_stream\(\)/u);
 });
 
 test('desktop batch offline decode is delegated to local ASR adapter', () => {
@@ -4199,30 +4217,30 @@ test('desktop streaming offline decode is delegated to local ASR adapter', () =>
   assert.doesNotMatch(streamingRs, /r\.0\.decode\(&stream\)/u);
 });
 
-test('desktop online stream operations are delegated to local ASR adapter', () => {
+test('local streaming ASR online operations use recognizer helpers', () => {
   const batchRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
     'utf8',
   );
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
-  const desktopOnlineRs = `${batchRs}\n${sherpaRs}`;
+  const localOnlineRs = `${batchRs}\n${adapterSession}`;
 
-  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*create_online_stream/u);
-  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*accept_online_samples/u);
-  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*decode_online_ready/u);
-  assert.match(desktopOnlineRs, /use sona_local_asr::recognizer::\{[\s\S]*online_stream_result/u);
-  assert.doesNotMatch(desktopOnlineRs, /SafeStream\(r\.0\.create_stream\(\)\)/u);
-  assert.doesNotMatch(desktopOnlineRs, /\.0\.accept_waveform\(16000/u);
-  assert.doesNotMatch(desktopOnlineRs, /r\.0\.is_ready\(&[^)]*\.0\)/u);
-  assert.doesNotMatch(desktopOnlineRs, /r\.0\.decode\(&[^)]*\.0\)/u);
-  assert.doesNotMatch(desktopOnlineRs, /r\.0\.get_result\(&[^)]*\.0\)/u);
-  assert.doesNotMatch(desktopOnlineRs, /r\.0\.reset\(&[^)]*\.0\)/u);
+  assert.match(adapterSession, /use crate::recognizer::\{[\s\S]*create_online_stream/u);
+  assert.match(adapterSession, /use crate::recognizer::\{[\s\S]*accept_online_samples/u);
+  assert.match(adapterSession, /use crate::recognizer::\{[\s\S]*decode_online_ready/u);
+  assert.match(adapterSession, /use crate::recognizer::\{[\s\S]*online_stream_result/u);
+  assert.doesNotMatch(localOnlineRs, /SafeStream\(r\.0\.create_stream\(\)\)/u);
+  assert.doesNotMatch(localOnlineRs, /\.0\.accept_waveform\(16000/u);
+  assert.doesNotMatch(localOnlineRs, /r\.0\.is_ready\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(localOnlineRs, /r\.0\.decode\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(localOnlineRs, /r\.0\.get_result\(&[^)]*\.0\)/u);
+  assert.doesNotMatch(localOnlineRs, /r\.0\.reset\(&[^)]*\.0\)/u);
 });
 
-test('desktop VAD runtime operations use private local ASR wrappers', () => {
+test('local streaming ASR VAD runtime operations use private wrappers', () => {
   const audioRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'), 'utf8');
   const recognizerRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'), 'utf8');
   const runtimeRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'), 'utf8');
@@ -4230,27 +4248,27 @@ test('desktop VAD runtime operations use private local ASR wrappers', () => {
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
-  const sherpaRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+  const adapterSession = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
   const streamingRs = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
     'utf8',
   );
-  const desktopVadRs = `${sherpaRs}\n${streamingRs}`;
+  const vadConsumers = `${adapterSession}\n${streamingRs}`;
 
   assert.match(asrMod, /accept_vad_samples/u);
   assert.match(runtimeRs, /pub fn reset_or_reload_vad\(&mut self\)/u);
-  assert.match(sherpaRs, /instance\.reset_or_reload_vad\(\)/u);
+  assert.match(adapterSession, /instance\.reset_or_reload_vad\(\)/u);
   assert.doesNotMatch(
-    sherpaRs,
-    /^use sona_local_asr::audio::\{[^}]*(?:load_vad|reset_vad)\b/mu,
+    adapterSession,
+    /^use crate::audio::\{[^}]*(?:load_vad|reset_vad)\b/mu,
   );
   assert.match(asrMod, /vad_detected/u);
-  assert.doesNotMatch(desktopVadRs, /SafeVad\([^)]+\)/u);
-  assert.doesNotMatch(desktopVadRs, /\.0\.accept_waveform/u);
-  assert.doesNotMatch(desktopVadRs, /\.0\.detected/u);
+  assert.doesNotMatch(vadConsumers, /SafeVad\([^)]+\)/u);
+  assert.doesNotMatch(vadConsumers, /\.0\.accept_waveform/u);
+  assert.doesNotMatch(vadConsumers, /\.0\.detected/u);
   assert.doesNotMatch(audioRs, /pub struct SafeVad\(pub /u);
   assert.doesNotMatch(recognizerRs, /pub struct SafeOnlineRecognizer\(pub /u);
   assert.doesNotMatch(recognizerRs, /pub struct SafeOfflineRecognizer\(pub /u);

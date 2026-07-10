@@ -2,7 +2,6 @@ pub mod api_server_config;
 pub mod api_server_runtime;
 pub mod app_config;
 pub mod archive;
-pub mod asr_runtime;
 pub mod audio_storage;
 pub mod automation_repository;
 pub mod automation_runtime;

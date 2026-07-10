@@ -1,12 +1,12 @@
+use super::recognizer_output_event;
 use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
-use super::{diagnostics_instance_label, log_segment_emit_diagnostics, recognizer_output_event};
 use log::info;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_local_asr::punctuation::Punctuation;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) use sona_core::transcription::transcript::{
     normalize_recognizer_text, select_final_transcript_text, synthesize_durations,
@@ -14,6 +14,46 @@ pub(crate) use sona_core::transcription::transcript::{
 
 fn new_transcript_segment_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+pub(crate) fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
+    match instance_id {
+        "record" => Some("record"),
+        "caption" => Some("caption"),
+        "voice-typing" => Some("voice-typing"),
+        _ => None,
+    }
+}
+
+pub(crate) fn log_segment_emit_diagnostics(
+    instance_id: &str,
+    first_segment_emitted: Option<&Arc<AtomicBool>>,
+    segment: &TranscriptSegment,
+    stage: &str,
+) {
+    // These logs are intentionally scoped to the long-lived live instances we
+    // debug most often (`record`, `caption`, `voice-typing`), not to every
+    // possible recognizer consumer.
+    let Some(label) = diagnostics_instance_label(instance_id) else {
+        return;
+    };
+
+    let text_len = segment.text.chars().count();
+    if let Some(first_segment_emitted) = first_segment_emitted
+        && first_segment_emitted
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    {
+        info!(
+            "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
+            stage, segment.id, segment.is_final, text_len
+        );
+    }
+
+    info!(
+        "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
+        stage, segment.id, segment.is_final, text_len
+    );
 }
 
 pub(crate) fn apply_timeline_normalization(
@@ -98,46 +138,6 @@ pub(crate) fn finalize_transcript_text(
 ) -> String {
     let formatted_text = format_transcript(cleaned_text, punctuation);
     select_final_transcript_text(cleaned_text, &formatted_text)
-}
-
-pub(crate) fn preview_text_for_log(text: &str) -> String {
-    const MAX_PREVIEW_CHARS: usize = 24;
-    let flattened = text.replace(['\r', '\n'], " ");
-    let mut preview = flattened
-        .chars()
-        .take(MAX_PREVIEW_CHARS)
-        .collect::<String>();
-    if flattened.chars().count() > MAX_PREVIEW_CHARS {
-        preview.push('…');
-    }
-    preview
-}
-
-pub(crate) fn log_text_transform_diagnostics(
-    instance_id: &str,
-    stage: &str,
-    segment_id: &str,
-    is_final: bool,
-    raw_text: &str,
-    cleaned_text: &str,
-    final_text: &str,
-) {
-    let Some(label) = diagnostics_instance_label(instance_id) else {
-        return;
-    };
-
-    info!(
-        "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={} raw_preview={:?} cleaned_preview={:?} final_preview={:?}",
-        stage,
-        segment_id,
-        is_final,
-        raw_text.chars().count(),
-        cleaned_text.chars().count(),
-        final_text.chars().count(),
-        preview_text_for_log(raw_text),
-        preview_text_for_log(cleaned_text),
-        preview_text_for_log(final_text)
-    );
 }
 
 #[cfg(test)]

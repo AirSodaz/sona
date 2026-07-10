@@ -1,250 +1,41 @@
-use super::TranscriptPostprocessor;
-use super::metrics::{
-    AsrInferenceMetric, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
-    capture_process_memory_mb, current_time_millis, duration_to_ms, log_inference_metric,
-    log_model_load_metric, samples_to_ms,
+use super::inference::{
+    build_transcript_update, diagnostics_instance_label, format_transcript,
+    observe_streaming_transcript_update, run_offline_inference, synthesize_durations,
 };
-use super::transcript::{
-    build_transcript_update, finalize_transcript_text, format_transcript,
-    log_text_transform_diagnostics, normalize_recognizer_text, observe_streaming_transcript_update,
-    preview_text_for_log, synthesize_durations,
+use super::telemetry::{
+    build_live_metric, capture_process_memory_mb, current_time_millis, log_model_load_metric,
+    record_live_metric,
 };
-use super::types::{
-    LocalSherpaStreamingRequest, TranscriptNormalizationOptions, TranscriptSegment,
+use crate::audio::{accept_vad_samples, vad_detected};
+use crate::gpu::resolve_gpu_acceleration_plan;
+use crate::punctuation::{Punctuation, load_punctuation};
+use crate::recognizer::{
+    Recognizer, accept_online_samples, build_model_config, create_online_stream,
+    create_recognizer_with_gpu_plan, decode_online_ready, is_online_endpoint, online_stream_result,
+    reset_online_stream,
 };
-use crate::integrations::asr::{AsrState, ModelConfigKey};
+use crate::runtime::{
+    ModelConfigKey, OfflineState, RecognizerPool, SherpaInstance, buffered_sample_count,
+    start_instance_runtime, stop_instance_runtime,
+};
+use async_trait::async_trait;
 use log::{debug, info, trace};
-use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
-use sona_local_asr::audio::{accept_vad_samples, vad_detected};
-use sona_local_asr::punctuation::{Punctuation, load_punctuation};
-use sona_local_asr::recognizer::{
-    Recognizer, SafeOfflineRecognizer, accept_online_samples, build_model_config,
-    create_online_stream, decode_offline_samples, decode_online_ready, is_online_endpoint,
-    online_stream_result, reset_online_stream,
+use sona_core::ports::asr::{
+    AsrRuntimeObserver, AsrStreamingSession, LocalSherpaStreamingRequest, SherpaError,
 };
-use sona_local_asr::runtime::{
-    OfflineState, SherpaInstance, buffered_sample_count, start_instance_runtime,
-    stop_instance_runtime,
+use sona_core::transcription::asr_metrics::{
+    AsrModelLoadMetric, calculate_rss_delta_mb, duration_to_ms,
 };
+use sona_core::transcription::postprocess::TranscriptPostprocessor;
+use sona_core::transcription::transcript::TranscriptSegment;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Instant;
-// No AppHandle needed
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
 
-fn record_live_metric(observer: &dyn AsrRuntimeObserver, metric: AsrInferenceMetric) {
-    observer.on_live_inference(&metric);
-    log_inference_metric(&metric);
-}
-
-fn build_live_metric(
-    instance_id: &str,
-    stage: &str,
-    is_final: bool,
-    buffered_samples: usize,
-    decode_ms: f64,
-    emit_latency_ms: Option<f64>,
-    total_ms: Option<f64>,
-) -> AsrInferenceMetric {
-    let audio_duration_ms = samples_to_ms(buffered_samples, 16000.0);
-
-    AsrInferenceMetric {
-        occurred_at_ms: current_time_millis(),
-        source: "live".to_string(),
-        instance_id: Some(instance_id.to_string()),
-        stage: stage.to_string(),
-        is_final,
-        audio_duration_ms,
-        buffered_samples,
-        audio_extract_ms: None,
-        decode_ms,
-        emit_latency_ms,
-        total_ms,
-        rtf: calculate_rtf(decode_ms, audio_duration_ms),
-        segment_count: None,
-        process_rss_mb: capture_process_memory_mb(),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn run_offline_inference(
-    speech_buffer: &[Vec<f32>],
-    observer: &dyn AsrRuntimeObserver,
-    r: &SafeOfflineRecognizer,
-    punctuation: Option<&Punctuation>,
-    segment_id: &str,
-    global_start: f64,
-    is_final: bool,
-    instance_id: &str,
-    stage: &'static str,
-    first_segment_emitted: Option<Arc<AtomicBool>>,
-    normalization_options: TranscriptNormalizationOptions,
-    postprocessor: TranscriptPostprocessor,
-    record_metrics: bool,
-    triggered_at: Instant,
-) {
-    if speech_buffer.is_empty() {
-        if let Some(label) = diagnostics_instance_label(instance_id) {
-            info!(
-                "[Sherpa] {label} offline inference skipped because the speech buffer is empty. stage={stage}"
-            );
-        }
-        return;
-    }
-
-    // Offline models decode one aggregated utterance at a time, so we flatten
-    // the buffered speech chunks into one continuous waveform before calling
-    // Sherpa.
-    let mut full_audio = Vec::new();
-    for chunk in speech_buffer {
-        full_audio.extend_from_slice(chunk);
-    }
-    let decode_started = Instant::now();
-    debug!(
-        "[Offline] FFI: Calling decode_offline_samples with {} samples",
-        full_audio.len()
-    );
-    let decode_result = decode_offline_samples(r, &full_audio);
-    debug!("[Offline] FFI: Decode finished");
-    let decode_ms = duration_to_ms(decode_started.elapsed());
-
-    let record_metric = |emit_latency_ms: Option<f64>| {
-        if record_metrics {
-            record_live_metric(
-                observer,
-                build_live_metric(
-                    instance_id,
-                    stage,
-                    is_final,
-                    full_audio.len(),
-                    decode_ms,
-                    emit_latency_ms,
-                    None,
-                ),
-            );
-        }
-    };
-
-    if let Some(label) = diagnostics_instance_label(instance_id) {
-        info!(
-            "[Sherpa] {label} offline inference finished. stage={} segment_id={} final={} buffered_chunks={} buffered_samples={}",
-            stage,
-            segment_id,
-            is_final,
-            speech_buffer.len(),
-            full_audio.len()
-        );
-    }
-
-    if let Some(result) = decode_result {
-        let raw_text = result.text.trim();
-        if !raw_text.is_empty() {
-            // The offline path emits only meaningful text: raw recognizer output
-            // is normalized first, then final-only formatting/punctuation is
-            // applied when this segment closes an utterance.
-            let cleaned_text = normalize_recognizer_text(&result.text);
-            if cleaned_text.is_empty() {
-                if let Some(label) = diagnostics_instance_label(instance_id) {
-                    info!(
-                        "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
-                        stage,
-                        segment_id,
-                        is_final,
-                        preview_text_for_log(raw_text)
-                    );
-                }
-                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
-                return;
-            }
-
-            let text = if is_final {
-                finalize_transcript_text(&cleaned_text, punctuation)
-            } else {
-                cleaned_text.clone()
-            };
-
-            if text.is_empty() {
-                if let Some(label) = diagnostics_instance_label(instance_id) {
-                    info!(
-                        "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
-                        stage,
-                        segment_id,
-                        is_final,
-                        preview_text_for_log(raw_text),
-                        preview_text_for_log(&cleaned_text)
-                    );
-                }
-                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
-                return;
-            }
-
-            log_text_transform_diagnostics(
-                instance_id,
-                stage,
-                segment_id,
-                is_final,
-                raw_text,
-                &cleaned_text,
-                &text,
-            );
-
-            let global_end = global_start + (full_audio.len() as f64 / 16000.0);
-            // Sherpa timestamps are relative to the decoded utterance, so we
-            // shift them into the global recording timeline before emitting.
-            let timestamps_abs: Option<Vec<f32>> = result
-                .timestamps
-                .as_ref()
-                .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
-            let durations = timestamps_abs
-                .as_ref()
-                .and_then(|ts| synthesize_durations(ts, global_end as f32));
-
-            let segment = TranscriptSegment {
-                id: segment_id.to_string(),
-                text,
-                start: global_start,
-                end: global_end,
-                is_final,
-                timing: None,
-                tokens: Some(result.tokens),
-                timestamps: timestamps_abs,
-                durations,
-                translation: None,
-                speaker: None,
-                speaker_attribution: None,
-            };
-            let update = postprocessor
-                .process_update(build_transcript_update(segment, normalization_options));
-            observe_streaming_transcript_update(
-                observer,
-                instance_id,
-                &update,
-                stage,
-                first_segment_emitted.as_ref(),
-            );
-            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
-        } else if let Some(label) = diagnostics_instance_label(instance_id) {
-            info!(
-                "[Sherpa] {label} offline inference produced empty text after formatting. stage={} segment_id={} final={}",
-                stage, segment_id, is_final
-            );
-            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
-        }
-    } else if let Some(label) = diagnostics_instance_label(instance_id) {
-        info!(
-            "[Sherpa] {label} offline inference produced no recognizer result. stage={} segment_id={} final={}",
-            stage, segment_id, is_final
-        );
-        record_metric(Some(duration_to_ms(triggered_at.elapsed())));
-    }
-}
-
-use crate::integrations::asr::SherpaError;
-use async_trait::async_trait;
-
-pub(crate) struct LocalSherpaSession {
+pub struct LocalSherpaSession {
     instance_id: String,
     observer: Arc<dyn AsrRuntimeObserver>,
     instance: tokio::sync::Mutex<SherpaInstance>,
@@ -299,7 +90,7 @@ impl AsrStreamingSession for LocalSherpaSession {
 }
 
 pub async fn resolve_punctuation(
-    pool: &crate::integrations::asr::RecognizerPool,
+    pool: &RecognizerPool,
     punctuation_model: Option<String>,
 ) -> Option<Arc<Punctuation>> {
     let p_path = punctuation_model?;
@@ -317,8 +108,8 @@ pub async fn resolve_punctuation(
     .cloned()
 }
 
-pub(crate) async fn init_recognizer_impl(
-    state: &AsrState,
+pub async fn create_streaming_session(
+    recognizer_pool: RecognizerPool,
     request: LocalSherpaStreamingRequest,
     observer: Arc<dyn AsrRuntimeObserver>,
 ) -> Result<Arc<LocalSherpaSession>, String> {
@@ -339,8 +130,7 @@ pub(crate) async fn init_recognizer_impl(
         gpu_acceleration,
     } = request;
 
-    let gpu_plan =
-        crate::platform::hardware::resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
+    let gpu_plan = resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
 
     info!(
         "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} gpu_plan={:?}",
@@ -362,8 +152,7 @@ pub(crate) async fn init_recognizer_impl(
     let mut reused_from_pool = false;
 
     let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
-    let (cell, is_new) = state
-        .recognizer_pool
+    let (cell, is_new) = recognizer_pool
         .recognizer_cell_for_gpu_plan(
             &config_key,
             gpu_plan.provider_options(),
@@ -390,11 +179,8 @@ pub(crate) async fn init_recognizer_impl(
                 &language,
                 hotwords.clone(),
             )?;
-            let create_result = crate::integrations::asr::create_recognizer_with_gpu_plan(
-                config_type,
-                num_threads,
-                gpu_plan.clone(),
-            )?;
+            let create_result =
+                create_recognizer_with_gpu_plan(config_type, num_threads, gpu_plan.clone())?;
             if let Some(notice) = create_result.fallback_notice.as_ref() {
                 log::warn!(
                     "[init_recognizer] {} recognizer creation failed, retrying with {}: {}",
@@ -407,8 +193,7 @@ pub(crate) async fn init_recognizer_impl(
             let r = Arc::new(create_result.recognizer);
 
             if actual_provider != primary_provider {
-                state
-                    .recognizer_pool
+                recognizer_pool
                     .register_recognizer_gpu_provider(&config_key, actual_provider, cell.clone())
                     .await;
             }
@@ -436,7 +221,7 @@ pub(crate) async fn init_recognizer_impl(
     observer.on_model_load(&model_load_metric);
     log_model_load_metric(&model_load_metric);
 
-    let punctuation = resolve_punctuation(&state.recognizer_pool, punctuation_model).await;
+    let punctuation = resolve_punctuation(&recognizer_pool, punctuation_model).await;
     let mut session_instance = SherpaInstance::default();
     session_instance.set_recognizer(recognizer);
     session_instance.set_punctuation(punctuation);
@@ -564,7 +349,7 @@ async fn flush_recognizer_impl_inner(
 
             // Offline decoding can be CPU-heavy, so the final utterance pass
             // runs on a blocking worker and then emits one final segment.
-            crate::platform::asr_runtime::run_blocking_asr_task(move || {
+            let task = move || {
                 if let Some(safe_r) = recognizer_copy.offline() {
                     run_offline_inference(
                         &offline_copy,
@@ -583,9 +368,10 @@ async fn flush_recognizer_impl_inner(
                         triggered_at,
                     );
                 }
-            })
-            .await
-            .map_err(|e| e.to_string())?;
+            };
+            tokio::task::spawn_blocking(task)
+                .await
+                .map_err(|error| error.to_string())?;
 
             instance.offline_state.clear_speech_buffer();
         } else if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -825,7 +611,7 @@ async fn feed_audio_samples_inner(
                     );
                 }
 
-                crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
+                let task = move || {
                     if let Some(safe_r) = recognizer_copy.offline() {
                         run_offline_inference(
                             &offline_copy,
@@ -844,7 +630,8 @@ async fn feed_audio_samples_inner(
                             triggered_at,
                         );
                     }
-                });
+                };
+                drop(tokio::task::spawn_blocking(task));
                 instance.offline_state.mark_inference_time(now);
             }
         }
@@ -895,7 +682,7 @@ async fn feed_audio_samples_inner(
                     );
                 }
 
-                crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
+                let task = move || {
                     if let Some(safe_r) = recognizer_copy.offline() {
                         run_offline_inference(
                             &offline_copy,
@@ -914,7 +701,8 @@ async fn feed_audio_samples_inner(
                             triggered_at,
                         );
                     }
-                });
+                };
+                drop(tokio::task::spawn_blocking(task));
 
                 instance.offline_state.clear_speech_buffer();
                 instance.clear_partial_metric_sample();
@@ -1125,42 +913,67 @@ async fn feed_audio_chunk_impl_inner(
     feed_audio_samples_inner(observer, instance_id, instance, &float_samples).await
 }
 
-pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
-    match instance_id {
-        "record" => Some("record"),
-        "caption" => Some("caption"),
-        "voice-typing" => Some("voice-typing"),
-        _ => None,
-    }
-}
-
-pub fn log_segment_emit_diagnostics(
-    instance_id: &str,
-    first_segment_emitted: Option<&Arc<AtomicBool>>,
-    segment: &TranscriptSegment,
-    stage: &str,
-) {
-    // These logs are intentionally scoped to the long-lived live instances we
-    // debug most often (`record`, `caption`, `voice-typing`), not to every
-    // possible recognizer consumer.
-    let Some(label) = diagnostics_instance_label(instance_id) else {
-        return;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sona_core::ports::asr::{
+        AsrStreamingSession, LocalSherpaStreamingRequest, NoopAsrRuntimeObserver,
+    };
+    use sona_core::transcription::postprocess::{
+        TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     };
 
-    let text_len = segment.text.chars().count();
-    if let Some(first_segment_emitted) = first_segment_emitted
-        && first_segment_emitted
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-    {
-        info!(
-            "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
-            stage, segment.id, segment.is_final, text_len
+    fn assert_streaming_session<T: AsrStreamingSession>() {}
+
+    #[test]
+    fn local_sherpa_session_implements_core_streaming_port() {
+        assert_streaming_session::<LocalSherpaSession>();
+    }
+
+    #[tokio::test]
+    async fn factory_rejects_missing_file_config_without_loading_a_model() {
+        let result = create_streaming_session(
+            RecognizerPool::new(),
+            LocalSherpaStreamingRequest {
+                instance_id: "test-live".to_string(),
+                model_path: "unused".to_string(),
+                num_threads: 1,
+                enable_itn: false,
+                language: "auto".to_string(),
+                punctuation_model: None,
+                vad_model: None,
+                vad_buffer: 0.0,
+                model_type: "sensevoice".to_string(),
+                file_config: None,
+                hotwords: None,
+                normalization_options: TranscriptNormalizationOptions::default(),
+                postprocess_options: TranscriptPostprocessOptions::default(),
+                gpu_acceleration: None,
+            },
+            Arc::new(NoopAsrRuntimeObserver),
+        )
+        .await;
+
+        assert_eq!(
+            result.err().as_deref(),
+            Some("File configuration is missing for this model.")
         );
     }
 
-    info!(
-        "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
-        stage, segment.id, segment.is_final, text_len
-    );
+    #[tokio::test]
+    async fn punctuation_resolution_ignores_missing_paths() {
+        let pool = RecognizerPool::new();
+
+        assert!(resolve_punctuation(&pool, None).await.is_none());
+        assert!(
+            resolve_punctuation(&pool, Some("".to_string()))
+                .await
+                .is_none()
+        );
+        assert!(
+            resolve_punctuation(&pool, Some("nonexistent_path_123".to_string()))
+                .await
+                .is_none()
+        );
+    }
 }
