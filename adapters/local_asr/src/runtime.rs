@@ -143,7 +143,7 @@ pub struct SherpaInstance {
     recognizer: Option<Arc<Recognizer>>,
     stream: Option<SafeStream>,
     pub vad: Option<SafeVad>,
-    pub punctuation: Option<Arc<Punctuation>>,
+    punctuation: Option<Arc<Punctuation>>,
     pub total_samples: usize,
     pub segment_start_time: f64,
     pub offline_state: OfflineState,
@@ -172,6 +172,22 @@ impl SherpaInstance {
 
     pub fn set_recognizer(&mut self, recognizer: Arc<Recognizer>) {
         self.recognizer = Some(recognizer);
+    }
+
+    pub fn punctuation(&self) -> Option<&Punctuation> {
+        self.punctuation.as_deref()
+    }
+
+    pub fn punctuation_clone(&self) -> Option<Arc<Punctuation>> {
+        self.punctuation.clone()
+    }
+
+    pub fn has_punctuation(&self) -> bool {
+        self.punctuation.is_some()
+    }
+
+    pub fn set_punctuation(&mut self, punctuation: Option<Arc<Punctuation>>) {
+        self.punctuation = punctuation;
     }
 
     pub fn stream(&self) -> Option<&SafeStream> {
@@ -423,6 +439,15 @@ mod tests {
 
         assert!(instance.recognizer().is_none());
         assert!(instance.recognizer_clone().is_none());
+    }
+
+    #[test]
+    fn punctuation_attachment_defaults_to_none() {
+        let instance = SherpaInstance::default();
+
+        assert!(instance.punctuation().is_none());
+        assert!(instance.punctuation_clone().is_none());
+        assert!(!instance.has_punctuation());
     }
 
     #[test]

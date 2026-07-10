@@ -452,7 +452,7 @@ pub(crate) async fn init_recognizer_impl(
     let mut session_instance = SherpaInstance::default();
     session_instance.set_recognizer(recognizer);
     session_instance.vad = vad;
-    session_instance.punctuation = punctuation;
+    session_instance.set_punctuation(punctuation);
     session_instance.vad_model = vad_model.clone();
     session_instance.vad_buffer = vad_buffer;
     session_instance.normalization_options = normalization_options;
@@ -493,7 +493,7 @@ async fn start_recognizer_impl_inner(
             "[Sherpa] start_recognizer({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
             recognizer_kind,
             instance.vad_model.is_some(),
-            instance.punctuation.is_some()
+            instance.has_punctuation()
         );
     }
 
@@ -558,7 +558,7 @@ async fn flush_recognizer_impl_inner(
             let offline_copy = instance.offline_state.speech_chunks().to_vec();
             let emitter_copy = emitter.clone();
             let recognizer_copy = recognizer.clone();
-            let punct_copy = instance.punctuation.clone();
+            let punct_copy = instance.punctuation_clone();
             let seg_id_copy = seg_id.clone();
             let instance_id_copy = instance_id.to_string();
             let first_segment_emitted =
@@ -643,7 +643,7 @@ async fn flush_recognizer_impl_inner(
         if let Some(result) = online_stream_result(r, st)
             && !result.text.trim().is_empty()
         {
-            let text = format_transcript(&result.text, instance.punctuation.as_deref());
+            let text = format_transcript(&result.text, instance.punctuation());
             let timestamps_abs = result.timestamps.as_ref().map(|ts| {
                 ts.iter()
                     .map(|t| *t + instance.segment_start_time as f32)
@@ -817,7 +817,7 @@ async fn feed_audio_samples_inner(
 
                 let offline_copy = instance.offline_state.speech_chunks().to_vec();
                 let emitter_copy = emitter.clone();
-                let punct_copy = instance.punctuation.clone();
+                let punct_copy = instance.punctuation_clone();
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
                 let recognizer_copy = recognizer.clone();
@@ -893,7 +893,7 @@ async fn feed_audio_samples_inner(
 
                 let offline_copy = instance.offline_state.speech_chunks().to_vec();
                 let emitter_copy = emitter.clone();
-                let punct_copy = instance.punctuation.clone();
+                let punct_copy = instance.punctuation_clone();
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
                 let recognizer_copy = recognizer.clone();
@@ -1055,7 +1055,7 @@ async fn feed_audio_samples_inner(
             if let Some(result) = online_stream_result(r, st)
                 && !result.text.trim().is_empty()
             {
-                let text = format_transcript(&result.text, instance.punctuation.as_deref());
+                let text = format_transcript(&result.text, instance.punctuation());
 
                 let timestamps_abs = result.timestamps.as_ref().map(|ts| {
                     ts.iter()

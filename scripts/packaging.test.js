@@ -1610,6 +1610,7 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'first_segment_emitted',
     'is_running',
     'recognizer',
+    'punctuation',
     'stream',
     'last_partial_metric_sample',
   ]) {
@@ -1620,6 +1621,8 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
         ? /\binstance\.is_running(?!\()/u
         : field === 'recognizer'
           ? /\binstance\.recognizer\b(?!\s*\()/u
+        : field === 'punctuation'
+          ? /\binstance\.punctuation\b(?!\s*\()/u
         : field === 'stream'
           ? /\binstance\.stream(?!\s*\()/u
         : field === 'last_partial_metric_sample'
@@ -1659,6 +1662,10 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'recognizer',
     'recognizer_clone',
     'set_recognizer',
+    'punctuation',
+    'punctuation_clone',
+    'has_punctuation',
+    'set_punctuation',
     'stream',
     'take_stream',
     'restore_stream',
