@@ -6,3 +6,4 @@ pub mod recognizer;
 pub mod runtime;
 pub mod speaker;
 pub mod speaker_processing;
+pub mod streaming;
