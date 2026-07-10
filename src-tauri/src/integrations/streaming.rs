@@ -11,7 +11,7 @@ use tokio;
 
 use crate::app::server::TauriStreamingContext;
 use sona_api_server::{ServerState, authorize_streaming_request};
-use sona_local_asr::audio::pcm_s16le_bytes_to_f32;
+use sona_local_asr::audio::{load_vad, pcm_s16le_bytes_to_f32};
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -342,9 +342,7 @@ async fn handle_local_streaming_socket(
     };
 
     let vad_model_path = resolve_vad_model_path(&state.models_dir, &vad_model_id);
-    let vad = match crate::integrations::asr::load_vad(Some(
-        vad_model_path.to_string_lossy().to_string(),
-    )) {
+    let vad = match load_vad(Some(vad_model_path.to_string_lossy().to_string())) {
         Some(v) => v,
         None => {
             let _ = socket

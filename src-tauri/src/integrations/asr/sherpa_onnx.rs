@@ -14,7 +14,7 @@ use super::types::{
 };
 use crate::integrations::asr::{AsrState, AsrStreamingSession, ModelConfigKey};
 use log::{debug, info, trace};
-use sona_local_asr::audio::{accept_vad_samples, load_vad, reset_vad, vad_detected};
+use sona_local_asr::audio::{accept_vad_samples, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
     Recognizer, SafeOfflineRecognizer, accept_online_samples, build_model_config,
@@ -447,14 +447,10 @@ pub(crate) async fn init_recognizer_impl(
     log_model_load_metric(&model_load_metric);
 
     let punctuation = resolve_punctuation(&state.recognizer_pool, punctuation_model).await;
-    let vad = load_vad(vad_model.clone());
-
     let mut session_instance = SherpaInstance::default();
     session_instance.set_recognizer(recognizer);
-    session_instance.vad = vad;
     session_instance.set_punctuation(punctuation);
-    session_instance.vad_model = vad_model.clone();
-    session_instance.vad_buffer = vad_buffer;
+    session_instance.configure_vad(vad_model.clone(), vad_buffer);
     session_instance.normalization_options = normalization_options;
     session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)?;
 
@@ -480,19 +476,13 @@ async fn start_recognizer_impl_inner(
     // fresh Sherpa stream that will accumulate new incremental state.
     start_instance_runtime(instance, stream);
 
-    if instance.vad_model.is_some() {
-        if let Some(vad) = instance.vad.as_mut() {
-            reset_vad(vad);
-        } else {
-            instance.vad = load_vad(instance.vad_model.clone());
-        }
-    }
+    instance.reset_or_reload_vad();
 
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] start_recognizer({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
             recognizer_kind,
-            instance.vad_model.is_some(),
+            instance.has_vad_configuration(),
             instance.has_punctuation()
         );
     }
@@ -757,7 +747,7 @@ async fn feed_audio_samples_inner(
         .ok_or("Recognizer not initialized")?;
 
     if recognizer.is_offline() {
-        let Some(vad) = instance.vad.as_ref() else {
+        let Some(vad) = instance.vad() else {
             println!(
                 "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
                 instance_id

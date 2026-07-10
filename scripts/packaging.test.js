@@ -1594,6 +1594,20 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     assert.doesNotMatch(desktopSherpa, new RegExp(`pub struct ${symbol}`, 'u'));
   }
 
+  for (const field of ['vad', 'vad_model', 'vad_buffer']) {
+    assert.doesNotMatch(localAsrRuntime, new RegExp(`pub ${field}:`, 'u'));
+  }
+
+  for (const helper of [
+    'configure_vad',
+    'reset_or_reload_vad',
+    'has_vad_configuration',
+    'vad',
+    'vad_buffer',
+  ]) {
+    assert.match(localAsrRuntime, new RegExp(`pub fn ${helper}\\(`, 'u'));
+  }
+
   for (const field of [
     'speech_buffer',
     'ring_buffer',
@@ -4000,8 +4014,11 @@ test('desktop live VAD creation is delegated to local ASR adapter', () => {
 
   assert.equal(fs.existsSync(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'model_config.rs')), false);
   assert.doesNotMatch(asrMod, /^mod model_config;/mu);
-  assert.match(asrMod, /pub\(crate\) use sona_local_asr::audio::\{[\s\S]*load_vad/u);
-  assert.match(localAsrRuntime, /use crate::audio::SafeVad/u);
+  assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bload_vad\b/u);
+  assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bSafeVad\b/u);
+  assert.match(localAsrRuntime, /pub fn configure_vad\(&mut self/u);
+  assert.match(sherpaRs, /session_instance\.configure_vad\(/u);
+  assert.doesNotMatch(asrMod, /\bload_vad\b/u);
   assert.doesNotMatch(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*SafeVad/u);
   assert.doesNotMatch(asrMod, /create_vad_detector/u);
   assert.doesNotMatch(asrMod, /pub struct SafeVad/u);
@@ -4175,6 +4192,7 @@ test('desktop online stream operations are delegated to local ASR adapter', () =
 test('desktop VAD runtime operations use private local ASR wrappers', () => {
   const audioRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'audio.rs'), 'utf8');
   const recognizerRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'), 'utf8');
+  const runtimeRs = fs.readFileSync(path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'), 'utf8');
   const asrMod = fs.readFileSync(
     path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
@@ -4190,7 +4208,12 @@ test('desktop VAD runtime operations use private local ASR wrappers', () => {
   const desktopVadRs = `${sherpaRs}\n${streamingRs}`;
 
   assert.match(asrMod, /accept_vad_samples/u);
-  assert.match(sherpaRs, /use sona_local_asr::audio::\{[\s\S]*reset_vad/u);
+  assert.match(runtimeRs, /pub fn reset_or_reload_vad\(&mut self\)/u);
+  assert.match(sherpaRs, /instance\.reset_or_reload_vad\(\)/u);
+  assert.doesNotMatch(
+    sherpaRs,
+    /^use sona_local_asr::audio::\{[^}]*(?:load_vad|reset_vad)\b/mu,
+  );
   assert.match(asrMod, /vad_detected/u);
   assert.doesNotMatch(desktopVadRs, /SafeVad\([^)]+\)/u);
   assert.doesNotMatch(desktopVadRs, /\.0\.accept_waveform/u);

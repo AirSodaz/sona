@@ -1,4 +1,4 @@
-use crate::audio::SafeVad;
+use crate::audio::{SafeVad, load_vad, reset_vad};
 use crate::punctuation::Punctuation;
 use crate::recognizer::{Recognizer, SafeStream};
 use sona_core::ports::asr::TranscriptNormalizationOptions;
@@ -142,13 +142,13 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
 pub struct SherpaInstance {
     recognizer: Option<Arc<Recognizer>>,
     stream: Option<SafeStream>,
-    pub vad: Option<SafeVad>,
+    vad: Option<SafeVad>,
     punctuation: Option<Arc<Punctuation>>,
     pub total_samples: usize,
     pub segment_start_time: f64,
     pub offline_state: OfflineState,
-    pub vad_model: Option<String>,
-    pub vad_buffer: f32,
+    vad_model: Option<String>,
+    vad_buffer: f32,
     pub current_segment_id: Option<String>,
     last_partial_metric_sample: usize,
     is_running: bool,
@@ -188,6 +188,36 @@ impl SherpaInstance {
 
     pub fn set_punctuation(&mut self, punctuation: Option<Arc<Punctuation>>) {
         self.punctuation = punctuation;
+    }
+
+    pub fn configure_vad(&mut self, vad_model: Option<String>, vad_buffer: f32) {
+        self.vad = load_vad(vad_model.clone());
+        self.vad_model = vad_model;
+        self.vad_buffer = vad_buffer;
+    }
+
+    pub fn reset_or_reload_vad(&mut self) {
+        if self.vad_model.is_none() {
+            return;
+        }
+
+        if let Some(vad) = self.vad.as_mut() {
+            reset_vad(vad);
+        } else {
+            self.vad = load_vad(self.vad_model.clone());
+        }
+    }
+
+    pub fn has_vad_configuration(&self) -> bool {
+        self.vad_model.is_some()
+    }
+
+    pub fn vad(&self) -> Option<&SafeVad> {
+        self.vad.as_ref()
+    }
+
+    pub fn vad_buffer(&self) -> f32 {
+        self.vad_buffer
     }
 
     pub fn stream(&self) -> Option<&SafeStream> {
@@ -448,6 +478,17 @@ mod tests {
         assert!(instance.punctuation().is_none());
         assert!(instance.punctuation_clone().is_none());
         assert!(!instance.has_punctuation());
+    }
+
+    #[test]
+    fn vad_configuration_is_owned_by_the_runtime_instance() {
+        let mut instance = SherpaInstance::default();
+
+        instance.configure_vad(Some(String::new()), 0.75);
+
+        assert!(instance.has_vad_configuration());
+        assert_eq!(instance.vad_buffer(), 0.75);
+        assert!(instance.vad().is_none());
     }
 
     #[test]

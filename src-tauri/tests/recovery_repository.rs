@@ -1,11 +1,8 @@
-#[path = "../src/platform/recovery_repository.rs"]
-mod recovery_adapter;
-
-use recovery_adapter::FsRecoveryRepository;
 use serde_json::{Value, json};
 use sona_core::recovery::repository::RecoveryRepository;
 use std::fs::{self, File};
 use std::path::Path;
+use tauri_appsona_lib::platform::recovery_repository::FsRecoveryRepository;
 use tempfile::tempdir;
 
 fn recovery_file(root: &Path) -> std::path::PathBuf {

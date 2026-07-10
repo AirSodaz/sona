@@ -33,7 +33,7 @@ pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 pub use sona_core::transcription::postprocess::TranscriptPostprocessor;
-pub(crate) use sona_local_asr::audio::{accept_vad_samples, load_vad, vad_detected};
+pub(crate) use sona_local_asr::audio::{accept_vad_samples, vad_detected};
 pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 pub use sona_local_asr::recognizer::Recognizer;
 pub(crate) use sona_local_asr::recognizer::{
