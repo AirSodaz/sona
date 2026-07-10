@@ -1,11 +1,12 @@
 use crate::models::config::ModelFileConfig;
+use crate::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use crate::transcription::postprocess::TranscriptPostprocessor;
 pub use crate::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
     TranscriptTextReplacementRuleSet,
 };
 use crate::transcription::runtime::BatchTranscribePlan;
-use crate::transcription::transcript::TranscriptSegment;
+use crate::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -222,6 +223,39 @@ pub enum BatchSegmentationMode {
 pub trait BatchTranscriber: Send + Sync {
     async fn transcribe(&self, plan: BatchTranscribePlan)
     -> Result<Vec<TranscriptSegment>, String>;
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AsrTranscriptUpdateEvent {
+    pub instance_id: String,
+    pub stage: String,
+    pub update: TranscriptUpdate,
+}
+
+pub trait AsrRuntimeObserver: Send + Sync {
+    fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent);
+    fn on_model_load(&self, metric: &AsrModelLoadMetric);
+    fn on_live_inference(&self, metric: &AsrInferenceMetric);
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopAsrRuntimeObserver;
+
+impl AsrRuntimeObserver for NoopAsrRuntimeObserver {
+    fn on_transcript_update(&self, _event: &AsrTranscriptUpdateEvent) {}
+
+    fn on_model_load(&self, _metric: &AsrModelLoadMetric) {}
+
+    fn on_live_inference(&self, _metric: &AsrInferenceMetric) {}
+}
+
+#[async_trait]
+pub trait AsrStreamingSession: Send + Sync {
+    async fn start(&self) -> Result<(), SherpaError>;
+    async fn stop(&self) -> Result<(), SherpaError>;
+    async fn flush(&self) -> Result<(), SherpaError>;
+    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError>;
+    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError>;
 }
 
 #[derive(Debug, Clone)]
