@@ -1604,6 +1604,18 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     assert.doesNotMatch(localAsrRuntime, new RegExp(`pub ${field}:`, 'u'));
   }
 
+  for (const field of [
+    'first_sample_logged',
+    'skipped_while_stopped_logged',
+    'first_segment_emitted',
+  ]) {
+    assert.doesNotMatch(localAsrRuntime, new RegExp(`pub ${field}:`, 'u'));
+    assert.doesNotMatch(
+      desktopSherpa,
+      new RegExp(`record_diagnostics[\\s\\S]{0,80}\\.${field}\\b`, 'u'),
+    );
+  }
+
   assert.match(desktopSherpa, /pub\(crate\) struct LocalSherpaSession/u);
   assert.match(desktopSherpa, /pub\(crate\) async fn init_recognizer_impl/u);
   assert.doesNotMatch(desktopSherpa, /pub struct LocalSherpaSession/u);
@@ -1626,6 +1638,11 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'utterance_start_seconds',
     'start_instance_runtime',
     'stop_instance_runtime',
+    'should_log_first_sample',
+    'mark_first_sample_logged',
+    'should_log_skipped_while_stopped',
+    'mark_skipped_while_stopped_logged',
+    'first_segment_emitted_flag',
   ]) {
     assert.match(localAsrRuntime, new RegExp(`pub fn ${helper}`, 'u'));
     assert.doesNotMatch(desktopSherpa, new RegExp(`pub fn ${helper}`, 'u'));

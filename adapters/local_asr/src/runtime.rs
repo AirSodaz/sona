@@ -265,9 +265,31 @@ impl OfflineState {
 
 #[derive(Default)]
 pub struct RecordDiagnosticsState {
-    pub first_sample_logged: bool,
-    pub skipped_while_stopped_logged: bool,
-    pub first_segment_emitted: Arc<AtomicBool>,
+    first_sample_logged: bool,
+    skipped_while_stopped_logged: bool,
+    first_segment_emitted: Arc<AtomicBool>,
+}
+
+impl RecordDiagnosticsState {
+    pub fn should_log_first_sample(&self) -> bool {
+        !self.first_sample_logged
+    }
+
+    pub fn mark_first_sample_logged(&mut self) {
+        self.first_sample_logged = true;
+    }
+
+    pub fn should_log_skipped_while_stopped(&self) -> bool {
+        !self.skipped_while_stopped_logged
+    }
+
+    pub fn mark_skipped_while_stopped_logged(&mut self) {
+        self.skipped_while_stopped_logged = true;
+    }
+
+    pub fn first_segment_emitted_flag(&self) -> &Arc<AtomicBool> {
+        &self.first_segment_emitted
+    }
 }
 
 impl Default for OfflineState {
@@ -377,8 +399,12 @@ mod tests {
         assert_eq!(instance.offline_state.ring_sample_count(), 0);
         assert_eq!(instance.current_segment_id, None);
         assert_eq!(instance.last_partial_metric_sample, 0);
-        assert!(!instance.record_diagnostics.first_sample_logged);
-        assert!(!instance.record_diagnostics.skipped_while_stopped_logged);
+        assert!(instance.record_diagnostics.should_log_first_sample());
+        assert!(
+            instance
+                .record_diagnostics
+                .should_log_skipped_while_stopped()
+        );
         assert_eq!(instance.vad_model.as_deref(), Some("vad.onnx"));
 
         instance.total_samples = 9;

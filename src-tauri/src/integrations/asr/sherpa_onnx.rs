@@ -517,7 +517,7 @@ async fn stop_recognizer_impl_inner(
                 instance.current_segment_id.as_deref().unwrap_or("none"),
                 instance
                     .record_diagnostics
-                    .first_segment_emitted
+                    .first_segment_emitted_flag()
                     .load(Ordering::SeqCst)
             );
         }
@@ -563,9 +563,13 @@ async fn flush_recognizer_impl_inner(
             let punct_copy = instance.punctuation.clone();
             let seg_id_copy = seg_id.clone();
             let instance_id_copy = instance_id.to_string();
-            let first_segment_emitted = diagnostics_instance_label(instance_id)
-                .is_some()
-                .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+            let first_segment_emitted =
+                diagnostics_instance_label(instance_id).is_some().then(|| {
+                    instance
+                        .record_diagnostics
+                        .first_segment_emitted_flag()
+                        .clone()
+                });
             let normalization_options = instance.normalization_options;
             let postprocessor = instance.postprocessor.clone();
             let metrics_store = state.metrics.clone();
@@ -679,7 +683,7 @@ async fn flush_recognizer_impl_inner(
                 instance_id,
                 &update,
                 "flush_online",
-                Some(&instance.record_diagnostics.first_segment_emitted),
+                Some(instance.record_diagnostics.first_segment_emitted_flag()),
             );
         }
 
@@ -719,20 +723,24 @@ async fn feed_audio_samples_inner(
 
     if !instance.is_running {
         if let Some(label) = diagnostics_instance_label(instance_id)
-            && !instance.record_diagnostics.skipped_while_stopped_logged
+            && instance
+                .record_diagnostics
+                .should_log_skipped_while_stopped()
         {
             println!(
                 "[Sherpa] {label} audio chunk skipped because recognizer is not running. samples={} total_samples={}",
                 samples.len(),
                 instance.total_samples
             );
-            instance.record_diagnostics.skipped_while_stopped_logged = true;
+            instance
+                .record_diagnostics
+                .mark_skipped_while_stopped_logged();
         }
         return Ok(());
     }
 
     if let Some(label) = diagnostics_instance_label(instance_id)
-        && !instance.record_diagnostics.first_sample_logged
+        && instance.record_diagnostics.should_log_first_sample()
     {
         println!(
             "[Sherpa] {label} first sample received. samples={} total_samples_before={} current_segment={}",
@@ -740,7 +748,7 @@ async fn feed_audio_samples_inner(
             instance.total_samples,
             instance.current_segment_id.as_deref().unwrap_or("none")
         );
-        instance.record_diagnostics.first_sample_logged = true;
+        instance.record_diagnostics.mark_first_sample_logged();
     }
 
     let recognizer = instance
@@ -773,7 +781,7 @@ async fn feed_audio_samples_inner(
                 currently_speaking,
                 instance
                     .record_diagnostics
-                    .first_segment_emitted
+                    .first_segment_emitted_flag()
                     .load(Ordering::SeqCst)
             );
         }
@@ -813,9 +821,13 @@ async fn feed_audio_samples_inner(
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
                 let recognizer_copy = recognizer.clone();
-                let first_segment_emitted = diagnostics_instance_label(instance_id)
-                    .is_some()
-                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+                let first_segment_emitted =
+                    diagnostics_instance_label(instance_id).is_some().then(|| {
+                        instance
+                            .record_diagnostics
+                            .first_segment_emitted_flag()
+                            .clone()
+                    });
                 let normalization_options = instance.normalization_options;
                 let postprocessor = instance.postprocessor.clone();
                 let should_record_partial_metric = instance.last_partial_metric_sample == 0
@@ -888,9 +900,13 @@ async fn feed_audio_samples_inner(
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.to_string();
                 let recognizer_copy = recognizer.clone();
-                let first_segment_emitted = diagnostics_instance_label(instance_id)
-                    .is_some()
-                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+                let first_segment_emitted =
+                    diagnostics_instance_label(instance_id).is_some().then(|| {
+                        instance
+                            .record_diagnostics
+                            .first_segment_emitted_flag()
+                            .clone()
+                    });
                 let normalization_options = instance.normalization_options;
                 let postprocessor = instance.postprocessor.clone();
                 let metrics_store = state.metrics.clone();
@@ -1001,7 +1017,7 @@ async fn feed_audio_samples_inner(
                     instance_id,
                     &update,
                     "online_partial",
-                    Some(&instance.record_diagnostics.first_segment_emitted),
+                    Some(instance.record_diagnostics.first_segment_emitted_flag()),
                 );
 
                 let should_record_partial_metric = !endpoint_detected
@@ -1086,7 +1102,7 @@ async fn feed_audio_samples_inner(
                     instance_id,
                     &update,
                     "online_final",
-                    Some(&instance.record_diagnostics.first_segment_emitted),
+                    Some(instance.record_diagnostics.first_segment_emitted_flag()),
                 );
             }
 
