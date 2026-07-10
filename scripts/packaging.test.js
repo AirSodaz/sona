@@ -1552,6 +1552,16 @@ test('desktop batch ASR uses local ASR recognizer accessors', () => {
   assert.doesNotMatch(batch, /\brecognizer\.inner\b/u);
 });
 
+test('desktop live sherpa ASR uses local ASR recognizer accessors', () => {
+  const desktopSherpa = fs.readFileSync(
+    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(desktopSherpa, /RecognizerInner/u);
+  assert.doesNotMatch(desktopSherpa, /\b(?:recognizer|recognizer_copy)\.inner\b/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),

@@ -17,7 +17,7 @@ use log::{debug, info, trace};
 use sona_local_asr::audio::{accept_vad_samples, load_vad, reset_vad, vad_detected};
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
-    Recognizer, RecognizerInner, SafeOfflineRecognizer, accept_online_samples, build_model_config,
+    Recognizer, SafeOfflineRecognizer, accept_online_samples, build_model_config,
     create_online_stream, decode_offline_samples, decode_online_ready, is_online_endpoint,
     online_stream_result, reset_online_stream,
 };
@@ -474,15 +474,9 @@ async fn start_recognizer_impl_inner(
     let Some(recognizer) = instance.recognizer.as_ref() else {
         return Err("Recognizer not initialized".to_string());
     };
-    let recognizer_kind = match &recognizer.inner {
-        RecognizerInner::Offline(_) => "offline",
-        RecognizerInner::Online(_) => "online",
-    };
+    let recognizer_kind = recognizer.kind_label();
 
-    let stream = match &recognizer.inner {
-        RecognizerInner::Online(r) => Some(create_online_stream(r)),
-        _ => None,
-    };
+    let stream = recognizer.online().map(create_online_stream);
 
     // Starting a run resets transient buffers and, for online models, creates a
     // fresh Sherpa stream that will accumulate new incremental state.
@@ -553,7 +547,7 @@ async fn flush_recognizer_impl_inner(
     }
 
     if let Some(recognizer) = instance.recognizer.clone()
-        && let RecognizerInner::Offline(_) = &recognizer.inner
+        && recognizer.is_offline()
     {
         if !instance.offline_state.speech_chunks().is_empty() {
             let seg_id = instance
@@ -589,7 +583,7 @@ async fn flush_recognizer_impl_inner(
             // Offline decoding can be CPU-heavy, so the final utterance pass
             // runs on a blocking worker and then emits one final segment.
             crate::platform::asr_runtime::run_blocking_asr_task(move || {
-                if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
+                if let Some(safe_r) = recognizer_copy.offline() {
                     run_offline_inference(
                         &offline_copy,
                         emitter_copy.as_ref(),
@@ -624,7 +618,7 @@ async fn flush_recognizer_impl_inner(
     }
 
     if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
-        && let RecognizerInner::Online(r) = &recognizer.inner
+        && let Some(r) = recognizer.online()
     {
         let inference_started = Instant::now();
         let metrics_store = state.metrics.clone();
@@ -754,372 +748,370 @@ async fn feed_audio_samples_inner(
         .clone()
         .ok_or("Recognizer not initialized")?;
 
-    match &recognizer.inner {
-        RecognizerInner::Offline(_) => {
-            let Some(vad) = instance.vad.as_ref() else {
-                println!(
-                    "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
-                    instance_id
-                );
-                return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
-            };
+    if recognizer.is_offline() {
+        let Some(vad) = instance.vad.as_ref() else {
+            println!(
+                "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
+                instance_id
+            );
+            return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
+        };
 
-            // Offline live transcription is VAD-driven: we keep feeding audio to
-            // the detector, grow/trim utterance buffers, and only run full
-            // recognizer inference when a speech segment boundary is reached.
-            accept_vad_samples(vad, samples);
-            let currently_speaking = vad_detected(vad);
+        // Offline live transcription is VAD-driven: we keep feeding audio to
+        // the detector, grow/trim utterance buffers, and only run full
+        // recognizer inference when a speech segment boundary is reached.
+        accept_vad_samples(vad, samples);
+        let currently_speaking = vad_detected(vad);
 
-            if let Some(label) = diagnostics_instance_label(instance_id)
-                && instance.total_samples % 160000 < 2000
-            {
-                // Print once every ~10 seconds
+        if let Some(label) = diagnostics_instance_label(instance_id)
+            && instance.total_samples % 160000 < 2000
+        {
+            // Print once every ~10 seconds
+            println!(
+                "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
+                instance.total_samples,
+                currently_speaking,
+                instance
+                    .record_diagnostics
+                    .first_segment_emitted
+                    .load(Ordering::SeqCst)
+            );
+        }
+
+        if instance.current_segment_id.is_none() {
+            instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
+        }
+        let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
+
+        if currently_speaking && !instance.offline_state.is_speech_active() {
+            if let Some(label) = diagnostics_instance_label(instance_id) {
+                let ring_buffer_samples = instance.offline_state.ring_sample_count();
                 println!(
-                    "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
-                    instance.total_samples,
-                    currently_speaking,
-                    instance
-                        .record_diagnostics
-                        .first_segment_emitted
-                        .load(Ordering::SeqCst)
+                    "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
+                    seg_id, instance.total_samples, ring_buffer_samples
                 );
+            } else {
+                println!("[Sherpa] Instance {} detected speech start.", instance_id);
             }
 
-            if instance.current_segment_id.is_none() {
-                instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
-            }
-            let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
+            let samples_to_keep = (16000.0 * 0.3) as usize;
+            instance
+                .offline_state
+                .begin_speech(instance.total_samples, samples_to_keep);
+        }
 
-            if currently_speaking && !instance.offline_state.is_speech_active() {
+        if currently_speaking {
+            instance.offline_state.push_speech_chunk(samples.to_vec());
+
+            let now = std::time::Instant::now();
+            if instance.offline_state.should_run_inference(now, 200) {
+                let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+
+                let offline_copy = instance.offline_state.speech_chunks().to_vec();
+                let emitter_copy = emitter.clone();
+                let punct_copy = instance.punctuation.clone();
+                let seg_id_copy = seg_id.clone();
+                let instance_id_copy = instance_id.to_string();
+                let recognizer_copy = recognizer.clone();
+                let first_segment_emitted = diagnostics_instance_label(instance_id)
+                    .is_some()
+                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+                let normalization_options = instance.normalization_options;
+                let postprocessor = instance.postprocessor.clone();
+                let should_record_partial_metric = instance.last_partial_metric_sample == 0
+                    || instance
+                        .total_samples
+                        .saturating_sub(instance.last_partial_metric_sample)
+                        >= PARTIAL_METRIC_INTERVAL_SAMPLES;
+                let metrics_store = should_record_partial_metric.then(|| {
+                    instance.last_partial_metric_sample = instance.total_samples;
+                    state.metrics.clone()
+                });
+                let triggered_at = Instant::now();
+
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    let ring_buffer_samples = instance.offline_state.ring_sample_count();
                     println!(
-                        "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
-                        seg_id, instance.total_samples, ring_buffer_samples
+                        "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                        seg_id,
+                        offline_copy.len(),
+                        buffered_sample_count(&offline_copy),
+                        global_start
                     );
-                } else {
-                    println!("[Sherpa] Instance {} detected speech start.", instance_id);
                 }
 
-                let samples_to_keep = (16000.0 * 0.3) as usize;
+                crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
+                    if let Some(safe_r) = recognizer_copy.offline() {
+                        run_offline_inference(
+                            &offline_copy,
+                            emitter_copy.as_ref(),
+                            safe_r,
+                            punct_copy.as_deref(),
+                            &seg_id_copy,
+                            global_start,
+                            false,
+                            &instance_id_copy,
+                            "partial",
+                            first_segment_emitted,
+                            normalization_options,
+                            postprocessor,
+                            metrics_store,
+                            triggered_at,
+                        );
+                    }
+                });
+                instance.offline_state.mark_inference_time(now);
+            }
+        }
+
+        if !currently_speaking {
+            if instance.offline_state.is_speech_active() {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    println!(
+                        "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
+                        seg_id,
+                        instance.total_samples,
+                        instance.offline_state.buffered_speech_chunk_count() + 1,
+                        instance.offline_state.buffered_speech_sample_count() + samples.len()
+                    );
+                } else {
+                    println!("[Sherpa] Instance {} detected speech end.", instance_id);
+                }
                 instance
                     .offline_state
-                    .begin_speech(instance.total_samples, samples_to_keep);
+                    .finish_speech_with_chunk(samples.to_vec());
+
+                let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+
+                let offline_copy = instance.offline_state.speech_chunks().to_vec();
+                let emitter_copy = emitter.clone();
+                let punct_copy = instance.punctuation.clone();
+                let seg_id_copy = seg_id.clone();
+                let instance_id_copy = instance_id.to_string();
+                let recognizer_copy = recognizer.clone();
+                let first_segment_emitted = diagnostics_instance_label(instance_id)
+                    .is_some()
+                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
+                let normalization_options = instance.normalization_options;
+                let postprocessor = instance.postprocessor.clone();
+                let metrics_store = state.metrics.clone();
+                let triggered_at = Instant::now();
+
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    println!(
+                        "[Sherpa] {label} triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                        seg_id,
+                        offline_copy.len(),
+                        buffered_sample_count(&offline_copy),
+                        global_start
+                    );
+                }
+
+                crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
+                    if let Some(safe_r) = recognizer_copy.offline() {
+                        run_offline_inference(
+                            &offline_copy,
+                            emitter_copy.as_ref(),
+                            safe_r,
+                            punct_copy.as_deref(),
+                            &seg_id_copy,
+                            global_start,
+                            true,
+                            &instance_id_copy,
+                            "final",
+                            first_segment_emitted,
+                            normalization_options,
+                            postprocessor,
+                            Some(metrics_store),
+                            triggered_at,
+                        );
+                    }
+                });
+
+                instance.offline_state.clear_speech_buffer();
+                instance.last_partial_metric_sample = 0;
+                instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
             }
 
-            if currently_speaking {
-                instance.offline_state.push_speech_chunk(samples.to_vec());
+            let max_ring_samples = (16000.0 * 0.3) as usize;
+            instance.offline_state.push_ring_chunk_with_sample_limit(
+                samples.to_vec(),
+                max_ring_samples,
+                4_000,
+            );
+        }
 
-                let now = std::time::Instant::now();
-                if instance.offline_state.should_run_inference(now, 200) {
-                    let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+        instance.total_samples += samples.len();
+        Ok(())
+    } else if let Some(r) = recognizer.online() {
+        let inference_started = Instant::now();
+        let metrics_store = state.metrics.clone();
+        let st = instance
+            .stream
+            .as_ref()
+            .ok_or("Stream not initialized for online model")?;
 
-                    let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                    let emitter_copy = emitter.clone();
-                    let punct_copy = instance.punctuation.clone();
-                    let seg_id_copy = seg_id.clone();
-                    let instance_id_copy = instance_id.to_string();
-                    let recognizer_copy = recognizer.clone();
-                    let first_segment_emitted = diagnostics_instance_label(instance_id)
-                        .is_some()
-                        .then(|| instance.record_diagnostics.first_segment_emitted.clone());
-                    let normalization_options = instance.normalization_options;
-                    let postprocessor = instance.postprocessor.clone();
-                    let should_record_partial_metric = instance.last_partial_metric_sample == 0
+        let decode_started = Instant::now();
+        accept_online_samples(st, samples);
+        instance.total_samples += samples.len();
+
+        decode_online_ready(r, st);
+        let decode_ms = duration_to_ms(decode_started.elapsed());
+
+        let current_time = instance.total_samples as f64 / 16000.0;
+        let endpoint_detected = is_online_endpoint(r, st);
+
+        if let Some(result) = online_stream_result(r, st) {
+            let has_text = !result.text.trim().is_empty();
+            if has_text || instance.current_segment_id.is_some() {
+                let id = instance
+                    .current_segment_id
+                    .get_or_insert_with(|| uuid::Uuid::new_v4().to_string())
+                    .clone();
+                let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                    ts.iter()
+                        .map(|t| *t + instance.segment_start_time as f32)
+                        .collect::<Vec<_>>()
+                });
+                let durations = timestamps_abs
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
+                let segment = TranscriptSegment {
+                    id,
+                    text: result.text.clone(),
+                    start: instance.segment_start_time,
+                    end: current_time,
+                    is_final: false,
+                    timing: None,
+                    tokens: Some(result.tokens.clone()),
+                    timestamps: timestamps_abs,
+                    durations,
+                    translation: None,
+                    speaker: None,
+                    speaker_attribution: None,
+                };
+                let update = instance
+                    .postprocessor
+                    .process_update(build_transcript_update(
+                        segment,
+                        instance.normalization_options,
+                    ));
+                emit_transcript_update(
+                    emitter.as_ref(),
+                    instance_id,
+                    &update,
+                    "online_partial",
+                    Some(&instance.record_diagnostics.first_segment_emitted),
+                );
+
+                let should_record_partial_metric = !endpoint_detected
+                    && (instance.last_partial_metric_sample == 0
                         || instance
                             .total_samples
                             .saturating_sub(instance.last_partial_metric_sample)
-                            >= PARTIAL_METRIC_INTERVAL_SAMPLES;
-                    let metrics_store = should_record_partial_metric.then(|| {
-                        instance.last_partial_metric_sample = instance.total_samples;
-                        state.metrics.clone()
-                    });
-                    let triggered_at = Instant::now();
+                            >= PARTIAL_METRIC_INTERVAL_SAMPLES);
 
-                    if let Some(label) = diagnostics_instance_label(instance_id) {
-                        println!(
-                            "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
-                            seg_id,
-                            offline_copy.len(),
-                            buffered_sample_count(&offline_copy),
-                            global_start
-                        );
-                    }
-
-                    crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
-                        if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
-                            run_offline_inference(
-                                &offline_copy,
-                                emitter_copy.as_ref(),
-                                safe_r,
-                                punct_copy.as_deref(),
-                                &seg_id_copy,
-                                global_start,
-                                false,
-                                &instance_id_copy,
-                                "partial",
-                                first_segment_emitted,
-                                normalization_options,
-                                postprocessor,
-                                metrics_store,
-                                triggered_at,
-                            );
-                        }
-                    });
-                    instance.offline_state.mark_inference_time(now);
+                if should_record_partial_metric {
+                    let buffered_samples =
+                        ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
+                    record_live_metric(
+                        &metrics_store,
+                        build_live_metric(
+                            instance_id,
+                            "online_partial",
+                            false,
+                            buffered_samples,
+                            decode_ms,
+                            Some(duration_to_ms(inference_started.elapsed())),
+                            None,
+                        ),
+                    );
+                    instance.last_partial_metric_sample = instance.total_samples;
                 }
             }
-
-            if !currently_speaking {
-                if instance.offline_state.is_speech_active() {
-                    if let Some(label) = diagnostics_instance_label(instance_id) {
-                        println!(
-                            "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
-                            seg_id,
-                            instance.total_samples,
-                            instance.offline_state.buffered_speech_chunk_count() + 1,
-                            instance.offline_state.buffered_speech_sample_count() + samples.len()
-                        );
-                    } else {
-                        println!("[Sherpa] Instance {} detected speech end.", instance_id);
-                    }
-                    instance
-                        .offline_state
-                        .finish_speech_with_chunk(samples.to_vec());
-
-                    let global_start = instance.offline_state.utterance_start_seconds(16000.0);
-
-                    let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                    let emitter_copy = emitter.clone();
-                    let punct_copy = instance.punctuation.clone();
-                    let seg_id_copy = seg_id.clone();
-                    let instance_id_copy = instance_id.to_string();
-                    let recognizer_copy = recognizer.clone();
-                    let first_segment_emitted = diagnostics_instance_label(instance_id)
-                        .is_some()
-                        .then(|| instance.record_diagnostics.first_segment_emitted.clone());
-                    let normalization_options = instance.normalization_options;
-                    let postprocessor = instance.postprocessor.clone();
-                    let metrics_store = state.metrics.clone();
-                    let triggered_at = Instant::now();
-
-                    if let Some(label) = diagnostics_instance_label(instance_id) {
-                        println!(
-                            "[Sherpa] {label} triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
-                            seg_id,
-                            offline_copy.len(),
-                            buffered_sample_count(&offline_copy),
-                            global_start
-                        );
-                    }
-
-                    crate::platform::asr_runtime::spawn_blocking_asr_task(move || {
-                        if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
-                            run_offline_inference(
-                                &offline_copy,
-                                emitter_copy.as_ref(),
-                                safe_r,
-                                punct_copy.as_deref(),
-                                &seg_id_copy,
-                                global_start,
-                                true,
-                                &instance_id_copy,
-                                "final",
-                                first_segment_emitted,
-                                normalization_options,
-                                postprocessor,
-                                Some(metrics_store),
-                                triggered_at,
-                            );
-                        }
-                    });
-
-                    instance.offline_state.clear_speech_buffer();
-                    instance.last_partial_metric_sample = 0;
-                    instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
-                }
-
-                let max_ring_samples = (16000.0 * 0.3) as usize;
-                instance.offline_state.push_ring_chunk_with_sample_limit(
-                    samples.to_vec(),
-                    max_ring_samples,
-                    4_000,
-                );
-            }
-
-            instance.total_samples += samples.len();
-            Ok(())
         }
-        RecognizerInner::Online(r) => {
-            let inference_started = Instant::now();
-            let metrics_store = state.metrics.clone();
-            let st = instance
-                .stream
-                .as_ref()
-                .ok_or("Stream not initialized for online model")?;
 
-            let decode_started = Instant::now();
-            accept_online_samples(st, samples);
-            instance.total_samples += samples.len();
-
+        if endpoint_detected {
+            let endpoint_decode_started = Instant::now();
+            let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+            debug!("FFI: Calling accept_waveform (Online, tail_padding)");
+            accept_online_samples(st, &tail_padding);
+            debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
             decode_online_ready(r, st);
-            let decode_ms = duration_to_ms(decode_started.elapsed());
+            let final_decode_ms = decode_ms + duration_to_ms(endpoint_decode_started.elapsed());
+            let final_buffered_samples =
+                ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
-            let current_time = instance.total_samples as f64 / 16000.0;
-            let endpoint_detected = is_online_endpoint(r, st);
+            if let Some(result) = online_stream_result(r, st)
+                && !result.text.trim().is_empty()
+            {
+                let text = format_transcript(&result.text, instance.punctuation.as_deref());
 
-            if let Some(result) = online_stream_result(r, st) {
-                let has_text = !result.text.trim().is_empty();
-                if has_text || instance.current_segment_id.is_some() {
-                    let id = instance
-                        .current_segment_id
-                        .get_or_insert_with(|| uuid::Uuid::new_v4().to_string())
-                        .clone();
-                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter()
-                            .map(|t| *t + instance.segment_start_time as f32)
-                            .collect::<Vec<_>>()
-                    });
-                    let durations = timestamps_abs
-                        .as_ref()
-                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
+                let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                    ts.iter()
+                        .map(|t| *t + instance.segment_start_time as f32)
+                        .collect::<Vec<_>>()
+                });
+                let durations = timestamps_abs
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                    let segment = TranscriptSegment {
-                        id,
-                        text: result.text.clone(),
-                        start: instance.segment_start_time,
-                        end: current_time,
-                        is_final: false,
-                        timing: None,
-                        tokens: Some(result.tokens.clone()),
-                        timestamps: timestamps_abs,
-                        durations,
-                        translation: None,
-                        speaker: None,
-                        speaker_attribution: None,
-                    };
-                    let update = instance
-                        .postprocessor
-                        .process_update(build_transcript_update(
-                            segment,
-                            instance.normalization_options,
-                        ));
-                    emit_transcript_update(
-                        emitter.as_ref(),
-                        instance_id,
-                        &update,
-                        "online_partial",
-                        Some(&instance.record_diagnostics.first_segment_emitted),
-                    );
+                let id = instance
+                    .current_segment_id
+                    .take()
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-                    let should_record_partial_metric = !endpoint_detected
-                        && (instance.last_partial_metric_sample == 0
-                            || instance
-                                .total_samples
-                                .saturating_sub(instance.last_partial_metric_sample)
-                                >= PARTIAL_METRIC_INTERVAL_SAMPLES);
-
-                    if should_record_partial_metric {
-                        let buffered_samples = ((current_time - instance.segment_start_time)
-                            .max(0.0)
-                            * 16000.0) as usize;
-                        record_live_metric(
-                            &metrics_store,
-                            build_live_metric(
-                                instance_id,
-                                "online_partial",
-                                false,
-                                buffered_samples,
-                                decode_ms,
-                                Some(duration_to_ms(inference_started.elapsed())),
-                                None,
-                            ),
-                        );
-                        instance.last_partial_metric_sample = instance.total_samples;
-                    }
-                }
-            }
-
-            if endpoint_detected {
-                let endpoint_decode_started = Instant::now();
-                let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-                debug!("FFI: Calling accept_waveform (Online, tail_padding)");
-                accept_online_samples(st, &tail_padding);
-                debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
-                decode_online_ready(r, st);
-                let final_decode_ms = decode_ms + duration_to_ms(endpoint_decode_started.elapsed());
-                let final_buffered_samples =
-                    ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
-
-                if let Some(result) = online_stream_result(r, st)
-                    && !result.text.trim().is_empty()
-                {
-                    let text = format_transcript(&result.text, instance.punctuation.as_deref());
-
-                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter()
-                            .map(|t| *t + instance.segment_start_time as f32)
-                            .collect::<Vec<_>>()
-                    });
-                    let durations = timestamps_abs
-                        .as_ref()
-                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
-
-                    let id = instance
-                        .current_segment_id
-                        .take()
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-                    let segment = TranscriptSegment {
-                        id,
-                        text,
-                        start: instance.segment_start_time,
-                        end: current_time,
-                        is_final: true,
-                        timing: None,
-                        tokens: Some(result.tokens),
-                        timestamps: timestamps_abs,
-                        durations,
-                        translation: None,
-                        speaker: None,
-                        speaker_attribution: None,
-                    };
-                    let update = instance
-                        .postprocessor
-                        .process_update(build_transcript_update(
-                            segment,
-                            instance.normalization_options,
-                        ));
-                    emit_transcript_update(
-                        emitter.as_ref(),
-                        instance_id,
-                        &update,
-                        "online_final",
-                        Some(&instance.record_diagnostics.first_segment_emitted),
-                    );
-                }
-
-                record_live_metric(
-                    &metrics_store,
-                    build_live_metric(
-                        instance_id,
-                        "online_final",
-                        true,
-                        final_buffered_samples,
-                        final_decode_ms,
-                        Some(duration_to_ms(inference_started.elapsed())),
-                        None,
-                    ),
+                let segment = TranscriptSegment {
+                    id,
+                    text,
+                    start: instance.segment_start_time,
+                    end: current_time,
+                    is_final: true,
+                    timing: None,
+                    tokens: Some(result.tokens),
+                    timestamps: timestamps_abs,
+                    durations,
+                    translation: None,
+                    speaker: None,
+                    speaker_attribution: None,
+                };
+                let update = instance
+                    .postprocessor
+                    .process_update(build_transcript_update(
+                        segment,
+                        instance.normalization_options,
+                    ));
+                emit_transcript_update(
+                    emitter.as_ref(),
+                    instance_id,
+                    &update,
+                    "online_final",
+                    Some(&instance.record_diagnostics.first_segment_emitted),
                 );
-
-                instance.current_segment_id = None;
-                instance.last_partial_metric_sample = 0;
-                reset_online_stream(r, st);
-                instance.segment_start_time = current_time;
             }
 
-            Ok(())
+            record_live_metric(
+                &metrics_store,
+                build_live_metric(
+                    instance_id,
+                    "online_final",
+                    true,
+                    final_buffered_samples,
+                    final_decode_ms,
+                    Some(duration_to_ms(inference_started.elapsed())),
+                    None,
+                ),
+            );
+
+            instance.current_segment_id = None;
+            instance.last_partial_metric_sample = 0;
+            reset_online_stream(r, st);
+            instance.segment_start_time = current_time;
         }
+
+        Ok(())
+    } else {
+        Err("Unsupported recognizer type".to_string())
     }
 }
 
