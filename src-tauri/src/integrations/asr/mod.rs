@@ -7,6 +7,7 @@ mod batch;
 mod groq;
 mod metrics;
 mod mistral;
+mod observer;
 mod sherpa_onnx;
 mod state;
 mod traits;
@@ -22,6 +23,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
+pub(crate) use observer::TauriAsrRuntimeObserver;
 #[cfg(test)]
 pub(crate) use sherpa_onnx::resolve_punctuation;
 pub(crate) use sherpa_onnx::{
