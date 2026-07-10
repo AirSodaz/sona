@@ -140,7 +140,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
 
 #[derive(Default)]
 pub struct SherpaInstance {
-    pub recognizer: Option<Arc<Recognizer>>,
+    recognizer: Option<Arc<Recognizer>>,
     stream: Option<SafeStream>,
     pub vad: Option<SafeVad>,
     pub punctuation: Option<Arc<Punctuation>>,
@@ -160,6 +160,18 @@ pub struct SherpaInstance {
 impl SherpaInstance {
     pub fn is_running(&self) -> bool {
         self.is_running
+    }
+
+    pub fn recognizer(&self) -> Option<&Recognizer> {
+        self.recognizer.as_deref()
+    }
+
+    pub fn recognizer_clone(&self) -> Option<Arc<Recognizer>> {
+        self.recognizer.clone()
+    }
+
+    pub fn set_recognizer(&mut self, recognizer: Arc<Recognizer>) {
+        self.recognizer = Some(recognizer);
     }
 
     pub fn stream(&self) -> Option<&SafeStream> {
@@ -403,6 +415,14 @@ mod tests {
             .await;
 
         assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn recognizer_attachment_defaults_to_none() {
+        let instance = SherpaInstance::default();
+
+        assert!(instance.recognizer().is_none());
+        assert!(instance.recognizer_clone().is_none());
     }
 
     #[test]

@@ -1609,6 +1609,7 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'skipped_while_stopped_logged',
     'first_segment_emitted',
     'is_running',
+    'recognizer',
     'stream',
     'last_partial_metric_sample',
   ]) {
@@ -1617,6 +1618,8 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
       desktopSherpa,
       field === 'is_running'
         ? /\binstance\.is_running(?!\()/u
+        : field === 'recognizer'
+          ? /\binstance\.recognizer\b(?!\s*\()/u
         : field === 'stream'
           ? /\binstance\.stream(?!\s*\()/u
         : field === 'last_partial_metric_sample'
@@ -1653,6 +1656,9 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'mark_skipped_while_stopped_logged',
     'first_segment_emitted_flag',
     'is_running',
+    'recognizer',
+    'recognizer_clone',
+    'set_recognizer',
     'stream',
     'take_stream',
     'restore_stream',

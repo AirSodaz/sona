@@ -450,7 +450,7 @@ pub(crate) async fn init_recognizer_impl(
     let vad = load_vad(vad_model.clone());
 
     let mut session_instance = SherpaInstance::default();
-    session_instance.recognizer = Some(recognizer);
+    session_instance.set_recognizer(recognizer);
     session_instance.vad = vad;
     session_instance.punctuation = punctuation;
     session_instance.vad_model = vad_model.clone();
@@ -469,7 +469,7 @@ async fn start_recognizer_impl_inner(
     instance_id: &str,
     instance: &mut SherpaInstance,
 ) -> Result<(), String> {
-    let Some(recognizer) = instance.recognizer.as_ref() else {
+    let Some(recognizer) = instance.recognizer_clone() else {
         return Err("Recognizer not initialized".to_string());
     };
     let recognizer_kind = recognizer.kind_label();
@@ -544,7 +544,7 @@ async fn flush_recognizer_impl_inner(
         );
     }
 
-    if let Some(recognizer) = instance.recognizer.clone()
+    if let Some(recognizer) = instance.recognizer_clone()
         && recognizer.is_offline()
     {
         if !instance.offline_state.speech_chunks().is_empty() {
@@ -619,7 +619,7 @@ async fn flush_recognizer_impl_inner(
         return Ok(());
     }
 
-    if let Some(recognizer) = instance.recognizer.clone()
+    if let Some(recognizer) = instance.recognizer_clone()
         && let Some(r) = recognizer.online()
         && let Some(stream) = instance.take_stream()
     {
@@ -753,8 +753,7 @@ async fn feed_audio_samples_inner(
     }
 
     let recognizer = instance
-        .recognizer
-        .clone()
+        .recognizer_clone()
         .ok_or("Recognizer not initialized")?;
 
     if recognizer.is_offline() {
