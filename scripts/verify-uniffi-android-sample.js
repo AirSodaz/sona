@@ -175,6 +175,12 @@ function findRequiredZipEntry(entries, name, archiveLabel) {
   return entry;
 }
 
+function verifyClassPrefix(classEntries, classPrefix, archiveLabel) {
+  if (!classEntries.includes(`${classPrefix}.class`)) {
+    throw new Error(`Missing compiled ${classPrefix} class in ${archiveLabel} classes.jar`);
+  }
+}
+
 function verifyAndroidSampleAarContents(aarPath) {
   if (!fs.existsSync(aarPath)) {
     throw new Error(`Missing Android sample AAR at ${aarPath}`);
@@ -198,8 +204,13 @@ function verifyAndroidSampleAarContents(aarPath) {
   if (!classEntries.some((entry) => entry.startsWith('uniffi/sona_uniffi_bind/') && entry.endsWith('.class'))) {
     throw new Error('Missing compiled uniffi/sona_uniffi_bind/ classes in sample AAR classes.jar');
   }
-  if (!classEntries.some((entry) => entry.startsWith('com/sona/uniffi/sample/SonaUniffiSmoke'))) {
-    throw new Error('Missing compiled com/sona/uniffi/sample/SonaUniffiSmoke class in sample AAR classes.jar');
+
+  for (const classPrefix of [
+    'uniffi/sona_uniffi_bind/FfiAsrStreamingSession',
+    'uniffi/sona_uniffi_bind/FfiAsrStreamingObserver',
+    'com/sona/uniffi/sample/SonaUniffiSmoke',
+  ]) {
+    verifyClassPrefix(classEntries, classPrefix, aarPath);
   }
 }
 
@@ -232,9 +243,7 @@ function verifyAndroidConsumerAar() {
   const classesEntry = findRequiredZipEntry(aarEntries, 'classes.jar', aarPath);
   const classesBuffer = readZipEntryData(aarBuffer, classesEntry);
   const classEntries = readZipEntries(classesBuffer).map((entry) => entry.name);
-  if (!classEntries.some((entry) => entry.startsWith('com/sona/uniffi/consumer/SonaUniffiConsumerSmoke'))) {
-    throw new Error('Missing compiled com/sona/uniffi/consumer/SonaUniffiConsumerSmoke class in consumer AAR classes.jar');
-  }
+  verifyClassPrefix(classEntries, 'com/sona/uniffi/consumer/SonaUniffiConsumerSmoke', aarPath);
 }
 
 function verifyPomDependency(pomXml, coordinates) {

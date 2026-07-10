@@ -52,21 +52,51 @@ function selectedAbis() {
   return abis;
 }
 
-function androidHostTag() {
-  return process.platform === 'win32'
-    ? 'windows-x86_64'
-    : process.platform === 'darwin'
-      ? 'darwin-x86_64'
-      : 'linux-x86_64';
+function androidHostToolchain(hostPlatform) {
+  if (hostPlatform === 'windows' || hostPlatform === 'win32') {
+    return {
+      hostTag: 'windows-x86_64',
+      linkerExtension: '.cmd',
+      archiverExtension: '.exe',
+    };
+  }
+  if (hostPlatform === 'linux') {
+    return {
+      hostTag: 'linux-x86_64',
+      linkerExtension: '',
+      archiverExtension: '',
+    };
+  }
+  if (hostPlatform === 'darwin') {
+    return {
+      hostTag: 'darwin-x86_64',
+      linkerExtension: '',
+      archiverExtension: '',
+    };
+  }
+  throw new Error(`Unsupported Android NDK host platform '${hostPlatform}'`);
 }
 
-function linkerPathForNdk(ndkHome, target, minSdk) {
-  const extension = process.platform === 'win32' ? '.cmd' : '';
-  const linkerName = `${LINKER_PREFIXES[target]}${minSdk}-clang${extension}`;
-  return path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', androidHostTag(), 'bin', linkerName);
+function linkerPathForNdk(ndkHome, target, minSdk, hostPlatform) {
+  const hostToolchain = androidHostToolchain(hostPlatform);
+  const linkerName = `${LINKER_PREFIXES[target]}${minSdk}-clang${hostToolchain.linkerExtension}`;
+  return path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', hostToolchain.hostTag, 'bin', linkerName);
 }
 
-function findAndroidNdkHome(target, minSdk) {
+function archiverPathForNdk(ndkHome, hostPlatform) {
+  const hostToolchain = androidHostToolchain(hostPlatform);
+  return path.join(
+    ndkHome,
+    'toolchains',
+    'llvm',
+    'prebuilt',
+    hostToolchain.hostTag,
+    'bin',
+    `llvm-ar${hostToolchain.archiverExtension}`,
+  );
+}
+
+function findAndroidNdkHome(target, minSdk, hostPlatform) {
   const explicit = process.env.ANDROID_NDK_HOME ?? process.env.ANDROID_NDK_ROOT;
   if (explicit) {
     return explicit;
@@ -87,22 +117,34 @@ function findAndroidNdkHome(target, minSdk) {
     .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
   return versions
     .map((version) => path.join(ndkRoot, version))
-    .find((ndkHome) => fs.existsSync(linkerPathForNdk(ndkHome, target, minSdk))) ?? null;
+    .find((ndkHome) => (
+      fs.existsSync(linkerPathForNdk(ndkHome, target, minSdk, hostPlatform))
+      && fs.existsSync(archiverPathForNdk(ndkHome, hostPlatform))
+    )) ?? null;
 }
 
-function linkerEnvForTarget(target, minSdk) {
-  const ndkHome = findAndroidNdkHome(target, minSdk);
+function toolchainEnvForTarget(target, minSdk, hostPlatform) {
+  const ndkHome = findAndroidNdkHome(target, minSdk, hostPlatform);
   if (!ndkHome) {
     return {};
   }
 
-  const linkerPath = linkerPathForNdk(ndkHome, target, minSdk);
+  const linkerPath = linkerPathForNdk(ndkHome, target, minSdk, hostPlatform);
+  const archiverPath = archiverPathForNdk(ndkHome, hostPlatform);
   if (!fs.existsSync(linkerPath)) {
     throw new Error(`Missing Android NDK linker at ${linkerPath}`);
   }
+  if (!fs.existsSync(archiverPath)) {
+    throw new Error(`Missing Android NDK archiver at ${archiverPath}`);
+  }
 
-  const envName = `CARGO_TARGET_${target.toUpperCase().replace(/-/gu, '_')}_LINKER`;
-  return { [envName]: linkerPath };
+  const targetEnvSuffix = target.replace(/-/gu, '_');
+  const cargoLinkerEnvName = `CARGO_TARGET_${targetEnvSuffix.toUpperCase()}_LINKER`;
+  return {
+    [cargoLinkerEnvName]: linkerPath,
+    [`CC_${targetEnvSuffix}`]: linkerPath,
+    [`AR_${targetEnvSuffix}`]: archiverPath,
+  };
 }
 
 function runCargoBuild(target, profile, minSdk) {
@@ -110,7 +152,7 @@ function runCargoBuild(target, profile, minSdk) {
   const cargo = process.env.CARGO ?? 'cargo';
   const env = {
     ...process.env,
-    ...linkerEnvForTarget(target, minSdk),
+    ...toolchainEnvForTarget(target, minSdk, process.platform),
   };
   const result = spawnSync(cargo, ['build', '-p', 'sona-uniffi-bind', '--target', target, ...releaseFlag], {
     cwd: repoRoot,
@@ -155,6 +197,12 @@ const outDir = path.resolve(
 );
 const dryRun = args.includes('--dry-run');
 const printLinkerEnv = args.includes('--print-linker-env');
+const hostPlatformOverride = readOption('--host-platform', null);
+
+if (hostPlatformOverride && !printLinkerEnv) {
+  throw new Error('--host-platform is only supported with --print-linker-env');
+}
+const printHostPlatform = hostPlatformOverride ?? process.platform;
 
 if (!dryRun && !printLinkerEnv) {
   prepareOutputDirectory(outDir);
@@ -163,8 +211,8 @@ if (!dryRun && !printLinkerEnv) {
 for (const abi of selectedAbis()) {
   const target = ABI_TARGETS[abi];
   if (printLinkerEnv) {
-    const linkerEnv = linkerEnvForTarget(target, minSdk);
-    for (const [name, value] of Object.entries(linkerEnv)) {
+    const toolchainEnv = toolchainEnvForTarget(target, minSdk, printHostPlatform);
+    for (const [name, value] of Object.entries(toolchainEnv)) {
       console.log(`${name}=${value}`);
     }
     continue;

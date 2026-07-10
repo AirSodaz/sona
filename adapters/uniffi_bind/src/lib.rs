@@ -1,4 +1,5 @@
 mod asr_bridge;
+mod asr_streaming_bridge;
 mod config_bridge;
 mod facade;
 mod json_bridge;
@@ -6,9 +7,11 @@ mod llm_bridge;
 mod mapper;
 mod model_bridge;
 mod runtime_bridge;
+pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
 pub use mapper::{
-    FfiAsrEngine, FfiAsrMode, FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiLlmConfig,
+    FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
+    FfiAsrTranscriptUpdateEvent, FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiLlmConfig,
     FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy,
     FfiLlmSegmentInput, FfiModelCatalogGroup, FfiModelCatalogModel, FfiModelCatalogPathMatchToken,
     FfiModelCatalogRestoreDefaults, FfiModelCatalogSection, FfiModelCatalogSectionType,
@@ -18,9 +21,11 @@ pub use mapper::{
     FfiModelSelectionPaths, FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability,
     FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
     FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel, FfiRequiredCompanionModels,
-    FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus,
-    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiSummaryTemplateConfig,
-    FfiTimestampSupportHint, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution,
+    FfiSpeakerCandidate, FfiSpeakerTag, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
+    FfiSummaryTemplateConfig, FfiTimestampSupportHint, FfiTranscriptSegment, FfiTranscriptTiming,
+    FfiTranscriptTimingLevel, FfiTranscriptTimingSource, FfiTranscriptTimingUnit,
+    FfiTranscriptUpdate, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
     FfiVolcengineDoubaoAsrConfig,
 };
 
@@ -30,9 +35,32 @@ uniffi::setup_scaffolding!();
 pub enum SonaCoreBindingError {
     #[error("{reason}")]
     InvalidInput { reason: String },
+    #[error("{reason}")]
+    AsrRuntime { code: String, reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
+
+impl From<sona_core::ports::asr::SherpaError> for SonaCoreBindingError {
+    fn from(error: sona_core::ports::asr::SherpaError) -> Self {
+        let fallback_reason = error.to_string();
+        let serialized = serde_json::to_value(&error).ok();
+        let fields = serialized.as_ref().and_then(|value| {
+            Some((
+                value.get("code")?.as_str()?.to_string(),
+                value.get("message")?.as_str()?.to_string(),
+            ))
+        });
+
+        match fields {
+            Some((code, reason)) => Self::AsrRuntime { code, reason },
+            None => Self::AsrRuntime {
+                code: "GENERIC_ERROR".to_string(),
+                reason: fallback_reason,
+            },
+        }
+    }
+}
 
 #[uniffi::export]
 pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
@@ -118,6 +146,15 @@ pub fn resolve_effective_config_json(
 #[uniffi::export]
 pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
     SonaCoreFacade::runtime_path_status(path)
+}
+
+#[uniffi::export]
+pub fn create_online_asr_streaming_session(
+    instance_id: String,
+    request_json: String,
+    observer: std::sync::Arc<dyn FfiAsrStreamingObserver>,
+) -> SonaCoreBindingResult<std::sync::Arc<FfiAsrStreamingSession>> {
+    SonaCoreFacade::create_online_asr_streaming_session(instance_id, request_json, observer)
 }
 
 #[uniffi::export]

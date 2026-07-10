@@ -89,6 +89,172 @@ function readCargoDependencyEntries(cargoTomlPath, sectionName) {
   return entries;
 }
 
+function assertCargoDependencyVersionAndFeature(
+  cargoTomlPath,
+  dependencyName,
+  expectedVersion,
+  expectedFeature,
+) {
+  const dependencySpec = readCargoDependencySpec(cargoTomlPath, 'dependencies', dependencyName);
+  const version = dependencySpec.match(/\bversion\s*=\s*"([^"]+)"/u)?.[1];
+  const featureSpec = dependencySpec.match(/\bfeatures\s*=\s*\[([^\]]*)\]/u)?.[1] ?? '';
+  const features = [...featureSpec.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+
+  assert.equal(version, expectedVersion);
+  assert.ok(features.includes(expectedFeature), `${dependencyName} must enable ${expectedFeature}`);
+}
+
+function stripRustComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+    .split(/\r?\n/u)
+    .map(stripRustLineComment)
+    .join('\n');
+}
+
+function readRustFunctionBlock(source, functionName) {
+  const signature = new RegExp(`\\bfn\\s+${functionName}\\s*\\(`, 'u').exec(source);
+  if (!signature) {
+    return '';
+  }
+
+  const openingBrace = source.indexOf('{', signature.index);
+  if (openingBrace === -1) {
+    return '';
+  }
+
+  let braceDepth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      braceDepth += 1;
+    } else if (source[index] === '}') {
+      braceDepth -= 1;
+      if (braceDepth === 0) {
+        return source.slice(signature.index, index + 1);
+      }
+    }
+  }
+
+  return '';
+}
+
+function readJavaScriptFunctionBlock(source, functionName) {
+  const signature = new RegExp(`\\bfunction\\s+${functionName}\\s*\\(`, 'u').exec(source);
+  if (!signature) {
+    return '';
+  }
+
+  const openingBrace = source.indexOf('{', signature.index);
+  if (openingBrace === -1) {
+    return '';
+  }
+
+  let braceDepth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      braceDepth += 1;
+    } else if (source[index] === '}') {
+      braceDepth -= 1;
+      if (braceDepth === 0) {
+        return source.slice(signature.index, index + 1);
+      }
+    }
+  }
+
+  return '';
+}
+
+function readKotlinFunctionItem(source, functionName) {
+  const normalizedSource = source.replace(/\r\n/gu, '\n');
+  const signature = new RegExp(`^([ \\t]*)fun\\s+${functionName}\\b`, 'mu').exec(normalizedSource);
+  if (!signature) {
+    return '';
+  }
+
+  const functionIndent = signature[1].length;
+  const remainingSource = normalizedSource.slice(signature.index);
+  const lines = remainingSource.split('\n');
+  let endOffset = lines[0].length;
+
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineStartOffset = endOffset + 1;
+    const trimmed = line.trim();
+    const lineIndent = line.match(/^[ \\t]*/u)?.[0].length ?? 0;
+
+    if (trimmed !== '' && lineIndent <= functionIndent) {
+      return remainingSource.slice(0, endOffset);
+    }
+    endOffset = lineStartOffset + line.length;
+  }
+
+  return remainingSource;
+}
+
+function assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge) {
+  const dependencyNames = readCargoDependencyNames(uniffiCargoPath, 'dependencies');
+  const onlineAsrSpec = readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-online-asr');
+  const uncommentedStreamingBridge = stripRustComments(streamingBridge);
+  const factoryBlock = readRustFunctionBlock(
+    uncommentedStreamingBridge,
+    'create_online_asr_streaming_session',
+  );
+
+  assert.ok(dependencyNames.includes('sona-online-asr'));
+  assert.ok(!dependencyNames.includes('sona-local-asr'));
+  assert.match(onlineAsrSpec, /\bpath\s*=\s*"\.\.\/online_asr"/u);
+  assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
+  assert.match(
+    uncommentedStreamingBridge,
+    /#\[uniffi::export\(foreign\)\]\s*pub trait FfiAsrStreamingObserver\b/u,
+  );
+  assert.match(
+    uncommentedStreamingBridge,
+    /#\[derive\(uniffi::Object\)\]\s*pub struct FfiAsrStreamingSession\s*\{[^}]*\binner\s*:\s*Arc<dyn AsrStreamingSession>\s*,?[^}]*\}/u,
+  );
+  assert.notEqual(factoryBlock, '', 'missing create_online_asr_streaming_session function body');
+  assert.match(
+    factoryBlock,
+    /^\s*VOLCENGINE_DOUBAO_PROVIDER_ID\s*=>\s*sona_online_asr::create_volcengine_streaming_session\s*\(/mu,
+  );
+  assert.doesNotMatch(uncommentedStreamingBridge, /VolcengineStreamingSession/u);
+}
+
+function assertAndroidStreamingSmoke(kotlinSmoke) {
+  for (const generatedImport of [
+    'FfiAsrInferenceMetric',
+    'FfiAsrModelLoadMetric',
+    'FfiAsrStreamingObserver',
+    'FfiAsrStreamingSession',
+    'FfiAsrTranscriptUpdateEvent',
+    'createOnlineAsrStreamingSession',
+  ]) {
+    assert.match(kotlinSmoke, new RegExp(`import uniffi\\.sona_uniffi_bind\\.${generatedImport}`, 'u'));
+  }
+
+  assert.match(
+    kotlinSmoke,
+    /override fun onTranscriptUpdate\(event: FfiAsrTranscriptUpdateEvent\)\s*\{\s*latestTranscriptUpdate\s*=\s*event\b[^}]*\}/u,
+  );
+  assert.match(
+    kotlinSmoke,
+    /override fun onModelLoad\(metric: FfiAsrModelLoadMetric\)\s*\{\s*latestModelLoad\s*=\s*metric\b[^}]*\}/u,
+  );
+  assert.match(
+    kotlinSmoke,
+    /override fun onLiveInference\(metric: FfiAsrInferenceMetric\)\s*\{\s*latestLiveInference\s*=\s*metric\b[^}]*\}/u,
+  );
+
+  const createStreamingSession = readKotlinFunctionItem(kotlinSmoke, 'createStreamingSession');
+  assert.notEqual(createStreamingSession, '', 'missing createStreamingSession function');
+  assert.match(createStreamingSession, /fun createStreamingSession\(\): FfiAsrStreamingSession/u);
+  assert.match(createStreamingSession, /createOnlineAsrStreamingSession\(/u);
+  assert.match(createStreamingSession, /instanceId\s*=\s*"android-live-1"/u);
+  assert.match(createStreamingSession, /requestJson\s*=\s*streamingRequestJson/u);
+  assert.match(createStreamingSession, /observer\s*=\s*RecordingAsrObserver\(\)/u);
+  assert.doesNotMatch(createStreamingSession, /\.start\s*\(|\bstart\s*\(\s*\)/u);
+}
+
 function scanRustSourcePolicyViolations(root, policies) {
   return rustFilesUnder(root)
     .sort()
@@ -2184,9 +2350,10 @@ test('core GPU acceleration config validation is exposed through UniFFI bindings
 
 test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integration', () => {
   const workspaceCargo = fs.readFileSync(path.join(repoRoot, 'Cargo.toml'), 'utf8');
-  const uniffiCargo = fs.readFileSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml'), 'utf8');
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const bindgenCargoPath = path.join(repoRoot, 'tools', 'uniffi_bindgen', 'Cargo.toml');
   const bindgenCargo = fs.readFileSync(
-    path.join(repoRoot, 'tools', 'uniffi_bindgen', 'Cargo.toml'),
+    bindgenCargoPath,
     'utf8',
   );
   const bindgenMain = fs.readFileSync(path.join(repoRoot, 'tools', 'uniffi_bindgen', 'src', 'main.rs'), 'utf8');
@@ -2197,9 +2364,9 @@ test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integ
   );
 
   assert.match(workspaceCargo, /"tools\/uniffi_bindgen"/u);
-  assert.match(uniffiCargo, /^uniffi\s*=\s*"0\.32"/mu);
+  assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
   assert.match(bindgenCargo, /name\s*=\s*"sona-uniffi-bindgen"/u);
-  assert.match(bindgenCargo, /^uniffi\s*=\s*\{\s*version\s*=\s*"0\.32",\s*features\s*=\s*\["cli"\]\s*\}/mu);
+  assertCargoDependencyVersionAndFeature(bindgenCargoPath, 'uniffi', '0.32', 'cli');
   assert.match(bindgenMain, /uniffi::uniffi_bindgen_main\(\)/u);
   assert.match(generateScript, /cargo/u);
   assert.match(generateScript, /sona-uniffi-bind/u);
@@ -2216,6 +2383,106 @@ test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integ
   assert.match(gradleIntegration, /java\.directories\.add\(generatedKotlinDir\.get\(\)\.asFile\.path\)/u);
   assert.match(gradleIntegration, /net\.java\.dev\.jna:jna:5\.12\.0@aar/u);
   assert.match(gradleIntegration, /org\.jetbrains\.kotlinx:kotlinx-coroutines-core:1\.6\.4/u);
+});
+
+test('UniFFI streaming ASR preserves the online-only architecture boundary', () => {
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const streamingBridge = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_streaming_bridge.rs'),
+    'utf8',
+  );
+
+  assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge);
+});
+
+test('UniFFI streaming ASR architecture guard rejects a detached foreign attribute', () => {
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const streamingBridge = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_streaming_bridge.rs'),
+    'utf8',
+  );
+  const weakStreamingBridge = streamingBridge.replace(
+    /#\[uniffi::export\(foreign\)\]\r?\n(?=pub trait FfiAsrStreamingObserver)/u,
+    '#[uniffi::export(foreign)]\nfn unrelated_export() {}\n',
+  );
+
+  assert.throws(() => assertStreamingAsrArchitecture(uniffiCargoPath, weakStreamingBridge));
+});
+
+test('UniFFI streaming ASR architecture guard rejects a scattered session declaration', () => {
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const streamingBridge = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_streaming_bridge.rs'),
+    'utf8',
+  );
+  const weakStreamingBridge = streamingBridge.replace(
+    /#\[derive\(uniffi::Object\)\]\r?\npub struct FfiAsrStreamingSession\s*\{[^}]*\}/u,
+    `#[derive(uniffi::Object)]
+pub struct UnrelatedObject;
+
+pub struct FfiAsrStreamingSession {
+    marker: bool,
+}
+
+fn unrelated_inner(_inner: Arc<dyn AsrStreamingSession>) {}`,
+  );
+
+  assert.throws(() => assertStreamingAsrArchitecture(uniffiCargoPath, weakStreamingBridge));
+});
+
+test('UniFFI streaming ASR architecture guard rejects a comment-only online factory call', () => {
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const streamingBridge = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'asr_streaming_bridge.rs'),
+    'utf8',
+  );
+  const weakStreamingBridge = streamingBridge.replace(
+    /sona_online_asr::create_volcengine_streaming_session/u,
+    '// sona_online_asr::create_volcengine_streaming_session',
+  );
+
+  assert.throws(() => assertStreamingAsrArchitecture(uniffiCargoPath, weakStreamingBridge));
+});
+
+test('Android UniFFI streaming smoke compiles the generated observer and session surface', () => {
+  const sampleKotlin = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin', 'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt'),
+    'utf8',
+  );
+  const consumerKotlin = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin', 'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt'),
+    'utf8',
+  );
+
+  for (const kotlinSmoke of [sampleKotlin, consumerKotlin]) {
+    assertAndroidStreamingSmoke(kotlinSmoke);
+  }
+});
+
+test('Android UniFFI streaming guard rejects callbacks that do not record generated values', () => {
+  const sampleKotlin = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin', 'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt'),
+    'utf8',
+  );
+  const weakKotlinSmoke = sampleKotlin
+    .replace(/latestTranscriptUpdate\s*=\s*event/u, 'Unit')
+    .replace(/latestModelLoad\s*=\s*metric/u, 'Unit')
+    .replace(/latestLiveInference\s*=\s*metric/u, 'Unit');
+
+  assert.throws(() => assertAndroidStreamingSmoke(weakKotlinSmoke));
+});
+
+test('Android UniFFI streaming guard rejects start calls in createStreamingSession', () => {
+  const sampleKotlin = fs.readFileSync(
+    path.join(repoRoot, 'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin', 'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt'),
+    'utf8',
+  );
+  const weakKotlinSmoke = sampleKotlin.replace(
+    /(observer\s*=\s*RecordingAsrObserver\(\),\r?\n\s*)\)/u,
+    '$1).also { it.start() }',
+  );
+
+  assert.throws(() => assertAndroidStreamingSmoke(weakKotlinSmoke));
 });
 
 test('UniFFI Android Gradle integration builds ABI-scoped native libraries', () => {
@@ -2383,9 +2650,29 @@ test('UniFFI Android Gradle smoke verifies assembled AAR contents', () => {
   assert.match(verifyScript, /jni\/arm64-v8a\/libsona_uniffi_bind\.so/u);
   assert.match(verifyScript, /classes\.jar/u);
   assert.match(verifyScript, /uniffi\/sona_uniffi_bind\//u);
+  assert.match(verifyScript, /uniffi\/sona_uniffi_bind\/FfiAsrStreamingSession/u);
+  assert.match(verifyScript, /uniffi\/sona_uniffi_bind\/FfiAsrStreamingObserver/u);
   assert.match(verifyScript, /com\/sona\/uniffi\/sample\/SonaUniffiSmoke/u);
+  assert.match(verifyScript, /com\/sona\/uniffi\/consumer\/SonaUniffiConsumerSmoke/u);
   assert.match(androidReadme, /assembles the sample debug AAR/u);
   assert.match(androidReadme, /jni\/arm64-v8a\/libsona_uniffi_bind\.so/u);
+  assert.match(androidReadme, /object\s*:\s*FfiAsrStreamingObserver/u);
+  assert.match(androidReadme, /createOnlineAsrStreamingSession/u);
+  assert.match(androidReadme, /verify:android-uniffi:gradle/u);
+});
+
+test('UniFFI Android AAR verifier rejects streaming class-name decoys', () => {
+  const verifyScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'verify-uniffi-android-sample.js'), 'utf8');
+  const functionBlock = readJavaScriptFunctionBlock(verifyScript, 'verifyClassPrefix');
+
+  assert.notEqual(functionBlock, '', 'missing verifyClassPrefix function body');
+  const verifyClassPrefix = Function(`return (${functionBlock});`)();
+  const sessionPrefix = 'uniffi/sona_uniffi_bind/FfiAsrStreamingSession';
+  const observerPrefix = 'uniffi/sona_uniffi_bind/FfiAsrStreamingObserver';
+
+  assert.doesNotThrow(() => verifyClassPrefix([`${sessionPrefix}.class`], sessionPrefix, 'sample.aar'));
+  assert.throws(() => verifyClassPrefix([`${sessionPrefix}Impl.class`], sessionPrefix, 'sample.aar'));
+  assert.throws(() => verifyClassPrefix([`${observerPrefix}Result.class`], observerPrefix, 'sample.aar'));
 });
 
 test('UniFFI Android sample ignores generated Gradle outputs', () => {
@@ -2463,49 +2750,172 @@ test('UniFFI Android native build script supports a no-toolchain dry run', () =>
   assert.doesNotMatch(result.stdout, /cargo build/u);
 });
 
+const androidNdkAbiCases = [
+  {
+    abi: 'arm64-v8a',
+    target: 'aarch64-linux-android',
+    linkerPrefix: 'aarch64-linux-android',
+  },
+  {
+    abi: 'armeabi-v7a',
+    target: 'armv7-linux-androideabi',
+    linkerPrefix: 'armv7a-linux-androideabi',
+  },
+  {
+    abi: 'x86',
+    target: 'i686-linux-android',
+    linkerPrefix: 'i686-linux-android',
+  },
+  {
+    abi: 'x86_64',
+    target: 'x86_64-linux-android',
+    linkerPrefix: 'x86_64-linux-android',
+  },
+];
+
+function androidNdkHostLayout(hostPlatform) {
+  if (hostPlatform === 'windows' || hostPlatform === 'win32') {
+    return { hostTag: 'windows-x86_64', linkerExtension: '.cmd', archiverExtension: '.exe' };
+  }
+  if (hostPlatform === 'darwin') {
+    return { hostTag: 'darwin-x86_64', linkerExtension: '', archiverExtension: '' };
+  }
+  return { hostTag: 'linux-x86_64', linkerExtension: '', archiverExtension: '' };
+}
+
+function androidNdkToolPaths(ndkHome, abiCase, hostPlatform) {
+  const layout = androidNdkHostLayout(hostPlatform);
+  const binDir = path.join(ndkHome, 'toolchains', 'llvm', 'prebuilt', layout.hostTag, 'bin');
+  return {
+    linkerPath: path.join(binDir, `${abiCase.linkerPrefix}23-clang${layout.linkerExtension}`),
+    archiverPath: path.join(binDir, `llvm-ar${layout.archiverExtension}`),
+  };
+}
+
+function runAndroidNdkPrint({ abi, androidHome = '', ndkHome = '', hostPlatform }) {
+  const commandArgs = [
+    path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
+    '--print-linker-env',
+    '--abis',
+    abi,
+  ];
+  if (hostPlatform) {
+    commandArgs.push('--host-platform', hostPlatform);
+  }
+
+  return spawnSync(node, commandArgs, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      ANDROID_HOME: androidHome,
+      ANDROID_SDK_ROOT: '',
+      ANDROID_NDK_HOME: ndkHome,
+      ANDROID_NDK_ROOT: '',
+    },
+  });
+}
+
 test('UniFFI Android native build script skips incomplete auto-discovered NDK installs', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-ndk-'));
   const sdkRoot = path.join(tempRoot, 'sdk');
   const validNdk = path.join(sdkRoot, 'ndk', '29.0.14206865');
   const incompleteNdk = path.join(sdkRoot, 'ndk', '30.0.15729638');
-  const linkerRelativePath = path.join(
-    'toolchains',
-    'llvm',
-    'prebuilt',
-    process.platform === 'win32' ? 'windows-x86_64' : process.platform === 'darwin' ? 'darwin-x86_64' : 'linux-x86_64',
-    'bin',
-    `aarch64-linux-android23-clang${process.platform === 'win32' ? '.cmd' : ''}`,
-  );
 
-  fs.mkdirSync(path.join(validNdk, path.dirname(linkerRelativePath)), { recursive: true });
-  fs.mkdirSync(incompleteNdk, { recursive: true });
-  fs.writeFileSync(path.join(validNdk, linkerRelativePath), '');
+  for (const abiCase of androidNdkAbiCases) {
+    const validPaths = androidNdkToolPaths(validNdk, abiCase, process.platform);
+    const incompletePaths = androidNdkToolPaths(incompleteNdk, abiCase, process.platform);
+    fs.mkdirSync(path.dirname(validPaths.linkerPath), { recursive: true });
+    fs.mkdirSync(path.dirname(incompletePaths.linkerPath), { recursive: true });
+    fs.writeFileSync(validPaths.linkerPath, '');
+    fs.writeFileSync(incompletePaths.linkerPath, '');
+  }
+  const validArchiverPath = androidNdkToolPaths(validNdk, androidNdkAbiCases[0], process.platform).archiverPath;
+  fs.writeFileSync(validArchiverPath, '');
 
+  for (const abiCase of androidNdkAbiCases) {
+    const result = runAndroidNdkPrint({ abi: abiCase.abi, androidHome: sdkRoot });
+    const validPaths = androidNdkToolPaths(validNdk, abiCase, process.platform);
+    const targetEnvSuffix = abiCase.target.replace(/-/gu, '_');
+    const expectedLines = [
+      `CARGO_TARGET_${targetEnvSuffix.toUpperCase()}_LINKER=${validPaths.linkerPath}`,
+      `CC_${targetEnvSuffix}=${validPaths.linkerPath}`,
+      `AR_${targetEnvSuffix}=${validPaths.archiverPath}`,
+    ];
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/u), expectedLines);
+    assert.doesNotMatch(result.stdout, /30\.0\.15729638/u);
+  }
+});
+
+test('UniFFI Android native build script reports a missing linker in an explicit NDK', () => {
+  const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-explicit-ndk-'));
+  const abiCase = androidNdkAbiCases[0];
+  const toolPaths = androidNdkToolPaths(ndkHome, abiCase, process.platform);
+  fs.mkdirSync(path.dirname(toolPaths.archiverPath), { recursive: true });
+  fs.writeFileSync(toolPaths.archiverPath, '');
+
+  const result = runAndroidNdkPrint({ abi: abiCase.abi, ndkHome });
+  const output = `${result.stderr}\n${result.stdout}`;
+
+  assert.notEqual(result.status, 0, output);
+  assert.ok(output.includes(`Missing Android NDK linker at ${toolPaths.linkerPath}`), output);
+});
+
+test('UniFFI Android native build script reports a missing archiver in an explicit NDK', () => {
+  const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-explicit-ndk-'));
+  const abiCase = androidNdkAbiCases[0];
+  const toolPaths = androidNdkToolPaths(ndkHome, abiCase, process.platform);
+  fs.mkdirSync(path.dirname(toolPaths.linkerPath), { recursive: true });
+  fs.writeFileSync(toolPaths.linkerPath, '');
+
+  const result = runAndroidNdkPrint({ abi: abiCase.abi, ndkHome });
+  const output = `${result.stderr}\n${result.stdout}`;
+
+  assert.notEqual(result.status, 0, output);
+  assert.ok(output.includes(`Missing Android NDK archiver at ${toolPaths.archiverPath}`), output);
+});
+
+test('UniFFI Android native build script supports injected host toolchain layouts in print mode', () => {
+  const abiCase = androidNdkAbiCases[0];
+
+  for (const hostPlatform of ['windows', 'linux', 'darwin']) {
+    const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), `sona-android-${hostPlatform}-ndk-`));
+    const toolPaths = androidNdkToolPaths(ndkHome, abiCase, hostPlatform);
+    fs.mkdirSync(path.dirname(toolPaths.linkerPath), { recursive: true });
+    fs.writeFileSync(toolPaths.linkerPath, '');
+    fs.writeFileSync(toolPaths.archiverPath, '');
+
+    const result = runAndroidNdkPrint({ abi: abiCase.abi, ndkHome, hostPlatform });
+    const targetEnvSuffix = abiCase.target.replace(/-/gu, '_');
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
+      `CARGO_TARGET_${targetEnvSuffix.toUpperCase()}_LINKER=${toolPaths.linkerPath}`,
+      `CC_${targetEnvSuffix}=${toolPaths.linkerPath}`,
+      `AR_${targetEnvSuffix}=${toolPaths.archiverPath}`,
+    ]);
+  }
+});
+
+test('UniFFI Android native build script rejects host overrides outside print mode', () => {
   const result = spawnSync(
     node,
     [
       path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
-      '--print-linker-env',
+      '--dry-run',
+      '--host-platform',
+      'linux',
       '--abis',
       'arm64-v8a',
     ],
-    {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        ANDROID_HOME: sdkRoot,
-        ANDROID_SDK_ROOT: '',
-        ANDROID_NDK_HOME: '',
-        ANDROID_NDK_ROOT: '',
-      },
-    },
+    { cwd: repoRoot, encoding: 'utf8' },
   );
+  const output = `${result.stderr}\n${result.stdout}`;
 
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/u);
-  assert.match(result.stdout, /29\.0\.14206865/u);
-  assert.doesNotMatch(result.stdout, /30\.0\.15729638/u);
+  assert.notEqual(result.status, 0, output);
+  assert.match(output, /--host-platform is only supported with --print-linker-env/u);
 });
 
 test('core owns LLM request field validation while online adapter owns API host policy', () => {

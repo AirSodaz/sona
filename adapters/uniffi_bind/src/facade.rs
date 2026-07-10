@@ -1,12 +1,14 @@
 use crate::{
-    FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiLlmConfig, FfiLlmPromptChunk,
-    FfiLlmProvider, FfiLlmSegmentInput, FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot,
-    FfiModelSelectionPaths, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
-    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload,
-    FfiRuntimePathStatus, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
-    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
-    SonaCoreBindingResult, asr_bridge, config_bridge, llm_bridge, model_bridge, runtime_bridge,
+    FfiAsrStreamingObserver, FfiAsrStreamingSession, FfiBatchSegmentationMode,
+    FfiConfigMigrationResult, FfiLlmConfig, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput,
+    FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot, FfiModelSelectionPaths,
+    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
+    FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
+    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
+    asr_streaming_bridge, config_bridge, llm_bridge, model_bridge, runtime_bridge,
 };
+use std::sync::Arc;
 
 /// Rust facade used by tests and by the top-level UniFFI exports.
 pub struct SonaCoreFacade;
@@ -85,6 +87,18 @@ impl SonaCoreFacade {
 
     pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
         runtime_bridge::runtime_path_status(path)
+    }
+
+    pub fn create_online_asr_streaming_session(
+        instance_id: String,
+        request_json: String,
+        observer: Arc<dyn FfiAsrStreamingObserver>,
+    ) -> SonaCoreBindingResult<Arc<FfiAsrStreamingSession>> {
+        asr_streaming_bridge::create_online_asr_streaming_session(
+            instance_id,
+            request_json,
+            observer,
+        )
     }
 
     pub fn default_batch_segmentation_mode() -> FfiBatchSegmentationMode {

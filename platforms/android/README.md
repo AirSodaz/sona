@@ -20,6 +20,40 @@ The Gradle script registers `generateSonaUniffiKotlin` and
 Android `main` source set, and stages ABI-specific `libsona_uniffi_bind.so`
 files under generated `jniLibs`.
 
+The generated streaming surface is typed. Implement
+`FfiAsrStreamingObserver`, then pass it to `createOnlineAsrStreamingSession`:
+
+```kotlin
+import uniffi.sona_uniffi_bind.FfiAsrInferenceMetric
+import uniffi.sona_uniffi_bind.FfiAsrModelLoadMetric
+import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
+import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
+import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
+import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
+
+fun createStreamingSession(requestJson: String): FfiAsrStreamingSession {
+    val observer: FfiAsrStreamingObserver = object : FfiAsrStreamingObserver {
+        override fun onTranscriptUpdate(event: FfiAsrTranscriptUpdateEvent) = Unit
+        override fun onModelLoad(metric: FfiAsrModelLoadMetric) = Unit
+        override fun onLiveInference(metric: FfiAsrInferenceMetric) = Unit
+    }
+
+    return createOnlineAsrStreamingSession(
+        instanceId = "android-live-1",
+        requestJson = requestJson,
+        observer = observer,
+    )
+}
+```
+
+The session's `start`, audio-feed, and `stop` methods are suspending Kotlin
+methods and must run from a coroutine. Close the session when it is no longer
+needed.
+
+This AAR stage supports the online streaming path. Packaging the local Sherpa
+Android native libraries is out of scope, so this artifact does not claim
+local Sherpa ASR support on Android.
+
 Run the local smoke check without requiring a Gradle install:
 
 ```powershell
