@@ -1,4 +1,4 @@
-pub mod inference;
+mod inference;
 
 mod session;
 

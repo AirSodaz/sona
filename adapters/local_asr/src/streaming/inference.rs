@@ -15,20 +15,21 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-pub use sona_core::transcription::transcript::{normalize_recognizer_text, synthesize_durations};
+use sona_core::transcription::transcript::normalize_recognizer_text;
+pub(super) use sona_core::transcription::transcript::synthesize_durations;
 
 fn new_transcript_segment_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-pub fn build_transcript_update(
+pub(super) fn build_transcript_update(
     segment: TranscriptSegment,
     options: TranscriptNormalizationOptions,
 ) -> TranscriptUpdate {
     build_transcript_update_with_id_generator(segment, options, new_transcript_segment_id)
 }
 
-pub fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
+pub(super) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
     let mut result = text.trim().to_string();
     if result.is_empty() {
         return result;
@@ -51,12 +52,12 @@ pub fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> Strin
     result
 }
 
-pub fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation>) -> String {
+fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation>) -> String {
     let formatted_text = format_transcript(cleaned_text, punctuation);
     select_final_transcript_text(cleaned_text, &formatted_text)
 }
 
-pub fn observe_streaming_transcript_update(
+pub(super) fn observe_streaming_transcript_update(
     observer: &dyn AsrRuntimeObserver,
     instance_id: &str,
     update: &TranscriptUpdate,
@@ -73,7 +74,7 @@ pub fn observe_streaming_transcript_update(
     });
 }
 
-pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
+pub(super) fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
     match instance_id {
         "record" => Some("record"),
         "caption" => Some("caption"),
@@ -82,7 +83,7 @@ pub fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
     }
 }
 
-pub fn log_segment_emit_diagnostics(
+fn log_segment_emit_diagnostics(
     instance_id: &str,
     first_segment_emitted: Option<&Arc<AtomicBool>>,
     segment: &TranscriptSegment,
@@ -110,7 +111,7 @@ pub fn log_segment_emit_diagnostics(
     );
 }
 
-pub fn preview_text_for_log(text: &str) -> String {
+fn preview_text_for_log(text: &str) -> String {
     const MAX_PREVIEW_CHARS: usize = 24;
     let flattened = text.replace(['\r', '\n'], " ");
     let mut preview = flattened
@@ -123,7 +124,7 @@ pub fn preview_text_for_log(text: &str) -> String {
     preview
 }
 
-pub fn log_text_transform_diagnostics(
+fn log_text_transform_diagnostics(
     instance_id: &str,
     stage: &str,
     segment_id: &str,

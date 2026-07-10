@@ -1609,9 +1609,18 @@ test('streaming ASR session contract is core-owned and platform-neutral', () => 
 });
 
 test('local streaming ASR session is implemented by the local adapter', () => {
+  const localAsrRoot = path.join(repoRoot, 'adapters', 'local_asr');
   const adapterSessionPath = path.join(
-    repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs',
+    localAsrRoot, 'src', 'streaming', 'session.rs',
   );
+  const adapterStreamingMod = fs.readFileSync(
+    path.join(localAsrRoot, 'src', 'streaming', 'mod.rs'),
+    'utf8',
+  );
+  const localAsrSources = rustFilesUnder(path.join(localAsrRoot, 'src'))
+    .map((filePath) => fs.readFileSync(filePath, 'utf8'))
+    .join('\n');
+  const localAsrCargo = fs.readFileSync(path.join(localAsrRoot, 'Cargo.toml'), 'utf8');
   const desktopSessionPath = path.join(
     repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs',
   );
@@ -1629,6 +1638,11 @@ test('local streaming ASR session is implemented by the local adapter', () => {
   const adapterSession = fs.readFileSync(adapterSessionPath, 'utf8');
   assert.match(adapterSession, /impl AsrStreamingSession for LocalSherpaSession/u);
   assert.doesNotMatch(adapterSession, /tauri::|crate::platform|AsrState/u);
+  assert.match(adapterStreamingMod, /^mod inference;$/mu);
+  assert.doesNotMatch(
+    `${localAsrSources}\n${localAsrCargo}`,
+    /tauri|AsrState|crate::platform/iu,
+  );
   assert.match(provider, /sona_local_asr::streaming::create_streaming_session/u);
 });
 
