@@ -1609,6 +1609,7 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'skipped_while_stopped_logged',
     'first_segment_emitted',
     'is_running',
+    'stream',
     'last_partial_metric_sample',
   ]) {
     assert.doesNotMatch(localAsrRuntime, new RegExp(`pub ${field}:`, 'u'));
@@ -1616,6 +1617,8 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
       desktopSherpa,
       field === 'is_running'
         ? /\binstance\.is_running(?!\()/u
+        : field === 'stream'
+          ? /\binstance\.stream(?!\s*\()/u
         : field === 'last_partial_metric_sample'
           ? /\binstance\.last_partial_metric_sample\b/u
           : new RegExp(`record_diagnostics[\\s\\S]{0,80}\\.${field}\\b`, 'u'),
@@ -1650,6 +1653,9 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'mark_skipped_while_stopped_logged',
     'first_segment_emitted_flag',
     'is_running',
+    'stream',
+    'take_stream',
+    'restore_stream',
     'should_record_partial_metric',
     'mark_partial_metric_sample',
     'clear_partial_metric_sample',

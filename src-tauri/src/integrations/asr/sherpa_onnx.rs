@@ -619,9 +619,11 @@ async fn flush_recognizer_impl_inner(
         return Ok(());
     }
 
-    if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
+    if let Some(recognizer) = instance.recognizer.clone()
         && let Some(r) = recognizer.online()
+        && let Some(stream) = instance.take_stream()
     {
+        let st = &stream;
         let inference_started = Instant::now();
         let metrics_store = state.metrics.clone();
         let current_time = instance.total_samples as f64 / 16000.0;
@@ -700,6 +702,7 @@ async fn flush_recognizer_impl_inner(
 
         instance.current_segment_id = None;
         reset_online_stream(r, st);
+        instance.restore_stream(stream);
         instance.segment_start_time = current_time;
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] flush_recognizer({label}) complete. mode=online");
@@ -956,10 +959,10 @@ async fn feed_audio_samples_inner(
     } else if let Some(r) = recognizer.online() {
         let inference_started = Instant::now();
         let metrics_store = state.metrics.clone();
-        let st = instance
-            .stream
-            .as_ref()
+        let stream = instance
+            .take_stream()
             .ok_or("Stream not initialized for online model")?;
+        let st = &stream;
 
         let decode_started = Instant::now();
         accept_online_samples(st, samples);
@@ -1120,6 +1123,8 @@ async fn feed_audio_samples_inner(
         if did_record_partial_metric {
             instance.mark_partial_metric_sample();
         }
+
+        instance.restore_stream(stream);
 
         Ok(())
     } else {

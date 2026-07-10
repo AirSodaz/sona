@@ -141,7 +141,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
 #[derive(Default)]
 pub struct SherpaInstance {
     pub recognizer: Option<Arc<Recognizer>>,
-    pub stream: Option<SafeStream>,
+    stream: Option<SafeStream>,
     pub vad: Option<SafeVad>,
     pub punctuation: Option<Arc<Punctuation>>,
     pub total_samples: usize,
@@ -160,6 +160,18 @@ pub struct SherpaInstance {
 impl SherpaInstance {
     pub fn is_running(&self) -> bool {
         self.is_running
+    }
+
+    pub fn stream(&self) -> Option<&SafeStream> {
+        self.stream.as_ref()
+    }
+
+    pub fn take_stream(&mut self) -> Option<SafeStream> {
+        self.stream.take()
+    }
+
+    pub fn restore_stream(&mut self, stream: SafeStream) {
+        self.stream = Some(stream);
     }
 
     pub fn should_record_partial_metric(&self, interval_samples: usize) -> bool {
@@ -456,7 +468,7 @@ mod tests {
         assert!(!instance.is_running());
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.current_segment_id, None);
-        assert!(instance.stream.is_none());
+        assert!(instance.stream().is_none());
         assert_eq!(instance.vad_model.as_deref(), Some("vad.onnx"));
     }
 
