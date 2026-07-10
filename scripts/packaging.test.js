@@ -1562,6 +1562,19 @@ test('desktop live sherpa ASR uses local ASR recognizer accessors', () => {
   assert.doesNotMatch(desktopSherpa, /\b(?:recognizer|recognizer_copy)\.inner\b/u);
 });
 
+test('local ASR recognizer internals stay behind accessors', () => {
+  const localAsrRecognizer = fs.readFileSync(
+    path.join(repoRoot, 'adapters', 'local_asr', 'src', 'recognizer.rs'),
+    'utf8',
+  );
+
+  for (const helper of ['kind_label', 'is_offline', 'offline', 'online']) {
+    assert.match(localAsrRecognizer, new RegExp(`pub fn ${helper}\\(&self\\)`, 'u'));
+  }
+  assert.doesNotMatch(localAsrRecognizer, /pub enum RecognizerInner/u);
+  assert.doesNotMatch(localAsrRecognizer, /pub inner: RecognizerInner/u);
+});
+
 test('local ASR streaming runtime state is owned by the local ASR adapter', () => {
   const localAsrRuntime = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'runtime.rs'),

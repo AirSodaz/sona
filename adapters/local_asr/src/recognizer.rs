@@ -266,13 +266,13 @@ pub struct OnlineDecodeResult {
     pub timestamps: Option<Vec<f32>>,
 }
 
-pub enum RecognizerInner {
+enum RecognizerInner {
     Online(SafeOnlineRecognizer),
     Offline(SafeOfflineRecognizer),
 }
 
 pub struct Recognizer {
-    pub inner: RecognizerInner,
+    inner: RecognizerInner,
 }
 
 pub struct RecognizerCreateResult {
