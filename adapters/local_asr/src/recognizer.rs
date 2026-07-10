@@ -335,6 +335,13 @@ impl Recognizer {
         }
     }
 
+    pub fn online(&self) -> Option<&SafeOnlineRecognizer> {
+        match &self.inner {
+            RecognizerInner::Online(recognizer) => Some(recognizer),
+            RecognizerInner::Offline(_) => None,
+        }
+    }
+
     pub fn new(
         model_type: ModelType,
         num_threads: i32,

@@ -15,10 +15,10 @@ use super::types::{
 };
 use sona_local_asr::punctuation::{Punctuation, load_punctuation};
 use sona_local_asr::recognizer::{
-    Recognizer, RecognizerInner, SafeOfflineRecognizer, SafeOnlineRecognizer,
-    accept_online_samples, build_model_config, create_online_stream,
-    create_recognizer_with_gpu_plan, decode_offline_samples, decode_online_ready,
-    is_online_endpoint, online_stream_result, reset_online_stream,
+    Recognizer, SafeOfflineRecognizer, SafeOnlineRecognizer, accept_online_samples,
+    build_model_config, create_online_stream, create_recognizer_with_gpu_plan,
+    decode_offline_samples, decode_online_ready, is_online_endpoint, online_stream_result,
+    reset_online_stream,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -167,34 +167,33 @@ where
     let instance_id = request.instance_id.as_deref();
 
     let decode_started = Instant::now();
-    let segments = match &recognizer.inner {
-        RecognizerInner::Offline(r) => {
-            process_batch_local(
-                r,
-                &samples,
-                request.vad_model.clone(),
-                request.vad_buffer,
-                request.batch_segmentation_mode,
-                punctuation.as_ref(),
-                &mut on_progress,
-                request.normalization_options,
-                emitter,
-                instance_id,
-            )
-            .await?
-        }
-        RecognizerInner::Online(r) => {
-            process_batch_online(
-                r,
-                &samples,
-                punctuation.as_ref(),
-                &mut on_progress,
-                request.normalization_options,
-                emitter,
-                instance_id,
-            )
-            .await?
-        }
+    let segments = if let Some(r) = recognizer.offline() {
+        process_batch_local(
+            r,
+            &samples,
+            request.vad_model.clone(),
+            request.vad_buffer,
+            request.batch_segmentation_mode,
+            punctuation.as_ref(),
+            &mut on_progress,
+            request.normalization_options,
+            emitter,
+            instance_id,
+        )
+        .await?
+    } else if let Some(r) = recognizer.online() {
+        process_batch_online(
+            r,
+            &samples,
+            punctuation.as_ref(),
+            &mut on_progress,
+            request.normalization_options,
+            emitter,
+            instance_id,
+        )
+        .await?
+    } else {
+        return Err("Unsupported recognizer type".to_string());
     };
     let decode_ms = duration_to_ms(decode_started.elapsed());
 
