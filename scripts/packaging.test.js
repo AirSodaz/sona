@@ -18,19 +18,21 @@ const exists = (...segments) => fs.existsSync(path.join(repoRoot, ...segments));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
+const desktopCrateSegments = ['platforms', 'desktop'];
+const desktopCratePath = (...segments) => path.join(repoRoot, ...desktopCrateSegments, ...segments);
 const node = process.execPath;
 
 function makeTempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-packaging-'));
-  fs.mkdirSync(path.join(root, 'src-tauri', 'binaries'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'cli'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'shared_libs'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'binaries'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'resources', 'cli'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'resources', 'shared_libs'), { recursive: true });
   return root;
 }
 
 function writeTauriConfig(root) {
   fs.writeFileSync(
-    path.join(root, 'src-tauri', 'tauri.conf.json'),
+    path.join(root, 'platforms', 'desktop', 'tauri.conf.json'),
     JSON.stringify(
       {
         bundle: {
@@ -307,21 +309,21 @@ function readWorkflowBuildTauriSteps(workflowName) {
 test('tauri bundle verification requires ffmpeg sidecar and shared libraries', () => {
   const root = makeTempRepo();
   const target = 'x86_64-pc-windows-msvc';
-  fs.mkdirSync(path.join(root, 'src-tauri', 'binaries'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'src-tauri', 'resources', 'shared_libs'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'binaries'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'resources', 'shared_libs'), { recursive: true });
   fs.writeFileSync(
-    path.join(root, 'src-tauri', 'binaries', 'ffmpeg-x86_64-pc-windows-msvc.exe'),
+    path.join(root, 'platforms', 'desktop', 'binaries', 'ffmpeg-x86_64-pc-windows-msvc.exe'),
     'ffmpeg',
   );
   fs.writeFileSync(
-    path.join(root, 'src-tauri', 'resources', 'shared_libs', 'sherpa-onnx-c-api.dll'),
+    path.join(root, 'platforms', 'desktop', 'resources', 'shared_libs', 'sherpa-onnx-c-api.dll'),
     'sherpa',
   );
   fs.writeFileSync(
-    path.join(root, 'src-tauri', 'resources', 'shared_libs', 'onnxruntime.dll'),
+    path.join(root, 'platforms', 'desktop', 'resources', 'shared_libs', 'onnxruntime.dll'),
     'onnxruntime',
   );
-  fs.writeFileSync(path.join(root, 'src-tauri', 'resources', 'cli', 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(root, 'platforms', 'desktop', 'resources', 'cli', 'sona-cli.exe'), 'cli');
   writeTauriConfig(root);
   const bundleRoot = path.join(root, 'target', target, 'release', 'bundle', 'nsis');
   fs.mkdirSync(bundleRoot, { recursive: true });
@@ -347,10 +349,20 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
   assert.match(result.stdout, /Verified shared libraries/);
 });
 
+test('desktop host is a direct platform crate with explicit CLI config', () => {
+  const wrapper = read('scripts', 'tauri.js');
+
+  assert.equal(exists('platforms', 'desktop', 'Cargo.toml'), true);
+  assert.equal(exists('src-tauri'), false);
+  assert.match(wrapper, /const desktopTauriConfig = path\.join\(repoRoot, 'platforms', 'desktop', 'tauri\.conf\.json'\);/u);
+  assert.match(wrapper, /function withDesktopConfig\(commandArgs\)/u);
+  assert.match(wrapper, /return \[command, '--config', desktopTauriConfig, \.\.\.commandArgs\.slice\(1\)\];/u);
+});
+
 test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
-  const libRs = read('src-tauri', 'src', 'lib.rs');
-  const cargoToml = read('src-tauri', 'Cargo.toml');
-  const tauriConfig = read('src-tauri', 'tauri.conf.json');
+  const libRs = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const cargoToml = read(...desktopCrateSegments, 'Cargo.toml');
+  const tauriConfig = read(...desktopCrateSegments, 'tauri.conf.json');
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
@@ -359,14 +371,14 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   const oldCliSidecarScript = ['prepare', 'cli', 'sidecar'].join('-');
   const oldCliBundleScript = ['verify', 'cli', 'bundle'].join('-');
 
-  assert.equal(exists('src-tauri', 'src', 'cli'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'cli'), false);
   assert.doesNotMatch(cargoToml, /^clap\s*=/mu);
   assert.doesNotMatch(cargoToml, /^clap_complete\s*=/mu);
   assert.doesNotMatch(tauriConfig, /binaries\/sona-cli/u);
   assert.doesNotMatch(tauriScript, new RegExp(oldCliSidecarScript, 'u'));
   assert.doesNotMatch(prWorkflow, new RegExp(`${oldCliSidecarScript}|${oldCliBundleScript}`, 'u'));
 
-  const desktopCliCoreReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+  const desktopCliCoreReferences = rustFilesUnder(desktopCratePath('src'))
     .map((filePath) => ({
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
@@ -399,7 +411,7 @@ test('standalone CLI resource staging copies the sona-cli binary into the deskto
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Staged standalone CLI resource/);
 
-  const resourceDir = path.join(root, 'src-tauri', 'resources', 'cli');
+  const resourceDir = path.join(root, 'platforms', 'desktop', 'resources', 'cli');
   assert.equal(fs.existsSync(path.join(resourceDir, 'sona-cli.exe')), true);
   assert.equal(fs.existsSync(path.join(resourceDir, 'sherpa-onnx-c-api.dll')), false);
   assert.equal(fs.existsSync(path.join(resourceDir, 'onnxruntime.dll')), false);
@@ -486,7 +498,7 @@ test('standalone CLI keeps local ASR implementation behind its adapter boundary'
 });
 
 test('desktop Tauri DLL directory setup is delegated to the runtime filesystem adapter', () => {
-  const tauriLib = read('src-tauri', 'src', 'lib.rs');
+  const tauriLib = read(...desktopCrateSegments, 'src', 'lib.rs');
   const runtimeFsLib = read('adapters', 'runtime_fs', 'src', 'lib.rs');
 
   assert.match(tauriLib, /pub fn init_dll_directory\(\)\s*\{\s*sona_runtime_fs::init_tauri_shared_library_directory\(\);\s*\}/u);
@@ -497,12 +509,12 @@ test('desktop Tauri DLL directory setup is delegated to the runtime filesystem a
 
 test('generated standalone CLI resources are ignored by git', () => {
   const rootIgnore = read('.gitignore');
-  const tauriIgnore = read('src-tauri', '.gitignore');
+  const tauriIgnore = read(...desktopCrateSegments, '.gitignore');
   const ignoreRules = `${rootIgnore}\n${tauriIgnore}`;
 
-  assert.match(ignoreRules, /src-tauri\/resources\/cli\/sona-cli\b/u);
-  assert.match(ignoreRules, /src-tauri\/resources\/cli\/sona-cli\.exe\b/u);
-  assert.doesNotMatch(ignoreRules, /src-tauri\/resources\/cli\/\.gitkeep/u);
+  assert.match(ignoreRules, /platforms\/desktop\/resources\/cli\/sona-cli\b/u);
+  assert.match(ignoreRules, /platforms\/desktop\/resources\/cli\/sona-cli\.exe\b/u);
+  assert.doesNotMatch(ignoreRules, /platforms\/desktop\/resources\/cli\/\.gitkeep/u);
 });
 
 test('release workflows stage standalone CLI into the same-platform desktop installer resources', () => {
@@ -592,10 +604,10 @@ test('core crate exposes serve runtime without cli runtime surface', () => {
 
 test('core path port default API does not expose test adapters', () => {
   const coreCargo = read('core', 'Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const corePaths = read('core', 'src', 'runtime', 'paths.rs');
   const corePathPort = read('core', 'src', 'ports', 'path.rs');
-  const tauriPlatformPaths = read('src-tauri', 'src', 'platform', 'paths.rs');
+  const tauriPlatformPaths = read(...desktopCrateSegments, 'src', 'platform', 'paths.rs');
 
   assert.doesNotMatch(coreCargo, /^test-utils\s*=/mu);
   assert.match(
@@ -673,8 +685,8 @@ test('core source does not call adapter runtime side effects directly', () => {
 });
 
 test('shared api server invokes local batch ASR through the core transcriber port', () => {
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
-  const tauriServer = read('src-tauri', 'src', 'app', 'server.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
+  const tauriServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
   const apiCargo = read('adapters', 'api_server', 'Cargo.toml');
   const apiServer = read('adapters', 'api_server', 'src', 'lib.rs');
 
@@ -694,10 +706,10 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = read('Cargo.toml');
   const coreCargo = read('core', 'Cargo.toml');
   const coreLib = read('core', 'src', 'lib.rs');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemRs = read('src-tauri', 'src', 'commands', 'system.rs');
-  const platformWebdavPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'webdav.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemRs = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const platformWebdavPath = desktopCratePath('src', 'platform', 'webdav.rs');
   const webdavAdapter = read('adapters', 'webdav', 'src', 'lib.rs');
   const webdavCargo = read('adapters', 'webdav', 'Cargo.toml');
 
@@ -744,10 +756,10 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
   const workspaceCargo = read('Cargo.toml');
   const coreCargo = read('core', 'Cargo.toml');
   const coreLib = read('core', 'src', 'lib.rs');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformArchivePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'archive.rs');
-  const archiveCommand = read('src-tauri', 'src', 'commands', 'archive.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformArchivePath = desktopCratePath('src', 'platform', 'archive.rs');
+  const archiveCommand = read(...desktopCrateSegments, 'src', 'commands', 'archive.rs');
   const archiveAdapter = read('adapters', 'archive', 'src', 'lib.rs');
 
   assert.match(workspaceCargo, /"adapters\/archive"/u);
@@ -781,14 +793,14 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
 test('model download runtime implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = read('Cargo.toml');
   const coreCargo = read('core', 'Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformModelDownloadsPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'model_downloads.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformModelDownloadsPath = desktopCratePath('src', 'platform', 'model_downloads.rs');
   const cliCargo = read('platforms', 'cli', 'Cargo.toml');
   const cliModels = read('platforms', 'cli', 'src', 'models.rs');
   const desktopDownloads = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'commands', 'downloads.rs'),
+    desktopCratePath('src', 'commands', 'downloads.rs'),
     'utf8',
   );
   const coreModelDownloads = read('core', 'src', 'models', 'downloads.rs');
@@ -848,7 +860,7 @@ test('model download runtime implementation lives in a dedicated adapter crate',
 test('runtime filesystem operations live in a dedicated adapter crate', () => {
   const workspaceCargo = read('Cargo.toml');
   const coreCargo = read('core', 'Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const cliCargo = read('platforms', 'cli', 'Cargo.toml');
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -877,19 +889,19 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     'utf8',
   );
   const tauriRecoveryRepository = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
+    desktopCratePath('src', 'platform', 'recovery_repository.rs'),
     'utf8',
   );
   const desktopRuntimeStatus = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs'),
+    desktopCratePath('src', 'platform', 'runtime_status.rs'),
     'utf8',
   );
   const desktopPresetModels = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'preset_models.rs'),
+    desktopCratePath('src', 'platform', 'preset_models.rs'),
     'utf8',
   );
   const desktopDiagnostics = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    desktopCratePath('src', 'platform', 'diagnostics.rs'),
     'utf8',
   );
 
@@ -1098,14 +1110,14 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   const coreDiagnostics = read('core', 'src', 'runtime', 'diagnostics.rs');
   const coreCargo = read('core', 'Cargo.toml');
   const tauriDiagnostics = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    desktopCratePath('src', 'platform', 'diagnostics.rs'),
     'utf8',
   );
   const coreDashboardService = fs.readFileSync(
     path.join(repoRoot, 'core', 'src', 'dashboard', 'service.rs'),
     'utf8',
   );
-  const tauriDashboard = read('src-tauri', 'src', 'app', 'dashboard.rs');
+  const tauriDashboard = read(...desktopCrateSegments, 'src', 'app', 'dashboard.rs');
 
   assert.match(coreDiagnostics, /pub fn build_diagnostics_core_snapshot_at/u);
   assert.doesNotMatch(coreDiagnostics, /pub fn build_diagnostics_core_snapshot\(/u);
@@ -1125,8 +1137,8 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
 });
 
 test('desktop app settings owns minimize-to-tray state', () => {
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const appSettings = read('src-tauri', 'src', 'app', 'settings.rs');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const appSettings = read(...desktopCrateSegments, 'src', 'app', 'settings.rs');
 
   assert.match(appSettings, /pub\(crate\) fn minimize_to_tray\(&self\) -> bool/u);
   assert.match(appSettings, /fn set_minimize_to_tray_enabled\(&self, enabled: bool\)/u);
@@ -1358,17 +1370,10 @@ test('core LLM provider manifest is exposed through UniFFI for mobile bindings',
 test('core owns ASR runtime error contract reused by desktop', () => {
   const coreAsr = read('core', 'src', 'ports', 'asr.rs');
   const desktopAsrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
-  const desktopAsrErrorPath = path.join(
-    repoRoot,
-    'src-tauri',
-    'src',
-    'integrations',
-    'asr',
-    'error.rs',
-  );
+  const desktopAsrErrorPath = desktopCratePath('src', 'integrations', 'asr', 'error.rs');
 
   assert.match(coreAsr, /pub enum SherpaError/u);
   assert.match(coreAsr, /impl Serialize for SherpaError/u);
@@ -1382,7 +1387,7 @@ test('core owns ASR runtime error contract reused by desktop', () => {
 test('core owns ASR metric helpers reused by desktop', () => {
   const coreMetrics = read('core', 'src', 'transcription', 'asr_metrics.rs');
   const desktopMetrics = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'metrics.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'metrics.rs'),
     'utf8',
   );
 
@@ -1445,11 +1450,11 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
     'utf8',
   );
   const desktopAsrState = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'state.rs'),
     'utf8',
   );
   const desktopAsrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
@@ -1468,8 +1473,8 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
   assert.match(desktopAsrMod, /pub\(crate\) use sona_local_asr::runtime::ModelConfigKey;/u);
 
   for (const desktopFile of [
-    ...rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr')),
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    ...rustFilesUnder(desktopCratePath('src', 'integrations', 'asr')),
+    desktopCratePath('src', 'integrations', 'streaming.rs'),
   ]) {
     const content = fs.readFileSync(desktopFile, 'utf8');
     assert.doesNotMatch(content, /\.recognizers\.lock\(\)/u);
@@ -1480,9 +1485,9 @@ test('local ASR runtime pool is owned by the local ASR adapter', () => {
 });
 
 test('desktop API server obtains ASR recognizer pools through integration facade', () => {
-  const appServer = read('src-tauri', 'src', 'app', 'server.rs');
+  const appServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
   const desktopAsrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
@@ -1493,8 +1498,8 @@ test('desktop API server obtains ASR recognizer pools through integration facade
 });
 
 test('desktop API server controller owns runtime handles', () => {
-  const appServer = read('src-tauri', 'src', 'app', 'server.rs');
-  const appSetup = read('src-tauri', 'src', 'app', 'setup.rs');
+  const appServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
+  const appSetup = read(...desktopCrateSegments, 'src', 'app', 'setup.rs');
 
   assert.match(appServer, /pub\(crate\) fn online_asr_config/u);
   assert.match(appServer, /pub\(crate\) async fn replace_online_asr_config/u);
@@ -1506,9 +1511,9 @@ test('desktop API server controller owns runtime handles', () => {
 });
 
 test('desktop ASR session maps are owned by AsrState', () => {
-  const stateRs = read('src-tauri', 'src', 'integrations', 'asr', 'state.rs');
-  const commandsAsr = read('src-tauri', 'src', 'commands', 'asr.rs');
-  const asrMod = read('src-tauri', 'src', 'integrations', 'asr', 'mod.rs');
+  const stateRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'state.rs');
+  const commandsAsr = read(...desktopCrateSegments, 'src', 'commands', 'asr.rs');
+  const asrMod = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mod.rs');
 
   assert.match(stateRs, /pub async fn insert_session/u);
   assert.match(stateRs, /pub async fn session/u);
@@ -1519,8 +1524,8 @@ test('desktop ASR session maps are owned by AsrState', () => {
 });
 
 test('desktop streaming handler uses Tauri streaming context accessors', () => {
-  const appServer = read('src-tauri', 'src', 'app', 'server.rs');
-  const streaming = read('src-tauri', 'src', 'integrations', 'streaming.rs');
+  const appServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
+  const streaming = read(...desktopCrateSegments, 'src', 'integrations', 'streaming.rs');
 
   assert.match(appServer, /pub\(crate\) struct TauriStreamingContext/u);
   assert.doesNotMatch(appServer, /pub struct TauriStreamingContext/u);
@@ -1536,8 +1541,8 @@ test('desktop streaming handler uses Tauri streaming context accessors', () => {
 });
 
 test('desktop standalone streaming uses local ASR recognizer accessors', () => {
-  const streaming = read('src-tauri', 'src', 'integrations', 'streaming.rs');
-  const asrMod = read('src-tauri', 'src', 'integrations', 'asr', 'mod.rs');
+  const streaming = read(...desktopCrateSegments, 'src', 'integrations', 'streaming.rs');
+  const asrMod = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mod.rs');
 
   assert.doesNotMatch(streaming, /RecognizerInner/u);
   assert.doesNotMatch(streaming, /\b(?:recognizer|r)\.inner\b/u);
@@ -1545,7 +1550,7 @@ test('desktop standalone streaming uses local ASR recognizer accessors', () => {
 });
 
 test('desktop batch ASR uses local ASR recognizer accessors', () => {
-  const batch = read('src-tauri', 'src', 'integrations', 'asr', 'batch.rs');
+  const batch = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'batch.rs');
 
   assert.doesNotMatch(batch, /RecognizerInner/u);
   assert.doesNotMatch(batch, /\brecognizer\.inner\b/u);
@@ -1580,15 +1585,15 @@ test('streaming ASR session contract is core-owned and platform-neutral', () => 
     'utf8',
   );
   const tauriTraits = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'traits.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'traits.rs'),
     'utf8',
   );
   const tauriState = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'state.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'state.rs'),
     'utf8',
   );
   const tauriCommands = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'commands', 'asr.rs'),
+    desktopCratePath('src', 'commands', 'asr.rs'),
     'utf8',
   );
 
@@ -1620,14 +1625,10 @@ test('local streaming ASR session is implemented by the local adapter', () => {
     .map((filePath) => fs.readFileSync(filePath, 'utf8'))
     .join('\n');
   const localAsrCargo = fs.readFileSync(path.join(localAsrRoot, 'Cargo.toml'), 'utf8');
-  const desktopSessionPath = path.join(
-    repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'sherpa_onnx.rs',
-  );
-  const desktopSchedulerPath = path.join(
-    repoRoot, 'src-tauri', 'src', 'platform', 'asr_runtime.rs',
-  );
+  const desktopSessionPath = desktopCratePath('src', 'integrations', 'asr', 'sherpa_onnx.rs');
+  const desktopSchedulerPath = desktopCratePath('src', 'platform', 'asr_runtime.rs');
   const provider = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'adapter.rs'),
     'utf8',
   );
 
@@ -1655,12 +1656,12 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
     'utf8',
   );
   const desktopAsr = rustFilesUnder(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr'),
+    desktopCratePath('src', 'integrations', 'asr'),
   )
     .map((filePath) => fs.readFileSync(filePath, 'utf8'))
     .join('\n');
   const desktopStreaming = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    desktopCratePath('src', 'integrations', 'streaming.rs'),
     'utf8',
   );
 
@@ -1780,11 +1781,11 @@ test('local ASR streaming runtime state is owned by the local ASR adapter', () =
 test('core owns local batch ASR request contract reused by desktop', () => {
   const coreAsr = read('core', 'src', 'ports', 'asr.rs');
   const desktopAsrTypes = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'types.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'types.rs'),
     'utf8',
   );
   const desktopAsrAdapter = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'adapter.rs'),
     'utf8',
   );
   const desktopBatchProcessor = desktopAsrAdapter.slice(
@@ -2662,11 +2663,11 @@ test('core owns LLM request field validation while online adapter owns API host 
   const coreRequests = read('core', 'src', 'llm', 'requests.rs');
   const coreCargo = read('core', 'Cargo.toml');
   const desktopTasks = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'tasks.rs'),
+    desktopCratePath('src', 'integrations', 'llm', 'tasks.rs'),
     'utf8',
   );
   const desktopCommands = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'),
+    desktopCratePath('src', 'integrations', 'llm', 'commands.rs'),
     'utf8',
   );
   const onlineLlm = read('adapters', 'online_llm', 'src', 'lib.rs');
@@ -2700,11 +2701,11 @@ test('online ASR provider manifest is owned by core and used directly by desktop
   const coreAsr = read('core', 'src', 'ports', 'asr.rs');
   const coreManifestPath = path.join(repoRoot, 'core', 'src', 'ports', 'online-asr-providers.json');
   const legacySharedManifestPath = path.join(repoRoot, 'src', 'shared', 'online-asr-providers.json');
-  const desktopIntegrations = read('src-tauri', 'src', 'integrations', 'mod.rs');
+  const desktopIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
   const apiServer = read('adapters', 'api_server', 'src', 'lib.rs');
-  const streamingRs = read('src-tauri', 'src', 'integrations', 'streaming.rs');
+  const streamingRs = read(...desktopCrateSegments, 'src', 'integrations', 'streaming.rs');
   const onlineAdapterRs = ['groq.rs', 'mistral.rs', 'volcengine.rs']
-    .map((file) => read('src-tauri', 'src', 'integrations', 'asr', file))
+    .map((file) => read(...desktopCrateSegments, 'src', 'integrations', 'asr', file))
     .join('\n');
   const tsBindLib = read('adapters', 'ts_bind', 'src', 'lib.rs');
   const onlineProvidersTs = read('src', 'services', 'onlineAsrProviders.ts');
@@ -2725,7 +2726,7 @@ test('online ASR provider manifest is owned by core and used directly by desktop
   assert.match(coreAsr, /pub struct OnlineAsrBatchCapability/u);
   assert.match(coreAsr, /pub fn provider_id\(&self\) -> &str/u);
 
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'asr_providers.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'asr_providers.rs'), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod asr_providers;/mu);
   assert.match(apiServer, /sona_core::ports::asr::\{[^}]*find_online_asr_provider[^}]*online_asr_providers/u);
   assert.match(streamingRs, /sona_core::ports::asr::find_online_asr_provider/u);
@@ -2773,27 +2774,27 @@ test('core model path resolution is adapter-driven without desktop filesystem pr
 });
 
 test('desktop platform adapters own Tauri path event diagnostics and preset model bridges', () => {
-  const desktopPlatform = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformPaths = read('src-tauri', 'src', 'platform', 'paths.rs');
-  const platformEvent = read('src-tauri', 'src', 'platform', 'event.rs');
+  const desktopPlatform = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformPaths = read(...desktopCrateSegments, 'src', 'platform', 'paths.rs');
+  const platformEvent = read(...desktopCrateSegments, 'src', 'platform', 'event.rs');
   const platformPresetModels = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'preset_models.rs'),
+    desktopCratePath('src', 'platform', 'preset_models.rs'),
     'utf8',
   );
   const platformDiagnostics = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    desktopCratePath('src', 'platform', 'diagnostics.rs'),
     'utf8',
   );
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
 
   assert.match(desktopPlatform, /^pub mod paths;/mu);
   assert.match(desktopPlatform, /^pub mod event;/mu);
   assert.match(desktopPlatform, /^pub mod preset_models;/mu);
   assert.match(desktopPlatform, /^pub mod diagnostics;/mu);
-  assert.equal(exists('src-tauri', 'src', 'core', 'paths.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'event.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'preset_models.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'diagnostics.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'paths.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'event.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'preset_models.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'diagnostics.rs'), false);
   assert.match(platformPaths, /pub struct TauriPathProvider/u);
   assert.match(platformPaths, /impl<R: Runtime> PathProvider for TauriPathProvider<R>/u);
   assert.match(platformEvent, /pub struct TauriEventEmitter<R: Runtime>\(pub AppHandle<R>\)/u);
@@ -2812,14 +2813,14 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
 });
 
 test('desktop runtime status adapter lives in platform layer', () => {
-  const appMod = read('src-tauri', 'src', 'app', 'mod.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
+  const appMod = read(...desktopCrateSegments, 'src', 'app', 'mod.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
   const platformDiagnostics = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'diagnostics.rs'),
+    desktopCratePath('src', 'platform', 'diagnostics.rs'),
     'utf8',
   );
-  const platformRuntimeStatusPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs');
+  const platformRuntimeStatusPath = desktopCratePath('src', 'platform', 'runtime_status.rs');
 
   assert.equal(fs.existsSync(platformRuntimeStatusPath), true);
   const platformRuntimeStatus = fs.readFileSync(platformRuntimeStatusPath, 'utf8');
@@ -2841,40 +2842,40 @@ test('desktop runtime status adapter lives in platform layer', () => {
 });
 
 test('desktop tauri crate imports core crates directly without a local core shim', () => {
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const desktopRust = rustFilesUnder(desktopCratePath('src'))
     .map((filePath) => fs.readFileSync(filePath, 'utf8'))
     .join('\n');
 
   assert.doesNotMatch(desktopLib, /^pub mod core;/mu);
-  assert.equal(exists('src-tauri', 'src', 'core'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core'), false);
   assert.doesNotMatch(desktopRust, /crate::core::/u);
   assert.match(desktopRust, /sona_core::/u);
   assert.match(desktopRust, /sona_sqlite::/u);
 });
 
 test('desktop filesystem adapters live in platform rather than repositories', () => {
-  const desktopPlatform = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformStorage = read('src-tauri', 'src', 'platform', 'file_storage.rs');
+  const desktopPlatform = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformStorage = read(...desktopCrateSegments, 'src', 'platform', 'file_storage.rs');
   const platformRecovery = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'recovery_repository.rs'),
+    desktopCratePath('src', 'platform', 'recovery_repository.rs'),
     'utf8',
   );
   const workspaceCargo = read('Cargo.toml');
   const coreExport = read('core', 'src', 'export', 'mod.rs');
   const exportAdapter = read('adapters', 'export', 'src', 'lib.rs');
-  const exportCommand = read('src-tauri', 'src', 'commands', 'export.rs');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const exportCommand = read(...desktopCrateSegments, 'src', 'commands', 'export.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const cliCargo = read('platforms', 'cli', 'Cargo.toml');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
 
   assert.doesNotMatch(desktopPlatform, /^pub mod export_files;/mu);
   assert.match(desktopPlatform, /^pub mod file_storage;/mu);
   assert.match(desktopPlatform, /^pub mod recovery_repository;/mu);
-  assert.equal(exists('src-tauri', 'src', 'platform', 'export_files.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'export.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'storage.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'recovery.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'platform', 'export_files.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'export.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'storage.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'recovery.rs'), false);
   assert.match(platformStorage, /pub use sona_runtime_fs::\{/u);
   assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
   assert.match(workspaceCargo, /"adapters\/export"/u);
@@ -2911,24 +2912,24 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
 });
 
 test('desktop automation and project repository task adapters live in platform', () => {
-  const desktopPlatform = read('src-tauri', 'src', 'platform', 'mod.rs');
+  const desktopPlatform = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
   const platformAutomation = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
+    desktopCratePath('src', 'platform', 'automation_repository.rs'),
     'utf8',
   );
   const platformProject = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'project_repository.rs'),
+    desktopCratePath('src', 'platform', 'project_repository.rs'),
     'utf8',
   );
-  const automationCommand = read('src-tauri', 'src', 'commands', 'automation.rs');
-  const projectCommand = read('src-tauri', 'src', 'commands', 'project.rs');
+  const automationCommand = read(...desktopCrateSegments, 'src', 'commands', 'automation.rs');
+  const projectCommand = read(...desktopCrateSegments, 'src', 'commands', 'project.rs');
 
   assert.match(desktopPlatform, /^pub mod automation_repository;/mu);
   assert.match(desktopPlatform, /^pub mod project_repository;/mu);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'automation.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'automation'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'project.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'project'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'automation.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'automation'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'project.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'project'), false);
   assert.match(platformAutomation, /pub fn validate_rule_activation_inner/u);
   assert.match(platformAutomation, /sona_sqlite::automation::SqliteAutomationRepository/u);
   assert.match(platformProject, /sona_sqlite::project::SqliteProjectRepository/u);
@@ -2939,29 +2940,29 @@ test('desktop automation and project repository task adapters live in platform',
 });
 
 test('desktop history repository facade lives in platform without repositories module', () => {
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const desktopPlatform = read('src-tauri', 'src', 'platform', 'mod.rs');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const desktopPlatform = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
   const platformHistory = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
   );
-  const platformDashboardPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'dashboard.rs');
+  const platformDashboardPath = desktopCratePath('src', 'platform', 'dashboard.rs');
   const platformDashboard = fs.existsSync(platformDashboardPath) ? fs.readFileSync(platformDashboardPath, 'utf8') : '';
-  const dashboardApp = read('src-tauri', 'src', 'app', 'dashboard.rs');
-  const setupApp = read('src-tauri', 'src', 'app', 'setup.rs');
-  const historyCommand = read('src-tauri', 'src', 'commands', 'history.rs');
+  const dashboardApp = read(...desktopCrateSegments, 'src', 'app', 'dashboard.rs');
+  const setupApp = read(...desktopCrateSegments, 'src', 'app', 'setup.rs');
+  const historyCommand = read(...desktopCrateSegments, 'src', 'commands', 'history.rs');
   const historyLlmHelpers = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository', 'llm_helpers.rs'),
+    desktopCratePath('src', 'platform', 'history_repository', 'llm_helpers.rs'),
     'utf8',
   );
-  const desktopRust = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+  const desktopRust = rustFilesUnder(desktopCratePath('src'))
     .map((filePath) => ({
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
     }))
     .filter(({ content }) => /crate::repositories|repositories::history/u.test(content))
     .map(({ filePath }) => path.relative(repoRoot, filePath));
-  const historyTypeShimReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository'))
+  const historyTypeShimReferences = rustFilesUnder(desktopCratePath('src', 'platform', 'history_repository'))
     .map((filePath) => ({
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
@@ -2973,10 +2974,10 @@ test('desktop history repository facade lives in platform without repositories m
   assert.equal(fs.existsSync(platformDashboardPath), true);
   assert.match(desktopPlatform, /^pub mod dashboard;/mu);
   assert.match(desktopPlatform, /^pub mod history_repository;/mu);
-  assert.equal(exists('src-tauri', 'src', 'repositories'), false);
-  assert.ok(exists('src-tauri', 'src', 'platform', 'history_repository', 'llm_helpers.rs'));
-  assert.ok(exists('src-tauri', 'src', 'platform', 'history_repository', 'state.rs'));
-  assert.equal(exists('src-tauri', 'src', 'platform', 'history_repository', 'types.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories'), false);
+  assert.ok(exists(...desktopCrateSegments, 'src', 'platform', 'history_repository', 'llm_helpers.rs'));
+  assert.ok(exists(...desktopCrateSegments, 'src', 'platform', 'history_repository', 'state.rs'));
+  assert.equal(exists(...desktopCrateSegments, 'src', 'platform', 'history_repository', 'types.rs'), false);
   assert.doesNotMatch(platformHistory, /^mod types;/mu);
   assert.deepEqual(historyTypeShimReferences, []);
   assert.deepEqual(desktopRust, []);
@@ -3033,14 +3034,14 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   const coreConfig = read('core', 'src', 'config', 'mod.rs');
   const coreDefaults = read('core', 'src', 'config', 'defaults.rs');
   const coreMigration = read('core', 'src', 'config', 'migration.rs');
-  const desktopSystemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const desktopServer = read('src-tauri', 'src', 'app', 'server.rs');
+  const desktopSystemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const desktopServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
   const desktopServerRuntime = desktopServer.split(/#\[cfg\(test\)\]/u)[0];
   const platformApiServerConfig = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'api_server_config.rs'),
+    desktopCratePath('src', 'platform', 'api_server_config.rs'),
     'utf8',
   );
-  const desktopIntegrations = read('src-tauri', 'src', 'integrations', 'mod.rs');
+  const desktopIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
   const llmProvidersTs = read('src', 'services', 'llm', 'providers.ts');
 
   assert.match(coreLib, /^pub mod config;/mu);
@@ -3055,21 +3056,21 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(desktopSystemCommand, /sona_core::config::migrate_app_config/u);
   assert.match(platformApiServerConfig, /sona_sqlite::config_store::\{/u);
   assert.doesNotMatch(desktopServerRuntime, /sona_sqlite::config_store/u);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config', 'defaults.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config', 'migration.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config', 'types.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config', 'error.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'defaults.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'migration.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'types.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'error.rs'), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod llm_providers;/mu);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'llm_providers.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'llm_providers.rs'), false);
   assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm\/llm-providers\.json/u);
 });
 
 test('SQLite database handle and schema are owned by sqlite adapter', () => {
   const workspaceCargo = read('Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
-  const desktopSetup = read('src-tauri', 'src', 'app', 'setup.rs');
-  const platformDatabase = read('src-tauri', 'src', 'platform', 'database.rs');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
+  const desktopSetup = read(...desktopCrateSegments, 'src', 'app', 'setup.rs');
+  const platformDatabase = read(...desktopCrateSegments, 'src', 'platform', 'database.rs');
   const sqliteCargoPath = path.join(repoRoot, 'adapters', 'sqlite', 'Cargo.toml');
   const sqliteLibPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'lib.rs');
   const sqliteMigrationPath = path.join(repoRoot, 'adapters', 'sqlite', 'src', 'legacy_migration.rs');
@@ -3089,14 +3090,14 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopSetup, /sona_sqlite::Database::open/u);
   assert.doesNotMatch(desktopSetup, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
   assert.doesNotMatch(desktopSetup, /sona_sqlite::legacy_migration::move_legacy_domains_to_backup/u);
-  assert.equal(exists('src-tauri', 'src', 'core', 'database'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'database'), false);
   assert.equal(
-    exists('src-tauri', 'src', 'core', 'database', 'legacy_migration.rs'),
+    exists(...desktopCrateSegments, 'src', 'core', 'database', 'legacy_migration.rs'),
     false,
   );
-  assert.equal(exists('src-tauri', 'src', 'core', 'database', 'error.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'database', 'ports.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'database', 'schema.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'database', 'error.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'database', 'ports.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'database', 'schema.rs'), false);
   assert.doesNotMatch(desktopSetup, /crate::core::database/u);
   assert.doesNotMatch(desktopSetup, /rusqlite::Connection/u);
   assert.doesNotMatch(desktopSetup, /struct ConnectionPool/u);
@@ -3105,10 +3106,10 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
 
 test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
-  const desktopSystemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const platformDatabase = read('src-tauri', 'src', 'platform', 'database.rs');
-  const platformAppConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'app_config.rs');
-  const taskLedgerRepositoryPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'task_ledger_repository.rs');
+  const desktopSystemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const platformDatabase = read(...desktopCrateSegments, 'src', 'platform', 'database.rs');
+  const platformAppConfigPath = desktopCratePath('src', 'platform', 'app_config.rs');
+  const taskLedgerRepositoryPath = desktopCratePath('src', 'platform', 'task_ledger_repository.rs');
 
   assert.ok(exists('adapters', 'sqlite', 'src', 'config_store.rs'));
   assert.ok(exists('adapters', 'sqlite', 'src', 'task_ledger.rs'));
@@ -3125,14 +3126,14 @@ test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
   assert.match(platformTaskLedgerRepository, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
   assert.doesNotMatch(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
   assert.doesNotMatch(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
-  assert.equal(exists('src-tauri', 'src', 'core', 'config', 'sqlite_store.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'core', 'task_ledger', 'sqlite_repository.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'sqlite_store.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'task_ledger', 'sqlite_repository.rs'), false);
 });
 
 test('desktop app config store commands delegate to platform adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const platformAppConfigPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'app_config.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const platformAppConfigPath = desktopCratePath('src', 'platform', 'app_config.rs');
 
   assert.equal(fs.existsSync(platformAppConfigPath), true);
   const platformAppConfig = fs.readFileSync(platformAppConfigPath, 'utf8');
@@ -3152,9 +3153,9 @@ test('desktop app config store commands delegate to platform adapter', () => {
 });
 
 test('desktop task ledger repository adapter lives in platform layer', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const platformTaskLedgerPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'task_ledger_repository.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const platformTaskLedgerPath = desktopCratePath('src', 'platform', 'task_ledger_repository.rs');
 
   assert.equal(fs.existsSync(platformTaskLedgerPath), true);
   const platformTaskLedger = fs.readFileSync(platformTaskLedgerPath, 'utf8');
@@ -3186,10 +3187,10 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   const coreAutomationPath = path.join(repoRoot, 'core', 'src', 'automation', 'mod.rs');
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
   const platformAutomationRepository = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_repository.rs'),
+    desktopCratePath('src', 'platform', 'automation_repository.rs'),
     'utf8',
   );
-  const desktopAutomationCommand = read('src-tauri', 'src', 'commands', 'automation.rs');
+  const desktopAutomationCommand = read(...desktopCrateSegments, 'src', 'commands', 'automation.rs');
 
   assert.ok(fs.existsSync(coreAutomationPath));
   assert.match(coreLib, /^pub mod automation;/mu);
@@ -3216,28 +3217,28 @@ test('SQLite automation repository is owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopAutomationCommand, /sona_sqlite::automation::AutomationRepositoryState/u);
   assert.doesNotMatch(desktopAutomationCommand, /run_automation_task/u);
   assert.doesNotMatch(desktopAutomationCommand, /validate_rule_activation_inner/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'automation.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'automation'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'automation.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'automation'), false);
   assert.doesNotMatch(platformAutomationRepository, /is_feature_llm_config_complete/u);
   assert.doesNotMatch(platformAutomationRepository, /fn is_feature_llm_config_complete/u);
   assert.doesNotMatch(platformAutomationRepository, /fn is_batch_asr_configured/u);
   assert.doesNotMatch(platformAutomationRepository, /online_asr_providers/u);
   assert.equal(
-    exists('src-tauri', 'src', 'repositories', 'automation', 'sqlite_repository.rs'),
+    exists(...desktopCrateSegments, 'src', 'repositories', 'automation', 'sqlite_repository.rs'),
     false,
   );
 });
 
 test('automation runtime path rules are owned by core and adapted by desktop', () => {
   const coreAutomation = read('core', 'src', 'automation', 'mod.rs');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const runtimeFsLib = read('adapters', 'runtime_fs', 'src', 'lib.rs');
   const desktopPlatformRuntime = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'automation_runtime.rs'),
+    desktopCratePath('src', 'platform', 'automation_runtime.rs'),
     'utf8',
   );
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const desktopCommands = read('src-tauri', 'src', 'commands', 'automation.rs');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const desktopCommands = read(...desktopCrateSegments, 'src', 'commands', 'automation.rs');
 
   assert.match(coreAutomation, /pub struct AutomationRuntimeRuleConfig/u);
   assert.match(coreAutomation, /pub struct AutomationRuntimeCandidatePayload/u);
@@ -3260,7 +3261,7 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
   assert.doesNotMatch(desktopCommands, /collect_rule_path_result\(/u);
   assert.doesNotMatch(desktopCommands, /tauri::async_runtime::spawn_blocking/u);
   assert.doesNotMatch(tauriCargo, /^walkdir\s*=/mu);
-  assert.equal(exists('src-tauri', 'src', 'core', 'automation.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'automation.rs'), false);
   assert.doesNotMatch(desktopPlatformRuntime, /const SUPPORTED_MEDIA_EXTENSIONS/u);
   assert.doesNotMatch(desktopPlatformRuntime, /pub struct AutomationRuntimeRuleConfig/u);
   assert.doesNotMatch(desktopPlatformRuntime, /pub struct AutomationRuntimeCandidatePayload/u);
@@ -3272,16 +3273,16 @@ test('automation runtime path rules are owned by core and adapted by desktop', (
 
 test('SQLite project repository is owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformDatabasePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformDatabasePath = desktopCratePath('src', 'platform', 'database.rs');
   const platformDatabase = fs.existsSync(platformDatabasePath)
     ? fs.readFileSync(platformDatabasePath, 'utf8')
     : '';
   const platformProjectRepository = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'project_repository.rs'),
+    desktopCratePath('src', 'platform', 'project_repository.rs'),
     'utf8',
   );
-  const desktopProjectCommand = read('src-tauri', 'src', 'commands', 'project.rs');
+  const desktopProjectCommand = read(...desktopCrateSegments, 'src', 'commands', 'project.rs');
 
   assert.ok(exists('adapters', 'sqlite', 'src', 'project.rs'));
   assert.match(sqliteLib, /^pub mod project;/mu);
@@ -3303,21 +3304,21 @@ test('SQLite project repository is owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopProjectCommand, /SETTINGS_FILE_NAME/u);
   assert.doesNotMatch(desktopProjectCommand, /ACTIVE_PROJECT_SETTINGS_KEY/u);
   assert.doesNotMatch(desktopProjectCommand, /app\.state::<Arc<sona_sqlite::Database>>\(\)/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'project.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'project'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'project.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'project'), false);
   assert.equal(
-    exists('src-tauri', 'src', 'repositories', 'project', 'sqlite_repository.rs'),
+    exists(...desktopCrateSegments, 'src', 'repositories', 'project', 'sqlite_repository.rs'),
     false,
   );
 });
 
 test('desktop sqlite app-state access is centralized in platform database adapter', () => {
   const platformDatabase = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'database.rs'),
+    desktopCratePath('src', 'platform', 'database.rs'),
     'utf8',
   );
-  const allowedPath = path.join('src-tauri', 'src', 'platform', 'database.rs').replaceAll(path.sep, '/');
-  const directStateAccess = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+  const allowedPath = path.join('platforms', 'desktop', 'src', 'platform', 'database.rs').replaceAll(path.sep, '/');
+  const directStateAccess = rustFilesUnder(desktopCratePath('src'))
     .sort()
     .flatMap((filePath) => {
       const relativePath = path.relative(repoRoot, filePath).replaceAll(path.sep, '/');
@@ -3339,13 +3340,13 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   const coreLib = read('core', 'src', 'lib.rs');
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformLlmUsagePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'llm_usage.rs');
-  const desktopLlmCommands = read('src-tauri', 'src', 'commands', 'llm.rs');
-  const tauriLlm = read('src-tauri', 'src', 'integrations', 'llm.rs');
-  const tauriLlmCommandImpl = read('src-tauri', 'src', 'integrations', 'llm', 'commands.rs');
-  const tauriIntegrations = read('src-tauri', 'src', 'integrations', 'mod.rs');
-  const tauriLlmTypes = read('src-tauri', 'src', 'integrations', 'llm', 'types.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformLlmUsagePath = desktopCratePath('src', 'platform', 'llm_usage.rs');
+  const desktopLlmCommands = read(...desktopCrateSegments, 'src', 'commands', 'llm.rs');
+  const tauriLlm = read(...desktopCrateSegments, 'src', 'integrations', 'llm.rs');
+  const tauriLlmCommandImpl = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'commands.rs');
+  const tauriIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
+  const tauriLlmTypes = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'types.rs');
 
   assert.ok(exists('core', 'src', 'llm', 'usage.rs'));
   assert.ok(exists('adapters', 'sqlite', 'src', 'llm_usage.rs'));
@@ -3375,18 +3376,18 @@ test('LLM usage domain and SQLite usage store are owned by core and sqlite adapt
   assert.doesNotMatch(tauriLlm, /pub\(crate\) use sona_core::llm::usage;/u);
   assert.doesNotMatch(tauriIntegrations, /pub use sona_sqlite::llm_usage as llm_usage_sqlite;/u);
   assert.match(tauriLlmTypes, /pub use sona_core::llm::usage::\{LlmGenerateSource, LlmUsageCategory, TokenUsage\};/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'analytics.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'llm_usage.rs'), false);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'llm_usage_sqlite.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'analytics.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'llm_usage.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'llm_usage_sqlite.rs'), false);
 });
 
 test('LLM task models and prompt planning are owned by core and reused by desktop', () => {
   const coreLib = read('core', 'src', 'lib.rs');
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const coreLlmTasks = read('core', 'src', 'llm', 'tasks.rs');
-  const desktopLlm = read('src-tauri', 'src', 'integrations', 'llm.rs');
-  const desktopLlmTypes = read('src-tauri', 'src', 'integrations', 'llm', 'types.rs');
-  const desktopLlmTasks = read('src-tauri', 'src', 'integrations', 'llm', 'tasks.rs');
+  const desktopLlm = read(...desktopCrateSegments, 'src', 'integrations', 'llm.rs');
+  const desktopLlmTypes = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'types.rs');
+  const desktopLlmTasks = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'tasks.rs');
   const onlineLlmLib = read('adapters', 'online_llm', 'src', 'lib.rs');
   const tsBindLib = read('adapters', 'ts_bind', 'src', 'lib.rs');
 
@@ -3424,7 +3425,7 @@ test('transcript LLM job helpers are owned by core and reused by desktop', () =>
   const coreLib = read('core', 'src', 'lib.rs');
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const coreLlmJobs = read('core', 'src', 'llm', 'jobs.rs');
-  const desktopLlmJobs = read('src-tauri', 'src', 'integrations', 'llm', 'jobs.rs');
+  const desktopLlmJobs = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'jobs.rs');
 
   assert.match(coreLib, /^pub mod llm;/mu);
   assert.match(coreLlm, /^pub mod jobs;/mu);
@@ -3440,8 +3441,8 @@ test('transcript LLM job helpers are owned by core and reused by desktop', () =>
 });
 
 test('desktop LLM commands use the integration facade instead of implementation submodules', () => {
-  const desktopLlm = read('src-tauri', 'src', 'integrations', 'llm.rs');
-  const desktopLlmCommands = read('src-tauri', 'src', 'commands', 'llm.rs');
+  const desktopLlm = read(...desktopCrateSegments, 'src', 'integrations', 'llm.rs');
+  const desktopLlmCommands = read(...desktopCrateSegments, 'src', 'commands', 'llm.rs');
 
   assert.match(desktopLlm, /^mod commands;/mu);
   assert.match(desktopLlm, /^mod jobs;/mu);
@@ -3462,8 +3463,8 @@ test('LLM provider protocol mapping is owned by core and reused by desktop', () 
   const coreLib = read('core', 'src', 'lib.rs');
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const coreProviderProtocol = read('core', 'src', 'llm', 'provider_protocol.rs');
-  const desktopLlmTypes = read('src-tauri', 'src', 'integrations', 'llm', 'types.rs');
-  const desktopLlmProviders = read('src-tauri', 'src', 'integrations', 'llm', 'providers.rs');
+  const desktopLlmTypes = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'types.rs');
+  const desktopLlmProviders = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'providers.rs');
   const onlineLlmLib = read('adapters', 'online_llm', 'src', 'lib.rs');
 
   assert.match(coreLib, /^pub mod llm;/mu);
@@ -3486,8 +3487,8 @@ test('LLM streaming protocol helpers are owned by core and reused by desktop', (
   const coreLib = read('core', 'src', 'lib.rs');
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const coreStreaming = read('core', 'src', 'llm', 'streaming_protocol.rs');
-  const desktopLlm = read('src-tauri', 'src', 'integrations', 'llm.rs');
-  const desktopStreaming = read('src-tauri', 'src', 'integrations', 'llm', 'streaming.rs');
+  const desktopLlm = read(...desktopCrateSegments, 'src', 'integrations', 'llm.rs');
+  const desktopStreaming = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'streaming.rs');
   const onlineLlmLib = read('adapters', 'online_llm', 'src', 'lib.rs');
 
   assert.match(coreLib, /^pub mod llm;/mu);
@@ -3514,7 +3515,7 @@ test('LLM request and config contracts are owned by core and reused by desktop',
   const coreLlm = read('core', 'src', 'llm', 'mod.rs');
   const coreRequestsPath = path.join(repoRoot, 'core', 'src', 'llm', 'requests.rs');
   const coreRequests = fs.readFileSync(coreRequestsPath, 'utf8');
-  const desktopLlmTypes = read('src-tauri', 'src', 'integrations', 'llm', 'types.rs');
+  const desktopLlmTypes = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'types.rs');
   const tsBindLib = read('adapters', 'ts_bind', 'src', 'lib.rs');
   const requestTypes = [
     'LlmConfig',
@@ -3550,8 +3551,8 @@ test('LLM generation and model listing use core ports with desktop adapters', ()
   const corePorts = read('core', 'src', 'ports', 'mod.rs');
   const coreLlmPortPath = path.join(repoRoot, 'core', 'src', 'ports', 'llm.rs');
   const coreLlmPort = fs.readFileSync(coreLlmPortPath, 'utf8');
-  const desktopCommands = read('src-tauri', 'src', 'integrations', 'llm', 'commands.rs');
-  const desktopProviders = read('src-tauri', 'src', 'integrations', 'llm', 'providers.rs');
+  const desktopCommands = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'commands.rs');
+  const desktopProviders = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'providers.rs');
   const onlineLlmLib = read('adapters', 'online_llm', 'src', 'lib.rs');
 
   assert.match(corePorts, /^pub mod llm;/mu);
@@ -3571,14 +3572,14 @@ test('LLM generation and model listing use core ports with desktop adapters', ()
 });
 
 test('desktop LLM timestamps are supplied by platform time adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformTimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'time.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformTimePath = desktopCratePath('src', 'platform', 'time.rs');
   const desktopLlmCommands = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'commands.rs'),
+    desktopCratePath('src', 'integrations', 'llm', 'commands.rs'),
     'utf8',
   );
   const desktopLlmJobs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'llm', 'jobs.rs'),
+    desktopCratePath('src', 'integrations', 'llm', 'jobs.rs'),
     'utf8',
   );
   const desktopLlmIntegration = `${desktopLlmCommands}\n${desktopLlmJobs}`;
@@ -3595,8 +3596,8 @@ test('desktop LLM timestamps are supplied by platform time adapter', () => {
 });
 
 test('desktop app log timestamps are supplied by platform time adapter', () => {
-  const desktopLib = read('src-tauri', 'src', 'lib.rs');
-  const platformTime = read('src-tauri', 'src', 'platform', 'time.rs');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const platformTime = read(...desktopCrateSegments, 'src', 'platform', 'time.rs');
 
   assert.match(platformTime, /pub fn unix_timestamp_secs\(/u);
   assert.match(desktopLib, /crate::platform::time::unix_timestamp_secs\(\)/u);
@@ -3605,14 +3606,14 @@ test('desktop app log timestamps are supplied by platform time adapter', () => {
 
 test('online LLM provider implementation lives in adapter crate', () => {
   const workspaceCargo = read('Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const onlineLlmCargoPath = path.join(repoRoot, 'adapters', 'online_llm', 'Cargo.toml');
   const onlineLlmLibPath = path.join(repoRoot, 'adapters', 'online_llm', 'src', 'lib.rs');
   const onlineLlmLib = fs.readFileSync(onlineLlmLibPath, 'utf8');
-  const desktopCommands = read('src-tauri', 'src', 'integrations', 'llm', 'commands.rs');
-  const desktopProviders = read('src-tauri', 'src', 'integrations', 'llm', 'providers.rs');
-  const desktopNetwork = read('src-tauri', 'src', 'integrations', 'llm', 'network.rs');
-  const desktopTasks = read('src-tauri', 'src', 'integrations', 'llm', 'tasks.rs');
+  const desktopCommands = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'commands.rs');
+  const desktopProviders = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'providers.rs');
+  const desktopNetwork = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'network.rs');
+  const desktopTasks = read(...desktopCrateSegments, 'src', 'integrations', 'llm', 'tasks.rs');
 
   assert.match(workspaceCargo, /"adapters\/online_llm"/u);
   assert.ok(fs.existsSync(onlineLlmCargoPath));
@@ -3641,9 +3642,9 @@ test('online LLM provider implementation lives in adapter crate', () => {
 
 test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
-  const desktopStorageCommand = read('src-tauri', 'src', 'commands', 'storage.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformStorageUsagePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'storage_usage.rs');
+  const desktopStorageCommand = read(...desktopCrateSegments, 'src', 'commands', 'storage.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformStorageUsagePath = desktopCratePath('src', 'platform', 'storage_usage.rs');
 
   assert.ok(exists('adapters', 'sqlite', 'src', 'storage_usage.rs'));
   assert.equal(fs.existsSync(platformStorageUsagePath), true);
@@ -3664,7 +3665,7 @@ test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', (
   assert.doesNotMatch(desktopStorageCommand, /PathKind::AppLocalData/u);
   assert.doesNotMatch(desktopStorageCommand, /tauri::async_runtime::spawn_blocking/u);
   assert.doesNotMatch(desktopStorageCommand, /observable_webview_cache_bytes/u);
-  assert.equal(exists('src-tauri', 'src', 'core', 'storage_usage.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'storage_usage.rs'), false);
 });
 
 test('history filesystem helpers are owned by sqlite adapter', () => {
@@ -3676,7 +3677,7 @@ test('history filesystem helpers are owned by sqlite adapter', () => {
     'utf8',
   );
   const platformHistory = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
   );
 
@@ -3688,14 +3689,14 @@ test('history filesystem helpers are owned by sqlite adapter', () => {
   assert.match(platformHistory, /pub\(crate\) use sona_sqlite::history_fs_utils as fs_utils;/u);
   assert.match(sqliteHistoryFs, /pub fn create_tar_bz2_archive/u);
   assert.match(sqliteHistoryFs, /pub fn extract_tar_bz2_archive/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'history', 'fs_utils.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'fs_utils.rs'), false);
   assert.doesNotMatch(platformHistory, /^pub\(crate\) mod fs_utils;/mu);
 });
 
 test('SQLite history store is owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
   const platformHistory = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
   );
 
@@ -3703,14 +3704,14 @@ test('SQLite history store is owned by sqlite adapter', () => {
   assert.match(sqliteLib, /^pub mod history_store;/mu);
   assert.match(sqliteLib, /^pub use history_store::SqliteHistoryStore;/mu);
   assert.match(platformHistory, /pub use sona_sqlite::history_store as sqlite_store;/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'history', 'sqlite_store.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'sqlite_store.rs'), false);
   assert.doesNotMatch(platformHistory, /^pub mod sqlite_store;/mu);
 });
 
 test('history backup archive persistence is owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
   const platformHistory = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'history_repository.rs'),
+    desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
   );
 
@@ -3719,9 +3720,9 @@ test('history backup archive persistence is owned by sqlite adapter', () => {
   assert.match(sqliteLib, /^pub mod history_backup;/mu);
   assert.match(sqliteLib, /^pub mod history_archive;/mu);
   assert.match(platformHistory, /pub use sona_sqlite::history_backup as backup;/u);
-  assert.equal(exists('src-tauri', 'src', 'repositories', 'history', 'backup.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'backup.rs'), false);
   assert.equal(
-    exists('src-tauri', 'src', 'repositories', 'history', 'repository.rs'),
+    exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'repository.rs'),
     false,
   );
   assert.doesNotMatch(platformHistory, /^pub mod backup;/mu);
@@ -3748,9 +3749,9 @@ test('standalone CLI invokes local batch ASR through the core transcriber port',
 
 test('recognizer transcript utilities are owned by core and reused by adapters', () => {
   const coreTranscript = read('core', 'src', 'transcription', 'transcript.rs');
-  const asrMod = read('src-tauri', 'src', 'integrations', 'asr', 'mod.rs');
+  const asrMod = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mod.rs');
   const tauriTranscript = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
   const localBatch = fs.readFileSync(
@@ -3762,7 +3763,7 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
   assert.match(coreTranscript, /pub fn synthesize_durations\(/u);
   assert.match(asrMod, /pub use sona_core::transcription::postprocess::TranscriptPostprocessor/u);
   assert.doesNotMatch(asrMod, /^mod postprocess;/mu);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'asr', 'postprocess.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'asr', 'postprocess.rs'), false);
   assert.match(
     tauriTranscript,
     /pub\(crate\) use sona_core::transcription::transcript::\{[\s\S]*normalize_recognizer_text[\s\S]*synthesize_durations[\s\S]*\};/u,
@@ -3780,13 +3781,13 @@ test('recognizer transcript utilities are owned by core and reused by adapters',
 test('timeline transcript normalization is owned by core and reused by desktop', () => {
   const coreCargo = read('core', 'Cargo.toml');
   const coreTranscript = read('core', 'src', 'transcription', 'transcript.rs');
-  const asrMod = read('src-tauri', 'src', 'integrations', 'asr', 'mod.rs');
+  const asrMod = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mod.rs');
   const tauriTranscript = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
-  const groqRs = read('src-tauri', 'src', 'integrations', 'asr', 'groq.rs');
-  const mistralRs = read('src-tauri', 'src', 'integrations', 'asr', 'mistral.rs');
+  const groqRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'groq.rs');
+  const mistralRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mistral.rs');
 
   assert.match(coreTranscript, /pub fn apply_timeline_normalization_with_id_generator/u);
   assert.match(coreTranscript, /pub fn build_transcript_update_with_id_generator/u);
@@ -3810,7 +3811,7 @@ test('timeline transcript normalization is owned by core and reused by desktop',
 
 test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR adapter', () => {
   const workspaceCargo = read('Cargo.toml');
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
@@ -3818,8 +3819,8 @@ test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR 
   const onlineAsrCargoPath = path.join(repoRoot, 'adapters', 'online_asr', 'Cargo.toml');
   const onlineAsrLibPath = path.join(repoRoot, 'adapters', 'online_asr', 'src', 'lib.rs');
   const coreAsr = read('core', 'src', 'ports', 'asr.rs');
-  const groqRs = read('src-tauri', 'src', 'integrations', 'asr', 'groq.rs');
-  const mistralRs = read('src-tauri', 'src', 'integrations', 'asr', 'mistral.rs');
+  const groqRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'groq.rs');
+  const mistralRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'mistral.rs');
 
   assert.match(workspaceCargo, /"adapters\/online_asr"/u);
   assert.ok(fs.existsSync(onlineAsrCargoPath));
@@ -3844,7 +3845,7 @@ test('desktop Volcengine batch provider delegates HTTP work to online ASR adapte
     'utf8',
   );
   const volcengineRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
   );
 
@@ -3868,7 +3869,7 @@ test('desktop Volcengine streaming protocol helpers are owned by online ASR adap
     'utf8',
   );
   const volcengineRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
   );
 
@@ -3895,15 +3896,15 @@ test('Volcengine streaming session is implemented by the online ASR adapter', ()
     'utf8',
   );
   const desktopCargo = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'Cargo.toml'),
+    desktopCratePath('Cargo.toml'),
     'utf8',
   );
   const desktopVolcengine = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
   );
   const desktopAsr = rustFilesUnder(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr'),
+    desktopCratePath('src', 'integrations', 'asr'),
   )
     .map((filePath) => fs.readFileSync(filePath, 'utf8'))
     .join('\n');
@@ -3933,7 +3934,7 @@ test('desktop Volcengine config and response helpers are owned by online ASR ada
     'utf8',
   );
   const volcengineRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
   );
 
@@ -3957,16 +3958,16 @@ test('desktop Volcengine config and response helpers are owned by online ASR ada
 });
 
 test('desktop hardware GPU adapter lives in platform layer', () => {
-  const appMod = read('src-tauri', 'src', 'app', 'mod.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const batchRs = read('src-tauri', 'src', 'integrations', 'asr', 'batch.rs');
-  const streamingRs = read('src-tauri', 'src', 'integrations', 'streaming.rs');
+  const appMod = read(...desktopCrateSegments, 'src', 'app', 'mod.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const batchRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'batch.rs');
+  const streamingRs = read(...desktopCrateSegments, 'src', 'integrations', 'streaming.rs');
   const adapterSession = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
   );
-  const hardwarePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'hardware.rs');
+  const hardwarePath = desktopCratePath('src', 'platform', 'hardware.rs');
 
   assert.equal(fs.existsSync(hardwarePath), true);
   const hardwareRs = fs.readFileSync(hardwarePath, 'utf8');
@@ -3990,18 +3991,18 @@ test('desktop hardware GPU adapter lives in platform layer', () => {
 });
 
 test('desktop local audio helpers come from local ASR adapter without Tauri core pipeline', () => {
-  const batchRs = read('src-tauri', 'src', 'integrations', 'asr', 'batch.rs');
-  const desktopAudio = read('src-tauri', 'src', 'integrations', 'audio.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformAudioStoragePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'audio_storage.rs');
+  const batchRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'batch.rs');
+  const desktopAudio = read(...desktopCrateSegments, 'src', 'integrations', 'audio.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformAudioStoragePath = desktopCratePath('src', 'platform', 'audio_storage.rs');
   const platformAudioStorage = fs.existsSync(platformAudioStoragePath) ? fs.readFileSync(platformAudioStoragePath, 'utf8') : '';
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const localAsrSpeakerProcessing = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
     'utf8',
   );
   const runtimeStatusRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'runtime_status.rs'),
+    desktopCratePath('src', 'platform', 'runtime_status.rs'),
     'utf8',
   );
   const prWorkflow = fs.readFileSync(
@@ -4009,7 +4010,7 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
     'utf8',
   );
 
-  assert.equal(exists('src-tauri', 'src', 'core', 'pipeline.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'pipeline.rs'), false);
   assert.match(batchRs, /sona_local_asr::audio::extract_and_resample_audio/u);
   assert.match(batchRs, /sona_local_asr::audio::save_wav_file/u);
   assert.match(localAsrSpeakerProcessing, /crate::audio::extract_and_resample_audio/u);
@@ -4028,7 +4029,7 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
   assert.doesNotMatch(tauriCargo, /^hound\s*=/mu);
   assert.doesNotMatch(prWorkflow, /core::pipeline::tests/u);
 
-  const desktopPipelineReferences = rustFilesUnder(path.join(repoRoot, 'src-tauri', 'src'))
+  const desktopPipelineReferences = rustFilesUnder(desktopCratePath('src'))
     .map((filePath) => ({
       filePath,
       content: fs.readFileSync(filePath, 'utf8'),
@@ -4040,8 +4041,8 @@ test('desktop local audio helpers come from local ASR adapter without Tauri core
 });
 
 test('local ASR blocking tasks are owned by the local adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformAsrRuntimePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'asr_runtime.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformAsrRuntimePath = desktopCratePath('src', 'platform', 'asr_runtime.rs');
   const adapterSession = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'streaming', 'session.rs'),
     'utf8',
@@ -4055,10 +4056,10 @@ test('local ASR blocking tasks are owned by the local adapter', () => {
 });
 
 test('desktop system audio mute command is owned by platform adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const commandAudio = read('src-tauri', 'src', 'commands', 'audio.rs');
-  const desktopAudio = read('src-tauri', 'src', 'integrations', 'audio.rs');
-  const platformSystemAudioPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'system_audio.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const commandAudio = read(...desktopCrateSegments, 'src', 'commands', 'audio.rs');
+  const desktopAudio = read(...desktopCrateSegments, 'src', 'integrations', 'audio.rs');
+  const platformSystemAudioPath = desktopCratePath('src', 'platform', 'system_audio.rs');
 
   assert.equal(fs.existsSync(platformSystemAudioPath), true);
   const platformSystemAudio = fs.readFileSync(platformSystemAudioPath, 'utf8');
@@ -4075,10 +4076,10 @@ test('desktop system audio mute command is owned by platform adapter', () => {
 });
 
 test('desktop system input adapter lives in platform layer', () => {
-  const appMod = read('src-tauri', 'src', 'app', 'mod.rs');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const platformSystemPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'system.rs');
+  const appMod = read(...desktopCrateSegments, 'src', 'app', 'mod.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const platformSystemPath = desktopCratePath('src', 'platform', 'system.rs');
 
   assert.equal(fs.existsSync(platformSystemPath), true);
   const platformSystem = fs.readFileSync(platformSystemPath, 'utf8');
@@ -4102,9 +4103,9 @@ test('desktop system input adapter lives in platform layer', () => {
 });
 
 test('desktop startup error dialog is owned by platform adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const desktopMain = read('src-tauri', 'src', 'main.rs');
-  const startupDialogPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_dialog.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const desktopMain = read(...desktopCrateSegments, 'src', 'main.rs');
+  const startupDialogPath = desktopCratePath('src', 'platform', 'startup_dialog.rs');
 
   assert.equal(fs.existsSync(startupDialogPath), true);
   const startupDialog = fs.readFileSync(startupDialogPath, 'utf8');
@@ -4122,9 +4123,9 @@ test('desktop startup error dialog is owned by platform adapter', () => {
 });
 
 test('desktop startup console setup is owned by platform adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const desktopMain = read('src-tauri', 'src', 'main.rs');
-  const startupConsolePath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_console.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const desktopMain = read(...desktopCrateSegments, 'src', 'main.rs');
+  const startupConsolePath = desktopCratePath('src', 'platform', 'startup_console.rs');
 
   assert.equal(fs.existsSync(startupConsolePath), true);
   const startupConsole = fs.readFileSync(startupConsolePath, 'utf8');
@@ -4140,9 +4141,9 @@ test('desktop startup console setup is owned by platform adapter', () => {
 });
 
 test('desktop startup test-exit environment switch is owned by platform adapter', () => {
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const desktopMain = read('src-tauri', 'src', 'main.rs');
-  const startupEnvPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'startup_env.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const desktopMain = read(...desktopCrateSegments, 'src', 'main.rs');
+  const startupEnvPath = desktopCratePath('src', 'platform', 'startup_env.rs');
 
   assert.equal(fs.existsSync(startupEnvPath), true);
   const startupEnv = fs.readFileSync(startupEnvPath, 'utf8');
@@ -4158,7 +4159,7 @@ test('desktop startup test-exit environment switch is owned by platform adapter'
 });
 
 test('desktop batch ASR delegates audio segmentation to local ASR adapter', () => {
-  const batchRs = read('src-tauri', 'src', 'integrations', 'asr', 'batch.rs');
+  const batchRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'batch.rs');
 
   assert.match(batchRs, /sona_local_asr::audio::segment_batch_audio/u);
   assert.doesNotMatch(batchRs, /sherpa_onnx::SileroVadModelConfig/u);
@@ -4169,26 +4170,26 @@ test('desktop batch ASR delegates audio segmentation to local ASR adapter', () =
 });
 
 test('speaker processing runtime is owned by local ASR adapter and wrapped by desktop platform', () => {
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const localAsrLib = read('adapters', 'local_asr', 'src', 'lib.rs');
   const localAsrProcessing = fs.readFileSync(
     path.join(repoRoot, 'adapters', 'local_asr', 'src', 'speaker_processing.rs'),
     'utf8',
   );
-  const desktopPlatform = read('src-tauri', 'src', 'platform', 'mod.rs');
+  const desktopPlatform = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
   const platformSpeaker = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'platform', 'speaker_processing.rs'),
+    desktopCratePath('src', 'platform', 'speaker_processing.rs'),
     'utf8',
   );
-  const desktopIntegrations = read('src-tauri', 'src', 'integrations', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const batchRs = read('src-tauri', 'src', 'integrations', 'asr', 'batch.rs');
+  const desktopIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const batchRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'batch.rs');
 
   assert.match(localAsrLib, /^pub mod speaker;/mu);
   assert.match(localAsrLib, /^pub mod speaker_processing;/mu);
   assert.equal(exists('adapters', 'local_asr', 'src', 'speaker.rs'), true);
   assert.equal(exists('adapters', 'local_asr', 'src', 'speaker_processing.rs'), true);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'speaker.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'speaker.rs'), false);
   assert.match(desktopPlatform, /^pub mod speaker_processing;/mu);
   assert.doesNotMatch(desktopIntegrations, /^pub mod speaker;/mu);
   assert.doesNotMatch(tauriCargo, /^sherpa-onnx\s*=/mu);
@@ -4221,14 +4222,14 @@ test('media file IO detection is delegated to media detector adapter', () => {
     path.join(repoRoot, 'adapters', 'media_detector', 'src', 'lib.rs'),
     'utf8',
   );
-  const tauriCargo = read('src-tauri', 'Cargo.toml');
+  const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const cliCargo = read('platforms', 'cli', 'Cargo.toml');
   const apiCargo = read('adapters', 'api_server', 'Cargo.toml');
-  const platformMod = read('src-tauri', 'src', 'platform', 'mod.rs');
-  const platformMediaDetectorPath = path.join(repoRoot, 'src-tauri', 'src', 'platform', 'media_detector.rs');
-  const desktopIntegrations = read('src-tauri', 'src', 'integrations', 'mod.rs');
-  const systemCommand = read('src-tauri', 'src', 'commands', 'system.rs');
-  const tauriServer = read('src-tauri', 'src', 'app', 'server.rs');
+  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
+  const platformMediaDetectorPath = desktopCratePath('src', 'platform', 'media_detector.rs');
+  const desktopIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
+  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
+  const tauriServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
   const apiServer = read('adapters', 'api_server', 'src', 'lib.rs');
 
   assert.match(coreCargo, /^infer\s*=/mu);
@@ -4248,7 +4249,7 @@ test('media file IO detection is delegated to media detector adapter', () => {
   assert.match(platformMod, /^pub mod media_detector;/mu);
   assert.match(platformMediaDetector, /pub async fn check_media_formats/u);
   assert.match(platformMediaDetector, /sona_media_detector::check_media_formats/u);
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'media_detector.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'media_detector.rs'), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod media_detector;/mu);
   assert.doesNotMatch(tauriCargo, /^infer\s*=/mu);
   assert.match(tauriCargo, /^sona-media-detector\s*=/mu);
@@ -4266,7 +4267,7 @@ test('media file IO detection is delegated to media detector adapter', () => {
 
 test('local streaming ASR VAD creation is delegated to local ASR adapter', () => {
   const asrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
   const adapterSession = fs.readFileSync(
@@ -4278,7 +4279,7 @@ test('local streaming ASR VAD creation is delegated to local ASR adapter', () =>
     'utf8',
   );
 
-  assert.equal(exists('src-tauri', 'src', 'integrations', 'asr', 'model_config.rs'), false);
+  assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'asr', 'model_config.rs'), false);
   assert.doesNotMatch(asrMod, /^mod model_config;/mu);
   assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bload_vad\b/u);
   assert.match(localAsrRuntime, /use crate::audio::\{[^}]*\bSafeVad\b/u);
@@ -4295,7 +4296,7 @@ test('local streaming ASR VAD creation is delegated to local ASR adapter', () =>
 
 test('desktop punctuation loading is delegated to local ASR adapter', () => {
   const asrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
@@ -4307,7 +4308,7 @@ test('desktop punctuation loading is delegated to local ASR adapter', () => {
 
 test('desktop recognizer construction is delegated to local ASR adapter', () => {
   const asrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
 
@@ -4321,21 +4322,21 @@ test('desktop recognizer construction is delegated to local ASR adapter', () => 
 
 test('desktop ASR modules use a local runtime facade instead of sherpa implementation paths', () => {
   const asrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
   const adapterRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'adapter.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'adapter.rs'),
     'utf8',
   );
-  const stateRs = read('src-tauri', 'src', 'integrations', 'asr', 'state.rs');
+  const stateRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'state.rs');
   const transcriptRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'transcript.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'transcript.rs'),
     'utf8',
   );
-  const traitsRs = read('src-tauri', 'src', 'integrations', 'asr', 'traits.rs');
+  const traitsRs = read(...desktopCrateSegments, 'src', 'integrations', 'asr', 'traits.rs');
   const volcengineRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'volcengine.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'volcengine.rs'),
     'utf8',
   );
 
@@ -4400,7 +4401,7 @@ test('local streaming ASR offline decode is delegated to recognizer helpers', ()
 
 test('desktop batch offline decode is delegated to local ASR adapter', () => {
   const batchRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'batch.rs'),
     'utf8',
   );
 
@@ -4415,7 +4416,7 @@ test('desktop streaming offline decode is delegated to local ASR adapter', () =>
     'utf8',
   );
   const streamingRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    desktopCratePath('src', 'integrations', 'streaming.rs'),
     'utf8',
   );
 
@@ -4430,7 +4431,7 @@ test('desktop streaming offline decode is delegated to local ASR adapter', () =>
 
 test('local streaming ASR online operations use recognizer helpers', () => {
   const batchRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'batch.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'batch.rs'),
     'utf8',
   );
   const adapterSession = fs.readFileSync(
@@ -4456,7 +4457,7 @@ test('local streaming ASR VAD runtime operations use private wrappers', () => {
   const recognizerRs = read('adapters', 'local_asr', 'src', 'recognizer.rs');
   const runtimeRs = read('adapters', 'local_asr', 'src', 'runtime.rs');
   const asrMod = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'asr', 'mod.rs'),
+    desktopCratePath('src', 'integrations', 'asr', 'mod.rs'),
     'utf8',
   );
   const adapterSession = fs.readFileSync(
@@ -4464,7 +4465,7 @@ test('local streaming ASR VAD runtime operations use private wrappers', () => {
     'utf8',
   );
   const streamingRs = fs.readFileSync(
-    path.join(repoRoot, 'src-tauri', 'src', 'integrations', 'streaming.rs'),
+    desktopCratePath('src', 'integrations', 'streaming.rs'),
     'utf8',
   );
   const vadConsumers = `${adapterSession}\n${streamingRs}`;
