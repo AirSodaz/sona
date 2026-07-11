@@ -1,13 +1,16 @@
 import fs from 'fs';
 import path from 'path';
-import ffmpegStatic from 'ffmpeg-static';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const frontendRequire = createRequire(path.join(__dirname, '../frontend/package.json'));
+const ffmpegStatic = frontendRequire('ffmpeg-static');
+const repoRoot = path.resolve(__dirname, '../../..');
 
 // Ensure the binaries directory exists
-const binariesDir = path.resolve(__dirname, '../platforms/desktop/binaries');
+const binariesDir = path.join(repoRoot, 'platforms', 'desktop', 'binaries');
 if (!fs.existsSync(binariesDir)) {
   fs.mkdirSync(binariesDir, { recursive: true });
 }

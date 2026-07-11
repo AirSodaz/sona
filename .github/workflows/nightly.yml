@@ -61,7 +61,7 @@ jobs:
       - name: Compute nightly version
         id: version
         run: |
-          BASE_VERSION=$(node -p "require('./package.json').version")
+          BASE_VERSION=$(node -p "require('./platforms/desktop/frontend/package.json').version")
           VERSION="${BASE_VERSION}-${{ github.run_number }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
@@ -122,7 +122,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Patch nightly version & identifiers
-        run: node scripts/patch-channel.js --channel nightly --version "${{ env.NIGHTLY_VERSION }}"
+        run: node platforms/desktop/scripts/patch-channel.js --channel nightly --version "${{ env.NIGHTLY_VERSION }}"
 
       - name: Download and extract sherpa-onnx shared libraries (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
@@ -176,7 +176,7 @@ jobs:
           cargo build -p sona-cli --release --target x86_64-apple-darwin
 
       - name: Stage standalone CLI resource
-        run: node scripts/setup-sona-cli-resource.js ${{ matrix.args }}
+        run: node platforms/desktop/scripts/setup-sona-cli-resource.js ${{ matrix.args }}
 
       - name: Build the app
         env:
@@ -184,10 +184,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
           SONA_SKIP_CLI_RESOURCE_PREP: "1"
-        run: node scripts/tauri.js build ${{ matrix.args }}
+        run: node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}
 
       - name: Verify Tauri bundle and shared libraries
-        run: node scripts/verify-tauri-bundle.js ${{ matrix.args }}
+        run: node platforms/desktop/scripts/verify-tauri-bundle.js ${{ matrix.args }}
 
       - name: Rename macOS assets for architecture
         if: matrix.platform == 'macos-latest'

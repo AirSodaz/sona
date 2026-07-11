@@ -332,7 +332,7 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
   const result = spawnSync(
     node,
     [
-      path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'),
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
       '--repo-root',
       root,
       '--target',
@@ -428,7 +428,7 @@ test('standalone CLI resource staging copies the sona-cli binary into the deskto
   const result = spawnSync(
     node,
     [
-      path.join(repoRoot, 'scripts', 'setup-sona-cli-resource.js'),
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'setup-sona-cli-resource.js'),
       '--repo-root',
       root,
       '--target',
@@ -448,11 +448,11 @@ test('standalone CLI resource staging copies the sona-cli binary into the deskto
 
 test('standalone CLI resource staging declares macOS universal CLI support', () => {
   const stagingScript = fs.readFileSync(
-    path.join(repoRoot, 'scripts', 'setup-sona-cli-resource.js'),
+    path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'setup-sona-cli-resource.js'),
     'utf8',
   );
   const verifierScript = fs.readFileSync(
-    path.join(repoRoot, 'scripts', 'verify-tauri-bundle.js'),
+    path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
     'utf8',
   );
 
@@ -555,7 +555,7 @@ test('release workflows stage standalone CLI into the same-platform desktop inst
     assert.match(workflow, /cargo build -p sona-cli --release \$\{\{ matrix\.args \}\}/u);
     assert.match(workflow, /cargo build -p sona-cli --release --target aarch64-apple-darwin/u);
     assert.match(workflow, /cargo build -p sona-cli --release --target x86_64-apple-darwin/u);
-    assert.match(workflow, /node scripts\/setup-sona-cli-resource\.js \$\{\{ matrix\.args \}\}/u);
+    assert.match(workflow, /node platforms\/desktop\/scripts\/setup-sona-cli-resource\.js \$\{\{ matrix\.args \}\}/u);
     assert.doesNotMatch(workflow, /Stage standalone CLI resource[\s\S]*matrix\.args != '--target universal-apple-darwin'/u);
     assert.doesNotMatch(workflow, /node scripts\/package-sona-cli\.js/u);
     assert.doesNotMatch(workflow, /target\/\*\*\/release\/sona-cli-\*\.tar\.gz/u);
@@ -577,11 +577,11 @@ test('release workflows build CLI and desktop installer from the same job resour
     assert.match(buildUniversalCliStep.run, /cargo build -p sona-cli --release --target aarch64-apple-darwin/u);
     assert.match(buildUniversalCliStep.run, /cargo build -p sona-cli --release --target x86_64-apple-darwin/u);
     assert.equal(buildUniversalCliStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
-    assert.equal(stageCliStep.run, 'node scripts/setup-sona-cli-resource.js ${{ matrix.args }}');
+    assert.equal(stageCliStep.run, 'node platforms/desktop/scripts/setup-sona-cli-resource.js ${{ matrix.args }}');
     assert.equal(buildAppStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
     assert.equal(buildAppStep.env.SONA_SKIP_CLI_RESOURCE_PREP, '1');
     assert.equal(buildAppStep.run, 'node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}');
-    assert.equal(verifyBundleStep.run, 'node scripts/verify-tauri-bundle.js ${{ matrix.args }}');
+    assert.equal(verifyBundleStep.run, 'node platforms/desktop/scripts/verify-tauri-bundle.js ${{ matrix.args }}');
     assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
     assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI (macOS universal)') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
     assert.ok(readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource') < readWorkflowStepIndex(workflowName, 'Build the app'));
@@ -2737,9 +2737,9 @@ test('online ASR provider manifest is owned by core and used directly by desktop
     .map((file) => read(...desktopCrateSegments, 'src', 'integrations', 'asr', file))
     .join('\n');
   const tsBindLib = read('adapters', 'ts_bind', 'src', 'lib.rs');
-  const onlineProvidersTs = read('src', 'services', 'onlineAsrProviders.ts');
+  const onlineProvidersTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'onlineAsrProviders.ts');
   const asrConfigServiceTest = fs.readFileSync(
-    path.join(repoRoot, 'src', 'services', '__tests__', 'asrConfigService.test.ts'),
+    path.join(repoRoot, 'platforms', 'desktop', 'frontend', 'src', 'services', '__tests__', 'asrConfigService.test.ts'),
     'utf8',
   );
 
@@ -2767,21 +2767,21 @@ test('online ASR provider manifest is owned by core and used directly by desktop
   assert.match(tsBindLib, /OnlineAsrCapability/u);
   assert.match(tsBindLib, /OnlineAsrBatchCapability/u);
   assert.match(tsBindLib, /OnlineAsrLocalFileBatchMode/u);
-  assert.match(onlineProvidersTs, /\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
-  assert.match(asrConfigServiceTest, /\.\.\/\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
+  assert.match(onlineProvidersTs, /\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
+  assert.match(asrConfigServiceTest, /\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/core\/src\/ports\/online-asr-providers\.json/u);
 });
 
 test('preset model catalog data is owned by core and reused by frontend', () => {
   const corePresetModels = read('core', 'src', 'models', 'preset_models.rs');
   const corePresetModelsPath = path.join(repoRoot, 'core', 'src', 'models', 'preset-models.json');
   const legacySharedPresetModelsPath = path.join(repoRoot, 'src', 'shared', 'preset-models.json');
-  const modelServiceTs = read('src', 'services', 'modelService.ts');
+  const modelServiceTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'modelService.ts');
 
   assert.ok(fs.existsSync(corePresetModelsPath));
   assert.equal(fs.existsSync(legacySharedPresetModelsPath), false);
   assert.match(corePresetModels, /include_str!\("preset-models\.json"\)/u);
   assert.doesNotMatch(corePresetModels, /src\/shared\/preset-models\.json/u);
-  assert.match(modelServiceTs, /\.\.\/\.\.\/core\/src\/models\/preset-models\.json/u);
+  assert.match(modelServiceTs, /\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/core\/src\/models\/preset-models\.json/u);
 });
 
 test('core model path resolution is adapter-driven without desktop filesystem probes', () => {
@@ -3071,7 +3071,7 @@ test('app config migration and LLM provider manifest are owned by core', () => {
     'utf8',
   );
   const desktopIntegrations = read(...desktopCrateSegments, 'src', 'integrations', 'mod.rs');
-  const llmProvidersTs = read('src', 'services', 'llm', 'providers.ts');
+  const llmProvidersTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'llm', 'providers.ts');
 
   assert.match(coreLib, /^pub mod config;/mu);
   assert.match(coreLib, /^pub mod llm;/mu);
@@ -3092,7 +3092,7 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'error.rs'), false);
   assert.doesNotMatch(desktopIntegrations, /^pub mod llm_providers;/mu);
   assert.equal(exists(...desktopCrateSegments, 'src', 'integrations', 'llm_providers.rs'), false);
-  assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/core\/src\/llm\/llm-providers\.json/u);
+  assert.match(llmProvidersTs, /\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/core\/src\/llm\/llm-providers\.json/u);
 });
 
 test('SQLite database handle and schema are owned by sqlite adapter', () => {

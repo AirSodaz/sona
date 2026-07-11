@@ -1,4 +1,4 @@
-import onlineAsrProviderManifest from '../../core/src/ports/online-asr-providers.json';
+import onlineAsrProviderManifest from '../../../../../core/src/ports/online-asr-providers.json';
 import type {
   AsrMode,
   AsrModelSelection,

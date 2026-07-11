@@ -113,7 +113,7 @@ jobs:
           cargo build -p sona-cli --release --target x86_64-apple-darwin
 
       - name: Stage standalone CLI resource
-        run: node scripts/setup-sona-cli-resource.js ${{ matrix.args }}
+        run: node platforms/desktop/scripts/setup-sona-cli-resource.js ${{ matrix.args }}
 
       - name: Build the app
         env:
@@ -121,10 +121,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
           SONA_SKIP_CLI_RESOURCE_PREP: "1"
-        run: node scripts/tauri.js build ${{ matrix.args }}
+        run: node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}
 
       - name: Verify Tauri bundle and shared libraries
-        run: node scripts/verify-tauri-bundle.js ${{ matrix.args }}
+        run: node platforms/desktop/scripts/verify-tauri-bundle.js ${{ matrix.args }}
 
       # 3. Handle macOS architecture renaming (Solve 422 Already Exists)
       - name: Rename macOS assets for architecture

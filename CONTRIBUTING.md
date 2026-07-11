@@ -63,11 +63,11 @@ pnpm run test:ci
 pnpm run build:ci
 ```
 
-Run Rust backend checks when you touch `src-tauri/`:
+Run Rust backend checks when you touch `platforms/desktop/`:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml --no-run
-cargo test --manifest-path src-tauri/Cargo.toml --test cli
+cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
+cargo test --manifest-path platforms/desktop/Cargo.toml --test desktop_entry
 ```
 
 If your change affects shared Rust behavior, also run the focused lib selectors
@@ -76,14 +76,14 @@ because Rust test binaries embed the Common Controls v6 manifest needed by the
 native dialog stack:
 
 ```bash
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path platforms/desktop/Cargo.toml
 ```
 
 Security audit checks:
 
 ```bash
 pnpm audit --prod
-cargo audit --file src-tauri/Cargo.lock
+cargo audit --file Cargo.lock
 ```
 
 `cargo audit` currently has no known-vulnerability findings for this repo, but
@@ -152,8 +152,8 @@ Before opening a PR:
 
 - `pnpm run lint:ci`, `pnpm run test:ci`, and `pnpm run build:ci` should pass.
 - Run focused tests that match the changed area.
-- For Rust backend changes, run `cargo test --manifest-path src-tauri/Cargo.toml --no-run` and the focused Rust tests that match the change.
-- For dependency or security-sensitive changes, run `pnpm audit --prod` and `cargo audit --file src-tauri/Cargo.lock`.
+- For Rust backend changes, run `cargo test --manifest-path platforms/desktop/Cargo.toml --no-run` and the focused Rust tests that match the change.
+- For dependency or security-sensitive changes, run `pnpm audit --prod` and `cargo audit --file Cargo.lock`.
 - Update repo docs for user-visible workflow or settings changes.
 - Include screenshots or video for UI changes when they help reviewers.
 

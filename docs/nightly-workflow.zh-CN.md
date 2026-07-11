@@ -35,7 +35,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **运行环境**: `ubuntu-latest`
 * **目的**: 计算 nightly 版本的标识符。
 * **流程**:
-  1. 从 `package.json` 中读取基础版本号（Base Version）。
+  1. 从 `platforms/desktop/frontend/package.json` 中读取基础版本号（Base Version）。
   2. 生成 nightly 版本号字符串：`${base_version}-${github.run_number}`。
   3. 计算 UTC 时间下的构建日期，格式为 `YYYY-MM-DD`。
 
@@ -49,9 +49,9 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **关键步骤**:
   1. **系统依赖**: 安装目标平台所需的系统级依赖（例如 Linux 下的 GTK/Webkit2gtk）。
   2. **Rust & Node 环境配置**: 配置 Rust 工具链、启用 `corepack`，并通过 `pnpm` 安装依赖。
-  3. **渠道与版本修改**: 调用 `node scripts/patch-channel.js --channel nightly --version <version>` 来更新 Tauri 配置文件中的渠道和版本号。
+  3. **渠道与版本修改**: 调用 `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` 来更新 Tauri 配置文件中的渠道和版本号。
   4. **下载 Sherpa-Onnx 库**: 针对每个目标平台/架构，下载并解压匹配的 `sherpa-onnx` 动态链接库。
-  5. **Tauri 构建**: 运行 `node scripts/tauri.js build` 构建应用。使用配置的签名密钥对安装包进行签名。
+  5. **Tauri 构建**: 运行 `node platforms/desktop/scripts/tauri.js build` 构建应用。使用配置的签名密钥对安装包进行签名。
   6. **重命名构建产物**: 重命名 macOS 的构建产物，在文件名中附加架构标识（`aarch64`、`x64` 或 `universal`），以防在发布上传时发生冲突。
   7. **上传构建产物**: 将生成的安装包和升级签名文件（`.sig` 文件）作为工作流构件（Artifacts）上传。
 

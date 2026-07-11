@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(__dirname, '../../..');
 
 const CHANNEL_CONFIG = {
   nightly: {
@@ -28,14 +28,14 @@ function readArg(name) {
 }
 
 function patchPackageJson(version) {
-  const file = path.join(repoRoot, 'package.json');
+  const file = path.join(repoRoot, 'platforms', 'desktop', 'frontend', 'package.json');
   if (!fs.existsSync(file)) {
     throw new Error(`package.json not found at ${file}`);
   }
   const json = JSON.parse(fs.readFileSync(file, 'utf8'));
   json.version = version;
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
-  console.log(`[patch-channel] package.json -> version ${version}`);
+  console.log(`[patch-channel] platforms/desktop/frontend/package.json -> version ${version}`);
 }
 
 function patchWorkspaceCargoToml(version) {
@@ -91,10 +91,11 @@ function patchTauriConf(version, config) {
   console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> updater endpoint ${config.updaterEndpoints[0]}`);
 }
 
-function patchTauriWindowsConf(config) {
+function patchTauriWindowsConf(version, config) {
   const file = path.join(repoRoot, 'platforms', 'desktop', 'tauri.windows.conf.json');
   if (fs.existsSync(file)) {
     const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+    json.version = version;
     json.identifier = config.identifier;
     fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
     console.log(`[patch-channel] platforms/desktop/tauri.windows.conf.json -> identifier ${config.identifier}`);
@@ -118,7 +119,7 @@ function main() {
   const version = readArg('version');
 
   if (!channel || !version) {
-    console.error('Usage: node scripts/patch-channel.js --channel <name> --version <semver>');
+    console.error('Usage: node platforms/desktop/scripts/patch-channel.js --channel <name> --version <semver>');
     process.exit(1);
   }
 
@@ -131,7 +132,7 @@ function main() {
   patchPackageJson(version);
   patchWorkspaceCargoToml(version);
   patchTauriConf(version, config);
-  patchTauriWindowsConf(config);
+  patchTauriWindowsConf(version, config);
 
   if (channel === 'nightly') {
     copyNightlyIcons();

@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 const args = process.argv.slice(2);
 
 function main() {
-  const repoRoot = path.resolve(readFlagValue(args, '--repo-root') ?? path.resolve(__dirname, '..'));
+  const repoRoot = path.resolve(readFlagValue(args, '--repo-root') ?? path.resolve(__dirname, '../../..'));
   const target = resolveBuildTarget(args);
   const bundleRoots = resolveBundleRoots(repoRoot, target, args);
 

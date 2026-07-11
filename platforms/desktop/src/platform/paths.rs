@@ -16,7 +16,7 @@ pub fn models_dir_status(path: &Path) -> sona_core::models::paths::ModelsDirStat
 
 /// Tauri adapter for the pure `sona-core` path provider port.
 ///
-/// `PathProvider` lives in `sona-core`, so `src-tauri` cannot implement it
+/// `PathProvider` lives in `sona-core`, so the desktop host cannot implement it
 /// directly for `tauri::AppHandle<R>` because both the trait and type are
 /// external to this crate. This local newtype keeps the dependency direction
 /// explicit: platform code adapts Tauri into the core port.

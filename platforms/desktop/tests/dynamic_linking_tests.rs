@@ -1,7 +1,7 @@
 //! Integration tests to verify that Sona's `sherpa-onnx` dependency is configured for dynamic linking
 //! and that the dynamic libraries are correctly loaded at runtime on the target operating system.
 //!
-//! File location: src-tauri/tests/dynamic_linking_tests.rs
+//! File location: platforms/desktop/tests/dynamic_linking_tests.rs
 
 use std::env;
 use std::path::PathBuf;

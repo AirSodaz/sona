@@ -12,6 +12,28 @@ importers:
 
   .:
     dependencies:
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
+    devDependencies:
+      '@commitlint/cli':
+        specifier: ^21.1.0
+        version: 21.1.0(@types/node@25.9.4)(conventional-commits-parser@6.4.0)(typescript@6.0.3)
+      '@commitlint/config-conventional':
+        specifier: ^21.1.0
+        version: 21.1.0
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
+      lint-staged:
+        specifier: ^17.0.8
+        version: 17.0.8
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+
+  platforms/desktop/frontend:
+    dependencies:
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -94,12 +116,6 @@ importers:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.17)(immer@11.1.8)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
     devDependencies:
-      '@commitlint/cli':
-        specifier: ^21.1.0
-        version: 21.1.0(@types/node@25.9.4)(conventional-commits-parser@6.4.0)(typescript@6.0.3)
-      '@commitlint/config-conventional':
-        specifier: ^21.1.0
-        version: 21.1.0
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.5.0(jiti@2.6.1))
@@ -142,15 +158,9 @@ importers:
       globals:
         specifier: ^17.7.0
         version: 17.7.0
-      husky:
-        specifier: ^9.1.7
-        version: 9.1.7
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
-      lint-staged:
-        specifier: ^17.0.8
-        version: 17.0.8
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -163,12 +173,6 @@ importers:
       vitest:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@25.9.4)(jsdom@29.1.1)(vite@8.1.0(@types/node@25.9.4)(jiti@2.6.1)(yaml@2.9.0))
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
 
 packages:
 

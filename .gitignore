@@ -35,6 +35,9 @@ __pycache__/
 # Playwright
 playwright-report/
 test-results/
+platforms/desktop/frontend/dist/
+platforms/desktop/frontend/playwright-report/
+platforms/desktop/frontend/test-results/
 
 # Local worktrees
 .worktrees/

@@ -1,7 +1,7 @@
 //! TypeScript-facing metadata for Sona core bindings.
 //!
 //! Desktop currently generates concrete Tauri command bindings from
-//! `src-tauri` with tauri-specta. This crate keeps core-owned TS binding
+//! the desktop Tauri host with tauri-specta. This crate keeps core-owned TS binding
 //! metadata in the workspace so future non-Tauri consumers can depend on the
 //! same pure Rust types without reaching into the desktop crate.
 

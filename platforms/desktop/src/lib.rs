@@ -47,7 +47,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
             .typ::<sona_core::domain::SummaryTemplateId>()
             .export(
                 specta_typescript::Typescript::default(),
-                "../src/bindings.ts",
+                "frontend/src/bindings.ts",
             )
             .expect("Failed to export typescript bindings");
     }

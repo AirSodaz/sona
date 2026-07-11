@@ -2,7 +2,10 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const eslintBin = fileURLToPath(new URL('../node_modules/eslint/bin/eslint.js', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+const frontendRoot = path.join(repoRoot, 'platforms', 'desktop', 'frontend');
+const eslintBin = path.join(frontendRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
+const frontendPathPrefix = 'platforms/desktop/frontend/';
 const LINTABLE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 
 function getStagedFiles() {
@@ -31,7 +34,7 @@ for (const fileArg of filesToCheck) {
   const relativePath = repoRelativePath.split(path.sep).join('/');
   const extension = path.extname(relativePath).toLowerCase();
 
-  if (LINTABLE_EXTENSIONS.has(extension)) {
+  if (LINTABLE_EXTENSIONS.has(extension) && relativePath.startsWith(frontendPathPrefix)) {
     lintTargets.add(relativePath);
   }
 
@@ -75,8 +78,13 @@ if (lintTargets.size === 0) {
 try {
   execFileSync(
     process.execPath,
-    [eslintBin, '--max-warnings=0', '--no-warn-ignored', ...Array.from(lintTargets)],
-    { stdio: 'inherit' }
+    [
+      eslintBin,
+      '--max-warnings=0',
+      '--no-warn-ignored',
+      ...Array.from(lintTargets, (target) => path.relative(frontendRoot, path.join(repoRoot, target))),
+    ],
+    { cwd: frontendRoot, stdio: 'inherit' }
   );
 } catch {
   process.exit(1);

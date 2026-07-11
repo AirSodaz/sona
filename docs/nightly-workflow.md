@@ -35,7 +35,7 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
 * **Runs on**: `ubuntu-latest`
 * **Purpose**: Compute nightly version identifiers.
 * **Flow**:
-  1. Reads the base version from `package.json`.
+  1. Reads the base version from `platforms/desktop/frontend/package.json`.
   2. Generates the nightly version string: `${base_version}-${github.run_number}`.
   3. Computes the build date in `YYYY-MM-DD` format (UTC).
 
@@ -49,9 +49,9 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
 * **Key Steps**:
   1. **Dependencies**: Installs native dependencies (e.g., GTK/Webkit2gtk on Linux).
   2. **Rust & Node Setup**: Configures Rust toolchain, enables `corepack`, and installs dependencies via `pnpm`.
-  3. **Channel Patching**: Invokes `node scripts/patch-channel.js --channel nightly --version <version>` to update Tauri configuration with the nightly channel and version.
+  3. **Channel Patching**: Invokes `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` to update Tauri configuration with the nightly channel and version.
   4. **Sherpa-Onnx Libs**: Downloads and extracts the correct prebuilt `sherpa-onnx` shared libraries for each target platform.
-  5. **Tauri Build**: Builds Sona via `node scripts/tauri.js build`. Signs binaries using the provided signing key.
+  5. **Tauri Build**: Builds Sona via `node platforms/desktop/scripts/tauri.js build`. Signs binaries using the provided signing key.
   6. **Asset Renaming**: Renames macOS build artifacts to append the architecture (`aarch64`, `x64`, or `universal`) to prevent conflicts in the release upload.
   7. **Artifact Upload**: Uploads generated binaries and update signatures (`.sig` files) as workflow run artifacts.
 

@@ -1,4 +1,4 @@
-import llmProvidersManifest from '../../../core/src/llm/llm-providers.json';
+import llmProvidersManifest from '../../../../../../core/src/llm/llm-providers.json';
 import {
   BuiltInLlmProvider,
   CustomLlmProvider,

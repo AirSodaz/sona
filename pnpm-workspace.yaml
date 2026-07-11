@@ -1,3 +1,5 @@
+packages:
+  - platforms/desktop/frontend
 allowBuilds:
   ffmpeg-static: true
 minimumReleaseAgeExclude:

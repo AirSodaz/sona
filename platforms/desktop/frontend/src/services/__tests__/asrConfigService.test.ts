@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../types/config';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
-import onlineAsrProviderManifest from '../../../core/src/ports/online-asr-providers.json';
+import onlineAsrProviderManifest from '../../../../../../core/src/ports/online-asr-providers.json';
 import {
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,

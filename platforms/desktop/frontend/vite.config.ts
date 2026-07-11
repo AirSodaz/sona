@@ -32,7 +32,7 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching the desktop host
-      ignored: ["**/platforms/desktop/**"],
+      ignored: ['../src/**'],
     },
   },
   optimizeDeps: {

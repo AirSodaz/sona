@@ -4,10 +4,10 @@
   "version": "0.8.0",
   "identifier": "com.asoda.sona",
   "build": {
-    "beforeDevCommand": "pnpm run dev",
+    "beforeDevCommand": { "script": "pnpm run dev", "cwd": "frontend" },
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm run build",
-    "frontendDist": "../../dist"
+    "beforeBuildCommand": { "script": "pnpm run build", "cwd": "frontend" },
+    "frontendDist": "frontend/dist"
   },
   "app": {
     "windows": [
