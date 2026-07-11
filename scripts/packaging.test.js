@@ -359,6 +359,30 @@ test('desktop host is a direct platform crate with explicit CLI config', () => {
   assert.match(wrapper, /return \[command, '--config', desktopTauriConfig, \.\.\.commandArgs\.slice\(1\)\];/u);
 });
 
+test('desktop frontend and Tauri configuration are colocated', () => {
+  const frontend = (...segments) => path.join(repoRoot, 'platforms', 'desktop', 'frontend', ...segments);
+  const desktopConfig = read(...desktopCrateSegments, 'tauri.conf.json');
+  const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
+  const rootPackage = JSON.parse(read('package.json'));
+  const frontendPackage = JSON.parse(fs.readFileSync(frontend('package.json'), 'utf8'));
+
+  assert.equal(fs.existsSync(frontend('src', 'main.tsx')), true);
+  assert.equal(fs.existsSync(frontend('public', 'audio-processor.js')), true);
+  assert.equal(fs.existsSync(frontend('vite.config.ts')), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'src')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'public')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'index.html')), false);
+  assert.match(desktopConfig, /"frontendDist"\s*:\s*"frontend\/dist"/u);
+  assert.match(desktopConfig, /"beforeDevCommand"\s*:\s*\{[\s\S]*"cwd"\s*:\s*"frontend"/u);
+  assert.match(desktopConfig, /"beforeBuildCommand"\s*:\s*\{[\s\S]*"cwd"\s*:\s*"frontend"/u);
+  assert.match(desktopLib, /"frontend\/src\/bindings\.ts"/u);
+  assert.ok(frontendPackage.dependencies['@tauri-apps/api']);
+  assert.equal(rootPackage.dependencies?.['@tauri-apps/api'], undefined);
+  assert.match(rootPackage.scripts.tauri, /platforms\/desktop\/frontend/u);
+  assert.equal(exists('platforms', 'desktop', 'scripts', 'tauri.js'), true);
+  assert.equal(exists('scripts', 'tauri.js'), false);
+});
+
 test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
   const libRs = read(...desktopCrateSegments, 'src', 'lib.rs');
   const cargoToml = read(...desktopCrateSegments, 'Cargo.toml');
