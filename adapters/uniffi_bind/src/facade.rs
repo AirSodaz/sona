@@ -6,7 +6,7 @@ use crate::{
     FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
-    asr_streaming_bridge, config_bridge, llm_bridge, model_bridge, runtime_bridge,
+    asr_streaming_bridge, config_bridge, llm_bridge, model_bridge, recovery_bridge, runtime_bridge,
 };
 use std::sync::Arc;
 
@@ -14,6 +14,29 @@ use std::sync::Arc;
 pub struct SonaCoreFacade;
 
 impl SonaCoreFacade {
+    pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+        recovery_bridge::load_recovery_snapshot_json(app_data_dir)
+    }
+
+    pub fn save_recovery_snapshot_json(
+        app_data_dir: String,
+        items_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        recovery_bridge::save_recovery_snapshot_json(app_data_dir, items_json)
+    }
+
+    pub fn persist_recovery_queue_snapshot_json(
+        app_data_dir: String,
+        queue_items_json: String,
+        resolved_ids: Vec<String>,
+    ) -> SonaCoreBindingResult<String> {
+        recovery_bridge::persist_recovery_queue_snapshot_json(
+            app_data_dir,
+            queue_items_json,
+            resolved_ids,
+        )
+    }
+
     pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
         runtime_bridge::normalize_export_format(value)
     }

@@ -1,0 +1,82 @@
+use serde_json::{Value, json};
+use sona_core::recovery::repository::RecoverySnapshotStore;
+use sona_core::recovery::types::RecoverySnapshot;
+use sona_recovery_fs::FsRecoverySnapshotStore;
+use std::fs::{self, File};
+use tempfile::tempdir;
+
+#[test]
+fn first_load_creates_the_canonical_empty_snapshot_file() {
+    let dir = tempdir().unwrap();
+    let store = FsRecoverySnapshotStore::new(dir.path().to_path_buf());
+
+    let value = store.load_snapshot_value().unwrap();
+    let path = store.queue_recovery_path();
+
+    assert_eq!(
+        value,
+        json!({
+            "version": 1,
+            "updatedAt": null,
+            "items": []
+        })
+    );
+    assert_eq!(
+        fs::read_to_string(path).unwrap(),
+        "{\n  \"version\": 1,\n  \"updatedAt\": null,\n  \"items\": []\n}"
+    );
+}
+
+#[test]
+fn saved_canonical_snapshot_round_trips_as_json_value() {
+    let dir = tempdir().unwrap();
+    let store = FsRecoverySnapshotStore::new(dir.path().to_path_buf());
+    let snapshot: RecoverySnapshot = serde_json::from_value(json!({
+        "version": 1,
+        "updatedAt": 42,
+        "items": [{
+            "id": "recovery-1",
+            "filename": "recording.wav",
+            "filePath": "C:/recording.wav",
+            "source": "batch_import",
+            "resolution": "pending",
+            "progress": 25,
+            "segments": [],
+            "projectId": null,
+            "lastKnownStage": "transcribing",
+            "updatedAt": 42,
+            "hasSourceFile": true,
+            "canResume": true,
+            "exportConfig": null,
+            "stageConfig": null
+        }]
+    }))
+    .unwrap();
+
+    store.save_snapshot(&snapshot).unwrap();
+
+    assert_eq!(
+        store.load_snapshot_value().unwrap(),
+        serde_json::to_value(snapshot).unwrap()
+    );
+}
+
+#[test]
+fn malformed_stored_json_loads_as_null() {
+    let dir = tempdir().unwrap();
+    let store = FsRecoverySnapshotStore::new(dir.path().to_path_buf());
+    fs::create_dir_all(store.recovery_dir()).unwrap();
+    fs::write(store.queue_recovery_path(), "{not-json").unwrap();
+
+    assert_eq!(store.load_snapshot_value().unwrap(), Value::Null);
+}
+
+#[test]
+fn load_returns_an_error_when_recovery_directory_cannot_be_created() {
+    let dir = tempdir().unwrap();
+    let blocked = dir.path().join("blocked");
+    File::create(&blocked).unwrap();
+    let store = FsRecoverySnapshotStore::new(blocked);
+
+    assert!(store.load_snapshot_value().is_err());
+}

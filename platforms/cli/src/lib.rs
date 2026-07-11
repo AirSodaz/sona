@@ -3,6 +3,7 @@ mod config_template;
 mod desktop_paths;
 mod init_config;
 mod models;
+mod recovery;
 mod serve;
 mod transcribe;
 
@@ -89,6 +90,8 @@ enum Commands {
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
+    /// Inspects persisted recovery snapshots.
+    Recovery(recovery::RecoveryArgs),
     /// Runs the shared local HTTP API server.
     Serve(serve::ServeArgs),
     /// Transcribes a local audio or video file using offline ASR.
@@ -106,6 +109,7 @@ where
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
+        Commands::Recovery(args) => recovery::run_recovery(args),
         Commands::Serve(args) => serve::run_serve(args),
         Commands::Transcribe(args) => transcribe::run_transcribe(args),
     }

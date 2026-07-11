@@ -6,6 +6,7 @@ mod json_bridge;
 mod llm_bridge;
 mod mapper;
 mod model_bridge;
+mod recovery_bridge;
 mod runtime_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
@@ -36,6 +37,8 @@ pub enum SonaCoreBindingError {
     #[error("{reason}")]
     InvalidInput { reason: String },
     #[error("{reason}")]
+    Recovery { reason: String },
+    #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
 }
 
@@ -60,6 +63,32 @@ impl From<sona_core::ports::asr::SherpaError> for SonaCoreBindingError {
             },
         }
     }
+}
+
+#[uniffi::export]
+pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_recovery_snapshot_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn save_recovery_snapshot_json(
+    app_data_dir: String,
+    items_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::save_recovery_snapshot_json(app_data_dir, items_json)
+}
+
+#[uniffi::export]
+pub fn persist_recovery_queue_snapshot_json(
+    app_data_dir: String,
+    queue_items_json: String,
+    resolved_ids: Vec<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::persist_recovery_queue_snapshot_json(
+        app_data_dir,
+        queue_items_json,
+        resolved_ids,
+    )
 }
 
 #[uniffi::export]

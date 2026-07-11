@@ -71,6 +71,29 @@ const desktopFrontendDependencies = [
   'zustand',
 ];
 
+function assertPrRecoveryCoverage(workflowSource) {
+  const workflow = YAML.parse(workflowSource);
+  const rustBackendSteps = workflow.jobs?.['rust-backend']?.steps ?? [];
+  const packageTests = rustBackendSteps.find(
+    (step) => step.name === 'Run core, adapters, bindings, and standalone CLI tests',
+  )?.run;
+  const desktopRecoveryTests = rustBackendSteps.find(
+    (step) => step.name === 'Run desktop recovery integration tests',
+  )?.run;
+
+  assert.equal(typeof packageTests, 'string', 'missing Rust package test step');
+  assert.match(
+    packageTests,
+    /(?:^|\s)-p sona-recovery-fs(?:\s|$)/u,
+    'Rust package tests must include sona-recovery-fs',
+  );
+  assert.equal(
+    desktopRecoveryTests,
+    'cargo test -p sona --test recovery_repository',
+    'desktop recovery integration tests must execute in PR guardrails',
+  );
+}
+
 function makeTempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-packaging-'));
   fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'binaries'), { recursive: true });
@@ -682,6 +705,10 @@ function readKotlinFunctionItem(source, functionName) {
   const remainingSource = normalizedSource.slice(signature.index);
   const lines = remainingSource.split('\n');
   let endOffset = lines[0].length;
+  let parenthesisDepth = [...lines[0]].reduce(
+    (depth, character) => depth + (character === '(' ? 1 : character === ')' ? -1 : 0),
+    0,
+  );
 
   for (let index = 1; index < lines.length; index += 1) {
     const line = lines[index];
@@ -689,13 +716,227 @@ function readKotlinFunctionItem(source, functionName) {
     const trimmed = line.trim();
     const lineIndent = line.match(/^[ \\t]*/u)?.[0].length ?? 0;
 
-    if (trimmed !== '' && lineIndent <= functionIndent) {
+    if (trimmed !== '' && lineIndent <= functionIndent && parenthesisDepth === 0) {
       return remainingSource.slice(0, endOffset);
     }
     endOffset = lineStartOffset + line.length;
+    parenthesisDepth += [...line].reduce(
+      (depth, character) => depth + (character === '(' ? 1 : character === ')' ? -1 : 0),
+      0,
+    );
   }
 
   return remainingSource;
+}
+
+function readKotlinObjectBlock(source, objectName) {
+  const signature = new RegExp(`\\bobject\\s+${objectName}\\s*\\{`, 'u').exec(source);
+  if (!signature) {
+    return '';
+  }
+
+  const openingBrace = source.indexOf('{', signature.index);
+  let braceDepth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      braceDepth += 1;
+    } else if (source[index] === '}') {
+      braceDepth -= 1;
+      if (braceDepth === 0) {
+        return source.slice(signature.index, index + 1);
+      }
+    }
+  }
+
+  return '';
+}
+
+function readKotlinDirectFunctionItem(objectBlock, functionName) {
+  const normalizedSource = objectBlock.replace(/\r\n/gu, '\n');
+  let braceDepth = 0;
+  let lineStart = 0;
+
+  for (let index = 0; index < normalizedSource.length; index += 1) {
+    if (index === lineStart && braceDepth === 1) {
+      const lineEnd = normalizedSource.indexOf('\n', lineStart);
+      const line = normalizedSource.slice(
+        lineStart,
+        lineEnd === -1 ? normalizedSource.length : lineEnd,
+      );
+      if (new RegExp(`^[ \\t]*fun\\s+${functionName}\\b`, 'u').test(line)) {
+        return readKotlinFunctionItem(normalizedSource.slice(lineStart), functionName);
+      }
+    }
+
+    if (normalizedSource[index] === '{') {
+      braceDepth += 1;
+    } else if (normalizedSource[index] === '}') {
+      braceDepth -= 1;
+    } else if (normalizedSource[index] === '\n') {
+      lineStart = index + 1;
+    }
+  }
+
+  return '';
+}
+
+function stripKotlinCommentsAndLiterals(source) {
+  let output = '';
+  let index = 0;
+  let state = 'code';
+  let blockCommentDepth = 0;
+
+  const blank = (character) => (character === '\n' || character === '\r' ? character : ' ');
+
+  while (index < source.length) {
+    const character = source[index];
+    const next = source[index + 1];
+    const nextTwo = source.slice(index, index + 3);
+
+    if (state === 'line-comment') {
+      output += blank(character);
+      index += 1;
+      if (character === '\n') state = 'code';
+      continue;
+    }
+
+    if (state === 'block-comment') {
+      if (character === '/' && next === '*') {
+        output += '  ';
+        index += 2;
+        blockCommentDepth += 1;
+      } else if (character === '*' && next === '/') {
+        output += '  ';
+        index += 2;
+        blockCommentDepth -= 1;
+        if (blockCommentDepth === 0) state = 'code';
+      } else {
+        output += blank(character);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (state === 'raw-string') {
+      if (nextTwo === '"""') {
+        output += '   ';
+        index += 3;
+        state = 'code';
+      } else {
+        output += blank(character);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (state === 'string' || state === 'character') {
+      const terminator = state === 'string' ? '"' : "'";
+      if (character === '\\') {
+        output += '  ';
+        index += Math.min(2, source.length - index);
+      } else {
+        output += blank(character);
+        index += 1;
+        if (character === terminator) state = 'code';
+      }
+      continue;
+    }
+
+    if (character === '/' && next === '/') {
+      output += '  ';
+      index += 2;
+      state = 'line-comment';
+    } else if (character === '/' && next === '*') {
+      output += '  ';
+      index += 2;
+      blockCommentDepth = 1;
+      state = 'block-comment';
+    } else if (nextTwo === '"""') {
+      output += '   ';
+      index += 3;
+      state = 'raw-string';
+    } else if (character === '"') {
+      output += ' ';
+      index += 1;
+      state = 'string';
+    } else if (character === "'") {
+      output += ' ';
+      index += 1;
+      state = 'character';
+    } else {
+      output += character;
+      index += 1;
+    }
+  }
+
+  return output;
+}
+
+function assertKotlinRecoveryImport(kotlinSmoke, generatedFunction) {
+  const executableSource = stripKotlinCommentsAndLiterals(kotlinSmoke);
+  assert.match(
+    executableSource,
+    new RegExp(`^[ \\t]*import\\s+uniffi\\.sona_uniffi_bind\\.${generatedFunction}\\s*$`, 'mu'),
+    `missing generated Kotlin import for ${generatedFunction}`,
+  );
+}
+
+function assertKotlinRecoveryCall(kotlinSmoke, methodName, directDelegation) {
+  const executableSource = stripKotlinCommentsAndLiterals(kotlinSmoke);
+  const method = readKotlinDirectFunctionItem(executableSource, methodName);
+
+  assert.notEqual(method, '', `missing ${methodName} Kotlin smoke method`);
+  assert.match(
+    method,
+    directDelegation,
+    `${methodName} must directly delegate to the generated recovery binding`,
+  );
+}
+
+function assertAndroidRecoverySampleSmoke(kotlinSmoke) {
+  for (const generatedFunction of [
+    'loadRecoverySnapshotJson',
+    'saveRecoverySnapshotJson',
+    'persistRecoveryQueueSnapshotJson',
+  ]) {
+    assertKotlinRecoveryImport(kotlinSmoke, generatedFunction);
+  }
+
+  const smokeObject = readKotlinObjectBlock(
+    stripKotlinCommentsAndLiterals(kotlinSmoke),
+    'SonaUniffiSmoke',
+  );
+  assert.notEqual(smokeObject, '', 'SonaUniffiSmoke must contain loadRecovery');
+
+  assertKotlinRecoveryCall(
+    smokeObject,
+    'loadRecovery',
+    /^[ \t]*fun loadRecovery\(appDataDir: String\): String\s*=\s*loadRecoverySnapshotJson\(appDataDir\)\s*$/u,
+  );
+  assertKotlinRecoveryCall(
+    smokeObject,
+    'saveRecovery',
+    /^[ \t]*fun saveRecovery\(appDataDir: String, itemsJson: String\): String\s*=\s*saveRecoverySnapshotJson\(appDataDir, itemsJson\)\s*$/u,
+  );
+  assertKotlinRecoveryCall(
+    smokeObject,
+    'persistRecovery',
+    /^[ \t]*fun persistRecovery\(\s*appDataDir: String,\s*queueItemsJson: String,\s*resolvedIds: List<String>,?\s*\): String\s*=\s*persistRecoveryQueueSnapshotJson\(appDataDir, queueItemsJson, resolvedIds\)\s*$/u,
+  );
+}
+
+function assertAndroidRecoveryConsumerSmoke(kotlinSmoke) {
+  assertKotlinRecoveryImport(kotlinSmoke, 'loadRecoverySnapshotJson');
+  const smokeObject = readKotlinObjectBlock(
+    stripKotlinCommentsAndLiterals(kotlinSmoke),
+    'SonaUniffiConsumerSmoke',
+  );
+  assert.notEqual(smokeObject, '', 'SonaUniffiConsumerSmoke must contain loadRecovery');
+  assertKotlinRecoveryCall(
+    smokeObject,
+    'loadRecovery',
+    /^[ \t]*fun loadRecovery\(appDataDir: String\): String\s*=\s*loadRecoverySnapshotJson\(appDataDir\)\s*$/u,
+  );
 }
 
 function assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge) {
@@ -1446,7 +1687,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(cliCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 
   assert.doesNotMatch(coreCargo, /^glob\s*=/mu);
@@ -1483,10 +1724,10 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(tauriRecoveryRepository, /fn now_ms\(\) -> u64/u);
   assert.match(tauriRecoveryRepository, /crate::platform::time::unix_timestamp_millis\(\)/u);
   assert.doesNotMatch(tauriRecoveryRepository, /SystemTime::now|UNIX_EPOCH/u);
-  assert.match(tauriRecoveryRepository, /sona_runtime_fs::ensure_directory_exists\(&recovery_dir\)/u);
-  assert.doesNotMatch(tauriRecoveryRepository, /fs::create_dir_all|std::fs::create_dir_all/u);
-  assert.match(tauriRecoveryRepository, /snapshot_from_items_with_timestamp/u);
-  assert.match(tauriRecoveryRepository, /snapshot_from_value_with_source_paths_at/u);
+  assert.match(tauriRecoveryRepository, /RecoveryService/u);
+  assert.match(tauriRecoveryRepository, /FsRecoverySnapshotStore/u);
+  assert.match(tauriRecoveryRepository, /FsSourcePathStatusProvider/u);
+  assert.doesNotMatch(tauriRecoveryRepository, /impl RecoveryRepository for/u);
   assert.doesNotMatch(
     runtimeFsLib,
     /sona_core::(?:runtime::)?file_utils::\{[^}]*write_json_pretty_atomic_with/u,
@@ -1520,6 +1761,22 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(runtimeFsLib, /fn replace_path_atomically/u);
 });
 
+test('desktop recovery host delegates persistence and normalization', () => {
+  const desktopRecovery = fs.readFileSync(
+    desktopCratePath('src', 'platform', 'recovery_repository.rs'),
+    'utf8',
+  );
+
+  assert.match(desktopRecovery, /RecoveryService/u);
+  assert.match(desktopRecovery, /FsRecoverySnapshotStore/u);
+  assert.match(desktopRecovery, /FsSourcePathStatusProvider/u);
+  assert.doesNotMatch(desktopRecovery, /impl RecoveryRepository for/u);
+  assert.doesNotMatch(
+    desktopRecovery,
+    /empty_snapshot|recovered_item_from_(?:queue|saved)_value_with_source_paths|snapshot_from_(?:items_with_timestamp|value_with_source_paths_at)/u,
+  );
+});
+
 test('pr guardrails run adapter tests with core bindings and standalone CLI', () => {
   const prWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
@@ -1528,8 +1785,9 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
+  assertPrRecoveryCoverage(prWorkflow);
   assert.match(prWorkflow, /cargo test -p sona-core --test preset_models/u);
   assert.match(prWorkflow, /rustup target add aarch64-linux-android/u);
   assert.match(prWorkflow, /yes \| sdkmanager --licenses/u);
@@ -1538,6 +1796,27 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
   assert.match(prWorkflow, /SONA_ANDROID_ABIS:\s*arm64-v8a/u);
   assert.match(prWorkflow, /pnpm run verify:android-uniffi:gradle/u);
   assert.doesNotMatch(prWorkflow, /core::preset_models::tests/u);
+});
+
+test('pr recovery guard rejects package and desktop integration omissions', () => {
+  const prWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
+    'utf8',
+  );
+
+  assert.throws(
+    () => assertPrRecoveryCoverage(prWorkflow.replace(' -p sona-recovery-fs', '')),
+    /sona-recovery-fs/u,
+  );
+  assert.throws(
+    () => assertPrRecoveryCoverage(
+      prWorkflow.replace(
+        'cargo test -p sona --test recovery_repository',
+        'cargo test --manifest-path platforms/desktop/Cargo.toml --no-run',
+      ),
+    ),
+    /desktop recovery integration tests/u,
+  );
 });
 
 test('android uniffi sample publishes a consumable local Maven artifact', () => {
@@ -2780,6 +3059,94 @@ test('Android UniFFI streaming smoke compiles the generated observer and session
   }
 });
 
+test('Android UniFFI recovery smoke calls generated snapshot bindings with app-data paths', () => {
+  const sampleKotlin = read(
+    'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+  );
+  const consumerKotlin = read(
+    'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+  );
+
+  assertAndroidRecoverySampleSmoke(sampleKotlin);
+  assertAndroidRecoveryConsumerSmoke(consumerKotlin);
+});
+
+test('Android UniFFI recovery guard rejects comment-only declarations and call-shaped strings', () => {
+  const commentDecoy = `
+    package com.sona.uniffi.sample
+    // import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+    /*
+    fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
+    */
+  `;
+  assert.throws(
+    () => assertAndroidRecoveryConsumerSmoke(commentDecoy),
+    /missing generated Kotlin import for loadRecoverySnapshotJson/u,
+  );
+
+  const stringDecoy = `
+    package com.sona.uniffi.sample
+    import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+
+    object SonaUniffiConsumerSmoke {
+      fun loadRecovery(appDataDir: String): String {
+        val unused = "loadRecoverySnapshotJson(appDataDir)"
+        return appDataDir
+      }
+    }
+  `;
+  assert.throws(
+    () => assertAndroidRecoveryConsumerSmoke(stringDecoy),
+    /loadRecovery must directly delegate to the generated recovery binding/u,
+  );
+
+  const detachedDecoy = `
+    package com.sona.uniffi.consumer
+    import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+
+    object SonaUniffiConsumerSmoke
+
+    fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
+  `;
+  assert.throws(
+    () => assertAndroidRecoveryConsumerSmoke(detachedDecoy),
+    /SonaUniffiConsumerSmoke must contain loadRecovery/u,
+  );
+
+  const nestedDecoy = `
+    package com.sona.uniffi.consumer
+    import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+
+    object SonaUniffiConsumerSmoke {
+      object Detached {
+        fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
+      }
+    }
+  `;
+  assert.throws(
+    () => assertAndroidRecoveryConsumerSmoke(nestedDecoy),
+    /missing loadRecovery Kotlin smoke method/u,
+  );
+
+  const deadBranchDecoy = `
+    package com.sona.uniffi.consumer
+    import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+
+    object SonaUniffiConsumerSmoke {
+      fun loadRecovery(appDataDir: String): String {
+        if (false) loadRecoverySnapshotJson(appDataDir)
+        return appDataDir
+      }
+    }
+  `;
+  assert.throws(
+    () => assertAndroidRecoveryConsumerSmoke(deadBranchDecoy),
+    /loadRecovery must directly delegate to the generated recovery binding/u,
+  );
+});
+
 test('UniFFI Android Gradle integration builds ABI-scoped native libraries', () => {
   const buildScript = read('scripts', 'build-uniffi-android-libs.js');
   const gradleIntegration = fs.readFileSync(
@@ -3413,7 +3780,7 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'storage.rs'), false);
   assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'recovery.rs'), false);
   assert.match(platformStorage, /pub use sona_runtime_fs::\{/u);
-  assert.match(platformRecovery, /pub struct FsRecoveryRepository/u);
+  assert.match(platformRecovery, /FsRecoverySnapshotStore/u);
   assert.match(workspaceCargo, /"adapters\/export"/u);
   assert.match(tauriCargo, /^sona-export\s*=/mu);
   assert.doesNotMatch(cliCargo, /^sona-export\s*=/mu);
@@ -3426,7 +3793,7 @@ test('desktop filesystem adapters live in platform rather than repositories', ()
   assert.match(exportCommand, /adapter_export_transcript_file\(ExportTranscriptFileRequest/u);
   assert.doesNotMatch(exportCommand, /core_export_transcript_file/u);
   assert.doesNotMatch(exportCommand, /crate::platform::export_files/u);
-  assert.match(platformRecovery, /async fn run_recovery_repository_task/u);
+  assert.match(platformRecovery, /async fn run_recovery_service_task/u);
   assert.match(platformRecovery, /PathKind::AppLocalData/u);
   assert.match(platformRecovery, /tauri::async_runtime::spawn_blocking/u);
   assert.match(platformRecovery, /pub async fn load_snapshot/u);

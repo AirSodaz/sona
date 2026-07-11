@@ -50,6 +50,19 @@ The session's `start`, audio-feed, and `stop` methods are suspending Kotlin
 methods and must run from a coroutine. Close the session when it is no longer
 needed.
 
+## Recovery snapshots
+
+The generated recovery surface exposes these JSON functions:
+
+- `loadRecoverySnapshotJson(appDataDir)`
+- `saveRecoverySnapshotJson(appDataDir, itemsJson)`
+- `persistRecoveryQueueSnapshotJson(appDataDir, queueItemsJson, resolvedIds)`
+
+The caller supplies an application data directory for every operation.
+`itemsJson` and `queueItemsJson` are JSON arrays. Each result uses the
+canonical camelCase version-1 recovery snapshot format. These operations
+perform filesystem I/O and can fail with `SonaCoreBindingException`.
+
 This AAR stage supports the online streaming path. Packaging the local Sherpa
 Android native libraries is out of scope, so this artifact does not claim
 local Sherpa ASR support on Android.

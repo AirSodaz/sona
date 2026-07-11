@@ -1,0 +1,15 @@
+[package]
+name = "sona-recovery-fs"
+version.workspace = true
+description = "Filesystem adapter for Sona recovery snapshots"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = "0.4"
+serde_json = "1"
+sona-core = { path = "../../core" }
+sona-runtime-fs = { path = "../runtime_fs" }
+
+[dev-dependencies]
+tempfile = "3"

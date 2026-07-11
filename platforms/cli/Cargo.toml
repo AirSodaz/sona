@@ -13,10 +13,12 @@ serde_json = "1"
 sona-api-server = { path = "../../adapters/api_server" }
 sona-local-asr = { path = "../../adapters/local_asr" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }
+sona-recovery-fs = { path = "../../adapters/recovery_fs" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-core = { path = "../../core" }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["rt-multi-thread", "signal", "sync"] }
+unicode-width = "0.2"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros"] }

@@ -10,8 +10,11 @@ import uniffi.sona_uniffi_bind.FfiPolishedSegment
 import uniffi.sona_uniffi_bind.SonaCoreBindingException
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.defaultConfigJson
+import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.parsePolishChunkJson
+import uniffi.sona_uniffi_bind.persistRecoveryQueueSnapshotJson
 import uniffi.sona_uniffi_bind.planPolishPromptChunksJson
+import uniffi.sona_uniffi_bind.saveRecoverySnapshotJson
 
 private class RecordingAsrObserver : FfiAsrStreamingObserver {
     private var latestTranscriptUpdate: FfiAsrTranscriptUpdateEvent? = null
@@ -74,6 +77,17 @@ object SonaUniffiSmoke {
             requestJson = streamingRequestJson,
             observer = RecordingAsrObserver(),
         )
+
+    fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
+
+    fun saveRecovery(appDataDir: String, itemsJson: String): String =
+        saveRecoverySnapshotJson(appDataDir, itemsJson)
+
+    fun persistRecovery(
+        appDataDir: String,
+        queueItemsJson: String,
+        resolvedIds: List<String>,
+    ): String = persistRecoveryQueueSnapshotJson(appDataDir, queueItemsJson, resolvedIds)
 
     @Throws(SonaCoreBindingException::class)
     fun run(): SonaUniffiSmokeResult {

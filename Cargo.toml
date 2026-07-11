@@ -9,6 +9,7 @@ members = [
     "adapters/model_downloads",
     "adapters/online_llm",
     "adapters/online_asr",
+    "adapters/recovery_fs",
     "adapters/runtime_fs",
     "adapters/sqlite",
     "adapters/ts_bind",
