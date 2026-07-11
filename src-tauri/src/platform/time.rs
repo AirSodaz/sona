@@ -1,5 +1,5 @@
-use crate::dashboard::DashboardSnapshotTime;
 use chrono::{DateTime, Local, NaiveDate, SecondsFormat, Utc};
+use sona_core::dashboard::DashboardSnapshotTime;
 
 pub fn utc_now_rfc3339() -> String {
     format_utc_rfc3339(Utc::now())

@@ -20,7 +20,7 @@ pub async fn get_diagnostics_core_snapshot(
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     let input = enrich_diagnostics_core_input(provider, state.inner(), input).await?;
-    let scanned_at = sona_core::runtime::time::utc_now_rfc3339_millis();
+    let scanned_at = crate::platform::time::utc_now_rfc3339_millis();
     Ok(build_diagnostics_core_snapshot_at(input, scanned_at))
 }
 

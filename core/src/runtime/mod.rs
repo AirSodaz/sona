@@ -6,4 +6,3 @@ pub mod gpu;
 pub mod media_detector;
 pub mod paths;
 pub mod serve;
-pub mod time;

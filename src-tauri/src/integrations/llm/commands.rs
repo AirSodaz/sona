@@ -81,7 +81,7 @@ impl UsageRecorder {
     }
 
     fn record(&self, response: &StandardLlmResponse) {
-        let occurred_at = sona_core::runtime::time::utc_now_rfc3339();
+        let occurred_at = crate::platform::time::utc_now_rfc3339();
         if let Err(error) = crate::platform::llm_usage::record_usage(
             &self.app,
             &UsageRecord {

@@ -28,4 +28,5 @@ pub mod storage_usage;
 pub mod system;
 pub mod system_audio;
 pub mod task_ledger_repository;
+pub mod time;
 pub mod webdav;
