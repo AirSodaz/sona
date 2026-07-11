@@ -16,7 +16,7 @@ pub(crate) fn new_metrics_store() -> AsrMetricsStore {
 }
 
 pub(crate) fn current_time_millis() -> u64 {
-    crate::platform::time::unix_timestamp_millis()
+    sona_core::runtime::time::unix_timestamp_millis()
 }
 
 pub(crate) fn capture_process_memory_mb() -> Option<f64> {

@@ -224,7 +224,7 @@ async fn run_summary_job(
         record: Some(TranscriptSummaryRecordPayload {
             template_id: result.template_id,
             content: result.content.trim().to_string(),
-            generated_at: crate::platform::time::utc_now_rfc3339_millis(),
+            generated_at: sona_core::runtime::time::utc_now_rfc3339_millis(),
             source_fingerprint: compute_summary_source_fingerprint(&request.segments),
         }),
     };

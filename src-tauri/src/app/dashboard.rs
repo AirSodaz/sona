@@ -15,7 +15,7 @@ pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<AppDashboardService>>,
     request: DashboardSnapshotRequest,
 ) -> Result<Value, String> {
-    let time = crate::platform::time::dashboard_snapshot_time_now();
+    let time = sona_core::runtime::time::dashboard_snapshot_time_now();
     let snapshot = service
         .build_snapshot_at(request.deep, time)
         .await

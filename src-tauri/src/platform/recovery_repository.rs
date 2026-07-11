@@ -189,7 +189,7 @@ pub async fn persist_queue_snapshot_for_app<R: tauri::Runtime>(
 }
 
 fn now_ms() -> u64 {
-    crate::platform::time::unix_timestamp_millis()
+    sona_core::runtime::time::unix_timestamp_millis()
 }
 
 fn collect_queue_recovery_ids(value: &Value) -> Vec<String> {
