@@ -1,3 +1,6 @@
+use sona_core::transcription::provider_resolution::{
+    AsrProviderCapability, resolve_asr_provider_id,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
@@ -52,6 +55,13 @@ pub use types::{
     TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
+const DESKTOP_ASR_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [
+    AsrProviderCapability::new(sona_core::ports::asr::LOCAL_SHERPA_PROVIDER_ID, true),
+    AsrProviderCapability::new(sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+    AsrProviderCapability::new(sona_core::ports::asr::GROQ_WHISPER_PROVIDER_ID, false),
+    AsrProviderCapability::new(sona_core::ports::asr::MISTRAL_VOXTRAL_PROVIDER_ID, false),
+];
+
 fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>> {
     static ADAPTERS: OnceLock<HashMap<&'static str, Arc<dyn AsrProviderAdapter>>> = OnceLock::new();
     ADAPTERS.get_or_init(|| {
@@ -75,7 +85,7 @@ pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str,
 pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn AsrProviderAdapter>, SherpaError> {
-    let provider_id = get_provider_id(request)?;
+    let provider_id = resolve_asr_provider_id(request, &DESKTOP_ASR_CAPABILITIES)?;
     asr_adapters()
         .get(provider_id)
         .cloned()
@@ -103,4 +113,86 @@ pub async fn feed_audio_samples(
         .await
         .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
     session.feed_audio_samples(samples).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sona_core::ports::asr::{
+        AsrEngineConfig, AsrMode, GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID,
+        OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    };
+
+    fn online_request(provider_id: &str, mode: AsrMode) -> AsrTranscriptionRequest {
+        AsrTranscriptionRequest {
+            mode,
+            language: "auto".into(),
+            enable_itn: false,
+            normalization_options: Default::default(),
+            postprocess_options: Default::default(),
+            hotwords: None,
+            speaker_processing: None,
+            engine_config: AsrEngineConfig::Online {
+                provider: OnlineAsrProviderRequest {
+                    provider_id: provider_id.into(),
+                    profile_id: "test".into(),
+                    config: serde_json::Value::Null,
+                },
+            },
+        }
+    }
+
+    fn local_request() -> AsrTranscriptionRequest {
+        AsrTranscriptionRequest::local_sherpa(
+            AsrMode::Streaming,
+            "model".into(),
+            1,
+            false,
+            "auto".into(),
+            None,
+            None,
+            5.0,
+            "zipformer".into(),
+            None,
+            None,
+            Default::default(),
+            Default::default(),
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn desktop_registry_selects_volcengine_streaming() {
+        let adapter = ensure_adapter(&online_request(
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            AsrMode::Streaming,
+        ))
+        .unwrap();
+        assert_eq!(adapter.provider_id(), VOLCENGINE_DOUBAO_PROVIDER_ID);
+    }
+
+    #[test]
+    fn desktop_registry_selects_groq_batch() {
+        let adapter =
+            ensure_adapter(&online_request(GROQ_WHISPER_PROVIDER_ID, AsrMode::Batch)).unwrap();
+        assert_eq!(adapter.provider_id(), GROQ_WHISPER_PROVIDER_ID);
+    }
+
+    #[test]
+    fn desktop_registry_selects_local_streaming() {
+        let adapter = ensure_adapter(&local_request()).unwrap();
+        assert_eq!(adapter.provider_id(), LOCAL_SHERPA_PROVIDER_ID);
+    }
+
+    #[test]
+    fn desktop_registry_rejects_batch_only_streaming() {
+        let error = ensure_adapter(&online_request(
+            GROQ_WHISPER_PROVIDER_ID,
+            AsrMode::Streaming,
+        ))
+        .err()
+        .expect("batch-only provider must not receive a streaming session");
+        assert!(matches!(error, SherpaError::StreamingNotSupported { .. }));
+    }
 }

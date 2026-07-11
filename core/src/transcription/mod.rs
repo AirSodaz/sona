@@ -1,5 +1,6 @@
 pub mod asr_metrics;
 pub mod postprocess;
+pub mod provider_resolution;
 pub mod runtime;
 pub mod speaker;
 pub mod speaker_correction;

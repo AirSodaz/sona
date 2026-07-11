@@ -2518,6 +2518,32 @@ test('streaming ASR session contract is core-owned and platform-neutral', () => 
   assert.match(tauriCommands, /session\.flush\(\)\.await/u);
 });
 
+test('ASR provider resolution policy is core-owned and shared by host bindings', () => {
+  const coreResolution = read(
+    'core', 'src', 'transcription', 'provider_resolution.rs',
+  );
+  const desktopRegistry = read(
+    'platforms', 'desktop', 'src', 'integrations', 'asr', 'mod.rs',
+  );
+  const uniffiStreaming = read(
+    'adapters', 'uniffi_bind', 'src', 'asr_streaming_bridge.rs',
+  );
+
+  assert.match(coreResolution, /pub fn resolve_asr_provider_id/u);
+  assert.match(coreResolution, /pub fn resolve_asr_streaming_provider_id/u);
+  assert.doesNotMatch(coreResolution, /tauri::|uniffi::|sona_(?:local|online)_asr/u);
+  for (const [hostBinding, resolver] of [
+    [desktopRegistry, 'resolve_asr_provider_id'],
+    [uniffiStreaming, 'resolve_asr_streaming_provider_id'],
+  ]) {
+    assert.match(hostBinding, new RegExp(`${resolver}\\(`, 'u'));
+    assert.doesNotMatch(
+      hostBinding,
+      /find_online_asr_provider|\.streaming\.supported/u,
+    );
+  }
+});
+
 test('local streaming ASR session is implemented by the local adapter', () => {
   const localAsrRoot = path.join(repoRoot, 'adapters', 'local_asr');
   const adapterSessionPath = path.join(

@@ -4,14 +4,17 @@ use crate::mapper::{
 };
 use crate::{
     FfiAsrInferenceMetric, FfiAsrModelLoadMetric, FfiAsrTranscriptUpdateEvent,
-    SonaCoreBindingError, SonaCoreBindingResult,
+    SonaCoreBindingResult,
 };
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent,
-    AsrTranscriptionRequest, LOCAL_SHERPA_PROVIDER_ID, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
-    find_online_asr_provider,
+    AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
+    GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, SherpaError,
+    VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_core::transcription::provider_resolution::{
+    AsrProviderCapability, resolve_asr_streaming_provider_id,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
@@ -89,6 +92,19 @@ impl FfiAsrStreamingSession {
     }
 }
 
+const UNIFFI_STREAMING_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [
+    AsrProviderCapability::new(LOCAL_SHERPA_PROVIDER_ID, false),
+    AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+    AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
+    AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
+];
+
+fn resolve_uniffi_streaming_provider_id(
+    request: &AsrTranscriptionRequest,
+) -> SonaCoreBindingResult<&'static str> {
+    resolve_asr_streaming_provider_id(request, &UNIFFI_STREAMING_CAPABILITIES).map_err(Into::into)
+}
+
 pub(crate) fn create_online_asr_streaming_session(
     instance_id: String,
     request_json: String,
@@ -96,33 +112,18 @@ pub(crate) fn create_online_asr_streaming_session(
 ) -> SonaCoreBindingResult<Arc<FfiAsrStreamingSession>> {
     let request: AsrTranscriptionRequest =
         parse_core_json(&request_json, "ASR transcription request")?;
-    let provider_id = match &request.engine_config {
-        AsrEngineConfig::LocalSherpa { .. } => {
-            return Err(SherpaError::StreamingNotSupported {
-                provider_id: LOCAL_SHERPA_PROVIDER_ID.to_string(),
-            }
-            .into());
-        }
-        AsrEngineConfig::Online { provider } => provider.provider_id.clone(),
-    };
-
-    let provider = find_online_asr_provider(&provider_id).ok_or_else(|| {
-        SonaCoreBindingError::from(SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.clone(),
-        })
-    })?;
-    if provider.streaming.supported == Some(false) {
-        return Err(SherpaError::StreamingNotSupported { provider_id }.into());
-    }
-
-    let inner = match provider_id.as_str() {
+    let provider_id = resolve_uniffi_streaming_provider_id(&request)?;
+    let inner = match provider_id {
         VOLCENGINE_DOUBAO_PROVIDER_ID => sona_online_asr::create_volcengine_streaming_session(
             instance_id,
             request,
             Arc::new(FfiAsrRuntimeObserver::new(observer)),
         )?,
         _ => {
-            return Err(SherpaError::UnsupportedOnlineProvider { provider_id }.into());
+            return Err(SherpaError::UnsupportedOnlineProvider {
+                provider_id: provider_id.to_owned(),
+            }
+            .into());
         }
     };
 
@@ -132,10 +133,11 @@ pub(crate) fn create_online_asr_streaming_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SonaCoreBindingError;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingSession,
-        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, OnlineAsrProviderRequest, SherpaError,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, MISTRAL_VOXTRAL_PROVIDER_ID,
+        OnlineAsrProviderRequest, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
     use sona_core::transcription::postprocess::{
@@ -290,9 +292,9 @@ mod tests {
         .unwrap()
     }
 
-    fn local_request_json() -> String {
+    fn local_request_json(mode: AsrMode) -> String {
         serde_json::to_string(&AsrTranscriptionRequest::local_sherpa(
-            AsrMode::Streaming,
+            mode,
             "model".into(),
             1,
             false,
@@ -425,7 +427,7 @@ mod tests {
     fn non_online_request_uses_the_core_streaming_error_code() {
         let error = create_online_asr_streaming_session(
             "live-1".into(),
-            local_request_json(),
+            local_request_json(AsrMode::Streaming),
             recording_observer(),
         )
         .err()
@@ -435,6 +437,54 @@ mod tests {
             SonaCoreBindingError::AsrRuntime { code, .. }
                 if code == "STREAMING_NOT_SUPPORTED"
         ));
+    }
+
+    fn binding_error_code(request_json: String) -> String {
+        match create_online_asr_streaming_session(
+            "live-1".into(),
+            request_json,
+            recording_observer(),
+        )
+        .err()
+        .expect("incompatible streaming request should fail")
+        {
+            SonaCoreBindingError::AsrRuntime { code, .. } => code,
+            error => panic!("expected ASR runtime error, got {error:?}"),
+        }
+    }
+
+    #[test]
+    fn local_batch_request_stays_streaming_not_supported() {
+        assert_eq!(
+            binding_error_code(local_request_json(AsrMode::Batch)),
+            "STREAMING_NOT_SUPPORTED",
+        );
+    }
+
+    #[test]
+    fn batch_only_online_batch_requests_stay_streaming_not_supported() {
+        for provider_id in [GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID] {
+            assert_eq!(
+                binding_error_code(request_json(provider_id, "batch")),
+                "STREAMING_NOT_SUPPORTED",
+            );
+        }
+    }
+
+    #[test]
+    fn volcengine_batch_request_keeps_realtime_mode_error() {
+        assert_eq!(
+            binding_error_code(request_json(VOLCENGINE_DOUBAO_PROVIDER_ID, "batch")),
+            "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING",
+        );
+    }
+
+    #[test]
+    fn unknown_batch_provider_keeps_unsupported_provider_error() {
+        assert_eq!(
+            binding_error_code(request_json("future-provider", "batch")),
+            "UNSUPPORTED_ONLINE_PROVIDER",
+        );
     }
 
     #[test]
@@ -462,6 +512,18 @@ mod tests {
         )
         .err()
         .expect("unsupported streaming provider should fail");
+        assert!(matches!(
+            error,
+            SonaCoreBindingError::AsrRuntime { code, .. }
+                if code == "STREAMING_NOT_SUPPORTED"
+        ));
+    }
+
+    #[test]
+    fn uniffi_resolver_preserves_mistral_streaming_error() {
+        let request: AsrTranscriptionRequest =
+            serde_json::from_str(&request_json(MISTRAL_VOXTRAL_PROVIDER_ID, "streaming")).unwrap();
+        let error = resolve_uniffi_streaming_provider_id(&request).unwrap_err();
         assert!(matches!(
             error,
             SonaCoreBindingError::AsrRuntime { code, .. }
