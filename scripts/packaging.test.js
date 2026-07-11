@@ -21,6 +21,54 @@ const repoRoot = path.resolve(__dirname, '..');
 const desktopCrateSegments = ['platforms', 'desktop'];
 const desktopCratePath = (...segments) => path.join(repoRoot, ...desktopCrateSegments, ...segments);
 const node = process.execPath;
+const desktopFrontendDependencies = [
+  '@dnd-kit/core',
+  '@dnd-kit/modifiers',
+  '@dnd-kit/sortable',
+  '@dnd-kit/utilities',
+  '@eslint/js',
+  '@lexical/html',
+  '@lexical/react',
+  '@lexical/rich-text',
+  '@playwright/test',
+  '@tauri-apps/api',
+  '@tauri-apps/cli',
+  '@tauri-apps/plugin-dialog',
+  '@tauri-apps/plugin-fs',
+  '@tauri-apps/plugin-global-shortcut',
+  '@tauri-apps/plugin-log',
+  '@tauri-apps/plugin-opener',
+  '@tauri-apps/plugin-process',
+  '@tauri-apps/plugin-store',
+  '@tauri-apps/plugin-updater',
+  '@testing-library/dom',
+  '@testing-library/react',
+  '@types/node',
+  '@types/react',
+  '@types/react-dom',
+  '@vitejs/plugin-react',
+  'eslint',
+  'eslint-plugin-react-hooks',
+  'eslint-plugin-react-refresh',
+  'ffmpeg-static',
+  'globals',
+  'i18next',
+  'i18next-browser-languagedetector',
+  'jsdom',
+  'lexical',
+  'lucide-react',
+  'react',
+  'react-dom',
+  'react-i18next',
+  'react-virtuoso',
+  'recharts',
+  'typescript',
+  'typescript-eslint',
+  'uuid',
+  'vite',
+  'vitest',
+  'zustand',
+];
 
 function makeTempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-packaging-'));
@@ -386,7 +434,20 @@ test('desktop frontend and Tauri configuration are colocated', () => {
   }
   assert.match(desktopLib, /"frontend\/src\/bindings\.ts"/u);
   assert.ok(frontendPackage.dependencies['@tauri-apps/api']);
-  assert.equal(rootPackage.dependencies?.['@tauri-apps/api'], undefined);
+  for (const dependencyName of desktopFrontendDependencies) {
+    assert.equal(
+      rootPackage.dependencies?.[dependencyName],
+      undefined,
+      `${dependencyName} must not be a root production dependency`,
+    );
+    assert.equal(
+      rootPackage.devDependencies?.[dependencyName],
+      undefined,
+      `${dependencyName} must not be a root development dependency`,
+    );
+  }
+  assert.equal(rootPackage.dependencies?.ws, undefined, 'root ws dependency has no remaining consumer');
+  assert.equal(rootPackage.devDependencies?.ws, undefined, 'root ws dev dependency has no remaining consumer');
   assert.equal(rootPackage.scripts.tauri, 'node platforms/desktop/scripts/tauri.js');
   assert.equal(exists('platforms', 'desktop', 'scripts', 'tauri.js'), true);
   assert.equal(exists('scripts', 'tauri.js'), false);

@@ -25,9 +25,6 @@
     "commitlint": "commitlint --edit",
     "check:staged": "node scripts/check-staged.js"
   },
-  "dependencies": {
-    "ws": "^8.21.0"
-  },
   "devDependencies": {
     "@commitlint/cli": "^21.1.0",
     "@commitlint/config-conventional": "^21.1.0",
