@@ -373,6 +373,10 @@ test('desktop frontend and Tauri configuration are colocated', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'public')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'index.html')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'vite.config.ts')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'eslint.config.js')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'tsconfig.json')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'tsconfig.node.json')), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'playwright.config.ts')), false);
   assert.equal(fs.existsSync(frontend('index.html')), true);
   assert.equal(desktopConfig.build.frontendDist, 'frontend/dist');
   for (const command of [desktopConfig.build.beforeDevCommand, desktopConfig.build.beforeBuildCommand]) {
