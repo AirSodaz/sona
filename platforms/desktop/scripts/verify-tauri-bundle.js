@@ -23,7 +23,7 @@ function main() {
   verifyStagedSidecar(config, configPath, target, 'ffmpeg');
   verifyStagedSidecar(config, configPath, target, 'sona-cli');
   verifyStagedRuntimeLibraries(config, configPath, target);
-  verifyCanonicalAppBundle(repoRoot, bundleRoots, target);
+  verifyCanonicalAppBundle(bundleRoots, target);
 
   console.log(`[bundle] Verified packaged artifacts for ${target}`);
 }
@@ -50,10 +50,10 @@ function resolveBundleRoots(repoRoot, target, commandArgs) {
   if (explicitBundleRoot) {
     return [path.resolve(repoRoot, explicitBundleRoot)].filter((directoryPath) => fs.existsSync(directoryPath));
   }
-  return [...new Set([
-    path.resolve(repoRoot, 'target', 'release', 'bundle'),
-    path.resolve(repoRoot, 'target', target, 'release', 'bundle'),
-  ])].filter((directoryPath) => fs.existsSync(directoryPath));
+  const releaseDir = readFlagValue(commandArgs, '--target')
+    ? path.resolve(repoRoot, 'target', target, 'release')
+    : path.resolve(repoRoot, 'target', 'release');
+  return [path.join(releaseDir, 'bundle')].filter((directoryPath) => fs.existsSync(directoryPath));
 }
 
 function verifyInstallerArtifacts(bundleRoots, target) {
@@ -121,9 +121,9 @@ function verifyRuntimePlacement(config, target) {
 }
 
 function verifyRuntimeFileMap(files, destinationDir, label) {
-  if (!files || !Object.entries(files).some(([source, destination]) => {
-    return normalizeConfigPath(source).includes('/runtime-libs/')
-      && normalizeConfigPath(destination).startsWith(`${destinationDir}/`);
+  if (!files || !Object.entries(files).some(([destination, source]) => {
+    return normalizeConfigPath(destination).startsWith(`${destinationDir}/`)
+      && normalizeConfigPath(source).includes('/runtime-libs/');
   })) {
     throw new Error(`Generated Tauri configuration must map runtime libraries through bundle.${label}.files.`);
   }
@@ -159,12 +159,12 @@ function configuredRuntimeFiles(config, configPath, target) {
     const runtimeLibDir = resolveConfigPath(configPath, source.slice(0, -2));
     return fs.readdirSync(runtimeLibDir).map((name) => path.join(runtimeLibDir, name));
   }
-  if (target.includes('apple')) return Object.keys(config.bundle.macOS.files).map((source) => resolveConfigPath(configPath, source));
-  return Object.keys(config.bundle.linux.deb.files).map((source) => resolveConfigPath(configPath, source));
+  if (target.includes('apple')) return Object.values(config.bundle.macOS.files).map((source) => resolveConfigPath(configPath, source));
+  return Object.values(config.bundle.linux.deb.files).map((source) => resolveConfigPath(configPath, source));
 }
 
-function verifyCanonicalAppBundle(repoRoot, bundleRoots, target) {
-  const appRoot = findCanonicalAppRoot(repoRoot, bundleRoots, target);
+function verifyCanonicalAppBundle(bundleRoots, target) {
+  const appRoot = findCanonicalAppRoot(bundleRoots, target);
   if (!appRoot) {
     throw new Error(`No canonical application bundle was found for ${target}.`);
   }
@@ -183,10 +183,11 @@ function verifyCanonicalAppBundle(repoRoot, bundleRoots, target) {
   console.log(`[bundle] Verified canonical app bundle: ${appRoot}`);
 }
 
-function findCanonicalAppRoot(repoRoot, bundleRoots, target) {
+function findCanonicalAppRoot(bundleRoots, target) {
   if (target.includes('windows')) {
-    const releaseDir = path.join(repoRoot, 'target', target, 'release');
-    return fs.existsSync(path.join(releaseDir, 'sona.exe')) ? releaseDir : null;
+    return bundleRoots
+      .map((bundleRoot) => path.dirname(bundleRoot))
+      .find((releaseDir) => fs.existsSync(path.join(releaseDir, 'sona.exe'))) ?? null;
   }
   const files = bundleRoots.flatMap((bundleRoot) => walkFiles(bundleRoot));
   if (target.includes('apple')) {

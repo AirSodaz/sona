@@ -336,8 +336,8 @@ function runtimeLibraryFileMap(runtimeLibDir, destinationDir) {
     fs.readdirSync(runtimeLibDir, { withFileTypes: true })
       .filter((entry) => entry.isFile())
       .map((entry) => [
-        path.join(runtimeLibDir, entry.name),
         path.posix.join(destinationDir, entry.name),
+        path.join(runtimeLibDir, entry.name),
       ]),
   );
 }

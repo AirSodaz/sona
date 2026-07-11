@@ -161,8 +161,8 @@ function writeRuntimeLibraries(directoryPath, target) {
 function runtimeFileMap(runtimeLibDir, target, destinationDir) {
   return Object.fromEntries(
     runtimeLibraryNames(target).map((libraryName) => [
-      path.join(runtimeLibDir, libraryName),
       `${destinationDir}/${libraryName}`,
+      path.join(runtimeLibDir, libraryName),
     ]),
   );
 }
@@ -210,8 +210,7 @@ function writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibD
   fs.writeFileSync(configPath, JSON.stringify(config));
 }
 
-function writeCanonicalAppBundle(root, target) {
-  const releaseDir = path.join(root, 'target', target, 'release');
+function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'target', target, 'release')) {
   const bundleRoot = path.join(releaseDir, 'bundle');
   fs.mkdirSync(bundleRoot, { recursive: true });
   if (target.includes('windows')) {
@@ -414,6 +413,26 @@ test('desktop bundle preparer maps macOS and Linux runtime libraries through nat
       runtimeFileMap(linux.runtimeLibDir, linux.target, 'usr/lib/sona'),
     );
     assert.equal(linuxConfig.bundle[format], undefined);
+  }
+});
+
+test('desktop bundle file maps use Tauri destination-to-source semantics', async () => {
+  const macos = await prepareBundleFixture('aarch64-apple-darwin');
+  const macosConfig = JSON.parse(fs.readFileSync(macos.configPath, 'utf8'));
+  const macosLibrary = runtimeLibraryNames(macos.target)[0];
+  assert.equal(
+    macosConfig.bundle.macOS.files[`Frameworks/${macosLibrary}`],
+    path.join(macos.runtimeLibDir, macosLibrary),
+  );
+
+  const linux = await prepareBundleFixture('x86_64-unknown-linux-gnu');
+  const linuxConfig = JSON.parse(fs.readFileSync(linux.configPath, 'utf8'));
+  const linuxLibrary = runtimeLibraryNames(linux.target)[0];
+  for (const format of ['deb', 'rpm', 'appimage']) {
+    assert.equal(
+      linuxConfig.bundle.linux[format].files[`usr/lib/sona/${linuxLibrary}`],
+      path.join(linux.runtimeLibDir, linuxLibrary),
+    );
   }
 });
 
@@ -1080,6 +1099,78 @@ test('tauri bundle verification inspects canonical native app locations', () => 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /Verified canonical app bundle/u);
   }
+});
+
+test('tauri bundle verification accepts an explicit native Windows bundle root', () => {
+  const target = 'x86_64-pc-windows-msvc';
+  const root = makeTempRepo();
+  const releaseDir = path.join(root, 'target', 'release');
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target, releaseDir);
+
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+      '--bundle-root',
+      path.join(releaseDir, 'bundle'),
+    ],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Verified canonical app bundle/u);
+});
+
+test('tauri bundle verification does not mix native and target-qualified Windows outputs', () => {
+  const target = 'aarch64-pc-windows-msvc';
+  const root = makeTempRepo();
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  const targetReleaseDir = path.join(root, 'target', target, 'release');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target, path.join(root, 'target', 'release'));
+  writeCanonicalAppBundle(root, target, targetReleaseDir);
+  fs.rmSync(path.join(targetReleaseDir, 'bundle', 'nsis'), { recursive: true });
+
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+
+  assert.notEqual(result.status, 0, result.stdout);
+  assert.match(result.stderr, /No installer artifact was found/u);
 });
 
 test('desktop host is a direct platform crate with explicit CLI config', () => {
