@@ -17,7 +17,6 @@ crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-embed-resource = "3.0.9"
 
 
 [dependencies]
@@ -97,7 +96,6 @@ windows = { version = "0.61", features = [
     "Win32_UI_Accessibility",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
-    "Win32_System_LibraryLoader",
 ] }
 
 [dev-dependencies]

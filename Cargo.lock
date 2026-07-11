@@ -5423,7 +5423,6 @@ dependencies = [
  "bytes",
  "chrono",
  "cpal",
- "embed-resource",
  "enigo",
  "fs3",
  "futures-util",
@@ -5662,7 +5661,6 @@ dependencies = [
  "tempfile",
  "uuid",
  "walkdir",
- "windows 0.61.3",
 ]
 
 [[package]]

@@ -3,10 +3,6 @@ pub mod commands;
 pub mod integrations;
 pub mod platform;
 
-#[cfg(all(test, target_os = "windows", target_env = "msvc"))]
-#[link(name = "windows-test-manifest")]
-unsafe extern "C" {}
-
 use tauri::{Emitter, Manager};
 
 /// Initializes and runs the Tauri application.
@@ -20,15 +16,56 @@ pub fn run() {
     }
 }
 
-#[cfg(target_os = "windows")]
-pub fn init_dll_directory() {
-    sona_runtime_fs::init_tauri_shared_library_directory();
+#[cfg(debug_assertions)]
+fn export_typescript_bindings() -> Result<(), specta_typescript::Error> {
+    let bindings_path = std::path::Path::new("frontend/src/bindings.ts");
+    let temporary_path = std::env::temp_dir().join(format!(
+        "sona-tauri-specta-bindings-{}.ts",
+        std::process::id()
+    ));
+    export_typescript_bindings_to(bindings_path, &temporary_path)?;
+    Ok(())
+}
+
+fn export_typescript_bindings_to(
+    bindings_path: &std::path::Path,
+    temporary_path: &std::path::Path,
+) -> Result<bool, specta_typescript::Error> {
+    let export_result = tauri_specta::Builder::<tauri::Wry>::new()
+        .typ::<sona_core::domain::LlmProvider>()
+        .typ::<sona_core::domain::PolishPresetId>()
+        .typ::<sona_core::domain::SummaryTemplateId>()
+        .export(specta_typescript::Typescript::default(), &temporary_path);
+
+    if let Err(error) = export_result {
+        let _ = std::fs::remove_file(&temporary_path);
+        return Err(error);
+    }
+
+    let generated_bindings = std::fs::read(&temporary_path);
+    let _ = std::fs::remove_file(&temporary_path);
+    write_bindings_if_changed(bindings_path, &generated_bindings?).map_err(Into::into)
+}
+
+fn write_bindings_if_changed(
+    path: &std::path::Path,
+    generated_bindings: &[u8],
+) -> std::io::Result<bool> {
+    match std::fs::read(path) {
+        Ok(existing_bindings) if existing_bindings == generated_bindings => Ok(false),
+        Ok(_) => {
+            std::fs::write(path, generated_bindings)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::write(path, generated_bindings)?;
+            Ok(true)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn run_app() -> Result<(), tauri::Error> {
-    #[cfg(target_os = "windows")]
-    init_dll_directory();
-
     let app_settings = crate::app::settings::AppSettings::new();
     let log_level_filter = app_settings.log_level_filter();
 
@@ -40,17 +77,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
     let prevent_default = tauri_plugin_prevent_default::Builder::new().build();
 
     #[cfg(debug_assertions)]
-    {
-        tauri_specta::Builder::<tauri::Wry>::new()
-            .typ::<sona_core::domain::LlmProvider>()
-            .typ::<sona_core::domain::PolishPresetId>()
-            .typ::<sona_core::domain::SummaryTemplateId>()
-            .export(
-                specta_typescript::Typescript::default(),
-                "frontend/src/bindings.ts",
-            )
-            .expect("Failed to export typescript bindings");
-    }
+    export_typescript_bindings().expect("Failed to export typescript bindings");
 
     tauri::Builder::default()
         .plugin(
@@ -133,4 +160,23 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(prevent_default)
         .invoke_handler(crate::commands::get_handlers())
         .run(tauri::generate_context!())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_bindings_if_changed;
+    use std::fs;
+
+    #[test]
+    fn writes_bindings_only_when_generated_content_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let bindings_path = directory.path().join("bindings.ts");
+        fs::write(&bindings_path, b"existing bindings").unwrap();
+
+        assert!(!write_bindings_if_changed(&bindings_path, b"existing bindings").unwrap());
+        assert_eq!(fs::read(&bindings_path).unwrap(), b"existing bindings");
+
+        assert!(write_bindings_if_changed(&bindings_path, b"updated bindings").unwrap());
+        assert_eq!(fs::read(&bindings_path).unwrap(), b"updated bindings");
+    }
 }

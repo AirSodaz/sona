@@ -1,11 +1,12 @@
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { resolveHostTarget } from './prepare-desktop-bundle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
-const tauriBinary = path.resolve(
+const tauriBinary = process.env.SONA_TAURI_BINARY ?? path.resolve(
   repoRoot,
   'platforms',
   'desktop',
@@ -17,19 +18,21 @@ const tauriBinary = path.resolve(
 
 const desktopTauriConfig = path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json');
 const args = process.argv.slice(2);
-const tauriArgs = withDesktopConfig(args);
+let tauriArgs = withDesktopConfig(args);
+let tauriEnvironment = process.env;
 const command = tauriArgs[0];
-const UNIVERSAL_MACOS_TARGET = 'universal-apple-darwin';
-const UNIVERSAL_MACOS_SOURCE_TARGETS = ['aarch64-apple-darwin', 'x86_64-apple-darwin'];
 
 if (command === 'build' || command === 'bundle') {
-  prepareBundleResources(tauriArgs);
+  const preparedBundle = prepareDesktopBundle(tauriArgs);
+  tauriArgs = preparedBundle.args;
+  tauriEnvironment = preparedBundle.environment;
 }
 
 const tauriResult = spawnSync(tauriBinary, tauriArgs, {
   cwd: repoRoot,
   stdio: 'inherit',
   shell: process.platform === 'win32',
+  env: tauriEnvironment,
 });
 
 if (tauriResult.error) {
@@ -51,59 +54,58 @@ function withDesktopConfig(commandArgs) {
   return [command, '--config', desktopTauriConfig, ...commandArgs.slice(1)];
 }
 
-function prepareBundleResources(tauriArgs) {
+function prepareDesktopBundle(commandArgs) {
+  const target = readFlagValue(commandArgs, '--target') ?? resolveHostTarget();
+  const baseConfig = readFlagValue(commandArgs, '--config') ?? desktopTauriConfig;
   runRequired(
-    'setup ffmpeg sidecar',
+    'prepare desktop bundle',
     process.execPath,
-    [path.resolve(__dirname, 'setup-ffmpeg.js')],
+    [
+      process.env.SONA_DESKTOP_BUNDLE_PREPARER ?? path.resolve(__dirname, 'prepare-desktop-bundle.js'),
+      '--repo-root',
+      repoRoot,
+      '--target',
+      target,
+      '--config',
+      baseConfig,
+    ],
     {
       cwd: repoRoot,
       stdio: 'inherit',
     },
   );
 
-  if (process.env.SONA_SKIP_CLI_RESOURCE_PREP === '1') {
-    return;
-  }
-
-  buildStandaloneCli(tauriArgs);
-  stageStandaloneCliResource(tauriArgs);
+  const bundleConfig = path.join(
+    repoRoot,
+    'target',
+    'desktop-bundle',
+    target,
+    'tauri.bundle.conf.json',
+  );
+  const environment = target.includes('apple')
+    ? { ...process.env, SHERPA_ONNX_LIB_DIR: path.join(repoRoot, 'target', 'desktop-bundle', target, 'runtime-libs') }
+    : process.env;
+  return {
+    args: withBundleConfig(commandArgs, bundleConfig),
+    environment,
+  };
 }
 
-function buildStandaloneCli(tauriArgs) {
-  const target = readFlagValue(tauriArgs, '--target');
-  if (target === UNIVERSAL_MACOS_TARGET) {
-    for (const sourceTarget of UNIVERSAL_MACOS_SOURCE_TARGETS) {
-      runRequired('build standalone sona-cli', 'cargo', [
-        'build',
-        '-p',
-        'sona-cli',
-        '--release',
-        '--target',
-        sourceTarget,
-      ]);
+function withBundleConfig(commandArgs, bundleConfig) {
+  const [command, ...rest] = commandArgs;
+  const retainedArgs = [];
+  for (let index = 0; index < rest.length; index += 1) {
+    const argument = rest[index];
+    if (argument === '--config') {
+      index += 1;
+      continue;
     }
-    return;
+    if (argument.startsWith('--config=')) {
+      continue;
+    }
+    retainedArgs.push(argument);
   }
-
-  const cargoArgs = ['build', '-p', 'sona-cli', '--release'];
-  if (target) {
-    cargoArgs.push('--target', target);
-  }
-  runRequired('build standalone sona-cli', 'cargo', cargoArgs);
-}
-
-function stageStandaloneCliResource(tauriArgs) {
-  const target = readFlagValue(tauriArgs, '--target');
-  const setupArgs = [path.resolve(__dirname, 'setup-sona-cli-resource.js')];
-  if (target) {
-    setupArgs.push('--target', target);
-  }
-
-  runRequired('stage standalone sona-cli resource', process.execPath, setupArgs, {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  });
+  return [command, '--config', bundleConfig, ...retainedArgs];
 }
 
 function readFlagValue(commandArgs, flagName) {

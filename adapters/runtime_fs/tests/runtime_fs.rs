@@ -8,12 +8,11 @@ use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvi
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, RealFileSystem, cli_shared_library_directory_candidates,
-    collect_automation_runtime_candidate_paths, ensure_directory_exists,
-    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
-    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
-    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    tauri_shared_library_directory_candidates, write_cli_config_template_file,
+    FsSourcePathStatusProvider, RealFileSystem, collect_automation_runtime_candidate_paths,
+    ensure_directory_exists, is_preset_model_installed_at, load_legacy_settings_app_config,
+    load_transcribe_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
+    resolve_batch_input_source, resolve_runtime_path_status,
+    select_desktop_models_dir_from_app_roots, write_cli_config_template_file,
     write_json_pretty_atomic, write_transcript_output_file,
 };
 
@@ -352,47 +351,4 @@ fn real_file_system_remove_path_if_exists_handles_files_and_missing_paths() {
     assert!(!path.exists());
 
     remove_path_if_exists(&path).unwrap();
-}
-
-#[test]
-fn cli_shared_library_candidates_match_standalone_resource_layouts() {
-    let exe_dir = PathBuf::from("/opt/sona/bin");
-
-    let candidates = cli_shared_library_directory_candidates(&exe_dir);
-
-    assert_eq!(
-        candidates,
-        vec![
-            exe_dir.join("../shared_libs"),
-            exe_dir.join("shared_libs"),
-            exe_dir.join("../resources/shared_libs"),
-            exe_dir.join("resources/shared_libs"),
-        ]
-    );
-}
-
-#[test]
-fn tauri_shared_library_candidates_match_desktop_bundle_layouts() {
-    let exe_dir = PathBuf::from("/opt/sona/bin");
-
-    let candidates = tauri_shared_library_directory_candidates(&exe_dir);
-
-    assert_eq!(
-        candidates,
-        vec![
-            exe_dir.join("resources").join("shared_libs"),
-            exe_dir.join("..").join("resources").join("shared_libs"),
-            exe_dir
-                .join("..")
-                .join("..")
-                .join("resources")
-                .join("shared_libs"),
-            exe_dir
-                .join("..")
-                .join("..")
-                .join("..")
-                .join("resources")
-                .join("shared_libs"),
-        ]
-    );
 }

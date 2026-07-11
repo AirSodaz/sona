@@ -1,8 +1,6 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    sona_runtime_fs::init_cli_shared_library_directory();
-
     match sona_cli::run_cli_from_args(std::env::args_os()) {
         Ok(output) => {
             if !output.stdout.is_empty() {

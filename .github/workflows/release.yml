@@ -23,8 +23,6 @@ jobs:
             args: "--target aarch64-apple-darwin"
           - platform: "macos-latest"
             args: "--target x86_64-apple-darwin"
-          - platform: "macos-latest"
-            args: "--target universal-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
           - platform: "windows-latest"
@@ -98,29 +96,11 @@ jobs:
         run: |
           echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
 
-      - name: Build standalone CLI
-        if: ${{ matrix.args != '--target universal-apple-darwin' }}
-        env:
-          LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
-        run: cargo build -p sona-cli --release ${{ matrix.args }}
-
-      - name: Build standalone CLI (macOS universal)
-        if: ${{ matrix.args == '--target universal-apple-darwin' }}
-        env:
-          LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
-        run: |
-          cargo build -p sona-cli --release --target aarch64-apple-darwin
-          cargo build -p sona-cli --release --target x86_64-apple-darwin
-
-      - name: Stage standalone CLI resource
-        run: node platforms/desktop/scripts/setup-sona-cli-resource.js ${{ matrix.args }}
-
       - name: Build the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
-          SONA_SKIP_CLI_RESOURCE_PREP: "1"
         run: node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}
 
       - name: Verify Tauri bundle and shared libraries
@@ -135,8 +115,6 @@ jobs:
             ARCH="aarch64"
           elif [[ "${{ matrix.args }}" == *"--target x86_64-apple-darwin"* ]]; then
             ARCH="x64"
-          elif [[ "${{ matrix.args }}" == *"--target universal-apple-darwin"* ]]; then
-            ARCH="universal"
           else
             ARCH="unknown"
           fi
@@ -212,7 +190,7 @@ jobs:
           [x64](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64-setup.exe) | [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_arm64-setup.exe)
 
           **macOS**
-          [Apple Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_aarch64.dmg) | [Intel](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_universal.dmg)
+          [Apple Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_aarch64.dmg) | [Intel](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64.dmg)
 
           **Linux**
           [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)

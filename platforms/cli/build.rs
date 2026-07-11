@@ -11,13 +11,9 @@ fn main() {
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
 
     if target_os == "linux" {
-        println!(
-            "cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN:$ORIGIN/../shared_libs:$ORIGIN/../resources/shared_libs"
-        );
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/sona");
     } else if target_os == "macos" {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../shared_libs");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources/resources/shared_libs");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
     } else if target_os == "windows" && target_env == "msvc" {
         println!("cargo:rustc-link-arg=delayimp.lib");
         println!("cargo:rustc-link-arg=/DELAYLOAD:sherpa-onnx-c-api.dll");

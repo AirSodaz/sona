@@ -87,9 +87,6 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare ffmpeg sidecar
-        run: node platforms/desktop/scripts/setup-ffmpeg.js
-
       - name: Build standalone CLI
         run: cargo build -p sona-cli --release
 

@@ -48,16 +48,3 @@ docs/superpowers
 target/
 target_*
 temp_*
-.placeholder
-
-# Sherpa-onnx shared libraries (build artifacts copied by build.rs)
-platforms/desktop/resources/shared_libs/*.dll
-platforms/desktop/resources/shared_libs/*.dylib
-platforms/desktop/resources/shared_libs/*.so
-
-# Standalone CLI resources copied for Tauri packaging
-platforms/desktop/resources/cli/sona-cli
-platforms/desktop/resources/cli/sona-cli.exe
-
-# Legacy standalone CLI sidecars copied for older Tauri packaging
-platforms/desktop/binaries/sona-cli-*

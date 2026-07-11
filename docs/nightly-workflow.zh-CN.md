@@ -43,7 +43,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **运行环境**: 矩阵平台（`macos-latest`, `ubuntu-22.04`, `windows-latest`）
 * **目的**: 编译 Sona 应用程序、对安装包进行数字签名，并生成签名校验文件。
 * **构建矩阵目标**:
-  - **macOS**: `macos-latest`（构建 `aarch64-apple-darwin`、`x86_64-apple-darwin` 和 `universal-apple-darwin` 目标）。
+  - **macOS**: `macos-latest`（构建 `aarch64-apple-darwin` 和 `x86_64-apple-darwin` 目标）。
   - **Linux**: `ubuntu-22.04`（默认目标，打包为 `.deb`、`.rpm`、`.AppImage`）。
   - **Windows**: `windows-latest`（默认 x64 目标和 `aarch64-pc-windows-msvc` ARM64 目标）。
 * **关键步骤**:
@@ -52,7 +52,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
   3. **渠道与版本修改**: 调用 `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` 来更新 Tauri 配置文件中的渠道和版本号。
   4. **下载 Sherpa-Onnx 库**: 针对每个目标平台/架构，下载并解压匹配的 `sherpa-onnx` 动态链接库。
   5. **Tauri 构建**: 运行 `node platforms/desktop/scripts/tauri.js build` 构建应用。使用配置的签名密钥对安装包进行签名。
-  6. **重命名构建产物**: 重命名 macOS 的构建产物，在文件名中附加架构标识（`aarch64`、`x64` 或 `universal`），以防在发布上传时发生冲突。
+  6. **重命名构建产物**: 重命名 macOS 的构建产物，在文件名中附加架构标识（`aarch64` 或 `x64`），以防在发布上传时发生冲突。
   7. **上传构建产物**: 将生成的安装包和升级签名文件（`.sig` 文件）作为工作流构件（Artifacts）上传。
 
 ### 4. `publish-nightly`

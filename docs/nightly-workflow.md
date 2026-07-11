@@ -43,7 +43,7 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
 * **Runs on**: Matrix platforms (`macos-latest`, `ubuntu-22.04`, `windows-latest`)
 * **Purpose**: Compiles the Sona application, signs the bundle, and generates signatures.
 * **Matrix Targets**:
-  - **macOS**: `macos-latest` (builds `aarch64-apple-darwin`, `x86_64-apple-darwin`, and `universal-apple-darwin` targets).
+  - **macOS**: `macos-latest` (builds `aarch64-apple-darwin` and `x86_64-apple-darwin` targets).
   - **Linux**: `ubuntu-22.04` (default target, compiles `.deb`, `.rpm`, `.AppImage`).
   - **Windows**: `windows-latest` (default x64 target and `aarch64-pc-windows-msvc` ARM64 target).
 * **Key Steps**:
@@ -52,7 +52,7 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
   3. **Channel Patching**: Invokes `node platforms/desktop/scripts/patch-channel.js --channel nightly --version <version>` to update Tauri configuration with the nightly channel and version.
   4. **Sherpa-Onnx Libs**: Downloads and extracts the correct prebuilt `sherpa-onnx` shared libraries for each target platform.
   5. **Tauri Build**: Builds Sona via `node platforms/desktop/scripts/tauri.js build`. Signs binaries using the provided signing key.
-  6. **Asset Renaming**: Renames macOS build artifacts to append the architecture (`aarch64`, `x64`, or `universal`) to prevent conflicts in the release upload.
+  6. **Asset Renaming**: Renames macOS build artifacts to append the architecture (`aarch64` or `x64`) to prevent conflicts in the release upload.
   7. **Artifact Upload**: Uploads generated binaries and update signatures (`.sig` files) as workflow run artifacts.
 
 ### 4. `publish-nightly`

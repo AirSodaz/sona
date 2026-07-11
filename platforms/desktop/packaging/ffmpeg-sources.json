@@ -1,0 +1,52 @@
+{
+  "sources": [
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-win64-gpl-8.1.zip",
+      "archiveKind": "zip",
+      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-win64-gpl-8.1/bin/ffmpeg.exe",
+      "sha256": "682361e32c9631caec09e5d9f09077101c9ed90c14e275f62014fefa6d397990",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "target": "aarch64-pc-windows-msvc",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-winarm64-gpl-8.1.zip",
+      "archiveKind": "zip",
+      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-winarm64-gpl-8.1/bin/ffmpeg.exe",
+      "sha256": "e4a86d390c1ab524acf73be651915be34bb7f1151540ab22c9774184aab18fdf",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1.tar.xz",
+      "archiveKind": "tar.xz",
+      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1/bin/ffmpeg",
+      "sha256": "0ba73bbd93472c7622f6dec26d334c5e62e64d858d072490b2844320970456cd",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1.tar.xz",
+      "archiveKind": "tar.xz",
+      "binaryPath": "ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1/bin/ffmpeg",
+      "sha256": "d3f90a71a38238466de2e4dc98537862d244e3307383435f94cbc4b8491033f8",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "target": "x86_64-apple-darwin",
+      "url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-x64.gz",
+      "archiveKind": "gz",
+      "binaryPath": "ffmpeg-darwin-x64",
+      "sha256": "929b375c1182d956c51f7ac25e0b2b0411fb01f6f407aa15c9758efeb4242106",
+      "license": "GPL-3.0-or-later"
+    },
+    {
+      "target": "aarch64-apple-darwin",
+      "url": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-arm64.gz",
+      "archiveKind": "gz",
+      "binaryPath": "ffmpeg-darwin-arm64",
+      "sha256": "8923876afa8db5585022d7860ec7e589af192f441c56793971276d450ed3bbfa",
+      "license": "GPL-3.0-or-later"
+    }
+  ]
+}

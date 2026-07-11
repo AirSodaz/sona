@@ -35,13 +35,6 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": [
-      "resources/cli/*",
-      "resources/shared_libs/*"
-    ],
-    "externalBin": [
-      "binaries/ffmpeg"
-    ],
     "targets": [
       "app",
       "nsis",
