@@ -200,7 +200,7 @@ function writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibD
   } else if (target.includes('apple')) {
     config.bundle.macOS = { files: runtimeFileMap(runtimeLibDir, target, 'Frameworks') };
   } else {
-    const files = runtimeFileMap(runtimeLibDir, target, 'usr/lib/sona');
+    const files = runtimeFileMap(runtimeLibDir, target, './usr/lib/sona');
     config.bundle.linux = {
       deb: { files },
       rpm: { files },
@@ -229,7 +229,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
     const frameworksDir = path.join(contents, 'Frameworks');
     fs.mkdirSync(macosDir, { recursive: true });
     fs.mkdirSync(frameworksDir, { recursive: true });
-    fs.writeFileSync(path.join(macosDir, 'Sona'), 'app');
+    fs.writeFileSync(path.join(macosDir, 'sona'), 'app');
     fs.writeFileSync(path.join(macosDir, 'sona-cli'), 'cli');
     fs.writeFileSync(path.join(macosDir, 'ffmpeg'), 'ffmpeg');
     for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(frameworksDir, libraryName), libraryName);
@@ -410,7 +410,7 @@ test('desktop bundle preparer maps macOS and Linux runtime libraries through nat
   for (const format of ['deb', 'rpm', 'appimage']) {
     assert.deepEqual(
       linuxConfig.bundle.linux[format].files,
-      runtimeFileMap(linux.runtimeLibDir, linux.target, 'usr/lib/sona'),
+      runtimeFileMap(linux.runtimeLibDir, linux.target, './usr/lib/sona'),
     );
     assert.equal(linuxConfig.bundle[format], undefined);
   }
@@ -430,7 +430,7 @@ test('desktop bundle file maps use Tauri destination-to-source semantics', async
   const linuxLibrary = runtimeLibraryNames(linux.target)[0];
   for (const format of ['deb', 'rpm', 'appimage']) {
     assert.equal(
-      linuxConfig.bundle.linux[format].files[`usr/lib/sona/${linuxLibrary}`],
+      linuxConfig.bundle.linux[format].files[`./usr/lib/sona/${linuxLibrary}`],
       path.join(linux.runtimeLibDir, linuxLibrary),
     );
   }

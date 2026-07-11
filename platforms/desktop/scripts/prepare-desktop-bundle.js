@@ -302,7 +302,7 @@ function writeBundleConfig(baseConfigPath, generatedConfigPath, sidecarsDir, run
     config.bundle.macOS ??= {};
     config.bundle.macOS.files = runtimeLibraryFileMap(runtimeLibDir, 'Frameworks');
   } else if (target.includes('linux')) {
-    const files = runtimeLibraryFileMap(runtimeLibDir, 'usr/lib/sona');
+    const files = runtimeLibraryFileMap(runtimeLibDir, './usr/lib/sona');
     config.bundle.linux ??= {};
     for (const format of ['deb', 'rpm', 'appimage']) {
       config.bundle.linux[format] ??= {};
@@ -336,7 +336,7 @@ function runtimeLibraryFileMap(runtimeLibDir, destinationDir) {
     fs.readdirSync(runtimeLibDir, { withFileTypes: true })
       .filter((entry) => entry.isFile())
       .map((entry) => [
-        path.posix.join(destinationDir, entry.name),
+        `${destinationDir}/${entry.name}`,
         path.join(runtimeLibDir, entry.name),
       ]),
   );

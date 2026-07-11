@@ -191,7 +191,7 @@ function findCanonicalAppRoot(bundleRoots, target) {
   }
   const files = bundleRoots.flatMap((bundleRoot) => walkFiles(bundleRoot));
   if (target.includes('apple')) {
-    const executable = files.find((filePath) => normalizeConfigPath(filePath).endsWith('.app/Contents/MacOS/Sona'));
+    const executable = files.find((filePath) => normalizeConfigPath(filePath).endsWith('.app/Contents/MacOS/sona'));
     return executable ? path.dirname(path.dirname(path.dirname(executable))) : null;
   }
   const executable = files.find((filePath) => normalizeConfigPath(filePath).endsWith('/usr/bin/sona'));
