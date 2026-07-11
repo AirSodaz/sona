@@ -16,7 +16,7 @@ members = [
     "adapters/webdav",
     "core",
     "platforms/cli",
-    "src-tauri",
+    "platforms/desktop",
     "tools/uniffi_bindgen",
 ]
 

@@ -9,7 +9,7 @@ describe('patch-channel.js integration', () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-patch-test-'));
     try {
       const scriptsDir = path.join(tempDir, 'scripts');
-      const tauriDir = path.join(tempDir, 'src-tauri');
+      const tauriDir = path.join(tempDir, 'platforms', 'desktop');
       const iconsNightlyDir = path.join(tauriDir, 'icons-nightly');
       const iconsDir = path.join(tauriDir, 'icons');
 

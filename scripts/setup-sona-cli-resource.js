@@ -12,7 +12,7 @@ const UNIVERSAL_MACOS_SOURCE_TARGETS = ['aarch64-apple-darwin', 'x86_64-apple-da
 function main() {
   const repoRoot = path.resolve(readFlagValue(args, '--repo-root') ?? path.resolve(__dirname, '..'));
   const target = resolveBuildTarget(args);
-  const resourceDir = path.join(repoRoot, 'src-tauri', 'resources', 'cli');
+  const resourceDir = path.join(repoRoot, 'platforms', 'desktop', 'resources', 'cli');
   fs.mkdirSync(resourceDir, { recursive: true });
 
   cleanCliResource(resourceDir);

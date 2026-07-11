@@ -80,11 +80,11 @@ function resolveBundleRoots(repoRoot, target, commandArgs) {
 }
 
 function verifyTauriBundleConfig(repoRoot) {
-  const configPath = path.resolve(repoRoot, 'src-tauri', 'tauri.conf.json');
+  const configPath = path.resolve(repoRoot, 'platforms', 'desktop', 'tauri.conf.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const externalBins = config.bundle?.externalBin ?? [];
   if (!externalBins.some((entry) => normalizeConfigPath(entry) === 'binaries/ffmpeg')) {
-    throw new Error('src-tauri/tauri.conf.json must include bundle.externalBin entry "binaries/ffmpeg".');
+    throw new Error('platforms/desktop/tauri.conf.json must include bundle.externalBin entry "binaries/ffmpeg".');
   }
 
   const resources = config.bundle?.resources ?? [];
@@ -93,17 +93,18 @@ function verifyTauriBundleConfig(repoRoot) {
     : Object.entries(resources).flatMap(([source, target]) => [source, target]);
 
   if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/shared_libs'))) {
-    throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/shared_libs.');
+    throw new Error('platforms/desktop/tauri.conf.json must include bundle.resources entry for resources/shared_libs.');
   }
   if (!resourceEntries.some((entry) => normalizeConfigPath(entry).includes('resources/cli'))) {
-    throw new Error('src-tauri/tauri.conf.json must include bundle.resources entry for resources/cli.');
+    throw new Error('platforms/desktop/tauri.conf.json must include bundle.resources entry for resources/cli.');
   }
 }
 
 function verifyFfmpegSidecar(repoRoot, target) {
   const sidecarPath = path.resolve(
     repoRoot,
-    'src-tauri',
+    'platforms',
+    'desktop',
     'binaries',
     `ffmpeg-${target}${target.includes('windows') ? '.exe' : ''}`,
   );
@@ -117,7 +118,7 @@ function verifyFfmpegSidecar(repoRoot, target) {
 
 function verifyStandaloneCliResource(repoRoot, target) {
   const binaryName = target.includes('windows') ? 'sona-cli.exe' : 'sona-cli';
-  const cliPath = path.resolve(repoRoot, 'src-tauri', 'resources', 'cli', binaryName);
+  const cliPath = path.resolve(repoRoot, 'platforms', 'desktop', 'resources', 'cli', binaryName);
 
   if (!fs.existsSync(cliPath)) {
     throw new Error(`Missing standalone CLI resource for ${target}: ${path.relative(repoRoot, cliPath)}`);
@@ -127,7 +128,7 @@ function verifyStandaloneCliResource(repoRoot, target) {
 }
 
 function verifySharedLibraries(repoRoot, target) {
-  const sharedLibsDir = path.resolve(repoRoot, 'src-tauri', 'resources', 'shared_libs');
+  const sharedLibsDir = path.resolve(repoRoot, 'platforms', 'desktop', 'resources', 'shared_libs');
   const entries = fs.existsSync(sharedLibsDir) ? fs.readdirSync(sharedLibsDir) : [];
   const missingLibraries = requiredSharedLibraries(target).filter((library) =>
     typeof library === 'string'

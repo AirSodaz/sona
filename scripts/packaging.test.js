@@ -441,7 +441,7 @@ test('tauri build wrapper builds and stages standalone CLI resources before desk
   assert.match(tauriScript, /sona-cli/u);
   assert.match(tauriScript, /setup-sona-cli-resource\.js/u);
   assert.ok(
-    tauriScript.indexOf('prepareBundleResources(args);') < tauriScript.indexOf('spawnSync(tauriBinary'),
+    tauriScript.indexOf('prepareBundleResources(tauriArgs);') < tauriScript.indexOf('spawnSync(tauriBinary'),
     'sona-cli resource staging must happen before invoking the Tauri CLI',
   );
 });
@@ -612,9 +612,9 @@ test('core path port default API does not expose test adapters', () => {
   assert.doesNotMatch(coreCargo, /^test-utils\s*=/mu);
   assert.match(
     tauriCargo,
-    /^sona-core\s*=\s*\{\s*path = "\.\.\/core", features = \["specta"\]\s*\}/mu,
+    /^sona-core\s*=\s*\{\s*path = "\.\.\/\.\.\/core", features = \["specta"\]\s*\}/mu,
   );
-  assert.doesNotMatch(tauriCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/core", features = \["test-utils"\]\s*\}/mu);
+  assert.doesNotMatch(tauriCargo, /^sona-core\s*=\s*\{\s*path = "\.\.\/\.\.\/core", features = \["test-utils"\]\s*\}/mu);
   assert.match(corePaths, /^pub use crate::ports::path::\{PathKind, PathProvider\};$/mu);
   assert.doesNotMatch(corePaths, /MockPathProvider/u);
   assert.doesNotMatch(corePathPort, /MockPathProvider/u);
@@ -690,7 +690,7 @@ test('shared api server invokes local batch ASR through the core transcriber por
   const apiCargo = read('adapters', 'api_server', 'Cargo.toml');
   const apiServer = read('adapters', 'api_server', 'src', 'lib.rs');
 
-  assert.match(tauriCargo, /^sona-local-asr\s*=\s*\{ path = "\.\.\/adapters\/local_asr" \}/mu);
+  assert.match(tauriCargo, /^sona-local-asr\s*=\s*\{ path = "\.\.\/\.\.\/adapters\/local_asr" \}/mu);
   assert.match(apiCargo, /^sona-local-asr\s*=\s*\{\s*path = "\.\.\/local_asr" \}/mu);
   assert.match(apiServer, /use sona_core::ports::asr::\{[\s\S]*BatchTranscriber/u);
   assert.match(apiServer, /sona_local_asr::batch::LocalBatchAsrAdapter/u);
@@ -714,7 +714,7 @@ test('webdav network implementation lives in a dedicated adapter crate', () => {
   const webdavCargo = read('adapters', 'webdav', 'Cargo.toml');
 
   assert.match(workspaceCargo, /"adapters\/webdav"/u);
-  assert.match(tauriCargo, /sona-webdav\s*=\s*\{\s*path = "\.\.\/adapters\/webdav" \}/u);
+  assert.match(tauriCargo, /sona-webdav\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/webdav" \}/u);
   assert.match(webdavCargo, /^roxmltree\s*=/mu);
   assert.match(webdavCargo, /^urlencoding\s*=/mu);
   assert.match(webdavCargo, /^url\s*=/mu);
@@ -763,7 +763,7 @@ test('tar.bz2 archive filesystem operations live in archive adapter', () => {
   const archiveAdapter = read('adapters', 'archive', 'src', 'lib.rs');
 
   assert.match(workspaceCargo, /"adapters\/archive"/u);
-  assert.match(tauriCargo, /sona-archive\s*=\s*\{\s*path = "\.\.\/adapters\/archive" \}/u);
+  assert.match(tauriCargo, /sona-archive\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/archive" \}/u);
   assert.doesNotMatch(tauriCargo, /^bzip2\s*=/mu);
   assert.doesNotMatch(tauriCargo, /^tar\s*=/mu);
   assert.doesNotMatch(coreCargo, /^bzip2\s*=/mu);
@@ -810,7 +810,7 @@ test('model download runtime implementation lives in a dedicated adapter crate',
   const adapterDownloads = read('adapters', 'model_downloads', 'src', 'downloads.rs');
 
   assert.match(workspaceCargo, /"adapters\/model_downloads"/u);
-  assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/adapters\/model_downloads" \}/u);
+  assert.match(tauriCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliCargo, /sona-model-downloads\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/model_downloads" \}/u);
   assert.match(cliModels, /use sona_model_downloads::\{download_model, installed_model_is_valid, remove_model_install_path\}/u);
   assert.equal(fs.existsSync(platformModelDownloadsPath), true);
@@ -906,7 +906,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   );
 
   assert.match(workspaceCargo, /"adapters\/runtime_fs"/u);
-  assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/adapters\/runtime_fs" \}/u);
+  assert.match(tauriCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
   assert.match(cliCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
   assert.match(
     prWorkflow,
@@ -3081,7 +3081,7 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(sqliteLibPath));
   assert.ok(fs.existsSync(sqliteMigrationPath));
   assert.match(sqliteLib, /^pub mod legacy_migration;/mu);
-  assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/adapters\/sqlite"/u);
+  assert.match(tauriCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"..\/..\/adapters\/sqlite"/u);
   assert.match(platformDatabase, /pub fn open_and_migrate_sqlite_for_app/u);
   assert.match(platformDatabase, /sona_sqlite::Database::open/u);
   assert.match(platformDatabase, /sona_sqlite::legacy_migration::migrate_legacy_to_sqlite/u);
@@ -3617,7 +3617,7 @@ test('online LLM provider implementation lives in adapter crate', () => {
 
   assert.match(workspaceCargo, /"adapters\/online_llm"/u);
   assert.ok(fs.existsSync(onlineLlmCargoPath));
-  assert.match(tauriCargo, /sona-online-llm\s*=\s*\{\s*path\s*=\s*"..\/adapters\/online_llm"/u);
+  assert.match(tauriCargo, /sona-online-llm\s*=\s*\{\s*path\s*=\s*"..\/..\/adapters\/online_llm"/u);
   assert.match(onlineLlmLib, /pub struct OnlineLlmAdapter/u);
   assert.match(onlineLlmLib, /impl LlmTextGenerator for OnlineLlmAdapter/u);
   assert.match(onlineLlmLib, /impl LlmModelLister for OnlineLlmAdapter/u);
@@ -3825,7 +3825,7 @@ test('desktop Groq and Mistral batch providers delegate HTTP work to online ASR 
   assert.match(workspaceCargo, /"adapters\/online_asr"/u);
   assert.ok(fs.existsSync(onlineAsrCargoPath));
   assert.ok(fs.existsSync(onlineAsrLibPath));
-  assert.match(tauriCargo, /sona-online-asr\s*=\s*\{\s*path\s*=\s*"..\/adapters\/online_asr"/u);
+  assert.match(tauriCargo, /sona-online-asr\s*=\s*\{\s*path\s*=\s*"..\/..\/adapters\/online_asr"/u);
   assert.match(prWorkflow, /sona-online-asr/u);
   assert.match(coreAsr, /trait OnlineBatchTranscriber/u);
   assert.match(coreAsr, /struct OnlineBatchTranscriptionRequest/u);

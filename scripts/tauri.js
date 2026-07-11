@@ -12,16 +12,18 @@ const tauriBinary = path.resolve(
   process.platform === 'win32' ? 'tauri.cmd' : 'tauri'
 );
 
+const desktopTauriConfig = path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json');
 const args = process.argv.slice(2);
-const command = args[0];
+const tauriArgs = withDesktopConfig(args);
+const command = tauriArgs[0];
 const UNIVERSAL_MACOS_TARGET = 'universal-apple-darwin';
 const UNIVERSAL_MACOS_SOURCE_TARGETS = ['aarch64-apple-darwin', 'x86_64-apple-darwin'];
 
 if (command === 'build' || command === 'bundle') {
-  prepareBundleResources(args);
+  prepareBundleResources(tauriArgs);
 }
 
-const tauriResult = spawnSync(tauriBinary, args, {
+const tauriResult = spawnSync(tauriBinary, tauriArgs, {
   cwd: repoRoot,
   stdio: 'inherit',
   shell: process.platform === 'win32',
@@ -33,6 +35,18 @@ if (tauriResult.error) {
 }
 
 process.exit(tauriResult.status ?? 1);
+
+function withDesktopConfig(commandArgs) {
+  const [command, ...rest] = commandArgs;
+  const supportsConfig = ['dev', 'build', 'bundle'].includes(command);
+  const hasConfig = rest.some((argument) => argument === '--config' || argument.startsWith('--config='));
+
+  if (!supportsConfig || hasConfig) {
+    return commandArgs;
+  }
+
+  return [command, '--config', desktopTauriConfig, ...commandArgs.slice(1)];
+}
 
 function prepareBundleResources(tauriArgs) {
   runRequired(

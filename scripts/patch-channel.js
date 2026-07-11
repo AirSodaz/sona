@@ -73,7 +73,7 @@ function patchWorkspaceCargoToml(version) {
 }
 
 function patchTauriConf(version, config) {
-  const file = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
+  const file = path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json');
   if (!fs.existsSync(file)) {
     throw new Error(`tauri.conf.json not found at ${file}`);
   }
@@ -87,25 +87,25 @@ function patchTauriConf(version, config) {
     console.warn('Warning: plugins or plugins.updater config is missing in tauri.conf.json');
   }
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
-  console.log(`[patch-channel] src-tauri/tauri.conf.json -> identifier ${config.identifier}, productName "${config.productName}"`);
-  console.log(`[patch-channel] src-tauri/tauri.conf.json -> updater endpoint ${config.updaterEndpoints[0]}`);
+  console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> identifier ${config.identifier}, productName "${config.productName}"`);
+  console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> updater endpoint ${config.updaterEndpoints[0]}`);
 }
 
 function patchTauriWindowsConf(config) {
-  const file = path.join(repoRoot, 'src-tauri', 'tauri.windows.conf.json');
+  const file = path.join(repoRoot, 'platforms', 'desktop', 'tauri.windows.conf.json');
   if (fs.existsSync(file)) {
     const json = JSON.parse(fs.readFileSync(file, 'utf8'));
     json.identifier = config.identifier;
     fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
-    console.log(`[patch-channel] src-tauri/tauri.windows.conf.json -> identifier ${config.identifier}`);
+    console.log(`[patch-channel] platforms/desktop/tauri.windows.conf.json -> identifier ${config.identifier}`);
   } else {
-    console.log(`[patch-channel] src-tauri/tauri.windows.conf.json not found, skipping.`);
+    console.log(`[patch-channel] platforms/desktop/tauri.windows.conf.json not found, skipping.`);
   }
 }
 
 function copyNightlyIcons() {
-  const srcDir = path.join(repoRoot, 'src-tauri', 'icons-nightly');
-  const destDir = path.join(repoRoot, 'src-tauri', 'icons');
+  const srcDir = path.join(repoRoot, 'platforms', 'desktop', 'icons-nightly');
+  const destDir = path.join(repoRoot, 'platforms', 'desktop', 'icons');
   if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
     throw new Error(`Nightly icons directory not found at ${srcDir}`);
   }

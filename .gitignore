@@ -48,13 +48,13 @@ temp_*
 .placeholder
 
 # Sherpa-onnx shared libraries (build artifacts copied by build.rs)
-src-tauri/resources/shared_libs/*.dll
-src-tauri/resources/shared_libs/*.dylib
-src-tauri/resources/shared_libs/*.so
+platforms/desktop/resources/shared_libs/*.dll
+platforms/desktop/resources/shared_libs/*.dylib
+platforms/desktop/resources/shared_libs/*.so
 
 # Standalone CLI resources copied for Tauri packaging
-src-tauri/resources/cli/sona-cli
-src-tauri/resources/cli/sona-cli.exe
+platforms/desktop/resources/cli/sona-cli
+platforms/desktop/resources/cli/sona-cli.exe
 
 # Legacy standalone CLI sidecars copied for older Tauri packaging
-src-tauri/binaries/sona-cli-*
+platforms/desktop/binaries/sona-cli-*

@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Ensure the binaries directory exists
-const binariesDir = path.resolve(__dirname, '../src-tauri/binaries');
+const binariesDir = path.resolve(__dirname, '../platforms/desktop/binaries');
 if (!fs.existsSync(binariesDir)) {
   fs.mkdirSync(binariesDir, { recursive: true });
 }

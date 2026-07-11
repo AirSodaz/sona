@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Tauri security config', () => {
   it('keeps CSP enabled and restricts asset protocol scope to managed app data', () => {
-    const configPath = resolve(process.cwd(), 'src-tauri', 'tauri.conf.json');
+    const configPath = resolve(process.cwd(), 'platforms', 'desktop', 'tauri.conf.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     const security = config.app.security;
 
