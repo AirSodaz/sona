@@ -350,7 +350,7 @@ test('tauri bundle verification requires ffmpeg sidecar and shared libraries', (
 });
 
 test('desktop host is a direct platform crate with explicit CLI config', () => {
-  const wrapper = read('scripts', 'tauri.js');
+  const wrapper = read(...desktopCrateSegments, 'scripts', 'tauri.js');
 
   assert.equal(exists('platforms', 'desktop', 'Cargo.toml'), true);
   assert.equal(exists('src-tauri'), false);
@@ -361,7 +361,7 @@ test('desktop host is a direct platform crate with explicit CLI config', () => {
 
 test('desktop frontend and Tauri configuration are colocated', () => {
   const frontend = (...segments) => path.join(repoRoot, 'platforms', 'desktop', 'frontend', ...segments);
-  const desktopConfig = read(...desktopCrateSegments, 'tauri.conf.json');
+  const desktopConfig = JSON.parse(read(...desktopCrateSegments, 'tauri.conf.json'));
   const desktopLib = read(...desktopCrateSegments, 'src', 'lib.rs');
   const rootPackage = JSON.parse(read('package.json'));
   const frontendPackage = JSON.parse(fs.readFileSync(frontend('package.json'), 'utf8'));
@@ -372,13 +372,18 @@ test('desktop frontend and Tauri configuration are colocated', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'src')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'public')), false);
   assert.equal(fs.existsSync(path.join(repoRoot, 'index.html')), false);
-  assert.match(desktopConfig, /"frontendDist"\s*:\s*"frontend\/dist"/u);
-  assert.match(desktopConfig, /"beforeDevCommand"\s*:\s*\{[\s\S]*"cwd"\s*:\s*"frontend"/u);
-  assert.match(desktopConfig, /"beforeBuildCommand"\s*:\s*\{[\s\S]*"cwd"\s*:\s*"frontend"/u);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'vite.config.ts')), false);
+  assert.equal(fs.existsSync(frontend('index.html')), true);
+  assert.equal(desktopConfig.build.frontendDist, 'frontend/dist');
+  for (const command of [desktopConfig.build.beforeDevCommand, desktopConfig.build.beforeBuildCommand]) {
+    assert.equal(typeof command, 'object');
+    assert.equal(typeof command.script, 'string');
+    assert.equal(command.cwd, 'frontend');
+  }
   assert.match(desktopLib, /"frontend\/src\/bindings\.ts"/u);
   assert.ok(frontendPackage.dependencies['@tauri-apps/api']);
   assert.equal(rootPackage.dependencies?.['@tauri-apps/api'], undefined);
-  assert.match(rootPackage.scripts.tauri, /platforms\/desktop\/frontend/u);
+  assert.equal(rootPackage.scripts.tauri, 'node platforms/desktop/scripts/tauri.js');
   assert.equal(exists('platforms', 'desktop', 'scripts', 'tauri.js'), true);
   assert.equal(exists('scripts', 'tauri.js'), false);
 });
@@ -391,7 +396,7 @@ test('desktop tauri crate no longer bundles sona-cli sidecar artifacts', () => {
     path.join(repoRoot, '.github', 'workflows', 'pr-guardrails.yml'),
     'utf8',
   );
-  const tauriScript = read('scripts', 'tauri.js');
+  const tauriScript = read(...desktopCrateSegments, 'scripts', 'tauri.js');
   const oldCliSidecarScript = ['prepare', 'cli', 'sidecar'].join('-');
   const oldCliBundleScript = ['verify', 'cli', 'bundle'].join('-');
 
@@ -459,7 +464,7 @@ test('standalone CLI resource staging declares macOS universal CLI support', () 
 });
 
 test('tauri build wrapper builds and stages standalone CLI resources before desktop packaging', () => {
-  const tauriScript = read('scripts', 'tauri.js');
+  const tauriScript = read(...desktopCrateSegments, 'scripts', 'tauri.js');
 
   assert.match(tauriScript, /cargo/u);
   assert.match(tauriScript, /sona-cli/u);
@@ -575,7 +580,7 @@ test('release workflows build CLI and desktop installer from the same job resour
     assert.equal(stageCliStep.run, 'node scripts/setup-sona-cli-resource.js ${{ matrix.args }}');
     assert.equal(buildAppStep.env.LD_LIBRARY_PATH, '${{ env.SHERPA_ONNX_LIB_DIR }}');
     assert.equal(buildAppStep.env.SONA_SKIP_CLI_RESOURCE_PREP, '1');
-    assert.equal(buildAppStep.run, 'node scripts/tauri.js build ${{ matrix.args }}');
+    assert.equal(buildAppStep.run, 'node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}');
     assert.equal(verifyBundleStep.run, 'node scripts/verify-tauri-bundle.js ${{ matrix.args }}');
     assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
     assert.ok(readWorkflowStepIndex(workflowName, 'Build standalone CLI (macOS universal)') < readWorkflowStepIndex(workflowName, 'Stage standalone CLI resource'));
