@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { repoRoot, read, exists, assertCargoDependencyVersionAndFeature, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke } from './test-support/repository.js';
-import { node, androidNdkAbiCases, androidNdkToolPaths, runAndroidNdkPrint } from './test-support/packaging-fixtures.js';
+import { node, androidNdkAbiCases, androidNdkToolPaths, runAndroidNdkPrint } from './test-support/android-ndk-fixtures.js';
 
 test('android uniffi sample publishes a consumable local Maven artifact', () => {
   const sampleLibraryGradle = fs.readFileSync(

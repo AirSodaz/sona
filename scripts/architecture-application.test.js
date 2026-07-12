@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoStringArray, assertCargoDependencyVersionAndFeature, stripRustComments, stripKotlinCommentsAndLiterals, scanRustSourcePolicyViolations } from './test-support/repository.js';
-import { makeTempRepo } from './test-support/packaging-fixtures.js';
+import { makeTempRepo } from './test-support/desktop-packaging-fixtures.js';
 
 test('core crate does not keep sona-cli config template surface', () => {
   const coreLib = read('core', 'src', 'lib.rs');
