@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+mod repository;
+mod service;
+
+pub use repository::{
+    ActiveProjectSelection, ProjectDefaultsPatch, ProjectPatch, ProjectRepositorySnapshot,
+    ProjectStore, ProjectStoredState,
+};
+pub use service::{ProjectClock, ProjectIdGenerator, ProjectRepositoryService};
+
 #[derive(Clone, Debug, Default)]
 pub struct ProjectListOptions {
     pub fallback_enabled_polish_keyword_set_ids: Vec<String>,
@@ -32,7 +41,7 @@ pub struct ProjectCreateInput {
     pub defaults: ProjectDefaultsInput,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDefaults {
     pub summary_template_id: String,
@@ -49,7 +58,7 @@ pub struct ProjectDefaults {
     pub enabled_speaker_profile_ids: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecord {
     pub id: String,

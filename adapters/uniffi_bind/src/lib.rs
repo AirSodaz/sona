@@ -7,6 +7,7 @@ mod json_bridge;
 mod llm_bridge;
 mod mapper;
 mod model_bridge;
+mod project_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
 mod task_ledger_bridge;
@@ -45,6 +46,8 @@ pub enum SonaCoreBindingError {
     #[error("{reason}")]
     Automation { reason: String },
     #[error("{reason}")]
+    Project { reason: String },
+    #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
 }
 
@@ -69,6 +72,57 @@ impl From<sona_core::ports::asr::SherpaError> for SonaCoreBindingError {
             },
         }
     }
+}
+
+#[uniffi::export]
+pub fn load_project_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_project_repository_state_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn replace_projects_json(
+    app_data_dir: String,
+    projects_json: String,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::replace_projects_json(app_data_dir, projects_json)
+}
+
+#[uniffi::export]
+pub fn create_project_json(
+    app_data_dir: String,
+    input_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::create_project_json(app_data_dir, input_json)
+}
+
+#[uniffi::export]
+pub fn update_project_json(
+    app_data_dir: String,
+    project_id: String,
+    updates_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_project_json(app_data_dir, project_id, updates_json)
+}
+
+#[uniffi::export]
+pub fn delete_project(app_data_dir: String, project_id: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::delete_project(app_data_dir, project_id)
+}
+
+#[uniffi::export]
+pub fn reorder_projects_json(
+    app_data_dir: String,
+    project_ids_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::reorder_projects_json(app_data_dir, project_ids_json)
+}
+
+#[uniffi::export]
+pub fn set_active_project_id(
+    app_data_dir: String,
+    project_id: Option<String>,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::set_active_project_id(app_data_dir, project_id)
 }
 
 #[uniffi::export]

@@ -4,6 +4,7 @@ mod config_template;
 mod desktop_paths;
 mod init_config;
 mod models;
+mod projects;
 mod recovery;
 mod serve;
 mod table;
@@ -95,6 +96,8 @@ enum Commands {
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
+    /// Inspects persisted projects.
+    Projects(projects::ProjectsArgs),
     /// Inspects persisted recovery snapshots.
     Recovery(recovery::RecoveryArgs),
     /// Runs the shared local HTTP API server.
@@ -117,6 +120,7 @@ where
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
+        Commands::Projects(args) => projects::run_projects(args),
         Commands::Recovery(args) => recovery::run_recovery(args),
         Commands::Serve(args) => serve::run_serve(args),
         Commands::TaskLedger(args) => task_ledger::run_task_ledger(args),

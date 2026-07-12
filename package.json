@@ -17,7 +17,7 @@
     "test:ci": "pnpm --filter sona-desktop-frontend run test:ci",
     "tauri": "node platforms/desktop/scripts/tauri.js",
     "build:ci": "pnpm run build",
-    "test:scripts": "node --test scripts/*.test.js",
+    "test:scripts": "node --test --test-concurrency=1 scripts/*.test.js",
     "ci:pr": "pnpm run lint:ci && pnpm run test:ci && pnpm run test:scripts && pnpm run build:ci",
     "verify:tauri-bundle": "pnpm --filter sona-desktop-frontend run verify:tauri-bundle",
     "verify:android-uniffi": "node scripts/verify-uniffi-android-sample.js",

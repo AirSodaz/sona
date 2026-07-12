@@ -7,7 +7,7 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
     asr_streaming_bridge, automation_bridge, config_bridge, llm_bridge, model_bridge,
-    recovery_bridge, runtime_bridge, task_ledger_bridge,
+    project_bridge, recovery_bridge, runtime_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -15,6 +15,52 @@ use std::sync::Arc;
 pub struct SonaCoreFacade;
 
 impl SonaCoreFacade {
+    pub fn load_project_repository_state_json(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<String> {
+        project_bridge::load_project_repository_state_json(app_data_dir)
+    }
+
+    pub fn replace_projects_json(
+        app_data_dir: String,
+        projects_json: String,
+    ) -> SonaCoreBindingResult<()> {
+        project_bridge::replace_projects_json(app_data_dir, projects_json)
+    }
+
+    pub fn create_project_json(
+        app_data_dir: String,
+        input_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        project_bridge::create_project_json(app_data_dir, input_json)
+    }
+
+    pub fn update_project_json(
+        app_data_dir: String,
+        project_id: String,
+        updates_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        project_bridge::update_project_json(app_data_dir, project_id, updates_json)
+    }
+
+    pub fn delete_project(app_data_dir: String, project_id: String) -> SonaCoreBindingResult<()> {
+        project_bridge::delete_project(app_data_dir, project_id)
+    }
+
+    pub fn reorder_projects_json(
+        app_data_dir: String,
+        project_ids_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        project_bridge::reorder_projects_json(app_data_dir, project_ids_json)
+    }
+
+    pub fn set_active_project_id(
+        app_data_dir: String,
+        project_id: Option<String>,
+    ) -> SonaCoreBindingResult<()> {
+        project_bridge::set_active_project_id(app_data_dir, project_id)
+    }
+
     pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
         recovery_bridge::load_recovery_snapshot_json(app_data_dir)
     }
@@ -488,5 +534,31 @@ mod automation_tests {
 
         assert_eq!(result["valid"], true);
         assert!(output_directory.is_dir());
+    }
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::SonaCoreFacade;
+    use serde_json::json;
+
+    #[test]
+    fn facade_delegates_project_load_and_create() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data_dir = dir.path().to_string_lossy().into_owned();
+
+        let empty =
+            SonaCoreFacade::load_project_repository_state_json(app_data_dir.clone()).unwrap();
+        let created = SonaCoreFacade::create_project_json(
+            app_data_dir,
+            json!({"name":"Facade","defaults":{}}).to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(empty, r#"{"projects":[],"activeProjectId":null}"#);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&created).unwrap()["name"],
+            "Facade"
+        );
     }
 }

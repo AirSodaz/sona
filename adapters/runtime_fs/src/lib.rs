@@ -9,6 +9,7 @@ use sona_core::models::catalog::ModelSummary;
 use sona_core::models::paths::{ModelsDirStatus, status_of};
 use sona_core::models::preset_models::{PresetModel, preset_models};
 use sona_core::ports::fs::{FileMetadata, FileSystem};
+use sona_core::project::{ProjectClock, ProjectIdGenerator};
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::config::{ServeConfigSection, TranscribeConfigSection};
 use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
@@ -19,7 +20,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
@@ -29,6 +30,8 @@ pub struct RealFileSystem;
 pub struct NativeAutomationFileSystem;
 
 pub struct UuidGenerator;
+
+pub struct SystemClock;
 
 impl AutomationFileSystem for NativeAutomationFileSystem {
     fn path_exists(&self, path: &str) -> bool {
@@ -43,6 +46,22 @@ impl AutomationFileSystem for NativeAutomationFileSystem {
 impl AutomationIdGenerator for UuidGenerator {
     fn generate_id(&self) -> String {
         Uuid::new_v4().to_string()
+    }
+}
+
+impl ProjectIdGenerator for UuidGenerator {
+    fn generate_id(&self) -> String {
+        Uuid::new_v4().to_string()
+    }
+}
+
+impl ProjectClock for SystemClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_millis();
+        u64::try_from(millis).map_err(|error| error.to_string())
     }
 }
 

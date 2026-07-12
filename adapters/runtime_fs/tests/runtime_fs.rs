@@ -5,12 +5,13 @@ use sona_core::automation::{AutomationRuntimePathCollectionOutcome, AutomationRu
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::FileSystem;
+use sona_core::project::{ProjectClock, ProjectIdGenerator};
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, NativeAutomationFileSystem, RealFileSystem, UuidGenerator,
-    collect_automation_runtime_candidate_paths, ensure_directory_exists,
+    FsSourcePathStatusProvider, NativeAutomationFileSystem, RealFileSystem, SystemClock,
+    UuidGenerator, collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
     path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
     resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
@@ -65,6 +66,26 @@ fn uuid_generator_returns_distinct_uuid_v4_strings() {
         Uuid::parse_str(&second).unwrap().get_version(),
         Some(Version::Random)
     );
+}
+
+#[test]
+fn uuid_generator_implements_project_id_port() {
+    let id = ProjectIdGenerator::generate_id(&UuidGenerator);
+    assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+}
+
+#[test]
+fn system_clock_returns_unix_milliseconds() {
+    let before = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let actual = ProjectClock::now_ms(&SystemClock).unwrap();
+    let after = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    assert!((before..=after).contains(&actual));
 }
 
 #[test]

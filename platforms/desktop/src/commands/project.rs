@@ -2,11 +2,10 @@ use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::project_repository::{
-    get_active_project_id, run_project_task, set_active_project_id,
+    create_project, delete_project, get_active_project_id, list_projects, reorder_projects,
+    replace_projects, set_active_project_id, update_project,
 };
-use sona_core::project::{
-    ProjectCreateInput, ProjectDefaultsInput, ProjectListOptions, ProjectRecord,
-};
+use sona_core::project::{ProjectDefaultsInput, ProjectRecord};
 
 #[tauri::command]
 pub async fn project_list<R: Runtime>(
@@ -14,14 +13,11 @@ pub async fn project_list<R: Runtime>(
     fallback_enabled_polish_keyword_set_ids: Option<Vec<String>>,
     fallback_enabled_speaker_profile_ids: Option<Vec<String>>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_task(&app, move |repository| {
-        repository.list(ProjectListOptions {
-            fallback_enabled_polish_keyword_set_ids: fallback_enabled_polish_keyword_set_ids
-                .unwrap_or_default(),
-            fallback_enabled_speaker_profile_ids: fallback_enabled_speaker_profile_ids
-                .unwrap_or_default(),
-        })
-    })
+    list_projects(
+        &app,
+        fallback_enabled_polish_keyword_set_ids,
+        fallback_enabled_speaker_profile_ids,
+    )
     .await
 }
 
@@ -30,7 +26,7 @@ pub async fn project_save_all<R: Runtime>(
     app: AppHandle<R>,
     projects: Vec<Value>,
 ) -> Result<(), String> {
-    run_project_task(&app, move |repository| repository.save_all_values(projects)).await
+    replace_projects(&app, projects).await
 }
 
 #[tauri::command]
@@ -41,15 +37,7 @@ pub async fn project_create<R: Runtime>(
     icon: Option<String>,
     defaults: ProjectDefaultsInput,
 ) -> Result<ProjectRecord, String> {
-    run_project_task(&app, move |repository| {
-        repository.create(ProjectCreateInput {
-            name,
-            description,
-            icon,
-            defaults,
-        })
-    })
-    .await
+    create_project(&app, name, description, icon, defaults).await
 }
 
 #[tauri::command]
@@ -58,10 +46,7 @@ pub async fn project_update<R: Runtime>(
     project_id: String,
     updates: Value,
 ) -> Result<Option<ProjectRecord>, String> {
-    run_project_task(&app, move |repository| {
-        repository.update(&project_id, updates)
-    })
-    .await
+    update_project(&app, project_id, updates).await
 }
 
 #[tauri::command]
@@ -69,7 +54,7 @@ pub async fn project_delete<R: Runtime>(
     app: AppHandle<R>,
     project_id: String,
 ) -> Result<(), String> {
-    run_project_task(&app, move |repository| repository.delete(&project_id)).await
+    delete_project(&app, project_id).await
 }
 
 #[tauri::command]
@@ -77,7 +62,7 @@ pub async fn project_reorder<R: Runtime>(
     app: AppHandle<R>,
     project_ids: Vec<String>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_task(&app, move |repository| repository.reorder(project_ids)).await
+    reorder_projects(&app, project_ids).await
 }
 
 #[tauri::command]
