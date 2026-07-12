@@ -6,8 +6,8 @@ use crate::{
     FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
-    asr_streaming_bridge, config_bridge, llm_bridge, model_bridge, recovery_bridge, runtime_bridge,
-    task_ledger_bridge,
+    asr_streaming_bridge, automation_bridge, config_bridge, llm_bridge, model_bridge,
+    recovery_bridge, runtime_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -68,6 +68,45 @@ impl SonaCoreFacade {
         app_data_dir: String,
     ) -> SonaCoreBindingResult<String> {
         task_ledger_bridge::clear_resolved_task_ledger_records_json(app_data_dir)
+    }
+
+    pub fn load_automation_repository_state_json(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<String> {
+        automation_bridge::load_automation_repository_state_json(app_data_dir)
+    }
+
+    pub fn replace_automation_rules_json(
+        app_data_dir: String,
+        rules_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        automation_bridge::replace_automation_rules_json(app_data_dir, rules_json)
+    }
+
+    pub fn replace_automation_processed_entries_json(
+        app_data_dir: String,
+        entries_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        automation_bridge::replace_automation_processed_entries_json(app_data_dir, entries_json)
+    }
+
+    pub fn replace_automation_repository_state_json(
+        app_data_dir: String,
+        state_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        automation_bridge::replace_automation_repository_state_json(app_data_dir, state_json)
+    }
+
+    pub fn validate_automation_rule_activation_json(
+        rule_json: String,
+        global_config_json: String,
+        project_json: Option<String>,
+    ) -> SonaCoreBindingResult<String> {
+        automation_bridge::validate_automation_rule_activation_json(
+            rule_json,
+            global_config_json,
+            project_json,
+        )
     }
 
     pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
@@ -400,5 +439,54 @@ mod task_ledger_tests {
         let output: Value = serde_json::from_str(&output).unwrap();
 
         assert_eq!(output["tasks"][0]["id"], "facade-task");
+    }
+}
+
+#[cfg(test)]
+mod automation_tests {
+    use super::SonaCoreFacade;
+    use serde_json::{Value, json};
+    use std::fs;
+
+    #[test]
+    fn facade_delegates_automation_repository_load() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let output = SonaCoreFacade::load_automation_repository_state_json(
+            dir.path().to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(output, r#"{"rules":[],"processedEntries":[]}"#);
+    }
+
+    #[test]
+    fn facade_delegates_automation_validation() {
+        let dir = tempfile::tempdir().unwrap();
+        let watch_directory = dir.path().join("watch");
+        let output_directory = dir.path().join("output");
+        let model_path = dir.path().join("model.onnx");
+        fs::create_dir(&watch_directory).unwrap();
+        fs::write(&model_path, b"model").unwrap();
+
+        let output = SonaCoreFacade::validate_automation_rule_activation_json(
+            json!({
+                "name": "Rule",
+                "projectId": "inbox",
+                "watchDirectory": watch_directory,
+                "exportConfig": {
+                    "directory": output_directory,
+                    "mode": "original"
+                }
+            })
+            .to_string(),
+            json!({"offlineModelPath": model_path}).to_string(),
+            None,
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(result["valid"], true);
+        assert!(output_directory.is_dir());
     }
 }

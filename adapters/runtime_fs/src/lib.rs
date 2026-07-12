@@ -1,4 +1,5 @@
 use serde::Serialize;
+use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::automation::{
     AutomationRuntimePathMetadata, AutomationRuntimeRuleConfig,
     should_consider_runtime_candidate_path,
@@ -24,6 +25,26 @@ use uuid::Uuid;
 const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
 
 pub struct RealFileSystem;
+
+pub struct NativeAutomationFileSystem;
+
+pub struct UuidGenerator;
+
+impl AutomationFileSystem for NativeAutomationFileSystem {
+    fn path_exists(&self, path: &str) -> bool {
+        Path::new(path).exists()
+    }
+
+    fn create_dir_all(&self, path: &str) -> bool {
+        fs::create_dir_all(path).is_ok()
+    }
+}
+
+impl AutomationIdGenerator for UuidGenerator {
+    fn generate_id(&self) -> String {
+        Uuid::new_v4().to_string()
+    }
+}
 
 impl FileSystem for RealFileSystem {
     fn create_dir_all(&self, path: &Path) -> Result<(), String> {

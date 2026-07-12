@@ -6,6 +6,9 @@ use crate::ports::asr::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
 
+pub mod repository;
+pub mod service;
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]

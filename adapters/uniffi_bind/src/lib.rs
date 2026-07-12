@@ -1,5 +1,6 @@
 mod asr_bridge;
 mod asr_streaming_bridge;
+mod automation_bridge;
 mod config_bridge;
 mod facade;
 mod json_bridge;
@@ -41,6 +42,8 @@ pub enum SonaCoreBindingError {
     Recovery { reason: String },
     #[error("{reason}")]
     TaskLedger { reason: String },
+    #[error("{reason}")]
+    Automation { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
 }
@@ -129,6 +132,50 @@ pub fn clear_resolved_task_ledger_records_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::clear_resolved_task_ledger_records_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn load_automation_repository_state_json(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_automation_repository_state_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn replace_automation_rules_json(
+    app_data_dir: String,
+    rules_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::replace_automation_rules_json(app_data_dir, rules_json)
+}
+
+#[uniffi::export]
+pub fn replace_automation_processed_entries_json(
+    app_data_dir: String,
+    entries_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::replace_automation_processed_entries_json(app_data_dir, entries_json)
+}
+
+#[uniffi::export]
+pub fn replace_automation_repository_state_json(
+    app_data_dir: String,
+    state_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::replace_automation_repository_state_json(app_data_dir, state_json)
+}
+
+#[uniffi::export]
+pub fn validate_automation_rule_activation_json(
+    rule_json: String,
+    global_config_json: String,
+    project_json: Option<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::validate_automation_rule_activation_json(
+        rule_json,
+        global_config_json,
+        project_json,
+    )
 }
 
 #[uniffi::export]

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::automation::{AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig};
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
@@ -8,13 +9,63 @@ use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvi
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, RealFileSystem, collect_automation_runtime_candidate_paths,
-    ensure_directory_exists, is_preset_model_installed_at, load_legacy_settings_app_config,
-    load_transcribe_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
-    resolve_batch_input_source, resolve_runtime_path_status,
-    select_desktop_models_dir_from_app_roots, write_cli_config_template_file,
-    write_json_pretty_atomic, write_transcript_output_file,
+    FsSourcePathStatusProvider, NativeAutomationFileSystem, RealFileSystem, UuidGenerator,
+    collect_automation_runtime_candidate_paths, ensure_directory_exists,
+    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
+    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
+    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
 };
+use uuid::{Uuid, Version};
+
+#[test]
+fn native_automation_file_system_probes_and_creates_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let nested = dir.path().join("exports").join("nested");
+    let regular_file = dir.path().join("existing.json");
+    std::fs::write(&regular_file, b"{}").unwrap();
+    let fs = NativeAutomationFileSystem;
+    assert!(!AutomationFileSystem::path_exists(
+        &fs,
+        nested.to_string_lossy().as_ref()
+    ));
+    assert!(AutomationFileSystem::create_dir_all(
+        &fs,
+        nested.to_string_lossy().as_ref()
+    ));
+    assert!(AutomationFileSystem::path_exists(
+        &fs,
+        nested.to_string_lossy().as_ref()
+    ));
+    assert!(AutomationFileSystem::path_exists(
+        &fs,
+        regular_file.to_string_lossy().as_ref()
+    ));
+    assert!(!AutomationFileSystem::create_dir_all(
+        &fs,
+        regular_file.to_string_lossy().as_ref()
+    ));
+}
+
+#[test]
+fn uuid_generator_returns_distinct_uuid_v4_strings() {
+    let generator: &dyn AutomationIdGenerator = &UuidGenerator;
+
+    let first = generator.generate_id();
+    let second = generator.generate_id();
+
+    assert!(!first.is_empty());
+    assert!(!second.is_empty());
+    assert_ne!(first, second);
+    assert_eq!(
+        Uuid::parse_str(&first).unwrap().get_version(),
+        Some(Version::Random)
+    );
+    assert_eq!(
+        Uuid::parse_str(&second).unwrap().get_version(),
+        Some(Version::Random)
+    );
+}
 
 #[test]
 fn path_exists_reports_existing_files_and_missing_paths() {

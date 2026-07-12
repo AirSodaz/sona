@@ -8,6 +8,7 @@ import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.defaultConfigJson
+import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
 
@@ -58,6 +59,9 @@ object SonaUniffiConsumerSmoke {
     fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
 
     fun loadTaskLedger(appDataDir: String): String = loadTaskLedgerSnapshotJson(appDataDir)
+
+    fun loadAutomation(appDataDir: String): String =
+        loadAutomationRepositoryStateJson(appDataDir)
 
     fun publishedSmokeTypeName(): String = SonaUniffiSmoke::class.java.name
 

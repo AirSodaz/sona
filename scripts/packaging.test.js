@@ -638,6 +638,54 @@ function readCargoDependencyEntries(cargoTomlPath, sectionName) {
   return entries;
 }
 
+function readCargoStringArray(cargoTomlPath, sectionName, keyName) {
+  const lines = fs.readFileSync(cargoTomlPath, 'utf8').split(/\r?\n/u);
+  let inSection = false;
+  let collecting = false;
+  let arraySource = '';
+
+  for (const rawLine of lines) {
+    const line = stripTomlLineComment(rawLine).trim();
+    const sectionMatch = line.match(/^\[([^[\]]+)\]$/u);
+    if (sectionMatch) {
+      if (collecting) break;
+      inSection = sectionMatch[1] === sectionName;
+      continue;
+    }
+    if (!inSection) continue;
+
+    if (!collecting) {
+      const assignment = line.match(/^([A-Za-z0-9_-]+)\s*=\s*\[(.*)$/u);
+      if (assignment?.[1] !== keyName) continue;
+      collecting = true;
+      arraySource = assignment[2];
+    } else {
+      arraySource += `\n${line}`;
+    }
+
+    const structuralArraySource = arraySource.replace(
+      /"(?:\\.|[^"\\])*"|'[^']*'/gu,
+      (value) => ' '.repeat(value.length),
+    );
+    const closingIndex = structuralArraySource.indexOf(']');
+    if (closingIndex !== -1) {
+      return [...arraySource.slice(0, closingIndex).matchAll(/"(?:\\.|[^"\\])*"|'[^']*'/gu)]
+        .map((match) => match[0].startsWith('"')
+          ? JSON.parse(match[0])
+          : match[0].slice(1, -1));
+    }
+  }
+
+  return [];
+}
+
+function stripTomlLineComment(line) {
+  return line.replace(
+    /"(?:\\.|[^"\\])*"|'[^']*'|#.*/gu,
+    (value) => value.startsWith('#') ? '' : value,
+  );
+}
+
 function assertCargoDependencyVersionAndFeature(
   cargoTomlPath,
   dependencyName,
@@ -3952,6 +4000,13 @@ test('desktop automation and project repository task adapters live in platform',
   assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'project'), false);
   assert.match(platformAutomation, /pub fn validate_rule_activation_inner/u);
   assert.match(platformAutomation, /sona_sqlite::automation::SqliteAutomationRepository/u);
+  assert.match(platformAutomation, /AutomationRepositoryService::new/u);
+  assert.match(platformAutomation, /AutomationValidationService::new/u);
+  assert.match(platformAutomation, /NativeAutomationFileSystem/u);
+  assert.match(platformAutomation, /UuidGenerator/u);
+  assert.doesNotMatch(platformAutomation, /std::fs/u);
+  assert.doesNotMatch(platformAutomation, /should_prepare_export_directory/u);
+  assert.doesNotMatch(platformAutomation, /validate_rule_activation_with_environment/u);
   assert.match(platformProject, /sona_sqlite::project::SqliteProjectRepository/u);
   assert.match(automationCommand, /crate::platform::automation_repository::load_repository_state/u);
   assert.match(projectCommand, /crate::platform::project_repository::\{/u);
@@ -4293,6 +4348,345 @@ test('task ledger application policy is shared across hosts', () => {
   assert.match(androidSample, /upsertTaskLedgerRecordJson\(appDataDir, recordJson\)/u);
   assert.match(androidConsumer, /import uniffi\.sona_uniffi_bind\.loadTaskLedgerSnapshotJson/u);
   assert.match(androidConsumer, /loadTaskLedgerSnapshotJson\(appDataDir\)/u);
+});
+
+test('automation application policy is shared across hosts', () => {
+  const coreStore = read('core', 'src', 'automation', 'repository.rs');
+  const coreService = read('core', 'src', 'automation', 'service.rs');
+  const sqliteAdapter = read('adapters', 'sqlite', 'src', 'automation.rs');
+  const runtimeFs = read('adapters', 'runtime_fs', 'src', 'lib.rs');
+  const desktopAdapter = read(
+    ...desktopCrateSegments,
+    'src',
+    'platform',
+    'automation_repository.rs',
+  );
+  const uniffiCargoPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'Cargo.toml');
+  const uniffiBridge = read('adapters', 'uniffi_bind', 'src', 'automation_bridge.rs');
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
+  const workspaceCargoPath = path.join(repoRoot, 'Cargo.toml');
+  const cliCargoPath = path.join(repoRoot, 'platforms', 'cli', 'Cargo.toml');
+  const cliLib = read('platforms', 'cli', 'src', 'lib.rs');
+  const cliAutomation = read('platforms', 'cli', 'src', 'automation.rs');
+  const androidSample = read(
+    'platforms',
+    'android',
+    'sample-consumer',
+    'sample-library',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'uniffi',
+    'sample',
+    'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms',
+    'android',
+    'sample-consumer',
+    'consumer-library',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'uniffi',
+    'consumer',
+    'SonaUniffiConsumerSmoke.kt',
+  );
+  const rustProductionView = (source) => stripRustComments(
+    source.split(/#\[cfg\(test\)\]/u)[0],
+  );
+  const coreStoreProduction = rustProductionView(coreStore);
+  const coreServiceProduction = rustProductionView(coreService);
+  const coreProduction = `${coreStoreProduction}\n${coreServiceProduction}`;
+  const coreForbiddenCapability =
+    /rusqlite|tauri|uniffi|std::fs|std::net|std::path|std::process|std::time|tokio|\bUuid\b|\bSystemTime\b|\bUNIX_EPOCH\b/u;
+  const sqliteProduction = rustProductionView(sqliteAdapter);
+  const runtimeFsProduction = rustProductionView(runtimeFs);
+  const desktopProduction = rustProductionView(desktopAdapter);
+  const uniffiBridgeProduction = rustProductionView(uniffiBridge);
+  const uniffiLibProduction = rustProductionView(uniffiLib);
+  const uniffiFacadeProduction = rustProductionView(uniffiFacade);
+  const cliLibProduction = rustProductionView(cliLib);
+  const cliAutomationProduction = rustProductionView(cliAutomation);
+  const androidSampleExecutable = stripKotlinCommentsAndLiterals(androidSample);
+  const androidConsumerExecutable = stripKotlinCommentsAndLiterals(androidConsumer);
+  const rustFilteringFixture = rustProductionView(`
+    // pub trait AutomationStore
+    /* AutomationRepositoryService::new */
+    #[cfg(test)]
+    mod tests { fn replace_state() {} }
+  `);
+  const cargoFixturePath = path.join(makeTempRepo(), 'Cargo.toml');
+  fs.writeFileSync(
+    cargoFixturePath,
+    `[workspace]
+members = [
+  # "platforms/cli",
+  "core#tools]",
+  "core",
+]
+
+[dependencies]
+# sona-core = { path = "../../core" }
+sona-sqlite = { path = "../sqlite" }
+`,
+  );
+  const kotlinFilteringFixture = stripKotlinCommentsAndLiterals(`
+    // import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
+    /* validateAutomationRuleActivationJson(ruleJson, globalConfigJson, projectJson) */
+    val callShapedLiteral = "loadAutomationRepositoryStateJson(appDataDir)"
+  `);
+  const coreWallClockCapabilityFixtures = ['std::time', 'SystemTime', 'UNIX_EPOCH'];
+
+  assert.equal(rustFilteringFixture.trim(), '');
+  assert.deepEqual(
+    readCargoStringArray(cargoFixturePath, 'workspace', 'members'),
+    ['core#tools]', 'core'],
+  );
+  assert.equal(readCargoDependencySpec(cargoFixturePath, 'dependencies', 'sona-core'), '');
+  assert.equal(
+    readCargoDependencySpec(cargoFixturePath, 'dependencies', 'sona-sqlite'),
+    '{ path = "../sqlite" }',
+  );
+  assert.doesNotMatch(
+    kotlinFilteringFixture,
+    /loadAutomationRepositoryStateJson|validateAutomationRuleActivationJson/u,
+  );
+  for (const fixture of coreWallClockCapabilityFixtures) {
+    assert.match(fixture, coreForbiddenCapability);
+  }
+  assert.match(coreStoreProduction, /pub trait AutomationStore/u);
+  for (const operation of [
+    'load_state',
+    'replace_rules',
+    'replace_processed_entries',
+    'replace_state',
+  ]) {
+    assert.match(coreStoreProduction, new RegExp(`fn ${operation}\\(`));
+  }
+  assert.match(coreServiceProduction, /pub trait AutomationIdGenerator/u);
+  assert.match(coreServiceProduction, /pub trait AutomationFileSystem/u);
+  for (const operation of [
+    'load_state',
+    'replace_rules_json',
+    'replace_processed_entries_json',
+    'replace_state_json',
+  ]) {
+    assert.match(coreServiceProduction, new RegExp(`pub fn ${operation}\\(`));
+  }
+  for (const storeOperation of [
+    'load_state',
+    'replace_rules',
+    'replace_processed_entries',
+    'replace_state',
+  ]) {
+    assert.match(coreServiceProduction, new RegExp(`self\\.store\\.${storeOperation}\\(`));
+  }
+  assert.match(coreServiceProduction, /fn normalize_rule_record\(/u);
+  assert.match(coreServiceProduction, /fn normalize_processed_record\(/u);
+  assert.match(coreServiceProduction, /normalize_rule_record\(&rule, self\.ids\)/u);
+  assert.match(coreServiceProduction, /normalize_processed_record\(&entry, self\.ids\)/u);
+  assert.match(coreServiceProduction, /ids\.generate_id\(\)/u);
+  assert.match(coreServiceProduction, /pub struct AutomationValidationService/u);
+  assert.match(coreServiceProduction, /self\.fs\.path_exists\(/u);
+  assert.match(coreServiceProduction, /self\.fs\.create_dir_all\(/u);
+  assert.match(coreServiceProduction, /validate_rule_activation\(\s*rule,/u);
+  assert.doesNotMatch(
+    coreProduction,
+    coreForbiddenCapability,
+  );
+
+  assert.match(
+    sqliteProduction,
+    /impl<D> AutomationStore for SqliteAutomationRepository<D>/u,
+  );
+  for (const operation of [
+    'load_state',
+    'replace_rules',
+    'replace_processed_entries',
+    'replace_state',
+  ]) {
+    assert.match(sqliteProduction, new RegExp(`fn ${operation}\\(`));
+  }
+  assert.match(sqliteProduction, /with_read_connection/u);
+  assert.match(sqliteProduction, /with_transaction/u);
+  assert.doesNotMatch(
+    sqliteProduction,
+    /serde_json|ensure_id|\bUuid\b|\buuid\b|\bValue\b/u,
+  );
+
+  assert.match(
+    runtimeFsProduction,
+    /impl AutomationFileSystem for NativeAutomationFileSystem/u,
+  );
+  assert.match(runtimeFsProduction, /impl AutomationIdGenerator for UuidGenerator/u);
+  assert.match(runtimeFsProduction, /fs::create_dir_all\(path\)/u);
+  assert.match(runtimeFsProduction, /Uuid::new_v4\(\)/u);
+
+  assert.match(desktopProduction, /AutomationRepositoryService::new/u);
+  assert.match(desktopProduction, /AutomationValidationService::new/u);
+  assert.match(desktopProduction, /SqliteAutomationRepository::new/u);
+  assert.match(desktopProduction, /NativeAutomationFileSystem/u);
+  assert.match(desktopProduction, /UuidGenerator/u);
+
+  assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
+  assert.equal(
+    readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-core'),
+    '{ path = "../../core" }',
+  );
+  assert.equal(
+    readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-runtime-fs'),
+    '{ path = "../runtime_fs" }',
+  );
+  assert.equal(
+    readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-sqlite'),
+    '{ path = "../sqlite" }',
+  );
+  assert.match(uniffiBridgeProduction, /AutomationRepositoryService::new/u);
+  assert.match(uniffiBridgeProduction, /AutomationValidationService::new/u);
+  assert.match(uniffiBridgeProduction, /SqliteAutomationRepository::new/u);
+  assert.match(uniffiBridgeProduction, /NativeAutomationFileSystem/u);
+  assert.match(uniffiBridgeProduction, /UuidGenerator/u);
+
+  const automationExports = [
+    'load_automation_repository_state_json',
+    'replace_automation_rules_json',
+    'replace_automation_processed_entries_json',
+    'replace_automation_repository_state_json',
+    'validate_automation_rule_activation_json',
+  ];
+  const preExistingUniffiExports = [
+    'load_recovery_snapshot_json',
+    'save_recovery_snapshot_json',
+    'persist_recovery_queue_snapshot_json',
+    'load_task_ledger_snapshot_json',
+    'upsert_task_ledger_record_json',
+    'patch_task_ledger_record_json',
+    'remove_task_ledger_record_json',
+    'clear_resolved_task_ledger_records_json',
+    'normalize_export_format',
+    'default_vad_model_id',
+    'default_punctuation_model_id',
+    'preset_model_name',
+    'preset_models',
+    'model_catalog_snapshot',
+    'model_catalog_selected_ids',
+    'resolve_model_download',
+    'resolve_gpu_acceleration',
+    'default_config_json',
+    'migrate_app_config_json',
+    'resolve_effective_config_json',
+    'runtime_path_status',
+    'create_online_asr_streaming_session',
+    'default_batch_segmentation_mode',
+    'online_asr_providers',
+    'find_online_asr_provider',
+    'online_asr_provider_request',
+    'volcengine_doubao_asr_config_from_json',
+    'llm_providers',
+    'find_llm_provider_by_id_or_alias',
+    'llm_config_from_json',
+    'validate_llm_config_json',
+    'validate_llm_generate_request_json',
+    'validate_polish_segments_request_json',
+    'validate_translate_segments_request_json',
+    'validate_summarize_transcript_request_json',
+    'llm_segment_inputs_from_transcript_json',
+    'summary_segment_inputs_from_transcript_json',
+    'merge_translated_items_into_transcript_json',
+    'merge_polished_items_into_transcript_json',
+    'summary_source_fingerprint_from_transcript_json',
+    'build_polish_prompt_json',
+    'build_translate_prompt_json',
+    'build_summary_chunk_prompt_json',
+    'build_summary_finalize_prompt_json',
+    'plan_polish_prompt_chunks_json',
+    'plan_translate_prompt_chunks_json',
+    'plan_summary_prompt_chunks_json',
+    'parse_polish_chunk_json',
+    'parse_translate_chunk_json',
+    'polish_segments_request_from_json',
+    'translate_segments_request_from_json',
+    'summarize_transcript_request_from_json',
+  ];
+  const automationExportInsertionIndex = preExistingUniffiExports.indexOf(
+    'normalize_export_format',
+  );
+  const expectedUniffiExports = [
+    ...preExistingUniffiExports.slice(0, automationExportInsertionIndex),
+    ...automationExports,
+    ...preExistingUniffiExports.slice(automationExportInsertionIndex),
+  ];
+  const currentUniffiExports = [
+    ...uniffiLibProduction.matchAll(/#\[uniffi::export\]\s*pub fn ([a-z0-9_]+)\s*\(/gu),
+  ].map((match) => match[1]);
+  assert.deepEqual(currentUniffiExports, expectedUniffiExports);
+  for (const exportName of automationExports) {
+    assert.match(uniffiBridgeProduction, new RegExp(`pub\\(crate\\) fn ${exportName}\\(`));
+    assert.match(uniffiFacadeProduction, new RegExp(`pub fn ${exportName}\\(`));
+    assert.match(
+      uniffiFacadeProduction,
+      new RegExp(`automation_bridge::${exportName}\\(`),
+    );
+    assert.match(uniffiLibProduction, new RegExp(`SonaCoreFacade::${exportName}\\(`));
+  }
+
+  assert.ok(
+    readCargoStringArray(workspaceCargoPath, 'workspace', 'members').includes('platforms/cli'),
+  );
+  assert.equal(
+    readCargoDependencySpec(cliCargoPath, 'dependencies', 'sona-core'),
+    '{ path = "../../core" }',
+  );
+  assert.equal(
+    readCargoDependencySpec(cliCargoPath, 'dependencies', 'sona-runtime-fs'),
+    '{ path = "../../adapters/runtime_fs" }',
+  );
+  assert.equal(
+    readCargoDependencySpec(cliCargoPath, 'dependencies', 'sona-sqlite'),
+    '{ path = "../../adapters/sqlite" }',
+  );
+  assert.match(cliLibProduction, /^mod automation;/mu);
+  assert.match(
+    cliLibProduction,
+    /Commands::Automation\(args\) => automation::run_automation\(args\)/u,
+  );
+  assert.match(cliAutomationProduction, /AutomationRepositoryService::new/u);
+  assert.match(cliAutomationProduction, /SqliteAutomationRepository::new/u);
+  assert.match(cliAutomationProduction, /Database::open_read_only/u);
+  assert.match(cliAutomationProduction, /\.load_state\(\)/u);
+  assert.doesNotMatch(cliAutomationProduction, /Database::open\(/u);
+  const cliPersistencePattern =
+    /\b(?:replace_rules|replace_processed_entries|replace_state)(?:_json)?\s*\(|\bwith_transaction\s*\(|\b(?:insert|update|delete)\b/iu;
+  assert.doesNotMatch('AutomationRepositoryState', cliPersistencePattern);
+  assert.doesNotMatch(cliAutomationProduction, cliPersistencePattern);
+
+  assert.match(
+    androidSampleExecutable,
+    /^\s*import\s+uniffi\.sona_uniffi_bind\.loadAutomationRepositoryStateJson\s*$/mu,
+  );
+  assert.match(
+    androidSampleExecutable,
+    /^\s*import\s+uniffi\.sona_uniffi_bind\.validateAutomationRuleActivationJson\s*$/mu,
+  );
+  assert.match(androidSampleExecutable, /loadAutomationRepositoryStateJson\(appDataDir\)/u);
+  assert.match(
+    androidSampleExecutable,
+    /validateAutomationRuleActivationJson\(ruleJson, globalConfigJson, projectJson\)/u,
+  );
+  assert.match(
+    androidConsumerExecutable,
+    /^\s*import\s+uniffi\.sona_uniffi_bind\.loadAutomationRepositoryStateJson\s*$/mu,
+  );
+  assert.match(
+    androidConsumerExecutable,
+    /loadAutomationRepositoryStateJson\(appDataDir\)/u,
+  );
 });
 
 test('SQLite automation repository is owned by sqlite adapter', () => {

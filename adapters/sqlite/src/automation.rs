@@ -1,15 +1,11 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+pub use sona_core::automation::repository::AutomationRepositoryState;
+use sona_core::automation::repository::{
+    AutomationProcessedRecord, AutomationRuleRecord, AutomationRuleRecordExportConfig,
+    AutomationRuleRecordStageConfig, AutomationStore,
+};
 use std::sync::Arc;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRepositoryState {
-    pub rules: Vec<Value>,
-    pub processed_entries: Vec<Value>,
-}
 
 #[derive(Clone)]
 pub struct SqliteAutomationRepository<D = crate::Database>
@@ -25,19 +21,7 @@ impl<D> SqliteAutomationRepository<D>
 where
     D: DatabasePort,
 {
-    pub fn load_state(&self) -> Result<AutomationRepositoryState, DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
-            let rules = Self::load_rules(tx)?;
-            let processed_entries = Self::load_processed_entries(tx)?;
-
-            Ok(AutomationRepositoryState {
-                rules,
-                processed_entries,
-            })
-        })
-    }
-
-    fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<Value>, DatabaseError> {
+    fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, DatabaseError> {
         let mut stmt = conn.prepare_cached(
             "SELECT id, name, project_id, preset_id, watch_directory, recursive, enabled,
                     stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
@@ -47,66 +31,94 @@ where
              FROM automation_rules
              ORDER BY id",
         )?;
-        let rows = stmt.query_map([], map_row_to_rule_value)?;
+        let rows = stmt.query_map([], map_row_to_rule_record)?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(DatabaseError::QueryError)
     }
 
-    fn load_processed_entries(conn: &rusqlite::Connection) -> Result<Vec<Value>, DatabaseError> {
+    fn load_processed_entries(
+        conn: &rusqlite::Connection,
+    ) -> Result<Vec<AutomationProcessedRecord>, DatabaseError> {
         let mut stmt = conn.prepare_cached(
             "SELECT id, rule_id, file_path, source_fingerprint, size, mtime_ms, status,
                     processed_at, history_id, export_path, error_message
              FROM automation_processed
              ORDER BY id",
         )?;
-        let rows = stmt.query_map([], map_row_to_processed_value)?;
+        let rows = stmt.query_map([], map_row_to_processed_record)?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(DatabaseError::QueryError)
     }
+}
 
-    pub fn persist_rules(&self, rules: Vec<Value>) -> Result<(), DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
-            tx.execute("DELETE FROM automation_rules", [])?;
-            persist_rule_values(tx, rules)?;
-            Ok(())
-        })
+impl<D> AutomationStore for SqliteAutomationRepository<D>
+where
+    D: DatabasePort,
+{
+    fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+        self.get_db()
+            .and_then(|db| {
+                db.with_read_connection(|conn| {
+                    let tx = conn
+                        .unchecked_transaction()
+                        .map_err(DatabaseError::QueryError)?;
+                    let state = AutomationRepositoryState {
+                        rules: Self::load_rules(&tx)?,
+                        processed_entries: Self::load_processed_entries(&tx)?,
+                    };
+                    tx.commit().map_err(DatabaseError::QueryError)?;
+                    Ok(state)
+                })
+            })
+            .map_err(|error| error.to_string())
     }
 
-    pub fn persist_processed_entries(&self, entries: Vec<Value>) -> Result<(), DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
-            tx.execute("DELETE FROM automation_processed", [])?;
-            persist_processed_values(tx, entries)?;
-            Ok(())
-        })
+    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), String> {
+        self.get_db()
+            .and_then(|db| {
+                db.with_transaction(|tx| {
+                    tx.execute("DELETE FROM automation_rules", [])?;
+                    insert_rules(tx, rules)?;
+                    Ok(())
+                })
+            })
+            .map_err(|error| error.to_string())
     }
 
-    pub fn persist_state(
+    fn replace_processed_entries(
         &self,
-        rules: Vec<Value>,
-        entries: Vec<Value>,
-    ) -> Result<(), DatabaseError> {
-        self.get_db()?.with_transaction(|tx| {
-            tx.execute("DELETE FROM automation_rules", [])?;
-            persist_rule_values(tx, rules)?;
-            tx.execute("DELETE FROM automation_processed", [])?;
-            persist_processed_values(tx, entries)?;
-            Ok(())
-        })
+        entries: &[AutomationProcessedRecord],
+    ) -> Result<(), String> {
+        self.get_db()
+            .and_then(|db| {
+                db.with_transaction(|tx| {
+                    tx.execute("DELETE FROM automation_processed", [])?;
+                    insert_processed_entries(tx, entries)?;
+                    Ok(())
+                })
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String> {
+        self.get_db()
+            .and_then(|db| {
+                db.with_transaction(|tx| {
+                    tx.execute("DELETE FROM automation_rules", [])?;
+                    insert_rules(tx, &state.rules)?;
+                    tx.execute("DELETE FROM automation_processed", [])?;
+                    insert_processed_entries(tx, &state.processed_entries)?;
+                    Ok(())
+                })
+            })
+            .map_err(|error| error.to_string())
     }
 }
 
-fn ensure_id(data: &mut Value) -> String {
-    if let Some(id) = data.get("id").and_then(Value::as_str) {
-        id.to_string()
-    } else {
-        let id = uuid::Uuid::new_v4().to_string();
-        data.as_object_mut()
-            .map(|obj| obj.insert("id".to_string(), Value::String(id.clone())));
-        id
-    }
-}
-
-fn persist_rule_values(tx: &rusqlite::Transaction, rules: Vec<Value>) -> Result<(), DatabaseError> {
+fn insert_rules(
+    tx: &rusqlite::Transaction,
+    rules: &[AutomationRuleRecord],
+) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_rules (
             id, name, project_id, preset_id, watch_directory, recursive, enabled,
@@ -117,37 +129,34 @@ fn persist_rule_values(tx: &rusqlite::Transaction, rules: Vec<Value>) -> Result<
         )
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
     )?;
-    for mut rule in rules {
-        let id = ensure_id(&mut rule);
-        let stage = rule.get("stageConfig");
-        let export = rule.get("exportConfig");
+    for rule in rules {
         stmt.execute(rusqlite::params![
-            id,
-            string_field(&rule, "name", ""),
-            string_field(&rule, "projectId", ""),
-            string_field(&rule, "presetId", "custom"),
-            string_field(&rule, "watchDirectory", ""),
-            bool_field(&rule, "recursive") as i64,
-            bool_field(&rule, "enabled") as i64,
-            nested_bool_field(stage, "autoPolish") as i64,
-            nested_string_field(stage, "polishPresetId", "general"),
-            nested_bool_field(stage, "autoTranslate") as i64,
-            nested_string_field(stage, "translationLanguage", "en"),
-            nested_bool_field(stage, "exportEnabled") as i64,
-            nested_string_field(export, "directory", ""),
-            nested_string_field(export, "format", "txt"),
-            nested_string_field(export, "mode", "original"),
-            nested_string_field(export, "prefix", ""),
-            integer_field(&rule, "createdAt"),
-            integer_field(&rule, "updatedAt"),
+            &rule.id,
+            &rule.name,
+            &rule.project_id,
+            &rule.preset_id,
+            &rule.watch_directory,
+            rule.recursive as i64,
+            rule.enabled as i64,
+            rule.stage_config.auto_polish as i64,
+            &rule.stage_config.polish_preset_id,
+            rule.stage_config.auto_translate as i64,
+            &rule.stage_config.translation_language,
+            rule.stage_config.export_enabled as i64,
+            &rule.export_config.directory,
+            &rule.export_config.format,
+            &rule.export_config.mode,
+            &rule.export_config.prefix,
+            rule.created_at,
+            rule.updated_at,
         ])?;
     }
     Ok(())
 }
 
-fn persist_processed_values(
+fn insert_processed_entries(
     tx: &rusqlite::Transaction,
-    entries: Vec<Value>,
+    entries: &[AutomationProcessedRecord],
 ) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_processed (
@@ -156,244 +165,366 @@ fn persist_processed_values(
         )
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     )?;
-    for mut entry in entries {
-        let id = ensure_id(&mut entry);
+    for entry in entries {
         stmt.execute(rusqlite::params![
-            id,
-            string_field(&entry, "ruleId", ""),
-            string_field(&entry, "filePath", ""),
-            string_field(&entry, "sourceFingerprint", ""),
-            integer_field(&entry, "size"),
-            integer_field(&entry, "mtimeMs"),
-            string_field(&entry, "status", "complete"),
-            integer_field(&entry, "processedAt"),
-            optional_string_field(&entry, "historyId"),
-            optional_string_field(&entry, "exportPath"),
-            optional_string_field(&entry, "errorMessage"),
+            &entry.id,
+            &entry.rule_id,
+            &entry.file_path,
+            &entry.source_fingerprint,
+            entry.size,
+            entry.mtime_ms,
+            &entry.status,
+            entry.processed_at,
+            entry.history_id.as_deref(),
+            entry.export_path.as_deref(),
+            entry.error_message.as_deref(),
         ])?;
     }
     Ok(())
 }
 
-fn map_row_to_rule_value(row: &rusqlite::Row) -> rusqlite::Result<Value> {
-    Ok(json!({
-        "id": row.get::<_, String>("id")?,
-        "name": row.get::<_, String>("name")?,
-        "projectId": row.get::<_, String>("project_id")?,
-        "presetId": row.get::<_, String>("preset_id")?,
-        "watchDirectory": row.get::<_, String>("watch_directory")?,
-        "recursive": row.get::<_, i64>("recursive")? != 0,
-        "enabled": row.get::<_, i64>("enabled")? != 0,
-        "stageConfig": {
-            "autoPolish": row.get::<_, i64>("stage_auto_polish")? != 0,
-            "polishPresetId": row.get::<_, String>("stage_polish_preset_id")?,
-            "autoTranslate": row.get::<_, i64>("stage_auto_translate")? != 0,
-            "translationLanguage": row.get::<_, String>("stage_translation_language")?,
-            "exportEnabled": row.get::<_, i64>("stage_export_enabled")? != 0,
+fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRuleRecord> {
+    Ok(AutomationRuleRecord {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        project_id: row.get("project_id")?,
+        preset_id: row.get("preset_id")?,
+        watch_directory: row.get("watch_directory")?,
+        recursive: row.get::<_, i64>("recursive")? != 0,
+        enabled: row.get::<_, i64>("enabled")? != 0,
+        stage_config: AutomationRuleRecordStageConfig {
+            auto_polish: row.get::<_, i64>("stage_auto_polish")? != 0,
+            polish_preset_id: row.get("stage_polish_preset_id")?,
+            auto_translate: row.get::<_, i64>("stage_auto_translate")? != 0,
+            translation_language: row.get("stage_translation_language")?,
+            export_enabled: row.get::<_, i64>("stage_export_enabled")? != 0,
         },
-        "exportConfig": {
-            "directory": row.get::<_, String>("export_directory")?,
-            "format": row.get::<_, String>("export_format")?,
-            "mode": row.get::<_, String>("export_mode")?,
-            "prefix": row.get::<_, String>("export_prefix")?,
+        export_config: AutomationRuleRecordExportConfig {
+            directory: row.get("export_directory")?,
+            format: row.get("export_format")?,
+            mode: row.get("export_mode")?,
+            prefix: row.get("export_prefix")?,
         },
-        "createdAt": row.get::<_, i64>("created_at")?,
-        "updatedAt": row.get::<_, i64>("updated_at")?,
-    }))
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
 }
 
-fn map_row_to_processed_value(row: &rusqlite::Row) -> rusqlite::Result<Value> {
-    let mut entry = Map::new();
-    entry.insert("id".to_string(), json!(row.get::<_, String>("id")?));
-    entry.insert(
-        "ruleId".to_string(),
-        json!(row.get::<_, String>("rule_id")?),
-    );
-    entry.insert(
-        "filePath".to_string(),
-        json!(row.get::<_, String>("file_path")?),
-    );
-    entry.insert(
-        "sourceFingerprint".to_string(),
-        json!(row.get::<_, String>("source_fingerprint")?),
-    );
-    entry.insert("size".to_string(), json!(row.get::<_, i64>("size")?));
-    entry.insert("mtimeMs".to_string(), json!(row.get::<_, i64>("mtime_ms")?));
-    entry.insert("status".to_string(), json!(row.get::<_, String>("status")?));
-    entry.insert(
-        "processedAt".to_string(),
-        json!(row.get::<_, i64>("processed_at")?),
-    );
-    insert_optional_output(&mut entry, "historyId", row.get("history_id")?);
-    insert_optional_output(&mut entry, "exportPath", row.get("export_path")?);
-    insert_optional_output(&mut entry, "errorMessage", row.get("error_message")?);
-    Ok(Value::Object(entry))
-}
-
-fn insert_optional_output(map: &mut Map<String, Value>, key: &str, value: Option<String>) {
-    if let Some(value) = value {
-        map.insert(key.to_string(), Value::String(value));
-    }
-}
-
-fn string_field(value: &Value, key: &str, default: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or(default)
-        .to_string()
-}
-
-fn optional_string_field(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
-fn bool_field(value: &Value, key: &str) -> bool {
-    value.get(key).and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn integer_field(value: &Value, key: &str) -> i64 {
-    value
-        .get(key)
-        .and_then(|value| {
-            value
-                .as_i64()
-                .or_else(|| value.as_u64().map(|n| n as i64))
-                .or_else(|| value.as_f64().map(|n| n.round() as i64))
-        })
-        .unwrap_or(0)
-}
-
-fn nested_string_field(value: Option<&Value>, key: &str, default: &str) -> String {
-    value
-        .and_then(|value| value.get(key))
-        .and_then(Value::as_str)
-        .unwrap_or(default)
-        .to_string()
-}
-
-fn nested_bool_field(value: Option<&Value>, key: &str) -> bool {
-    value
-        .and_then(|value| value.get(key))
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
+fn map_row_to_processed_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationProcessedRecord> {
+    Ok(AutomationProcessedRecord {
+        id: row.get("id")?,
+        rule_id: row.get("rule_id")?,
+        file_path: row.get("file_path")?,
+        source_fingerprint: row.get("source_fingerprint")?,
+        size: row.get("size")?,
+        mtime_ms: row.get("mtime_ms")?,
+        status: row.get("status")?,
+        processed_at: row.get("processed_at")?,
+        history_id: row.get("history_id")?,
+        export_path: row.get("export_path")?,
+        error_message: row.get("error_message")?,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Database;
-    use serde_json::json;
-    use std::path::PathBuf;
-    use std::sync::Arc;
+    use sona_core::automation::repository::{
+        AutomationProcessedRecord, AutomationRuleRecord, AutomationRuleRecordExportConfig,
+        AutomationRuleRecordStageConfig, AutomationStore,
+    };
+    use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
+    use std::sync::{Arc, Mutex};
+    use tempfile::tempdir;
 
-    #[test]
-    fn test_automation_persist_and_load() {
+    struct SequenceIds(Mutex<Vec<String>>);
+
+    impl AutomationIdGenerator for SequenceIds {
+        fn generate_id(&self) -> String {
+            self.0.lock().unwrap().remove(0)
+        }
+    }
+
+    fn object<T: serde::de::DeserializeOwned>(fields: &[(&str, &str)]) -> T {
+        T::deserialize(serde::de::value::MapDeserializer::<
+            _,
+            serde::de::value::Error,
+        >::new(
+            fields
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string())),
+        ))
+        .unwrap()
+    }
+
+    fn rule_record(id: &str, name: &str) -> AutomationRuleRecord {
+        AutomationRuleRecord {
+            id: id.into(),
+            name: name.into(),
+            project_id: "project-1".into(),
+            preset_id: "preset-1".into(),
+            watch_directory: "C:\\watch".into(),
+            recursive: true,
+            enabled: true,
+            stage_config: AutomationRuleRecordStageConfig {
+                auto_polish: true,
+                polish_preset_id: "polish-1".into(),
+                auto_translate: true,
+                translation_language: "zh".into(),
+                export_enabled: true,
+            },
+            export_config: AutomationRuleRecordExportConfig {
+                directory: "C:\\export".into(),
+                format: "srt".into(),
+                mode: "polished".into(),
+                prefix: "done-".into(),
+            },
+            created_at: 100,
+            updated_at: 200,
+        }
+    }
+
+    fn processed_record(id: &str, rule_id: &str) -> AutomationProcessedRecord {
+        AutomationProcessedRecord {
+            id: id.into(),
+            rule_id: rule_id.into(),
+            file_path: "C:\\watch\\audio.wav".into(),
+            source_fingerprint: "fingerprint".into(),
+            size: 42,
+            mtime_ms: 300,
+            status: "complete".into(),
+            processed_at: 400,
+            history_id: Some("history-1".into()),
+            export_path: Some("C:\\export\\audio.srt".into()),
+            error_message: Some("previous warning".into()),
+        }
+    }
+
+    fn repository() -> (Arc<Database>, SqliteAutomationRepository) {
         let db = Arc::new(Database::open_in_memory().unwrap());
         let repo = SqliteAutomationRepository::new(Arc::clone(&db));
-
-        let rules = vec![
-            json!({"name": "Rule 1", "watchDirectory": "/watch", "projectId": "proj-1"}),
-            json!({"name": "Rule 2", "watchDirectory": "/watch2", "projectId": "proj-2"}),
-        ];
-        let entries = vec![json!({"filePath": "/path/to/file.mp3", "processedAt": "2026-01-01"})];
-
-        repo.persist_state(rules.clone(), entries.clone()).unwrap();
-
-        let state = repo.load_state().unwrap();
-        assert_eq!(state.rules.len(), 2);
-        assert_eq!(state.processed_entries.len(), 1);
-        let names: Vec<&str> = state
-            .rules
-            .iter()
-            .map(|r| r["name"].as_str().unwrap_or(""))
-            .collect();
-        assert!(names.contains(&"Rule 1"));
-        assert!(names.contains(&"Rule 2"));
-        assert!(state.rules[0].get("id").and_then(Value::as_str).is_some());
+        (db, repo)
     }
 
     #[test]
-    fn test_automation_persist_rules_replace() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteAutomationRepository::with_db(PathBuf::new(), db);
+    fn typed_state_round_trips() {
+        let (_, repo) = repository();
+        let state = AutomationRepositoryState {
+            rules: vec![rule_record("rule-1", "Rule")],
+            processed_entries: vec![processed_record("entry-1", "rule-1")],
+        };
 
-        let rules = vec![json!({"name": "Old Rule", "projectId": "p1"})];
-        repo.persist_rules(rules).unwrap();
+        AutomationStore::replace_state(&repo, &state).unwrap();
 
-        let rules2 = vec![json!({"name": "New Rule", "projectId": "p2"})];
-        repo.persist_rules(rules2).unwrap();
-
-        let state = repo.load_state().unwrap();
-        assert_eq!(state.rules.len(), 1);
-        assert_eq!(state.rules[0]["name"], "New Rule");
+        assert_eq!(AutomationStore::load_state(&repo).unwrap(), state);
     }
 
     #[test]
-    fn load_state_returns_rules_and_processed_entries_together() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteAutomationRepository::with_db(PathBuf::new(), db);
+    fn typed_state_loads_from_read_only_database() {
+        let temp = tempdir().unwrap();
+        let state = AutomationRepositoryState {
+            rules: vec![rule_record("rule-1", "Rule")],
+            processed_entries: vec![processed_record("entry-1", "rule-1")],
+        };
+        {
+            let db = Arc::new(Database::open(temp.path()).unwrap());
+            let repo = SqliteAutomationRepository::new(db);
+            AutomationStore::replace_state(&repo, &state).unwrap();
+        }
 
-        repo.persist_state(
-            vec![json!({"id": "rule-1", "name": "Rule", "projectId": "project-1"})],
-            vec![json!({"id": "entry-1", "filePath": "C:\\audio.wav"})],
+        let db = Arc::new(Database::open_read_only(temp.path()).unwrap());
+        let repo = SqliteAutomationRepository::new(db);
+
+        assert_eq!(AutomationStore::load_state(&repo).unwrap(), state);
+    }
+
+    #[test]
+    fn replacing_rules_preserves_processed_entries() {
+        let (_, repo) = repository();
+        let initial = AutomationRepositoryState {
+            rules: vec![rule_record("rule-old", "Old")],
+            processed_entries: vec![processed_record("entry-1", "rule-old")],
+        };
+        AutomationStore::replace_state(&repo, &initial).unwrap();
+
+        AutomationStore::replace_rules(&repo, &[rule_record("rule-new", "New")]).unwrap();
+
+        let state = AutomationStore::load_state(&repo).unwrap();
+        assert_eq!(state.rules, vec![rule_record("rule-new", "New")]);
+        assert_eq!(state.processed_entries, initial.processed_entries);
+    }
+
+    #[test]
+    fn replacing_processed_entries_preserves_rules() {
+        let (_, repo) = repository();
+        let initial = AutomationRepositoryState {
+            rules: vec![rule_record("rule-1", "Rule")],
+            processed_entries: vec![processed_record("entry-old", "rule-1")],
+        };
+        AutomationStore::replace_state(&repo, &initial).unwrap();
+
+        let replacement = processed_record("entry-new", "rule-1");
+        AutomationStore::replace_processed_entries(&repo, &[replacement.clone()]).unwrap();
+
+        let state = AutomationStore::load_state(&repo).unwrap();
+        assert_eq!(state.rules, initial.rules);
+        assert_eq!(state.processed_entries, vec![replacement]);
+    }
+
+    #[test]
+    fn loaded_records_are_ordered_by_id() {
+        let (_, repo) = repository();
+        AutomationStore::replace_state(
+            &repo,
+            &AutomationRepositoryState {
+                rules: vec![rule_record("rule-z", "Z"), rule_record("rule-a", "A")],
+                processed_entries: vec![
+                    processed_record("entry-z", "rule-z"),
+                    processed_record("entry-a", "rule-a"),
+                ],
+            },
         )
         .unwrap();
 
-        let state = repo.load_state().unwrap();
-
+        let state = AutomationStore::load_state(&repo).unwrap();
         assert_eq!(
-            state.rules,
-            vec![json!({
-                "id": "rule-1",
-                "name": "Rule",
-                "projectId": "project-1",
-                "presetId": "custom",
-                "watchDirectory": "",
-                "recursive": false,
-                "enabled": false,
-                "stageConfig": {
-                    "autoPolish": false,
-                    "polishPresetId": "general",
-                    "autoTranslate": false,
-                    "translationLanguage": "en",
-                    "exportEnabled": false
-                },
-                "exportConfig": {
-                    "directory": "",
-                    "format": "txt",
-                    "mode": "original",
-                    "prefix": ""
-                },
-                "createdAt": 0,
-                "updatedAt": 0
-            })]
+            state
+                .rules
+                .iter()
+                .map(|r| r.id.as_str())
+                .collect::<Vec<_>>(),
+            ["rule-a", "rule-z"]
         );
         assert_eq!(
-            state.processed_entries,
-            vec![json!({
-                "id": "entry-1",
-                "ruleId": "",
-                "filePath": "C:\\audio.wav",
-                "sourceFingerprint": "",
-                "size": 0,
-                "mtimeMs": 0,
-                "status": "complete",
-                "processedAt": 0
-            })]
+            state
+                .processed_entries
+                .iter()
+                .map(|e| e.id.as_str())
+                .collect::<Vec<_>>(),
+            ["entry-a", "entry-z"]
         );
     }
 
     #[test]
-    fn test_automation_empty_state() {
-        let db = Database::open_in_memory().unwrap();
-        let repo = SqliteAutomationRepository::with_db(PathBuf::new(), db);
+    fn optional_columns_and_signed_numbers_round_trip() {
+        let (_, repo) = repository();
+        let mut rule = rule_record("rule-1", "Rule");
+        rule.created_at = -9;
+        rule.updated_at = i64::MIN;
+        let mut entry = processed_record("entry-1", "rule-1");
+        entry.size = -1;
+        entry.mtime_ms = i64::MIN;
+        entry.processed_at = -400;
+        entry.history_id = None;
+        entry.export_path = None;
+        entry.error_message = None;
+        let state = AutomationRepositoryState {
+            rules: vec![rule],
+            processed_entries: vec![entry],
+        };
 
-        let state = repo.load_state().unwrap();
-        assert!(state.rules.is_empty());
-        assert!(state.processed_entries.is_empty());
+        AutomationStore::replace_state(&repo, &state).unwrap();
+
+        assert_eq!(AutomationStore::load_state(&repo).unwrap(), state);
+    }
+
+    #[test]
+    fn full_state_replacement_rolls_back_both_collections() {
+        let (db, repo) = repository();
+        let initial = AutomationRepositoryState {
+            rules: vec![rule_record("rule-old", "Old")],
+            processed_entries: vec![processed_record("entry-old", "rule-old")],
+        };
+        AutomationStore::replace_state(&repo, &initial).unwrap();
+        db.with_write_connection(|conn| {
+            conn.execute_batch(
+                "CREATE TEMP TRIGGER abort_automation_processed_insert
+                 BEFORE INSERT ON automation_processed
+                 BEGIN SELECT RAISE(ABORT, 'forced processed insert failure'); END;",
+            )
+            .map_err(DatabaseError::QueryError)
+        })
+        .unwrap();
+
+        let replacement = AutomationRepositoryState {
+            rules: vec![rule_record("rule-new", "New")],
+            processed_entries: vec![processed_record("entry-new", "rule-new")],
+        };
+        assert!(AutomationStore::replace_state(&repo, &replacement).is_err());
+
+        assert_eq!(AutomationStore::load_state(&repo).unwrap(), initial);
+    }
+
+    #[test]
+    fn service_persists_canonical_defaults_and_generated_ids() {
+        let (_, repo) = repository();
+        let ids = SequenceIds(Mutex::new(vec![
+            "rule-generated".into(),
+            "entry-generated".into(),
+        ]));
+
+        AutomationRepositoryService::new(&repo, &ids)
+            .replace_state_json(vec![object(&[])], vec![object(&[])])
+            .unwrap();
+
+        let state = AutomationStore::load_state(&repo).unwrap();
+        assert_eq!(
+            state.rules,
+            vec![AutomationRuleRecord {
+                id: "rule-generated".into(),
+                name: "".into(),
+                project_id: "".into(),
+                preset_id: "custom".into(),
+                watch_directory: "".into(),
+                recursive: false,
+                enabled: false,
+                stage_config: AutomationRuleRecordStageConfig {
+                    auto_polish: false,
+                    polish_preset_id: "general".into(),
+                    auto_translate: false,
+                    translation_language: "en".into(),
+                    export_enabled: false,
+                },
+                export_config: AutomationRuleRecordExportConfig {
+                    directory: "".into(),
+                    format: "txt".into(),
+                    mode: "original".into(),
+                    prefix: "".into(),
+                },
+                created_at: 0,
+                updated_at: 0,
+            }]
+        );
+        assert_eq!(state.processed_entries[0].id, "entry-generated");
+        assert_eq!(state.processed_entries[0].status, "complete");
+    }
+
+    #[test]
+    fn service_full_state_persistence_is_atomic() {
+        let (db, repo) = repository();
+        let initial = AutomationRepositoryState {
+            rules: vec![rule_record("rule-old", "Old")],
+            processed_entries: vec![processed_record("entry-old", "rule-old")],
+        };
+        AutomationStore::replace_state(&repo, &initial).unwrap();
+        db.with_write_connection(|conn| {
+            conn.execute_batch(
+                "CREATE TEMP TRIGGER abort_service_processed_insert
+                 BEFORE INSERT ON automation_processed
+                 BEGIN SELECT RAISE(ABORT, 'forced service failure'); END;",
+            )
+            .map_err(DatabaseError::QueryError)
+        })
+        .unwrap();
+        let ids = SequenceIds(Mutex::new(Vec::new()));
+
+        let result = AutomationRepositoryService::new(&repo, &ids).replace_state_json(
+            vec![object(&[("id", "rule-new"), ("name", "New")])],
+            vec![object(&[("id", "entry-new"), ("ruleId", "rule-new")])],
+        );
+
+        assert!(result.is_err());
+        assert_eq!(AutomationStore::load_state(&repo).unwrap(), initial);
     }
 }

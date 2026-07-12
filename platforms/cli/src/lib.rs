@@ -1,10 +1,12 @@
 mod asr_adapter;
+mod automation;
 mod config_template;
 mod desktop_paths;
 mod init_config;
 mod models;
 mod recovery;
 mod serve;
+mod table;
 mod task_ledger;
 mod transcribe;
 
@@ -85,6 +87,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Inspects persisted automation rules and processed entries.
+    Automation(automation::AutomationArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
@@ -109,6 +113,7 @@ where
     let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
 
     match cli.command {
+        Commands::Automation(args) => automation::run_automation(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),

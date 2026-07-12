@@ -5,8 +5,8 @@ use sona_recovery_fs::FsRecoverySnapshotStore;
 use sona_runtime_fs::FsSourcePathStatusProvider;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use unicode_width::UnicodeWidthStr;
 
+use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
 
 #[derive(Debug, Args)]
@@ -75,13 +75,7 @@ fn render_recovery_table(snapshot: &RecoverySnapshot) -> String {
         })
         .collect::<Vec<_>>();
     let headers = ["ID", "FILE", "STAGE", "PROGRESS", "RESUMABLE"];
-    let mut widths = headers.map(UnicodeWidthStr::width);
-
-    for row in &rows {
-        for (index, value) in row.iter().enumerate() {
-            widths[index] = widths[index].max(UnicodeWidthStr::width(value.as_str()));
-        }
-    }
+    let widths = column_widths(&headers, &rows);
 
     let mut output = String::new();
     append_table_row(&mut output, &headers, &widths);
@@ -97,39 +91,6 @@ fn render_recovery_table(snapshot: &RecoverySnapshot) -> String {
         append_table_row(&mut output, &values, &widths);
     }
     output
-}
-
-fn append_table_row(output: &mut String, values: &[&str; 5], widths: &[usize; 5]) {
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(value);
-        output.push_str(&" ".repeat(widths[index].saturating_sub(UnicodeWidthStr::width(*value))));
-    }
-    output.push('\n');
-}
-
-fn sanitize_table_cell(value: &str) -> String {
-    let mut sanitized = String::with_capacity(value.len());
-    for character in value.chars() {
-        if character.is_control() {
-            sanitized.extend(character.escape_default());
-        } else {
-            sanitized.push(character);
-        }
-    }
-    sanitized
-}
-
-fn append_table_separator(output: &mut String, widths: &[usize; 5]) {
-    for (index, width) in widths.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&"-".repeat(*width));
-    }
-    output.push('\n');
 }
 
 #[cfg(test)]

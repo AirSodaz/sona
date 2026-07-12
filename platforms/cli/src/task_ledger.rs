@@ -6,8 +6,8 @@ use sona_sqlite::{Database, SqliteLedgerRepository};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use unicode_width::UnicodeWidthStr;
 
+use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
 
 #[derive(Debug, Args)]
@@ -62,13 +62,7 @@ fn render_task_ledger_table(snapshot: &TaskLedgerSnapshot) -> CliResult<String> 
         .map(task_row)
         .collect::<CliResult<Vec<_>>>()?;
     let headers = ["ID", "KIND", "STATUS", "TITLE", "PROGRESS", "UPDATED"];
-    let mut widths = headers.map(UnicodeWidthStr::width);
-
-    for row in &rows {
-        for (index, value) in row.iter().enumerate() {
-            widths[index] = widths[index].max(UnicodeWidthStr::width(value.as_str()));
-        }
-    }
+    let widths = column_widths(&headers, &rows);
 
     let mut output = String::new();
     append_table_row(&mut output, &headers, &widths);
@@ -105,39 +99,6 @@ fn enum_label<T: Serialize>(value: &T) -> CliResult<String> {
             "Task ledger enum did not serialize as a string".to_string(),
         )),
     }
-}
-
-fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(value);
-        output.push_str(&" ".repeat(widths[index].saturating_sub(UnicodeWidthStr::width(*value))));
-    }
-    output.push('\n');
-}
-
-fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
-    for (index, width) in widths.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&"-".repeat(*width));
-    }
-    output.push('\n');
-}
-
-fn sanitize_table_cell(value: &str) -> String {
-    let mut sanitized = String::with_capacity(value.len());
-    for character in value.chars() {
-        if character.is_control() {
-            sanitized.extend(character.escape_default());
-        } else {
-            sanitized.push(character);
-        }
-    }
-    sanitized
 }
 
 fn now_ms() -> u64 {
