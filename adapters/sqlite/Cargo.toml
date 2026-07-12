@@ -16,8 +16,6 @@ serde_json = "1"
 sona-core = { path = "../../core" }
 tar = "0.4"
 thiserror = "2.0.18"
+tempfile = "3"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 walkdir = "2.5.0"
-
-[dev-dependencies]
-tempfile = "3"

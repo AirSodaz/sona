@@ -8,6 +8,7 @@ mod mapper;
 mod model_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
+mod task_ledger_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
 pub use mapper::{
@@ -38,6 +39,8 @@ pub enum SonaCoreBindingError {
     InvalidInput { reason: String },
     #[error("{reason}")]
     Recovery { reason: String },
+    #[error("{reason}")]
+    TaskLedger { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
 }
@@ -89,6 +92,43 @@ pub fn persist_recovery_queue_snapshot_json(
         queue_items_json,
         resolved_ids,
     )
+}
+
+#[uniffi::export]
+pub fn load_task_ledger_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_task_ledger_snapshot_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn upsert_task_ledger_record_json(
+    app_data_dir: String,
+    record_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::upsert_task_ledger_record_json(app_data_dir, record_json)
+}
+
+#[uniffi::export]
+pub fn patch_task_ledger_record_json(
+    app_data_dir: String,
+    id: String,
+    patch_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::patch_task_ledger_record_json(app_data_dir, id, patch_json)
+}
+
+#[uniffi::export]
+pub fn remove_task_ledger_record_json(
+    app_data_dir: String,
+    id: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::remove_task_ledger_record_json(app_data_dir, id)
+}
+
+#[uniffi::export]
+pub fn clear_resolved_task_ledger_records_json(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::clear_resolved_task_ledger_records_json(app_data_dir)
 }
 
 #[uniffi::export]

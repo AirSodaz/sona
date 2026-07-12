@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-const CURRENT_SCHEMA_VERSION: i64 = 1;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 1;
 type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
 const MIGRATIONS: &[(i64, &str, MigrationFn)] =
@@ -34,6 +34,31 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
         }
         Ok(())
     })
+}
+
+pub(crate) fn validate_current_schema(
+    connection: &rusqlite::Connection,
+) -> Result<(), DatabaseError> {
+    let applied_version = connection
+        .query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(DatabaseError::QueryError)?;
+    if applied_version > CURRENT_SCHEMA_VERSION {
+        return Err(DatabaseError::UnsupportedSchemaVersion {
+            found: applied_version,
+            current: CURRENT_SCHEMA_VERSION,
+        });
+    }
+    if applied_version < CURRENT_SCHEMA_VERSION {
+        return Err(DatabaseError::SchemaMigrationRequired {
+            found: applied_version,
+            current: CURRENT_SCHEMA_VERSION,
+        });
+    }
+    Ok(())
 }
 
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {

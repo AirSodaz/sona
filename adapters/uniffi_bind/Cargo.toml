@@ -16,6 +16,10 @@ sona-core = { path = "../../core" }
 sona-online-asr = { path = "../online_asr" }
 sona-recovery-fs = { path = "../recovery_fs" }
 sona-runtime-fs = { path = "../runtime_fs" }
+sona-sqlite = { path = "../sqlite" }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { version = "0.32", features = ["tokio"] }
+
+[dev-dependencies]
+tempfile = "3"

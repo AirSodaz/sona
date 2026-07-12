@@ -4176,16 +4176,24 @@ test('desktop task ledger repository adapter lives in platform layer', () => {
   const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
   const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
   const platformTaskLedgerPath = desktopCratePath('src', 'platform', 'task_ledger_repository.rs');
+  const coreTaskLedgerService = read('core', 'src', 'task_ledger', 'service.rs');
+  const sqliteTaskLedger = read('adapters', 'sqlite', 'src', 'task_ledger.rs');
 
   assert.equal(fs.existsSync(platformTaskLedgerPath), true);
   const platformTaskLedger = fs.readFileSync(platformTaskLedgerPath, 'utf8');
 
   assert.match(platformMod, /^pub mod task_ledger_repository;/mu);
   assert.match(platformTaskLedger, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
+  assert.match(platformTaskLedger, /TaskLedgerService::new/u);
+  assert.match(platformTaskLedger, /unix_timestamp_millis/u);
+  assert.match(platformTaskLedger, /TauriEventEmitter/u);
   assert.match(platformTaskLedger, /TASK_LEDGER_UPDATED_EVENT/u);
-  assert.match(platformTaskLedger, /async fn run_task_ledger_repository_task/u);
+  assert.match(platformTaskLedger, /async fn run_task_ledger_service_task/u);
   assert.match(platformTaskLedger, /fn emit_task_ledger_snapshot/u);
-  assert.match(platformTaskLedger, /app\.emit\(TASK_LEDGER_UPDATED_EVENT, snapshot\)/u);
+  assert.match(platformTaskLedger, /emitter\.emit\(/u);
+  assert.match(coreTaskLedgerService, /pub struct TaskLedgerService/u);
+  assert.match(sqliteTaskLedger, /impl<D> TaskLedgerStore for SqliteLedgerRepository<D>/u);
+  assert.doesNotMatch(sqliteTaskLedger, /SystemTime|UNIX_EPOCH|normalize_record/u);
   assert.match(platformTaskLedger, /pub async fn load_snapshot/u);
   assert.match(platformTaskLedger, /pub async fn upsert_task/u);
   assert.match(platformTaskLedger, /pub async fn patch_task/u);
@@ -4200,6 +4208,91 @@ test('desktop task ledger repository adapter lives in platform layer', () => {
   assert.doesNotMatch(systemCommand, /SqliteLedgerRepository/u);
   assert.doesNotMatch(systemCommand, /run_task_ledger_repository_task/u);
   assert.doesNotMatch(systemCommand, /emit_task_ledger_snapshot/u);
+});
+
+test('task ledger application policy is shared across hosts', () => {
+  const coreStore = read('core', 'src', 'task_ledger', 'repository.rs');
+  const coreService = read('core', 'src', 'task_ledger', 'service.rs');
+  const sqliteAdapter = read('adapters', 'sqlite', 'src', 'task_ledger.rs');
+  const desktopAdapter = read(...desktopCrateSegments, 'src', 'platform', 'task_ledger_repository.rs');
+  const uniffiCargo = read('adapters', 'uniffi_bind', 'Cargo.toml');
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiBridge = read('adapters', 'uniffi_bind', 'src', 'task_ledger_bridge.rs');
+  const cliCargo = read('platforms', 'cli', 'Cargo.toml');
+  const cliTaskLedger = read('platforms', 'cli', 'src', 'task_ledger.rs');
+  const androidSample = read(
+    'platforms',
+    'android',
+    'sample-consumer',
+    'sample-library',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'uniffi',
+    'sample',
+    'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms',
+    'android',
+    'sample-consumer',
+    'consumer-library',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'uniffi',
+    'consumer',
+    'SonaUniffiConsumerSmoke.kt',
+  );
+
+  assert.match(coreStore, /pub trait TaskLedgerStore/u);
+  for (const operation of [
+    'load_snapshot_at',
+    'upsert_task_at',
+    'patch_task_at',
+    'remove_task_at',
+    'clear_resolved_at',
+  ]) {
+    assert.match(coreService, new RegExp(`pub fn ${operation}`));
+  }
+  assert.doesNotMatch(
+    `${coreStore}\n${coreService}`,
+    /rusqlite|tauri|uniffi|SystemTime|UNIX_EPOCH|std::fs|std::process|std::net/u,
+  );
+
+  assert.match(sqliteAdapter, /impl<D> TaskLedgerStore for SqliteLedgerRepository<D>/u);
+  assert.doesNotMatch(
+    sqliteAdapter,
+    /normalize_record|normalize_loaded_record|is_retained_status|SystemTime|UNIX_EPOCH|TaskLedgerSnapshot/u,
+  );
+  assert.match(desktopAdapter, /TaskLedgerService::new/u);
+  assert.match(uniffiBridge, /TaskLedgerService::new/u);
+  assert.match(cliTaskLedger, /TaskLedgerService::new/u);
+  assert.match(cliTaskLedger, /Database::open_read_only/u);
+  assert.doesNotMatch(cliTaskLedger, /Database::open\(/u);
+  assert.match(uniffiCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"\.\.\/sqlite"\s*\}/u);
+  assert.match(cliCargo, /sona-sqlite\s*=\s*\{\s*path\s*=\s*"\.\.\/\.\.\/adapters\/sqlite"\s*\}/u);
+
+  for (const exportName of [
+    'load_task_ledger_snapshot_json',
+    'upsert_task_ledger_record_json',
+    'patch_task_ledger_record_json',
+    'remove_task_ledger_record_json',
+    'clear_resolved_task_ledger_records_json',
+  ]) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}\\(`));
+  }
+
+  assert.match(androidSample, /import uniffi\.sona_uniffi_bind\.loadTaskLedgerSnapshotJson/u);
+  assert.match(androidSample, /import uniffi\.sona_uniffi_bind\.upsertTaskLedgerRecordJson/u);
+  assert.match(androidSample, /loadTaskLedgerSnapshotJson\(appDataDir\)/u);
+  assert.match(androidSample, /upsertTaskLedgerRecordJson\(appDataDir, recordJson\)/u);
+  assert.match(androidConsumer, /import uniffi\.sona_uniffi_bind\.loadTaskLedgerSnapshotJson/u);
+  assert.match(androidConsumer, /loadTaskLedgerSnapshotJson\(appDataDir\)/u);
 });
 
 test('SQLite automation repository is owned by sqlite adapter', () => {

@@ -23,6 +23,8 @@ pub use project::SqliteProjectRepository;
 pub use task_ledger::SqliteLedgerRepository;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior};
+use std::fs::File;
+use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -35,8 +37,99 @@ use std::time::{Duration, Instant};
 const POOL_SIZE: usize = 4;
 const WRITE_POOL_SIZE: usize = 1;
 const POOL_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
+const READ_ONLY_SNAPSHOT_ATTEMPTS: usize = 3;
+const FILE_COMPARE_BUFFER_SIZE: usize = 64 * 1024;
 
 static GLOBAL_DB: OnceLock<Arc<Database>> = OnceLock::new();
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReadOnlySidecarState {
+    Clean,
+    ActiveWal,
+}
+
+fn sqlite_sidecar_paths(db_path: &Path) -> (PathBuf, PathBuf) {
+    let mut wal_path = db_path.as_os_str().to_os_string();
+    wal_path.push("-wal");
+    let mut shm_path = db_path.as_os_str().to_os_string();
+    shm_path.push("-shm");
+    (PathBuf::from(wal_path), PathBuf::from(shm_path))
+}
+
+fn validate_read_only_sidecars(
+    wal_path: &Path,
+    shm_path: &Path,
+) -> Result<ReadOnlySidecarState, DatabaseError> {
+    let wal_exists = wal_path.is_file();
+    let shm_exists = shm_path.is_file();
+    match (wal_exists, shm_exists) {
+        (false, false) => Ok(ReadOnlySidecarState::Clean),
+        (true, true) => Ok(ReadOnlySidecarState::ActiveWal),
+        _ => Err(DatabaseError::ConnectionError(format!(
+            "Cannot safely open read-only database with incomplete WAL sidecars: WAL exists={wal_exists}, SHM exists={shm_exists}"
+        ))),
+    }
+}
+
+fn copy_database_snapshot(
+    db_path: &Path,
+    wal_path: &Path,
+    sidecar_state: ReadOnlySidecarState,
+) -> Result<(tempfile::TempDir, PathBuf), DatabaseError> {
+    let snapshot_dir = tempfile::Builder::new()
+        .prefix("sona-read-only-")
+        .tempdir()
+        .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+    let snapshot_db_path = snapshot_dir.path().join("sona.db");
+    std::fs::copy(db_path, &snapshot_db_path)
+        .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+    if sidecar_state == ReadOnlySidecarState::ActiveWal {
+        let (snapshot_wal_path, _) = sqlite_sidecar_paths(&snapshot_db_path);
+        std::fs::copy(wal_path, snapshot_wal_path)
+            .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+    }
+    Ok((snapshot_dir, snapshot_db_path))
+}
+
+fn files_equal(left_path: &Path, right_path: &Path) -> Result<bool, DatabaseError> {
+    let mut left =
+        File::open(left_path).map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+    let mut right = File::open(right_path)
+        .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+    let mut left_buffer = [0_u8; FILE_COMPARE_BUFFER_SIZE];
+    let mut right_buffer = [0_u8; FILE_COMPARE_BUFFER_SIZE];
+
+    loop {
+        let left_count = left
+            .read(&mut left_buffer)
+            .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+        let right_count = right
+            .read(&mut right_buffer)
+            .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+        if left_count != right_count || left_buffer[..left_count] != right_buffer[..right_count] {
+            return Ok(false);
+        }
+        if left_count == 0 {
+            return Ok(true);
+        }
+    }
+}
+
+fn database_snapshot_matches_source(
+    db_path: &Path,
+    wal_path: &Path,
+    snapshot_db_path: &Path,
+    sidecar_state: ReadOnlySidecarState,
+) -> Result<bool, DatabaseError> {
+    if !files_equal(db_path, snapshot_db_path)? {
+        return Ok(false);
+    }
+    if sidecar_state == ReadOnlySidecarState::ActiveWal {
+        let (snapshot_wal_path, _) = sqlite_sidecar_paths(snapshot_db_path);
+        return files_equal(wal_path, &snapshot_wal_path);
+    }
+    Ok(true)
+}
 
 #[derive(Clone)]
 struct ConnectionPool {
@@ -160,6 +253,7 @@ pub struct Database {
     read_pool: ConnectionPool,
     write_pool: ConnectionPool,
     app_local_data_dir: Option<PathBuf>,
+    _read_only_snapshot: Option<tempfile::TempDir>,
     slow_query_threshold_us: AtomicI64,
 }
 
@@ -221,6 +315,7 @@ impl Database {
             read_pool: ConnectionPool::new(read_connections),
             write_pool: ConnectionPool::new(write_connections),
             app_local_data_dir: Some(app_local_data_dir.to_path_buf()),
+            _read_only_snapshot: None,
             slow_query_threshold_us: AtomicI64::new(0),
         };
 
@@ -228,6 +323,75 @@ impl Database {
         db.run_optimize()?;
 
         Ok(db)
+    }
+
+    /// Opens the existing main database without creating files, migrating the
+    /// schema, attaching analytics, or performing maintenance writes.
+    pub fn open_read_only(app_local_data_dir: &Path) -> Result<Self, DatabaseError> {
+        Self::open_read_only_with_hook(app_local_data_dir, || {})
+    }
+
+    fn open_read_only_with_hook(
+        app_local_data_dir: &Path,
+        after_initial_snapshot: impl FnOnce(),
+    ) -> Result<Self, DatabaseError> {
+        let app_local_data_dir = std::path::absolute(app_local_data_dir)
+            .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+        let db_path = app_local_data_dir.join("sona.db");
+        let (wal_path, shm_path) = sqlite_sidecar_paths(&db_path);
+        let mut after_initial_snapshot = Some(after_initial_snapshot);
+
+        for _ in 0..READ_ONLY_SNAPSHOT_ATTEMPTS {
+            let initial_state = validate_read_only_sidecars(&wal_path, &shm_path)?;
+            let capture = copy_database_snapshot(&db_path, &wal_path, initial_state);
+            let (snapshot_dir, snapshot_db_path) = match capture {
+                Ok(snapshot) => snapshot,
+                Err(_)
+                    if validate_read_only_sidecars(&wal_path, &shm_path).ok()
+                        != Some(initial_state) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if let Some(hook) = after_initial_snapshot.take() {
+                hook();
+            }
+            if validate_read_only_sidecars(&wal_path, &shm_path).ok() != Some(initial_state) {
+                continue;
+            }
+            let matches_source = database_snapshot_matches_source(
+                &db_path,
+                &wal_path,
+                &snapshot_db_path,
+                initial_state,
+            )?;
+            if !matches_source
+                || validate_read_only_sidecars(&wal_path, &shm_path).ok() != Some(initial_state)
+            {
+                continue;
+            }
+
+            let conn = Connection::open(&snapshot_db_path)
+                .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            conn.execute_batch("PRAGMA query_only=ON; PRAGMA foreign_keys=ON;")
+                .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            conn.busy_timeout(Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS))
+                .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            schema::validate_current_schema(&conn)?;
+
+            return Ok(Self {
+                read_pool: ConnectionPool::new(vec![conn]),
+                write_pool: ConnectionPool::new(Vec::new()),
+                app_local_data_dir: Some(app_local_data_dir),
+                _read_only_snapshot: Some(snapshot_dir),
+                slow_query_threshold_us: AtomicI64::new(0),
+            });
+        }
+
+        Err(DatabaseError::ConnectionError(format!(
+            "Database changed while creating read-only snapshot after {READ_ONLY_SNAPSHOT_ATTEMPTS} attempts"
+        )))
     }
 
     /// Opens an in-memory database for testing.
@@ -246,6 +410,7 @@ impl Database {
             read_pool: shared_pool.clone(),
             write_pool: shared_pool,
             app_local_data_dir: None,
+            _read_only_snapshot: None,
             slow_query_threshold_us: AtomicI64::new(0),
         };
 
@@ -661,6 +826,113 @@ mod tests {
 
         // Verify db file exists
         assert!(tmp.path().join("sona.db").exists());
+    }
+
+    #[test]
+    fn read_only_open_retries_clean_database_that_changes_to_active_wal() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        drop(Database::open(tmp.path()).unwrap());
+        assert!(!tmp.path().join("sona.db-wal").exists());
+        assert!(!tmp.path().join("sona.db-shm").exists());
+        let mut writer = None;
+
+        let database = Database::open_read_only_with_hook(tmp.path(), || {
+            let database = Database::open(tmp.path()).unwrap();
+            database
+                .with_write_connection(|connection| {
+                    connection.execute(
+                        "INSERT INTO app_settings (key, value) VALUES ('race', 'committed')",
+                        [],
+                    )?;
+                    Ok(())
+                })
+                .unwrap();
+            writer = Some(database);
+        })
+        .unwrap();
+
+        database
+            .with_connection(|connection| {
+                let value: String = connection.query_row(
+                    "SELECT value FROM app_settings WHERE key = 'race'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(value, "committed");
+                Ok(())
+            })
+            .unwrap();
+        drop(writer);
+    }
+
+    #[test]
+    fn read_only_open_retries_wal_append_without_sidecar_state_change() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let writer = Database::open(tmp.path()).unwrap();
+        assert!(tmp.path().join("sona.db-wal").exists());
+        assert!(tmp.path().join("sona.db-shm").exists());
+
+        let database = Database::open_read_only_with_hook(tmp.path(), || {
+            writer
+                .with_write_connection(|connection| {
+                    connection.execute(
+                        "INSERT INTO app_settings (key, value) VALUES ('append', 'committed')",
+                        [],
+                    )?;
+                    Ok(())
+                })
+                .unwrap();
+        })
+        .unwrap();
+
+        database
+            .with_connection(|connection| {
+                let value: String = connection.query_row(
+                    "SELECT value FROM app_settings WHERE key = 'append'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(value, "committed");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn read_only_open_retries_wal_checkpoint_reset() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let writer = Database::open(tmp.path()).unwrap();
+        writer
+            .with_write_connection(|connection| {
+                connection.execute(
+                    "INSERT INTO app_settings (key, value) VALUES ('checkpoint', 'committed')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let database = Database::open_read_only_with_hook(tmp.path(), || {
+            writer
+                .with_write_connection(|connection| {
+                    connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+                    Ok(())
+                })
+                .unwrap();
+        })
+        .unwrap();
+
+        database
+            .with_connection(|connection| {
+                let value: String = connection.query_row(
+                    "SELECT value FROM app_settings WHERE key = 'checkpoint'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(value, "committed");
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

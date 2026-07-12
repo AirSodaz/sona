@@ -7,6 +7,7 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
     asr_streaming_bridge, config_bridge, llm_bridge, model_bridge, recovery_bridge, runtime_bridge,
+    task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -35,6 +36,38 @@ impl SonaCoreFacade {
             queue_items_json,
             resolved_ids,
         )
+    }
+
+    pub fn load_task_ledger_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+        task_ledger_bridge::load_task_ledger_snapshot_json(app_data_dir)
+    }
+
+    pub fn upsert_task_ledger_record_json(
+        app_data_dir: String,
+        record_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        task_ledger_bridge::upsert_task_ledger_record_json(app_data_dir, record_json)
+    }
+
+    pub fn patch_task_ledger_record_json(
+        app_data_dir: String,
+        id: String,
+        patch_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        task_ledger_bridge::patch_task_ledger_record_json(app_data_dir, id, patch_json)
+    }
+
+    pub fn remove_task_ledger_record_json(
+        app_data_dir: String,
+        id: String,
+    ) -> SonaCoreBindingResult<String> {
+        task_ledger_bridge::remove_task_ledger_record_json(app_data_dir, id)
+    }
+
+    pub fn clear_resolved_task_ledger_records_json(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<String> {
+        task_ledger_bridge::clear_resolved_task_ledger_records_json(app_data_dir)
     }
 
     pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
@@ -333,5 +366,39 @@ impl SonaCoreFacade {
         request_json: String,
     ) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
         llm_bridge::summarize_transcript_request_from_json(request_json)
+    }
+}
+
+#[cfg(test)]
+mod task_ledger_tests {
+    use super::SonaCoreFacade;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn facade_loads_and_upserts_task_ledger_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data_dir = dir.path().to_string_lossy().into_owned();
+
+        let empty = SonaCoreFacade::load_task_ledger_snapshot_json(app_data_dir.clone()).unwrap();
+        assert_eq!(empty, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
+
+        let record = json!({
+            "id": "facade-task",
+            "kind": "llmPolish",
+            "status": "pending",
+            "title": "Facade task",
+            "progress": 0.0,
+            "createdAt": 1,
+            "updatedAt": 1,
+            "retryable": false,
+            "cancelable": true,
+            "recoverable": false
+        });
+        let output =
+            SonaCoreFacade::upsert_task_ledger_record_json(app_data_dir, record.to_string())
+                .unwrap();
+        let output: Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(output["tasks"][0]["id"], "facade-task");
     }
 }

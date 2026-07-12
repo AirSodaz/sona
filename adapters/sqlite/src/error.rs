@@ -20,6 +20,9 @@ pub enum DatabaseError {
     #[error("Unsupported database schema version {found}; this build supports up to {current}")]
     UnsupportedSchemaVersion { found: i64, current: i64 },
 
+    #[error("Database schema version {found} requires migration to {current}")]
+    SchemaMigrationRequired { found: i64, current: i64 },
+
     #[error("{0}")]
     Internal(String),
 }

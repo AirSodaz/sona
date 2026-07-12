@@ -11,10 +11,12 @@ import uniffi.sona_uniffi_bind.SonaCoreBindingException
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.defaultConfigJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
 import uniffi.sona_uniffi_bind.parsePolishChunkJson
 import uniffi.sona_uniffi_bind.persistRecoveryQueueSnapshotJson
 import uniffi.sona_uniffi_bind.planPolishPromptChunksJson
 import uniffi.sona_uniffi_bind.saveRecoverySnapshotJson
+import uniffi.sona_uniffi_bind.upsertTaskLedgerRecordJson
 
 private class RecordingAsrObserver : FfiAsrStreamingObserver {
     private var latestTranscriptUpdate: FfiAsrTranscriptUpdateEvent? = null
@@ -79,6 +81,11 @@ object SonaUniffiSmoke {
         )
 
     fun loadRecovery(appDataDir: String): String = loadRecoverySnapshotJson(appDataDir)
+
+    fun loadTaskLedger(appDataDir: String): String = loadTaskLedgerSnapshotJson(appDataDir)
+
+    fun upsertTaskLedger(appDataDir: String, recordJson: String): String =
+        upsertTaskLedgerRecordJson(appDataDir, recordJson)
 
     fun saveRecovery(appDataDir: String, itemsJson: String): String =
         saveRecoverySnapshotJson(appDataDir, itemsJson)

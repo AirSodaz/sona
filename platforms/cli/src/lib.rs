@@ -5,6 +5,7 @@ mod init_config;
 mod models;
 mod recovery;
 mod serve;
+mod task_ledger;
 mod transcribe;
 
 use clap::{Parser, Subcommand};
@@ -94,6 +95,8 @@ enum Commands {
     Recovery(recovery::RecoveryArgs),
     /// Runs the shared local HTTP API server.
     Serve(serve::ServeArgs),
+    /// Inspects the shared task ledger.
+    TaskLedger(task_ledger::TaskLedgerArgs),
     /// Transcribes a local audio or video file using offline ASR.
     Transcribe(transcribe::TranscribeArgs),
 }
@@ -111,6 +114,7 @@ where
         Commands::Models(args) => models::run_models(args),
         Commands::Recovery(args) => recovery::run_recovery(args),
         Commands::Serve(args) => serve::run_serve(args),
+        Commands::TaskLedger(args) => task_ledger::run_task_ledger(args),
         Commands::Transcribe(args) => transcribe::run_transcribe(args),
     }
 }
