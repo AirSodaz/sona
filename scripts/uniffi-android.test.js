@@ -586,6 +586,47 @@ test('app config repository persistence is exposed through UniFFI and Android bi
   assert.match(androidConsumer, /loadAppConfigJson\(appDataDir\)/u);
 });
 
+test('dashboard reporting is exposed through UniFFI and Android bindings', () => {
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
+  const dashboardBridge = read('adapters', 'uniffi_bind', 'src', 'dashboard_bridge.rs');
+  const androidSample = read(
+    'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+  );
+
+  assert.match(uniffiLib, /^mod dashboard_bridge;/mu);
+  assert.match(
+    uniffiLib,
+    /#\[uniffi::export\]\s*pub async fn load_dashboard_snapshot_json\(\s*app_data_dir: String,\s*deep: bool,\s*\) -> SonaCoreBindingResult<String>/u,
+  );
+  assert.match(uniffiLib, /SonaCoreFacade::load_dashboard_snapshot_json\(app_data_dir, deep\)\.await/u);
+  assert.match(uniffiFacade, /pub async fn load_dashboard_snapshot_json\(/u);
+  assert.match(uniffiFacade, /dashboard_bridge::load_dashboard_snapshot_json\(app_data_dir, deep\)\.await/u);
+  assert.match(dashboardBridge, /tokio::task::spawn_blocking/u);
+  assert.match(dashboardBridge, /Database::open_read_only_with_analytics/u);
+  assert.match(dashboardBridge, /DashboardService::new/u);
+  assert.match(dashboardBridge, /sona_runtime_fs::dashboard_snapshot_time_now\(\)/u);
+
+  const errorBody = /pub enum SonaCoreBindingError\s*\{([\s\S]*?)\n\}/u
+    .exec(uniffiLib)?.[1] ?? assert.fail('missing SonaCoreBindingError');
+  const errorVariants = [
+    ...errorBody.matchAll(/^\s*([A-Z][A-Za-z0-9_]*)\s*\{/gmu),
+  ].map((match) => match[1]);
+  assert.deepEqual(errorVariants, expectedUniffiErrorVariants);
+
+  assert.match(androidSample, /^import uniffi\.sona_uniffi_bind\.loadDashboardSnapshotJson$/mu);
+  assert.match(androidSample, /suspend fun loadDashboard\(appDataDir: String, deep: Boolean\): String/u);
+  assert.match(androidSample, /loadDashboardSnapshotJson\(appDataDir, deep\)/u);
+  assert.match(androidConsumer, /^import uniffi\.sona_uniffi_bind\.loadDashboardSnapshotJson$/mu);
+  assert.match(androidConsumer, /suspend fun loadDashboard\(appDataDir: String\): String/u);
+  assert.match(androidConsumer, /loadDashboardSnapshotJson\(appDataDir, false\)/u);
+});
+
 test('UniFFI config bridge is isolated from the top-level binding facade', () => {
   const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
   const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');

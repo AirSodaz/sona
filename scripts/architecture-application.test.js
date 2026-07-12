@@ -388,6 +388,14 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
     path.join(repoRoot, 'core', 'src', 'dashboard', 'service.rs'),
     'utf8',
   );
+  const runtimeFsLib = read('adapters', 'runtime_fs', 'src', 'lib.rs');
+  const runtimeFsDashboardTime = read(
+    'adapters',
+    'runtime_fs',
+    'src',
+    'dashboard_time.rs',
+  );
+  const desktopTime = read(...desktopCrateSegments, 'src', 'platform', 'time.rs');
   const tauriDashboard = read(...desktopCrateSegments, 'src', 'app', 'dashboard.rs');
 
   assert.match(coreDiagnostics, /pub fn build_diagnostics_core_snapshot_at/u);
@@ -401,7 +409,12 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
   assert.match(coreDashboardService, /build_snapshot_at/u);
   assert.doesNotMatch(coreDashboardService, /pub async fn build_snapshot\(/u);
   assert.doesNotMatch(coreDashboardService, /Utc::now|chrono::Utc::now|chrono::Local|\bLocal\b/u);
-  assert.match(tauriDashboard, /crate::platform::time::dashboard_snapshot_time_now\(\)/u);
+  assert.match(runtimeFsLib, /pub use dashboard_time::dashboard_snapshot_time_now;/u);
+  assert.match(runtimeFsDashboardTime, /pub fn dashboard_snapshot_time_now\(\)/u);
+  assert.match(runtimeFsDashboardTime, /Utc::now\(\)/u);
+  assert.doesNotMatch(desktopTime, /dashboard_snapshot_time_now/u);
+  assert.match(tauriDashboard, /sona_runtime_fs::dashboard_snapshot_time_now\(\)/u);
+  assert.doesNotMatch(tauriDashboard, /crate::platform::time::dashboard_snapshot_time_now\(\)/u);
   assert.doesNotMatch(tauriDashboard, /DashboardSnapshotTime/u);
   assert.doesNotMatch(tauriDashboard, /chrono::Utc::now|chrono::Local|chrono::SecondsFormat|with_timezone\(&chrono::Local\)/u);
   assert.doesNotMatch(coreCargo, /chrono = \{[^}]*"clock"/u);
@@ -1220,7 +1233,9 @@ sona-sqlite = { path = "../sqlite" }
     'validate_automation_rule_activation_json',
   ];
   const currentUniffiExports = [
-    ...uniffiLibProduction.matchAll(/#\[uniffi::export\]\s*pub fn ([a-z0-9_]+)\s*\(/gu),
+    ...uniffiLibProduction.matchAll(
+      /#\[uniffi::export\]\s*pub (?:async )?fn ([a-z0-9_]+)\s*\(/gu,
+    ),
   ].map((match) => match[1]);
   assert.deepEqual(currentUniffiExports, expectedUniffiExports);
   for (const exportName of automationExports) {

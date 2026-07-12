@@ -486,7 +486,7 @@ test('app config repository policy is shared across hosts', () => {
   }
   assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
   const currentExports = [
-    ...uniffiLib.matchAll(/#\[uniffi::export\]\s*pub fn ([a-z0-9_]+)\s*\(/gu),
+    ...uniffiLib.matchAll(/#\[uniffi::export\]\s*pub (?:async )?fn ([a-z0-9_]+)\s*\(/gu),
   ].map((match) => match[1]);
   assert.deepEqual(currentExports, expectedUniffiExports);
   const firstConfigExport = currentExports.indexOf('load_app_config_json');

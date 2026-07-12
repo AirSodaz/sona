@@ -2,6 +2,7 @@ mod app_config;
 mod asr_adapter;
 mod automation;
 mod config_template;
+mod dashboard;
 mod desktop_paths;
 mod init_config;
 mod models;
@@ -93,6 +94,8 @@ enum Commands {
     AppConfig(app_config::AppConfigArgs),
     /// Inspects persisted automation rules and processed entries.
     Automation(automation::AutomationArgs),
+    /// Shows a read-only dashboard snapshot.
+    Dashboard(dashboard::DashboardArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
@@ -121,6 +124,7 @@ where
     match cli.command {
         Commands::AppConfig(args) => app_config::run_app_config(args),
         Commands::Automation(args) => automation::run_automation(args),
+        Commands::Dashboard(args) => dashboard::run_dashboard(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),

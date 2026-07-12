@@ -5669,6 +5669,7 @@ dependencies = [
 name = "sona-runtime-fs"
 version = "0.8.0"
 dependencies = [
+ "chrono",
  "glob",
  "serde",
  "serde_json",
@@ -5689,10 +5690,12 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sona-core",
  "tar",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
  "uuid",
  "walkdir",
 ]
@@ -5711,6 +5714,7 @@ version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sona-core",
  "sona-online-asr",
  "sona-recovery-fs",

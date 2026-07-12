@@ -106,15 +106,15 @@ fn validate_read_only_sidecars(
 }
 
 fn copy_database_snapshot(
+    snapshot_dir: &Path,
     db_path: &Path,
     wal_path: &Path,
     sidecar_state: ReadOnlySidecarState,
-) -> Result<(tempfile::TempDir, PathBuf), DatabaseError> {
-    let snapshot_dir = tempfile::Builder::new()
-        .prefix("sona-read-only-")
-        .tempdir()
-        .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
-    let snapshot_db_path = snapshot_dir.path().join("sona.db");
+) -> Result<PathBuf, DatabaseError> {
+    let file_name = db_path.file_name().ok_or_else(|| {
+        DatabaseError::ConnectionError("Database path has no file name".to_string())
+    })?;
+    let snapshot_db_path = snapshot_dir.join(file_name);
     std::fs::copy(db_path, &snapshot_db_path)
         .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
     if sidecar_state == ReadOnlySidecarState::ActiveWal {
@@ -122,7 +122,7 @@ fn copy_database_snapshot(
         std::fs::copy(wal_path, snapshot_wal_path)
             .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
     }
-    Ok((snapshot_dir, snapshot_db_path))
+    Ok(snapshot_db_path)
 }
 
 fn files_equal(left_path: &Path, right_path: &Path) -> Result<bool, DatabaseError> {
@@ -372,25 +372,74 @@ impl Database {
         Self::open_read_only_with_hook(app_local_data_dir, || {})
     }
 
+    /// Opens consistent read-only snapshots of the main and analytics databases.
+    pub fn open_read_only_with_analytics(app_local_data_dir: &Path) -> Result<Self, DatabaseError> {
+        Self::open_read_only_with_analytics_hook(app_local_data_dir, || {})
+    }
+
     fn open_read_only_with_hook(
         app_local_data_dir: &Path,
+        after_initial_snapshot: impl FnOnce(),
+    ) -> Result<Self, DatabaseError> {
+        Self::open_read_only_snapshot(app_local_data_dir, false, after_initial_snapshot)
+    }
+
+    fn open_read_only_with_analytics_hook(
+        app_local_data_dir: &Path,
+        after_initial_snapshot: impl FnOnce(),
+    ) -> Result<Self, DatabaseError> {
+        Self::open_read_only_snapshot(app_local_data_dir, true, after_initial_snapshot)
+    }
+
+    fn open_read_only_snapshot(
+        app_local_data_dir: &Path,
+        include_analytics: bool,
         after_initial_snapshot: impl FnOnce(),
     ) -> Result<Self, DatabaseError> {
         let app_local_data_dir = std::path::absolute(app_local_data_dir)
             .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
         let db_path = app_local_data_dir.join("sona.db");
+        let analytics_path = app_local_data_dir.join("sona-analytics.db");
         let (wal_path, shm_path) = sqlite_sidecar_paths(&db_path);
+        let (analytics_wal_path, analytics_shm_path) = sqlite_sidecar_paths(&analytics_path);
         let mut after_initial_snapshot = Some(after_initial_snapshot);
+        let source_states = || {
+            let main = validate_read_only_sidecars(&wal_path, &shm_path)?;
+            let analytics = include_analytics
+                .then(|| validate_read_only_sidecars(&analytics_wal_path, &analytics_shm_path))
+                .transpose()?;
+            Ok::<_, DatabaseError>((main, analytics))
+        };
 
         for _ in 0..READ_ONLY_SNAPSHOT_ATTEMPTS {
-            let initial_state = validate_read_only_sidecars(&wal_path, &shm_path)?;
-            let capture = copy_database_snapshot(&db_path, &wal_path, initial_state);
-            let (snapshot_dir, snapshot_db_path) = match capture {
+            let initial_states = source_states()?;
+            let snapshot_dir = tempfile::Builder::new()
+                .prefix("sona-read-only-")
+                .tempdir()
+                .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            let capture = (|| {
+                let snapshot_db_path = copy_database_snapshot(
+                    snapshot_dir.path(),
+                    &db_path,
+                    &wal_path,
+                    initial_states.0,
+                )?;
+                let snapshot_analytics_path = initial_states
+                    .1
+                    .map(|state| {
+                        copy_database_snapshot(
+                            snapshot_dir.path(),
+                            &analytics_path,
+                            &analytics_wal_path,
+                            state,
+                        )
+                    })
+                    .transpose()?;
+                Ok((snapshot_db_path, snapshot_analytics_path))
+            })();
+            let (snapshot_db_path, snapshot_analytics_path) = match capture {
                 Ok(snapshot) => snapshot,
-                Err(_)
-                    if validate_read_only_sidecars(&wal_path, &shm_path).ok()
-                        != Some(initial_state) =>
-                {
+                Err(_) if source_states().ok() != Some(initial_states) => {
                     continue;
                 }
                 Err(error) => return Err(error),
@@ -398,23 +447,34 @@ impl Database {
             if let Some(hook) = after_initial_snapshot.take() {
                 hook();
             }
-            if validate_read_only_sidecars(&wal_path, &shm_path).ok() != Some(initial_state) {
+            if source_states().ok() != Some(initial_states) {
                 continue;
             }
-            let matches_source = database_snapshot_matches_source(
+            let main_matches = database_snapshot_matches_source(
                 &db_path,
                 &wal_path,
                 &snapshot_db_path,
-                initial_state,
+                initial_states.0,
             )?;
-            if !matches_source
-                || validate_read_only_sidecars(&wal_path, &shm_path).ok() != Some(initial_state)
-            {
+            let analytics_matches = match (snapshot_analytics_path.as_ref(), initial_states.1) {
+                (Some(snapshot_path), Some(state)) => database_snapshot_matches_source(
+                    &analytics_path,
+                    &analytics_wal_path,
+                    snapshot_path,
+                    state,
+                )?,
+                (None, None) => true,
+                _ => false,
+            };
+            if !main_matches || !analytics_matches || source_states().ok() != Some(initial_states) {
                 continue;
             }
 
             let conn = Connection::open(&snapshot_db_path)
                 .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            if let Some(snapshot_analytics_path) = snapshot_analytics_path {
+                Self::attach_analytics(&conn, &snapshot_analytics_path)?;
+            }
             conn.execute_batch("PRAGMA query_only=ON; PRAGMA foreign_keys=ON;")
                 .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
             conn.busy_timeout(Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS))
@@ -510,6 +570,8 @@ impl Database {
             analytics_path.to_string_lossy().replace('\'', "''")
         );
         conn.execute_batch(&attach_sql)
+            .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+        conn.execute_batch("PRAGMA analytics.journal_mode=WAL;")
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))
     }
 
@@ -898,6 +960,37 @@ mod tests {
     }
 
     #[test]
+    fn read_only_open_preserves_main_only_database_support() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let database = Database::open(tmp.path()).unwrap();
+        database
+            .with_write_connection(|connection| {
+                connection.execute(
+                    "INSERT INTO app_settings (key, value) VALUES ('main-only', 'available')",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        drop(database);
+        std::fs::remove_file(tmp.path().join("sona-analytics.db")).unwrap();
+
+        let read_only = Database::open_read_only(tmp.path()).unwrap();
+
+        read_only
+            .with_connection(|connection| {
+                let value: String = connection.query_row(
+                    "SELECT value FROM app_settings WHERE key = 'main-only'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(value, "available");
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
     fn read_only_open_retries_clean_database_that_changes_to_active_wal() {
         let tmp = tempfile::TempDir::new().unwrap();
         drop(Database::open(tmp.path()).unwrap());
@@ -968,6 +1061,50 @@ mod tests {
     }
 
     #[test]
+    fn read_only_open_retries_analytics_wal_append() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let writer = Database::open(tmp.path()).unwrap();
+        writer
+            .with_write_connection(|connection| {
+                connection.execute(
+                    "INSERT INTO analytics.llm_usage (occurred_at, total_tokens)
+                     VALUES ('2026-07-13T07:00:00Z', 10)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(tmp.path().join("sona-analytics.db-wal").is_file());
+        assert!(tmp.path().join("sona-analytics.db-shm").is_file());
+
+        let database = Database::open_read_only_with_analytics_hook(tmp.path(), || {
+            writer
+                .with_write_connection(|connection| {
+                    connection.execute(
+                        "INSERT INTO analytics.llm_usage (occurred_at, total_tokens)
+                         VALUES ('2026-07-13T08:00:00Z', 20)",
+                        [],
+                    )?;
+                    Ok(())
+                })
+                .unwrap();
+        })
+        .unwrap();
+
+        database
+            .with_connection(|connection| {
+                let total_tokens: i64 = connection.query_row(
+                    "SELECT SUM(total_tokens) FROM analytics.llm_usage",
+                    [],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(total_tokens, 30);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
     fn read_only_open_retries_wal_checkpoint_reset() {
         let tmp = tempfile::TempDir::new().unwrap();
         let writer = Database::open(tmp.path()).unwrap();
@@ -1012,6 +1149,22 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn disk_database_configures_analytics_for_wal() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db = Database::open(tmp.path()).unwrap();
+
+        db.with_connection(|connection| {
+            let mode: String =
+                connection.query_row("PRAGMA analytics.journal_mode", [], |row| row.get(0))?;
+            assert_eq!(mode, "wal");
+            Ok(())
+        })
+        .unwrap();
+        assert!(tmp.path().join("sona-analytics.db-wal").is_file());
+        assert!(tmp.path().join("sona-analytics.db-shm").is_file());
     }
 
     #[test]

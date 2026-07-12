@@ -3,6 +3,7 @@ mod asr_bridge;
 mod asr_streaming_bridge;
 mod automation_bridge;
 mod config_bridge;
+mod dashboard_bridge;
 mod facade;
 mod json_bridge;
 mod llm_bridge;
@@ -52,6 +53,8 @@ pub enum SonaCoreBindingError {
     AsrRuntime { code: String, reason: String },
     #[error("{reason}")]
     ConfigRepository { reason: String },
+    #[error("{reason}")]
+    Dashboard { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -344,6 +347,14 @@ pub fn set_app_setting_json(
     value_json: String,
 ) -> SonaCoreBindingResult<()> {
     SonaCoreFacade::set_app_setting_json(app_data_dir, key, value_json)
+}
+
+#[uniffi::export]
+pub async fn load_dashboard_snapshot_json(
+    app_data_dir: String,
+    deep: bool,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_dashboard_snapshot_json(app_data_dir, deep).await
 }
 
 #[uniffi::export]

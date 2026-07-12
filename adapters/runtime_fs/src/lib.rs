@@ -1,3 +1,7 @@
+mod dashboard_time;
+
+pub use dashboard_time::dashboard_snapshot_time_now;
+
 use serde::Serialize;
 use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::automation::{

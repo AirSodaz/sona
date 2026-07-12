@@ -22,4 +22,5 @@ tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { version = "0.32", features = ["tokio"] }
 
 [dev-dependencies]
+sha2 = "0.10"
 tempfile = "3"
