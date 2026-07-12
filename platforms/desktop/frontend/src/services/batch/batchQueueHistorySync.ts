@@ -1,5 +1,6 @@
 import type { BatchQueueItem } from '../../types/batchQueue';
 import type { HistoryItem } from '../../types/history';
+import { logger } from '../../utils/logger';
 
 export interface SavedBatchHistoryMeta {
   historyId: string;
@@ -26,6 +27,7 @@ export async function resolveSavedBatchHistoryMeta({
     try {
       historyAudioUrl = await getAudioUrl(historyItem.id);
     } catch {
+      logger.debug('[BatchQueue] Audio URL resolution failed, falling back to null');
       historyAudioUrl = null;
     }
   }

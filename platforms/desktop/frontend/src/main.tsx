@@ -15,6 +15,8 @@ import { modelService } from "./services/modelService";
 import { voiceTypingService } from "./services/voiceTypingService";
 import { CaptionWindow } from "./components/CaptionWindow";
 import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { logger } from "./utils/logger";
 
 declare global {
   interface Window {
@@ -45,6 +47,14 @@ if (import.meta.env.DEV) {
   window.voiceTypingService = voiceTypingService;
 }
 
+// Global error handlers — log unhandled errors for diagnostics
+window.addEventListener('unhandledrejection', (event) => {
+  logger.error('[Global] Unhandled promise rejection:', event.reason);
+});
+window.addEventListener('error', (event) => {
+  logger.error('[Global] Uncaught error:', event.error);
+});
+
 const isCaptionWindow = window.location.search.includes('window=caption');
 const isVoiceTypingWindow = window.location.search.includes('window=voice-typing');
 
@@ -57,6 +67,8 @@ if (isVoiceTypingWindow) {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {rootComponent}
+    <ErrorBoundary>
+      {rootComponent}
+    </ErrorBoundary>
   </React.StrictMode>,
 );

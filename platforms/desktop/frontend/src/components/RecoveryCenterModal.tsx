@@ -14,6 +14,7 @@ import { useRecoveryStore } from '../stores/recoveryStore';
 import type { RecoveryItemStage, RecoverySource, RecoveredQueueItem } from '../types/recovery';
 import { PanelModal } from './PanelModal';
 import './RecoveryCenterModal.css';
+import { logger } from '../utils/logger';
 
 interface RecoveryCenterModalProps {
     isOpen: boolean;
@@ -111,7 +112,8 @@ export function RecoveryCenterModal({
         try {
             await resumeAll();
         } catch {
-            // Store error state drives the banner.
+            // Store error state drives the banner — log for diagnostics.
+            logger.debug('[RecoveryCenter] Store action threw (error state drives banner)');
         }
     };
 
@@ -119,7 +121,8 @@ export function RecoveryCenterModal({
         try {
             await discardAll();
         } catch {
-            // Store error state drives the banner.
+            // Store error state drives the banner — log for diagnostics.
+            logger.debug('[RecoveryCenter] Store action threw (error state drives banner)');
         }
     };
 
@@ -127,7 +130,8 @@ export function RecoveryCenterModal({
         try {
             await discardItem(id);
         } catch {
-            // Store error state drives the banner.
+            // Store error state drives the banner — log for diagnostics.
+            logger.debug('[RecoveryCenter] Store action threw (error state drives banner)');
         }
     };
 
@@ -135,7 +139,8 @@ export function RecoveryCenterModal({
         try {
             await resumeItem(id);
         } catch {
-            // Store error state drives the banner.
+            // Store error state drives the banner — log for diagnostics.
+            logger.debug('[RecoveryCenter] Store action threw (error state drives banner)');
         }
     };
 

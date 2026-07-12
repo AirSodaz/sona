@@ -5,6 +5,7 @@ import { AlertCircle, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-r
 import { type DialogVariant, useDialogStore } from '../stores/dialogStore';
 import { SparklesIcon } from './Icons';
 import { Modal } from './Modal';
+import { logger } from '../utils/logger';
 
 /**
  * Renders the appropriate icon based on dialog variant.
@@ -72,7 +73,8 @@ export function GlobalDialog(): React.JSX.Element | null {
             const result = await options.onAiAction();
             setInputValue(result);
         } catch {
-            // Error handling is managed by the service
+            // Error handling is managed by the service — log for diagnostics.
+            logger.debug('[GlobalDialog] AI action failed (service handles error)');
         } finally {
             setIsAiLoading(false);
         }

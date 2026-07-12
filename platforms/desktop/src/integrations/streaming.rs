@@ -49,6 +49,14 @@ pub enum ServerMessage {
     },
 }
 
+/// Serialize a ServerMessage to JSON string, logging and returning a fallback error JSON on failure.
+fn serialize_server_message(msg: &ServerMessage) -> String {
+    serde_json::to_string(msg).unwrap_or_else(|e| {
+        log::error!("[Streaming] Failed to serialize ServerMessage: {e}");
+        r#"{"type":"error","message":"Internal serialization error"}"#.to_string()
+    })
+}
+
 pub async fn handle_streaming(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -87,10 +95,9 @@ async fn handle_streaming_socket(
             _ => {
                 let _ = socket
                     .send(Message::Text(
-                        serde_json::to_string(&ServerMessage::Error {
+                        serialize_server_message(&ServerMessage::Error {
                             message: "Expected start message".to_string(),
                         })
-                        .unwrap()
                         .into(),
                     ))
                     .await;
@@ -132,9 +139,7 @@ async fn handle_online_streaming_socket(
         Err(message) => {
             let _ = socket
                 .send(Message::Text(
-                    serde_json::to_string(&ServerMessage::Error { message })
-                        .unwrap()
-                        .into(),
+                    serialize_server_message(&ServerMessage::Error { message }).into(),
                 ))
                 .await;
             return;
@@ -145,10 +150,9 @@ async fn handle_online_streaming_socket(
         None => {
             let _ = socket
                 .send(Message::Text(
-                    serde_json::to_string(&ServerMessage::Error {
+                    serialize_server_message(&ServerMessage::Error {
                         message: "Online ASR streaming requires AppHandle".to_string(),
                     })
-                    .unwrap()
                     .into(),
                 ))
                 .await;
@@ -156,14 +160,26 @@ async fn handle_online_streaming_socket(
         }
     };
 
-    let provider = sona_core::ports::asr::find_online_asr_provider(&model_id).unwrap();
+    let provider = match sona_core::ports::asr::find_online_asr_provider(&model_id) {
+        Some(p) => p,
+        None => {
+            let _ = socket
+                .send(Message::Text(
+                    serialize_server_message(&ServerMessage::Error {
+                        message: format!("Provider not found: {model_id}"),
+                    })
+                    .into(),
+                ))
+                .await;
+            return;
+        }
+    };
     if !provider.streaming.supported.unwrap_or(true) {
         let _ = socket
             .send(Message::Text(
-                serde_json::to_string(&ServerMessage::Error {
+                serialize_server_message(&ServerMessage::Error {
                     message: format!("Provider {} does not support streaming", model_id),
                 })
-                .unwrap()
                 .into(),
             ))
             .await;
@@ -209,10 +225,9 @@ async fn handle_online_streaming_socket(
     {
         let _ = socket
             .send(Message::Text(
-                serde_json::to_string(&ServerMessage::Error {
+                serialize_server_message(&ServerMessage::Error {
                     message: e.to_string(),
                 })
-                .unwrap()
                 .into(),
             ))
             .await;
@@ -224,10 +239,9 @@ async fn handle_online_streaming_socket(
     {
         let _ = socket
             .send(Message::Text(
-                serde_json::to_string(&ServerMessage::Error {
+                serialize_server_message(&ServerMessage::Error {
                     message: e.to_string(),
                 })
-                .unwrap()
                 .into(),
             ))
             .await;
@@ -236,10 +250,9 @@ async fn handle_online_streaming_socket(
 
     let _ = socket
         .send(Message::Text(
-            serde_json::to_string(&ServerMessage::Started {
+            serialize_server_message(&ServerMessage::Started {
                 session_id: session_id.clone(),
             })
-            .unwrap()
             .into(),
         ))
         .await;
@@ -299,15 +312,15 @@ async fn handle_online_streaming_socket(
             }
             Some(update) = rx.recv() => {
                 for segment in update.upsert_segments {
-                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
+                    let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if stopping => {
-                let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Stopped).unwrap().into())).await;
+                let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Stopped).into())).await;
                 break;
             }
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)), if !stopping => {
-                let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Error { message: "Idle timeout".to_string() }).unwrap().into())).await;
+                let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Error { message: "Idle timeout".to_string() }).into())).await;
                 break;
             }
         }
@@ -331,9 +344,7 @@ async fn handle_local_streaming_socket(
         Err(e) => {
             let _ = socket
                 .send(Message::Text(
-                    serde_json::to_string(&ServerMessage::Error { message: e })
-                        .unwrap()
-                        .into(),
+                    serialize_server_message(&ServerMessage::Error { message: e }).into(),
                 ))
                 .await;
             return;
@@ -346,10 +357,9 @@ async fn handle_local_streaming_socket(
         None => {
             let _ = socket
                 .send(Message::Text(
-                    serde_json::to_string(&ServerMessage::Error {
+                    serialize_server_message(&ServerMessage::Error {
                         message: "VAD model required but not found".to_string(),
                     })
-                    .unwrap()
                     .into(),
                 ))
                 .await;
@@ -359,10 +369,9 @@ async fn handle_local_streaming_socket(
 
     let _ = socket
         .send(Message::Text(
-            serde_json::to_string(&ServerMessage::Started {
+            serialize_server_message(&ServerMessage::Started {
                 session_id: session_id.clone(),
             })
-            .unwrap()
             .into(),
         ))
         .await;
@@ -398,14 +407,18 @@ async fn handle_local_streaming_socket(
                             let now = std::time::Instant::now();
                             if now.duration_since(last_inference_time).as_millis() > 200 {
                                 let global_start = offline_state.utterance_start_seconds(16000.0);
+                                let segment_id = current_segment_id.as_deref().unwrap_or_else(|| {
+                                    log::error!("[Streaming] current_segment_id is None when speech is active");
+                                    "unknown"
+                                });
                                 if let Some(segment) = run_offline_inference_standalone(
                                     offline_state.speech_chunks(),
                                     &recognizer,
-                                    current_segment_id.as_deref().unwrap(),
+                                    segment_id,
                                     global_start,
                                     false,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                                 last_inference_time = now;
                             }
@@ -413,14 +426,18 @@ async fn handle_local_streaming_socket(
                             if offline_state.is_speech_active() {
                                 offline_state.finish_speech_with_chunk(samples.clone());
                                 let global_start = offline_state.utterance_start_seconds(16000.0);
+                                let segment_id = current_segment_id.as_deref().unwrap_or_else(|| {
+                                    log::error!("[Streaming] current_segment_id is None when speech is active");
+                                    "unknown"
+                                });
                                 if let Some(segment) = run_offline_inference_standalone(
                                     offline_state.speech_chunks(),
                                     &recognizer,
-                                    current_segment_id.as_deref().unwrap(),
+                                    segment_id,
                                     global_start,
                                     true,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                                 offline_state.clear_speech_buffer();
                                 current_segment_id = None;
@@ -432,17 +449,21 @@ async fn handle_local_streaming_socket(
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
                             if offline_state.is_speech_active() {
                                 let global_start = offline_state.utterance_start_seconds(16000.0);
+                                let segment_id = current_segment_id.as_deref().unwrap_or_else(|| {
+                                    log::error!("[Streaming] current_segment_id is None when speech is active");
+                                    "unknown"
+                                });
                                 if let Some(segment) = run_offline_inference_standalone(
                                     offline_state.speech_chunks(),
                                     &recognizer,
-                                    current_segment_id.as_deref().unwrap(),
+                                    segment_id,
                                     global_start,
                                     true,
                                 ) {
-                                    let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Segment { segment: Box::new(segment) }).unwrap().into())).await;
+                                    let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                             }
-                            let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Stopped).unwrap().into())).await;
+                            let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Stopped).into())).await;
                             break;
                         }
                     }
@@ -451,7 +472,7 @@ async fn handle_local_streaming_socket(
                 }
             }
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-                let _ = socket.send(Message::Text(serde_json::to_string(&ServerMessage::Error { message: "Idle timeout".to_string() }).unwrap().into())).await;
+                let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Error { message: "Idle timeout".to_string() }).into())).await;
                 break;
             }
         }

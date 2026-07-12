@@ -84,7 +84,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Trace)
                 .filter(move |metadata| log_level_filter.should_log(metadata))
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                 .max_file_size(10 * 1024 * 1024) // 10MB
                 .clear_targets()
                 .targets([

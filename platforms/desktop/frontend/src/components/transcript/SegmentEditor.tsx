@@ -14,6 +14,7 @@ import {
 import { setActiveEditor } from '../../stores/transcriptRuntimeStore';
 import { convertOldFormatToLexical } from '../../utils/dataMigrationUtils';
 import { serializeSplitBlocks } from '../../utils/lexicalSplitUtils';
+import { logger } from '../../utils/logger';
 
 /** Props for SegmentEditor. */
 export interface SegmentEditorProps {
@@ -66,8 +67,7 @@ export function SegmentEditor({
       },
     },
     onError: (error: Error) => {
-      // eslint-disable-next-line no-console
-      console.error('Lexical error:', error);
+      logger.error('[SegmentEditor] Lexical error:', error);
     },
   };
 

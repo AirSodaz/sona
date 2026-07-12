@@ -8,6 +8,8 @@ import { SettingsPageHeader, SettingsSection, SettingsTabContainer, SettingsItem
 import { Switch } from '../Switch';
 import { invokeTauri } from '../../services/tauri/invoke';
 import { TauriCommand } from '../../services/tauri/commands';
+import { logger } from '../../utils/logger';
+import { extractErrorMessage } from '../../utils/errorUtils';
 
 interface ServerHealth {
   status: string;
@@ -93,7 +95,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
             setHealth(null);
             setInfo(null);
             setJobs({});
-            setLastError(err instanceof Error ? err.message : String(err));
+            setLastError(extractErrorMessage(err));
         }
     }, [config.httpServerEnabled, config.httpServerHost, config.httpServerPort, config.httpServerApiKey]);
 
@@ -167,8 +169,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
         navigator.clipboard.writeText(key).then(() => {
             setCopied(true);
         }).catch((err) => {
-            // eslint-disable-next-line no-console
-            console.error('Failed to copy API key: ', err);
+            logger.error('[ApiServer] Failed to copy API key:', err);
         });
     }, [config.httpServerApiKey]);
 
@@ -191,9 +192,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
                         setConfig({ httpServerIpWhitelist: normalizedWhitelist });
                     }
                 }).catch((e) => {
-                    // eslint-disable-next-line no-console
-                    console.error(e);
-                    const errMsg = e instanceof Error ? e.message : String(e);
+                    logger.error('[ApiServer] Failed to start server:', e);
+                    const errMsg = extractErrorMessage(e);
                     setLastError(errMsg);
                     setHealth(null);
                     setJobs({});
@@ -205,8 +205,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                 });
             } else {
                 invokeTauri(TauriCommand.apiServer.stop).catch((e) => {
-                    // eslint-disable-next-line no-console
-                    console.error(e);
+                    logger.error('[ApiServer] Failed to stop server:', e);
                 });
             }
         }, 1000);

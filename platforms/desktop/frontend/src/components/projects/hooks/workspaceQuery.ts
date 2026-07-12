@@ -8,6 +8,7 @@ import type {
   WorkspaceQueryRequest,
   WorkspaceQueryResult,
 } from '../types';
+import { logger } from '../../../utils/logger';
 
 export const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
   filteredItems: [],
@@ -67,6 +68,7 @@ export function useWorkspaceQuery({
         setQueryResult(result);
       })
       .catch(() => {
+        logger.debug('[WorkspaceQuery] Query failed, using empty result');
         if (requestIdRef.current !== requestId) {
           return;
         }

@@ -88,7 +88,12 @@ pub(crate) fn emit_transcript_update(
     for segment in &update.upsert_segments {
         log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
     }
-    let _ = emitter.emit(&event_name, serde_json::to_value(update).unwrap());
+    match serde_json::to_value(update) {
+        Ok(value) => {
+            let _ = emitter.emit(&event_name, value);
+        }
+        Err(e) => log::error!("[Transcript] Failed to serialize transcript update: {e}"),
+    }
 }
 
 pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
