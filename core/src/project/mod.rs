@@ -8,7 +8,7 @@ pub use repository::{
     ActiveProjectSelection, ProjectDefaultsPatch, ProjectPatch, ProjectRepositorySnapshot,
     ProjectStore, ProjectStoredState,
 };
-pub use service::{ProjectClock, ProjectIdGenerator, ProjectRepositoryService};
+pub use service::{ProjectIdGenerator, ProjectRepositoryService};
 
 #[derive(Clone, Debug, Default)]
 pub struct ProjectListOptions {

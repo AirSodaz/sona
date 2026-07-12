@@ -1,5 +1,7 @@
 use serde_json::{Map, Value};
 
+use crate::ports::time::UnixMillisClock;
+
 use super::{
     ActiveProjectSelection, DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID,
     DEFAULT_TRANSLATION_LANGUAGE, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
@@ -12,21 +14,17 @@ pub trait ProjectIdGenerator: Send + Sync {
     fn generate_id(&self) -> String;
 }
 
-pub trait ProjectClock: Send + Sync {
-    fn now_ms(&self) -> Result<u64, String>;
-}
-
 pub struct ProjectRepositoryService<'a> {
     store: &'a dyn ProjectStore,
     ids: &'a dyn ProjectIdGenerator,
-    clock: &'a dyn ProjectClock,
+    clock: &'a dyn UnixMillisClock,
 }
 
 impl<'a> ProjectRepositoryService<'a> {
     pub fn new(
         store: &'a dyn ProjectStore,
         ids: &'a dyn ProjectIdGenerator,
-        clock: &'a dyn ProjectClock,
+        clock: &'a dyn UnixMillisClock,
     ) -> Self {
         Self { store, ids, clock }
     }

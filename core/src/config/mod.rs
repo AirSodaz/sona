@@ -1,10 +1,14 @@
 pub mod defaults;
 pub mod error;
 pub mod migration;
+pub mod repository;
+pub mod service;
 pub mod types;
 
 pub use defaults::*;
 pub use error::ConfigError;
+pub use repository::*;
+pub use service::AppConfigRepositoryService;
 pub use types::*;
 
 use serde_json::Value;

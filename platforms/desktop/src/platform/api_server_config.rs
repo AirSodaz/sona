@@ -1,33 +1,71 @@
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use sona_core::config::AppConfigRepositoryService;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
 };
-use sona_sqlite::config_store::{
-    load_app_config_payload_from_app_local_data_dir,
-    load_serve_startup_settings_from_app_local_data_dir,
-};
+use sona_runtime_fs::SystemClock;
+use sona_sqlite::{Database, DatabaseError, SqliteConfigStore};
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+
+fn database_for_app_local_data_dir(
+    app_local_data_dir: &Path,
+) -> Result<Arc<Database>, DatabaseError> {
+    database_for_app_local_data_dir_or_open(
+        app_local_data_dir,
+        Database::global_arc().ok(),
+        Database::open,
+    )
+}
+
+fn database_for_app_local_data_dir_or_open(
+    app_local_data_dir: &Path,
+    global_database: Option<Arc<Database>>,
+    open_database: impl FnOnce(&Path) -> Result<Database, DatabaseError>,
+) -> Result<Arc<Database>, DatabaseError> {
+    if let Some(database) = global_database
+        && database.is_for_app_local_data_dir(app_local_data_dir)
+    {
+        return Ok(database);
+    }
+    open_database(app_local_data_dir).map(Arc::new)
+}
+
+fn with_config_service<T>(
+    app_local_data_dir: &Path,
+    load: impl FnOnce(&AppConfigRepositoryService<'_>) -> Result<T, String>,
+) -> Result<T, String> {
+    let database =
+        database_for_app_local_data_dir(app_local_data_dir).map_err(|error| error.to_string())?;
+    let store = SqliteConfigStore::new(database);
+    load(&AppConfigRepositoryService::new(&store, &SystemClock))
+}
 
 fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    load_app_config_payload_from_app_local_data_dir(&app_local_data_dir)
-        .map_err(|error| {
-            log::warn!("[API Server] Failed to load SQLite app config: {error}");
-            error
-        })
-        .ok()
-        .flatten()
+    with_config_service(&app_local_data_dir, |service| {
+        service.load_app_config_payload()
+    })
+    .map_err(|error| {
+        log::warn!("[API Server] Failed to load SQLite app config: {error}");
+        error
+    })
+    .ok()
+    .flatten()
 }
 
 fn load_sqlite_serve_startup_settings(provider: &dyn PathProvider) -> Option<ServeStartupSettings> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    load_serve_startup_settings_from_app_local_data_dir(&app_local_data_dir)
-        .map_err(|error| {
-            log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
-            error
-        })
-        .ok()
-        .flatten()
+    with_config_service(&app_local_data_dir, |service| {
+        service.load_serve_startup_settings()
+    })
+    .map_err(|error| {
+        log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
+        error
+    })
+    .ok()
+    .flatten()
 }
 
 fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
@@ -80,9 +118,17 @@ mod tests {
     use crate::platform::paths::{MockPathProvider, PathKind};
     use sona_sqlite::Database;
     use sona_sqlite::config_store::SqliteConfigStore;
+    use std::cell::Cell;
     use std::collections::HashMap as StdHashMap;
     use std::path::Path as StdPath;
     use std::sync::Arc;
+
+    fn save_config(db: Arc<Database>, config: &serde_json::Value) {
+        let store = SqliteConfigStore::new(db);
+        AppConfigRepositoryService::new(&store, &SystemClock)
+            .save_config(config)
+            .unwrap();
+    }
 
     fn provider_for_config_test(
         app_data_dir: &StdPath,
@@ -95,14 +141,53 @@ mod tests {
     }
 
     #[test]
+    fn app_local_data_database_selector_reuses_matching_global_database() {
+        let app_local_data = tempfile::tempdir().unwrap();
+        let global = Arc::new(Database::open(app_local_data.path()).unwrap());
+        let opened = Cell::new(false);
+
+        let selected = database_for_app_local_data_dir_or_open(
+            app_local_data.path(),
+            Some(Arc::clone(&global)),
+            |path| {
+                opened.set(true);
+                Database::open(path)
+            },
+        )
+        .unwrap();
+
+        assert!(Arc::ptr_eq(&selected, &global));
+        assert!(!opened.get());
+    }
+
+    #[test]
+    fn app_local_data_database_selector_opens_requested_path_when_global_mismatches() {
+        let global_dir = tempfile::tempdir().unwrap();
+        let requested_dir = tempfile::tempdir().unwrap();
+        let global = Arc::new(Database::open(global_dir.path()).unwrap());
+        let opened = Cell::new(false);
+
+        let selected =
+            database_for_app_local_data_dir_or_open(requested_dir.path(), Some(global), |path| {
+                assert_eq!(path, requested_dir.path());
+                opened.set(true);
+                Database::open(path)
+            })
+            .unwrap();
+
+        assert!(opened.get());
+        assert!(selected.is_for_app_local_data_dir(requested_dir.path()));
+    }
+
+    #[test]
     fn load_online_asr_config_reads_sqlite_app_config_before_legacy_settings_file() {
         let app_data = tempfile::tempdir().unwrap();
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::new(Arc::new(db));
-        store
-            .save_config(&serde_json::json!({
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
                 "asr": {
                     "providers": {
                         "online": {
@@ -112,8 +197,8 @@ mod tests {
                         }
                     }
                 }
-            }))
-            .unwrap();
+            }),
+        );
         std::fs::write(
             app_data.path().join("settings.json"),
             r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
@@ -161,9 +246,9 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::new(Arc::new(db));
-        store
-            .save_config(&serde_json::json!({
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
                 "sona-config": {
                     "asr": {
                         "providers": {
@@ -175,8 +260,8 @@ mod tests {
                         }
                     }
                 }
-            }))
-            .unwrap();
+            }),
+        );
 
         let config = load_online_asr_config(&provider);
 
@@ -195,9 +280,9 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::new(Arc::new(db));
-        store
-            .save_config(&serde_json::json!({
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
                 "config": null,
                 "asr": {
                     "providers": {
@@ -208,8 +293,8 @@ mod tests {
                         }
                     }
                 }
-            }))
-            .unwrap();
+            }),
+        );
 
         let config = load_online_asr_config(&provider);
 
@@ -228,9 +313,9 @@ mod tests {
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
         let db = Database::open(app_local_data.path()).unwrap();
-        let store = SqliteConfigStore::new(Arc::new(db));
-        store
-            .save_config(&serde_json::json!({
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
                 "httpServerEnabled": true,
                 "httpServerHost": "0.0.0.0",
                 "httpServerPort": 15555,
@@ -242,8 +327,8 @@ mod tests {
                 "httpServerMaxStreaming": 4,
                 "httpServerIpWhitelist": "127.0.0.1/32",
                 "gpuAcceleration": "cpu"
-            }))
-            .unwrap();
+            }),
+        );
 
         let settings = load_api_server_startup_settings(&provider);
 

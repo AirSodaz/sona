@@ -9,7 +9,8 @@ use sona_core::models::catalog::ModelSummary;
 use sona_core::models::paths::{ModelsDirStatus, status_of};
 use sona_core::models::preset_models::{PresetModel, preset_models};
 use sona_core::ports::fs::{FileMetadata, FileSystem};
-use sona_core::project::{ProjectClock, ProjectIdGenerator};
+use sona_core::ports::time::UnixMillisClock;
+use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::config::{ServeConfigSection, TranscribeConfigSection};
 use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
@@ -55,7 +56,7 @@ impl ProjectIdGenerator for UuidGenerator {
     }
 }
 
-impl ProjectClock for SystemClock {
+impl UnixMillisClock for SystemClock {
     fn now_ms(&self) -> Result<u64, String> {
         let millis = SystemTime::now()
             .duration_since(UNIX_EPOCH)

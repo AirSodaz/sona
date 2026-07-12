@@ -1,22 +1,31 @@
 use serde_json::Value;
+use sona_core::config::AppConfigRepositoryService;
+use sona_runtime_fs::SystemClock;
+use sona_sqlite::{Database, SqliteConfigStore};
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
+fn run_app_config_service<T>(
+    db: Arc<Database>,
+    operation: impl FnOnce(&AppConfigRepositoryService<'_>) -> Result<T, String>,
+) -> Result<T, String> {
+    let store = SqliteConfigStore::new(db);
+    operation(&AppConfigRepositoryService::new(&store, &SystemClock))
+}
+
 pub fn load_config<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Value>, String> {
-    crate::platform::database::sqlite_config_store(app)
-        .load_config()
-        .map_err(|error| error.to_string())
+    let db = crate::platform::database::sqlite_database(app);
+    run_app_config_service(db, |service| service.load_config())
 }
 
 pub fn save_config<R: Runtime>(app: &AppHandle<R>, config: Value) -> Result<(), String> {
-    crate::platform::database::sqlite_config_store(app)
-        .save_config(&config)
-        .map_err(|error| error.to_string())
+    let db = crate::platform::database::sqlite_database(app);
+    run_app_config_service(db, |service| service.save_config(&config))
 }
 
 pub fn get_setting<R: Runtime>(app: &AppHandle<R>, key: String) -> Result<Option<Value>, String> {
-    crate::platform::database::sqlite_config_store(app)
-        .get_setting(&key)
-        .map_err(|error| error.to_string())
+    let db = crate::platform::database::sqlite_database(app);
+    run_app_config_service(db, |service| service.get_setting(&key))
 }
 
 pub fn set_setting<R: Runtime>(
@@ -24,7 +33,70 @@ pub fn set_setting<R: Runtime>(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    crate::platform::database::sqlite_config_store(app)
-        .set_setting(&key, &value)
-        .map_err(|error| error.to_string())
+    let db = crate::platform::database::sqlite_database(app);
+    run_app_config_service(db, |service| service.set_setting(&key, &value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sona_sqlite::Database;
+    use std::sync::Arc;
+
+    fn in_memory_database() -> Arc<Database> {
+        Arc::new(Database::open_in_memory().unwrap())
+    }
+
+    #[test]
+    fn desktop_composition_loads_saves_gets_and_sets_config() {
+        let db = in_memory_database();
+        let config = serde_json::json!({"theme": "dark", "configVersion": 7});
+
+        run_app_config_service(Arc::clone(&db), |service| service.save_config(&config)).unwrap();
+        let loaded = run_app_config_service(Arc::clone(&db), |service| service.load_config())
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.get("theme"), Some(&serde_json::json!("dark")));
+        assert_eq!(loaded.get("configVersion"), Some(&serde_json::json!(7)));
+
+        run_app_config_service(Arc::clone(&db), |service| {
+            service.set_setting("locale", &serde_json::json!({"language": "zh-CN"}))
+        })
+        .unwrap();
+        let setting = run_app_config_service(db, |service| service.get_setting("locale")).unwrap();
+        assert_eq!(setting, Some(serde_json::json!({"language": "zh-CN"})));
+    }
+
+    #[test]
+    fn desktop_composition_preserves_malformed_json_serialization_error_prefix() {
+        let db = in_memory_database();
+        run_app_config_service(Arc::clone(&db), |service| {
+            service.save_config(&serde_json::json!({"theme": "dark"}))
+        })
+        .unwrap();
+        db.with_write_connection(|connection| {
+            connection.execute("UPDATE app_config SET config = '{' WHERE id = 1", [])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let error = run_app_config_service(db, |service| service.load_config()).unwrap_err();
+
+        assert!(error.starts_with("Serialization error: "), "{error}");
+    }
+
+    #[test]
+    fn desktop_composition_propagates_sqlite_store_errors() {
+        let db = in_memory_database();
+        db.with_write_connection(|connection| {
+            connection.execute("DROP TABLE app_settings", [])?;
+            Ok(())
+        })
+        .unwrap();
+
+        let error =
+            run_app_config_service(db, |service| service.get_setting("locale")).unwrap_err();
+
+        assert_eq!(error, "Query error: no such table: app_settings");
+    }
 }

@@ -566,10 +566,10 @@ where
 mod tests {
     use super::*;
     use crate::Database;
+    use sona_core::ports::time::UnixMillisClock;
     use sona_core::project::{
-        ProjectClock, ProjectCreateInput, ProjectDefaultsInput, ProjectDefaultsPatch,
-        ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRepositoryService,
-        ProjectStore,
+        ProjectCreateInput, ProjectDefaultsInput, ProjectDefaultsPatch, ProjectIdGenerator,
+        ProjectListOptions, ProjectPatch, ProjectRepositoryService, ProjectStore,
     };
     use std::path::PathBuf;
 
@@ -1085,7 +1085,7 @@ mod tests {
         }
     }
     struct FixedClock;
-    impl ProjectClock for FixedClock {
+    impl UnixMillisClock for FixedClock {
         fn now_ms(&self) -> Result<u64, String> {
             Ok(777)
         }

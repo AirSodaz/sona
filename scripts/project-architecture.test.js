@@ -11,6 +11,7 @@ import {
   readCargoStringArray,
   repoRoot,
   assertCargoDependencyVersionAndFeature,
+  expectedUniffiExports,
   stripKotlinCommentsAndLiterals,
 } from './test-support/repository.js';
 
@@ -281,7 +282,8 @@ test('project repository policy is shared across hosts', () => {
   const coreRepository = rustProductionView(read('core', 'src', 'project', 'repository.rs'));
   const coreService = rustProductionView(read('core', 'src', 'project', 'service.rs'));
   const coreModule = rustProductionView(read('core', 'src', 'project', 'mod.rs'));
-  const coreProduction = `${coreRepository}\n${coreService}\n${coreModule}`;
+  const coreTime = rustProductionView(read('core', 'src', 'ports', 'time.rs'));
+  const coreProduction = `${coreRepository}\n${coreService}\n${coreModule}\n${coreTime}`;
   const sqliteProject = rustProductionView(read('adapters', 'sqlite', 'src', 'project.rs'));
   const runtimeFs = rustProductionView(read('adapters', 'runtime_fs', 'src', 'lib.rs'));
   const desktopProject = rustProductionView(
@@ -511,7 +513,7 @@ test('project repository policy is shared across hosts', () => {
     assert.match(coreRepository, new RegExp(`fn ${operation}\\(`, 'u'));
   }
   assert.match(coreService, /pub trait ProjectIdGenerator\b/u);
-  assert.match(coreService, /pub trait ProjectClock\b/u);
+  assert.match(coreTime, /pub trait UnixMillisClock\b/u);
   assert.match(coreService, /pub struct ProjectRepositoryService\b/u);
   for (const operation of [
     'load_state',
@@ -542,7 +544,7 @@ test('project repository policy is shared across hosts', () => {
   assert.match(coreService, /fn normalize_replacement_project\(/u);
   assert.match(coreService, /fn snapshot_from_state\(/u);
   assert.match(coreModule, /pub use repository::\{[\s\S]*ProjectStore/u);
-  assert.match(coreModule, /pub use service::\{ProjectClock, ProjectIdGenerator, ProjectRepositoryService\}/u);
+  assert.match(coreModule, /pub use service::\{ProjectIdGenerator, ProjectRepositoryService\}/u);
   assertCoreSourcePurity(coreProduction);
   assertCoreDependencyPurity(
     readCargoDependencyNames(path.join(repoRoot, 'core', 'Cargo.toml'), 'dependencies'),
@@ -564,11 +566,11 @@ test('project repository policy is shared across hosts', () => {
   assert.match(sqliteProject, /with_transaction/u);
   assert.doesNotMatch(
     sqliteProject,
-    /serde_json|\bUuid\b|\buuid::|\bProjectClock\b|\bProjectIdGenerator\b|\bSystemTime\b|\bUNIX_EPOCH\b|\.now_ms\(|\.generate_id\(/u,
+    /serde_json|\bUuid\b|\buuid::|\bUnixMillisClock\b|\bProjectIdGenerator\b|\bSystemTime\b|\bUNIX_EPOCH\b|\.now_ms\(|\.generate_id\(/u,
   );
 
   assert.match(runtimeFs, /impl ProjectIdGenerator for UuidGenerator/u);
-  assert.match(runtimeFs, /impl ProjectClock for SystemClock/u);
+  assert.match(runtimeFs, /impl UnixMillisClock for SystemClock/u);
   assert.match(runtimeFs, /Uuid::new_v4\(\)/u);
   assert.match(runtimeFs, /SystemTime::now\(\)/u);
 
@@ -617,78 +619,10 @@ test('project repository policy is shared across hosts', () => {
   }
   assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
 
-  const projectExports = [
-    'load_project_repository_state_json',
-    'replace_projects_json',
-    'create_project_json',
-    'update_project_json',
-    'delete_project',
-    'reorder_projects_json',
-    'set_active_project_id',
-  ];
-  const completePriorExports = [
-    'load_recovery_snapshot_json',
-    'save_recovery_snapshot_json',
-    'persist_recovery_queue_snapshot_json',
-    'load_task_ledger_snapshot_json',
-    'upsert_task_ledger_record_json',
-    'patch_task_ledger_record_json',
-    'remove_task_ledger_record_json',
-    'clear_resolved_task_ledger_records_json',
-    'load_automation_repository_state_json',
-    'replace_automation_rules_json',
-    'replace_automation_processed_entries_json',
-    'replace_automation_repository_state_json',
-    'validate_automation_rule_activation_json',
-    'normalize_export_format',
-    'default_vad_model_id',
-    'default_punctuation_model_id',
-    'preset_model_name',
-    'preset_models',
-    'model_catalog_snapshot',
-    'model_catalog_selected_ids',
-    'resolve_model_download',
-    'resolve_gpu_acceleration',
-    'default_config_json',
-    'migrate_app_config_json',
-    'resolve_effective_config_json',
-    'runtime_path_status',
-    'create_online_asr_streaming_session',
-    'default_batch_segmentation_mode',
-    'online_asr_providers',
-    'find_online_asr_provider',
-    'online_asr_provider_request',
-    'volcengine_doubao_asr_config_from_json',
-    'llm_providers',
-    'find_llm_provider_by_id_or_alias',
-    'llm_config_from_json',
-    'validate_llm_config_json',
-    'validate_llm_generate_request_json',
-    'validate_polish_segments_request_json',
-    'validate_translate_segments_request_json',
-    'validate_summarize_transcript_request_json',
-    'llm_segment_inputs_from_transcript_json',
-    'summary_segment_inputs_from_transcript_json',
-    'merge_translated_items_into_transcript_json',
-    'merge_polished_items_into_transcript_json',
-    'summary_source_fingerprint_from_transcript_json',
-    'build_polish_prompt_json',
-    'build_translate_prompt_json',
-    'build_summary_chunk_prompt_json',
-    'build_summary_finalize_prompt_json',
-    'plan_polish_prompt_chunks_json',
-    'plan_translate_prompt_chunks_json',
-    'plan_summary_prompt_chunks_json',
-    'parse_polish_chunk_json',
-    'parse_translate_chunk_json',
-    'polish_segments_request_from_json',
-    'translate_segments_request_from_json',
-    'summarize_transcript_request_from_json',
-  ];
   const currentExports = [
     ...uniffiLib.matchAll(/#\[uniffi::export\]\s*pub fn ([a-z0-9_]+)\s*\(/gu),
   ].map((match) => match[1]);
-  assert.deepEqual(currentExports, [...projectExports, ...completePriorExports]);
+  assert.deepEqual(currentExports, expectedUniffiExports);
 
   assert.match(cliLib, /^mod projects;/mu);
   assert.match(cliLib, /Commands::Projects\(args\) => projects::run_projects\(args\)/u);

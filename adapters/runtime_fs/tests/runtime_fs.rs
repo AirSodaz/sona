@@ -1,11 +1,13 @@
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::automation::{AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig};
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::FileSystem;
-use sona_core::project::{ProjectClock, ProjectIdGenerator};
+use sona_core::ports::time::UnixMillisClock;
+use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
@@ -74,15 +76,18 @@ fn uuid_generator_implements_project_id_port() {
     assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
 }
 
+fn accepts_clock(_: &dyn UnixMillisClock) {}
+
 #[test]
-fn system_clock_returns_unix_milliseconds() {
-    let before = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+fn system_clock_implements_shared_unix_millis_port() {
+    accepts_clock(&SystemClock);
+    let before = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    let actual = ProjectClock::now_ms(&SystemClock).unwrap();
-    let after = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let actual = UnixMillisClock::now_ms(&SystemClock).unwrap();
+    let after = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
     assert!((before..=after).contains(&actual));

@@ -1,7 +1,8 @@
 use sha2::{Digest, Sha256};
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
-    ProjectClock, ProjectCreateInput, ProjectDefaultsInput, ProjectIdGenerator,
-    ProjectRepositoryService, ProjectRepositorySnapshot,
+    ProjectCreateInput, ProjectDefaultsInput, ProjectIdGenerator, ProjectRepositoryService,
+    ProjectRepositorySnapshot,
 };
 use sona_sqlite::{Database, SqliteProjectRepository};
 use std::path::Path;
@@ -18,7 +19,7 @@ impl ProjectIdGenerator for SequenceIds {
 
 struct SequenceClock(Mutex<Vec<u64>>);
 
-impl ProjectClock for SequenceClock {
+impl UnixMillisClock for SequenceClock {
     fn now_ms(&self) -> Result<u64, String> {
         Ok(self.0.lock().unwrap().remove(0))
     }

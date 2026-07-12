@@ -1,3 +1,4 @@
+mod app_config_repository_bridge;
 mod asr_bridge;
 mod asr_streaming_bridge;
 mod automation_bridge;
@@ -49,6 +50,8 @@ pub enum SonaCoreBindingError {
     Project { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
+    #[error("{reason}")]
+    ConfigRepository { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -311,6 +314,36 @@ pub fn resolve_effective_config_json(
     project_json: Option<String>,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::resolve_effective_config_json(global_config_json, project_json)
+}
+
+#[uniffi::export]
+pub fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
+    SonaCoreFacade::load_app_config_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn save_app_config_json(
+    app_data_dir: String,
+    config_json: String,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::save_app_config_json(app_data_dir, config_json)
+}
+
+#[uniffi::export]
+pub fn get_app_setting_json(
+    app_data_dir: String,
+    key: String,
+) -> SonaCoreBindingResult<Option<String>> {
+    SonaCoreFacade::get_app_setting_json(app_data_dir, key)
+}
+
+#[uniffi::export]
+pub fn set_app_setting_json(
+    app_data_dir: String,
+    key: String,
+    value_json: String,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::set_app_setting_json(app_data_dir, key, value_json)
 }
 
 #[uniffi::export]

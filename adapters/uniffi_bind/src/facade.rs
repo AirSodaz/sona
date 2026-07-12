@@ -5,9 +5,10 @@ use crate::{
     FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
     FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, asr_bridge,
-    asr_streaming_bridge, automation_bridge, config_bridge, llm_bridge, model_bridge,
-    project_bridge, recovery_bridge, runtime_bridge, task_ledger_bridge,
+    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
+    app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
+    config_bridge, llm_bridge, model_bridge, project_bridge, recovery_bridge, runtime_bridge,
+    task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -224,6 +225,32 @@ impl SonaCoreFacade {
         project_json: Option<String>,
     ) -> SonaCoreBindingResult<String> {
         config_bridge::resolve_effective_config_json(global_config_json, project_json)
+    }
+
+    pub fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
+        app_config_repository_bridge::load_app_config_json(app_data_dir)
+    }
+
+    pub fn save_app_config_json(
+        app_data_dir: String,
+        config_json: String,
+    ) -> SonaCoreBindingResult<()> {
+        app_config_repository_bridge::save_app_config_json(app_data_dir, config_json)
+    }
+
+    pub fn get_app_setting_json(
+        app_data_dir: String,
+        key: String,
+    ) -> SonaCoreBindingResult<Option<String>> {
+        app_config_repository_bridge::get_app_setting_json(app_data_dir, key)
+    }
+
+    pub fn set_app_setting_json(
+        app_data_dir: String,
+        key: String,
+        value_json: String,
+    ) -> SonaCoreBindingResult<()> {
+        app_config_repository_bridge::set_app_setting_json(app_data_dir, key, value_json)
     }
 
     pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {

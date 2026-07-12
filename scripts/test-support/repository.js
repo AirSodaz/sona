@@ -17,6 +17,85 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
 const desktopCrateSegments = ['platforms', 'desktop'];
 const desktopCratePath = (...segments) => path.join(repoRoot, ...desktopCrateSegments, ...segments);
+const expectedUniffiExports = Object.freeze([
+  'load_project_repository_state_json',
+  'replace_projects_json',
+  'create_project_json',
+  'update_project_json',
+  'delete_project',
+  'reorder_projects_json',
+  'set_active_project_id',
+  'load_recovery_snapshot_json',
+  'save_recovery_snapshot_json',
+  'persist_recovery_queue_snapshot_json',
+  'load_task_ledger_snapshot_json',
+  'upsert_task_ledger_record_json',
+  'patch_task_ledger_record_json',
+  'remove_task_ledger_record_json',
+  'clear_resolved_task_ledger_records_json',
+  'load_automation_repository_state_json',
+  'replace_automation_rules_json',
+  'replace_automation_processed_entries_json',
+  'replace_automation_repository_state_json',
+  'validate_automation_rule_activation_json',
+  'normalize_export_format',
+  'default_vad_model_id',
+  'default_punctuation_model_id',
+  'preset_model_name',
+  'preset_models',
+  'model_catalog_snapshot',
+  'model_catalog_selected_ids',
+  'resolve_model_download',
+  'resolve_gpu_acceleration',
+  'default_config_json',
+  'migrate_app_config_json',
+  'resolve_effective_config_json',
+  'load_app_config_json',
+  'save_app_config_json',
+  'get_app_setting_json',
+  'set_app_setting_json',
+  'runtime_path_status',
+  'create_online_asr_streaming_session',
+  'default_batch_segmentation_mode',
+  'online_asr_providers',
+  'find_online_asr_provider',
+  'online_asr_provider_request',
+  'volcengine_doubao_asr_config_from_json',
+  'llm_providers',
+  'find_llm_provider_by_id_or_alias',
+  'llm_config_from_json',
+  'validate_llm_config_json',
+  'validate_llm_generate_request_json',
+  'validate_polish_segments_request_json',
+  'validate_translate_segments_request_json',
+  'validate_summarize_transcript_request_json',
+  'llm_segment_inputs_from_transcript_json',
+  'summary_segment_inputs_from_transcript_json',
+  'merge_translated_items_into_transcript_json',
+  'merge_polished_items_into_transcript_json',
+  'summary_source_fingerprint_from_transcript_json',
+  'build_polish_prompt_json',
+  'build_translate_prompt_json',
+  'build_summary_chunk_prompt_json',
+  'build_summary_finalize_prompt_json',
+  'plan_polish_prompt_chunks_json',
+  'plan_translate_prompt_chunks_json',
+  'plan_summary_prompt_chunks_json',
+  'parse_polish_chunk_json',
+  'parse_translate_chunk_json',
+  'polish_segments_request_from_json',
+  'translate_segments_request_from_json',
+  'summarize_transcript_request_from_json',
+]);
+const expectedUniffiErrorVariants = Object.freeze([
+  'InvalidInput',
+  'Recovery',
+  'TaskLedger',
+  'Automation',
+  'Project',
+  'AsrRuntime',
+  'ConfigRepository',
+]);
 const desktopFrontendDependencies = [
   '@dnd-kit/core',
   '@dnd-kit/modifiers',
@@ -233,12 +312,233 @@ function assertCargoDependencyVersionAndFeature(
   assert.ok(features.includes(expectedFeature), `${dependencyName} must enable ${expectedFeature}`);
 }
 
+function rustCharacterLiteralAt(source, index) {
+  return /^(?:b)?'(?:\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f_]{1,6}\}|[nrt0\\'"])|[^'\\\r\n])'/u
+    .exec(source.slice(index));
+}
+
 function stripRustComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//gu, '')
-    .split(/\r?\n/u)
-    .map(stripRustLineComment)
-    .join('\n');
+  const stripped = source.split('');
+  const blank = (index) => {
+    if (stripped[index] !== '\n') stripped[index] = ' ';
+  };
+
+  for (let index = 0; index < source.length;) {
+    const rawString = /^(?:br|rb|r)(#*)"/u.exec(source.slice(index));
+    if (rawString) {
+      const closing = `"${rawString[1]}`;
+      const end = source.indexOf(closing, index + rawString[0].length);
+      index = end === -1 ? source.length : end + closing.length;
+      continue;
+    }
+    const quoteOffset = source[index] === 'b' && source[index + 1] === '"' ? 1 : 0;
+    if (source[index + quoteOffset] === '"') {
+      index += quoteOffset + 1;
+      while (index < source.length) {
+        if (source[index] === '\\') index += 2;
+        else if (source[index++] === '"') break;
+      }
+      continue;
+    }
+    const character = rustCharacterLiteralAt(source, index);
+    if (character) {
+      index += character[0].length;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      while (index < source.length && source[index] !== '\n') blank(index++);
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      let depth = 0;
+      while (index < source.length) {
+        if (source.startsWith('/*', index)) {
+          blank(index++);
+          blank(index++);
+          depth += 1;
+        } else if (source.startsWith('*/', index)) {
+          blank(index++);
+          blank(index++);
+          depth -= 1;
+          if (depth === 0) break;
+        } else {
+          blank(index++);
+        }
+      }
+      continue;
+    }
+    index += 1;
+  }
+  return stripped.join('');
+}
+
+function maskRustLiterals(source) {
+  const masked = source.split('');
+  const maskRange = (start, end) => {
+    for (let index = start; index < end; index += 1) {
+      if (masked[index] !== '\n') masked[index] = ' ';
+    }
+  };
+
+  for (let index = 0; index < source.length;) {
+    const rawString = /^(?:br|rb|r)(#*)"/u.exec(source.slice(index));
+    if (rawString) {
+      const closing = `"${rawString[1]}`;
+      const end = source.indexOf(closing, index + rawString[0].length);
+      const literalEnd = end === -1 ? source.length : end + closing.length;
+      maskRange(index, literalEnd);
+      index = literalEnd;
+      continue;
+    }
+
+    const quoteOffset = source[index] === 'b' && source[index + 1] === '"' ? 1 : 0;
+    if (source[index + quoteOffset] === '"') {
+      let end = index + quoteOffset + 1;
+      while (end < source.length) {
+        if (source[end] === '\\') end += 2;
+        else if (source[end++] === '"') break;
+      }
+      maskRange(index, end);
+      index = end;
+      continue;
+    }
+
+    const character = rustCharacterLiteralAt(source, index);
+    if (character) {
+      maskRange(index, index + character[0].length);
+      index += character[0].length;
+      continue;
+    }
+    index += 1;
+  }
+  return masked.join('');
+}
+
+function rustCfgMemberContext(structural, markerIndex) {
+  const delimiters = [];
+  for (let index = 0; index < markerIndex; index += 1) {
+    if (structural[index] === '{' || structural[index] === '(') {
+      delimiters.push({ character: structural[index], index });
+    } else if (structural[index] === '}' || structural[index] === ')') {
+      delimiters.pop();
+    }
+  }
+  const owner = delimiters.at(-1);
+  if (owner?.character === '(') {
+    return { commaTerminated: true, parenthesisOwner: true };
+  }
+  if (owner?.character !== '{') {
+    return { commaTerminated: false, parenthesisOwner: false };
+  }
+
+  const previousBoundary = Math.max(
+    structural.lastIndexOf('{', owner.index - 1),
+    structural.lastIndexOf('}', owner.index - 1),
+    structural.lastIndexOf(';', owner.index - 1),
+  );
+  const ownerHeader = structural.slice(previousBoundary + 1, owner.index);
+  const parent = delimiters.at(-2);
+  let parentHeader = '';
+  if (parent?.character === '{') {
+    const parentBoundary = Math.max(
+      structural.lastIndexOf('{', parent.index - 1),
+      structural.lastIndexOf('}', parent.index - 1),
+      structural.lastIndexOf(';', parent.index - 1),
+    );
+    parentHeader = structural.slice(parentBoundary + 1, parent.index);
+  }
+  return {
+    commaTerminated: /\b(?:struct|enum|union)\b/u.test(ownerHeader)
+      || /\benum\b/u.test(parentHeader),
+    parenthesisOwner: false,
+  };
+}
+
+function rustProductionView(source) {
+  let production = stripRustComments(source);
+  const structural = maskRustLiterals(production);
+  const removals = [];
+
+  for (const marker of structural.matchAll(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/gu)) {
+    const { commaTerminated, parenthesisOwner } = rustCfgMemberContext(
+      structural,
+      marker.index,
+    );
+    let parentheses = 0;
+    let brackets = 0;
+    let angles = 0;
+    let memberBraces = 0;
+    let memberInitializer = false;
+    let itemEnd = structural.length;
+
+    for (let index = marker.index + marker[0].length; index < structural.length; index += 1) {
+      const character = structural[index];
+      if (character === '(') parentheses += 1;
+      else if (character === ')' && parenthesisOwner && parentheses === 0) {
+        itemEnd = index;
+        break;
+      } else if (character === ')') parentheses -= 1;
+      else if (character === '[') brackets += 1;
+      else if (character === ']') brackets -= 1;
+      else if (commaTerminated && angles > 0 && character === '{') memberBraces += 1;
+      else if (commaTerminated && memberBraces > 0 && character === '}') memberBraces -= 1;
+      else if (
+        commaTerminated
+        && parentheses === 0
+        && brackets === 0
+        && angles === 0
+        && character === '='
+      ) {
+        memberInitializer = true;
+      } else if (
+        commaTerminated
+        && character === '<'
+        && memberBraces === 0
+        && (
+          !memberInitializer
+          || angles > 0
+          || structural.slice(marker.index, index).trimEnd().endsWith('::')
+        )
+      ) angles += 1;
+      else if (
+        commaTerminated
+        && memberBraces === 0
+        && character === '>'
+        && angles > 0
+      ) angles -= 1;
+      else if (
+        commaTerminated
+        && parentheses === 0
+        && brackets === 0
+        && angles === 0
+        && memberBraces === 0
+        && character === ','
+      ) {
+        itemEnd = index + 1;
+        break;
+      } else if (parentheses === 0 && brackets === 0 && angles === 0 && character === ';') {
+        itemEnd = index + 1;
+        break;
+      } else if (parentheses === 0 && brackets === 0 && angles === 0 && character === '{') {
+        let braces = 1;
+        for (index += 1; index < structural.length && braces > 0; index += 1) {
+          if (structural[index] === '{') braces += 1;
+          else if (structural[index] === '}') braces -= 1;
+        }
+        while (/\s/u.test(structural[index] ?? '')) index += 1;
+        if (structural[index] === ',') index += 1;
+        itemEnd = index;
+        break;
+      }
+    }
+    removals.push([marker.index, itemEnd]);
+  }
+
+  for (const [start, end] of removals.reverse()) {
+    const whitespace = production.slice(start, end).replace(/[^\n]/gu, ' ');
+    production = `${production.slice(0, start)}${whitespace}${production.slice(end)}`;
+  }
+  return production;
 }
 
 function readRustFunctionBlock(source, functionName) {
@@ -643,4 +943,4 @@ function readWorkflowBuildTauriSteps(workflowName) {
   return steps;
 }
 
-export { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, desktopFrontendDependencies, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoDependencyEntries, readCargoStringArray, stripTomlLineComment, assertCargoDependencyVersionAndFeature, stripRustComments, readRustFunctionBlock, readJavaScriptFunctionBlock, readKotlinFunctionItem, readKotlinObjectBlock, readKotlinDirectFunctionItem, stripKotlinCommentsAndLiterals, assertKotlinRecoveryImport, assertKotlinRecoveryCall, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke, scanRustSourcePolicyViolations, stripRustLineComment, readWorkflowStep, readWorkflowStepIndex, readWorkflowBuildTauriSteps };
+export { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, desktopFrontendDependencies, expectedUniffiExports, expectedUniffiErrorVariants, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoDependencyEntries, readCargoStringArray, stripTomlLineComment, assertCargoDependencyVersionAndFeature, stripRustComments, rustProductionView, readRustFunctionBlock, readJavaScriptFunctionBlock, readKotlinFunctionItem, readKotlinObjectBlock, readKotlinDirectFunctionItem, stripKotlinCommentsAndLiterals, assertKotlinRecoveryImport, assertKotlinRecoveryCall, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke, scanRustSourcePolicyViolations, stripRustLineComment, readWorkflowStep, readWorkflowStepIndex, readWorkflowBuildTauriSteps };

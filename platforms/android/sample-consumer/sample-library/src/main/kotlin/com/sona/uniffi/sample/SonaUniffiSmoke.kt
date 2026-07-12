@@ -12,6 +12,7 @@ import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.createProjectJson
 import uniffi.sona_uniffi_bind.defaultConfigJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
+import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadProjectRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
@@ -19,6 +20,7 @@ import uniffi.sona_uniffi_bind.parsePolishChunkJson
 import uniffi.sona_uniffi_bind.persistRecoveryQueueSnapshotJson
 import uniffi.sona_uniffi_bind.planPolishPromptChunksJson
 import uniffi.sona_uniffi_bind.saveRecoverySnapshotJson
+import uniffi.sona_uniffi_bind.saveAppConfigJson
 import uniffi.sona_uniffi_bind.upsertTaskLedgerRecordJson
 import uniffi.sona_uniffi_bind.validateAutomationRuleActivationJson
 
@@ -90,6 +92,11 @@ object SonaUniffiSmoke {
 
     fun loadAutomation(appDataDir: String): String =
         loadAutomationRepositoryStateJson(appDataDir)
+
+    fun loadAppConfig(appDataDir: String): String? = loadAppConfigJson(appDataDir)
+
+    fun saveAppConfig(appDataDir: String, configJson: String) =
+        saveAppConfigJson(appDataDir, configJson)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

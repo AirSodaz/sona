@@ -1,8 +1,7 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
-use sona_core::project::{
-    ProjectClock, ProjectCreateInput, ProjectIdGenerator, ProjectRepositoryService,
-};
+use sona_core::ports::time::UnixMillisClock;
+use sona_core::project::{ProjectCreateInput, ProjectIdGenerator, ProjectRepositoryService};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{Database, SqliteProjectRepository};
 use std::path::Path;
@@ -79,7 +78,7 @@ fn create_project_json_with_runtime(
     app_data_dir: String,
     input_json: String,
     ids: &dyn ProjectIdGenerator,
-    clock: &dyn ProjectClock,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let input = parse_json_object_as::<ProjectCreateInput>("project input", &input_json)?;
     with_project_repository(&app_data_dir, ids, clock, |service| {
@@ -92,7 +91,7 @@ fn update_project_json_with_clock(
     app_data_dir: String,
     project_id: String,
     updates_json: String,
-    clock: &dyn ProjectClock,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let project_id = parse_project_id("project ID", &project_id)?;
     let updates = parse_json_object("project updates", &updates_json)?;
@@ -105,7 +104,7 @@ fn update_project_json_with_clock(
 fn with_project_repository<T, F>(
     app_data_dir: &str,
     ids: &dyn ProjectIdGenerator,
-    clock: &dyn ProjectClock,
+    clock: &dyn UnixMillisClock,
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
@@ -222,7 +221,7 @@ fn update_project_json_at(
 struct FixedClock(u64);
 
 #[cfg(test)]
-impl ProjectClock for FixedClock {
+impl UnixMillisClock for FixedClock {
     fn now_ms(&self) -> Result<u64, String> {
         Ok(self.0)
     }

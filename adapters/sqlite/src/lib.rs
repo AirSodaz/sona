@@ -308,6 +308,13 @@ impl From<DatabaseError> for sona_core::history_store::HistoryStoreError {
 }
 
 impl Database {
+    pub fn global_arc() -> Result<Arc<Database>, DatabaseError> {
+        GLOBAL_DB
+            .get()
+            .map(Arc::clone)
+            .ok_or_else(|| DatabaseError::Internal("Database not initialized".to_string()))
+    }
+
     pub fn global() -> Result<&'static Database, DatabaseError> {
         GLOBAL_DB
             .get()

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { repoRoot, read, exists, assertCargoDependencyVersionAndFeature, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke } from './test-support/repository.js';
+import { repoRoot, read, exists, expectedUniffiErrorVariants, assertCargoDependencyVersionAndFeature, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke } from './test-support/repository.js';
 import { node, androidNdkAbiCases, androidNdkToolPaths, runAndroidNdkPrint } from './test-support/android-ndk-fixtures.js';
 
 test('android uniffi sample publishes a consumable local Maven artifact', () => {
@@ -531,6 +531,59 @@ test('core config migration surface is exposed through UniFFI JSON bridge', () =
   assert.match(uniffiConfigMapper, /pub struct FfiConfigMigrationResult/u);
   assert.match(uniffiConfigMapper, /pub config_json: String/u);
   assert.match(uniffiConfigMapper, /pub migrated: bool/u);
+});
+
+test('app config repository persistence is exposed through UniFFI and Android bindings', () => {
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
+  const repositoryBridgePath = path.join(
+    repoRoot,
+    'adapters',
+    'uniffi_bind',
+    'src',
+    'app_config_repository_bridge.rs',
+  );
+  const repositoryBridge = fs.readFileSync(repositoryBridgePath, 'utf8');
+  const androidSample = read(
+    'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+  );
+  const exports = [
+    'load_app_config_json',
+    'save_app_config_json',
+    'get_app_setting_json',
+    'set_app_setting_json',
+  ];
+
+  assert.match(uniffiLib, /^mod app_config_repository_bridge;/mu);
+  assert.match(uniffiLib, /ConfigRepository\s*\{\s*reason: String\s*\}/u);
+  const errorBody = /pub enum SonaCoreBindingError\s*\{([\s\S]*?)\n\}/u
+    .exec(uniffiLib)?.[1] ?? assert.fail('missing SonaCoreBindingError');
+  const errorVariants = [
+    ...errorBody.matchAll(/^\s*([A-Z][A-Za-z0-9_]*)\s*\{/gmu),
+  ].map((match) => match[1]);
+  assert.deepEqual(errorVariants, expectedUniffiErrorVariants);
+  for (const exportName of exports) {
+    assert.match(uniffiLib, new RegExp(`pub fn ${exportName}\\(`, 'u'));
+    assert.match(uniffiLib, new RegExp(`SonaCoreFacade::${exportName}\\(`, 'u'));
+    assert.match(uniffiFacade, new RegExp(`pub fn ${exportName}\\(`, 'u'));
+    assert.match(
+      uniffiFacade,
+      new RegExp(`app_config_repository_bridge::${exportName}\\(`, 'u'),
+    );
+    assert.match(repositoryBridge, new RegExp(`pub\\(crate\\) fn ${exportName}\\(`, 'u'));
+  }
+
+  assert.match(androidSample, /^import uniffi\.sona_uniffi_bind\.loadAppConfigJson$/mu);
+  assert.match(androidSample, /^import uniffi\.sona_uniffi_bind\.saveAppConfigJson$/mu);
+  assert.match(androidSample, /loadAppConfigJson\(appDataDir\)/u);
+  assert.match(androidSample, /saveAppConfigJson\(appDataDir, configJson\)/u);
+  assert.match(androidConsumer, /^import uniffi\.sona_uniffi_bind\.loadAppConfigJson$/mu);
+  assert.match(androidConsumer, /loadAppConfigJson\(appDataDir\)/u);
 });
 
 test('UniFFI config bridge is isolated from the top-level binding facade', () => {

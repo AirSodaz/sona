@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoStringArray, assertCargoDependencyVersionAndFeature, stripRustComments, stripKotlinCommentsAndLiterals, scanRustSourcePolicyViolations } from './test-support/repository.js';
+import { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, expectedUniffiExports, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoStringArray, assertCargoDependencyVersionAndFeature, rustProductionView, stripRustComments, stripKotlinCommentsAndLiterals, scanRustSourcePolicyViolations } from './test-support/repository.js';
 import { makeTempRepo } from './test-support/desktop-packaging-fixtures.js';
 
 test('core crate does not keep sona-cli config template surface', () => {
@@ -821,7 +821,12 @@ test('app config migration and LLM provider manifest are owned by core', () => {
   assert.match(coreDefaults, /crate::ports::asr::online_asr_providers/u);
   assert.match(coreMigration, /crate::llm::providers::find_llm_provider_by_id_or_alias/u);
   assert.match(desktopSystemCommand, /sona_core::config::migrate_app_config/u);
-  assert.match(platformApiServerConfig, /sona_sqlite::config_store::\{/u);
+  assert.match(platformApiServerConfig, /use sona_core::config::AppConfigRepositoryService;/u);
+  assert.match(
+    platformApiServerConfig,
+    /use sona_sqlite::\{Database, DatabaseError, SqliteConfigStore\};/u,
+  );
+  assert.match(platformApiServerConfig, /AppConfigRepositoryService::new\(&store, &SystemClock\)/u);
   assert.doesNotMatch(desktopServerRuntime, /sona_sqlite::config_store/u);
   assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config'), false);
   assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'defaults.rs'), false);
@@ -871,52 +876,19 @@ test('SQLite database handle and schema are owned by sqlite adapter', () => {
   assert.doesNotMatch(desktopSetup, /pub struct Database/u);
 });
 
-test('SQLite config and task ledger stores are owned by sqlite adapter', () => {
+test('SQLite task ledger store is owned by sqlite adapter', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
   const desktopSystemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
-  const platformDatabase = read(...desktopCrateSegments, 'src', 'platform', 'database.rs');
-  const platformAppConfigPath = desktopCratePath('src', 'platform', 'app_config.rs');
   const taskLedgerRepositoryPath = desktopCratePath('src', 'platform', 'task_ledger_repository.rs');
 
-  assert.ok(exists('adapters', 'sqlite', 'src', 'config_store.rs'));
   assert.ok(exists('adapters', 'sqlite', 'src', 'task_ledger.rs'));
-  assert.equal(fs.existsSync(platformAppConfigPath), true);
   assert.equal(fs.existsSync(taskLedgerRepositoryPath), true);
-  const platformAppConfig = fs.readFileSync(platformAppConfigPath, 'utf8');
   const platformTaskLedgerRepository = fs.readFileSync(taskLedgerRepositoryPath, 'utf8');
-  assert.match(sqliteLib, /^pub mod config_store;/mu);
   assert.match(sqliteLib, /^pub mod task_ledger;/mu);
-  assert.match(sqliteLib, /^pub use config_store::SqliteConfigStore;/mu);
   assert.match(sqliteLib, /^pub use task_ledger::SqliteLedgerRepository;/mu);
-  assert.match(platformDatabase, /sona_sqlite::config_store::SqliteConfigStore/u);
-  assert.match(platformAppConfig, /crate::platform::database::sqlite_config_store/u);
   assert.match(platformTaskLedgerRepository, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
-  assert.doesNotMatch(desktopSystemCommand, /crate::platform::database::sqlite_config_store/u);
   assert.doesNotMatch(desktopSystemCommand, /sona_sqlite::task_ledger::SqliteLedgerRepository/u);
-  assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'config', 'sqlite_store.rs'), false);
   assert.equal(exists(...desktopCrateSegments, 'src', 'core', 'task_ledger', 'sqlite_repository.rs'), false);
-});
-
-test('desktop app config store commands delegate to platform adapter', () => {
-  const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
-  const systemCommand = read(...desktopCrateSegments, 'src', 'commands', 'system.rs');
-  const platformAppConfigPath = desktopCratePath('src', 'platform', 'app_config.rs');
-
-  assert.equal(fs.existsSync(platformAppConfigPath), true);
-  const platformAppConfig = fs.readFileSync(platformAppConfigPath, 'utf8');
-
-  assert.match(platformMod, /^pub mod app_config;/mu);
-  assert.match(platformAppConfig, /pub fn load_config/u);
-  assert.match(platformAppConfig, /pub fn save_config/u);
-  assert.match(platformAppConfig, /pub fn get_setting/u);
-  assert.match(platformAppConfig, /pub fn set_setting/u);
-  assert.match(platformAppConfig, /crate::platform::database::sqlite_config_store/u);
-  assert.match(systemCommand, /crate::platform::app_config::load_config\(&app\)/u);
-  assert.match(systemCommand, /crate::platform::app_config::save_config\(&app, config\)/u);
-  assert.match(systemCommand, /crate::platform::app_config::get_setting\(&app, key\)/u);
-  assert.match(systemCommand, /crate::platform::app_config::set_setting\(&app, key, value\)/u);
-  assert.doesNotMatch(systemCommand, /sqlite_config_store/u);
-  assert.doesNotMatch(systemCommand, /SqliteConfigStore/u);
 });
 
 test('desktop task ledger repository adapter lives in platform layer', () => {
@@ -1089,9 +1061,6 @@ test('automation application policy is shared across hosts', () => {
     'consumer',
     'SonaUniffiConsumerSmoke.kt',
   );
-  const rustProductionView = (source) => stripRustComments(
-    source.split(/#\[cfg\(test\)\]/u)[0],
-  );
   const coreStoreProduction = rustProductionView(coreStore);
   const coreServiceProduction = rustProductionView(coreService);
   const coreProduction = `${coreStoreProduction}\n${coreServiceProduction}`;
@@ -1249,48 +1218,6 @@ sona-sqlite = { path = "../sqlite" }
     'load_automation_repository_state_json', 'replace_automation_rules_json',
     'replace_automation_processed_entries_json', 'replace_automation_repository_state_json',
     'validate_automation_rule_activation_json',
-  ];
-  const projectExports = [
-    'load_project_repository_state_json', 'replace_projects_json',
-    'create_project_json', 'update_project_json', 'delete_project',
-    'reorder_projects_json', 'set_active_project_id',
-  ];
-  const preExistingUniffiExports = [
-    'load_recovery_snapshot_json', 'save_recovery_snapshot_json',
-    'persist_recovery_queue_snapshot_json', 'load_task_ledger_snapshot_json',
-    'upsert_task_ledger_record_json', 'patch_task_ledger_record_json',
-    'remove_task_ledger_record_json', 'clear_resolved_task_ledger_records_json',
-    'normalize_export_format', 'default_vad_model_id',
-    'default_punctuation_model_id', 'preset_model_name',
-    'preset_models', 'model_catalog_snapshot',
-    'model_catalog_selected_ids', 'resolve_model_download',
-    'resolve_gpu_acceleration', 'default_config_json',
-    'migrate_app_config_json', 'resolve_effective_config_json',
-    'runtime_path_status', 'create_online_asr_streaming_session',
-    'default_batch_segmentation_mode', 'online_asr_providers',
-    'find_online_asr_provider', 'online_asr_provider_request',
-    'volcengine_doubao_asr_config_from_json', 'llm_providers',
-    'find_llm_provider_by_id_or_alias', 'llm_config_from_json',
-    'validate_llm_config_json', 'validate_llm_generate_request_json',
-    'validate_polish_segments_request_json', 'validate_translate_segments_request_json',
-    'validate_summarize_transcript_request_json', 'llm_segment_inputs_from_transcript_json',
-    'summary_segment_inputs_from_transcript_json', 'merge_translated_items_into_transcript_json',
-    'merge_polished_items_into_transcript_json', 'summary_source_fingerprint_from_transcript_json',
-    'build_polish_prompt_json', 'build_translate_prompt_json',
-    'build_summary_chunk_prompt_json', 'build_summary_finalize_prompt_json',
-    'plan_polish_prompt_chunks_json', 'plan_translate_prompt_chunks_json',
-    'plan_summary_prompt_chunks_json', 'parse_polish_chunk_json',
-    'parse_translate_chunk_json', 'polish_segments_request_from_json',
-    'translate_segments_request_from_json', 'summarize_transcript_request_from_json',
-  ];
-  const automationExportInsertionIndex = preExistingUniffiExports.indexOf(
-    'normalize_export_format',
-  );
-  const expectedUniffiExports = [
-    ...projectExports,
-    ...preExistingUniffiExports.slice(0, automationExportInsertionIndex),
-    ...automationExports,
-    ...preExistingUniffiExports.slice(automationExportInsertionIndex),
   ];
   const currentUniffiExports = [
     ...uniffiLibProduction.matchAll(/#\[uniffi::export\]\s*pub fn ([a-z0-9_]+)\s*\(/gu),
@@ -1467,7 +1394,7 @@ test('SQLite project repository is owned by sqlite adapter', () => {
   assert.ok(fs.existsSync(platformDatabasePath));
   assert.match(platformMod, /^pub mod database;/mu);
   assert.match(platformDatabase, /pub fn sqlite_database/u);
-  assert.match(platformDatabase, /pub fn sqlite_config_store/u);
+  assert.doesNotMatch(platformDatabase, /sqlite_config_store|SqliteConfigStore/u);
   assert.match(platformDatabase, /app\.state::<Arc<sona_sqlite::Database>>\(\)/u);
   assert.match(platformProjectRepository, /sona_sqlite::project::SqliteProjectRepository/u);
   assert.match(platformProjectRepository, /ProjectRepositoryService::new/u);

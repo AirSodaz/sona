@@ -9,6 +9,7 @@ import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.defaultConfigJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
+import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadProjectRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
@@ -63,6 +64,8 @@ object SonaUniffiConsumerSmoke {
 
     fun loadAutomation(appDataDir: String): String =
         loadAutomationRepositoryStateJson(appDataDir)
+
+    fun loadAppConfig(appDataDir: String): String? = loadAppConfigJson(appDataDir)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

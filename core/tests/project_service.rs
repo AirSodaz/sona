@@ -1,10 +1,11 @@
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
-    ActiveProjectSelection, ProjectClock, ProjectCreateInput, ProjectDefaults,
-    ProjectDefaultsInput, ProjectDefaultsPatch, ProjectIdGenerator, ProjectListOptions,
-    ProjectPatch, ProjectRecord, ProjectRepositoryService, ProjectStore, ProjectStoredState,
+    ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
+    ProjectDefaultsPatch, ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord,
+    ProjectRepositoryService, ProjectStore, ProjectStoredState,
 };
 
 #[derive(Default)]
@@ -122,7 +123,7 @@ impl ProjectIdGenerator for SequenceIds {
 
 struct FixedClock(u64);
 
-impl ProjectClock for FixedClock {
+impl UnixMillisClock for FixedClock {
     fn now_ms(&self) -> Result<u64, String> {
         Ok(self.0)
     }
@@ -149,7 +150,7 @@ impl RecordingClock {
     }
 }
 
-impl ProjectClock for RecordingClock {
+impl UnixMillisClock for RecordingClock {
     fn now_ms(&self) -> Result<u64, String> {
         *self.calls.lock().unwrap() += 1;
         self.result.clone()
@@ -159,7 +160,7 @@ impl ProjectClock for RecordingClock {
 fn service<'a>(
     store: &'a MemoryProjectStore,
     ids: &'a SequenceIds,
-    clock: &'a dyn ProjectClock,
+    clock: &'a dyn UnixMillisClock,
 ) -> ProjectRepositoryService<'a> {
     ProjectRepositoryService::new(store, ids, clock)
 }
