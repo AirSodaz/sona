@@ -245,7 +245,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.match(cliCargo, /sona-runtime-fs\s*=\s*\{\s*path = "\.\.\/\.\.\/adapters\/runtime_fs" \}/u);
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
 
   assert.doesNotMatch(coreCargo, /^glob\s*=/mu);
@@ -343,7 +343,7 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
 
   assert.match(
     prWorkflow,
-    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
+    /cargo test -p sona-core -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli/u,
   );
   assertPrRecoveryCoverage(prWorkflow);
   assert.match(prWorkflow, /cargo test -p sona-core --test preset_models/u);
@@ -436,10 +436,10 @@ test('usage and workspace date windows are supplied by sqlite adapters', () => {
   assert.match(sqliteLlmUsage, /Local::now\(\)\.date_naive\(\)/u);
 
   assert.match(coreWorkspaceQuery, /pub struct HistoryWorkspaceDateFilterThresholds/u);
-  assert.match(coreWorkspaceQuery, /query_workspace_items_at/u);
-  assert.match(coreWorkspaceQuery, /query_workspace_items_with_counts_at/u);
+  assert.match(coreWorkspaceQuery, /query_workspace_items_at[\s\S]*query_workspace_items_with_counts_at[\s\S]*workspace_search_fields_match[\s\S]*workspace_item_search_match/u);
   assert.doesNotMatch(coreWorkspaceQuery, /Local::now|chrono::Local::now|with_ymd_and_hms|timestamp_millis_opt/u);
-  assert.match(sqliteHistoryStore, /query_workspace_items_with_counts_at/u);
+  assert.match(sqliteHistoryStore, /query_workspace[\s\S]*unchecked_transaction\(\)[\s\S]*workspace_match_query_parts[\s\S]*ORDER BY \{\} LIMIT \? OFFSET \?/u);
+  assert.doesNotMatch(sqliteHistoryStore, /history_items_fts MATCH/u);
   assert.match(sqliteHistoryStore, /Local::now\(\)/u);
 });
 

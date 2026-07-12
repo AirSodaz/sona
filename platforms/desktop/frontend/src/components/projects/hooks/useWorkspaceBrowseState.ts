@@ -100,7 +100,6 @@ export function useWorkspaceBrowseState({
     historyItems,
   });
 
-  const scopedItems = workspaceQueryResult.scopedItems;
   const filteredAndSortedItems = workspaceQueryResult.filteredItems;
 
   const searchMatchByItemId = useMemo(
@@ -168,7 +167,8 @@ export function useWorkspaceBrowseState({
     setSortOrder: controls.setSortOrder,
     isScrolled,
     handleScroll,
-    scopedItems,
+    scopeItemCount: workspaceQueryResult.summary.totalItems,
+    filteredItemCount: workspaceQueryResult.filteredItemCount,
     filteredAndSortedItems,
     searchMatchByItemId,
     itemCounts: viewModel.itemCounts,
@@ -185,6 +185,12 @@ export function useWorkspaceBrowseState({
     activeFilterCount: viewModel.activeFilterCount,
     hasActiveFilters: viewModel.hasActiveFilters,
     filterPopoverHint: viewModel.filterPopoverHint,
+    initialLoadError: workspaceQueryResult.initialLoadError,
+    isInitialLoading: workspaceQueryResult.isInitialLoading,
+    isLoadingMore: workspaceQueryResult.isLoadingMore,
+    loadMoreError: workspaceQueryResult.loadMoreError,
+    loadMore: workspaceQueryResult.loadMore,
+    retryInitialLoad: workspaceQueryResult.retryInitialLoad,
     handleWorkspaceSearchInputKeyDown,
     resetBrowseState: controls.resetBrowseState,
   };

@@ -164,14 +164,23 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     syncVisibleItems(browseState.filteredAndSortedItems);
   }, [browseState.filteredAndSortedItems, isActive, syncVisibleItems]);
 
-  const scopedSourceHistoryId = useMemo(
-    () => (
-      sourceHistoryId && browseState.scopedItems.some((item) => item.id === sourceHistoryId)
-        ? sourceHistoryId
-        : null
-    ),
-    [browseState.scopedItems, sourceHistoryId],
-  );
+  const itemMatchesBrowseScope = useCallback((item: HistoryItemType) => {
+    if (browseState.isAllItemsScope) {
+      return true;
+    }
+    if (browseState.isInboxScope) {
+      return !item.projectId;
+    }
+    return item.projectId === browseState.browseProjectId;
+  }, [browseState.browseProjectId, browseState.isAllItemsScope, browseState.isInboxScope]);
+
+  const scopedSourceHistoryId = useMemo(() => {
+    if (!sourceHistoryId) {
+      return null;
+    }
+    const sourceItem = historyItems.find((item) => item.id === sourceHistoryId);
+    return sourceItem && itemMatchesBrowseScope(sourceItem) ? sourceHistoryId : null;
+  }, [historyItems, itemMatchesBrowseScope, sourceHistoryId]);
 
   const effectiveSelectedHistoryId = useMemo(() => {
     if (isLiveDraftSessionLocked && sourceHistoryId) {
@@ -182,7 +191,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return scopedSourceHistoryId;
     }
 
-    const selectedItemStillVisible = browseState.scopedItems.some((item) => item.id === selectedHistoryId);
+    const selectedItemStillVisible = historyItems.some(
+      (item) => item.id === selectedHistoryId && itemMatchesBrowseScope(item),
+    );
     if (!selectedItemStillVisible) {
       return null;
     }
@@ -193,8 +204,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     return selectedHistoryId;
   }, [
-    browseState.scopedItems,
+    historyItems,
     isLiveDraftSessionLocked,
+    itemMatchesBrowseScope,
     scopedSourceHistoryId,
     segmentsLength,
     selectedHistoryId,
@@ -202,8 +214,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   ]);
 
   const selectedItem = useMemo(
-    () => browseState.scopedItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
-    [browseState.scopedItems, effectiveSelectedHistoryId],
+    () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
+    [effectiveSelectedHistoryId, historyItems],
   );
 
   useEffect(() => {
@@ -487,7 +499,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             filterMenuRef={filterMenuRef}
             filterType={browseState.filterType}
             filterTypeOptions={browseState.filterTypeOptions}
-            filteredResultsCount={browseState.filteredAndSortedItems.length}
+            filteredResultsCount={browseState.filteredItemCount}
             hasActiveFilters={browseState.hasActiveFilters}
             isFilterMenuOpen={browseState.isFilterMenuOpen}
             isSelectionMode={selectionState.isSelectionMode}
@@ -503,7 +515,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             onSetViewMode={(nextViewMode) => setConfig({ projectsViewMode: nextViewMode })}
                 onToggleSelectionMode={handleToggleSelectionMode}
                 disableSelectionModeToggle={isLiveDraftSessionLocked}
-                scopedItemsCount={browseState.scopedItems.length}
+                scopedItemsCount={browseState.scopeItemCount}
             searchInputLabel={browseState.searchInputLabel}
             searchInputRef={searchInputRef}
             searchQuery={browseState.searchQuery}
@@ -534,16 +546,23 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             browseProject={browseState.browseProject}
             filteredAndSortedItems={browseState.filteredAndSortedItems}
             handleOpenItem={handleOpenItem}
+            initialLoadError={browseState.initialLoadError}
             isHistoryInteractionLocked={isLiveDraftSessionLocked}
             isAllItemsScope={browseState.isAllItemsScope}
             isHistoryLoading={isHistoryLoading}
+            isInitialLoading={browseState.isInitialLoading}
+            isLoadingMore={browseState.isLoadingMore}
             isSelectionMode={selectionState.isSelectionMode}
+            loadMoreError={browseState.loadMoreError}
             onDeleteHistoryItem={handleDeleteHistoryItem}
+            onLoadMore={browseState.loadMore}
             onRenameHistoryItem={handleRenameHistoryItem}
+            onRetryInitialLoad={browseState.retryInitialLoad}
             onScroll={browseState.handleScroll}
             onToggleSelection={selectionState.toggleSelection}
             resetBrowseState={browseState.resetBrowseState}
-            scopedItems={browseState.scopedItems}
+            filteredItemCount={browseState.filteredItemCount}
+            scopeItemCount={browseState.scopeItemCount}
             searchMatchByItemId={browseState.searchMatchByItemId}
             searchQuery={browseState.searchQuery}
             selectedHistoryId={effectiveSelectedHistoryId}

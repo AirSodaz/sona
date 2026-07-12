@@ -7,7 +7,9 @@ use super::{
     HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSearchRange,
     HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
+    MAX_WORKSPACE_QUERY_LIMIT,
 };
+use crate::history_store::HistoryStoreError;
 
 const DEFAULT_SNIPPET_LENGTH: usize = 72;
 
@@ -33,9 +35,15 @@ pub fn query_workspace_items_at(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
     date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
-) -> HistoryWorkspaceQueryResult {
+) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+    validate_workspace_query_request(&request)?;
     let item_counts = count_items_by_project(&items);
-    query_workspace_items_impl(items, request, item_counts, date_filter_thresholds)
+    Ok(query_workspace_items_impl(
+        items,
+        request,
+        item_counts,
+        date_filter_thresholds,
+    ))
 }
 
 pub fn query_workspace_items_with_counts_at(
@@ -43,8 +51,25 @@ pub fn query_workspace_items_with_counts_at(
     request: HistoryWorkspaceQueryRequest,
     item_counts: HistoryWorkspaceItemCounts,
     date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
-) -> HistoryWorkspaceQueryResult {
-    query_workspace_items_impl(items, request, item_counts, date_filter_thresholds)
+) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+    validate_workspace_query_request(&request)?;
+    Ok(query_workspace_items_impl(
+        items,
+        request,
+        item_counts,
+        date_filter_thresholds,
+    ))
+}
+
+pub fn validate_workspace_query_request(
+    request: &HistoryWorkspaceQueryRequest,
+) -> Result<(), HistoryStoreError> {
+    if request.limit == 0 || request.limit > MAX_WORKSPACE_QUERY_LIMIT {
+        return Err(HistoryStoreError::InvalidRequest(format!(
+            "limit must be between 1 and {MAX_WORKSPACE_QUERY_LIMIT}"
+        )));
+    }
+    Ok(())
 }
 
 fn query_workspace_items_impl(
@@ -58,11 +83,6 @@ fn query_workspace_items_impl(
         .filter(|item| matches_scope(item, &request.scope))
         .collect::<Vec<_>>();
     let summary = summarize_items(&scoped_items);
-    let scoped_item_ids = scoped_items
-        .iter()
-        .map(|item| item.id.clone())
-        .collect::<Vec<_>>();
-    let scoped_items_for_result = scoped_items.clone();
     let normalized_query = normalize_workspace_search_text(&request.query);
     let has_query = !normalized_query.text.is_empty();
 
@@ -70,7 +90,7 @@ fn query_workspace_items_impl(
         .into_iter()
         .filter_map(|item| {
             let search_match = if has_query {
-                match_workspace_item(&item, &normalized_query.text)?
+                Some(workspace_item_search_match(&item, &normalized_query.text)?)
             } else {
                 None
             };
@@ -88,6 +108,12 @@ fn query_workspace_items_impl(
         .collect::<Vec<_>>();
 
     filtered_entries.sort_by(|(a, _), (b, _)| compare_items(a, b, request.sort_order));
+    let filtered_item_count = filtered_entries.len();
+    let filtered_entries = filtered_entries
+        .into_iter()
+        .skip(request.offset)
+        .take(request.limit)
+        .collect::<Vec<_>>();
 
     let search_match_by_item_id = filtered_entries
         .iter()
@@ -97,12 +123,13 @@ fn query_workspace_items_impl(
         .into_iter()
         .map(|(item, _)| item)
         .collect::<Vec<_>>();
+    let has_more = request.offset.saturating_add(filtered_items.len()) < filtered_item_count;
 
     HistoryWorkspaceQueryResult {
         filtered_items,
-        scoped_items: scoped_items_for_result,
-        scoped_item_ids,
         search_match_by_item_id,
+        filtered_item_count,
+        has_more,
         summary,
         item_counts,
     }
@@ -142,7 +169,7 @@ fn compare_items(
     b: &HistoryItemRecord,
     sort_order: HistoryWorkspaceSortOrder,
 ) -> Ordering {
-    match sort_order {
+    let ordering = match sort_order {
         HistoryWorkspaceSortOrder::Oldest => a.timestamp.cmp(&b.timestamp),
         HistoryWorkspaceSortOrder::DurationDesc => {
             compare_f64_desc(b.duration, a.duration).then_with(|| b.timestamp.cmp(&a.timestamp))
@@ -150,13 +177,12 @@ fn compare_items(
         HistoryWorkspaceSortOrder::DurationAsc => {
             compare_f64_desc(a.duration, b.duration).then_with(|| b.timestamp.cmp(&a.timestamp))
         }
-        HistoryWorkspaceSortOrder::TitleAsc => a
-            .title
-            .to_lowercase()
-            .cmp(&b.title.to_lowercase())
+        HistoryWorkspaceSortOrder::TitleAsc => workspace_title_sort_key(&a.title)
+            .cmp(&workspace_title_sort_key(&b.title))
             .then_with(|| b.timestamp.cmp(&a.timestamp)),
         HistoryWorkspaceSortOrder::Newest => b.timestamp.cmp(&a.timestamp),
-    }
+    };
+    ordering.then_with(|| a.id.cmp(&b.id))
 }
 
 fn compare_f64_desc(left: f64, right: f64) -> Ordering {
@@ -417,10 +443,25 @@ fn build_snippet(
     }
 }
 
-fn match_workspace_item(
+pub fn workspace_search_fields_match(
+    title: &str,
+    preview_text: &str,
+    search_content: &str,
+    normalized_query: &str,
+) -> bool {
+    find_match_range(title, normalized_query).is_some()
+        || find_match_range(preview_text, normalized_query).is_some()
+        || find_match_range(search_content, normalized_query).is_some()
+}
+
+pub fn workspace_title_sort_key(value: &str) -> String {
+    value.to_lowercase()
+}
+
+pub fn workspace_item_search_match(
     item: &HistoryItemRecord,
     normalized_query: &str,
-) -> Option<Option<HistoryWorkspaceItemSearchMatch>> {
+) -> Option<HistoryWorkspaceItemSearchMatch> {
     let title_match = find_match_range(&item.title, normalized_query);
     let preview_match = find_match_range(&item.preview_text, normalized_query);
     let search_content_match = find_match_range(&item.search_content, normalized_query);
@@ -445,11 +486,11 @@ fn match_workspace_item(
         (item.title.as_str(), title_match.clone()?)
     };
 
-    Some(Some(HistoryWorkspaceItemSearchMatch {
+    Some(HistoryWorkspaceItemSearchMatch {
         matched_field: matched_field.to_string(),
         title_match: title_match.map(|range| range.display_range),
         display_snippet: build_snippet(source_text, &display_range, DEFAULT_SNIPPET_LENGTH),
-    }))
+    })
 }
 
 #[cfg(test)]
@@ -490,6 +531,50 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
+        }
+    }
+
+    #[test]
+    fn workspace_query_paginates_after_filtering_with_stable_order_and_totals() {
+        let item_c = sample_history_item("c", HistoryItemStatus::Complete);
+        let item_a = sample_history_item("a", HistoryItemStatus::Complete);
+        let item_b = sample_history_item("b", HistoryItemStatus::Complete);
+        let mut request = base_request("item");
+        request.limit = 1;
+        request.offset = 1;
+
+        let result = query_workspace_items_at(
+            vec![item_c, item_a, item_b.clone()],
+            request,
+            test_thresholds(),
+        )
+        .unwrap();
+
+        assert_eq!(result.filtered_items, vec![item_b]);
+        assert_eq!(result.filtered_item_count, 3);
+        assert!(result.has_more);
+        assert_eq!(result.summary.total_items, 3);
+        assert_eq!(
+            result
+                .search_match_by_item_id
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec!["b".to_string()]
+        );
+    }
+
+    #[test]
+    fn workspace_query_rejects_limits_outside_the_shared_contract() {
+        for limit in [0, MAX_WORKSPACE_QUERY_LIMIT + 1] {
+            let mut request = base_request("");
+            request.limit = limit;
+
+            let result = query_workspace_items_at(Vec::new(), request, test_thresholds());
+
+            assert!(matches!(result, Err(HistoryStoreError::InvalidRequest(_))));
         }
     }
 
@@ -504,7 +589,8 @@ mod tests {
             vec![punctuation.clone()],
             base_request("你好,世界"),
             test_thresholds(),
-        );
+        )
+        .unwrap();
         assert_eq!(punctuation_result.filtered_items, vec![punctuation.clone()]);
         let punctuation_match = punctuation_result
             .search_match_by_item_id
@@ -523,7 +609,8 @@ mod tests {
             vec![whitespace.clone()],
             base_request("helloworld"),
             test_thresholds(),
-        );
+        )
+        .unwrap();
         assert!(whitespace_result.filtered_items.is_empty());
 
         let mut body_priority = sample_history_item("body-priority", HistoryItemStatus::Complete);
@@ -536,7 +623,8 @@ mod tests {
             vec![body_priority.clone()],
             base_request("roadmap"),
             test_thresholds(),
-        );
+        )
+        .unwrap();
         let body_match = body_result
             .search_match_by_item_id
             .get("body-priority")
@@ -573,7 +661,8 @@ mod tests {
                 week_start_millis: 500,
                 month_start_millis: 100,
             },
-        );
+        )
+        .unwrap();
 
         assert_eq!(result.filtered_items, vec![today]);
     }

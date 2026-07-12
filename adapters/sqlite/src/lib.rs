@@ -22,6 +22,7 @@ pub use history_store::SqliteHistoryStore;
 pub use project::SqliteProjectRepository;
 pub use task_ledger::SqliteLedgerRepository;
 
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::fs::File;
 use std::io::Read;
@@ -41,6 +42,39 @@ const READ_ONLY_SNAPSHOT_ATTEMPTS: usize = 3;
 const FILE_COMPARE_BUFFER_SIZE: usize = 64 * 1024;
 
 static GLOBAL_DB: OnceLock<Arc<Database>> = OnceLock::new();
+
+#[cfg(test)]
+type WorkspaceMatchTestHook = Box<dyn FnOnce() + Send + 'static>;
+
+#[cfg(test)]
+static WORKSPACE_MATCH_TEST_HOOK: Mutex<Option<(String, WorkspaceMatchTestHook)>> =
+    Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) fn set_workspace_match_test_hook(
+    normalized_query: impl Into<String>,
+    hook: WorkspaceMatchTestHook,
+) {
+    *WORKSPACE_MATCH_TEST_HOOK.lock().unwrap() = Some((normalized_query.into(), hook));
+}
+
+#[cfg(test)]
+fn run_workspace_match_test_hook(normalized_query: &str) {
+    let hook = {
+        let mut guard = WORKSPACE_MATCH_TEST_HOOK.lock().unwrap();
+        if guard
+            .as_ref()
+            .is_some_and(|(expected_query, _)| expected_query == normalized_query)
+        {
+            guard.take().map(|(_, hook)| hook)
+        } else {
+            None
+        }
+    };
+    if let Some(hook) = hook {
+        hook();
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ReadOnlySidecarState {
@@ -378,6 +412,7 @@ impl Database {
                 .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
             conn.busy_timeout(Duration::from_millis(POOL_ACQUIRE_TIMEOUT_MS))
                 .map_err(|error| DatabaseError::ConnectionError(error.to_string()))?;
+            Self::register_connection_functions(&conn)?;
             schema::validate_current_schema(&conn)?;
 
             return Ok(Self {
@@ -404,6 +439,7 @@ impl Database {
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("ATTACH DATABASE ':memory:' AS analytics;")
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+        Self::register_connection_functions(&conn)?;
 
         let shared_pool = ConnectionPool::new(vec![conn]);
         let db = Self {
@@ -432,7 +468,33 @@ impl Database {
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+        Self::register_connection_functions(&conn)?;
         Ok(conn)
+    }
+
+    fn register_connection_functions(conn: &Connection) -> Result<(), DatabaseError> {
+        let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+        conn.create_scalar_function("sona_workspace_matches", 4, flags, |context| {
+            let title = context.get::<String>(0)?;
+            let preview_text = context.get::<String>(1)?;
+            let search_content = context.get::<String>(2)?;
+            let normalized_query = context.get::<String>(3)?;
+            #[cfg(test)]
+            run_workspace_match_test_hook(&normalized_query);
+            Ok(i64::from(
+                sona_core::history::workspace_query::workspace_search_fields_match(
+                    &title,
+                    &preview_text,
+                    &search_content,
+                    &normalized_query,
+                ),
+            ))
+        })?;
+        conn.create_scalar_function("sona_workspace_title_key", 1, flags, |context| {
+            let title = context.get::<String>(0)?;
+            Ok(sona_core::history::workspace_query::workspace_title_sort_key(&title))
+        })?;
+        Ok(())
     }
 
     fn attach_analytics(conn: &Connection, analytics_path: &Path) -> Result<(), DatabaseError> {

@@ -534,6 +534,8 @@ describe('tauri boundary wrappers', () => {
       filterType: 'recording',
       dateFilter: 'week',
       sortOrder: 'title_asc',
+      limit: 100,
+      offset: 0,
     });
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.history.queryWorkspace, {
@@ -542,6 +544,8 @@ describe('tauri boundary wrappers', () => {
       filterType: 'recording',
       dateFilter: 'week',
       sortOrder: 'title_asc',
+      limit: 100,
+      offset: 0,
     });
   });
 

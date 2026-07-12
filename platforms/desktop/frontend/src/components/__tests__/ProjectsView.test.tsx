@@ -107,9 +107,9 @@ vi.mock('../../services/tauri/history', () => {
 
       return {
         filteredItems: scopedItems,
-        scopedItems,
-        scopedItemIds: scopedItems.map((item: any) => item.id),
         searchMatchByItemId: Object.fromEntries(scopedItems.map((item: any) => [item.id, null])),
+        filteredItemCount: scopedItems.length,
+        hasMore: false,
         summary: summarize(scopedItems),
         itemCounts: {
           inbox,
@@ -347,11 +347,11 @@ describe('ProjectsView', () => {
 
     return {
       filteredItems,
-      scopedItems,
-      scopedItemIds: scopedItems.map((item) => item.id),
       searchMatchByItemId: Object.fromEntries(
         filteredItems.map((item) => [item.id, searchMatchByItemId[item.id] ?? null]),
       ),
+      filteredItemCount: filteredItems.length,
+      hasMore: false,
       summary: summarizeWorkspaceItems(scopedItems),
       itemCounts: {
         inbox,
@@ -598,6 +598,9 @@ describe('ProjectsView', () => {
 
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('history-item-hist-0')).toBeDefined();
+    });
     for (let index = 0; index < 25; index += 1) {
       fireEvent.keyDown(input, { key: 'ArrowDown' });
     }
@@ -1375,6 +1378,9 @@ describe('ProjectsView', () => {
 
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('history-item-hist-1')).toBeDefined();
+    });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
     expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('true');
@@ -1482,6 +1488,9 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('history-item-hist-1')).toBeDefined();
+    });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
     expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('false');

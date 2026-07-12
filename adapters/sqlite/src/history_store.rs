@@ -8,15 +8,19 @@ use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
-use sona_core::history::workspace_query::HistoryWorkspaceDateFilterThresholds;
+use sona_core::history::workspace_query::{
+    HistoryWorkspaceDateFilterThresholds, normalize_workspace_search_text,
+    validate_workspace_query_request, workspace_item_search_match,
+};
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSummary, LiveRecordingDraftResult,
-    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
+    LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -226,27 +230,83 @@ fn add_workspace_query_conditions(
     match &request.scope {
         HistoryWorkspaceScope::All => {}
         HistoryWorkspaceScope::Inbox => {
-            clauses.push("project_id IS NULL".to_string());
+            clauses.push("h.project_id IS NULL".to_string());
         }
         HistoryWorkspaceScope::Project { project_id } => {
-            clauses.push("project_id = ?".to_string());
+            clauses.push("h.project_id = ?".to_string());
             params.push(Box::new(project_id.clone()));
         }
     }
     match request.filter_type {
         HistoryWorkspaceFilterType::All => {}
         HistoryWorkspaceFilterType::Recording => {
-            clauses.push("kind = 'recording'".to_string());
+            clauses.push("h.kind = 'recording'".to_string());
         }
         HistoryWorkspaceFilterType::Batch => {
-            clauses.push("kind = 'batch'".to_string());
+            clauses.push("h.kind = 'batch'".to_string());
         }
     }
     if let Some(threshold) = threshold_for_date_filter(request.date_filter, date_filter_thresholds)
     {
-        clauses.push("timestamp >= ?".to_string());
+        clauses.push("h.timestamp >= ?".to_string());
         params.push(Box::new(threshold));
     }
+}
+
+fn add_workspace_scope_condition(
+    scope: &HistoryWorkspaceScope,
+    clauses: &mut Vec<String>,
+    params: &mut Vec<Box<dyn ToSql>>,
+) {
+    match scope {
+        HistoryWorkspaceScope::All => {}
+        HistoryWorkspaceScope::Inbox => clauses.push("h.project_id IS NULL".to_string()),
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("h.project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
+        }
+    }
+}
+
+fn workspace_order_by(sort_order: HistoryWorkspaceSortOrder) -> &'static str {
+    match sort_order {
+        HistoryWorkspaceSortOrder::Newest => "h.timestamp DESC, h.id ASC",
+        HistoryWorkspaceSortOrder::Oldest => "h.timestamp ASC, h.id ASC",
+        HistoryWorkspaceSortOrder::DurationDesc => "h.duration DESC, h.timestamp DESC, h.id ASC",
+        HistoryWorkspaceSortOrder::DurationAsc => "h.duration ASC, h.timestamp DESC, h.id ASC",
+        HistoryWorkspaceSortOrder::TitleAsc => {
+            "sona_workspace_title_key(h.title) ASC, h.timestamp DESC, h.id ASC"
+        }
+    }
+}
+
+fn workspace_match_query_parts(
+    request: &HistoryWorkspaceQueryRequest,
+    date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
+    normalized_query: &str,
+) -> (String, Vec<Box<dyn ToSql>>) {
+    let mut conditions = Vec::new();
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    add_workspace_query_conditions(
+        request,
+        date_filter_thresholds,
+        &mut conditions,
+        &mut params,
+    );
+    if !normalized_query.is_empty() {
+        conditions.push(
+            "sona_workspace_matches(h.title, h.preview_text, h.search_content, ?) = 1".to_string(),
+        );
+        params.push(Box::new(normalized_query.to_string()));
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+    (where_clause, params)
 }
 
 #[derive(Clone)]
@@ -826,13 +886,21 @@ where
         &self,
         request: HistoryWorkspaceQueryRequest,
     ) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+        validate_workspace_query_request(&request)?;
+        let limit = i64::try_from(request.limit).map_err(|_| {
+            HistoryStoreError::InvalidRequest("limit exceeds SQLite range".to_string())
+        })?;
+        let offset = i64::try_from(request.offset).map_err(|_| {
+            HistoryStoreError::InvalidRequest("offset exceeds SQLite range".to_string())
+        })?;
+
         self.ensure_ready()?;
         self.reconcile_live_drafts()?;
 
         Ok(self.get_db()?.with_connection(|conn| {
-            // 1. Compute item counts via aggregate query (index-only, lightweight)
+            let tx = conn.unchecked_transaction()?;
             let item_counts = {
-                let mut stmt = conn.prepare_cached(
+                let mut stmt = tx.prepare_cached(
                     "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id",
                 )?;
                 let mut inbox = 0usize;
@@ -857,46 +925,29 @@ where
                 }
             };
 
-            // 2. Build dynamic WHERE clause + params from request filters
             let date_filter_thresholds = current_workspace_date_filter_thresholds();
-            let mut conditions: Vec<String> = Vec::new();
-            let mut params: Vec<Box<dyn ToSql>> = Vec::new();
-            add_workspace_query_conditions(
-                &request,
-                date_filter_thresholds,
-                &mut conditions,
-                &mut params,
-            );
 
-            // 3. Determine if FTS is used
-            let trimmed_query = request.query.trim();
-            let mut fts_used = false;
-            let mut fts_expr = String::new();
-
-            if !trimmed_query.is_empty() {
-                fts_expr = build_fts_query(trimmed_query);
-                if !fts_expr.is_empty() {
-                    fts_used = true;
-                }
-            }
-
-            let (items, summary) = if fts_used {
-                // 3a. Compute summary via aggregate SQL query
+            let summary = {
+                let mut conditions = Vec::new();
+                let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+                add_workspace_scope_condition(&request.scope, &mut conditions, &mut params);
                 let where_clause = if conditions.is_empty() {
                     String::new()
                 } else {
                     format!("WHERE {}", conditions.join(" AND "))
                 };
-                let summary_sql = format!(
-                    "SELECT COUNT(*), COALESCE(SUM(duration), 0.0), MAX(timestamp), \
-                     SUM(CASE WHEN kind = 'recording' THEN 1 ELSE 0 END), \
-                     SUM(CASE WHEN kind = 'batch' THEN 1 ELSE 0 END) \
-                     FROM history_items {}",
-                    where_clause
+                let sql = format!(
+                    "SELECT COUNT(*), COALESCE(SUM(h.duration), 0.0), MAX(h.timestamp), \
+                     SUM(CASE WHEN h.kind = 'recording' THEN 1 ELSE 0 END), \
+                     SUM(CASE WHEN h.kind = 'batch' THEN 1 ELSE 0 END) \
+                     FROM history_items h {where_clause}"
                 );
-                let mut summary_stmt = conn.prepare_cached(&summary_sql)?;
-                let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
-                let summary = summary_stmt.query_row(param_refs.as_slice(), |row| {
+                let mut stmt = tx.prepare_cached(&sql)?;
+                let param_refs = params
+                    .iter()
+                    .map(|value| value.as_ref())
+                    .collect::<Vec<_>>();
+                stmt.query_row(param_refs.as_slice(), |row| {
                     let total_items: i64 = row.get(0)?;
                     let total_duration: f64 = row.get(1)?;
                     let latest_timestamp: Option<i64> = row.get(2)?;
@@ -905,76 +956,79 @@ where
                     Ok(HistoryWorkspaceSummary {
                         total_items: total_items as usize,
                         total_duration,
-                        latest_timestamp: latest_timestamp.map(|t| t as u64),
-                        recording_count: recording_count.unwrap_or(0) as usize,
-                        batch_count: batch_count.unwrap_or(0) as usize,
+                        latest_timestamp: latest_timestamp.map(|value| value as u64),
+                        recording_count: recording_count.unwrap_or_default() as usize,
+                        batch_count: batch_count.unwrap_or_default() as usize,
                     })
-                })?;
+                })?
+            };
 
-                // 3b. Load ONLY matching items via JOIN with FTS table
-                let mut join_conditions = vec!["f.history_items_fts MATCH ?".to_string()];
-                let mut join_params: Vec<Box<dyn ToSql>> = vec![Box::new(fts_expr)];
-                add_workspace_query_conditions(
+            let normalized_query = normalize_workspace_search_text(&request.query).text;
+
+            let filtered_item_count = {
+                let (where_clause, params) = workspace_match_query_parts(
                     &request,
                     date_filter_thresholds,
-                    &mut join_conditions,
-                    &mut join_params,
+                    &normalized_query,
                 );
+                let sql = format!("SELECT COUNT(*) FROM history_items h {where_clause}");
+                let mut stmt = tx.prepare_cached(&sql)?;
+                let param_refs = params
+                    .iter()
+                    .map(|value| value.as_ref())
+                    .collect::<Vec<_>>();
+                stmt.query_row(param_refs.as_slice(), |row| row.get::<_, i64>(0))? as usize
+            };
 
-                let join_where = format!("WHERE {}", join_conditions.join(" AND "));
+            let items = {
+                let (where_clause, mut params) = workspace_match_query_parts(
+                    &request,
+                    date_filter_thresholds,
+                    &normalized_query,
+                );
+                params.push(Box::new(limit));
+                params.push(Box::new(offset));
                 let sql = format!(
-                    "SELECT {} FROM history_items h \
-                     JOIN history_items_fts f ON h.rowid = f.rowid \
-                     {} ORDER BY h.timestamp DESC",
+                    "SELECT {} FROM history_items h {where_clause} \
+                     ORDER BY {} LIMIT ? OFFSET ?",
                     history_select_columns(Some("h"), &[]),
-                    join_where
+                    workspace_order_by(request.sort_order),
                 );
-                let mut stmt = conn.prepare_cached(&sql)?;
-                let join_param_refs: Vec<&dyn ToSql> =
-                    join_params.iter().map(|p| p.as_ref()).collect();
-                let rows = stmt.query_map(join_param_refs.as_slice(), map_row_to_item)?;
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(row?);
-                }
-
-                (items, Some(summary))
-            } else {
-                // 4. Load all scoped items and compute summary in memory (fallback behavior)
-                let where_clause = if conditions.is_empty() {
-                    String::new()
-                } else {
-                    format!("WHERE {}", conditions.join(" AND "))
-                };
-                let sql = format!(
-                    "SELECT {} FROM history_items {} ORDER BY timestamp DESC",
-                    history_select_columns(None, &[]),
-                    where_clause
-                );
-                let mut stmt = conn.prepare_cached(&sql)?;
-                let param_refs: Vec<&dyn ToSql> = params.iter().map(|p| p.as_ref()).collect();
+                let mut stmt = tx.prepare_cached(&sql)?;
+                let param_refs = params
+                    .iter()
+                    .map(|value| value.as_ref())
+                    .collect::<Vec<_>>();
                 let rows = stmt.query_map(param_refs.as_slice(), map_row_to_item)?;
                 let mut items = Vec::new();
                 for row in rows {
                     items.push(row?);
                 }
-                (items, None)
+                items
             };
 
-            // 5. In-memory text search matching and sorting
-            let mut result =
-                sona_core::history::workspace_query::query_workspace_items_with_counts_at(
-                    items,
-                    request,
-                    item_counts,
-                    date_filter_thresholds,
-                );
+            let search_match_by_item_id = items
+                .iter()
+                .map(|item| {
+                    let search_match = if normalized_query.is_empty() {
+                        None
+                    } else {
+                        workspace_item_search_match(item, &normalized_query)
+                    };
+                    (item.id.clone(), search_match)
+                })
+                .collect::<BTreeMap<_, _>>();
+            let has_more = request.offset.saturating_add(items.len()) < filtered_item_count;
 
-            // If we already computed the summary in SQL, override the in-memory computed summary
-            if let Some(sql_summary) = summary {
-                result.summary = sql_summary;
-            }
-
+            let result = HistoryWorkspaceQueryResult {
+                filtered_items: items,
+                search_match_by_item_id,
+                filtered_item_count,
+                has_more,
+                summary,
+                item_counts,
+            };
+            tx.commit()?;
             Ok(result)
         })?)
     }
@@ -1855,36 +1909,12 @@ where
     }
 }
 
-fn build_fts_query(query: &str) -> String {
-    let normalized = sona_core::history::workspace_query::normalize_workspace_search_text(query);
-    let terms: Vec<&str> = normalized
-        .text
-        .split(|c: char| c.is_whitespace() || ",.?!;:()[]{}<>'/\\|~`-=_+\"".contains(c))
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    // FTS5 trigram tokenizer operates at the character level and needs at least 3
-    // characters per term to form a trigram. Shorter terms would silently match
-    // nothing, causing the entire AND query to return zero results.
-    if terms.iter().any(|t| t.chars().count() < 3) {
-        return String::new();
-    }
-
-    terms
-        .iter()
-        .map(|s| {
-            let escaped = s.replace('"', "\"\"");
-            format!("\"{}\"", escaped)
-        })
-        .collect::<Vec<_>>()
-        .join(" AND ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
+    use sona_core::history::HistoryWorkspaceSortOrder;
     use std::sync::Arc;
     use tempfile::tempdir;
 
@@ -1906,6 +1936,29 @@ mod tests {
                 conn.execute(
                     "UPDATE history_items SET timestamp = ?1 WHERE id = ?2",
                     rusqlite::params![timestamp as i64, history_id],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    fn insert_workspace_item(
+        store: &SqliteHistoryStore,
+        id: &str,
+        timestamp: i64,
+        duration: f64,
+        title: &str,
+        kind: &str,
+    ) {
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                conn.execute(
+                    "INSERT INTO history_items (
+                        id, timestamp, duration, title, preview_text, search_content, kind
+                     ) VALUES (?1, ?2, ?3, ?4, ?4, ?4, ?5)",
+                    rusqlite::params![id, timestamp, duration, title, kind],
                 )?;
                 Ok(())
             })
@@ -2753,6 +2806,8 @@ mod tests {
                 filter_type: HistoryWorkspaceFilterType::Recording,
                 date_filter: HistoryWorkspaceDateFilter::All,
                 sort_order: HistoryWorkspaceSortOrder::TitleAsc,
+                limit: 100,
+                offset: 0,
             })
             .unwrap();
 
@@ -2764,23 +2819,234 @@ mod tests {
     }
 
     #[test]
-    fn test_build_fts_query() {
-        assert_eq!(build_fts_query("hello world"), "\"hello\" AND \"world\"");
-        assert_eq!(build_fts_query("hello, world!"), "\"hello\" AND \"world\"");
-        assert_eq!(
-            build_fts_query("hello \"world\""),
-            "\"hello\" AND \"world\""
+    fn workspace_query_applies_each_sort_before_pagination() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        insert_workspace_item(&store, "a", 100, 5.0, "Zulu", "recording");
+        insert_workspace_item(&store, "b", 300, 2.0, "alpha", "recording");
+        insert_workspace_item(&store, "c", 200, 2.0, "Beta", "recording");
+        insert_workspace_item(&store, "d", 300, 7.0, "alpha", "recording");
+        insert_workspace_item(&store, "batch", 400, 1.0, "Ignored", "batch");
+
+        let cases = [
+            (HistoryWorkspaceSortOrder::Newest, ["d", "c"]),
+            (HistoryWorkspaceSortOrder::Oldest, ["c", "b"]),
+            (HistoryWorkspaceSortOrder::DurationDesc, ["a", "b"]),
+            (HistoryWorkspaceSortOrder::DurationAsc, ["c", "a"]),
+            (HistoryWorkspaceSortOrder::TitleAsc, ["d", "c"]),
+        ];
+
+        for (sort_order, expected_ids) in cases {
+            let result = store
+                .query_workspace(HistoryWorkspaceQueryRequest {
+                    scope: HistoryWorkspaceScope::All,
+                    query: String::new(),
+                    filter_type: HistoryWorkspaceFilterType::Recording,
+                    date_filter: HistoryWorkspaceDateFilter::All,
+                    sort_order,
+                    limit: 2,
+                    offset: 1,
+                })
+                .unwrap();
+
+            assert_eq!(
+                result
+                    .filtered_items
+                    .iter()
+                    .map(|item| item.id.as_str())
+                    .collect::<Vec<_>>(),
+                expected_ids
+            );
+            assert_eq!(result.filtered_item_count, 4);
+            assert!(result.has_more);
+            assert_eq!(result.summary.total_items, 5);
+        }
+    }
+
+    #[test]
+    fn workspace_query_rejects_invalid_pagination() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        for (limit, offset) in [(0, 0), (201, 0), (1, usize::MAX)] {
+            let result = store.query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::All,
+                query: String::new(),
+                filter_type: HistoryWorkspaceFilterType::All,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit,
+                offset,
+            });
+
+            assert!(matches!(result, Err(HistoryStoreError::InvalidRequest(_))));
+        }
+    }
+
+    #[test]
+    fn workspace_query_paginates_exact_search_matches() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        insert_workspace_item(
+            &store,
+            "newest-miss",
+            500,
+            1.0,
+            "Status update",
+            "recording",
         );
-        assert_eq!(build_fts_query("  "), "");
+        insert_workspace_item(
+            &store,
+            "first-match",
+            400,
+            1.0,
+            "Roadmap alpha",
+            "recording",
+        );
+        insert_workspace_item(
+            &store,
+            "middle-miss",
+            300,
+            1.0,
+            "Release notes",
+            "recording",
+        );
+        insert_workspace_item(
+            &store,
+            "second-match",
+            200,
+            1.0,
+            "Roadmap beta",
+            "recording",
+        );
 
-        // Short queries (< 3 bytes) are skipped — trigram can't form a match
-        assert_eq!(build_fts_query("ab"), "");
-        assert_eq!(build_fts_query("a"), "");
-        assert_eq!(build_fts_query("ab cd"), "");
-        assert_eq!(build_fts_query("hello ab"), "");
+        let result = store
+            .query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::All,
+                query: "roadmap".to_string(),
+                filter_type: HistoryWorkspaceFilterType::All,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit: 1,
+                offset: 1,
+            })
+            .unwrap();
 
-        // 3-byte minimum: "abc" has exactly 3 bytes → one trigram possible
-        assert_eq!(build_fts_query("abc"), "\"abc\"");
+        assert_eq!(result.filtered_item_count, 2);
+        assert!(!result.has_more);
+        assert_eq!(result.filtered_items[0].id, "second-match");
+        assert_eq!(
+            result
+                .search_match_by_item_id
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec!["second-match".to_string()]
+        );
+    }
+
+    #[test]
+    fn workspace_query_search_matches_nfkc_equivalent_text() {
+        let root = tempdir().unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+        store.ensure_ready().unwrap();
+
+        insert_workspace_item(
+            &store,
+            "full-width",
+            100,
+            1.0,
+            "\u{ff21}\u{ff22}\u{ff23} planning",
+            "recording",
+        );
+
+        let result = store
+            .query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::All,
+                query: "abc".to_string(),
+                filter_type: HistoryWorkspaceFilterType::All,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit: 100,
+                offset: 0,
+            })
+            .unwrap();
+
+        assert_eq!(result.filtered_item_count, 1);
+        assert_eq!(result.filtered_items[0].id, "full-width");
+        assert!(result.search_match_by_item_id["full-width"].is_some());
+    }
+
+    #[test]
+    fn workspace_query_builds_metadata_and_page_from_one_read_snapshot() {
+        let root = tempdir().unwrap();
+        let store = SqliteHistoryStore::with_db(
+            root.path().to_path_buf(),
+            Database::open(root.path()).unwrap(),
+        );
+        store.ensure_ready().unwrap();
+        insert_workspace_item(
+            &store,
+            "existing",
+            100,
+            1.0,
+            "snapshotmarker existing",
+            "recording",
+        );
+
+        let (start_write_tx, start_write_rx) = std::sync::mpsc::channel();
+        let (write_done_tx, write_done_rx) = std::sync::mpsc::channel();
+        let db_path = root.path().join("sona.db");
+        let writer = std::thread::spawn(move || {
+            start_write_rx.recv().unwrap();
+            let conn = rusqlite::Connection::open(db_path).unwrap();
+            conn.execute_batch("PRAGMA busy_timeout=5000;").unwrap();
+            conn.execute(
+                "INSERT INTO history_items (
+                    id, timestamp, duration, title, preview_text, search_content, kind
+                 ) VALUES ('concurrent', 200, 1.0, 'snapshotmarker concurrent',
+                           'snapshotmarker concurrent', 'snapshotmarker concurrent', 'recording')",
+                [],
+            )
+            .unwrap();
+            write_done_tx.send(()).unwrap();
+        });
+
+        crate::set_workspace_match_test_hook(
+            "snapshotmarker",
+            Box::new(move || {
+                start_write_tx.send(()).unwrap();
+                write_done_rx.recv().unwrap();
+            }),
+        );
+
+        let result = store
+            .query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::All,
+                query: "snapshotmarker".to_string(),
+                filter_type: HistoryWorkspaceFilterType::All,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit: 100,
+                offset: 0,
+            })
+            .unwrap();
+        writer.join().unwrap();
+
+        assert_eq!(result.filtered_item_count, 1);
+        assert_eq!(result.filtered_items.len(), 1);
+        assert_eq!(result.filtered_items[0].id, "existing");
+        assert_eq!(result.summary.total_items, 1);
+        assert_eq!(result.item_counts.inbox, 1);
     }
 
     #[test]
@@ -2828,6 +3094,8 @@ mod tests {
                 filter_type: HistoryWorkspaceFilterType::All,
                 date_filter: HistoryWorkspaceDateFilter::All,
                 sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit: 100,
+                offset: 0,
             })
             .unwrap();
         assert_eq!(result.filtered_items.len(), 1);
@@ -2870,6 +3138,8 @@ mod tests {
                 filter_type: HistoryWorkspaceFilterType::All,
                 date_filter: HistoryWorkspaceDateFilter::All,
                 sort_order: HistoryWorkspaceSortOrder::Newest,
+                limit: 100,
+                offset: 0,
             })
             .unwrap();
 
@@ -2934,12 +3204,14 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_zh = store.query_workspace(req_zh).unwrap();
         assert_eq!(res_zh.filtered_items.len(), 1);
         assert_eq!(res_zh.filtered_items[0].id, item.id);
         // New assertions verifying optimized behavior:
-        assert_eq!(res_zh.scoped_items.len(), 1); // Scoped items only contains matched items
+        assert_eq!(res_zh.filtered_item_count, 1);
         assert_eq!(res_zh.summary.total_items, 2); // Summary correctly counts all items in the scope
 
         // 2. Test fuzzy/substring match
@@ -2949,6 +3221,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_fuzzy = store.query_workspace(req_fuzzy).unwrap();
         assert_eq!(res_fuzzy.filtered_items.len(), 1);
@@ -2961,6 +3235,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_none = store.query_workspace(req_none).unwrap();
         assert_eq!(res_none.filtered_items.len(), 0);
@@ -2972,6 +3248,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_punc1 = store.query_workspace(req_punc1).unwrap();
         assert_eq!(res_punc1.filtered_items.len(), 1);
@@ -2983,6 +3261,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_punc2 = store.query_workspace(req_punc2).unwrap();
         assert_eq!(res_punc2.filtered_items.len(), 1);
@@ -2996,6 +3276,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_short_zh = store.query_workspace(req_short_zh).unwrap();
         let short_zh_ids: std::collections::HashSet<&str> = res_short_zh
@@ -3014,6 +3296,8 @@ mod tests {
             filter_type: HistoryWorkspaceFilterType::All,
             date_filter: HistoryWorkspaceDateFilter::All,
             sort_order: HistoryWorkspaceSortOrder::Newest,
+            limit: 100,
+            offset: 0,
         };
         let res_short_en = store.query_workspace(req_short_en).unwrap();
         assert_eq!(res_short_en.filtered_items.len(), 1);

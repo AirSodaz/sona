@@ -44,13 +44,15 @@ export interface HistoryWorkspaceQueryRequest {
   dateFilter: "all" | "today" | "week" | "month";
   sortOrder:
     "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
+  limit: number;
+  offset: number;
 }
 
 export interface HistoryWorkspaceQueryResult {
   filteredItems: HistoryItem[];
-  scopedItems: HistoryItem[];
-  scopedItemIds: string[];
   searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
+  filteredItemCount: number;
+  hasMore: boolean;
   summary: {
     totalItems: number;
     totalDuration: number;

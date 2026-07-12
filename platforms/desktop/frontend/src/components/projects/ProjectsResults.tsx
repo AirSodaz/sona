@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { CircleAlert, Loader2, RefreshCw, Search } from 'lucide-react';
 import {
   Virtuoso,
   VirtuosoGrid,
@@ -21,16 +21,23 @@ interface ProjectsResultsProps {
   browseProject: ProjectRecord | null;
   filteredAndSortedItems: HistoryItemType[];
   handleOpenItem: (item: HistoryItemType) => Promise<void>;
+  initialLoadError: boolean;
   isHistoryInteractionLocked: boolean;
   isAllItemsScope: boolean;
   isHistoryLoading: boolean;
+  isInitialLoading: boolean;
+  isLoadingMore: boolean;
   isSelectionMode: boolean;
+  loadMoreError: boolean;
   onDeleteHistoryItem: (event: React.MouseEvent, id: string) => Promise<void>;
+  onLoadMore: () => Promise<void>;
   onRenameHistoryItem: (event: React.MouseEvent, id: string) => Promise<void>;
+  onRetryInitialLoad: () => void;
   onScroll?: React.UIEventHandler<HTMLDivElement>;
   onToggleSelection: (id: string) => void;
   resetBrowseState: () => void;
-  scopedItems: HistoryItemType[];
+  filteredItemCount: number;
+  scopeItemCount: number;
   searchMatchByItemId: Map<string, WorkspaceItemSearchMatch | null>;
   searchQuery: string;
   selectedHistoryId: string | null;
@@ -41,6 +48,9 @@ interface ProjectsResultsProps {
 
 interface ProjectsVirtualContext {
   isSelectionMode: boolean;
+  isLoadingMore: boolean;
+  loadMoreError: boolean;
+  onLoadMore: () => Promise<void>;
   showProjectBadge: boolean;
   t: TranslationFn;
   viewMode: 'list' | 'table';
@@ -80,12 +90,41 @@ function ProjectsVirtualTopSpacer({ context }: { context?: ProjectsVirtualContex
   return <div className="projects-virtual-spacer projects-virtual-spacer--top" aria-hidden="true" />;
 }
 
-function ProjectsVirtualBottomSpacer({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
-  if (context?.viewMode === 'table') {
-    return null;
-  }
-
-  return <div className="projects-virtual-spacer projects-virtual-spacer--bottom" aria-hidden="true" />;
+function ProjectsVirtualFooter({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element {
+  return (
+    <>
+      {context?.viewMode !== 'table' && (
+        <div className="projects-virtual-spacer projects-virtual-spacer--bottom" aria-hidden="true" />
+      )}
+      {context?.isLoadingMore && (
+        <div
+          className="projects-pagination-footer"
+          role="status"
+          aria-label={context.t('projects.loading_more', { defaultValue: 'Loading more items' })}
+        >
+          <Loader2 size={16} className="queue-icon-spin" />
+        </div>
+      )}
+      {context?.loadMoreError && (
+        <div className="projects-pagination-footer">
+          <button
+            type="button"
+            className="btn btn-icon btn-text"
+            onClick={() => void context.onLoadMore()}
+            aria-label={context.t('projects.retry_load_more', {
+              defaultValue: 'Retry loading more items',
+            })}
+            data-tooltip={context.t('projects.retry_load_more', {
+              defaultValue: 'Retry loading more items',
+            })}
+            data-tooltip-pos="top"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
 
 function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
@@ -144,13 +183,13 @@ function ProjectsVirtualHeader({ context }: { context?: ProjectsVirtualContext }
 }
 
 const PROJECTS_LIST_COMPONENTS: Components<HistoryItemType, ProjectsVirtualContext> = {
-  Footer: ProjectsVirtualBottomSpacer,
+  Footer: ProjectsVirtualFooter,
   Header: ProjectsVirtualHeader,
   List: ProjectsVirtualList,
 };
 
 const PROJECTS_GRID_COMPONENTS: GridComponents = {
-  Footer: ProjectsVirtualBottomSpacer,
+  Footer: ProjectsVirtualFooter,
   Header: ProjectsVirtualTopSpacer,
 };
 
@@ -159,16 +198,23 @@ export function ProjectsResults({
   browseProject,
   filteredAndSortedItems,
   handleOpenItem,
+  initialLoadError,
   isHistoryInteractionLocked,
   isAllItemsScope,
   isHistoryLoading,
+  isInitialLoading,
+  isLoadingMore,
   isSelectionMode,
+  loadMoreError,
   onDeleteHistoryItem,
+  onLoadMore,
   onRenameHistoryItem,
+  onRetryInitialLoad,
   onScroll,
   onToggleSelection,
   resetBrowseState,
-  scopedItems,
+  filteredItemCount,
+  scopeItemCount,
   searchMatchByItemId,
   searchQuery,
   selectedHistoryId,
@@ -183,10 +229,14 @@ export function ProjectsResults({
   const scrollClassName = React.useMemo(() => getVirtualScrollClassName(viewMode), [viewMode]);
   const listContext = React.useMemo<ProjectsVirtualContext>(() => ({
     isSelectionMode,
+    isLoadingMore,
+    loadMoreError,
+    onLoadMore,
     showProjectBadge,
     t,
     viewMode: viewMode === 'table' ? 'table' : 'list',
-  }), [isSelectionMode, showProjectBadge, t, viewMode]);
+  }), [isLoadingMore, isSelectionMode, loadMoreError, onLoadMore, showProjectBadge, t, viewMode]);
+  const isLoading = isHistoryLoading || isInitialLoading;
   const activeSearchResultIndex = React.useMemo(() => {
     if (!activeSearchResultId) {
       return -1;
@@ -267,7 +317,27 @@ export function ProjectsResults({
 
   return (
     <>
-      {!isHistoryLoading && scopedItems.length === 0 && !searchQuery && (
+      {!isLoading && initialLoadError && (
+        renderScrollableState(<div className="projects-overview-card">
+          <CircleAlert size={28} />
+          <h4>
+            {t('projects.initial_load_failed_title', {
+              defaultValue: 'Workspace items could not be loaded',
+            })}
+          </h4>
+          <p>
+            {t('projects.initial_load_failed_hint', {
+              defaultValue: 'Check the connection and try again.',
+            })}
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={onRetryInitialLoad}>
+            <RefreshCw size={16} />
+            {t('common.retry', { defaultValue: 'Retry' })}
+          </button>
+        </div>)
+      )}
+
+      {!isLoading && !initialLoadError && scopeItemCount === 0 && !searchQuery && (
         renderScrollableState(<div className="projects-overview-card">
           <PlusCircleIcon />
           <h4>{t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}</h4>
@@ -287,7 +357,7 @@ export function ProjectsResults({
         </div>)
       )}
 
-      {!isHistoryLoading && (scopedItems.length > 0 || searchQuery) && filteredAndSortedItems.length === 0 && (
+      {!isLoading && !initialLoadError && (scopeItemCount > 0 || searchQuery) && filteredItemCount === 0 && (
         renderScrollableState(<div className="projects-overview-card">
           <Search size={28} />
           <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
@@ -302,19 +372,21 @@ export function ProjectsResults({
         </div>)
       )}
 
-      {isHistoryLoading && (
+      {isLoading && (
         renderScrollableState(<div className="projects-list-empty">
           {t('history.loading')}
         </div>)
       )}
 
-      {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode === 'grid' && (
+      {!isLoading && filteredAndSortedItems.length > 0 && viewMode === 'grid' && (
         <VirtuosoGrid
           key={viewMode}
           className={scrollClassName}
           components={PROJECTS_GRID_COMPONENTS}
           computeItemKey={(_index, item) => item.id}
+          context={listContext}
           data={filteredAndSortedItems}
+          endReached={() => void onLoadMore()}
           increaseViewportBy={VIRTUAL_VIEWPORT_INCREASE}
           itemClassName="projects-grid-virtual-item"
           itemContent={renderVirtualItem}
@@ -324,7 +396,7 @@ export function ProjectsResults({
         />
       )}
 
-      {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode !== 'grid' && (
+      {!isLoading && filteredAndSortedItems.length > 0 && viewMode !== 'grid' && (
         <Virtuoso
           key={viewMode}
           className={scrollClassName}
@@ -335,6 +407,7 @@ export function ProjectsResults({
           defaultItemHeight={viewMode === 'table' ? 64 : 96}
           increaseViewportBy={VIRTUAL_VIEWPORT_INCREASE}
           itemContent={renderVirtualItem}
+          endReached={() => void onLoadMore()}
           onScroll={onScroll}
           ref={virtuosoRef}
         />

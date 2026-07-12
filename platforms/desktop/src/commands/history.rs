@@ -39,6 +39,8 @@ pub async fn history_query_workspace<R: Runtime>(
     filter_type: HistoryWorkspaceFilterType,
     date_filter: HistoryWorkspaceDateFilter,
     sort_order: HistoryWorkspaceSortOrder,
+    limit: usize,
+    offset: usize,
 ) -> Result<HistoryWorkspaceQueryResult, String> {
     let request = HistoryWorkspaceQueryRequest {
         scope,
@@ -46,6 +48,8 @@ pub async fn history_query_workspace<R: Runtime>(
         filter_type,
         date_filter,
         sort_order,
+        limit,
+        offset,
     };
     crate::platform::history_repository::run_history_file_task(
         &app,

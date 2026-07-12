@@ -59,9 +59,9 @@ describe('useWorkspaceBrowseState', () => {
     vi.clearAllMocks();
     vi.mocked(historyQueryWorkspace).mockResolvedValue({
       filteredItems: historyItems,
-      scopedItems: historyItems,
-      scopedItemIds: historyItems.map((item) => item.id),
       searchMatchByItemId: {},
+      filteredItemCount: historyItems.length,
+      hasMore: false,
       summary: {
         totalItems: historyItems.length,
         totalDuration: historyItems.reduce((total, item) => total + item.duration, 0),
@@ -174,9 +174,9 @@ describe('useWorkspaceBrowseState', () => {
       }))
       .mockResolvedValueOnce({
         filteredItems: [secondItem],
-        scopedItems: [secondItem],
-        scopedItemIds: [secondItem.id],
         searchMatchByItemId: {},
+        filteredItemCount: 1,
+        hasMore: false,
         summary: {
           totalItems: 1,
           totalDuration: secondItem.duration,
@@ -214,9 +214,9 @@ describe('useWorkspaceBrowseState', () => {
     await act(async () => {
       resolveFirst?.({
         filteredItems: [firstItem],
-        scopedItems: [firstItem],
-        scopedItemIds: [firstItem.id],
         searchMatchByItemId: {},
+        filteredItemCount: 1,
+        hasMore: false,
         summary: {
           totalItems: 1,
           totalDuration: firstItem.duration,
@@ -247,9 +247,9 @@ describe('useWorkspaceBrowseState', () => {
       filterType: 'batch',
       queryResult: {
         filteredItems: historyItems,
-        scopedItems: historyItems,
-        scopedItemIds: historyItems.map((item) => item.id),
         searchMatchByItemId: {},
+        filteredItemCount: historyItems.length,
+        hasMore: false,
         summary: {
           totalItems: historyItems.length,
           totalDuration: 3600,
@@ -290,9 +290,9 @@ describe('useWorkspaceBrowseState', () => {
     vi.mocked(historyQueryWorkspace)
       .mockResolvedValueOnce({
         filteredItems: historyItems,
-        scopedItems: historyItems,
-        scopedItemIds: historyItems.map((item) => item.id),
         searchMatchByItemId: {},
+        filteredItemCount: historyItems.length,
+        hasMore: false,
         summary: {
           totalItems: historyItems.length,
           totalDuration: historyItems[0].duration,
@@ -331,7 +331,7 @@ describe('useWorkspaceBrowseState', () => {
 
     await waitFor(() => {
       expect(result.current.filteredAndSortedItems).toEqual([]);
-      expect(result.current.scopedItems).toEqual([]);
+      expect(result.current.scopeItemCount).toBe(0);
       expect(result.current.activeSearchResultId).toBeNull();
       expect(result.current.itemCounts.get(null)).toBe(0);
     });

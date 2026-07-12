@@ -121,7 +121,11 @@ pub struct HistoryWorkspaceQueryRequest {
     pub filter_type: HistoryWorkspaceFilterType,
     pub date_filter: HistoryWorkspaceDateFilter,
     pub sort_order: HistoryWorkspaceSortOrder,
+    pub limit: usize,
+    pub offset: usize,
 }
+
+pub const MAX_WORKSPACE_QUERY_LIMIT: usize = 200;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -173,9 +177,9 @@ pub struct HistoryWorkspaceItemCounts {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryWorkspaceQueryResult {
     pub filtered_items: Vec<HistoryItemRecord>,
-    pub scoped_items: Vec<HistoryItemRecord>,
-    pub scoped_item_ids: Vec<String>,
     pub search_match_by_item_id: BTreeMap<String, Option<HistoryWorkspaceItemSearchMatch>>,
+    pub filtered_item_count: usize,
+    pub has_more: bool,
     pub summary: HistoryWorkspaceSummary,
     pub item_counts: HistoryWorkspaceItemCounts,
 }

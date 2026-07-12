@@ -11,6 +11,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum HistoryStoreError {
+    #[error("Invalid history query: {0}")]
+    InvalidRequest(String),
     #[error("Database error: {0}")]
     Database(String),
     #[error("{0}")]

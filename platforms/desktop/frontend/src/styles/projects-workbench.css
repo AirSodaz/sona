@@ -854,6 +854,19 @@
   pointer-events: none;
 }
 
+.projects-pagination-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  color: var(--color-text-secondary);
+}
+
+.projects-pagination-footer .btn {
+  width: 32px;
+  height: 32px;
+}
+
 .projects-overview-card {
   display: flex;
   flex-direction: column;
