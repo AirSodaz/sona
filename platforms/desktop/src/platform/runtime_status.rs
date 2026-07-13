@@ -23,10 +23,17 @@ pub async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Res
 pub fn resolve_runtime_environment_status(
     provider: &dyn crate::platform::paths::PathProvider,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    let ffmpeg_path = sona_local_asr::audio::resolve_ffmpeg_sidecar_path()?;
     let log_dir = provider
         .resolve_path(crate::platform::paths::PathKind::AppLogData)
         .map_err(|e: String| -> String { e })?;
+
+    resolve_runtime_environment_status_for_log_dir(log_dir)
+}
+
+pub fn resolve_runtime_environment_status_for_log_dir(
+    log_dir: std::path::PathBuf,
+) -> Result<RuntimeEnvironmentStatus, String> {
+    let ffmpeg_path = sona_local_asr::audio::resolve_ffmpeg_sidecar_path()?;
 
     Ok(RuntimeEnvironmentStatus {
         ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),

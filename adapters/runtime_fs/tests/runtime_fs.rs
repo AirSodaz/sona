@@ -9,15 +9,19 @@ use sona_core::ports::fs::FileSystem;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
+use sona_core::runtime::diagnostics::{
+    DiagnosticsConfigInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
+};
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::BatchInputSource;
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, NativeAutomationFileSystem, RealFileSystem, SystemClock,
-    UuidGenerator, collect_automation_runtime_candidate_paths, ensure_directory_exists,
-    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
-    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
-    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
+    FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
+    RealFileSystem, SystemClock, UuidGenerator, collect_automation_runtime_candidate_paths,
+    ensure_directory_exists, is_preset_model_installed_at, load_legacy_settings_app_config,
+    load_transcribe_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
+    resolve_batch_input_source, resolve_runtime_path_status,
+    select_desktop_models_dir_from_app_roots, write_cli_config_template_file,
+    write_json_pretty_atomic, write_transcript_output_file,
 };
 use uuid::{Uuid, Version};
 
@@ -283,6 +287,83 @@ fn ensure_directory_exists_creates_nested_directory() {
     ensure_directory_exists(&nested).unwrap();
 
     assert!(nested.is_dir());
+}
+
+#[test]
+fn diagnostics_repository_collects_unicode_catalog_and_trimmed_path_statuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("模型-目录-🌍");
+    std::fs::create_dir_all(&models_dir).unwrap();
+    let vad_model = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
+    std::fs::write(vad_model.resolve_install_path(&models_dir), b"model bytes").unwrap();
+    let live_dir = dir.path().join("实时-模型");
+    std::fs::create_dir_all(&live_dir).unwrap();
+    let vad_path = dir.path().join("vad-探针.onnx");
+    std::fs::write(&vad_path, b"vad").unwrap();
+    let missing_batch = dir.path().join("缺失-batch");
+    let config = DiagnosticsConfigInput {
+        streaming_model_path: format!("  {}  ", live_dir.to_string_lossy()),
+        batch_model_path: missing_batch.to_string_lossy().into_owned(),
+        vad_model_path: vad_path.to_string_lossy().into_owned(),
+        punctuation_model_path: "   ".to_string(),
+        microphone_id: "default".to_string(),
+    };
+    let repository = FsDiagnosticsEnrichmentRepository::new(models_dir.clone());
+
+    let measurements = repository.collect_measurements(&config).unwrap();
+
+    assert_eq!(
+        measurements.model_catalog.models_dir,
+        models_dir.to_string_lossy()
+    );
+    assert!(
+        measurements
+            .model_catalog
+            .models
+            .iter()
+            .any(|model| model.id == DEFAULT_SILERO_VAD_MODEL_ID && model.is_installed)
+    );
+    assert_eq!(
+        measurements.path_statuses.live_model.as_ref().unwrap().path,
+        live_dir.to_string_lossy()
+    );
+    assert_eq!(
+        measurements.path_statuses.live_model.as_ref().unwrap().kind,
+        RuntimePathKind::Directory
+    );
+    assert_eq!(
+        measurements
+            .path_statuses
+            .batch_model
+            .as_ref()
+            .unwrap()
+            .kind,
+        RuntimePathKind::Missing
+    );
+    assert_eq!(
+        measurements.path_statuses.vad.as_ref().unwrap().kind,
+        RuntimePathKind::File
+    );
+    assert!(measurements.path_statuses.punctuation.is_none());
+}
+
+#[test]
+fn diagnostics_repository_creates_models_directory_and_maps_failures() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("new-models");
+    let repository = FsDiagnosticsEnrichmentRepository::new(models_dir.clone());
+    let config = DiagnosticsConfigInput::default();
+
+    repository.collect_measurements(&config).unwrap();
+    assert!(models_dir.is_dir());
+
+    let blocked = dir.path().join("blocked-models");
+    std::fs::write(&blocked, b"not a directory").unwrap();
+    let error = FsDiagnosticsEnrichmentRepository::new(blocked)
+        .collect_measurements(&config)
+        .unwrap_err();
+
+    assert!(matches!(error, DiagnosticsError::Repository(_)));
 }
 
 #[test]

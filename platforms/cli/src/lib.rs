@@ -4,6 +4,7 @@ mod automation;
 mod config_template;
 mod dashboard;
 mod desktop_paths;
+mod diagnostics;
 mod init_config;
 mod models;
 mod projects;
@@ -97,6 +98,8 @@ enum Commands {
     Automation(automation::AutomationArgs),
     /// Shows a read-only dashboard snapshot.
     Dashboard(dashboard::DashboardArgs),
+    /// Builds diagnostics snapshots from host-provided facts.
+    Diagnostics(diagnostics::DiagnosticsArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
@@ -128,6 +131,7 @@ where
         Commands::AppConfig(args) => app_config::run_app_config(args),
         Commands::Automation(args) => automation::run_automation(args),
         Commands::Dashboard(args) => dashboard::run_dashboard(args),
+        Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),

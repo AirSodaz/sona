@@ -14,6 +14,7 @@ import uniffi.sona_uniffi_bind.defaultConfigJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadDashboardSnapshotJson
+import uniffi.sona_uniffi_bind.loadDiagnosticsSnapshotJson
 import uniffi.sona_uniffi_bind.loadProjectRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.loadStorageUsageSnapshotJson
@@ -102,6 +103,9 @@ object SonaUniffiSmoke {
 
     suspend fun loadDashboard(appDataDir: String, deep: Boolean): String =
         loadDashboardSnapshotJson(appDataDir, deep)
+
+    suspend fun loadDiagnostics(appDataDir: String, inputJson: String): String =
+        loadDiagnosticsSnapshotJson(appDataDir, inputJson)
 
     suspend fun loadStorageUsage(appDataDir: String): String =
         loadStorageUsageSnapshotJson(appDataDir)

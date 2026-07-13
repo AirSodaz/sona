@@ -1,14 +1,76 @@
+use serde_json::json;
+use sona_core::models::preset_models::{
+    ModelCatalogSnapshot, build_model_catalog_snapshot_with_installed_ids,
+};
 use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
-    ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
+    DiagnosticsEnrichmentMeasurements, DiagnosticsEnrichmentRepository, DiagnosticsError,
+    DiagnosticsService, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
     VoiceTypingReadinessInput, build_diagnostics_core_snapshot_at,
 };
 use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
+use std::collections::HashSet;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 const SCANNED_AT: &str = "2026-07-08T01:02:03.004Z";
+const LIVE_MODEL_ID: &str = "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en";
+const BATCH_MODEL_ID: &str = "sherpa-onnx-whisper-turbo";
+
+struct FixedRepository {
+    measurements: Mutex<Option<DiagnosticsEnrichmentMeasurements>>,
+}
+
+impl DiagnosticsEnrichmentRepository for FixedRepository {
+    fn collect_measurements(
+        &self,
+        _config: &DiagnosticsConfigInput,
+    ) -> Result<DiagnosticsEnrichmentMeasurements, DiagnosticsError> {
+        Ok(self.measurements.lock().unwrap().take().unwrap())
+    }
+}
+
+struct FailingRepository;
+
+impl DiagnosticsEnrichmentRepository for FailingRepository {
+    fn collect_measurements(
+        &self,
+        _config: &DiagnosticsConfigInput,
+    ) -> Result<DiagnosticsEnrichmentMeasurements, DiagnosticsError> {
+        Err(DiagnosticsError::Repository(
+            "catalog scan failed".to_string(),
+        ))
+    }
+}
+
+fn model_catalog(models_dir: &Path) -> ModelCatalogSnapshot {
+    build_model_catalog_snapshot_with_installed_ids(models_dir, &HashSet::new())
+}
+
+fn model_path(catalog: &ModelCatalogSnapshot, model_id: &str) -> String {
+    catalog
+        .models
+        .iter()
+        .find(|model| model.id == model_id)
+        .unwrap()
+        .install_path
+        .clone()
+}
+
+fn measurements(catalog: ModelCatalogSnapshot) -> DiagnosticsEnrichmentMeasurements {
+    DiagnosticsEnrichmentMeasurements {
+        model_catalog: catalog,
+        path_statuses: PathStatusesInput {
+            live_model: Some(path_status("live-measured", RuntimePathKind::Directory)),
+            batch_model: Some(path_status("batch-measured", RuntimePathKind::Directory)),
+            vad: Some(path_status("vad-measured", RuntimePathKind::File)),
+            punctuation: None,
+        },
+    }
+}
 
 fn base_input() -> DiagnosticsCoreInput {
     DiagnosticsCoreInput {
@@ -204,4 +266,172 @@ fn core_snapshot_uses_supplied_scanned_at_timestamp() {
     let snapshot = build_diagnostics_core_snapshot_at(base_input(), SCANNED_AT.to_string());
 
     assert_eq!(snapshot.scanned_at, SCANNED_AT);
+}
+
+#[test]
+fn service_owns_model_selection_rules_and_readiness_policy() {
+    let models_dir = Path::new("C:\\sona\\模型");
+    let catalog = model_catalog(models_dir);
+    let live_path = model_path(&catalog, LIVE_MODEL_ID);
+    let batch_path = model_path(&catalog, BATCH_MODEL_ID);
+    let mut input = base_input();
+    input.config.streaming_model_path = live_path;
+    input.config.batch_model_path = batch_path;
+    input.selected_models = SelectedModelsInput::default();
+    input.model_rules = ModelRulesInput::default();
+    input.path_statuses = PathStatusesInput::default();
+    input.onboarding_ready = false;
+    input.punctuation_required = false;
+    let expected_environment = input.runtime_environment.clone();
+    let expected_metrics = input.asr_runtime_metrics.clone();
+    let service = DiagnosticsService::new(Arc::new(FixedRepository {
+        measurements: Mutex::new(Some(measurements(catalog))),
+    }));
+
+    let snapshot = service
+        .build_snapshot_at(input, SCANNED_AT.to_string())
+        .unwrap();
+
+    assert_eq!(
+        snapshot.selected_models.live.as_ref().unwrap().id,
+        LIVE_MODEL_ID
+    );
+    assert_eq!(
+        snapshot.selected_models.batch.as_ref().unwrap().id,
+        BATCH_MODEL_ID
+    );
+    assert!(!snapshot.model_rules.live.as_ref().unwrap().requires_vad);
+    assert!(
+        snapshot
+            .model_rules
+            .live
+            .as_ref()
+            .unwrap()
+            .requires_punctuation
+    );
+    assert!(snapshot.model_rules.batch.as_ref().unwrap().requires_vad);
+    assert!(snapshot.onboarding_ready);
+    assert!(snapshot.punctuation_required);
+    assert_eq!(
+        snapshot.path_statuses.live_model.as_ref().unwrap().path,
+        "live-measured"
+    );
+    assert_eq!(snapshot.runtime_environment, expected_environment);
+    assert_eq!(snapshot.asr_runtime_metrics, expected_metrics);
+    assert_eq!(snapshot.scanned_at, SCANNED_AT);
+}
+
+#[test]
+fn service_clears_derived_fields_for_blank_model_paths() {
+    let catalog = model_catalog(Path::new("C:\\sona\\models"));
+    let mut input = base_input();
+    input.config.streaming_model_path = "  ".to_string();
+    input.config.batch_model_path.clear();
+    input.selected_models = SelectedModelsInput {
+        live: Some(ModelSummaryInput {
+            id: "stale-live".to_string(),
+            name: "Stale".to_string(),
+        }),
+        batch: None,
+    };
+    input.punctuation_required = true;
+    input.onboarding_ready = true;
+    let service = DiagnosticsService::new(Arc::new(FixedRepository {
+        measurements: Mutex::new(Some(DiagnosticsEnrichmentMeasurements {
+            model_catalog: catalog,
+            path_statuses: PathStatusesInput::default(),
+        })),
+    }));
+
+    let snapshot = service
+        .build_snapshot_at(input, SCANNED_AT.to_string())
+        .unwrap();
+
+    assert!(snapshot.selected_models.live.is_none());
+    assert!(snapshot.selected_models.batch.is_none());
+    assert!(snapshot.model_rules.live.is_none());
+    assert!(snapshot.model_rules.batch.is_none());
+    assert!(!snapshot.onboarding_ready);
+    assert!(!snapshot.punctuation_required);
+    assert!(snapshot.path_statuses.live_model.is_none());
+}
+
+#[test]
+fn service_propagates_repository_errors() {
+    let error = DiagnosticsService::new(Arc::new(FailingRepository))
+        .build_snapshot_at(base_input(), SCANNED_AT.to_string())
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        DiagnosticsError::Repository("catalog scan failed".to_string())
+    );
+}
+
+#[test]
+fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
+    let catalog = model_catalog(Path::new("C:\\sona\\models"));
+    let live_path = model_path(&catalog, LIVE_MODEL_ID);
+    let batch_path = model_path(&catalog, BATCH_MODEL_ID);
+    let mut input = base_input();
+    input.config.streaming_model_path = live_path.clone();
+    input.config.batch_model_path = batch_path.clone();
+    let service = DiagnosticsService::new(Arc::new(FixedRepository {
+        measurements: Mutex::new(Some(measurements(catalog))),
+    }));
+
+    let value = serde_json::to_value(
+        service
+            .build_snapshot_at(input, SCANNED_AT.to_string())
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        value,
+        json!({
+            "scannedAt": SCANNED_AT,
+            "config": {
+                "streamingModelPath": live_path,
+                "batchModelPath": batch_path,
+                "vadModelPath": "C:\\models\\vad.onnx",
+                "punctuationModelPath": "",
+                "microphoneId": "default"
+            },
+            "selectedModels": {
+                "live": {"id": LIVE_MODEL_ID, "name": "Paraformer"},
+                "batch": {"id": BATCH_MODEL_ID, "name": "Whisper"}
+            },
+            "modelRules": {
+                "live": {"requiresVad": false, "requiresPunctuation": true},
+                "batch": {"requiresVad": true, "requiresPunctuation": false}
+            },
+            "pathStatuses": {
+                "liveModel": {"path": "live-measured", "kind": "directory", "error": null},
+                "batchModel": {"path": "batch-measured", "kind": "directory", "error": null},
+                "vad": {"path": "vad-measured", "kind": "file", "error": null},
+                "punctuation": null
+            },
+            "permissionState": "granted",
+            "microphoneProbe": {
+                "options": [{"label": "Auto", "value": "default"}],
+                "available": true,
+                "errorMessage": null
+            },
+            "systemAudioProbe": {"options": [], "available": true, "errorMessage": null},
+            "voiceTypingReadiness": {"state": "ready", "lastErrorMessage": null},
+            "runtimeEnvironment": {
+                "ffmpegPath": "C:\\app\\ffmpeg.exe",
+                "ffmpegExists": true,
+                "logDirPath": "C:\\app\\logs"
+            },
+            "asrRuntimeMetrics": {
+                "modelLoad": null,
+                "liveInference": null,
+                "batchInference": null
+            },
+            "onboardingReady": true,
+            "punctuationRequired": true
+        })
+    );
 }

@@ -202,6 +202,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
     'utf8',
   );
   const runtimeFsLib = read('adapters', 'runtime_fs', 'src', 'lib.rs');
+  const runtimeFsDiagnostics = read('adapters', 'runtime_fs', 'src', 'diagnostics.rs');
   const cliInitConfig = read('platforms', 'cli', 'src', 'init_config.rs');
   const cliModels = read('platforms', 'cli', 'src', 'models.rs');
   const cliTranscribe = read('platforms', 'cli', 'src', 'transcribe.rs');
@@ -271,7 +272,7 @@ test('runtime filesystem operations live in a dedicated adapter crate', () => {
   assert.doesNotMatch(desktopRuntimeStatus, /std::fs::create_dir_all/u);
   assert.match(desktopPresetModels, /sona_runtime_fs::ensure_directory_exists\(&models_dir\)/u);
   assert.doesNotMatch(desktopPresetModels, /std::fs::create_dir_all/u);
-  assert.match(desktopDiagnostics, /sona_runtime_fs::ensure_directory_exists\(&models_dir\)/u);
+  assert.match(runtimeFsDiagnostics, /crate::ensure_directory_exists\(&self\.models_dir\)/u);
   assert.doesNotMatch(desktopDiagnostics, /std::fs::create_dir_all/u);
   assert.doesNotMatch(coreFileUtils, /SystemTime::now|current_time_millis/u);
   assert.doesNotMatch(
@@ -395,15 +396,29 @@ test('dashboard and diagnostics clocks are supplied by desktop adapters', () => 
     'src',
     'dashboard_time.rs',
   );
+  const runtimeFsDiagnosticsTime = read(
+    'adapters',
+    'runtime_fs',
+    'src',
+    'diagnostics_time.rs',
+  );
   const desktopTime = read(...desktopCrateSegments, 'src', 'platform', 'time.rs');
   const tauriDashboard = read(...desktopCrateSegments, 'src', 'app', 'dashboard.rs');
 
-  assert.match(coreDiagnostics, /pub fn build_diagnostics_core_snapshot_at/u);
+  assert.match(coreDiagnostics, /pub struct DiagnosticsService/u);
+  assert.match(coreDiagnostics, /pub fn build_snapshot_at/u);
   assert.doesNotMatch(coreDiagnostics, /pub fn build_diagnostics_core_snapshot\(/u);
   assert.doesNotMatch(coreDiagnostics, /Utc::now|chrono::Utc::now|now_iso_like/u);
-  assert.match(tauriDiagnostics, /build_diagnostics_core_snapshot_at/u);
-  assert.match(tauriDiagnostics, /crate::platform::time::utc_now_rfc3339_millis\(\)/u);
+  assert.match(tauriDiagnostics, /DiagnosticsService::new/u);
+  assert.match(tauriDiagnostics, /FsDiagnosticsEnrichmentRepository::new/u);
+  assert.match(tauriDiagnostics, /tauri::async_runtime::spawn_blocking/u);
+  assert.doesNotMatch(tauriDiagnostics, /resolve_model_catalog_selected_ids/u);
+  assert.doesNotMatch(tauriDiagnostics, /input\.onboarding_ready\s*=/u);
+  assert.doesNotMatch(tauriDiagnostics, /input\.punctuation_required\s*=/u);
+  assert.match(tauriDiagnostics, /sona_runtime_fs::diagnostics_scanned_at_now\(\)/u);
   assert.doesNotMatch(tauriDiagnostics, /chrono::Utc::now\(\)/u);
+  assert.match(runtimeFsDiagnosticsTime, /pub fn diagnostics_scanned_at_now\(\)/u);
+  assert.match(runtimeFsDiagnosticsTime, /Utc::now\(\)/u);
 
   assert.match(coreDashboardService, /pub struct DashboardSnapshotTime/u);
   assert.match(coreDashboardService, /build_snapshot_at/u);
@@ -576,8 +591,9 @@ test('desktop runtime status adapter lives in platform layer', () => {
   assert.match(systemCommand, /crate::platform::runtime_status::open_log_folder\(app\)\.await/u);
   assert.match(systemCommand, /crate::platform::runtime_status::get_runtime_environment_status\(app\)\.await/u);
   assert.match(systemCommand, /crate::platform::runtime_status::get_path_statuses\(paths\)\.await/u);
-  assert.match(platformDiagnostics, /crate::platform::runtime_status::resolve_runtime_environment_status\(provider\)/u);
-  assert.match(platformDiagnostics, /crate::platform::runtime_status::resolve_runtime_path_status\(path\)/u);
+  assert.match(platformDiagnostics, /resolve_runtime_environment_status_for_log_dir/u);
+  assert.match(platformDiagnostics, /FsDiagnosticsEnrichmentRepository::new/u);
+  assert.doesNotMatch(platformDiagnostics, /resolve_runtime_path_status/u);
   assert.doesNotMatch(systemCommand, /crate::app::runtime_status/u);
   assert.doesNotMatch(platformDiagnostics, /crate::app::runtime_status/u);
 });

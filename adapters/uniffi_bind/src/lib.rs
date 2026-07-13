@@ -4,6 +4,7 @@ mod asr_streaming_bridge;
 mod automation_bridge;
 mod config_bridge;
 mod dashboard_bridge;
+mod diagnostics_bridge;
 mod facade;
 mod json_bridge;
 mod llm_bridge;
@@ -56,6 +57,8 @@ pub enum SonaCoreBindingError {
     ConfigRepository { reason: String },
     #[error("{reason}")]
     Dashboard { reason: String },
+    #[error("{reason}")]
+    Diagnostics { reason: String },
     #[error("{reason}")]
     StorageUsage { reason: String },
 }
@@ -358,6 +361,14 @@ pub async fn load_dashboard_snapshot_json(
     deep: bool,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_dashboard_snapshot_json(app_data_dir, deep).await
+}
+
+#[uniffi::export]
+pub async fn load_diagnostics_snapshot_json(
+    app_data_dir: String,
+    input_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_diagnostics_snapshot_json(app_data_dir, input_json).await
 }
 
 #[uniffi::export]

@@ -609,6 +609,10 @@ test('desktop platform adapters own Tauri path event diagnostics and preset mode
   assert.match(platformDiagnostics, /pub use sona_core::runtime::diagnostics::\{/u);
   assert.match(platformDiagnostics, /crate::platform::paths::\{PathKind, PathProvider\}/u);
   assert.match(platformDiagnostics, /pub async fn get_diagnostics_core_snapshot_for_app/u);
+  assert.match(platformDiagnostics, /DiagnosticsService::new/u);
+  assert.match(platformDiagnostics, /FsDiagnosticsEnrichmentRepository::new/u);
+  assert.match(platformDiagnostics, /tauri::async_runtime::spawn_blocking/u);
+  assert.doesNotMatch(platformDiagnostics, /resolve_model_catalog_selected_ids/u);
   assert.match(systemCommand, /crate::platform::preset_models::get_model_catalog_snapshot_for_app\(&app\)\.await/u);
   assert.match(systemCommand, /crate::platform::preset_models::resolve_model_catalog_selected_ids_for_app\(&app, paths\)\.await/u);
   assert.match(systemCommand, /crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app\(&app, state, input\)\.await/u);

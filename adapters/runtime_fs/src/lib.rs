@@ -1,7 +1,11 @@
 mod dashboard_time;
+mod diagnostics;
+mod diagnostics_time;
 mod storage_usage_time;
 
 pub use dashboard_time::dashboard_snapshot_time_now;
+pub use diagnostics::FsDiagnosticsEnrichmentRepository;
+pub use diagnostics_time::diagnostics_scanned_at_now;
 pub use storage_usage_time::storage_usage_generated_at_now;
 
 use serde::Serialize;

@@ -627,6 +627,41 @@ test('dashboard reporting is exposed through UniFFI and Android bindings', () =>
   assert.match(androidConsumer, /loadDashboardSnapshotJson\(appDataDir, false\)/u);
 });
 
+test('diagnostics snapshots are exposed through UniFFI and Android bindings', () => {
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
+  const diagnosticsBridge = read('adapters', 'uniffi_bind', 'src', 'diagnostics_bridge.rs');
+  const androidSample = read(
+    'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+  );
+
+  assert.match(uniffiLib, /^mod diagnostics_bridge;/mu);
+  assert.match(
+    uniffiLib,
+    /#\[uniffi::export\]\s*pub async fn load_diagnostics_snapshot_json\(\s*app_data_dir: String,\s*input_json: String,\s*\) -> SonaCoreBindingResult<String>/u,
+  );
+  assert.match(uniffiLib, /SonaCoreFacade::load_diagnostics_snapshot_json\(app_data_dir, input_json\)\.await/u);
+  assert.match(uniffiFacade, /pub async fn load_diagnostics_snapshot_json\(/u);
+  assert.match(diagnosticsBridge, /tokio::task::spawn_blocking/u);
+  assert.match(diagnosticsBridge, /FsDiagnosticsEnrichmentRepository::new/u);
+  assert.match(diagnosticsBridge, /DiagnosticsService::new/u);
+  assert.match(diagnosticsBridge, /diagnostics_scanned_at_now\(\)/u);
+  assert.match(diagnosticsBridge, /serde_json::to_string\(&canonical\)/u);
+  assert.doesNotMatch(diagnosticsBridge, /sona_local_asr|AsrState/u);
+
+  assert.match(androidSample, /^import uniffi\.sona_uniffi_bind\.loadDiagnosticsSnapshotJson$/mu);
+  assert.match(androidSample, /suspend fun loadDiagnostics\(appDataDir: String, inputJson: String\): String/u);
+  assert.match(androidSample, /loadDiagnosticsSnapshotJson\(appDataDir, inputJson\)/u);
+  assert.match(androidConsumer, /^import uniffi\.sona_uniffi_bind\.loadDiagnosticsSnapshotJson$/mu);
+  assert.match(androidConsumer, /suspend fun loadDiagnostics\(appDataDir: String, inputJson: String\): String/u);
+  assert.match(androidConsumer, /loadDiagnosticsSnapshotJson\(appDataDir, inputJson\)/u);
+});
+
 test('storage usage reporting is exposed through UniFFI and Android bindings', () => {
   const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
   const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
