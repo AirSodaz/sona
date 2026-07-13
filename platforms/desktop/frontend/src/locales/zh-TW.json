@@ -20,6 +20,9 @@
         "ok": "確定",
         "open": "開啟",
         "actions_for": "{{item}} 的操作",
+        "cut": "剪下",
+        "copy": "複製",
+        "paste": "貼上",
         "rename": "重新命名",
         "rename_item": "重新命名 {{item}}",
         "rename_prompt": "輸入新名稱",
@@ -235,6 +238,7 @@
         "error_src_not_supported": "音訊格式不支援或檔案遺失。"
     },
     "editor": {
+        "context_menu_label": "文字編輯操作",
         "empty_state": "暫無轉錄分段。\n開始錄音或匯入檔案。",
         "seek_tooltip": "點擊跳轉",
         "edit_tooltip": "編輯分段",

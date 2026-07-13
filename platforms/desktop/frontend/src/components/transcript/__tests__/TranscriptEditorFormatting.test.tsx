@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { TranscriptEditor } from '../TranscriptEditor';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 
 // Mock i18next
 vi.mock('react-i18next', () => ({
@@ -34,6 +35,12 @@ vi.mock('react-virtuoso', () => ({
 // Icons might need mocking if they use assets? usually SVG components. fine.
 
 describe('TranscriptEditor Formatting', () => {
+    const renderEditor = () => render(
+        <ContextMenuProvider>
+            <TranscriptEditor />
+        </ContextMenuProvider>,
+    );
+
     beforeEach(() => {
         // Reset store
         useTranscriptStore.setState({
@@ -58,7 +65,7 @@ describe('TranscriptEditor Formatting', () => {
             ]
         });
 
-        render(<TranscriptEditor />);
+        renderEditor();
 
         const world = screen.getByText('World');
         expect(world.tagName).toBe('STRONG');
@@ -79,7 +86,7 @@ describe('TranscriptEditor Formatting', () => {
             ]
         });
 
-        render(<TranscriptEditor />);
+        renderEditor();
 
         expect(screen.getByText('Bold').tagName).toBe('STRONG');
         expect(screen.getByText('italic').tagName).toBe('EM');
@@ -101,7 +108,7 @@ describe('TranscriptEditor Formatting', () => {
             ]
          });
 
-         render(<TranscriptEditor />);
+         renderEditor();
 
          // Find the paragraph container
          // Text is likely split into "Line", "\n", "Break" tokens.

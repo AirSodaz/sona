@@ -20,6 +20,9 @@
         "ok": "OK",
         "open": "開く",
         "actions_for": "{{item}} の操作",
+        "cut": "切り取り",
+        "copy": "コピー",
+        "paste": "貼り付け",
         "rename": "名前の変更",
         "rename_item": "{{item}} の名前を変更します",
         "rename_prompt": "新しいタイトルを入力してください",
@@ -235,6 +238,7 @@
         "error_src_not_supported": "オーディオ形式がサポートされていないか、ファイルが見つかりません。"
     },
     "editor": {
+        "context_menu_label": "テキスト編集操作",
         "empty_state": "トランスクリプトセグメントはまだありません。\n録音を開始するか、ファイルをインポートします。",
         "seek_tooltip": "クリックして検索",
         "edit_tooltip": "セグメントの編集",

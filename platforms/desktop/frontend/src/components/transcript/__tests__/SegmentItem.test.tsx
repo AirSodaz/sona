@@ -6,6 +6,7 @@ import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
 import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
+import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
@@ -66,9 +67,11 @@ describe('SegmentItem Highlighting', () => {
     });
 
     const renderComponent = () => render(
-        <TranscriptUIContext.Provider value={uiStore}>
-            <SegmentItem {...defaultProps} />
-        </TranscriptUIContext.Provider>
+        <ContextMenuProvider>
+            <TranscriptUIContext.Provider value={uiStore}>
+                <SegmentItem {...defaultProps} />
+            </TranscriptUIContext.Provider>
+        </ContextMenuProvider>
     );
 
     it('highlights the first token at start time', () => {

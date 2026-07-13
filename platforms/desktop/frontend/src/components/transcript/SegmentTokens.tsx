@@ -1,9 +1,10 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
 import { sanitizeTranscriptHtml } from '../../utils/transcriptTextUtils';
+import { useReadonlySegmentContextMenu } from './context-menu/useReadonlySegmentContextMenu';
 
 /** Props for SegmentTokens component. */
 export interface SegmentTokensProps {
@@ -24,6 +25,9 @@ interface TokenListProps {
     onMatchClick?: (index: number) => void;
     matches?: Match[];
     activeMatch?: Match | null;
+    rootRef: React.RefObject<HTMLParagraphElement | null>;
+    onContextMenu: React.MouseEventHandler<HTMLElement>;
+    onContextMenuKeyDown: React.KeyboardEventHandler<HTMLElement>;
 }
 
 /**
@@ -100,7 +104,10 @@ function TokenListComponent({
     onSeek,
     onMatchClick,
     matches,
-    activeMatch
+    activeMatch,
+    rootRef,
+    onContextMenu,
+    onContextMenuKeyDown,
 }: TokenListProps): React.JSX.Element {
     // Calculate token indices for highlighting
     // This is cheap enough to do in render for a single segment, but could be memoized if needed.
@@ -117,7 +124,15 @@ function TokenListComponent({
     }, [alignedUnits]);
 
     return (
-        <p className={`segment-text ${!isFinal ? 'partial' : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
+        <p
+            ref={rootRef}
+            className={`segment-text ${!isFinal ? 'partial' : ''}`}
+            style={{ whiteSpace: 'pre-wrap' }}
+            tabIndex={0}
+            aria-haspopup="menu"
+            onContextMenu={onContextMenu}
+            onKeyDown={onContextMenuKeyDown}
+        >
             {tokensWithIndices ? (
                 tokensWithIndices.map((tokenObj, i) => {
                     const isTimeActive = tokenObj.start === activeUnitStart;
@@ -223,6 +238,11 @@ function SegmentTokensComponent({
     matches,
     activeMatch
 }: SegmentTokensProps): React.JSX.Element {
+    const rootRef = useRef<HTMLParagraphElement>(null);
+    const contextMenuHandlers = useReadonlySegmentContextMenu({
+        segmentId: segment.id,
+        rootRef,
+    });
     const alignedUnits = useMemo(() => (
         segment.timing?.level === 'token' ? segment.timing.units : null
     ), [segment.timing]);
@@ -241,6 +261,9 @@ function SegmentTokensComponent({
             onMatchClick={onMatchClick}
             matches={matches}
             activeMatch={activeMatch}
+            rootRef={rootRef}
+            onContextMenu={contextMenuHandlers.onContextMenu}
+            onContextMenuKeyDown={contextMenuHandlers.onKeyDown}
         />
     );
 

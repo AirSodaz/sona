@@ -39,6 +39,14 @@ describe('locale resources', () => {
 
     for (const [locale, resource] of Object.entries(locales)) {
       expect(resource.common.open, `${locale}:common.open`).toBeTruthy();
+      expect(resource.common.cut, `${locale}:common.cut`).toBeTruthy();
+      expect(resource.common.copy, `${locale}:common.copy`).toBeTruthy();
+      expect(resource.common.paste, `${locale}:common.paste`).toBeTruthy();
+      expect(resource.common.select_all, `${locale}:common.select_all`).toBeTruthy();
+      expect(resource.editor.context_menu_label, `${locale}:editor.context_menu_label`).toBeTruthy();
+      expect(resource.editor.bold, `${locale}:editor.bold`).toBeTruthy();
+      expect(resource.editor.italic, `${locale}:editor.italic`).toBeTruthy();
+      expect(resource.editor.underline, `${locale}:editor.underline`).toBeTruthy();
       expect(
         getInterpolationNames(resource.common.actions_for),
         `${locale}:common.actions_for`,

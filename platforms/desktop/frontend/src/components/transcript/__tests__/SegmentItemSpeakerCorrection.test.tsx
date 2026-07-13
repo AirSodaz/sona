@@ -57,6 +57,7 @@ import { resetTranscriptStores } from '../../../test-utils/transcriptStoreTestUt
 import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, type TranscriptUIState } from '../TranscriptUIContext';
+import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 
 describe('SegmentItem speaker correction', () => {
   let uiStore: StoreApi<TranscriptUIState>;
@@ -176,19 +177,21 @@ describe('SegmentItem speaker correction', () => {
 
   function renderComponent() {
     return render(
-      <TranscriptUIContext.Provider value={uiStore}>
-        <SegmentItem
-          segment={normalizeTranscriptSegment(useTranscriptSessionStore.getState().segments[0])}
-          index={0}
-          showSpeakerLabel
-          onSeek={vi.fn()}
-          onEdit={vi.fn()}
-          onSave={vi.fn()}
-          onDelete={vi.fn()}
-          onMergeWithNext={vi.fn()}
-          onAnimationEnd={vi.fn()}
-        />
-      </TranscriptUIContext.Provider>,
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem
+            segment={normalizeTranscriptSegment(useTranscriptSessionStore.getState().segments[0])}
+            index={0}
+            showSpeakerLabel
+            onSeek={vi.fn()}
+            onEdit={vi.fn()}
+            onSave={vi.fn()}
+            onDelete={vi.fn()}
+            onMergeWithNext={vi.fn()}
+            onAnimationEnd={vi.fn()}
+          />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>,
     );
   }
 

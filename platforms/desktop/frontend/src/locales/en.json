@@ -20,6 +20,9 @@
         "ok": "OK",
         "open": "Open",
         "actions_for": "Actions for {{item}}",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
         "rename": "Rename",
         "rename_item": "Rename {{item}}",
         "rename_prompt": "Enter new title",
@@ -235,6 +238,7 @@
         "error_src_not_supported": "Audio format not supported or file missing."
     },
     "editor": {
+        "context_menu_label": "Text editing actions",
         "empty_state": "No transcript segments yet.\nStart recording or import a file.",
         "seek_tooltip": "Click to seek",
         "edit_tooltip": "Edit segment",

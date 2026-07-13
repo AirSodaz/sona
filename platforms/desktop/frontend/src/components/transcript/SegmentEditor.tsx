@@ -3,6 +3,7 @@ import { LexicalComposer, type InitialConfigType } from '@lexical/react/LexicalC
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -15,6 +16,24 @@ import { setActiveEditor } from '../../stores/transcriptRuntimeStore';
 import { convertOldFormatToLexical } from '../../utils/dataMigrationUtils';
 import { serializeSplitBlocks } from '../../utils/lexicalSplitUtils';
 import { logger } from '../../utils/logger';
+import { SegmentEditorContextMenuPlugin } from './context-menu/SegmentEditorContextMenuPlugin';
+
+interface ActiveEditorPluginProps {
+  onReady: (editor: LexicalEditor) => void;
+}
+
+function ActiveEditorPlugin({ onReady }: ActiveEditorPluginProps): null {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    onReady(editor);
+    return () => {
+      setActiveEditor(null);
+    };
+  }, [editor, onReady]);
+
+  return null;
+}
 
 /** Props for SegmentEditor. */
 export interface SegmentEditorProps {
@@ -42,6 +61,7 @@ export function SegmentEditor({
   onSplit,
 }: SegmentEditorProps): React.JSX.Element {
   const editorRef = useRef<LexicalEditor | null>(null);
+  const isContextMenuOpenRef = useRef(false);
 
   // Detect and convert old format (<b>/<i>/<u>) to Lexical format
   const lexicalHtml = convertOldFormatToLexical(initialHtml);
@@ -50,7 +70,6 @@ export function SegmentEditor({
     namespace: `Segment-${segmentId}`,
     editorState: (editor: LexicalEditor) => {
       editorRef.current = editor;
-      setActiveEditor(editor);
       const dom = new DOMParser().parseFromString(lexicalHtml, 'text/html');
       const nodes = $generateNodesFromDOM(editor, dom);
       const root = $getRoot();
@@ -71,20 +90,15 @@ export function SegmentEditor({
     },
   };
 
-  const handleEditorReady = useCallback(
-    (_editorState: EditorState, editor: LexicalEditor) => {
-      editorRef.current = editor;
-      setActiveEditor(editor);
-    },
-    [],
-  );
-
-  // Cleanup: clear the active ref when this editor unmounts
-  useEffect(() => {
-    return () => {
-      setActiveEditor(null);
-    };
+  const handleActiveEditor = useCallback((editor: LexicalEditor) => {
+    editorRef.current = editor;
+    setActiveEditor(editor);
   }, []);
+
+  const handleEditorReady = useCallback(
+    (_editorState: EditorState, editor: LexicalEditor) => handleActiveEditor(editor),
+    [handleActiveEditor],
+  );
 
   /** Serializes current editor state to HTML. */
   const getHtml = useCallback((): string => {
@@ -130,9 +144,19 @@ export function SegmentEditor({
     [onSave, onCancel, onSplit, getHtml],
   );
 
-  const handleBlur = useCallback(() => {
+  const handleCommit = useCallback(() => {
     onSave(getHtml());
   }, [onSave, getHtml]);
+
+  const handleBlur = useCallback(() => {
+    if (!isContextMenuOpenRef.current) {
+      handleCommit();
+    }
+  }, [handleCommit]);
+
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    isContextMenuOpenRef.current = open;
+  }, []);
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
@@ -155,6 +179,12 @@ export function SegmentEditor({
       />
       <HistoryPlugin />
       <OnChangePlugin onChange={handleEditorReady} />
+      <ActiveEditorPlugin onReady={handleActiveEditor} />
+      <SegmentEditorContextMenuPlugin
+        segmentId={segmentId}
+        onCommit={handleCommit}
+        onMenuOpenChange={handleContextMenuOpenChange}
+      />
     </LexicalComposer>
   );
 }
