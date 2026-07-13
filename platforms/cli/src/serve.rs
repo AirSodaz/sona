@@ -97,6 +97,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             normalized_ip_whitelist,
             mut shutdown_tx,
             mut join_handle,
+            ..
         } = start_api_server_runtime(ApiServerServiceParts {
             resolved,
             temp_dir,
