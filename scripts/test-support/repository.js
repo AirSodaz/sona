@@ -55,6 +55,7 @@ const expectedUniffiExports = Object.freeze([
   'get_app_setting_json',
   'set_app_setting_json',
   'load_dashboard_snapshot_json',
+  'load_storage_usage_snapshot_json',
   'runtime_path_status',
   'create_online_asr_streaming_session',
   'default_batch_segmentation_mode',
@@ -97,6 +98,7 @@ const expectedUniffiErrorVariants = Object.freeze([
   'AsrRuntime',
   'ConfigRepository',
   'Dashboard',
+  'StorageUsage',
 ]);
 const desktopFrontendDependencies = [
   '@dnd-kit/core',

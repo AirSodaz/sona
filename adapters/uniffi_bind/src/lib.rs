@@ -12,6 +12,7 @@ mod model_bridge;
 mod project_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
+mod storage_usage_bridge;
 mod task_ledger_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
@@ -55,6 +56,8 @@ pub enum SonaCoreBindingError {
     ConfigRepository { reason: String },
     #[error("{reason}")]
     Dashboard { reason: String },
+    #[error("{reason}")]
+    StorageUsage { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -355,6 +358,13 @@ pub async fn load_dashboard_snapshot_json(
     deep: bool,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_dashboard_snapshot_json(app_data_dir, deep).await
+}
+
+#[uniffi::export]
+pub async fn load_storage_usage_snapshot_json(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_storage_usage_snapshot_json(app_data_dir).await
 }
 
 #[uniffi::export]

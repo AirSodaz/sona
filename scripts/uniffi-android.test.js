@@ -627,6 +627,40 @@ test('dashboard reporting is exposed through UniFFI and Android bindings', () =>
   assert.match(androidConsumer, /loadDashboardSnapshotJson\(appDataDir, false\)/u);
 });
 
+test('storage usage reporting is exposed through UniFFI and Android bindings', () => {
+  const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
+  const storageBridge = read('adapters', 'uniffi_bind', 'src', 'storage_usage_bridge.rs');
+  const androidSample = read(
+    'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+  );
+  const androidConsumer = read(
+    'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+    'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+  );
+
+  assert.match(uniffiLib, /^mod storage_usage_bridge;/mu);
+  assert.match(
+    uniffiLib,
+    /#\[uniffi::export\]\s*pub async fn load_storage_usage_snapshot_json\(\s*app_data_dir: String,\s*\) -> SonaCoreBindingResult<String>/u,
+  );
+  assert.match(uniffiLib, /SonaCoreFacade::load_storage_usage_snapshot_json\(app_data_dir\)\.await/u);
+  assert.match(uniffiFacade, /pub async fn load_storage_usage_snapshot_json\(/u);
+  assert.match(storageBridge, /tokio::task::spawn_blocking/u);
+  assert.match(storageBridge, /Database::open_read_only_with_analytics/u);
+  assert.match(storageBridge, /SqliteStorageUsageRepository::new/u);
+  assert.match(storageBridge, /StorageUsageService::new/u);
+  assert.match(storageBridge, /storage_usage_generated_at_now\(\)/u);
+
+  assert.match(androidSample, /^import uniffi\.sona_uniffi_bind\.loadStorageUsageSnapshotJson$/mu);
+  assert.match(androidSample, /suspend fun loadStorageUsage\(appDataDir: String\): String/u);
+  assert.match(androidSample, /loadStorageUsageSnapshotJson\(appDataDir\)/u);
+  assert.match(androidConsumer, /^import uniffi\.sona_uniffi_bind\.loadStorageUsageSnapshotJson$/mu);
+  assert.match(androidConsumer, /suspend fun loadStorageUsage\(appDataDir: String\): String/u);
+  assert.match(androidConsumer, /loadStorageUsageSnapshotJson\(appDataDir\)/u);
+});
+
 test('UniFFI config bridge is isolated from the top-level binding facade', () => {
   const uniffiLib = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
   const uniffiFacade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');

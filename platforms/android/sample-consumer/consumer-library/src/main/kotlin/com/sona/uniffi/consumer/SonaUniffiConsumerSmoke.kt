@@ -13,6 +13,7 @@ import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadDashboardSnapshotJson
 import uniffi.sona_uniffi_bind.loadProjectRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
+import uniffi.sona_uniffi_bind.loadStorageUsageSnapshotJson
 import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
 
 private class RecordingAsrObserver : FfiAsrStreamingObserver {
@@ -70,6 +71,9 @@ object SonaUniffiConsumerSmoke {
 
     suspend fun loadDashboard(appDataDir: String): String =
         loadDashboardSnapshotJson(appDataDir, false)
+
+    suspend fun loadStorageUsage(appDataDir: String): String =
+        loadStorageUsageSnapshotJson(appDataDir)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

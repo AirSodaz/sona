@@ -1,10 +1,14 @@
 use crate::{Database, DatabaseError};
 use rusqlite::Connection;
-use serde::Serialize;
+use sona_core::storage_usage::{
+    DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry, SQLiteUsageSummary,
+    StorageUsageError, StorageUsageMeasurements, StorageUsageRepository, WebviewCacheUsageCategory,
+};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 const HISTORY_DIR_NAME: &str = "history";
@@ -30,89 +34,6 @@ const DATABASE_FILE_NAMES: [&str; 6] = [
     ANALYTICS_SHM_FILE_NAME,
 ];
 
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StorageUsageSnapshot {
-    pub generated_at: String,
-    pub total_bytes: u64,
-    pub categories: StorageUsageCategories,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StorageUsageCategories {
-    pub audio: AudioUsageCategory,
-    pub database: DatabaseUsageCategory,
-    pub models: FileUsageCategory,
-    pub temporary: FileUsageCategory,
-    pub webview_cache: WebviewCacheUsageCategory,
-    pub other: FileUsageCategory,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AudioUsageCategory {
-    pub bytes: u64,
-    pub history_audio_bytes: u64,
-    pub speaker_sample_bytes: u64,
-    pub file_count: u64,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DatabaseUsageCategory {
-    pub bytes: u64,
-    pub sqlite: SQLiteUsageSummary,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileUsageCategory {
-    pub bytes: u64,
-    pub file_count: u64,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebviewCacheUsageCategory {
-    pub bytes: Option<u64>,
-    pub clear_supported: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SQLiteUsageSummary {
-    pub main_db_bytes: u64,
-    pub main_wal_bytes: u64,
-    pub main_shm_bytes: u64,
-    pub analytics_db_bytes: u64,
-    pub analytics_wal_bytes: u64,
-    pub analytics_shm_bytes: u64,
-    pub data_bytes: u64,
-    pub index_bytes: u64,
-    pub free_page_bytes: u64,
-    pub index_entries: Vec<SQLiteIndexUsageEntry>,
-    pub dbstat_available: bool,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SQLiteIndexUsageEntry {
-    pub schema: String,
-    pub name: String,
-    pub bytes: u64,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebviewBrowsingDataClearResult {
-    pub before_bytes: Option<u64>,
-    pub after_bytes: Option<u64>,
-    pub clear_requested: bool,
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct FileUsage {
     bytes: u64,
@@ -128,22 +49,55 @@ impl From<FileUsage> for FileUsageCategory {
     }
 }
 
-pub fn collect_storage_usage_snapshot(
-    app_local_data_dir: &Path,
-    db: &Database,
-) -> Result<StorageUsageSnapshot, String> {
-    collect_storage_usage_snapshot_with_webview_path(
-        app_local_data_dir,
-        db,
-        default_webview_cache_path(app_local_data_dir),
-    )
+pub struct SqliteStorageUsageRepository {
+    app_local_data_dir: PathBuf,
+    db: Arc<Database>,
+    webview_cache_path: Option<PathBuf>,
 }
 
-pub(crate) fn collect_storage_usage_snapshot_with_webview_path(
+impl SqliteStorageUsageRepository {
+    pub fn new(app_local_data_dir: PathBuf, db: Arc<Database>) -> Self {
+        let webview_cache_path = default_webview_cache_path(&app_local_data_dir);
+        Self {
+            app_local_data_dir,
+            db,
+            webview_cache_path,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_webview_cache_path(
+        app_local_data_dir: PathBuf,
+        db: Arc<Database>,
+        webview_cache_path: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            app_local_data_dir,
+            db,
+            webview_cache_path,
+        }
+    }
+
+    fn collect(&self) -> Result<StorageUsageMeasurements, String> {
+        collect_storage_usage_measurements(
+            &self.app_local_data_dir,
+            self.db.as_ref(),
+            self.webview_cache_path.as_deref(),
+        )
+    }
+}
+
+impl StorageUsageRepository for SqliteStorageUsageRepository {
+    fn collect_measurements(&self) -> Result<StorageUsageMeasurements, StorageUsageError> {
+        self.collect().map_err(StorageUsageError::Repository)
+    }
+}
+
+fn collect_storage_usage_measurements(
     app_local_data_dir: &Path,
     db: &Database,
-    webview_cache_path: Option<PathBuf>,
-) -> Result<StorageUsageSnapshot, String> {
+    webview_cache_path: Option<&Path>,
+) -> Result<StorageUsageMeasurements, String> {
     let history_dir = app_local_data_dir.join(HISTORY_DIR_NAME);
     let speaker_profiles_dir = app_local_data_dir.join(SPEAKER_PROFILES_DIR_NAME);
     let models_dir = app_local_data_dir.join(MODELS_DIR_NAME);
@@ -153,7 +107,7 @@ pub(crate) fn collect_storage_usage_snapshot_with_webview_path(
     let speaker_samples = scan_existing_path(&speaker_profiles_dir)?;
     let models = scan_existing_path(&models_dir)?;
     let temporary = scan_existing_path(&temporary_dir)?;
-    let webview_cache = scan_optional_path(webview_cache_path.as_deref())?;
+    let webview_cache = scan_optional_path(webview_cache_path)?;
 
     let mut sqlite = collect_sqlite_usage_summary(db)?;
     sqlite.main_db_bytes = file_size(app_local_data_dir.join(MAIN_DB_FILE_NAME))?;
@@ -163,16 +117,20 @@ pub(crate) fn collect_storage_usage_snapshot_with_webview_path(
     sqlite.analytics_wal_bytes = file_size(app_local_data_dir.join(ANALYTICS_WAL_FILE_NAME))?;
     sqlite.analytics_shm_bytes = file_size(app_local_data_dir.join(ANALYTICS_SHM_FILE_NAME))?;
 
-    let database_bytes = sqlite.main_db_bytes
-        + sqlite.main_wal_bytes
-        + sqlite.main_shm_bytes
-        + sqlite.analytics_db_bytes
-        + sqlite.analytics_wal_bytes
-        + sqlite.analytics_shm_bytes;
+    let database_bytes = [
+        sqlite.main_db_bytes,
+        sqlite.main_wal_bytes,
+        sqlite.main_shm_bytes,
+        sqlite.analytics_db_bytes,
+        sqlite.analytics_wal_bytes,
+        sqlite.analytics_shm_bytes,
+    ]
+    .into_iter()
+    .fold(0_u64, u64::saturating_add);
 
     let mut excluded_paths = vec![history_dir, speaker_profiles_dir, models_dir, temporary_dir];
-    if let Some(path) = webview_cache_path.as_ref() {
-        excluded_paths.push(path.clone());
+    if let Some(path) = webview_cache_path {
+        excluded_paths.push(path.to_path_buf());
     }
     for file_name in DATABASE_FILE_NAMES {
         excluded_paths.push(app_local_data_dir.join(file_name));
@@ -180,12 +138,6 @@ pub(crate) fn collect_storage_usage_snapshot_with_webview_path(
 
     let other = scan_dir_excluding(app_local_data_dir, &excluded_paths)?;
 
-    let audio = AudioUsageCategory {
-        bytes: history_audio.bytes + speaker_samples.bytes,
-        history_audio_bytes: history_audio.bytes,
-        speaker_sample_bytes: speaker_samples.bytes,
-        file_count: history_audio.file_count + speaker_samples.file_count,
-    };
     let database = DatabaseUsageCategory {
         bytes: database_bytes,
         sqlite,
@@ -194,31 +146,17 @@ pub(crate) fn collect_storage_usage_snapshot_with_webview_path(
     let webview_cache = WebviewCacheUsageCategory {
         bytes: webview_cache_bytes,
         clear_supported: true,
-        path: webview_cache_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().into_owned()),
+        path: webview_cache_path.map(|path| path.to_string_lossy().into_owned()),
     };
 
-    let categories = StorageUsageCategories {
-        audio,
+    Ok(StorageUsageMeasurements {
+        history_audio: history_audio.into(),
+        speaker_samples: speaker_samples.into(),
         database,
         models: models.into(),
         temporary: temporary.into(),
         webview_cache,
         other: other.into(),
-    };
-
-    let total_bytes = categories.audio.bytes
-        + categories.database.bytes
-        + categories.models.bytes
-        + categories.temporary.bytes
-        + categories.webview_cache.bytes.unwrap_or(0)
-        + categories.other.bytes;
-
-    Ok(StorageUsageSnapshot {
-        generated_at: chrono::Utc::now().to_rfc3339(),
-        total_bytes,
-        categories,
     })
 }
 
@@ -242,17 +180,6 @@ pub fn observable_webview_cache_bytes(app_local_data_dir: &Path) -> Result<Optio
     Ok(Some(scan_existing_path(&path)?.bytes))
 }
 
-pub fn build_webview_clear_result(
-    before_bytes: Option<u64>,
-    after_bytes: Option<u64>,
-) -> WebviewBrowsingDataClearResult {
-    WebviewBrowsingDataClearResult {
-        before_bytes,
-        after_bytes,
-        clear_requested: true,
-    }
-}
-
 pub fn collect_sqlite_usage_summary(db: &Database) -> Result<SQLiteUsageSummary, String> {
     db.with_connection(collect_sqlite_usage_summary_inner)
         .map_err(|error| error.to_string())
@@ -267,36 +194,40 @@ fn collect_sqlite_usage_summary_inner(
     let mut data_bytes = 0_u64;
     let mut index_bytes = 0_u64;
 
-    let mut stmt = conn
-        .prepare_cached(
-            "SELECT schema, name, pagetype, COALESCE(SUM(pgsize), 0), COALESCE(SUM(unused), 0)
-         FROM dbstat
-         WHERE aggregate = false
-         GROUP BY schema, name, pagetype",
-        )
-        .map_err(dbstat_unavailable)?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)?,
+    for schema_name in ["main", "analytics"] {
+        let mut stmt = conn
+            .prepare_cached(&format!(
+                "SELECT schema, name, pagetype,
+                        COALESCE(SUM(pgsize), 0), COALESCE(SUM(unused), 0)
+                 FROM dbstat('{schema_name}')
+                 WHERE aggregate = false
+                 GROUP BY schema, name, pagetype"
             ))
-        })
-        .map_err(dbstat_unavailable)?;
+            .map_err(dbstat_unavailable)?;
 
-    for row in rows {
-        let (schema, name, _page_type, page_bytes, _unused_bytes) =
-            row.map_err(dbstat_unavailable)?;
-        let page_bytes = page_bytes.max(0) as u64;
-        if index_like_objects.contains(&(schema.clone(), name.clone())) {
-            index_bytes += page_bytes;
-            *index_entries_by_object.entry((schema, name)).or_default() += page_bytes;
-        } else {
-            data_bytes += page_bytes;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })
+            .map_err(dbstat_unavailable)?;
+
+        for row in rows {
+            let (schema, name, _page_type, page_bytes, _unused_bytes) =
+                row.map_err(dbstat_unavailable)?;
+            let page_bytes = page_bytes.max(0) as u64;
+            if index_like_objects.contains(&(schema.clone(), name.clone())) {
+                index_bytes = index_bytes.saturating_add(page_bytes);
+                let entry = index_entries_by_object.entry((schema, name)).or_default();
+                *entry = entry.saturating_add(page_bytes);
+            } else {
+                data_bytes = data_bytes.saturating_add(page_bytes);
+            }
         }
     }
 
@@ -320,12 +251,15 @@ fn collect_sqlite_usage_summary_inner(
 }
 
 fn ensure_dbstat_available(conn: &Connection) -> Result<(), DatabaseError> {
-    conn.query_row(
-        "SELECT COUNT(*) FROM dbstat WHERE aggregate = false",
-        [],
-        |_row| Ok(()),
-    )
-    .map_err(dbstat_unavailable)
+    for schema in ["main", "analytics"] {
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM dbstat('{schema}') WHERE aggregate = false"),
+            [],
+            |_row| Ok(()),
+        )
+        .map_err(dbstat_unavailable)?;
+    }
+    Ok(())
 }
 
 fn dbstat_unavailable(error: rusqlite::Error) -> DatabaseError {
@@ -518,13 +452,23 @@ mod tests {
         db.with_connection(|conn| {
             conn.execute_batch(
                 "CREATE TABLE dbstat_index_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
-                 CREATE INDEX idx_dbstat_index_probe_value ON dbstat_index_probe(value);",
+                 CREATE INDEX idx_dbstat_index_probe_value ON dbstat_index_probe(value);
+                 CREATE TABLE analytics.dbstat_analytics_probe (
+                     id INTEGER PRIMARY KEY,
+                     value TEXT NOT NULL
+                 );
+                 CREATE INDEX analytics.idx_dbstat_analytics_probe_value
+                     ON dbstat_analytics_probe(value);",
             )?;
             let tx = conn.unchecked_transaction()?;
             for index in 0..500 {
                 tx.execute(
                     "INSERT INTO dbstat_index_probe (value) VALUES (?1)",
                     [format!("value-{index:04}")],
+                )?;
+                tx.execute(
+                    "INSERT INTO analytics.dbstat_analytics_probe (value) VALUES (?1)",
+                    [format!("analytics-{index:04}")],
                 )?;
             }
             tx.commit()?;
@@ -538,60 +482,59 @@ mod tests {
             summary.index_bytes > 0,
             "dbstat should attribute bytes to SQLite indexes"
         );
-        assert!(
-            summary
-                .index_entries
-                .iter()
-                .any(|entry| entry.name == "idx_dbstat_index_probe_value" && entry.bytes > 0)
-        );
+        assert!(summary.index_entries.iter().any(|entry| {
+            entry.schema == "main"
+                && entry.name == "idx_dbstat_index_probe_value"
+                && entry.bytes > 0
+        }));
+        assert!(summary.index_entries.iter().any(|entry| {
+            entry.schema == "analytics"
+                && entry.name == "idx_dbstat_analytics_probe_value"
+                && entry.bytes > 0
+        }));
     }
 
     #[test]
     fn storage_snapshot_classifies_known_roots_and_excludes_webview_from_other() {
         let dir = tempdir().unwrap();
-        let root = dir.path();
-        let db = Database::open(root).unwrap();
+        let root = dir.path().join("存储-用量-🌍");
+        let webview_cache = root.join("网页缓存-🌍");
+        let db = Database::open(&root).unwrap();
 
-        write_sized_file(&root.join("history").join("recording.wav"), 100);
+        write_sized_file(&root.join("history").join("录音.wav"), 100);
         write_sized_file(
             &root
                 .join("speaker-profiles")
-                .join("speaker-1")
-                .join("sample.wav"),
+                .join("说话人-1")
+                .join("样本.wav"),
             50,
         );
         write_sized_file(&root.join("models").join("model.bin"), 30);
         write_sized_file(&root.join("api_temp").join("job.tmp"), 20);
-        write_sized_file(&root.join("EBWebView").join("Cache").join("entry.bin"), 10);
+        write_sized_file(&webview_cache.join("缓存").join("entry.bin"), 10);
         write_sized_file(&root.join("settings-sidecar.json"), 7);
 
-        let snapshot = collect_storage_usage_snapshot_with_webview_path(
+        let repository = SqliteStorageUsageRepository::with_webview_cache_path(
             root,
-            &db,
-            Some(root.join("EBWebView")),
-        )
-        .unwrap();
+            Arc::new(db),
+            Some(webview_cache.clone()),
+        );
+        let measurements = repository.collect_measurements().unwrap();
 
-        assert_eq!(snapshot.categories.audio.history_audio_bytes, 100);
-        assert_eq!(snapshot.categories.audio.speaker_sample_bytes, 50);
-        assert_eq!(snapshot.categories.audio.bytes, 150);
-        assert_eq!(snapshot.categories.audio.file_count, 2);
-        assert_eq!(snapshot.categories.models.bytes, 30);
-        assert_eq!(snapshot.categories.models.file_count, 1);
-        assert_eq!(snapshot.categories.temporary.bytes, 20);
-        assert_eq!(snapshot.categories.webview_cache.bytes, Some(10));
-        assert_eq!(snapshot.categories.other.bytes, 7);
-        assert_eq!(snapshot.categories.other.file_count, 1);
-        assert!(snapshot.categories.database.bytes > 0);
-        assert!(snapshot.total_bytes >= 150 + 30 + 20 + 10 + 7);
-    }
-
-    #[test]
-    fn webview_clear_result_shape_sets_clear_requested() {
-        let result = build_webview_clear_result(Some(128), Some(64));
-
-        assert_eq!(result.before_bytes, Some(128));
-        assert_eq!(result.after_bytes, Some(64));
-        assert!(result.clear_requested);
+        assert_eq!(measurements.history_audio.bytes, 100);
+        assert_eq!(measurements.history_audio.file_count, 1);
+        assert_eq!(measurements.speaker_samples.bytes, 50);
+        assert_eq!(measurements.speaker_samples.file_count, 1);
+        assert_eq!(measurements.models.bytes, 30);
+        assert_eq!(measurements.models.file_count, 1);
+        assert_eq!(measurements.temporary.bytes, 20);
+        assert_eq!(measurements.webview_cache.bytes, Some(10));
+        assert_eq!(
+            measurements.webview_cache.path,
+            Some(webview_cache.to_string_lossy().into_owned())
+        );
+        assert_eq!(measurements.other.bytes, 7);
+        assert_eq!(measurements.other.file_count, 1);
+        assert!(measurements.database.bytes > 0);
     }
 }

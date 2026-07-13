@@ -8,7 +8,7 @@ use crate::{
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
     app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
     config_bridge, dashboard_bridge, llm_bridge, model_bridge, project_bridge, recovery_bridge,
-    runtime_bridge, task_ledger_bridge,
+    runtime_bridge, storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -258,6 +258,12 @@ impl SonaCoreFacade {
         deep: bool,
     ) -> SonaCoreBindingResult<String> {
         dashboard_bridge::load_dashboard_snapshot_json(app_data_dir, deep).await
+    }
+
+    pub async fn load_storage_usage_snapshot_json(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<String> {
+        storage_usage_bridge::load_storage_usage_snapshot_json(app_data_dir).await
     }
 
     pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {

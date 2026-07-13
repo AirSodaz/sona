@@ -1769,22 +1769,37 @@ test('online LLM provider implementation lives in adapter crate', () => {
   assert.doesNotMatch(desktopTasks, /fn google_translate_free_retry_delay/u);
 });
 
-test('storage usage SQLite and filesystem scanner is owned by sqlite adapter', () => {
+test('storage usage policy is core-owned and Tauri adapts sqlite', () => {
+  const coreLib = read('core', 'src', 'lib.rs');
+  const coreModels = read('core', 'src', 'storage_usage', 'models.rs');
+  const corePorts = read('core', 'src', 'storage_usage', 'ports.rs');
+  const coreService = read('core', 'src', 'storage_usage', 'service.rs');
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
+  const sqliteStorageUsage = read('adapters', 'sqlite', 'src', 'storage_usage.rs');
   const desktopStorageCommand = read(...desktopCrateSegments, 'src', 'commands', 'storage.rs');
   const platformMod = read(...desktopCrateSegments, 'src', 'platform', 'mod.rs');
   const platformStorageUsagePath = desktopCratePath('src', 'platform', 'storage_usage.rs');
 
+  assert.match(coreLib, /^pub mod storage_usage;/mu);
+  assert.match(coreModels, /pub struct StorageUsageSnapshot/u);
+  assert.match(coreModels, /pub struct StorageUsageMeasurements/u);
+  assert.match(corePorts, /pub trait StorageUsageRepository: Send \+ Sync/u);
+  assert.match(coreService, /pub struct StorageUsageService/u);
+  assert.match(coreService, /\.fold\(0_u64, u64::saturating_add\)/u);
   assert.ok(exists('adapters', 'sqlite', 'src', 'storage_usage.rs'));
   assert.equal(fs.existsSync(platformStorageUsagePath), true);
   const platformStorageUsage = fs.readFileSync(platformStorageUsagePath, 'utf8');
   assert.match(sqliteLib, /^pub mod storage_usage;/mu);
   assert.match(platformMod, /^pub mod storage_usage;/mu);
-  assert.match(platformStorageUsage, /pub use sona_sqlite::storage_usage::\{[\s\S]*StorageUsageSnapshot/u);
-  assert.match(platformStorageUsage, /pub use sona_sqlite::storage_usage::\{[\s\S]*WebviewBrowsingDataClearResult/u);
-  assert.match(platformStorageUsage, /collect_storage_usage_snapshot/u);
+  assert.match(sqliteStorageUsage, /pub struct SqliteStorageUsageRepository/u);
+  assert.match(sqliteStorageUsage, /impl StorageUsageRepository for SqliteStorageUsageRepository/u);
+  assert.doesNotMatch(sqliteStorageUsage, /pub struct StorageUsageSnapshot/u);
+  assert.doesNotMatch(sqliteStorageUsage, /collect_storage_usage_snapshot/u);
+  assert.match(platformStorageUsage, /pub use sona_core::storage_usage::\{StorageUsageSnapshot, WebviewBrowsingDataClearResult\}/u);
+  assert.match(platformStorageUsage, /SqliteStorageUsageRepository::new/u);
+  assert.match(platformStorageUsage, /StorageUsageService::new/u);
   assert.match(platformStorageUsage, /observable_webview_cache_bytes/u);
-  assert.match(platformStorageUsage, /build_webview_clear_result/u);
+  assert.match(platformStorageUsage, /sona_core::storage_usage::build_webview_clear_result/u);
   assert.match(platformStorageUsage, /tauri::async_runtime::spawn_blocking/u);
   assert.match(platformStorageUsage, /get_webview_window\("main"\)/u);
   assert.match(platformStorageUsage, /clear_all_browsing_data/u);

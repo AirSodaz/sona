@@ -1,6 +1,8 @@
 mod dashboard_time;
+mod storage_usage_time;
 
 pub use dashboard_time::dashboard_snapshot_time_now;
+pub use storage_usage_time::storage_usage_generated_at_now;
 
 use serde::Serialize;
 use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
