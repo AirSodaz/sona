@@ -67,6 +67,14 @@ jobs:
           echo "build_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
           echo "Computed nightly version: $VERSION"
 
+  android-client:
+    needs: prepare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/android-client.yml
+    with:
+      artifact_prefix: nightly-assets-android
+
   build-tauri:
     needs: prepare
     permissions:
@@ -214,8 +222,8 @@ jobs:
           if-no-files-found: warn
 
   publish-nightly:
-    needs: [check-commits, prepare, build-tauri]
-    if: needs.build-tauri.result == 'success'
+    needs: [check-commits, prepare, build-tauri, android-client]
+    if: needs.build-tauri.result == 'success' && needs.android-client.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -231,6 +239,16 @@ jobs:
           path: all-artifacts
           pattern: "nightly-assets-*"
           merge-multiple: true
+
+      - name: Verify Android release artifacts
+        run: |
+          for apk in app-arm64-v8a-debug.apk app-x86_64-debug.apk; do
+            count=$(find all-artifacts -type f -name "$apk" | wc -l)
+            if [ "$count" -ne 1 ]; then
+              echo "::error::Expected exactly one $apk, found $count"
+              exit 1
+            fi
+          done
 
       - name: Generate changelog since last nightly
         id: changelog
@@ -355,6 +373,9 @@ jobs:
             This is an unstable, unsigned-for-trust-only-by-you build for testing.
             Use the [stable releases](https://github.com/AirSodaz/sona/releases/latest) for everyday use.
 
+            **Android preview APKs:**
+            [ARM64](https://github.com/${{ github.repository }}/releases/download/nightly/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/${{ github.repository }}/releases/download/nightly/app-x86_64-debug.apk)
+
             **Changes since last nightly:**
             ```
             ${{ steps.changelog.outputs.changelog }}
@@ -364,6 +385,6 @@ jobs:
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
-          artifactErrorsFailBuild: false
+          artifactErrorsFailBuild: true
           token: ${{ github.token }}
           artifacts: "all-artifacts/**/*,updater.json"

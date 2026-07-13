@@ -1,0 +1,83 @@
+name: Android Client
+
+on:
+  workflow_call:
+    inputs:
+      artifact_prefix:
+        description: Artifact name prefix
+        required: false
+        type: string
+        default: android-client
+  workflow_dispatch:
+    inputs:
+      artifact_prefix:
+        description: Artifact name prefix
+        required: false
+        type: string
+        default: android-client
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-client:
+    name: Build Android Client
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Node.js setup
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Java setup
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          shared-key: android-client
+          cache-on-failure: true
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-37.0"
+          sdkmanager "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Build and verify Android client
+        env:
+          SONA_ANDROID_ABIS: arm64-v8a,x86_64
+        run: pnpm run verify:android-client
+
+      - name: Upload ARM64 APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-arm64-v8a
+          path: platforms/android/client/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-x86_64
+          path: platforms/android/client/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          if-no-files-found: error
+          retention-days: 14

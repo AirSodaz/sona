@@ -9,6 +9,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  android-client:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/android-client.yml
+    with:
+      artifact_prefix: release-assets-android
+
   build-tauri:
     permissions:
       contents: write
@@ -160,7 +167,7 @@ jobs:
           if-no-files-found: warn
 
   publish-release:
-    needs: build-tauri
+    needs: [build-tauri, android-client]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -176,6 +183,16 @@ jobs:
           path: all-artifacts
           pattern: "release-assets-*"
           merge-multiple: true
+
+      - name: Verify Android release artifacts
+        run: |
+          for apk in app-arm64-v8a-debug.apk app-x86_64-debug.apk; do
+            count=$(find all-artifacts -type f -name "$apk" | wc -l)
+            if [ "$count" -ne 1 ]; then
+              echo "::error::Expected exactly one $apk, found $count"
+              exit 1
+            fi
+          done
 
       - name: Extract Release Notes
         run: |
@@ -194,6 +211,9 @@ jobs:
 
           **Linux**
           [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)
+
+          **Android (preview debug builds)**
+          [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-debug.apk)
           EOF
 
       - name: Build updater.json from signatures
@@ -329,6 +349,6 @@ jobs:
           bodyFile: "release_notes.md"
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "all-artifacts/**/*,updater.json"
-          artifactErrorsFailBuild: false
+          artifactErrorsFailBuild: true
           replacesArtifacts: true
           makeLatest: legacy

@@ -161,3 +161,14 @@ The default client verification builds and validates two independent debug APKs:
 Each APK contains only its matching Sona UniFFI, sherpa-onnx, and ONNX Runtime
 native libraries. Set `SONA_ANDROID_ABIS` to one of the supported values when a
 single-ABI local build is sufficient.
+
+GitHub Actions uses `.github/workflows/android-client.yml` as the reusable
+Android build entry point. Stable and nightly workflows call it with both ABIs,
+publish the two APKs as separate workflow artifacts, and attach both files to
+tagged or nightly GitHub releases. A manually dispatched Android workflow uses
+the same build and verification path.
+
+These CI outputs are currently debug-signed preview packages. They are
+installable for testing, but they are not production-signed and a package from
+one CI run may need to be uninstalled before installing a package signed by a
+different run's generated debug key.
