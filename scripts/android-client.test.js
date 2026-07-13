@@ -64,6 +64,7 @@ test('Android client Gradle modules preserve the hexagonal dependency direction'
   const settings = readClientFile('settings.gradle.kts');
   const properties = readClientFile('gradle.properties');
   const applicationGradle = readClientFile('application', 'build.gradle.kts');
+  const androidGradle = readClientFile('adapters', 'android', 'build.gradle.kts');
   const uniffiGradle = readClientFile('adapters', 'uniffi', 'build.gradle.kts');
   const appGradle = readClientFile('app', 'build.gradle.kts');
 
@@ -71,33 +72,45 @@ test('Android client Gradle modules preserve the hexagonal dependency direction'
   assert.match(settings, /id\("com\.android\.library"\) version "9\.2\.1" apply false/u);
   assert.match(settings, /id\("org\.jetbrains\.kotlin\.plugin\.compose"\) version "2\.2\.10" apply false/u);
   assert.match(settings, /include\(":application"\)/u);
+  assert.match(settings, /include\(":adapters:android"\)/u);
   assert.match(settings, /include\(":adapters:uniffi"\)/u);
   assert.match(settings, /include\(":app"\)/u);
   assert.match(properties, /^SONA_REPO_ROOT=\.\.\/\.\.\/\.\.\/\.\.\/\.\.$/mu);
 
-  for (const source of [applicationGradle, uniffiGradle, appGradle]) {
+  for (const source of [applicationGradle, androidGradle, uniffiGradle, appGradle]) {
     assert.match(source, /compileSdk\s*=\s*37/u);
     assert.match(source, /minSdk\s*=\s*23/u);
     assert.match(source, /JavaVersion\.VERSION_17/u);
   }
 
   assert.match(applicationGradle, /id\("com\.android\.library"\)/u);
-  assert.doesNotMatch(applicationGradle, /project\(":adapters:uniffi"\)|project\(":app"\)|uniffi/u);
+  assert.doesNotMatch(
+    applicationGradle,
+    /project\(":adapters:(?:android|uniffi)"\)|project\(":app"\)|uniffi/u,
+  );
+
+  assert.match(androidGradle, /implementation\(project\(":application"\)\)/u);
+  assert.doesNotMatch(
+    androidGradle,
+    /project\(":adapters:uniffi"\)|project\(":app"\)|uniffi/u,
+  );
 
   assert.match(uniffiGradle, /implementation\(project\(":application"\)\)/u);
   assert.match(uniffiGradle, /apply\(from\s*=\s*"\.\.\/\.\.\/\.\.\/sona-uniffi-bindings\.gradle\.kts"\)/u);
-  assert.doesNotMatch(uniffiGradle, /project\(":app"\)/u);
+  assert.doesNotMatch(uniffiGradle, /project\(":adapters:android"\)|project\(":app"\)/u);
 
   assert.match(appGradle, /id\("com\.android\.application"\)/u);
   assert.match(appGradle, /id\("org\.jetbrains\.kotlin\.plugin\.compose"\)/u);
   assert.match(appGradle, /targetSdk\s*=\s*37/u);
   assert.match(appGradle, /implementation\(project\(":application"\)\)/u);
+  assert.match(appGradle, /implementation\(project\(":adapters:android"\)\)/u);
   assert.match(appGradle, /implementation\(project\(":adapters:uniffi"\)\)/u);
   assert.match(appGradle, /platform\("androidx\.compose:compose-bom:2026\.06\.01"\)/u);
   assert.match(appGradle, /androidx\.compose\.material3:material3-adaptive-navigation-suite/u);
 
   for (const manifest of [
     clientPath('application', 'src', 'main', 'AndroidManifest.xml'),
+    clientPath('adapters', 'android', 'src', 'main', 'AndroidManifest.xml'),
     clientPath('adapters', 'uniffi', 'src', 'main', 'AndroidManifest.xml'),
     clientPath('app', 'src', 'main', 'AndroidManifest.xml'),
   ]) {
@@ -142,6 +155,15 @@ test('Android UniFFI adapter is the only outbound binding owner', () => {
       source,
       /^import\s+uniffi\./mu,
       `app source bypasses the UniFFI adapter: ${sourcePath}`,
+    );
+  }
+
+  for (const sourcePath of kotlinFilesUnder('adapters', 'android', 'src', 'main')) {
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    assert.doesNotMatch(
+      source,
+      /^import\s+uniffi\./mu,
+      `Android platform adapter bypasses the UniFFI adapter: ${sourcePath}`,
     );
   }
 });

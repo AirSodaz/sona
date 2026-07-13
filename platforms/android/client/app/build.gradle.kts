@@ -62,6 +62,7 @@ android {
 
 dependencies {
     implementation(project(":application"))
+    implementation(project(":adapters:android"))
     implementation(project(":adapters:uniffi"))
 
     implementation(platform("androidx.compose:compose-bom:2026.06.01"))

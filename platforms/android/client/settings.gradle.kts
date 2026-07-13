@@ -22,5 +22,6 @@ plugins {
 
 rootProject.name = "sona-android-client"
 include(":application")
+include(":adapters:android")
 include(":adapters:uniffi")
 include(":app")
