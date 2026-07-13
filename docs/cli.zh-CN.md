@@ -13,6 +13,7 @@
 - `export transcript`
 - `serve`
 - `transcribe`
+- `transcribe-live`
 
 无头 HTTP API 服务由共享的 `sona-api-server` 适配器提供，可从桌面应用或 `sona-cli serve` 启动。
 
@@ -31,6 +32,7 @@ cargo run -p sona-cli -- history list --app-data-dir ./sona-data --json
 cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
+cargo run -p sona-cli -- transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
 ```
 
 ## 命令
@@ -159,7 +161,7 @@ sona-cli serve --host 127.0.0.1 --port 14200 --api-key local-secret
 - 持续运行直到按 Ctrl+C
 - 复用与桌面应用相同的本地批量转写 API server adapter
 - `--config` 会读取 `init-config` 生成的 `[serve]` 配置段
-- CLI 侧支持本地 REST 转写；依赖桌面运行时的在线 ASR 与流式集成仍需要桌面应用
+- CLI 侧支持本地 REST 转写。`serve` 的 WebSocket 流式路由和在线 ASR 集成仍需要桌面运行时；独立本地流式转写请使用 `transcribe-live`。
 
 ### `transcribe`
 
@@ -175,6 +177,34 @@ sona-cli transcribe ./sample.wav --format txt --quiet
 - 支持导出格式：`json`、`txt`、`srt`、`vtt`、`md`
 - `--config` 读取由 `init-config` 生成的带注释 `sona-cli.toml` 模板
 - `--force` 允许覆盖已有输出文件
+
+### `transcribe-live`
+
+使用已安装的本地流式模型，实时转写麦克风或 stdin 原始音频。
+
+```bash
+sona-cli transcribe-live --list-input-devices
+sona-cli transcribe-live \
+  --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 \
+  --device "Studio Mic" \
+  --duration 60 \
+  --output ./live.srt
+ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
+  sona-cli transcribe-live \
+    --input stdin \
+    --model-id sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en \
+    --output-format ndjson
+```
+
+- 第一版仅支持本地离线 ASR；所选预设必须声明支持 `streaming`，并已安装到解析后的模型目录。
+- 麦克风默认使用 CPAL 默认输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称精确匹配。
+- `--input stdin` 接收无文件头的 16 kHz、单声道、signed 16-bit little-endian PCM；末尾不完整 sample 会作为输入错误返回。
+- TTY text 模式原位刷新当前转录；stdout 被重定向时，text 模式只在 flush 后写一次最终快照。
+- `--output-format ndjson` 每行输出并立即 flush 一个 JSON 对象。事件类型为 `started`、`update`、`stopped` 和仅运行时失败使用的 `error`；转录字段采用 camelCase。
+- Ctrl+C、stdin EOF 和 `--duration` 使用相同的正常收尾流程：排空采集音频、flush/stop ASR、可选写入最终文件、输出 `stopped`，并以 0 退出。
+- `--output` 可将最终快照写为 `json`、`txt`、`srt`、`vtt` 或 `md`；默认从扩展名推断，也可用 `--format` 覆盖。覆盖已有文件必须显式传入 `--force`。
+- `--config` 读取 `sona-cli.toml` 的 `[transcribe_live]`；命令行值覆盖该分区，该分区继续继承顶层 ASR 共享默认值。最终输出路径、导出格式和覆盖行为只允许通过命令行指定。
+- 参数校验错误退出码为 2，模型错误为 3，输入/设备错误为 5。NDJSON 运行时错误还会在非零退出前输出一个 `error` 事件。
 
 ## 全局参数
 

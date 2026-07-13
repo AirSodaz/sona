@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use sona_core::runtime::config::{
-    ServeConfigSection, TranscribeConfigSection, UnifiedConfigFile, parse_serve_config_file,
+    ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection, UnifiedConfigFile,
+    parse_serve_config_file, parse_transcribe_live_config_file,
 };
 
 #[test]
@@ -16,6 +17,11 @@ port = 8080
 [transcribe]
 language = "ja"
 
+[transcribe_live]
+model_id = "live-model"
+input = "stdin"
+output_format = "ndjson"
+
 [serve]
 port = 15000
 "#;
@@ -27,6 +33,16 @@ port = 15000
     assert_eq!(transcribe.gpu_acceleration.as_deref(), Some("cuda"));
     assert_eq!(transcribe.model_id.as_deref(), Some("legacy-model"));
     assert_eq!(transcribe.language.as_deref(), Some("ja"));
+
+    let transcribe_live = unified.clone().into_transcribe_live_config();
+    assert_eq!(
+        transcribe_live.models_dir,
+        Some(PathBuf::from("/shared/models"))
+    );
+    assert_eq!(transcribe_live.gpu_acceleration.as_deref(), Some("cuda"));
+    assert_eq!(transcribe_live.model_id.as_deref(), Some("live-model"));
+    assert_eq!(transcribe_live.input.as_deref(), Some("stdin"));
+    assert_eq!(transcribe_live.output_format.as_deref(), Some("ndjson"));
 
     let serve = unified.into_serve_config();
     assert_eq!(serve.models_dir, Some(PathBuf::from("/shared/models")));
@@ -40,8 +56,35 @@ fn runtime_config_sections_default_cleanly() {
     let transcribe = TranscribeConfigSection::default();
     assert!(transcribe.model_id.is_none());
 
+    let transcribe_live = TranscribeLiveConfigSection::default();
+    assert!(transcribe_live.model_id.is_none());
+
     let serve = ServeConfigSection::default();
     assert!(serve.host.is_none());
+}
+
+#[test]
+fn parse_transcribe_live_config_file_reads_shared_and_section_values() {
+    let live = parse_transcribe_live_config_file(
+        r#"
+models_dir = "/shared/models"
+model_id = "shared-model"
+language = "en"
+
+[transcribe_live]
+model_id = "live-model"
+device = "Studio Mic"
+duration_seconds = 12.5
+"#,
+        "sona-cli.toml",
+    )
+    .unwrap();
+
+    assert_eq!(live.models_dir, Some(PathBuf::from("/shared/models")));
+    assert_eq!(live.model_id.as_deref(), Some("live-model"));
+    assert_eq!(live.language.as_deref(), Some("en"));
+    assert_eq!(live.device.as_deref(), Some("Studio Mic"));
+    assert_eq!(live.duration_seconds, Some(12.5));
 }
 
 #[test]

@@ -8,6 +8,8 @@ mod diagnostics;
 mod export;
 mod history;
 mod init_config;
+mod live_audio;
+mod live_output;
 mod models;
 mod projects;
 mod recovery;
@@ -16,9 +18,11 @@ mod storage;
 mod table;
 mod task_ledger;
 mod transcribe;
+mod transcribe_live;
 
 use clap::{Parser, Subcommand};
 use std::ffi::OsString;
+use std::io::{self, IsTerminal, Write};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -40,6 +44,71 @@ impl CliOutput {
             stdout: String::new(),
             stderr: value,
         }
+    }
+}
+
+pub(crate) trait CliIo {
+    fn stdout(&mut self) -> &mut dyn Write;
+    fn stderr(&mut self) -> &mut dyn Write;
+    fn stdout_is_terminal(&self) -> bool;
+}
+
+#[derive(Default)]
+struct MemoryCliIo {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+impl MemoryCliIo {
+    fn into_output(self) -> CliOutput {
+        CliOutput {
+            stdout: String::from_utf8_lossy(&self.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
+        }
+    }
+}
+
+impl CliIo for MemoryCliIo {
+    fn stdout(&mut self) -> &mut dyn Write {
+        &mut self.stdout
+    }
+
+    fn stderr(&mut self) -> &mut dyn Write {
+        &mut self.stderr
+    }
+
+    fn stdout_is_terminal(&self) -> bool {
+        false
+    }
+}
+
+struct StdCliIo {
+    stdout: io::Stdout,
+    stderr: io::Stderr,
+    stdout_is_terminal: bool,
+}
+
+impl Default for StdCliIo {
+    fn default() -> Self {
+        Self {
+            stdout: io::stdout(),
+            stderr: io::stderr(),
+            stdout_is_terminal: io::stdout().is_terminal(),
+        }
+    }
+}
+
+impl CliIo for StdCliIo {
+    fn stdout(&mut self) -> &mut dyn Write {
+        &mut self.stdout
+    }
+
+    fn stderr(&mut self) -> &mut dyn Write {
+        &mut self.stderr
+    }
+
+    fn stdout_is_terminal(&self) -> bool {
+        self.stdout_is_terminal
     }
 }
 
@@ -124,6 +193,8 @@ enum Commands {
     TaskLedger(task_ledger::TaskLedgerArgs),
     /// Transcribes a local audio or video file using offline ASR.
     Transcribe(transcribe::TranscribeArgs),
+    /// Transcribe live audio from a microphone or stdin PCM using offline ASR.
+    TranscribeLive(transcribe_live::TranscribeLiveArgs),
 }
 
 pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
@@ -132,8 +203,35 @@ where
     T: Into<OsString> + Clone,
 {
     let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
+    let mut io = MemoryCliIo::default();
+    match dispatch(cli.command, &mut io)? {
+        Some(output) => Ok(output),
+        None => Ok(io.into_output()),
+    }
+}
 
-    match cli.command {
+pub fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
+    let mut io = StdCliIo::default();
+    if let Some(output) = dispatch(cli.command, &mut io)? {
+        if !output.stdout.is_empty() {
+            writeln!(io.stdout(), "{}", output.stdout)
+                .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
+        }
+        if !output.stderr.is_empty() {
+            writeln!(io.stderr(), "{}", output.stderr)
+                .map_err(|error| CliError::Io(format!("Failed to write stderr: {error}")))?;
+        }
+    }
+    Ok(())
+}
+
+fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput>> {
+    let output = match command {
         Commands::AppConfig(args) => app_config::run_app_config(args),
         Commands::Automation(args) => automation::run_automation(args),
         Commands::Dashboard(args) => dashboard::run_dashboard(args),
@@ -149,7 +247,12 @@ where
         Commands::Storage(args) => storage::run_storage(args),
         Commands::TaskLedger(args) => task_ledger::run_task_ledger(args),
         Commands::Transcribe(args) => transcribe::run_transcribe(args),
-    }
+        Commands::TranscribeLive(args) => {
+            transcribe_live::run_transcribe_live(args, io)?;
+            return Ok(None);
+        }
+    }?;
+    Ok(Some(output))
 }
 
 pub fn render_path_status_json(path: &str) -> CliResult<String> {

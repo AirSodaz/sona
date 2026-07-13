@@ -22,10 +22,13 @@ use sona_core::ports::fs::{FileMetadata, FileSystem};
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
-use sona_core::runtime::config::{ServeConfigSection, TranscribeConfigSection};
+use sona_core::runtime::config::{
+    ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection,
+};
 use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
 use sona_core::transcription::runtime::{
     BatchInputSource, BatchOutputPlan, BatchTranscribeOptions, BatchTranscribePlan,
+    LiveTranscribeOptions, LiveTranscribePlan,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -253,6 +256,17 @@ pub fn load_transcribe_config_file(path: &Path) -> Result<TranscribeConfigSectio
     let contents = fs::read_to_string(path)
         .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
     sona_core::runtime::config::parse_transcribe_config_file(&contents, &path.display().to_string())
+}
+
+pub fn load_transcribe_live_config_file(
+    path: &Path,
+) -> Result<TranscribeLiveConfigSection, String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read config file {}: {error}", path.display()))?;
+    sona_core::runtime::config::parse_transcribe_live_config_file(
+        &contents,
+        &path.display().to_string(),
+    )
 }
 
 pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, String> {
@@ -515,6 +529,31 @@ pub fn resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
     ensure_input_file_exists(&options.input)?;
     ensure_output_can_be_written(options.output.as_ref(), options.force)?;
     sona_core::transcription::runtime::resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
+        options,
+        config,
+        is_preset_model_installed_at,
+        models_dir_status,
+    )
+}
+
+pub fn resolve_live_transcribe_plan_with_runtime_paths(
+    options: LiveTranscribeOptions,
+    config: Option<TranscribeLiveConfigSection>,
+) -> Result<LiveTranscribePlan, String> {
+    resolve_live_transcribe_plan_with_runtime_paths_and_models_dir_status(
+        options,
+        config,
+        models_dir_status,
+    )
+}
+
+pub fn resolve_live_transcribe_plan_with_runtime_paths_and_models_dir_status(
+    options: LiveTranscribeOptions,
+    config: Option<TranscribeLiveConfigSection>,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<LiveTranscribePlan, String> {
+    ensure_output_can_be_written(options.output.as_ref(), options.force)?;
+    sona_core::transcription::runtime::resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
         config,
         is_preset_model_installed_at,

@@ -307,7 +307,7 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
     let v_path = vad_model?;
 
     if v_path.is_empty() {
-        println!(
+        log::warn!(
             "[Sherpa] load_vad: Path is empty or does not exist: {}",
             v_path
         );
@@ -316,11 +316,11 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
 
     match create_vad_detector(Path::new(&v_path), 60.0) {
         Ok(vad) => {
-            println!("[Sherpa] load_vad: VAD successfully created!");
+            log::info!("[Sherpa] load_vad: VAD successfully created!");
             Some(SafeVad(vad))
         }
         Err(error) => {
-            println!("[Sherpa] load_vad: {error}");
+            log::warn!("[Sherpa] load_vad: {error}");
             None
         }
     }

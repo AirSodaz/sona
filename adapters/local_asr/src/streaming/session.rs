@@ -34,11 +34,46 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
+type PendingInferenceTask = tokio::task::JoinHandle<Result<(), String>>;
 
 pub struct LocalSherpaSession {
     instance_id: String,
     observer: Arc<dyn AsrRuntimeObserver>,
     instance: tokio::sync::Mutex<SherpaInstance>,
+    pending_inference: tokio::sync::Mutex<Option<PendingInferenceTask>>,
+}
+
+fn queue_inference_task(
+    previous: Option<PendingInferenceTask>,
+    task: impl FnOnce() + Send + 'static,
+) -> PendingInferenceTask {
+    tokio::spawn(async move {
+        if let Some(previous) = previous {
+            previous
+                .await
+                .map_err(|error| format!("Offline inference task failed: {error}"))??;
+        }
+        tokio::task::spawn_blocking(task)
+            .await
+            .map_err(|error| format!("Offline inference task failed: {error}"))
+    })
+}
+
+async fn wait_for_inference_task(pending: &mut Option<PendingInferenceTask>) -> Result<(), String> {
+    if let Some(task) = pending.take() {
+        task.await
+            .map_err(|error| format!("Offline inference task failed: {error}"))??;
+    }
+    Ok(())
+}
+
+async fn prepare_partial_inference_slot(
+    pending: &mut Option<PendingInferenceTask>,
+) -> Result<bool, String> {
+    if pending.as_ref().is_some_and(|task| task.is_finished()) {
+        wait_for_inference_task(pending).await?;
+    }
+    Ok(pending.is_none())
 }
 
 #[async_trait]
@@ -52,6 +87,10 @@ impl AsrStreamingSession for LocalSherpaSession {
 
     async fn stop(&self) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
+        let mut pending = self.pending_inference.lock().await;
+        wait_for_inference_task(&mut pending)
+            .await
+            .map_err(SherpaError::Generic)?;
         stop_recognizer_impl_inner(&self.instance_id, &mut instance)
             .await
             .map_err(SherpaError::Generic)
@@ -59,6 +98,10 @@ impl AsrStreamingSession for LocalSherpaSession {
 
     async fn flush(&self) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
+        let mut pending = self.pending_inference.lock().await;
+        wait_for_inference_task(&mut pending)
+            .await
+            .map_err(SherpaError::Generic)?;
         flush_recognizer_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
             .await
             .map_err(SherpaError::Generic)
@@ -66,10 +109,12 @@ impl AsrStreamingSession for LocalSherpaSession {
 
     async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
+        let mut pending = self.pending_inference.lock().await;
         feed_audio_chunk_impl_inner(
             self.observer.clone(),
             &self.instance_id,
             &mut instance,
+            &mut pending,
             samples,
         )
         .await
@@ -78,10 +123,12 @@ impl AsrStreamingSession for LocalSherpaSession {
 
     async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError> {
         let mut instance = self.instance.lock().await;
+        let mut pending = self.pending_inference.lock().await;
         feed_audio_samples_inner(
             self.observer.clone(),
             &self.instance_id,
             &mut instance,
+            &mut pending,
             samples,
         )
         .await
@@ -233,6 +280,7 @@ pub async fn create_streaming_session(
         instance_id,
         observer,
         instance: tokio::sync::Mutex::new(session_instance),
+        pending_inference: tokio::sync::Mutex::new(None),
     });
 
     Ok(session)
@@ -481,6 +529,7 @@ async fn feed_audio_samples_inner(
     observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
+    pending_inference: &mut Option<PendingInferenceTask>,
     samples: &[f32],
 ) -> Result<(), String> {
     // instances removed
@@ -492,7 +541,7 @@ async fn feed_audio_samples_inner(
                 .record_diagnostics
                 .should_log_skipped_while_stopped()
         {
-            println!(
+            info!(
                 "[Sherpa] {label} audio chunk skipped because recognizer is not running. samples={} total_samples={}",
                 samples.len(),
                 instance.total_samples
@@ -507,7 +556,7 @@ async fn feed_audio_samples_inner(
     if let Some(label) = diagnostics_instance_label(instance_id)
         && instance.record_diagnostics.should_log_first_sample()
     {
-        println!(
+        info!(
             "[Sherpa] {label} first sample received. samples={} total_samples_before={} current_segment={}",
             samples.len(),
             instance.total_samples,
@@ -522,7 +571,7 @@ async fn feed_audio_samples_inner(
 
     if recognizer.is_offline() {
         let Some(vad) = instance.vad() else {
-            println!(
+            log::warn!(
                 "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
                 instance_id
             );
@@ -538,8 +587,8 @@ async fn feed_audio_samples_inner(
         if let Some(label) = diagnostics_instance_label(instance_id)
             && instance.total_samples % 160000 < 2000
         {
-            // Print once every ~10 seconds
-            println!(
+            // Log once every ~10 seconds
+            info!(
                 "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
                 instance.total_samples,
                 currently_speaking,
@@ -558,12 +607,12 @@ async fn feed_audio_samples_inner(
         if currently_speaking && !instance.offline_state.is_speech_active() {
             if let Some(label) = diagnostics_instance_label(instance_id) {
                 let ring_buffer_samples = instance.offline_state.ring_sample_count();
-                println!(
+                info!(
                     "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
                     seg_id, instance.total_samples, ring_buffer_samples
                 );
             } else {
-                println!("[Sherpa] Instance {} detected speech start.", instance_id);
+                info!("[Sherpa] Instance {} detected speech start.", instance_id);
             }
 
             let samples_to_keep = (16000.0 * 0.3) as usize;
@@ -576,7 +625,9 @@ async fn feed_audio_samples_inner(
             instance.offline_state.push_speech_chunk(samples.to_vec());
 
             let now = std::time::Instant::now();
-            if instance.offline_state.should_run_inference(now, 200) {
+            if instance.offline_state.should_run_inference(now, 200)
+                && prepare_partial_inference_slot(pending_inference).await?
+            {
                 let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
                 let offline_copy = instance.offline_state.speech_chunks().to_vec();
@@ -602,7 +653,7 @@ async fn feed_audio_samples_inner(
                 let triggered_at = Instant::now();
 
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    println!(
+                    info!(
                         "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
                         seg_id,
                         offline_copy.len(),
@@ -631,7 +682,7 @@ async fn feed_audio_samples_inner(
                         );
                     }
                 };
-                drop(tokio::task::spawn_blocking(task));
+                *pending_inference = Some(queue_inference_task(None, task));
                 instance.offline_state.mark_inference_time(now);
             }
         }
@@ -639,7 +690,7 @@ async fn feed_audio_samples_inner(
         if !currently_speaking {
             if instance.offline_state.is_speech_active() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    println!(
+                    info!(
                         "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
                         seg_id,
                         instance.total_samples,
@@ -647,7 +698,7 @@ async fn feed_audio_samples_inner(
                         instance.offline_state.buffered_speech_sample_count() + samples.len()
                     );
                 } else {
-                    println!("[Sherpa] Instance {} detected speech end.", instance_id);
+                    info!("[Sherpa] Instance {} detected speech end.", instance_id);
                 }
                 instance
                     .offline_state
@@ -673,7 +724,7 @@ async fn feed_audio_samples_inner(
                 let triggered_at = Instant::now();
 
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    println!(
+                    info!(
                         "[Sherpa] {label} triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
                         seg_id,
                         offline_copy.len(),
@@ -702,7 +753,7 @@ async fn feed_audio_samples_inner(
                         );
                     }
                 };
-                drop(tokio::task::spawn_blocking(task));
+                *pending_inference = Some(queue_inference_task(pending_inference.take(), task));
 
                 instance.offline_state.clear_speech_buffer();
                 instance.clear_partial_metric_sample();
@@ -898,6 +949,7 @@ async fn feed_audio_chunk_impl_inner(
     observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
+    pending_inference: &mut Option<PendingInferenceTask>,
     samples: Vec<u8>,
 ) -> Result<(), String> {
     trace!(
@@ -910,7 +962,14 @@ async fn feed_audio_chunk_impl_inner(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples_inner(observer, instance_id, instance, &float_samples).await
+    feed_audio_samples_inner(
+        observer,
+        instance_id,
+        instance,
+        pending_inference,
+        &float_samples,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -975,5 +1034,45 @@ mod tests {
                 .await
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn queued_offline_inference_runs_in_order_and_waits_for_completion() {
+        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let partial_order = order.clone();
+        let partial = queue_inference_task(None, move || {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            partial_order.lock().unwrap().push("partial");
+        });
+        let final_order = order.clone();
+        let final_task = queue_inference_task(Some(partial), move || {
+            final_order.lock().unwrap().push("final");
+        });
+        let mut pending = Some(final_task);
+
+        wait_for_inference_task(&mut pending).await.unwrap();
+
+        assert!(pending.is_none());
+        assert_eq!(order.lock().unwrap().as_slice(), &["partial", "final"]);
+    }
+
+    #[tokio::test]
+    async fn partial_inference_slot_coalesces_while_work_is_running() {
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let task = queue_inference_task(None, move || {
+            release_receiver.recv().unwrap();
+        });
+        let mut pending = Some(task);
+
+        assert!(!prepare_partial_inference_slot(&mut pending).await.unwrap());
+        release_sender.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while !pending.as_ref().unwrap().is_finished() {
+            assert!(std::time::Instant::now() < deadline);
+            tokio::task::yield_now().await;
+        }
+
+        assert!(prepare_partial_inference_slot(&mut pending).await.unwrap());
+        assert!(pending.is_none());
     }
 }

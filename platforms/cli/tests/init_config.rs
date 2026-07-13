@@ -20,6 +20,9 @@ fn init_config_writes_commented_template_to_target_path() {
     assert!(contents.contains("# Sona CLI config template"));
     assert!(contents.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
     assert!(contents.contains("[transcribe]"));
+    assert!(contents.contains("[transcribe_live]"));
+    assert!(contents.contains("# input = \"microphone\""));
+    assert!(contents.contains("# output_format = \"text\""));
     assert!(contents.contains("# api_key = \"\""));
     assert!(contents.contains("[serve]"));
     assert!(contents.contains("sona-cli serve"));

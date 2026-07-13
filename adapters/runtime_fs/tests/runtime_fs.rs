@@ -13,13 +13,14 @@ use sona_core::runtime::diagnostics::{
     DiagnosticsConfigInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
 };
 use sona_core::runtime::environment::RuntimePathKind;
-use sona_core::transcription::runtime::BatchInputSource;
+use sona_core::transcription::runtime::{BatchInputSource, LiveTranscribeOptions};
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
     RealFileSystem, SystemClock, UuidGenerator, collect_automation_runtime_candidate_paths,
     ensure_directory_exists, is_preset_model_installed_at, load_legacy_settings_app_config,
-    load_transcribe_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
-    resolve_batch_input_source, resolve_runtime_path_status,
+    load_transcribe_config_file, load_transcribe_live_config_file, path_exists,
+    plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
     select_desktop_models_dir_from_app_roots, write_cli_config_template_file,
     write_json_pretty_atomic, write_transcript_output_file,
 };
@@ -78,6 +79,60 @@ fn uuid_generator_returns_distinct_uuid_v4_strings() {
 fn uuid_generator_implements_project_id_port() {
     let id = ProjectIdGenerator::generate_id(&UuidGenerator);
     assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+}
+
+#[test]
+fn load_transcribe_live_config_file_reads_live_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &path,
+        r#"
+models_dir = "shared-models"
+
+[transcribe_live]
+model_id = "live-model"
+input = "stdin"
+"#,
+    )
+    .unwrap();
+
+    let config = load_transcribe_live_config_file(&path).unwrap();
+
+    assert_eq!(config.models_dir, Some(PathBuf::from("shared-models")));
+    assert_eq!(config.model_id.as_deref(), Some("live-model"));
+    assert_eq!(config.input.as_deref(), Some("stdin"));
+}
+
+#[test]
+fn live_plan_rejects_existing_output_before_model_resolution() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = dir.path().join("live.srt");
+    std::fs::write(&output, "existing").unwrap();
+
+    let error = resolve_live_transcribe_plan_with_runtime_paths(
+        LiveTranscribeOptions {
+            output: Some(output.clone()),
+            format: None,
+            model_id: None,
+            models_dir: None,
+            default_models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: None,
+            language: None,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            force: false,
+        },
+        None,
+    )
+    .unwrap_err();
+
+    assert!(error.contains("Output file already exists"));
+    assert!(error.contains(output.to_string_lossy().as_ref()));
 }
 
 fn accepts_clock(_: &dyn UnixMillisClock) {}

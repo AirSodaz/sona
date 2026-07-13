@@ -7,6 +7,7 @@ pub struct UnifiedConfigFile {
     pub shared: SharedConfig,
 
     pub transcribe: Option<TranscribeConfigSection>,
+    pub transcribe_live: Option<TranscribeLiveConfigSection>,
     pub serve: Option<ServeConfigSection>,
 }
 
@@ -53,6 +54,24 @@ pub struct TranscribeConfigSection {
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TranscribeLiveConfigSection {
+    pub models_dir: Option<PathBuf>,
+    pub model_id: Option<String>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+    pub language: Option<String>,
+    pub threads: Option<i32>,
+    pub enable_itn: Option<bool>,
+    pub hotwords: Option<String>,
+    pub vad_buffer_size: Option<f32>,
+    pub gpu_acceleration: Option<String>,
+    pub input: Option<String>,
+    pub device: Option<String>,
+    pub duration_seconds: Option<f64>,
+    pub output_format: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -112,6 +131,23 @@ impl UnifiedConfigFile {
             .or(self.shared.punctuation_model_id);
         config
     }
+
+    pub fn into_transcribe_live_config(self) -> TranscribeLiveConfigSection {
+        let mut config = self.transcribe_live.unwrap_or_default();
+        config.models_dir = config.models_dir.or(self.shared.models_dir);
+        config.model_id = config.model_id.or(self.shared.model_id);
+        config.vad_model_id = config.vad_model_id.or(self.shared.vad_model_id);
+        config.punctuation_model_id = config
+            .punctuation_model_id
+            .or(self.shared.punctuation_model_id);
+        config.language = config.language.or(self.shared.language);
+        config.threads = config.threads.or(self.shared.threads);
+        config.enable_itn = config.enable_itn.or(self.shared.enable_itn);
+        config.hotwords = config.hotwords.or(self.shared.hotwords);
+        config.vad_buffer_size = config.vad_buffer_size.or(self.shared.vad_buffer_size);
+        config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
+        config
+    }
 }
 
 pub fn parse_unified_config_file(
@@ -128,6 +164,14 @@ pub fn parse_transcribe_config_file(
 ) -> Result<TranscribeConfigSection, String> {
     let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_transcribe_config())
+}
+
+pub fn parse_transcribe_live_config_file(
+    contents: &str,
+    source_label: &str,
+) -> Result<TranscribeLiveConfigSection, String> {
+    let unified = parse_unified_config_file(contents, source_label)?;
+    Ok(unified.into_transcribe_live_config())
 }
 
 pub fn parse_serve_config_file(

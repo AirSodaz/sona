@@ -8,8 +8,12 @@ build = "build.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "wrap_help"] }
+cpal = "0.18"
+crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rubato = "0.16"
+ringbuf = "0.4"
 sona-api-server = { path = "../../adapters/api_server" }
 sona-local-asr = { path = "../../adapters/local_asr" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }
@@ -19,10 +23,12 @@ sona-sqlite = { path = "../../adapters/sqlite" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../../adapters/export" }
 thiserror = "2.0.18"
-tokio = { version = "1", features = ["rt-multi-thread", "signal", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
 unicode-width = "0.2"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
+async-trait = "0.1"
 axum = { version = "0.8", features = ["macros"] }
 hex = "0.4"
 sha2 = "0.11"

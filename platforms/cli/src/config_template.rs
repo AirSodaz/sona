@@ -6,6 +6,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # `sona-cli transcribe` requires model_id to be enabled.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
+#   sona-cli transcribe-live -c ./sona-cli.toml
+#   ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin -c ./sona-cli.toml
 #   sona-cli serve -c ./sona-cli.toml
 #
 # Top-level keys are shared defaults for CLI commands.
@@ -32,6 +34,27 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # format = "srt"
 # quiet = false
 # jobs = 1
+
+[transcribe_live]
+# Input source: microphone or stdin. stdin must be 16 kHz mono signed 16-bit little-endian PCM.
+# input = "microphone"
+# Exact CPAL input device name. Only valid with microphone input.
+# device = ""
+# Stop automatically after this many seconds.
+# duration_seconds = 60.0
+# Live stdout format: text or ndjson.
+# output_format = "text"
+# models_dir = "..."
+# gpu_acceleration = "auto"
+# vad_model_id = "silero-vad"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# model_id = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+# language = "auto"
+# threads = 4
+# enable_itn = false
+# vad_buffer_size = 5.0
+# hotwords = "Sona,live ASR"
+# Final output path, export format, and overwrite behavior are command-line-only options.
 
 [serve]
 # models_dir = "..."
@@ -91,6 +114,10 @@ mod tests {
         assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
         assert!(content.contains("[transcribe]"));
         assert!(content.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
+        assert!(content.contains("[transcribe_live]"));
+        assert!(content.contains("# input = \"microphone\""));
+        assert!(content.contains("# output_format = \"text\""));
+        assert!(content.contains("sona-cli transcribe-live"));
         assert!(content.contains("[serve]"));
         assert!(content.contains("sona-cli serve"));
         assert!(content.contains("# api_key = \"\""));
@@ -106,6 +133,7 @@ mod tests {
 
         assert!(models_line.starts_with("# models_dir = \""));
         assert!(!models_line.contains('\\'));
+        assert!(content.contains("[transcribe_live]"));
 
         #[cfg(target_os = "windows")]
         assert!(models_line.contains("C:/Users/you/AppData/Local/com.asoda.sona/models"));

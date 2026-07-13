@@ -50,6 +50,42 @@ test('shared api server invokes local batch ASR through the core transcriber por
   assert.doesNotMatch(apiServer, /LocalSherpaAdapter::offline_plan_to_batch_request/u);
 });
 
+test('standalone CLI live transcription keeps capture in the host and ASR behind core ports', () => {
+  const cliCargo = read('platforms', 'cli', 'Cargo.toml');
+  const cliAsrAdapter = read('platforms', 'cli', 'src', 'asr_adapter.rs');
+  const cliLiveAudio = read('platforms', 'cli', 'src', 'live_audio.rs');
+  const cliLiveCommand = read('platforms', 'cli', 'src', 'transcribe_live.rs');
+  const coreRuntime = read('core', 'src', 'transcription', 'runtime.rs');
+
+  assert.match(cliCargo, /^cpal\s*=\s*"0\.18"/mu);
+  assert.match(cliCargo, /^rubato\s*=\s*"0\.16"/mu);
+  assert.match(cliCargo, /^ringbuf\s*=\s*"0\.4"/mu);
+  assert.doesNotMatch(cliCargo, /sona-online-asr/u);
+  assert.match(cliLiveAudio, /cpal::traits::\{DeviceTrait, HostTrait, StreamTrait\}/u);
+  assert.match(cliLiveAudio, /FftFixedOut/u);
+  assert.match(cliLiveAudio, /HeapRb::<f32>::new/u);
+  assert.match(cliAsrAdapter, /Arc<dyn AsrStreamingSession>/u);
+  assert.match(cliAsrAdapter, /sona_local_asr::streaming::create_streaming_session/u);
+  assert.match(cliLiveCommand, /session: Arc<dyn AsrStreamingSession>/u);
+  assert.match(coreRuntime, /pub struct LiveTranscribeOptions/u);
+  assert.match(coreRuntime, /pub struct LiveTranscribePlan/u);
+  assert.match(coreRuntime, /to_local_streaming_request/u);
+});
+
+test('local VAD loading never writes protocol-breaking messages to stdout', () => {
+  const localAudio = read('adapters', 'local_asr', 'src', 'audio.rs');
+  const streamingSession = read('adapters', 'local_asr', 'src', 'streaming', 'session.rs');
+  const loadVadStart = localAudio.indexOf('pub fn load_vad');
+  const loadVadEnd = localAudio.indexOf('pub fn reset_vad', loadVadStart);
+  const loadVadBody = localAudio.slice(loadVadStart, loadVadEnd);
+
+  assert.ok(loadVadStart >= 0 && loadVadEnd > loadVadStart, 'load_vad body must remain discoverable');
+  assert.doesNotMatch(loadVadBody, /println!/u);
+  assert.doesNotMatch(streamingSession, /println!/u);
+  assert.match(loadVadBody, /log::info!/u);
+  assert.match(loadVadBody, /log::warn!/u);
+});
+
 test('model download runtime implementation lives in a dedicated adapter crate', () => {
   const workspaceCargo = read('Cargo.toml');
   const coreCargo = read('core', 'Cargo.toml');
@@ -969,7 +1005,9 @@ test('local ASR blocking tasks are owned by the local adapter', () => {
   assert.equal(fs.existsSync(platformAsrRuntimePath), false);
   assert.doesNotMatch(platformMod, /^pub mod asr_runtime;/mu);
   assert.match(adapterSession, /tokio::task::spawn_blocking\(task\)/u);
-  assert.match(adapterSession, /drop\(tokio::task::spawn_blocking\(task\)\)/u);
+  assert.match(adapterSession, /queue_inference_task/u);
+  assert.match(adapterSession, /wait_for_inference_task/u);
+  assert.doesNotMatch(adapterSession, /drop\(tokio::task::spawn_blocking\(task\)\)/u);
   assert.doesNotMatch(adapterSession, /tauri::async_runtime::spawn_blocking/u);
 });
 

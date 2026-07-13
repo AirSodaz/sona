@@ -3,7 +3,7 @@ use crate::models::paths::ModelsDirStatus;
 use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
-use crate::runtime::config::TranscribeConfigSection;
+use crate::runtime::config::{TranscribeConfigSection, TranscribeLiveConfigSection};
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
@@ -75,6 +75,66 @@ pub struct BatchTranscribePlan {
     pub export_format: ExportFormat,
     pub output_target: OutputTarget,
     pub quiet: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveTranscribeOptions {
+    pub output: Option<PathBuf>,
+    pub format: Option<String>,
+    pub model_id: Option<String>,
+    pub models_dir: Option<PathBuf>,
+    pub default_models_dir: Option<PathBuf>,
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
+    pub threads: Option<i32>,
+    pub enable_itn: Option<bool>,
+    pub language: Option<String>,
+    pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
+    pub vad_buffer: Option<f32>,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveTranscribePlan {
+    pub model_id: String,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub model_type: String,
+    pub file_config: Option<crate::models::config::ModelFileConfig>,
+    pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
+    pub export_format: Option<ExportFormat>,
+    pub output_path: Option<PathBuf>,
+}
+
+impl LiveTranscribePlan {
+    pub fn to_local_streaming_request(
+        &self,
+        instance_id: impl Into<String>,
+    ) -> crate::ports::asr::LocalSherpaStreamingRequest {
+        crate::ports::asr::LocalSherpaStreamingRequest {
+            instance_id: instance_id.into(),
+            model_path: self.model_path.clone(),
+            num_threads: self.num_threads,
+            enable_itn: self.enable_itn,
+            language: self.language.clone(),
+            punctuation_model: self.punctuation_model.clone(),
+            vad_model: self.vad_model.clone(),
+            vad_buffer: self.vad_buffer,
+            model_type: self.model_type.clone(),
+            file_config: self.file_config.clone(),
+            hotwords: self.hotwords.clone(),
+            normalization_options: Default::default(),
+            postprocess_options: Default::default(),
+            gpu_acceleration: self.gpu_acceleration.clone(),
+        }
+    }
 }
 
 pub fn resolve_export_format(
@@ -254,6 +314,72 @@ pub fn resolve_batch_transcribe_plan_with_install_checker(
     )
 }
 
+pub fn resolve_live_transcribe_plan_with_install_checker(
+    options: LiveTranscribeOptions,
+    config: Option<TranscribeLiveConfigSection>,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+) -> Result<LiveTranscribePlan, String> {
+    resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
+        options,
+        config,
+        is_installed,
+        |_| ModelsDirStatus::Missing,
+    )
+}
+
+pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
+    options: LiveTranscribeOptions,
+    config: Option<TranscribeLiveConfigSection>,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<LiveTranscribePlan, String> {
+    let config = config.unwrap_or_default();
+    if options.output.is_none() && options.format.is_some() {
+        return Err("--format requires --output for live transcription.".to_string());
+    }
+    let export_format = options
+        .output
+        .as_deref()
+        .map(|path| resolve_export_format(options.format.as_deref(), Some(path)))
+        .transpose()?;
+    let resolved = resolve_local_transcribe_settings(
+        LocalTranscribeSettings {
+            model_id: options.model_id.or(config.model_id),
+            models_dir: options.models_dir.or(config.models_dir),
+            default_models_dir: options.default_models_dir,
+            vad_model_id: options.vad_model_id.or(config.vad_model_id),
+            punctuation_model_id: options.punctuation_model_id.or(config.punctuation_model_id),
+            threads: options.threads.or(config.threads),
+            enable_itn: options.enable_itn.or(config.enable_itn),
+            language: options.language.or(config.language),
+            hotwords: options.hotwords.or(config.hotwords),
+            gpu_acceleration: options.gpu_acceleration.or(config.gpu_acceleration),
+            vad_buffer: options.vad_buffer.or(config.vad_buffer_size),
+        },
+        "streaming",
+        "Missing required streaming model. Pass --model-id or set model_id in --config.",
+        is_installed,
+        models_dir_status,
+    )?;
+    let _ = options.force;
+    Ok(LiveTranscribePlan {
+        model_id: resolved.model_id,
+        model_path: resolved.model_path,
+        num_threads: resolved.num_threads,
+        enable_itn: resolved.enable_itn,
+        language: resolved.language,
+        punctuation_model: resolved.punctuation_model,
+        vad_model: resolved.vad_model,
+        vad_buffer: resolved.vad_buffer,
+        model_type: resolved.model_type,
+        file_config: resolved.file_config,
+        hotwords: resolved.hotwords,
+        gpu_acceleration: resolved.gpu_acceleration,
+        export_format,
+        output_path: options.output,
+    })
+}
+
 pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
     options: BatchTranscribeOptions,
     config: Option<TranscribeConfigSection>,
@@ -269,94 +395,158 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
             OutputTarget::File(path) => Some(path.as_path()),
         },
     )?;
-    let gpu_acceleration = crate::runtime::gpu::resolve_gpu_acceleration(
-        options.gpu_acceleration.or(config.gpu_acceleration),
-    )?;
-
-    let models_dir = crate::models::paths::resolve_models_dir(
-        options.models_dir.or(config.models_dir),
-        options.default_models_dir,
+    let resolved = resolve_local_transcribe_settings(
+        LocalTranscribeSettings {
+            model_id: options.model_id.or(config.model_id),
+            models_dir: options.models_dir.or(config.models_dir),
+            default_models_dir: options.default_models_dir,
+            vad_model_id: options.vad_model_id.or(config.vad_model_id),
+            punctuation_model_id: options.punctuation_model_id.or(config.punctuation_model_id),
+            threads: options.threads.or(config.threads),
+            enable_itn: options.enable_itn.or(config.enable_itn),
+            language: options.language.or(config.language),
+            hotwords: options.hotwords.or(config.hotwords),
+            gpu_acceleration: options.gpu_acceleration.or(config.gpu_acceleration),
+            vad_buffer: options.vad_buffer.or(config.vad_buffer_size),
+        },
+        "batch",
+        "Missing required batch model. Pass --model-id or set model_id in --config.",
+        is_installed,
         models_dir_status,
     )?;
-    let model_id = options.model_id.or(config.model_id).ok_or_else(|| {
-        "Missing required batch model. Pass --model-id or set model_id in --config.".to_string()
-    })?;
-    let model = resolve_batch_model(&model_id)?;
-    let rules = model.resolved_rules();
-
-    let vad_model_id = options.vad_model_id.or(config.vad_model_id);
-    let punctuation_model_id = options.punctuation_model_id.or(config.punctuation_model_id);
-
-    let enable_itn = options.enable_itn.or(config.enable_itn).unwrap_or(false);
-    let threads = options
-        .threads
-        .or(config.threads)
-        .unwrap_or(DEFAULT_THREADS);
-    if threads <= 0 {
-        return Err("threads must be greater than 0".to_string());
-    }
-
-    let vad_buffer = options
-        .vad_buffer
-        .or(config.vad_buffer_size)
-        .unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
-    if vad_buffer <= 0.0 {
-        return Err("vad_buffer must be greater than 0".to_string());
-    }
-
-    let language = options
-        .language
-        .or(config.language)
-        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
-    let model_path = require_installed_model(model, &models_dir, is_installed)?;
-    let vad_model = if rules.requires_vad {
-        let companion_id = vad_model_id.unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
-        Some(require_installed_companion(
-            &companion_id,
-            &models_dir,
-            is_installed,
-        )?)
-    } else {
-        optional_installed_companion(vad_model_id.as_deref(), &models_dir, is_installed)?
-    };
-    let punctuation_model = if rules.requires_punctuation {
-        let companion_id =
-            punctuation_model_id.unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
-        Some(require_installed_companion(
-            &companion_id,
-            &models_dir,
-            is_installed,
-        )?)
-    } else {
-        optional_installed_companion(punctuation_model_id.as_deref(), &models_dir, is_installed)?
-    };
 
     Ok(BatchTranscribePlan {
         input_path: options.input,
         save_to_path: options.save_wav,
-        model_path,
-        num_threads: threads,
-        enable_itn,
-        language,
-        punctuation_model,
-        vad_model,
-        vad_buffer,
-        model_type: model.model_type.clone(),
-        file_config: model.file_config.clone(),
-        hotwords: options.hotwords.or(config.hotwords),
-        gpu_acceleration,
+        model_path: resolved.model_path,
+        num_threads: resolved.num_threads,
+        enable_itn: resolved.enable_itn,
+        language: resolved.language,
+        punctuation_model: resolved.punctuation_model,
+        vad_model: resolved.vad_model,
+        vad_buffer: resolved.vad_buffer,
+        model_type: resolved.model_type,
+        file_config: resolved.file_config,
+        hotwords: resolved.hotwords,
+        gpu_acceleration: resolved.gpu_acceleration,
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
     })
 }
 
-fn resolve_batch_model(model_id: &str) -> Result<&'static PresetModel, String> {
+struct LocalTranscribeSettings {
+    model_id: Option<String>,
+    models_dir: Option<PathBuf>,
+    default_models_dir: Option<PathBuf>,
+    vad_model_id: Option<String>,
+    punctuation_model_id: Option<String>,
+    threads: Option<i32>,
+    enable_itn: Option<bool>,
+    language: Option<String>,
+    hotwords: Option<String>,
+    gpu_acceleration: Option<String>,
+    vad_buffer: Option<f32>,
+}
+
+struct ResolvedLocalTranscribeSettings {
+    model_id: String,
+    model_path: String,
+    num_threads: i32,
+    enable_itn: bool,
+    language: String,
+    punctuation_model: Option<String>,
+    vad_model: Option<String>,
+    vad_buffer: f32,
+    model_type: String,
+    file_config: Option<crate::models::config::ModelFileConfig>,
+    hotwords: Option<String>,
+    gpu_acceleration: Option<String>,
+}
+
+fn resolve_local_transcribe_settings(
+    settings: LocalTranscribeSettings,
+    mode: &'static str,
+    missing_model_error: &'static str,
+    is_installed: fn(&PresetModel, &Path) -> bool,
+    models_dir_status: fn(&Path) -> ModelsDirStatus,
+) -> Result<ResolvedLocalTranscribeSettings, String> {
+    let gpu_acceleration =
+        crate::runtime::gpu::resolve_gpu_acceleration(settings.gpu_acceleration)?;
+    let model_id = settings
+        .model_id
+        .ok_or_else(|| missing_model_error.to_string())?;
+    let model = resolve_model_for_mode(&model_id, mode)?;
+    let models_dir = crate::models::paths::resolve_models_dir(
+        settings.models_dir,
+        settings.default_models_dir,
+        models_dir_status,
+    )?;
+    let threads = settings.threads.unwrap_or(DEFAULT_THREADS);
+    if threads <= 0 {
+        return Err("threads must be greater than 0".to_string());
+    }
+    let vad_buffer = settings.vad_buffer.unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
+    if vad_buffer <= 0.0 {
+        return Err("vad_buffer must be greater than 0".to_string());
+    }
+    let rules = model.resolved_rules();
+    let model_path = require_installed_model(model, &models_dir, is_installed)?;
+    let vad_model = if rules.requires_vad {
+        let companion_id = settings
+            .vad_model_id
+            .unwrap_or_else(|| DEFAULT_SILERO_VAD_MODEL_ID.to_string());
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
+    } else {
+        optional_installed_companion(settings.vad_model_id.as_deref(), &models_dir, is_installed)?
+    };
+    let punctuation_model = if rules.requires_punctuation {
+        let companion_id = settings
+            .punctuation_model_id
+            .unwrap_or_else(|| DEFAULT_PUNCTUATION_MODEL_ID.to_string());
+        Some(require_installed_companion(
+            &companion_id,
+            &models_dir,
+            is_installed,
+        )?)
+    } else {
+        optional_installed_companion(
+            settings.punctuation_model_id.as_deref(),
+            &models_dir,
+            is_installed,
+        )?
+    };
+    Ok(ResolvedLocalTranscribeSettings {
+        model_id,
+        model_path,
+        num_threads: threads,
+        enable_itn: settings.enable_itn.unwrap_or(false),
+        language: settings
+            .language
+            .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string()),
+        punctuation_model,
+        vad_model,
+        vad_buffer,
+        model_type: model.model_type.clone(),
+        file_config: model.file_config.clone(),
+        hotwords: settings.hotwords,
+        gpu_acceleration,
+    })
+}
+
+fn resolve_model_for_mode(
+    model_id: &str,
+    mode: &'static str,
+) -> Result<&'static PresetModel, String> {
     let model =
         find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
-    if !model.supports_mode("batch") {
+    if !model.supports_mode(mode) {
         return Err(format!(
-            "Model '{model_id}' does not support batch transcription."
+            "Model '{model_id}' does not support {mode} transcription."
         ));
     }
     Ok(model)

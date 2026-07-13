@@ -234,6 +234,15 @@ test('CLI documentation describes standalone sona-cli packaging only', () => {
   assert.match(readmeZh, /pnpm run build:sona-cli/u);
   assert.match(cliGuide, /### `transcribe`/u);
   assert.match(cliGuide, /sona-cli transcribe/u);
+  for (const guide of [cliGuide, cliGuideZh]) {
+    assert.match(guide, /### `transcribe-live`/u);
+    assert.match(guide, /sona-cli transcribe-live/u);
+    assert.match(guide, /--input stdin/u);
+    assert.match(guide, /16 kHz/u);
+    assert.match(guide, /--output-format ndjson/u);
+    assert.match(guide, /\[transcribe_live\]/u);
+    assert.match(guide, /Ctrl\+C/u);
+  }
 
   assert.doesNotMatch(docs, /main desktop executable/u);
   assert.doesNotMatch(docs, /Sona\.exe transcribe/u);

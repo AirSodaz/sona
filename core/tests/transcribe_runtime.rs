@@ -4,12 +4,13 @@ use std::path::PathBuf;
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::PresetModel;
 use sona_core::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
-use sona_core::runtime::config::TranscribeConfigSection;
+use sona_core::runtime::config::{TranscribeConfigSection, TranscribeLiveConfigSection};
 use sona_core::transcription::runtime::{
     BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
-    DEFAULT_VAD_BUFFER_SIZE, OutputTarget, plan_batch_output_files, resolve_batch_jobs,
-    resolve_batch_transcribe_plan_with_install_checker, resolve_export_format,
-    resolve_output_target, should_run_path_batch,
+    DEFAULT_VAD_BUFFER_SIZE, LiveTranscribeOptions, OutputTarget, plan_batch_output_files,
+    resolve_batch_jobs, resolve_batch_transcribe_plan_with_install_checker, resolve_export_format,
+    resolve_live_transcribe_plan_with_install_checker, resolve_output_target,
+    should_run_path_batch,
 };
 use tempfile::tempdir;
 
@@ -181,6 +182,107 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     )
     .unwrap();
     (dir, input_path, models_dir)
+}
+
+fn temp_live_options() -> LiveTranscribeOptions {
+    LiveTranscribeOptions {
+        output: None,
+        format: None,
+        model_id: None,
+        models_dir: None,
+        default_models_dir: None,
+        vad_model_id: None,
+        punctuation_model_id: None,
+        threads: None,
+        enable_itn: None,
+        language: None,
+        hotwords: None,
+        gpu_acceleration: None,
+        vad_buffer: None,
+        force: false,
+    }
+}
+
+fn installed_streaming_paraformer_fixture() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    fs::create_dir_all(
+        models_dir.join("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
+    )
+    .unwrap();
+    fs::create_dir_all(
+        models_dir.join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"),
+    )
+    .unwrap();
+    (dir, models_dir)
+}
+
+#[test]
+fn live_plan_resolves_streaming_model_companions_and_config_precedence() {
+    let (_dir, models_dir) = installed_streaming_paraformer_fixture();
+    let mut cli = temp_live_options();
+    cli.output = Some(PathBuf::from("live.srt"));
+    cli.model_id = Some("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en".to_string());
+    cli.models_dir = Some(models_dir.clone());
+    cli.threads = Some(8);
+
+    let plan = resolve_live_transcribe_plan_with_install_checker(
+        cli,
+        Some(TranscribeLiveConfigSection {
+            threads: Some(2),
+            hotwords: Some("Sona".to_string()),
+            ..Default::default()
+        }),
+        test_model_exists,
+    )
+    .unwrap();
+
+    assert_eq!(
+        plan.model_id,
+        "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"
+    );
+    assert_eq!(plan.num_threads, 8);
+    assert_eq!(plan.hotwords.as_deref(), Some("Sona"));
+    assert_eq!(plan.export_format, Some(ExportFormat::Srt));
+    assert_eq!(plan.output_path, Some(PathBuf::from("live.srt")));
+    assert!(
+        plan.punctuation_model
+            .as_deref()
+            .unwrap()
+            .contains(DEFAULT_PUNCTUATION_MODEL_ID)
+    );
+    let request = plan.to_local_streaming_request("cli-live-session");
+    assert_eq!(request.instance_id, "cli-live-session");
+    assert_eq!(request.model_path, plan.model_path);
+    assert_eq!(request.num_threads, 8);
+    assert_eq!(request.hotwords.as_deref(), Some("Sona"));
+}
+
+#[test]
+fn live_plan_rejects_batch_only_models() {
+    let (_dir, _input_path, models_dir) = installed_whisper_fixture();
+    let mut cli = temp_live_options();
+    cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+    cli.models_dir = Some(models_dir);
+
+    let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        "Model 'sherpa-onnx-whisper-turbo' does not support streaming transcription."
+    );
+}
+
+#[test]
+fn live_plan_rejects_format_without_output_path() {
+    let mut cli = temp_live_options();
+    cli.format = Some("srt".to_string());
+
+    let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
+        .unwrap_err();
+
+    assert_eq!(error, "--format requires --output for live transcription.");
 }
 
 #[test]
