@@ -359,6 +359,8 @@ pub struct HistoryBackupSnapshot {
 }
 
 pub mod item_factory;
+pub mod query_repository;
+pub mod query_service;
 pub mod transcript_diff;
 pub mod transcript_payload;
 pub mod workspace_query;

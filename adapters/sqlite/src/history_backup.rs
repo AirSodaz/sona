@@ -731,6 +731,7 @@ mod tests {
     };
     use crate::history_store::SqliteHistoryStore;
     use serde_json::{Value, json};
+    use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_core::history::{
         HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistorySaveRecordingRequest,
         TranscriptSnapshotReason,

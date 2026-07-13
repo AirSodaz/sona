@@ -22,10 +22,10 @@ pub async fn history_list_items<R: Runtime>(
     offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
     let opts = HistoryListOptions { limit, offset };
-    crate::platform::history_repository::run_history_file_task(
+    crate::platform::history_repository::run_history_query_file_task(
         &app,
         state.inner(),
-        move |repository| repository.list_items_with_reconciled_live_drafts_paginated(opts),
+        move |service| service.list_items(opts),
     )
     .await
 }
@@ -51,10 +51,10 @@ pub async fn history_query_workspace<R: Runtime>(
         limit,
         offset,
     };
-    crate::platform::history_repository::run_history_file_task(
+    crate::platform::history_repository::run_history_query_file_task(
         &app,
         state.inner(),
-        move |repository| repository.query_workspace(request),
+        move |service| service.query_workspace(request),
     )
     .await
 }
@@ -170,8 +170,8 @@ pub async fn history_load_transcript<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<Option<Vec<TranscriptSegment>>, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.load_transcript(&history_id)
+    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+        service.load_transcript(&history_id)
     })
     .await
 }
@@ -206,8 +206,8 @@ pub async fn history_list_transcript_snapshots<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
 ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.list_transcript_snapshots(&history_id)
+    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+        service.list_transcript_snapshots(&history_id)
     })
     .await
 }
@@ -218,8 +218,8 @@ pub async fn history_load_transcript_snapshot<R: Runtime>(
     history_id: String,
     snapshot_id: String,
 ) -> Result<Option<TranscriptSnapshotRecord>, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.load_transcript_snapshot(&history_id, &snapshot_id)
+    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+        service.load_transcript_snapshot(&history_id, &snapshot_id)
     })
     .await
 }

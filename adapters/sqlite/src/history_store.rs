@@ -7,6 +7,7 @@ use crate::ports::Database as DatabasePort;
 use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
+use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::workspace_query::{
     HistoryWorkspaceDateFilterThresholds, normalize_workspace_search_text,
@@ -811,7 +812,7 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
     }
 }
 
-impl<D> HistoryStore for SqliteHistoryStore<D>
+impl<D> SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
@@ -1890,13 +1891,189 @@ where
     }
 }
 
+impl<D> HistoryQueryRepository for SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
+    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        SqliteHistoryStore::list_items(self)
+    }
+
+    fn list_items_with_reconciled_live_drafts(
+        &self,
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        SqliteHistoryStore::list_items_with_reconciled_live_drafts(self)
+    }
+
+    fn list_items_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        SqliteHistoryStore::list_items_paginated(self, opts)
+    }
+
+    fn list_items_with_reconciled_live_drafts_paginated(
+        &self,
+        opts: HistoryListOptions,
+    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
+        SqliteHistoryStore::list_items_with_reconciled_live_drafts_paginated(self, opts)
+    }
+
+    fn query_workspace(
+        &self,
+        request: HistoryWorkspaceQueryRequest,
+    ) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+        SqliteHistoryStore::query_workspace(self, request)
+    }
+
+    fn load_transcript(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<Vec<TranscriptSegment>>, HistoryStoreError> {
+        SqliteHistoryStore::load_transcript(self, history_id)
+    }
+
+    fn list_transcript_snapshots(
+        &self,
+        history_id: &str,
+    ) -> Result<Vec<TranscriptSnapshotMetadata>, HistoryStoreError> {
+        SqliteHistoryStore::list_transcript_snapshots(self, history_id)
+    }
+
+    fn load_transcript_snapshot(
+        &self,
+        history_id: &str,
+        snapshot_id: &str,
+    ) -> Result<Option<TranscriptSnapshotRecord>, HistoryStoreError> {
+        SqliteHistoryStore::load_transcript_snapshot(self, history_id, snapshot_id)
+    }
+}
+
+impl<D> HistoryStore for SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
+    fn ensure_ready(&self) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::ensure_ready(self)
+    }
+
+    fn create_live_draft(
+        &self,
+        request: HistoryCreateLiveDraftRequest,
+    ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
+        SqliteHistoryStore::create_live_draft(self, request)
+    }
+
+    fn complete_live_draft(
+        &self,
+        history_id: &str,
+        segments: Value,
+        duration: f64,
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+        SqliteHistoryStore::complete_live_draft(self, history_id, segments, duration)
+    }
+
+    fn save_recording(
+        &self,
+        request: HistorySaveRecordingRequest,
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+        SqliteHistoryStore::save_recording(self, request)
+    }
+
+    fn save_imported_file(
+        &self,
+        request: HistorySaveImportedFileRequest,
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+        SqliteHistoryStore::save_imported_file(self, request)
+    }
+
+    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::delete_items(self, ids)
+    }
+
+    fn update_transcript(
+        &self,
+        history_id: &str,
+        segments: Value,
+    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+        SqliteHistoryStore::update_transcript(self, history_id, segments)
+    }
+
+    fn create_transcript_snapshot(
+        &self,
+        history_id: &str,
+        reason: TranscriptSnapshotReason,
+        segments: Value,
+    ) -> Result<TranscriptSnapshotMetadata, HistoryStoreError> {
+        SqliteHistoryStore::create_transcript_snapshot(self, history_id, reason, segments)
+    }
+
+    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::update_item_meta(self, history_id, updates)
+    }
+
+    fn update_project_assignments(
+        &self,
+        ids: &[String],
+        project_id: Option<String>,
+    ) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::update_project_assignments(self, ids, project_id)
+    }
+
+    fn reassign_project(
+        &self,
+        current_project_id: String,
+        next_project_id: Option<String>,
+    ) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::reassign_project(self, current_project_id, next_project_id)
+    }
+
+    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, HistoryStoreError> {
+        SqliteHistoryStore::load_summary(self, history_id)
+    }
+
+    fn save_summary(
+        &self,
+        history_id: &str,
+        summary_payload: Value,
+    ) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::save_summary(self, history_id, summary_payload)
+    }
+
+    fn delete_summary(&self, history_id: &str) -> Result<(), HistoryStoreError> {
+        SqliteHistoryStore::delete_summary(self, history_id)
+    }
+
+    fn resolve_audio_path(&self, history_id: &str) -> Result<Option<String>, HistoryStoreError> {
+        SqliteHistoryStore::resolve_audio_path(self, history_id)
+    }
+
+    fn preview_audio_cleanup(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
+        SqliteHistoryStore::preview_audio_cleanup(self, request)
+    }
+
+    fn cleanup_audio(
+        &self,
+        request: HistoryAudioCleanupRequest,
+    ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
+        SqliteHistoryStore::cleanup_audio(self, request)
+    }
+
+    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
+        SqliteHistoryStore::history_snapshot_for_backup(self)
+    }
+}
+
 #[async_trait::async_trait]
 impl<D> sona_core::dashboard::ports::HistoryRepository for SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
     async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardServiceError> {
-        HistoryStore::list_items(self)
+        HistoryQueryRepository::list_items(self)
             .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
     }
 
@@ -1904,7 +2081,7 @@ where
         &self,
         history_id: &str,
     ) -> Result<Option<Vec<TranscriptSegment>>, DashboardServiceError> {
-        HistoryStore::load_transcript(self, history_id)
+        HistoryQueryRepository::load_transcript(self, history_id)
             .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
     }
 }

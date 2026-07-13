@@ -9,6 +9,7 @@ This document tracks the commands that ship in the standalone CLI today:
 - `models list`
 - `models download`
 - `models delete`
+- `history list|query|transcript|snapshots|snapshot`
 - `export transcript`
 - `serve`
 - `transcribe`
@@ -26,6 +27,7 @@ Examples:
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- history list --app-data-dir ./sona-data --json
 cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
@@ -98,6 +100,23 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 Companion models are not deleted automatically.
+
+### `history`
+
+Query an existing Sona application data directory through the shared history query service.
+
+```bash
+sona-cli history list --app-data-dir ./sona-data --limit 50 --offset 0
+sona-cli history query --app-data-dir ./sona-data --input ./workspace-query.json --json
+sona-cli history transcript --app-data-dir ./sona-data --history-id <ID> --json
+sona-cli history snapshots --app-data-dir ./sona-data --history-id <ID>
+sona-cli history snapshot --app-data-dir ./sona-data --history-id <ID> --snapshot-id <ID> --json
+```
+
+- `query` accepts the same camelCase `HistoryWorkspaceQueryRequest` JSON contract as Tauri and UniFFI.
+- `list`, `query`, and `snapshots` use tables by default; `--json` preserves the complete machine-readable response.
+- `transcript` and `snapshot` display segment tables by default.
+- The application data directory must already exist; history query commands do not create missing directories.
 
 ### `export transcript`
 

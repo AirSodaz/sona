@@ -6,6 +6,7 @@ mod dashboard;
 mod desktop_paths;
 mod diagnostics;
 mod export;
+mod history;
 mod init_config;
 mod models;
 mod projects;
@@ -103,6 +104,8 @@ enum Commands {
     Diagnostics(diagnostics::DiagnosticsArgs),
     /// Exports transcript segments through the shared core service.
     Export(export::ExportArgs),
+    /// Queries persisted history through the shared core service.
+    History(history::HistoryArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
@@ -136,6 +139,7 @@ where
         Commands::Dashboard(args) => dashboard::run_dashboard(args),
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args),
+        Commands::History(args) => history::run_history(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),

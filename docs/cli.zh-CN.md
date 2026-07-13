@@ -9,6 +9,7 @@
 - `models list`
 - `models download`
 - `models delete`
+- `history list|query|transcript|snapshots|snapshot`
 - `export transcript`
 - `serve`
 - `transcribe`
@@ -26,6 +27,7 @@
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- history list --app-data-dir ./sona-data --json
 cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
@@ -98,6 +100,23 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 不会自动删除伴生模型。
+
+### `history`
+
+通过共享的 history query service 查询已有的 Sona 应用数据目录。
+
+```bash
+sona-cli history list --app-data-dir ./sona-data --limit 50 --offset 0
+sona-cli history query --app-data-dir ./sona-data --input ./workspace-query.json --json
+sona-cli history transcript --app-data-dir ./sona-data --history-id <ID> --json
+sona-cli history snapshots --app-data-dir ./sona-data --history-id <ID>
+sona-cli history snapshot --app-data-dir ./sona-data --history-id <ID> --snapshot-id <ID> --json
+```
+
+- `query` 使用与 Tauri、UniFFI 相同的 camelCase `HistoryWorkspaceQueryRequest` JSON 契约。
+- `list`、`query`、`snapshots` 默认输出表格；`--json` 保留完整的机器可读响应。
+- `transcript`、`snapshot` 默认输出 segment 表格。
+- 应用数据目录必须已经存在；history 查询命令不会创建缺失目录。
 
 ### `export transcript`
 

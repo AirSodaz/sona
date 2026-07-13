@@ -9,7 +9,7 @@ use super::{
     HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
     MAX_WORKSPACE_QUERY_LIMIT,
 };
-use crate::history_store::HistoryStoreError;
+use crate::history::query_repository::HistoryQueryError;
 
 const DEFAULT_SNIPPET_LENGTH: usize = 72;
 
@@ -35,7 +35,7 @@ pub fn query_workspace_items_at(
     items: Vec<HistoryItemRecord>,
     request: HistoryWorkspaceQueryRequest,
     date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
-) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+) -> Result<HistoryWorkspaceQueryResult, HistoryQueryError> {
     validate_workspace_query_request(&request)?;
     let item_counts = count_items_by_project(&items);
     Ok(query_workspace_items_impl(
@@ -51,7 +51,7 @@ pub fn query_workspace_items_with_counts_at(
     request: HistoryWorkspaceQueryRequest,
     item_counts: HistoryWorkspaceItemCounts,
     date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
-) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError> {
+) -> Result<HistoryWorkspaceQueryResult, HistoryQueryError> {
     validate_workspace_query_request(&request)?;
     Ok(query_workspace_items_impl(
         items,
@@ -63,9 +63,9 @@ pub fn query_workspace_items_with_counts_at(
 
 pub fn validate_workspace_query_request(
     request: &HistoryWorkspaceQueryRequest,
-) -> Result<(), HistoryStoreError> {
+) -> Result<(), HistoryQueryError> {
     if request.limit == 0 || request.limit > MAX_WORKSPACE_QUERY_LIMIT {
-        return Err(HistoryStoreError::InvalidRequest(format!(
+        return Err(HistoryQueryError::InvalidRequest(format!(
             "limit must be between 1 and {MAX_WORKSPACE_QUERY_LIMIT}"
         )));
     }
@@ -574,7 +574,7 @@ mod tests {
 
             let result = query_workspace_items_at(Vec::new(), request, test_thresholds());
 
-            assert!(matches!(result, Err(HistoryStoreError::InvalidRequest(_))));
+            assert!(matches!(result, Err(HistoryQueryError::InvalidRequest(_))));
         }
     }
 

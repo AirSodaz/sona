@@ -1,44 +1,15 @@
+pub use crate::history::query_repository::HistoryQueryError as HistoryStoreError;
+use crate::history::query_repository::HistoryQueryRepository;
 use crate::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryBackupSnapshot,
-    HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest,
-    HistoryWorkspaceQueryResult, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryCreateLiveDraftRequest, HistoryItemRecord, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason,
 };
-use crate::transcription::transcript::TranscriptSegment;
 use serde_json::Value;
-use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum HistoryStoreError {
-    #[error("Invalid history query: {0}")]
-    InvalidRequest(String),
-    #[error("Database error: {0}")]
-    Database(String),
-    #[error("{0}")]
-    Internal(String),
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
-}
-
-pub trait HistoryStore: Send + Sync {
+pub trait HistoryStore: HistoryQueryRepository {
     fn ensure_ready(&self) -> Result<(), HistoryStoreError>;
-    fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryStoreError>;
-    fn list_items_with_reconciled_live_drafts(
-        &self,
-    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError>;
-    fn list_items_paginated(
-        &self,
-        opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError>;
-    fn list_items_with_reconciled_live_drafts_paginated(
-        &self,
-        opts: HistoryListOptions,
-    ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError>;
-    fn query_workspace(
-        &self,
-        request: HistoryWorkspaceQueryRequest,
-    ) -> Result<HistoryWorkspaceQueryResult, HistoryStoreError>;
     fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
@@ -58,10 +29,6 @@ pub trait HistoryStore: Send + Sync {
         request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, HistoryStoreError>;
     fn delete_items(&self, ids: &[String]) -> Result<(), HistoryStoreError>;
-    fn load_transcript(
-        &self,
-        history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, HistoryStoreError>;
     fn update_transcript(
         &self,
         history_id: &str,
@@ -73,15 +40,6 @@ pub trait HistoryStore: Send + Sync {
         reason: TranscriptSnapshotReason,
         segments: Value,
     ) -> Result<TranscriptSnapshotMetadata, HistoryStoreError>;
-    fn list_transcript_snapshots(
-        &self,
-        history_id: &str,
-    ) -> Result<Vec<TranscriptSnapshotMetadata>, HistoryStoreError>;
-    fn load_transcript_snapshot(
-        &self,
-        history_id: &str,
-        snapshot_id: &str,
-    ) -> Result<Option<TranscriptSnapshotRecord>, HistoryStoreError>;
     fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), HistoryStoreError>;
     fn update_project_assignments(
         &self,

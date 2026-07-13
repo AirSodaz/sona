@@ -105,6 +105,7 @@ mod tests {
         HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest,
     };
     use serde_json::json;
+    use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_sqlite::Database;
     use tempfile::tempdir;
 

@@ -7,8 +7,9 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
     app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, llm_bridge, model_bridge,
-    project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge, task_ledger_bridge,
+    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_query_bridge,
+    llm_bridge, model_bridge, project_bridge, recovery_bridge, runtime_bridge,
+    storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -162,6 +163,48 @@ impl SonaCoreFacade {
 
     pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
         export_bridge::export_transcript_file_json(input_json).await
+    }
+
+    pub async fn list_history_items_json(
+        app_data_dir: String,
+        limit: Option<u64>,
+        offset: Option<u64>,
+    ) -> SonaCoreBindingResult<String> {
+        history_query_bridge::list_history_items_json(app_data_dir, limit, offset).await
+    }
+
+    pub async fn query_history_workspace_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_query_bridge::query_history_workspace_json(app_data_dir, request_json).await
+    }
+
+    pub async fn load_history_transcript_json(
+        app_data_dir: String,
+        history_id: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_query_bridge::load_history_transcript_json(app_data_dir, history_id).await
+    }
+
+    pub async fn list_history_transcript_snapshots_json(
+        app_data_dir: String,
+        history_id: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_query_bridge::list_history_transcript_snapshots_json(app_data_dir, history_id).await
+    }
+
+    pub async fn load_history_transcript_snapshot_json(
+        app_data_dir: String,
+        history_id: String,
+        snapshot_id: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_query_bridge::load_history_transcript_snapshot_json(
+            app_data_dir,
+            history_id,
+            snapshot_id,
+        )
+        .await
     }
 
     pub fn default_vad_model_id() -> String {

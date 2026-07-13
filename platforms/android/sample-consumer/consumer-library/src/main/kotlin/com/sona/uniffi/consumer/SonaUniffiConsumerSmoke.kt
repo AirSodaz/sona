@@ -13,10 +13,15 @@ import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadDashboardSnapshotJson
 import uniffi.sona_uniffi_bind.loadDiagnosticsSnapshotJson
+import uniffi.sona_uniffi_bind.listHistoryItemsJson
+import uniffi.sona_uniffi_bind.listHistoryTranscriptSnapshotsJson
+import uniffi.sona_uniffi_bind.loadHistoryTranscriptJson
+import uniffi.sona_uniffi_bind.loadHistoryTranscriptSnapshotJson
 import uniffi.sona_uniffi_bind.loadProjectRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.loadStorageUsageSnapshotJson
 import uniffi.sona_uniffi_bind.loadTaskLedgerSnapshotJson
+import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
 
 private class RecordingAsrObserver : FfiAsrStreamingObserver {
     private var latestTranscriptUpdate: FfiAsrTranscriptUpdateEvent? = null
@@ -82,6 +87,24 @@ object SonaUniffiConsumerSmoke {
 
     suspend fun exportTranscript(inputJson: String): String =
         exportTranscriptFileJson(inputJson)
+
+    suspend fun listHistory(appDataDir: String, limit: ULong?, offset: ULong?): String =
+        listHistoryItemsJson(appDataDir, limit, offset)
+
+    suspend fun queryHistory(appDataDir: String, requestJson: String): String =
+        queryHistoryWorkspaceJson(appDataDir, requestJson)
+
+    suspend fun loadHistoryTranscript(appDataDir: String, historyId: String): String =
+        loadHistoryTranscriptJson(appDataDir, historyId)
+
+    suspend fun listHistorySnapshots(appDataDir: String, historyId: String): String =
+        listHistoryTranscriptSnapshotsJson(appDataDir, historyId)
+
+    suspend fun loadHistorySnapshot(
+        appDataDir: String,
+        historyId: String,
+        snapshotId: String,
+    ): String = loadHistoryTranscriptSnapshotJson(appDataDir, historyId, snapshotId)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

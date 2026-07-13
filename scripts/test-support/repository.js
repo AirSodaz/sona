@@ -40,6 +40,11 @@ const expectedUniffiExports = Object.freeze([
   'validate_automation_rule_activation_json',
   'normalize_export_format',
   'export_transcript_file_json',
+  'list_history_items_json',
+  'query_history_workspace_json',
+  'load_history_transcript_json',
+  'list_history_transcript_snapshots_json',
+  'load_history_transcript_snapshot_json',
   'default_vad_model_id',
   'default_punctuation_model_id',
   'preset_model_name',
@@ -103,6 +108,7 @@ const expectedUniffiErrorVariants = Object.freeze([
   'Diagnostics',
   'StorageUsage',
   'Export',
+  'HistoryQuery',
 ]);
 const desktopFrontendDependencies = [
   '@dnd-kit/core',

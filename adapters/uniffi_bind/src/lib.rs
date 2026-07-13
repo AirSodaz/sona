@@ -7,6 +7,7 @@ mod dashboard_bridge;
 mod diagnostics_bridge;
 mod export_bridge;
 mod facade;
+mod history_query_bridge;
 mod json_bridge;
 mod llm_bridge;
 mod mapper;
@@ -64,6 +65,8 @@ pub enum SonaCoreBindingError {
     StorageUsage { reason: String },
     #[error("{reason}")]
     Export { reason: String },
+    #[error("{reason}")]
+    HistoryQuery { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -255,6 +258,49 @@ pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
 #[uniffi::export]
 pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::export_transcript_file_json(input_json).await
+}
+
+#[uniffi::export]
+pub async fn list_history_items_json(
+    app_data_dir: String,
+    limit: Option<u64>,
+    offset: Option<u64>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::list_history_items_json(app_data_dir, limit, offset).await
+}
+
+#[uniffi::export]
+pub async fn query_history_workspace_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::query_history_workspace_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn load_history_transcript_json(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_history_transcript_json(app_data_dir, history_id).await
+}
+
+#[uniffi::export]
+pub async fn list_history_transcript_snapshots_json(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::list_history_transcript_snapshots_json(app_data_dir, history_id).await
+}
+
+#[uniffi::export]
+pub async fn load_history_transcript_snapshot_json(
+    app_data_dir: String,
+    history_id: String,
+    snapshot_id: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_history_transcript_snapshot_json(app_data_dir, history_id, snapshot_id)
+        .await
 }
 
 #[uniffi::export]
