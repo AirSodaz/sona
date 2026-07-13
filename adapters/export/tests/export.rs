@@ -1,4 +1,4 @@
-use sona_core::export::{ExportFormat, ExportMode};
+use sona_core::export::{ExportFormat, ExportMode, ExportService, ExportTranscriptFileRequest};
 use sona_core::transcription::transcript::TranscriptSegment;
 
 fn sample_segments() -> Vec<TranscriptSegment> {
@@ -23,13 +23,14 @@ fn export_transcript_file_writes_core_content_and_reports_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let output_path = dir.path().join("sample.vtt");
 
-    let result = sona_export::export_transcript_file(sona_export::ExportTranscriptFileRequest {
-        segments: sample_segments(),
-        format: ExportFormat::Vtt,
-        mode: ExportMode::Bilingual,
-        output_path: output_path.to_string_lossy().into_owned(),
-    })
-    .unwrap();
+    let result = ExportService::new(sona_export::FsTranscriptExportRepository)
+        .export_transcript_file(ExportTranscriptFileRequest {
+            segments: sample_segments(),
+            format: ExportFormat::Vtt,
+            mode: ExportMode::Bilingual,
+            output_path: output_path.to_string_lossy().into_owned(),
+        })
+        .unwrap();
 
     let written = std::fs::read_to_string(&output_path).unwrap();
     assert_eq!(result.output_path, output_path.to_string_lossy());

@@ -50,6 +50,7 @@ Current standalone CLI scope:
 
 - Single-file offline transcription
 - Preset model listing, downloads, and deletion
+- Transcript export from existing segment JSON
 - Shared local HTTP API server via `sona-cli serve`
 - Runtime path status inspection
 - Commented `sona-cli.toml` starter generation

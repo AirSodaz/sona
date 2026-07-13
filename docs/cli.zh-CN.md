@@ -9,6 +9,7 @@
 - `models list`
 - `models download`
 - `models delete`
+- `export transcript`
 - `serve`
 - `transcribe`
 
@@ -25,6 +26,7 @@
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
 ```
@@ -96,6 +98,21 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 不会自动删除伴生模型。
+
+### `export transcript`
+
+通过共享的 core export service 导出已有的 transcript segment JSON 数组。
+
+```bash
+sona-cli export transcript --input ./segments.json --output ./transcript.vtt
+sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
+sona-cli export transcript --input ./segments.json --output ./transcript.txt --format txt --json
+```
+
+- 未提供 `--format` 时，从输出文件扩展名推断格式。
+- 支持格式：`json`、`txt`、`srt`、`vtt`、`md`。
+- 支持模式：`original`（默认）、`translation`、`bilingual`。
+- `--json` 输出机器可读的目标路径和写入字节数。
 
 ### `serve`
 

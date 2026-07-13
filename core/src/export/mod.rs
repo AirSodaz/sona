@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
+mod error;
+mod models;
+mod ports;
+mod service;
+
+pub use error::ExportError;
+pub use models::{ExportTranscriptFileRequest, ExportTranscriptFileResult};
+pub use ports::TranscriptExportRepository;
+pub use service::ExportService;
+
 /// Supported transcript export formats for every Sona frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -50,6 +60,17 @@ pub enum ExportMode {
     Original,
     Translation,
     Bilingual,
+}
+
+impl ExportMode {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "original" => Ok(Self::Original),
+            "translation" => Ok(Self::Translation),
+            "bilingual" => Ok(Self::Bilingual),
+            other => Err(format!("Unsupported export mode: {other}")),
+        }
+    }
 }
 
 #[derive(Serialize)]

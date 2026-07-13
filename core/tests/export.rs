@@ -1,4 +1,9 @@
-use sona_core::export::{ExportFormat, ExportMode, export_segments, export_segments_with_mode};
+use std::sync::{Arc, Mutex};
+
+use sona_core::export::{
+    ExportError, ExportFormat, ExportMode, ExportService, ExportTranscriptFileRequest,
+    TranscriptExportRepository, export_segments, export_segments_with_mode,
+};
 use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 fn sample_segments() -> Vec<TranscriptSegment> {
@@ -47,6 +52,11 @@ fn export_format_parses_and_infers_without_adapter_dependencies() {
 
     let format = ExportFormat::from_output_path(std::path::Path::new("sample.vtt")).unwrap();
     assert_eq!(format, ExportFormat::Vtt);
+    assert_eq!(ExportMode::parse("original").unwrap(), ExportMode::Original);
+    assert_eq!(
+        ExportMode::parse("BILINGUAL").unwrap(),
+        ExportMode::Bilingual
+    );
 }
 
 #[test]
@@ -95,4 +105,72 @@ fn exports_bilingual_text_and_subtitles_with_existing_ordering() {
         export_segments_with_mode(&segments, ExportFormat::Txt, ExportMode::Bilingual).unwrap();
 
     assert_eq!(txt, "Alice: Hello World\nAgain\nBonjour Monde\n\nWorld");
+}
+
+struct RecordingExportRepository {
+    writes: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+impl TranscriptExportRepository for RecordingExportRepository {
+    fn write_export(&self, output_path: &str, content: &str) -> Result<(), ExportError> {
+        self.writes
+            .lock()
+            .unwrap()
+            .push((output_path.to_string(), content.to_string()));
+        Ok(())
+    }
+}
+
+#[test]
+fn export_service_renders_through_core_and_persists_through_the_port() {
+    let writes = Arc::new(Mutex::new(Vec::new()));
+    let repository = RecordingExportRepository {
+        writes: Arc::clone(&writes),
+    };
+    let service = ExportService::new(repository);
+
+    let result = service
+        .export_transcript_file(ExportTranscriptFileRequest {
+            segments: sample_segments(),
+            format: ExportFormat::Vtt,
+            mode: ExportMode::Original,
+            output_path: "exports/sample.vtt".to_string(),
+        })
+        .unwrap();
+
+    let writes = writes.lock().unwrap();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].0, "exports/sample.vtt");
+    assert!(writes[0].1.starts_with("WEBVTT"));
+    assert_eq!(result.output_path, "exports/sample.vtt");
+    assert_eq!(result.bytes_written, writes[0].1.len() as u64);
+}
+
+struct FailingExportRepository;
+
+impl TranscriptExportRepository for FailingExportRepository {
+    fn write_export(&self, _output_path: &str, _content: &str) -> Result<(), ExportError> {
+        Err(ExportError::Repository {
+            reason: "disk full".to_string(),
+        })
+    }
+}
+
+#[test]
+fn export_service_preserves_repository_failures() {
+    let error = ExportService::new(FailingExportRepository)
+        .export_transcript_file(ExportTranscriptFileRequest {
+            segments: sample_segments(),
+            format: ExportFormat::Txt,
+            mode: ExportMode::Original,
+            output_path: "exports/sample.txt".to_string(),
+        })
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        ExportError::Repository {
+            reason: "disk full".to_string(),
+        }
+    );
 }

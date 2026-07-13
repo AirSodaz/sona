@@ -7,8 +7,8 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
     app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    config_bridge, dashboard_bridge, diagnostics_bridge, llm_bridge, model_bridge, project_bridge,
-    recovery_bridge, runtime_bridge, storage_usage_bridge, task_ledger_bridge,
+    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, llm_bridge, model_bridge,
+    project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -158,6 +158,10 @@ impl SonaCoreFacade {
 
     pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
         runtime_bridge::normalize_export_format(value)
+    }
+
+    pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
+        export_bridge::export_transcript_file_json(input_json).await
     }
 
     pub fn default_vad_model_id() -> String {

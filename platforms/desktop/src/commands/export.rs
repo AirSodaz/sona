@@ -1,8 +1,8 @@
-use sona_core::export::{ExportFormat, ExportMode};
-use sona_export::{
-    ExportTranscriptFileRequest, ExportTranscriptFileResult,
-    export_transcript_file as adapter_export_transcript_file,
+use sona_core::export::{
+    ExportFormat, ExportMode, ExportService, ExportTranscriptFileRequest,
+    ExportTranscriptFileResult,
 };
+use sona_export::FsTranscriptExportRepository;
 
 #[tauri::command]
 pub async fn export_transcript_file(
@@ -11,10 +11,16 @@ pub async fn export_transcript_file(
     mode: ExportMode,
     output_path: String,
 ) -> Result<ExportTranscriptFileResult, String> {
-    adapter_export_transcript_file(ExportTranscriptFileRequest {
-        segments,
-        format,
-        mode,
-        output_path,
+    tauri::async_runtime::spawn_blocking(move || {
+        ExportService::new(FsTranscriptExportRepository)
+            .export_transcript_file(ExportTranscriptFileRequest {
+                segments,
+                format,
+                mode,
+                output_path,
+            })
+            .map_err(|error| error.to_string())
     })
+    .await
+    .map_err(|error| error.to_string())?
 }

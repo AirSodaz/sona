@@ -5,6 +5,7 @@ mod automation_bridge;
 mod config_bridge;
 mod dashboard_bridge;
 mod diagnostics_bridge;
+mod export_bridge;
 mod facade;
 mod json_bridge;
 mod llm_bridge;
@@ -61,6 +62,8 @@ pub enum SonaCoreBindingError {
     Diagnostics { reason: String },
     #[error("{reason}")]
     StorageUsage { reason: String },
+    #[error("{reason}")]
+    Export { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -247,6 +250,11 @@ pub fn validate_automation_rule_activation_json(
 #[uniffi::export]
 pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::normalize_export_format(value)
+}
+
+#[uniffi::export]
+pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::export_transcript_file_json(input_json).await
 }
 
 #[uniffi::export]

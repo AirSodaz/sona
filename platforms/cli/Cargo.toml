@@ -17,6 +17,7 @@ sona-recovery-fs = { path = "../../adapters/recovery_fs" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-sqlite = { path = "../../adapters/sqlite" }
 sona-core = { path = "../../core" }
+sona-export = { path = "../../adapters/export" }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["rt-multi-thread", "signal", "sync"] }
 unicode-width = "0.2"

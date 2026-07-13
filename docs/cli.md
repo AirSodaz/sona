@@ -9,6 +9,7 @@ This document tracks the commands that ship in the standalone CLI today:
 - `models list`
 - `models download`
 - `models delete`
+- `export transcript`
 - `serve`
 - `transcribe`
 
@@ -25,6 +26,7 @@ Examples:
 cargo run -p sona-cli -- path-status .
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
+cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
 ```
@@ -96,6 +98,21 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
 Companion models are not deleted automatically.
+
+### `export transcript`
+
+Export an existing JSON array of transcript segments through the shared core export service.
+
+```bash
+sona-cli export transcript --input ./segments.json --output ./transcript.vtt
+sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
+sona-cli export transcript --input ./segments.json --output ./transcript.txt --format txt --json
+```
+
+- The format is inferred from the output extension unless `--format` is provided.
+- Supported formats: `json`, `txt`, `srt`, `vtt`, `md`.
+- Supported modes: `original` (default), `translation`, `bilingual`.
+- `--json` prints the output path and written byte count as machine-readable JSON.
 
 ### `serve`
 

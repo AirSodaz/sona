@@ -11,6 +11,7 @@ import uniffi.sona_uniffi_bind.SonaCoreBindingException
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.createProjectJson
 import uniffi.sona_uniffi_bind.defaultConfigJson
+import uniffi.sona_uniffi_bind.exportTranscriptFileJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadDashboardSnapshotJson
@@ -109,6 +110,9 @@ object SonaUniffiSmoke {
 
     suspend fun loadStorageUsage(appDataDir: String): String =
         loadStorageUsageSnapshotJson(appDataDir)
+
+    suspend fun exportTranscript(inputJson: String): String =
+        exportTranscriptFileJson(inputJson)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

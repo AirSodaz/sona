@@ -1,40 +1,25 @@
-use sona_core::export::{ExportFormat, ExportMode};
-use sona_core::transcription::transcript::TranscriptSegment;
+use sona_core::export::{ExportError, ExportService, TranscriptExportRepository};
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportTranscriptFileRequest {
-    pub segments: Vec<TranscriptSegment>,
-    pub format: ExportFormat,
-    pub mode: ExportMode,
-    pub output_path: String,
-}
+pub use sona_core::export::{ExportTranscriptFileRequest, ExportTranscriptFileResult};
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportTranscriptFileResult {
-    pub output_path: String,
-    pub bytes_written: u64,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FsTranscriptExportRepository;
+
+impl TranscriptExportRepository for FsTranscriptExportRepository {
+    fn write_export(&self, output_path: &str, content: &str) -> Result<(), ExportError> {
+        std::fs::write(output_path, content).map_err(|error| ExportError::Repository {
+            reason: format!(
+                "Failed to write transcript export to {}: {error}",
+                std::path::Path::new(output_path).display()
+            ),
+        })
+    }
 }
 
 pub fn export_transcript_file(
     request: ExportTranscriptFileRequest,
 ) -> Result<ExportTranscriptFileResult, String> {
-    let content = sona_core::export::export_segments_with_mode(
-        &request.segments,
-        request.format,
-        request.mode,
-    )?;
-    let bytes_written = content.len() as u64;
-    std::fs::write(&request.output_path, content).map_err(|error| {
-        format!(
-            "Failed to write transcript export to {}: {error}",
-            std::path::Path::new(&request.output_path).display()
-        )
-    })?;
-
-    Ok(ExportTranscriptFileResult {
-        output_path: request.output_path,
-        bytes_written,
-    })
+    ExportService::new(FsTranscriptExportRepository)
+        .export_transcript_file(request)
+        .map_err(|error| error.to_string())
 }
