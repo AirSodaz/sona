@@ -68,8 +68,22 @@ function validateRuntimeLayout(rootDir, source, selectedAbis) {
   }
 }
 
+function selectArchiveTarCommand({
+  platform = process.platform,
+  systemRoot = process.env.SystemRoot ?? process.env.WINDIR,
+  pathExists = fs.existsSync,
+} = {}) {
+  if (platform === 'win32' && systemRoot) {
+    const systemTar = path.join(systemRoot, 'System32', 'tar.exe');
+    if (pathExists(systemTar)) {
+      return systemTar;
+    }
+  }
+  return 'tar';
+}
+
 function extractArchive(archivePath, destinationDir) {
-  const result = spawnSync('tar', ['-xjf', archivePath, '-C', destinationDir], {
+  const result = spawnSync(selectArchiveTarCommand(), ['-xjf', archivePath, '-C', destinationDir], {
     encoding: 'utf8',
   });
   if (result.error) {
@@ -230,6 +244,7 @@ export {
   assertArchiveChecksum,
   loadAndroidSherpaSource,
   prepareAndroidSherpaRuntime,
+  selectArchiveTarCommand,
   sha256File,
   stageAndroidSherpaRuntime,
   validateRuntimeLayout,

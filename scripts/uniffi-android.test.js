@@ -62,6 +62,29 @@ async function loadAndroidSherpaRuntime() {
   return import(pathToFileURL(androidSherpaRuntimePath).href);
 }
 
+test('Android sherpa extraction selects the Windows system tar outside shell PATH', async () => {
+  const { selectArchiveTarCommand } = await loadAndroidSherpaRuntime();
+  const systemRoot = path.join('C:', 'Windows');
+  const systemTar = path.join(systemRoot, 'System32', 'tar.exe');
+
+  assert.equal(
+    selectArchiveTarCommand({
+      platform: 'win32',
+      systemRoot,
+      pathExists: (candidate) => candidate === systemTar,
+    }),
+    systemTar,
+  );
+  assert.equal(
+    selectArchiveTarCommand({
+      platform: 'linux',
+      systemRoot: null,
+      pathExists: () => false,
+    }),
+    'tar',
+  );
+});
+
 function runSherpaPrepareProcess(source, cacheRoot) {
   const script = `
     const { prepareAndroidSherpaRuntime } = await import(process.env.SONA_TEST_SHERPA_MODULE_URL);

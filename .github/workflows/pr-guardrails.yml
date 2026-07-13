@@ -109,11 +109,12 @@ jobs:
         run: cargo test --manifest-path platforms/desktop/Cargo.toml --lib app::server::tests
 
       - name: Install Android Rust target
-        run: rustup target add aarch64-linux-android
+        run: rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Install Android NDK
         run: |
           yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-37.0"
           sdkmanager "ndk;29.0.14206865"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
 
@@ -121,3 +122,8 @@ jobs:
         env:
           SONA_ANDROID_ABIS: arm64-v8a
         run: pnpm run verify:android-uniffi:gradle
+
+      - name: Run Android client verification
+        env:
+          SONA_ANDROID_ABIS: arm64-v8a,x86_64
+        run: pnpm run verify:android-client

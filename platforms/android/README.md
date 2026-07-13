@@ -132,3 +132,32 @@ $env:SONA_ANDROID_ABIS="arm64-v8a,x86_64"
 
 Use `SONA_ANDROID_MIN_SDK` to override the Android linker API level. The
 default is `23`.
+
+## Android client
+
+The native Compose client lives under `platforms/android/client` and keeps its
+host boundary explicit:
+
+- `:application` owns platform-neutral models, ports, and use cases.
+- `:adapters:uniffi` is the only module that imports generated UniFFI APIs.
+- `:app` owns Android lifecycle, adaptive Compose navigation, and dependency
+  composition.
+
+The client compiles and targets Android API 37 with min SDK 23. Install
+`platforms;android-37.0` through `sdkmanager`, then run the complete client
+unit-test and APK gate from the repository root:
+
+```powershell
+pnpm run verify:android-client
+```
+
+The default client verification builds and validates two independent debug APKs:
+
+- `platforms/android/client/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`
+  for Android phones and tablets.
+- `platforms/android/client/app/build/outputs/apk/debug/app-x86_64-debug.apk`
+  for x86_64 emulators and devices.
+
+Each APK contains only its matching Sona UniFFI, sherpa-onnx, and ONNX Runtime
+native libraries. Set `SONA_ANDROID_ABIS` to one of the supported values when a
+single-ABI local build is sufficient.

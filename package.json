@@ -22,6 +22,7 @@
     "verify:tauri-bundle": "pnpm --filter sona-desktop-frontend run verify:tauri-bundle",
     "verify:android-uniffi": "node scripts/verify-uniffi-android-sample.js",
     "verify:android-uniffi:gradle": "node scripts/verify-uniffi-android-sample.js --download-gradle --require-gradle",
+    "verify:android-client": "node scripts/verify-android-client.js",
     "commitlint": "commitlint --edit",
     "check:staged": "node scripts/check-staged.js"
   },

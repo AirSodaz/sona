@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sona</string>
+    <string name="destination_record">录音</string>
+    <string name="destination_library">记录</string>
+    <string name="destination_settings">设置</string>
+    <string name="record_heading">实时转写</string>
+    <string name="engine_label">识别引擎</string>
+    <string name="engine_online">在线</string>
+    <string name="engine_local">本地</string>
+    <string name="record_timer_idle">00:00</string>
+    <string name="record_action_description">开始录音</string>
+    <string name="status_preparing">准备中</string>
+    <string name="status_loading">正在初始化</string>
+    <string name="status_ready">已就绪</string>
+    <string name="status_error">初始化失败</string>
+    <string name="action_retry">重试</string>
+    <string name="library_empty">暂无记录</string>
+    <string name="appearance_heading">外观</string>
+    <string name="dynamic_color">使用系统配色</string>
+    <string name="runtime_heading">本地运行库</string>
+    <string name="local_runtime_ready">已就绪</string>
+    <string name="local_runtime_unavailable">不可用</string>
+</resources>
