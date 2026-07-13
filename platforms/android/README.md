@@ -17,8 +17,9 @@ SONA_REPO_ROOT=../../../..
 
 The Gradle script registers `generateSonaUniffiKotlin` and
 `buildSonaUniffiAndroidLibraries`, adds the generated Kotlin directory to the
-Android `main` source set, and stages ABI-specific `libsona_uniffi_bind.so`
-files under generated `jniLibs`.
+Android `main` source set, and stages ABI-specific `libsona_uniffi_bind.so`,
+`libsherpa-onnx-c-api.so`, and `libonnxruntime.so` files under generated
+`jniLibs`.
 
 The generated streaming surface is typed. Implement
 `FfiAsrStreamingObserver`, then pass it to `createOnlineAsrStreamingSession`:
@@ -63,9 +64,15 @@ The caller supplies an application data directory for every operation.
 canonical camelCase version-1 recovery snapshot format. These operations
 perform filesystem I/O and can fail with `SonaCoreBindingException`.
 
-This AAR stage supports the online streaming path. Packaging the local Sherpa
-Android native libraries is out of scope, so this artifact does not claim
-local Sherpa ASR support on Android.
+This AAR includes the native local Sherpa runtime needed for later Android
+local ASR integration. The generated Kotlin surface remains online-only until
+a local streaming session factory is explicitly added to the UniFFI API.
+
+The Android build downloads the locked sherpa-onnx 1.13.4 archive into
+`target/android-sherpa`. For offline builds, set
+`SONA_SHERPA_ONNX_ANDROID_ARCHIVE` to a local copy of the locked archive. The
+local copy must match the SHA-256 recorded in
+`platforms/android/packaging/sherpa-onnx-sources.json`.
 
 Run the local smoke check without requiring a Gradle install:
 
@@ -85,8 +92,10 @@ does not commit a Gradle wrapper jar to the repository.
 The smoke check assembles the sample debug AAR, runs
 `:sample-library:publishDebugPublicationToSonaAndroidSampleRepository`, and
 verifies both outputs. The AAR must contain
-`jni/arm64-v8a/libsona_uniffi_bind.so`, compiled `uniffi.sona_uniffi_bind`
-classes, and the sample `SonaUniffiSmoke` class. The local Maven publication is
+`jni/arm64-v8a/libsona_uniffi_bind.so`,
+`jni/arm64-v8a/libsherpa-onnx-c-api.so`,
+`jni/arm64-v8a/libonnxruntime.so`, compiled `uniffi.sona_uniffi_bind` classes,
+and the sample `SonaUniffiSmoke` class. The local Maven publication is
 written under `platforms/android/sample-consumer/sample-library/build/repo` as
 `com.sona:sona-uniffi-bindings:0.8.0`, with POM dependencies for JNA and
 Kotlin coroutines. The verifier also checks the Gradle Module Metadata runtime

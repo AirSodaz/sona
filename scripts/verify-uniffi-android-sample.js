@@ -14,6 +14,10 @@ const downloadGradle = args.includes('--download-gradle');
 const sampleProjectDir = path.join(repoRoot, 'platforms', 'android', 'sample-consumer');
 const defaultAndroidAbi = 'arm64-v8a';
 const defaultJniLibraryEntry = 'jni/arm64-v8a/libsona_uniffi_bind.so';
+const requiredSherpaRuntimeLibraries = [
+  'libsherpa-onnx-c-api.so',
+  'libonnxruntime.so',
+];
 const samplePublicationVersion = '0.8.0';
 const sampleMavenCoordinatePath = 'com/sona/sona-uniffi-bindings/0.8.0';
 
@@ -195,6 +199,12 @@ function verifyAndroidSampleAarContents(aarPath) {
       : `jni/${abi}/libsona_uniffi_bind.so`;
     if (!aarEntryNames.has(jniEntry)) {
       throw new Error(`Missing ${jniEntry} in ${aarPath}`);
+    }
+    for (const library of requiredSherpaRuntimeLibraries) {
+      const runtimeEntry = `jni/${abi}/${library}`;
+      if (!aarEntryNames.has(runtimeEntry)) {
+        throw new Error(`Missing ${runtimeEntry} in ${aarPath}`);
+      }
     }
   }
 

@@ -72,8 +72,8 @@ jobs:
     permissions:
       contents: read
     env:
-      SHERPA_ONNX_VERSION: 1.13.3
-      SHERPA_ONNX_TAG: v1.13.3
+      SHERPA_ONNX_VERSION: 1.13.4
+      SHERPA_ONNX_TAG: v1.13.4
       NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
     strategy:
       fail-fast: false

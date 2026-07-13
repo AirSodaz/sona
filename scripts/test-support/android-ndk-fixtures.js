@@ -45,7 +45,15 @@ function androidNdkToolPaths(ndkHome, abiCase, hostPlatform) {
   };
 }
 
-function runAndroidNdkPrint({ abi, androidHome = '', ndkHome = '', hostPlatform }) {
+function runAndroidNdkPrint({
+  abi,
+  androidHome = '',
+  ndkHome = '',
+  hostPlatform,
+  targetDir,
+  outDir,
+  archiveOverride,
+}) {
   const commandArgs = [
     path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
     '--print-linker-env',
@@ -54,6 +62,12 @@ function runAndroidNdkPrint({ abi, androidHome = '', ndkHome = '', hostPlatform 
   ];
   if (hostPlatform) {
     commandArgs.push('--host-platform', hostPlatform);
+  }
+  if (targetDir) {
+    commandArgs.push('--target-dir', targetDir);
+  }
+  if (outDir) {
+    commandArgs.push('--out-dir', outDir);
   }
 
   return spawnSync(node, commandArgs, {
@@ -65,6 +79,7 @@ function runAndroidNdkPrint({ abi, androidHome = '', ndkHome = '', hostPlatform 
       ANDROID_SDK_ROOT: '',
       ANDROID_NDK_HOME: ndkHome,
       ANDROID_NDK_ROOT: '',
+      SONA_SHERPA_ONNX_ANDROID_ARCHIVE: archiveOverride ?? '',
     },
   });
 }

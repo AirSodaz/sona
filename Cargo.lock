@@ -5718,6 +5718,7 @@ dependencies = [
  "sha2 0.10.9",
  "sona-core",
  "sona-export",
+ "sona-local-asr",
  "sona-online-asr",
  "sona-recovery-fs",
  "sona-runtime-fs",

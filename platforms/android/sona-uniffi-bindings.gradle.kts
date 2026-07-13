@@ -10,6 +10,7 @@ val sonaRepoRoot = providers.gradleProperty("SONA_REPO_ROOT")
 val sonaAndroidAbis = providers.environmentVariable("SONA_ANDROID_ABIS")
 val sonaAndroidMinSdk = providers.environmentVariable("SONA_ANDROID_MIN_SDK")
     .orElse("23")
+val sonaSherpaOnnxAndroidArchive = providers.environmentVariable("SONA_SHERPA_ONNX_ANDROID_ARCHIVE")
 val generatedKotlinDir = layout.buildDirectory.dir("generated/source/uniffi/main/kotlin")
 val generatedJniLibsDir = layout.buildDirectory.dir("generated/jniLibs/main")
 
@@ -18,18 +19,32 @@ val buildSonaUniffiAndroidLibraries = tasks.register<Exec>("buildSonaUniffiAndro
     val outDir = generatedJniLibsDir.get().asFile
     val androidAbis = sonaAndroidAbis.orNull
     val androidMinSdk = sonaAndroidMinSdk.get()
+    val sherpaArchive = sonaSherpaOnnxAndroidArchive.orNull?.let {
+        val archive = File(it)
+        if (archive.isAbsolute) archive else File(repoRoot, it)
+    }
 
     workingDir = repoRoot
     inputs.file(File(repoRoot, "Cargo.toml"))
     inputs.file(File(repoRoot, "Cargo.lock"))
     inputs.file(File(repoRoot, "adapters/uniffi_bind/Cargo.toml"))
     inputs.dir(File(repoRoot, "adapters/uniffi_bind/src"))
+    inputs.file(File(repoRoot, "adapters/local_asr/Cargo.toml"))
+    inputs.file(File(repoRoot, "adapters/local_asr/build.rs"))
+    inputs.dir(File(repoRoot, "adapters/local_asr/src"))
     inputs.dir(File(repoRoot, "core/src"))
     inputs.file(File(repoRoot, "scripts/build-uniffi-android-libs.js"))
+    inputs.file(File(repoRoot, "scripts/android-sherpa-runtime.js"))
+    inputs.file(File(repoRoot, "platforms/android/packaging/sherpa-onnx-sources.json"))
     inputs.file(File(repoRoot, "adapters/runtime_fs/Cargo.toml"))
     inputs.dir(File(repoRoot, "adapters/runtime_fs/src"))
     inputs.property("sonaAndroidAbis", androidAbis ?: "")
     inputs.property("sonaAndroidMinSdk", androidMinSdk)
+    inputs.property("sonaSherpaOnnxAndroidArchive", sherpaArchive?.absolutePath ?: "")
+    if (sherpaArchive != null) {
+        inputs.file(sherpaArchive)
+        environment("SONA_SHERPA_ONNX_ANDROID_ARCHIVE", sherpaArchive.absolutePath)
+    }
     outputs.dir(outDir)
     val command = mutableListOf(
         "node",

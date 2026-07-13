@@ -3,10 +3,23 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadAndroidSherpaSource,
+  prepareAndroidSherpaRuntime,
+  stageAndroidSherpaRuntime,
+} from './android-sherpa-runtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
 const args = process.argv.slice(2);
+const sherpaSourceLockPath = path.join(
+  repoRoot,
+  'platforms',
+  'android',
+  'packaging',
+  'sherpa-onnx-sources.json',
+);
+const sherpaSource = loadAndroidSherpaSource(sherpaSourceLockPath);
 
 const ABI_TARGETS = {
   'arm64-v8a': 'aarch64-linux-android',
@@ -44,6 +57,9 @@ function splitList(value) {
 function selectedAbis() {
   const requested = readOption('--abis', process.env.SONA_ANDROID_ABIS ?? Object.keys(ABI_TARGETS).join(','));
   const abis = splitList(requested);
+  if (abis.length === 0) {
+    throw new Error('At least one Android ABI is required');
+  }
   for (const abi of abis) {
     if (!ABI_TARGETS[abi]) {
       throw new Error(`Unsupported Android ABI '${abi}'. Supported ABIs: ${Object.keys(ABI_TARGETS).join(', ')}`);
@@ -147,12 +163,13 @@ function toolchainEnvForTarget(target, minSdk, hostPlatform) {
   };
 }
 
-function runCargoBuild(target, profile, minSdk) {
+function runCargoBuild(target, profile, minSdk, sherpaLibDir) {
   const releaseFlag = profile === 'release' ? ['--release'] : [];
   const cargo = process.env.CARGO ?? 'cargo';
   const env = {
     ...process.env,
     ...toolchainEnvForTarget(target, minSdk, process.platform),
+    SHERPA_ONNX_LIB_DIR: sherpaLibDir,
   };
   const result = spawnSync(cargo, ['build', '-p', 'sona-uniffi-bind', '--target', target, ...releaseFlag], {
     cwd: repoRoot,
@@ -177,9 +194,15 @@ function copyAndroidLibrary(targetDir, target, profile, abi, outDir) {
   fs.copyFileSync(source, path.join(destinationDir, 'libsona_uniffi_bind.so'));
 }
 
-function androidLibraryPath(targetDir, target, profile) {
-  const profileDir = profile === 'release' ? 'release' : 'debug';
-  return path.join(targetDir, target, profileDir, 'libsona_uniffi_bind.so');
+function androidAarNativeEntries(abi) {
+  return [
+    'libsona_uniffi_bind.so',
+    ...sherpaSource.runtimeLibraries,
+  ].map((library) => `jni/${abi}/${library}`);
+}
+
+function formatAndroidBuildPlan(abi, target) {
+  return `Plan: ${abi} -> ${target}; AAR native entries: ${androidAarNativeEntries(abi).join(', ')}`;
 }
 
 function prepareOutputDirectory(outDir) {
@@ -203,14 +226,24 @@ if (hostPlatformOverride && !printLinkerEnv) {
   throw new Error('--host-platform is only supported with --print-linker-env');
 }
 const printHostPlatform = hostPlatformOverride ?? process.platform;
+const abis = selectedAbis();
+const preparedSherpaRuntime = (!dryRun && !printLinkerEnv)
+  ? await prepareAndroidSherpaRuntime({
+    source: sherpaSource,
+    cacheRoot: path.join(targetDir, 'android-sherpa'),
+    selectedAbis: abis,
+    archiveOverride: process.env.SONA_SHERPA_ONNX_ANDROID_ARCHIVE,
+  })
+  : null;
 
 if (!dryRun && !printLinkerEnv) {
   prepareOutputDirectory(outDir);
 }
 
-for (const abi of selectedAbis()) {
+for (const abi of abis) {
   const target = ABI_TARGETS[abi];
   if (printLinkerEnv) {
+    console.error(formatAndroidBuildPlan(abi, target));
     const toolchainEnv = toolchainEnvForTarget(target, minSdk, printHostPlatform);
     for (const [name, value] of Object.entries(toolchainEnv)) {
       console.log(`${name}=${value}`);
@@ -218,13 +251,13 @@ for (const abi of selectedAbis()) {
     continue;
   }
   if (dryRun) {
-    const source = androidLibraryPath(targetDir, target, profile);
-    const destination = path.join(outDir, abi, 'libsona_uniffi_bind.so');
-    console.log(`Dry run: ${abi} -> ${target}; ${source} => ${destination}`);
+    console.log(formatAndroidBuildPlan(abi, target));
     continue;
   }
-  runCargoBuild(target, profile, minSdk);
+  const sherpaLibDir = path.join(preparedSherpaRuntime.rootDir, 'jniLibs', abi);
+  runCargoBuild(target, profile, minSdk, sherpaLibDir);
   copyAndroidLibrary(targetDir, target, profile, abi, outDir);
+  stageAndroidSherpaRuntime(preparedSherpaRuntime, abi, outDir);
 }
 
 if (!printLinkerEnv) {

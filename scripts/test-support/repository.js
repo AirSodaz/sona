@@ -854,6 +854,7 @@ function assertAndroidRecoveryConsumerSmoke(kotlinSmoke) {
 
 function assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge) {
   const dependencyNames = readCargoDependencyNames(uniffiCargoPath, 'dependencies');
+  const localAsrSpec = readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-local-asr');
   const onlineAsrSpec = readCargoDependencySpec(uniffiCargoPath, 'dependencies', 'sona-online-asr');
   const uncommentedStreamingBridge = stripRustComments(streamingBridge);
   const factoryBlock = readRustFunctionBlock(
@@ -862,7 +863,8 @@ function assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge) {
   );
 
   assert.ok(dependencyNames.includes('sona-online-asr'));
-  assert.ok(!dependencyNames.includes('sona-local-asr'));
+  assert.ok(dependencyNames.includes('sona-local-asr'));
+  assert.match(localAsrSpec, /\bpath\s*=\s*"\.\.\/local_asr"/u);
   assert.match(onlineAsrSpec, /\bpath\s*=\s*"\.\.\/online_asr"/u);
   assertCargoDependencyVersionAndFeature(uniffiCargoPath, 'uniffi', '0.32', 'tokio');
   assert.match(
@@ -878,6 +880,7 @@ function assertStreamingAsrArchitecture(uniffiCargoPath, streamingBridge) {
     factoryBlock,
     /^\s*VOLCENGINE_DOUBAO_PROVIDER_ID\s*=>\s*sona_online_asr::create_volcengine_streaming_session\s*\(/mu,
   );
+  assert.doesNotMatch(uncommentedStreamingBridge, /sona_local_asr|create_local_asr_streaming_session/u);
   assert.doesNotMatch(uncommentedStreamingBridge, /VolcengineStreamingSession/u);
 }
 

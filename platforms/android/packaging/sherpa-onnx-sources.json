@@ -1,0 +1,15 @@
+{
+  "version": "1.13.4",
+  "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-v1.13.4-android.tar.bz2",
+  "sha256": "7983fc3de23f6e64148f2fb05fa94a2efaa8c0516cc1573383dc5c7d4d2a43b0",
+  "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "runtimeLibraries": [
+    "libsherpa-onnx-c-api.so",
+    "libonnxruntime.so"
+  ]
+}

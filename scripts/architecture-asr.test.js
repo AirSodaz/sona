@@ -4,6 +4,34 @@ import path from 'node:path';
 import test from 'node:test';
 import { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, rustFilesUnder } from './test-support/repository.js';
 
+test('UniFFI Android builds use the pinned local ASR runtime release', () => {
+  const uniffiCargo = read('adapters', 'uniffi_bind', 'Cargo.toml');
+  const localAsrCargo = read('adapters', 'local_asr', 'Cargo.toml');
+  const releaseWorkflow = read('.github', 'workflows', 'release.yml');
+  const nightlyWorkflow = read('.github', 'workflows', 'nightly.yml');
+  const sourceLockSegments = [
+    'platforms', 'android', 'packaging', 'sherpa-onnx-sources.json',
+  ];
+
+  assert.match(uniffiCargo, /^sona-local-asr\s*=\s*\{\s*path\s*=\s*"\.\.\/local_asr"\s*\}/mu);
+  assert.match(
+    localAsrCargo,
+    /^sherpa-onnx\s*=\s*\{[^}]*version\s*=\s*"=1\.13\.4"[^}]*features\s*=\s*\["shared"\][^}]*\}/mu,
+  );
+  assert.match(releaseWorkflow, /SHERPA_ONNX_VERSION:\s*1\.13\.4/u);
+  assert.match(nightlyWorkflow, /SHERPA_ONNX_VERSION:\s*1\.13\.4/u);
+  assert.equal(exists(...sourceLockSegments), true);
+
+  const sourceLock = JSON.parse(read(...sourceLockSegments));
+  assert.deepEqual(sourceLock, {
+    version: '1.13.4',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-v1.13.4-android.tar.bz2',
+    sha256: '7983fc3de23f6e64148f2fb05fa94a2efaa8c0516cc1573383dc5c7d4d2a43b0',
+    abis: ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'],
+    runtimeLibraries: ['libsherpa-onnx-c-api.so', 'libonnxruntime.so'],
+  });
+});
+
 test('shared api server invokes local batch ASR through the core transcriber port', () => {
   const tauriCargo = read(...desktopCrateSegments, 'Cargo.toml');
   const tauriServer = read(...desktopCrateSegments, 'src', 'app', 'server.rs');
