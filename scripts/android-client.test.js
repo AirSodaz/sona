@@ -247,7 +247,9 @@ test('Android client has a repeatable local and CI verification entry point', ()
   );
   assert.match(apkVerifier, /Missing Android client debug APK/u);
 
-  assert.match(workflow, /sdkmanager "platforms;android-37\.0"/u);
+  assert.match(workflow, /uses: android-actions\/setup-android@v3/u);
+  assert.match(workflow, /platforms;android-37\.0/u);
+  assert.doesNotMatch(workflow, /yes \| sdkmanager/u);
   assert.match(workflow, /rustup target add aarch64-linux-android x86_64-linux-android/u);
   assert.match(workflow, /- name: Run Android client verification[\s\S]*pnpm run verify:android-client/u);
   assert.match(

@@ -64,20 +64,24 @@ test('reusable Android workflow builds and uploads both independent APKs', () =>
     distribution: 'temurin',
     'java-version': 17,
   });
+  const androidSdkStep = workflowStep(job, 'Android SDK setup');
+  assert.equal(androidSdkStep.uses, 'android-actions/setup-android@v3');
+  assert.equal(
+    androidSdkStep.with.packages,
+    'platforms;android-37.0 ndk;29.0.14206865',
+  );
   assert.equal(workflowStep(job, 'Rust setup').uses, 'dtolnay/rust-toolchain@stable');
   assert.equal(
     workflowStep(job, 'Rust setup').with.targets,
     'aarch64-linux-android,x86_64-linux-android',
   );
 
-  const androidSdkStep = workflowStep(job, 'Install Android SDK components');
-  assert.match(androidSdkStep.run, /yes \| sdkmanager --licenses >\/dev\/null/u);
-  assert.match(androidSdkStep.run, /sdkmanager "platforms;android-37\.0"/u);
-  assert.match(androidSdkStep.run, /sdkmanager "ndk;29\.0\.14206865"/u);
+  const androidNdkStep = workflowStep(job, 'Configure Android NDK');
   assert.match(
-    androidSdkStep.run,
+    androidNdkStep.run,
     /ANDROID_NDK_HOME=\$ANDROID_HOME\/ndk\/29\.0\.14206865/u,
   );
+  assert.doesNotMatch(JSON.stringify(job.steps), /yes \| sdkmanager/u);
 
   const buildStep = workflowStep(job, 'Build and verify Android client');
   assert.deepEqual(buildStep.env, { SONA_ANDROID_ABIS: 'arm64-v8a,x86_64' });
@@ -108,6 +112,32 @@ test('reusable Android workflow builds and uploads both independent APKs', () =>
     assert.equal(upload.with['if-no-files-found'], 'error');
     assert.equal(upload.with['retention-days'], 14);
   }
+});
+
+test('PR Android build initializes Java and the SDK in the Rust backend job', () => {
+  const workflow = readWorkflow('pr-guardrails.yml');
+  const job = workflow.jobs?.['rust-backend'];
+
+  const javaStep = workflowStep(job, 'Java setup');
+  assert.equal(javaStep.uses, 'actions/setup-java@v5');
+  assert.deepEqual(javaStep.with, {
+    distribution: 'temurin',
+    'java-version': 17,
+  });
+
+  const androidSdkStep = workflowStep(job, 'Android SDK setup');
+  assert.equal(androidSdkStep.uses, 'android-actions/setup-android@v3');
+  assert.equal(
+    androidSdkStep.with.packages,
+    'platforms;android-37.0 ndk;29.0.14206865',
+  );
+
+  const androidNdkStep = workflowStep(job, 'Configure Android NDK');
+  assert.match(
+    androidNdkStep.run,
+    /ANDROID_NDK_HOME=\$ANDROID_HOME\/ndk\/29\.0\.14206865/u,
+  );
+  assert.doesNotMatch(JSON.stringify(job.steps), /yes \| sdkmanager/u);
 });
 
 test('stable release waits for Android and publishes both APKs', () => {

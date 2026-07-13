@@ -84,6 +84,12 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Java setup
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
@@ -111,12 +117,15 @@ jobs:
       - name: Install Android Rust target
         run: rustup target add aarch64-linux-android x86_64-linux-android
 
-      - name: Install Android NDK
-        run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-37.0"
-          sdkmanager "ndk;29.0.14206865"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+      - name: Android SDK setup
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platforms;android-37.0
+            ndk;29.0.14206865
+
+      - name: Configure Android NDK
+        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
 
       - name: Run Android UniFFI Gradle smoke
         env:

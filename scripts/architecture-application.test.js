@@ -349,8 +349,10 @@ test('pr guardrails run adapter tests with core bindings and standalone CLI', ()
   assertPrRecoveryCoverage(prWorkflow);
   assert.match(prWorkflow, /cargo test -p sona-core --test preset_models/u);
   assert.match(prWorkflow, /rustup target add aarch64-linux-android/u);
-  assert.match(prWorkflow, /yes \| sdkmanager --licenses/u);
-  assert.match(prWorkflow, /sdkmanager "ndk;29\.0\.14206865"/u);
+  assert.match(prWorkflow, /uses: android-actions\/setup-android@v3/u);
+  assert.match(prWorkflow, /platforms;android-37\.0/u);
+  assert.match(prWorkflow, /ndk;29\.0\.14206865/u);
+  assert.doesNotMatch(prWorkflow, /yes \| sdkmanager/u);
   assert.match(prWorkflow, /ANDROID_NDK_HOME=\$ANDROID_HOME\/ndk\/29\.0\.14206865/u);
   assert.match(prWorkflow, /SONA_ANDROID_ABIS:\s*arm64-v8a/u);
   assert.match(prWorkflow, /pnpm run verify:android-uniffi:gradle/u);
