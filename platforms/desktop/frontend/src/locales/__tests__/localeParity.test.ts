@@ -34,6 +34,18 @@ function getInterpolationNames(value: string): string[] {
 }
 
 describe('locale resources', () => {
+  it('provides localized context menu action labels', () => {
+    const locales = { en, ja, ko, zh, 'zh-TW': zhTW } as const;
+
+    for (const [locale, resource] of Object.entries(locales)) {
+      expect(resource.common.open, `${locale}:common.open`).toBeTruthy();
+      expect(
+        getInterpolationNames(resource.common.actions_for),
+        `${locale}:common.actions_for`,
+      ).toEqual(['item']);
+    }
+  });
+
   it('keeps all UI locales at the same key parity', () => {
     const locales = {
       en,

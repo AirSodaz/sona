@@ -11,10 +11,10 @@ import {
 import { HistoryItem } from '../history/HistoryItem';
 import { PlusCircleIcon } from '../Icons';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
-import { isLiveRecordDraftHistoryItem } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
 import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
 import type { TranslationFn } from './types';
+import type { ContextMenuOpenRequest } from '../context-menu/trigger';
 
 interface ProjectsResultsProps {
   activeSearchResultId: string | null;
@@ -22,16 +22,18 @@ interface ProjectsResultsProps {
   filteredAndSortedItems: HistoryItemType[];
   handleOpenItem: (item: HistoryItemType) => Promise<void>;
   initialLoadError: boolean;
-  isHistoryInteractionLocked: boolean;
   isAllItemsScope: boolean;
   isHistoryLoading: boolean;
   isInitialLoading: boolean;
   isLoadingMore: boolean;
   isSelectionMode: boolean;
   loadMoreError: boolean;
-  onDeleteHistoryItem: (event: React.MouseEvent, id: string) => Promise<void>;
+  lockedHistoryId: string | null;
+  onDeleteHistoryItem: (id: string) => Promise<void>;
   onLoadMore: () => Promise<void>;
-  onRenameHistoryItem: (event: React.MouseEvent, id: string) => Promise<void>;
+  onRenameHistoryItem: (id: string) => Promise<void>;
+  onOpenHistoryContextMenu: (id: string, request: ContextMenuOpenRequest) => void;
+  activeContextId: string | null;
   onRetryInitialLoad: () => void;
   onScroll?: React.UIEventHandler<HTMLDivElement>;
   onToggleSelection: (id: string) => void;
@@ -199,16 +201,18 @@ export function ProjectsResults({
   filteredAndSortedItems,
   handleOpenItem,
   initialLoadError,
-  isHistoryInteractionLocked,
   isAllItemsScope,
   isHistoryLoading,
   isInitialLoading,
   isLoadingMore,
   isSelectionMode,
   loadMoreError,
+  lockedHistoryId,
   onDeleteHistoryItem,
   onLoadMore,
   onRenameHistoryItem,
+  onOpenHistoryContextMenu,
+  activeContextId,
   onRetryInitialLoad,
   onScroll,
   onToggleSelection,
@@ -266,7 +270,7 @@ export function ProjectsResults({
 
   const renderHistoryItem = React.useCallback((item: HistoryItemType) => {
     const searchMatch = searchMatchByItemId.get(item.id) ?? null;
-    const isLockedLiveDraft = isHistoryInteractionLocked && isLiveRecordDraftHistoryItem(item);
+    const isLockedHistoryItem = item.id === lockedHistoryId;
 
     return (
       <HistoryItem
@@ -275,9 +279,11 @@ export function ProjectsResults({
         onLoad={handleOpenItem}
         onDelete={onDeleteHistoryItem}
         onRename={onRenameHistoryItem}
-        isLoadDisabled={isHistoryInteractionLocked && !isLockedLiveDraft}
-        isRenameDisabled={isLockedLiveDraft}
-        isDeleteDisabled={isLockedLiveDraft}
+        onOpenContextMenu={onOpenHistoryContextMenu}
+        isContextMenuOpen={activeContextId === `workspace:history:${item.id}`}
+        isLoadDisabled={lockedHistoryId != null && !isLockedHistoryItem}
+        isRenameDisabled={isLockedHistoryItem}
+        isDeleteDisabled={isLockedHistoryItem}
         searchQuery={searchQuery}
         searchTitleMatch={searchMatch?.titleMatch ?? null}
         searchSnippet={searchMatch?.displaySnippet ?? null}
@@ -292,10 +298,12 @@ export function ProjectsResults({
   }, [
     activeSearchResultId,
     handleOpenItem,
-    isHistoryInteractionLocked,
     isSelectionMode,
+    lockedHistoryId,
     onDeleteHistoryItem,
     onRenameHistoryItem,
+    onOpenHistoryContextMenu,
+    activeContextId,
     onToggleSelection,
     searchMatchByItemId,
     searchQuery,

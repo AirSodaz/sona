@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import {
+  act,
+  fireEvent,
+  render as testingLibraryRender,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { ProjectsView } from '../ProjectsView';
+import { ContextMenuProvider } from '../context-menu/ContextMenuProvider';
+import { ProjectsResults } from '../projects/ProjectsResults';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -8,6 +17,10 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
+const render = (ui: ReactElement) => testingLibraryRender(
+  <ContextMenuProvider>{ui}</ContextMenuProvider>,
+);
 const virtuosoScrollToIndexMock = vi.hoisted(() => vi.fn());
 const virtuosoGridScrollToIndexMock = vi.hoisted(() => vi.fn());
 const workspaceQueryBackendMock = vi.hoisted(() => ({
@@ -51,6 +64,7 @@ vi.mock('../../services/historyService', () => ({
     loadTranscript: vi.fn().mockResolvedValue([]),
     getAudioUrl: vi.fn().mockResolvedValue('asset:///audio.wav'),
     updateTranscript: vi.fn().mockResolvedValue(undefined),
+    updateItemMeta: vi.fn().mockResolvedValue(undefined),
     updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteRecordings: vi.fn().mockResolvedValue(undefined),
@@ -155,12 +169,32 @@ vi.mock('../history/HistoryItem', () => ({
     searchQuery,
     searchSnippet,
     showProjectBadge = true,
+    onOpenContextMenu,
+    isContextMenuOpen,
+    isLoadDisabled,
+    isRenameDisabled,
+    isDeleteDisabled,
   }: any) => (
     <div
       id={`workspace-search-result-${item.id}`}
       data-testid={`history-item-${item.id}`}
       data-search-query={searchQuery || ''}
       data-keyboard-active={isKeyboardActive ? 'true' : 'false'}
+      data-context-menu-open={isContextMenuOpen ? 'true' : 'false'}
+      data-load-disabled={isLoadDisabled ? 'true' : 'false'}
+      data-rename-disabled={isRenameDisabled ? 'true' : 'false'}
+      data-delete-disabled={isDeleteDisabled ? 'true' : 'false'}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (isSelectionMode) {
+          return;
+        }
+        onOpenContextMenu?.(item.id, {
+          anchor: event.currentTarget,
+          point: { x: event.clientX, y: event.clientY },
+          invocation: 'pointer',
+        });
+      }}
     >
       <button onClick={() => onLoad(item)}>{item.title}</button>
       {showProjectBadge && <span>{`Project ${item.projectId ?? 'inbox'}`}</span>}
@@ -168,7 +202,7 @@ vi.mock('../history/HistoryItem', () => ({
       {searchSnippet?.text && <span>{`Snippet ${searchSnippet.text}`}</span>}
       {isSelected && <span>{`Active ${item.id}`}</span>}
       {onRename && !isSelectionMode && (
-        <button onClick={(event) => onRename(event, item.id)}>
+        <button onClick={() => onRename(item.id)}>
           {`Rename ${item.title}`}
         </button>
       )}
@@ -474,6 +508,406 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('AI Project Title')).toBeDefined();
     });
+  });
+
+  it('opens the history context menu and reuses the existing rename flow', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const historyItem = screen.getByTestId('history-item-hist-inbox');
+    fireEvent.contextMenu(historyItem, { clientX: 160, clientY: 220 });
+
+    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeDefined();
+    expect(historyItem.dataset.contextMenuOpen).toBe('true');
+    expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    expect(await screen.findByDisplayValue('Inbox Item')).toBeDefined();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
+  });
+
+  it('does not submit a rename after the target is removed', async () => {
+    const { historyService } = await import('../../services/historyService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 160,
+      clientY: 220,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    expect(await screen.findByDisplayValue('Inbox Item')).toBeDefined();
+
+    act(() => {
+      useHistoryStore.setState({ items: [] });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(historyService.updateItemMeta).not.toHaveBeenCalled();
+  });
+
+  it('does not submit a rename after the target becomes the active live draft', async () => {
+    const { historyService } = await import('../../services/historyService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 160,
+      clientY: 220,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    expect(await screen.findByDisplayValue('Inbox Item')).toBeDefined();
+
+    act(() => {
+      const currentItem = useHistoryStore.getState().items[0];
+      useHistoryStore.setState({
+        items: [{
+          ...currentItem,
+          status: 'draft',
+          draftSource: 'live_record',
+        }],
+      } as any);
+      useTranscriptStore.setState({
+        sourceHistoryId: 'hist-inbox',
+        isRecording: true,
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(historyService.updateItemMeta).not.toHaveBeenCalled();
+  });
+
+  it('opens project settings for a project selected from the rail context menu', async () => {
+    const { projectService } = await import('../../services/projectService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const projectButton = getButtonByContent('Alpha');
+    fireEvent.contextMenu(projectButton, { clientX: 92, clientY: 148 });
+
+    expect(screen.getByRole('menu', { name: 'Actions for Alpha' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Project Settings' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Project Settings' }));
+
+    await waitFor(() => {
+      expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
+      expect(screen.getByText('Edit Project Defaults')).toBeDefined();
+    });
+  });
+
+  it('closes an open workspace menu when its target is removed', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+
+    act(() => {
+      useHistoryStore.setState({ items: [] });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+  });
+
+  it('closes an open workspace menu when the target metadata changes', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+
+    act(() => {
+      const currentItem = useHistoryStore.getState().items[0];
+      useHistoryStore.setState({
+        items: [{ ...currentItem, title: 'Updated Inbox Item' }],
+      } as any);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+  });
+
+  it('resolves the latest history item when a context action runs', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    const renameAction = screen.getByRole('menuitem', { name: 'Rename' });
+
+    act(() => {
+      const currentItem = useHistoryStore.getState().items[0];
+      useHistoryStore.setState({
+        items: [{ ...currentItem, title: 'Latest Inbox Item' }],
+      } as any);
+      fireEvent.click(renameAction);
+    });
+
+    expect(await screen.findByDisplayValue('Latest Inbox Item')).toBeDefined();
+  });
+
+  it('rechecks the live draft lock when a context action runs', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    const deleteAction = screen.getByRole('menuitem', { name: 'Delete' });
+
+    act(() => {
+      const currentItem = useHistoryStore.getState().items[0];
+      useHistoryStore.setState({
+        items: [{
+          ...currentItem,
+          status: 'draft',
+          draftSource: 'live_record',
+        }],
+      } as any);
+      useTranscriptStore.setState({
+        sourceHistoryId: 'hist-inbox',
+        isRecording: true,
+      });
+      fireEvent.click(deleteAction);
+    });
+
+    expect(useDialogStore.getState().confirm).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the live draft lock before a project context action switches scope', async () => {
+    const { projectService } = await import('../../services/projectService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
+    const openAction = screen.getByRole('menuitem', { name: 'Open' });
+
+    act(() => {
+      useHistoryStore.setState({
+        items: [{
+          id: 'hist-live',
+          title: 'Live Draft',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'live.wav',
+          transcriptPath: 'hist-live.json',
+          previewText: 'Live preview',
+          type: 'recording',
+          projectId: 'project-1',
+          status: 'draft',
+          draftSource: 'live_record',
+        }],
+      } as any);
+      useTranscriptStore.setState({
+        sourceHistoryId: 'hist-live',
+        isRecording: true,
+      });
+      fireEvent.click(openAction);
+    });
+
+    expect(projectService.setActiveProjectId).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+  });
+
+  it('opens and deletes history items through the context menu actions', async () => {
+    const { historyService } = await import('../../services/historyService');
+
+    const firstRender = render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open' }));
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-inbox');
+      expect(getDetailPlaceholder()).not.toBeNull();
+    });
+
+    firstRender.unmount();
+    useTranscriptStore.setState({ sourceHistoryId: null, segments: [], audioUrl: null });
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    await clickAsync(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(historyService.deleteRecording).toHaveBeenCalledWith('hist-inbox');
+    });
+  });
+
+  it('disables opening the current project while keeping project settings available', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const projectButton = getButtonByContent('Alpha');
+    vi.spyOn(projectButton, 'getBoundingClientRect').mockReturnValue({
+      x: 24,
+      y: 72,
+      width: 280,
+      height: 64,
+      top: 72,
+      right: 304,
+      bottom: 136,
+      left: 24,
+      toJSON: () => ({}),
+    });
+    fireEvent.keyDown(projectButton, { key: 'F10', shiftKey: true });
+
+    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('menuitem', { name: 'Project Settings' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('disables other project actions during an active live draft', async () => {
+    useProjectStore.setState({ activeProjectId: null });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-live',
+          title: 'Live Draft',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'live.wav',
+          transcriptPath: 'hist-live.json',
+          previewText: 'Live preview',
+          type: 'recording',
+          projectId: 'project-1',
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+      ],
+    } as any);
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-live',
+      isRecording: true,
+      segments: [{ id: 'seg-live', start: 0, end: 1, text: 'Live', isFinal: true }],
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
+    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('menuitem', { name: 'Project Settings' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('locks only the current live draft actions when older live drafts remain', async () => {
+    const liveDrafts = [
+        {
+          id: 'hist-old-draft',
+          title: 'Old Live Draft',
+          timestamp: Date.now() - 1000,
+          duration: 8,
+          audioPath: 'old-live.wav',
+          transcriptPath: 'hist-old-draft.json',
+          previewText: 'Old draft',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+        {
+          id: 'hist-current-draft',
+          title: 'Current Live Draft',
+          timestamp: Date.now(),
+          duration: 4,
+          audioPath: 'current-live.wav',
+          transcriptPath: 'hist-current-draft.json',
+          previewText: 'Current draft',
+          type: 'recording',
+          projectId: null,
+          status: 'draft',
+          draftSource: 'live_record',
+        },
+      ] as any;
+
+    render(
+      <ProjectsResults
+        activeContextId={null}
+        activeSearchResultId={null}
+        browseProject={null}
+        filteredAndSortedItems={liveDrafts}
+        filteredItemCount={liveDrafts.length}
+        handleOpenItem={vi.fn()}
+        initialLoadError={false}
+        isAllItemsScope
+        isHistoryLoading={false}
+        isInitialLoading={false}
+        isLoadingMore={false}
+        isSelectionMode={false}
+        loadMoreError={false}
+        lockedHistoryId="hist-current-draft"
+        onDeleteHistoryItem={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpenHistoryContextMenu={vi.fn()}
+        onRenameHistoryItem={vi.fn()}
+        onRetryInitialLoad={vi.fn()}
+        onToggleSelection={vi.fn()}
+        resetBrowseState={vi.fn()}
+        scopeItemCount={liveDrafts.length}
+        searchMatchByItemId={new Map()}
+        searchQuery=""
+        selectedHistoryId={null}
+        selectedIds={[]}
+        t={(_key, options) => String(options?.defaultValue ?? '')}
+        viewMode="list"
+      />,
+    );
+
+    const oldDraft = screen.getByTestId('history-item-hist-old-draft');
+    const currentDraft = screen.getByTestId('history-item-hist-current-draft');
+    expect(oldDraft.dataset.loadDisabled).toBe('true');
+    expect(oldDraft.dataset.renameDisabled).toBe('false');
+    expect(oldDraft.dataset.deleteDisabled).toBe('false');
+    expect(currentDraft.dataset.loadDisabled).toBe('false');
+    expect(currentDraft.dataset.renameDisabled).toBe('true');
+    expect(currentDraft.dataset.deleteDisabled).toBe('true');
+  });
+
+  it('closes an open workspace menu when the virtual results viewport scrolls', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+
+    fireEvent.scroll(screen.getByTestId('projects-virtuoso-list'));
+
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('does not render hidden workspace detail or result DOM while inactive', async () => {

@@ -238,6 +238,12 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
+.history-item.context-menu-active {
+  border-color: color-mix(in srgb, var(--color-text-primary) 58%, var(--color-border));
+  background: color-mix(in srgb, var(--color-bg-elevated) 92%, var(--color-accent-secondary));
+  box-shadow: var(--shadow-sm);
+}
+
 .history-item-checkbox {
   grid-column: 1;
   display: flex;

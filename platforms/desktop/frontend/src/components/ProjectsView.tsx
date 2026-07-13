@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FolderOpen, Pencil, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { RenameModal } from './RenameModal';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
@@ -26,13 +27,73 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
+import { useContextMenu } from './context-menu/useContextMenu';
+import type { ContextMenuOpenRequest } from './context-menu/trigger';
 
 interface ProjectsViewProps {
   isActive?: boolean;
 }
 
+interface LiveDraftLockState {
+  isLocked: boolean;
+  isRecording: boolean;
+  sourceHistoryId: string | null;
+}
+
+interface WorkspaceMenuSnapshot {
+  contextId: string;
+  revision: string;
+}
+
+function getLiveDraftLockState(): LiveDraftLockState {
+  const { isRecording } = useTranscriptRuntimeStore.getState();
+  const { sourceHistoryId } = useTranscriptSessionStore.getState();
+  const sourceItem = sourceHistoryId
+    ? useHistoryStore.getState().items.find((item) => item.id === sourceHistoryId)
+    : null;
+
+  return {
+    isLocked: isRecording && !!sourceItem && isLiveRecordDraftHistoryItem(sourceItem),
+    isRecording,
+    sourceHistoryId,
+  };
+}
+
+function createWorkspaceMenuRevision(
+  contextId: string,
+  browseScope: string,
+  viewMode: string,
+  isSelectionMode: boolean,
+  isActive: boolean,
+): string {
+  const historyPrefix = 'workspace:history:';
+  const projectPrefix = 'workspace:project:';
+  const historyState = useHistoryStore.getState();
+  const projectState = useProjectStore.getState();
+  const lockState = getLiveDraftLockState();
+  let target: unknown = null;
+
+  if (contextId.startsWith(historyPrefix)) {
+    const id = contextId.slice(historyPrefix.length);
+    target = historyState.items.find((item) => item.id === id) ?? null;
+  } else if (contextId.startsWith(projectPrefix)) {
+    const id = contextId.slice(projectPrefix.length);
+    target = projectState.projects.find((project) => project.id === id) ?? null;
+  }
+
+  return JSON.stringify({
+    target,
+    browseScope,
+    viewMode,
+    isSelectionMode,
+    isActive,
+    lockState,
+  });
+}
+
 export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.Element {
   const { t } = useTranslation();
+  const { activeContextId, closeContextMenu, openContextMenu } = useContextMenu();
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const createProject = useProjectStore((state) => state.createProject);
@@ -46,15 +107,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const isHistoryLoading = useHistoryStore((state) => state.isLoading);
   const loadHistoryItems = useHistoryStore((state) => state.loadItems);
   const refreshHistory = useHistoryStore((state) => state.refresh);
-  const deleteHistoryItem = useHistoryStore((state) => state.deleteItem);
   const deleteHistoryItems = useHistoryStore((state) => state.deleteItems);
-  const updateHistoryItemMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const setTitle = useTranscriptSessionStore((state) => state.setTitle);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
@@ -71,6 +129,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
+  const browseScopeRef = useRef('inbox');
   const activeHistoryItem = useMemo(
     () => historyItems.find((item) => item.id === sourceHistoryId) || null,
     [historyItems, sourceHistoryId],
@@ -87,7 +147,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, []);
 
   const handleOpenItem = useCallback(async (item: HistoryItemType) => {
-    if (isLiveDraftSessionLocked && item.id !== sourceHistoryId) {
+    const initialItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
+    const initialLockState = getLiveDraftLockState();
+    if (!initialItem || (initialLockState.isLocked && item.id !== initialLockState.sourceHistoryId)) {
       return;
     }
 
@@ -95,14 +157,27 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       let segments = await historyService.loadTranscript(item.id);
       const url = await historyService.getAudioUrl(item.id);
 
+      const latestItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
+      const latestLockState = getLiveDraftLockState();
+      if (!latestItem || (latestLockState.isLocked && item.id !== latestLockState.sourceHistoryId)) {
+        return;
+      }
+
       if (!segments && !url) {
         await showError({
           code: 'history.missing_files_deleted',
           messageKey: 'errors.history.missing_files_deleted',
           showCause: false,
         });
-        await deleteHistoryItem(item.id);
-        await refreshHistory();
+
+        const deletableItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
+        const deleteLockState = getLiveDraftLockState();
+        if (!deletableItem || (deleteLockState.isLocked && item.id === deleteLockState.sourceHistoryId)) {
+          return;
+        }
+
+        await useHistoryStore.getState().deleteItem(item.id);
+        await useHistoryStore.getState().refresh();
         return;
       }
 
@@ -113,12 +188,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       openTranscriptSession({
         segments,
         sourceHistoryId: item.id,
-        title: item.title,
-        icon: item.icon,
+        title: latestItem.title,
+        icon: latestItem.icon,
         audioUrl: url,
       });
       setSelectedHistoryId(item.id);
-      await setActiveProjectId(item.projectId);
+      await useProjectStore.getState().setActiveProjectId(latestItem.projectId);
     } catch (error) {
       await showError({
         code: 'history.load_failed',
@@ -126,7 +201,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         cause: error,
       });
     }
-  }, [deleteHistoryItem, isLiveDraftSessionLocked, refreshHistory, setActiveProjectId, showError, sourceHistoryId]);
+  }, [showError]);
 
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
@@ -155,6 +230,45 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const clearSelection = selectionState.clearSelection;
   const workspaceSelectionMode = selectionState.isSelectionMode;
   const syncVisibleItems = selectionState.syncVisibleItems;
+
+  useEffect(() => {
+    browseScopeRef.current = browseState.browseScope;
+  }, [browseState.browseScope]);
+
+  useEffect(() => {
+    if (!activeContextId?.startsWith('workspace:')) {
+      workspaceMenuSnapshotRef.current = null;
+      return;
+    }
+
+    const snapshot = workspaceMenuSnapshotRef.current;
+    if (!snapshot || snapshot.contextId !== activeContextId) {
+      closeContextMenu();
+      return;
+    }
+
+    const latestRevision = createWorkspaceMenuRevision(
+      activeContextId,
+      browseState.browseScope,
+      viewMode,
+      selectionState.isSelectionMode,
+      isActive,
+    );
+    if (latestRevision !== snapshot.revision) {
+      closeContextMenu();
+    }
+  }, [
+    activeContextId,
+    browseState.browseScope,
+    closeContextMenu,
+    historyItems,
+    isActive,
+    isRecording,
+    projects,
+    selectionState.isSelectionMode,
+    sourceHistoryId,
+    viewMode,
+  ]);
 
   useEffect(() => {
     if (!isActive) {
@@ -246,14 +360,27 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
   }, [clearSelection, isLiveDraftSessionLocked, workspaceSelectionMode]);
 
-  const handleSwitchBrowseScope = async (nextScope: string) => {
-    if (isLiveDraftSessionLocked) {
-      return;
+  const handleSwitchBrowseScope = async (nextScope: string): Promise<boolean> => {
+    const isProjectScope = nextScope !== 'all' && nextScope !== 'inbox';
+    const initialLockState = getLiveDraftLockState();
+    if (
+      initialLockState.isLocked
+      || (isProjectScope && !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+    ) {
+      return false;
     }
 
     const shouldDiscard = await projectSettingsDraft.confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
-      return;
+      return false;
+    }
+
+    const latestLockState = getLiveDraftLockState();
+    if (
+      latestLockState.isLocked
+      || (isProjectScope && !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+    ) {
+      return false;
     }
 
     if (projectSettingsDraft.isSettingsOpen) {
@@ -268,15 +395,97 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     clearOpenedItem();
 
     if (nextScope === 'all') {
+      return true;
+    }
+
+    await useProjectStore.getState().setActiveProjectId(nextScope === 'inbox' ? null : nextScope);
+    return true;
+  };
+
+  const handleOpenProjectSettings = async (id: string) => {
+    let project = useProjectStore.getState().projects.find((item) => item.id === id);
+    const initialLockState = getLiveDraftLockState();
+    const isCurrentProject = browseScopeRef.current === id;
+    if (!project || (initialLockState.isLocked && !isCurrentProject)) {
       return;
     }
 
-    await setActiveProjectId(nextScope === 'inbox' ? null : nextScope);
+    if (!isCurrentProject) {
+      const didSwitch = await handleSwitchBrowseScope(id);
+      if (!didSwitch) {
+        return;
+      }
+    }
+
+    project = useProjectStore.getState().projects.find((item) => item.id === id);
+    const latestLockState = getLiveDraftLockState();
+    if (!project || (latestLockState.isLocked && !isCurrentProject)) {
+      return;
+    }
+
+    projectSettingsDraft.resetProjectSettingsDraft(project);
+    projectSettingsDraft.setIsSettingsOpen(true);
   };
 
-  const handleDeleteHistoryItem = async (event: React.MouseEvent, id: string) => {
-    event.stopPropagation();
-    if (isLiveDraftSessionLocked && id === sourceHistoryId) {
+  const handleOpenProjectContextMenu = (
+    id: string,
+    request: ContextMenuOpenRequest,
+  ) => {
+    const project = useProjectStore.getState().projects.find((item) => item.id === id);
+    if (!project) {
+      return;
+    }
+
+    const lockState = getLiveDraftLockState();
+    const isCurrentProject = browseScopeRef.current === id;
+    const isOtherProjectLocked = lockState.isLocked && !isCurrentProject;
+    const contextId = `workspace:project:${id}`;
+
+    workspaceMenuSnapshotRef.current = {
+      contextId,
+      revision: createWorkspaceMenuRevision(
+        contextId,
+        browseScopeRef.current,
+        viewMode,
+        selectionState.isSelectionMode,
+        isActive,
+      ),
+    };
+
+    openContextMenu({
+      contextId,
+      ariaLabel: t('common.actions_for', {
+        item: project.name,
+        defaultValue: 'Actions for {{item}}',
+      }),
+      actions: [
+        {
+          id: 'open',
+          label: t('common.open', { defaultValue: 'Open' }),
+          icon: <FolderOpen size={16} />,
+          disabled: isCurrentProject || lockState.isLocked,
+          onSelect: () => {
+            void handleSwitchBrowseScope(id);
+          },
+        },
+        {
+          id: 'settings',
+          label: t('projects.project_settings', { defaultValue: 'Project Settings' }),
+          icon: <SettingsIcon size={16} />,
+          disabled: isOtherProjectLocked,
+          onSelect: () => {
+            void handleOpenProjectSettings(id);
+          },
+        },
+      ],
+      ...request,
+    });
+  };
+
+  const handleDeleteHistoryItem = async (id: string) => {
+    const initialItem = useHistoryStore.getState().items.find((item) => item.id === id);
+    const initialLockState = getLiveDraftLockState();
+    if (!initialItem || (initialLockState.isLocked && id === initialLockState.sourceHistoryId)) {
       return;
     }
 
@@ -290,21 +499,93 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    await deleteHistoryItem(id);
-    await refreshHistory();
-  };
-
-  const handleRenameHistoryItem = async (event: React.MouseEvent, id: string) => {
-    event.stopPropagation();
-    if (isLiveDraftSessionLocked && id === sourceHistoryId) {
+    const latestItem = useHistoryStore.getState().items.find((item) => item.id === id);
+    const latestLockState = getLiveDraftLockState();
+    if (!latestItem || (latestLockState.isLocked && id === latestLockState.sourceHistoryId)) {
       return;
     }
-    const item = historyItems.find((historyItem) => historyItem.id === id);
-    if (!item) {
+
+    await useHistoryStore.getState().deleteItem(id);
+    await useHistoryStore.getState().refresh();
+  };
+
+  const handleRenameHistoryItem = async (id: string) => {
+    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
+    const lockState = getLiveDraftLockState();
+    if (!item || (lockState.isLocked && id === lockState.sourceHistoryId)) {
       return;
     }
 
     setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
+  };
+
+  const handleOpenHistoryContextMenu = (
+    id: string,
+    request: ContextMenuOpenRequest,
+  ) => {
+    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
+    if (!item || selectionState.isSelectionMode) {
+      return;
+    }
+
+    const lockState = getLiveDraftLockState();
+    const isLockedLiveDraft = lockState.isLocked && id === lockState.sourceHistoryId;
+    const isOpenDisabled = lockState.isLocked && id !== lockState.sourceHistoryId;
+    const contextId = `workspace:history:${id}`;
+
+    workspaceMenuSnapshotRef.current = {
+      contextId,
+      revision: createWorkspaceMenuRevision(
+        contextId,
+        browseScopeRef.current,
+        viewMode,
+        selectionState.isSelectionMode,
+        isActive,
+      ),
+    };
+
+    openContextMenu({
+      contextId,
+      ariaLabel: t('common.actions_for', {
+        item: item.title,
+        defaultValue: 'Actions for {{item}}',
+      }),
+      actions: [
+        {
+          id: 'open',
+          label: t('common.open', { defaultValue: 'Open' }),
+          icon: <FolderOpen size={16} />,
+          disabled: isOpenDisabled,
+          onSelect: () => {
+            const latestItem = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
+            if (latestItem) {
+              void handleOpenItem(latestItem);
+            }
+          },
+        },
+        {
+          id: 'rename',
+          label: t('common.rename', { defaultValue: 'Rename' }),
+          icon: <Pencil size={16} />,
+          disabled: isLockedLiveDraft,
+          onSelect: () => {
+            void handleRenameHistoryItem(id);
+          },
+        },
+        {
+          id: 'delete',
+          label: t('common.delete', { defaultValue: 'Delete' }),
+          icon: <Trash2 size={16} />,
+          disabled: isLockedLiveDraft,
+          tone: 'danger',
+          dividerBefore: true,
+          onSelect: () => {
+            void handleDeleteHistoryItem(id);
+          },
+        },
+      ],
+      ...request,
+    });
   };
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
@@ -312,12 +593,21 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    await updateHistoryItemMeta(renameTarget.id, { title: newTitle.trim(), icon: newIcon });
-    await refreshHistory();
+    const targetId = renameTarget.id;
+    const target = useHistoryStore.getState().items.find((item) => item.id === targetId);
+    const lockState = getLiveDraftLockState();
+    if (!target || (lockState.isLocked && lockState.sourceHistoryId === targetId)) {
+      return;
+    }
 
-    if (sourceHistoryId === renameTarget.id) {
-      setTitle(newTitle.trim());
-      useTranscriptSessionStore.getState().setIcon(newIcon || null);
+    const trimmedTitle = newTitle.trim();
+    await useHistoryStore.getState().updateItemMeta(targetId, { title: trimmedTitle, icon: newIcon });
+    await useHistoryStore.getState().refresh();
+
+    const sessionState = useTranscriptSessionStore.getState();
+    if (sessionState.sourceHistoryId === targetId) {
+      sessionState.setTitle(trimmedTitle);
+      sessionState.setIcon(newIcon || null);
     }
 
     setRenameTarget(null);
@@ -461,6 +751,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   return (
     <div className={`projects-workbench ${selectedItem ? 'with-detail' : ''}`}>
       <ProjectsRail
+        activeContextId={activeContextId}
         browseProjectId={browseState.browseProjectId}
         historyItemsCount={historyItems.length}
         inboxCount={browseState.itemCounts.get(null) || 0}
@@ -470,6 +761,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onReorderProjects={reorderProjects}
         onSwitchScope={handleSwitchBrowseScope}
+        onOpenProjectContextMenu={handleOpenProjectContextMenu}
         projects={projects}
         t={t}
       />
@@ -542,21 +834,23 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           )}
 
           <ProjectsResults
+            activeContextId={activeContextId}
             activeSearchResultId={browseState.activeSearchResultId}
             browseProject={browseState.browseProject}
             filteredAndSortedItems={browseState.filteredAndSortedItems}
             handleOpenItem={handleOpenItem}
             initialLoadError={browseState.initialLoadError}
-            isHistoryInteractionLocked={isLiveDraftSessionLocked}
             isAllItemsScope={browseState.isAllItemsScope}
             isHistoryLoading={isHistoryLoading}
             isInitialLoading={browseState.isInitialLoading}
             isLoadingMore={browseState.isLoadingMore}
             isSelectionMode={selectionState.isSelectionMode}
             loadMoreError={browseState.loadMoreError}
+            lockedHistoryId={isLiveDraftSessionLocked ? sourceHistoryId : null}
             onDeleteHistoryItem={handleDeleteHistoryItem}
             onLoadMore={browseState.loadMore}
             onRenameHistoryItem={handleRenameHistoryItem}
+            onOpenHistoryContextMenu={handleOpenHistoryContextMenu}
             onRetryInitialLoad={browseState.retryInitialLoad}
             onScroll={browseState.handleScroll}
             onToggleSelection={selectionState.toggleSelection}

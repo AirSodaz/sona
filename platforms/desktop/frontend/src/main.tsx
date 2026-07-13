@@ -16,6 +16,7 @@ import { voiceTypingService } from "./services/voiceTypingService";
 import { CaptionWindow } from "./components/CaptionWindow";
 import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ContextMenuProvider } from "./components/context-menu/ContextMenuProvider";
 import { logger } from "./utils/logger";
 
 declare global {
@@ -68,7 +69,9 @@ if (isVoiceTypingWindow) {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      {rootComponent}
+      <ContextMenuProvider>
+        {rootComponent}
+      </ContextMenuProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

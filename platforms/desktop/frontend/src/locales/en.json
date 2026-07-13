@@ -18,6 +18,8 @@
         "close": "Close",
         "confirm": "Confirm",
         "ok": "OK",
+        "open": "Open",
+        "actions_for": "Actions for {{item}}",
         "rename": "Rename",
         "rename_item": "Rename {{item}}",
         "rename_prompt": "Enter new title",

@@ -18,6 +18,8 @@
         "close": "关闭",
         "confirm": "确认",
         "ok": "确定",
+        "open": "打开",
+        "actions_for": "对 {{item}} 的操作",
         "rename": "重命名",
         "rename_item": "重命名 {{item}}",
         "rename_prompt": "输入新名称",

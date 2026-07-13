@@ -7,6 +7,7 @@
 @import './app-shell.css';
 @import './projects-workbench.css';
 @import './controls.css';
+@import './context-menu.css';
 @import './transcript.css';
 @import './workflow-surfaces.css';
 @import './live-record.css';

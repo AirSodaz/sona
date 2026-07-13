@@ -25,6 +25,12 @@ import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
+import {
+  createKeyboardContextMenuRequest,
+  createPointerContextMenuRequest,
+  isContextMenuKeyboardEvent,
+  type ContextMenuOpenRequest,
+} from '../context-menu/trigger';
 
 interface ProjectsRailProps {
   browseProjectId: string | null;
@@ -35,16 +41,20 @@ interface ProjectsRailProps {
   itemCounts: Map<string | null, number>;
   onOpenCreateModal: () => void;
   onReorderProjects: (projectIds: string[]) => Promise<void>;
-  onSwitchScope: (scope: ProjectBrowseScope) => Promise<void>;
+  onSwitchScope: (scope: ProjectBrowseScope) => Promise<boolean>;
+  onOpenProjectContextMenu: (id: string, request: ContextMenuOpenRequest) => void;
+  activeContextId: string | null;
   projects: ProjectRecord[];
   t: TranslationFn;
 }
 
 interface SortableProjectItemProps {
   isActive: boolean;
-  onSwitchScope: (id: string) => Promise<void>;
+  onSwitchScope: (id: string) => Promise<boolean>;
   project: ProjectRecord;
   projectCount: number;
+  onOpenContextMenu: (id: string, request: ContextMenuOpenRequest) => void;
+  isContextMenuOpen: boolean;
   t: TranslationFn;
 }
 
@@ -53,6 +63,8 @@ function SortableProjectItem({
   onSwitchScope,
   project,
   projectCount,
+  onOpenContextMenu,
+  isContextMenuOpen,
   t,
 }: SortableProjectItemProps): React.JSX.Element {
   const {
@@ -70,6 +82,17 @@ function SortableProjectItem({
     zIndex: isDragging ? 100 : undefined,
   };
 
+  const handleContextMenuKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (isContextMenuKeyboardEvent(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      onOpenContextMenu(project.id, createKeyboardContextMenuRequest(event.currentTarget));
+      return;
+    }
+
+    listeners?.onKeyDown?.(event);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -78,10 +101,16 @@ function SortableProjectItem({
     >
       <button
         type="button"
-        className={`projects-rail-item ${isActive ? 'active' : ''}`}
+        className={`projects-rail-item ${isActive ? 'active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
         onClick={() => void onSwitchScope(project.id)}
         {...attributes}
         {...listeners}
+        onKeyDown={handleContextMenuKeyDown}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+        }}
         aria-pressed={isActive}
       >
         <RailItemContent
@@ -108,6 +137,8 @@ export function ProjectsRail({
   onOpenCreateModal,
   onReorderProjects,
   onSwitchScope,
+  onOpenProjectContextMenu,
+  activeContextId,
   projects,
   t,
 }: ProjectsRailProps): React.JSX.Element {
@@ -225,6 +256,8 @@ export function ProjectsRail({
                   projectCount={itemCounts.get(project.id) || 0}
                   isActive={browseProjectId === project.id}
                   onSwitchScope={onSwitchScope}
+                  onOpenContextMenu={onOpenProjectContextMenu}
+                  isContextMenuOpen={activeContextId === `workspace:project:${project.id}`}
                   t={t}
                 />
               ))}

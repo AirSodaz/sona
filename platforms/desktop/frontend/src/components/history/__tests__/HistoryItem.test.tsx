@@ -78,7 +78,7 @@ describe('HistoryItem', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Client Call' }));
 
     expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(onDelete.mock.calls[0][1]).toBe('hist-1');
+    expect(onDelete).toHaveBeenCalledWith('hist-1');
     expect(onLoad).not.toHaveBeenCalled();
   });
 
@@ -104,6 +104,122 @@ describe('HistoryItem', () => {
     expect(onToggleSelection).toHaveBeenCalledWith('hist-1');
     expect(onLoad).not.toHaveBeenCalled();
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it('requests a pointer context menu without opening the history item', () => {
+    const onLoad = vi.fn();
+    const onOpenContextMenu = vi.fn();
+
+    render(
+      <HistoryItem
+        item={item}
+        onLoad={onLoad}
+        onDelete={vi.fn()}
+        onOpenContextMenu={onOpenContextMenu}
+        isContextMenuOpen
+      />,
+    );
+
+    const historyItem = screen.getByRole('listitem');
+    const contentButton = screen.getByRole('button', { name: 'Load Client Call' });
+    fireEvent.contextMenu(historyItem, {
+      button: 2,
+      clientX: 140,
+      clientY: 180,
+    });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', {
+      anchor: contentButton,
+      point: { x: 140, y: 180 },
+      invocation: 'pointer',
+    });
+    expect(historyItem.classList.contains('context-menu-active')).toBe(true);
+    expect(onLoad).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { key: 'F10', shiftKey: true },
+    { key: 'ContextMenu', shiftKey: false },
+  ])('requests a keyboard context menu for $key', ({ key, shiftKey }) => {
+    const onOpenContextMenu = vi.fn();
+
+    render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenContextMenu={onOpenContextMenu}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Load Client Call' });
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 32,
+      y: 48,
+      width: 240,
+      height: 80,
+      top: 48,
+      right: 272,
+      bottom: 128,
+      left: 32,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.keyDown(trigger, { key, shiftKey });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', {
+      anchor: trigger,
+      point: { x: 44, y: 60 },
+      invocation: 'keyboard',
+    });
+  });
+
+  it('keeps a load-locked item focusable for keyboard context menu requests', () => {
+    const onOpenContextMenu = vi.fn();
+
+    render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenContextMenu={onOpenContextMenu}
+        isLoadDisabled
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Load Client Call' }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+    expect(trigger.getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.keyDown(trigger, { key: 'F10', shiftKey: true });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
+      anchor: trigger,
+      invocation: 'keyboard',
+    }));
+  });
+
+  it('does not request an item context menu while selection mode is active', () => {
+    const onOpenContextMenu = vi.fn();
+
+    render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenContextMenu={onOpenContextMenu}
+        isSelectionMode
+      />,
+    );
+
+    const historyItem = screen.getByRole('listitem');
+    fireEvent.contextMenu(historyItem, { clientX: 40, clientY: 50 });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Load Client Call' }), {
+      key: 'F10',
+      shiftKey: true,
+    });
+
+    expect(onOpenContextMenu).not.toHaveBeenCalled();
   });
 
   it('renders a search snippet with highlight for list layouts', () => {

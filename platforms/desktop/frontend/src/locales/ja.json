@@ -18,6 +18,8 @@
         "close": "閉じる",
         "confirm": "確認する",
         "ok": "OK",
+        "open": "開く",
+        "actions_for": "{{item}} の操作",
         "rename": "名前の変更",
         "rename_item": "{{item}} の名前を変更します",
         "rename_prompt": "新しいタイトルを入力してください",

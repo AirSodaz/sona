@@ -158,6 +158,12 @@
   box-shadow: var(--shadow-sm);
 }
 
+.projects-rail-item.context-menu-active {
+  border-color: color-mix(in srgb, var(--color-text-primary) 58%, var(--color-border));
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
 .projects-rail-item.active:focus-visible {
   box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
 }

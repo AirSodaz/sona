@@ -10,12 +10,18 @@ import { useProjectStore } from '../../stores/projectStore';
 import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon } from '../Icons';
 import { Checkbox } from '../Checkbox';
 import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
+import {
+    createKeyboardContextMenuRequest,
+    createPointerContextMenuRequest,
+    isContextMenuKeyboardEvent,
+    type ContextMenuOpenRequest,
+} from '../context-menu/trigger';
 
 interface HistoryItemProps {
     item: HistoryItemType;
     onLoad: (item: HistoryItemType) => void;
-    onDelete: (e: React.MouseEvent, id: string) => void;
-    onRename?: (e: React.MouseEvent, id: string) => void;
+    onDelete: (id: string) => void;
+    onRename?: (id: string) => void;
     searchQuery?: string;
     searchTitleMatch?: WorkspaceSearchRange | null;
     searchSnippet?: WorkspaceSearchSnippet | null;
@@ -28,6 +34,8 @@ interface HistoryItemProps {
     isRenameDisabled?: boolean;
     isDeleteDisabled?: boolean;
     showProjectBadge?: boolean;
+    isContextMenuOpen?: boolean;
+    onOpenContextMenu?: (id: string, request: ContextMenuOpenRequest) => void;
 }
 
 /**
@@ -133,8 +141,11 @@ function HistoryItemComponent({
     isRenameDisabled = false,
     isDeleteDisabled = false,
     showProjectBadge = true,
+    isContextMenuOpen = false,
+    onOpenContextMenu,
 }: HistoryItemProps): React.JSX.Element {
     const { t, i18n } = useTranslation();
+    const contentButtonRef = React.useRef<HTMLButtonElement>(null);
     const projectName = useProjectStore((state) => {
         if (!item.projectId) {
             return t('projects.inbox', { defaultValue: 'Inbox' });
@@ -165,12 +176,45 @@ function HistoryItemComponent({
         }
     };
 
+    const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!onOpenContextMenu) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (isSelectionMode) {
+            return;
+        }
+
+        const request = createPointerContextMenuRequest(event);
+        onOpenContextMenu(item.id, {
+            ...request,
+            anchor: contentButtonRef.current ?? request.anchor,
+        });
+    };
+
+    const handleContextMenuKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (!onOpenContextMenu || !isContextMenuKeyboardEvent(event)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (isSelectionMode) {
+            return;
+        }
+
+        onOpenContextMenu(item.id, createKeyboardContextMenuRequest(event.currentTarget));
+    };
+
     return (
         <div
             id={`workspace-search-result-${item.id}`}
             data-history-item-id={item.id}
-            className={`history-item history-item--${layout} ${showProjectBadge ? '' : 'history-item--without-project-badge'} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''}`}
+            className={`history-item history-item--${layout} ${showProjectBadge ? '' : 'history-item--without-project-badge'} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
             onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
+            onContextMenu={handleContextMenu}
             role={layout === 'table' ? 'row' : 'listitem'}
         >
             {isSelectionMode && (
@@ -184,12 +228,14 @@ function HistoryItemComponent({
             )}
 
             <button
+                ref={contentButtonRef}
                 type="button"
                 className="history-item-content"
                 onClick={handleClick}
+                onKeyDown={handleContextMenuKeyDown}
                 aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
                 role={layout === 'table' ? 'cell' : undefined}
-                disabled={!isSelectionMode && isLoadDisabled}
+                aria-disabled={!isSelectionMode && isLoadDisabled}
             >
                 <div className="history-item-header">
                     <div className="history-item-title-row">
@@ -251,7 +297,10 @@ function HistoryItemComponent({
                         <button
                             type="button"
                             className="btn btn-icon history-item-rename"
-                            onClick={(e) => onRename(e, item.id)}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onRename(item.id);
+                            }}
                             aria-label={t('common.rename_item', { item: item.title, defaultValue: `Rename ${item.title}` })}
                             data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
                             data-tooltip-pos="left"
@@ -263,7 +312,10 @@ function HistoryItemComponent({
                     <button
                         type="button"
                         className="btn btn-icon delete-btn history-item-delete"
-                        onClick={(e) => onDelete(e, item.id)}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onDelete(item.id);
+                        }}
                         aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
                         data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
                         data-tooltip-pos="left"

@@ -18,6 +18,8 @@
         "close": "닫기",
         "confirm": "확인",
         "ok": "확인",
+        "open": "열기",
+        "actions_for": "{{item}} 작업",
         "rename": "이름 변경",
         "rename_item": "{{item}} 이름 변경",
         "rename_prompt": "새 제목 입력",
