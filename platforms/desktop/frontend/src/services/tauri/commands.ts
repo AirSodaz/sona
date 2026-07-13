@@ -161,6 +161,7 @@ export const TauriCommand = {
   apiServer: {
     start: 'start_api_server',
     stop: 'stop_api_server',
+    dashboardSnapshot: 'get_api_server_dashboard_snapshot',
   },
 } as const;
 

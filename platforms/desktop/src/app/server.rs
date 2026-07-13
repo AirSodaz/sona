@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use sona_api_server::{
-    ApiServerPlatform, ApiServerServiceParts, ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest,
-    RunningApiServer, build_streaming_router, start_api_server_runtime,
+    ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerServiceParts,
+    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, RunningApiServer, build_streaming_router,
+    start_api_server_runtime,
 };
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
 use std::any::Any;
@@ -46,6 +47,18 @@ impl ApiServerController {
 
     pub(crate) async fn set_running_server(&self, running_server: RunningApiServer) {
         *self.running_server.lock().await = Some(running_server);
+    }
+
+    pub(crate) async fn dashboard_snapshot(&self) -> Result<ApiServerDashboardSnapshot, String> {
+        let dashboard = self
+            .running_server
+            .lock()
+            .await
+            .as_ref()
+            .map(RunningApiServer::dashboard_handle)
+            .ok_or_else(|| "API server is not running".to_string())?;
+
+        dashboard.snapshot().await
     }
 }
 
@@ -288,6 +301,18 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
 mod tests {
     use super::*;
     use std::collections::HashMap as StdHashMap;
+
+    #[tokio::test]
+    async fn api_server_dashboard_snapshot_requires_a_running_server() {
+        let controller = ApiServerController::default();
+
+        let error = match controller.dashboard_snapshot().await {
+            Ok(_) => panic!("controller without a server should reject dashboard reads"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error, "API server is not running");
+    }
 
     #[tokio::test]
     async fn refresh_online_asr_config_updates_controller_before_server_start() {

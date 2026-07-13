@@ -10,24 +10,11 @@ import { invokeTauri } from '../../services/tauri/invoke';
 import { TauriCommand } from '../../services/tauri/commands';
 import { logger } from '../../utils/logger';
 import { extractErrorMessage } from '../../utils/errorUtils';
-
-interface ServerHealth {
-  status: string;
-  uptime: number;
-  activeJobs: number;
-  pendingJobs: number;
-  cacheSpaceBytes: number;
-}
-
-interface ServerInfo {
-  platform: string;
-  gpuAvailable: boolean;
-  models: string[];
-  vadInstalled: boolean;
-  punctuationInstalled: boolean;
-}
-
-type JobStatus = 'Pending' | 'Processing' | { Completed: unknown } | { Failed: string };
+import type {
+    ApiServerHealth,
+    ApiServerInfo,
+    ApiServerJobStatus,
+} from '../../types/apiServer';
 
 export function SettingsApiServerTab(): React.JSX.Element {
     const { t } = useTranslation();
@@ -35,9 +22,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
     const setConfig = useSetConfig();
 
     const [copied, setCopied] = useState(false);
-    const [health, setHealth] = useState<ServerHealth | null>(null);
-    const [info, setInfo] = useState<ServerInfo | null>(null);
-    const [jobs, setJobs] = useState<Record<string, JobStatus>>({});
+    const [health, setHealth] = useState<ApiServerHealth | null>(null);
+    const [info, setInfo] = useState<ApiServerInfo | null>(null);
+    const [jobs, setJobs] = useState<Record<string, ApiServerJobStatus>>({});
     const [lastError, setLastError] = useState<string | null>(null);
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,44 +39,11 @@ export function SettingsApiServerTab(): React.JSX.Element {
     const fetchData = useCallback(async () => {
         if (!config.httpServerEnabled) return;
 
-        const host = config.httpServerHost || '127.0.0.1';
-        const port = config.httpServerPort || 14200;
-        const apiKey = config.httpServerApiKey || '';
-        const baseUrl = `http://${host}:${port}`;
-
-        const headers: Record<string, string> = {};
-        if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-
         try {
-            // Fetch Health (Public)
-            const healthRes = await fetch(`${baseUrl}/health`);
-            if (healthRes.ok) {
-                const healthData = await healthRes.json();
-                setHealth(healthData);
-            } else {
-                setHealth(null);
-            }
-
-            // Fetch Info (Public)
-            const infoRes = await fetch(`${baseUrl}/info`);
-            if (infoRes.ok) {
-                const infoData = await infoRes.json();
-                setInfo(infoData);
-            } else {
-                setInfo(null);
-            }
-
-            // Fetch Jobs (Private)
-            const jobsRes = await fetch(`${baseUrl}/v1/transcriptions/jobs`, { headers });
-            if (jobsRes.ok) {
-                const jobsData = await jobsRes.json();
-                setJobs(jobsData);
-            } else {
-                setJobs({});
-            }
-
+            const snapshot = await invokeTauri(TauriCommand.apiServer.dashboardSnapshot);
+            setHealth(snapshot.health);
+            setInfo(snapshot.info);
+            setJobs(snapshot.jobs);
             setLastError(null);
         } catch (err) {
             setHealth(null);
@@ -97,7 +51,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
             setJobs({});
             setLastError(extractErrorMessage(err));
         }
-    }, [config.httpServerEnabled, config.httpServerHost, config.httpServerPort, config.httpServerApiKey]);
+    }, [config.httpServerEnabled]);
 
     useEffect(() => {
         if (config.httpServerEnabled) {
@@ -134,7 +88,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
-    const getStatusLabel = (status: JobStatus) => {
+    const getStatusLabel = (status: ApiServerJobStatus) => {
         if (status === 'Pending') return <span className="badge badge-pending">Pending</span>;
         if (status === 'Processing') return <span className="badge badge-processing">Processing</span>;
         if (typeof status === 'object') {

@@ -135,6 +135,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::system::confirm_speaker_group_review,
         crate::commands::system::start_api_server,
         crate::commands::system::stop_api_server,
+        crate::commands::system::get_api_server_dashboard_snapshot,
         crate::commands::system::check_media_formats
     ]
 }

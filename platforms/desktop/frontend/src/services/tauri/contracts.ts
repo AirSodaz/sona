@@ -53,6 +53,7 @@ import type {
   TaskLedgerRecord,
   TaskLedgerSnapshot,
 } from "../../types/taskLedger";
+import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -901,6 +902,10 @@ export type TauriCommandContractMap = {
   [TauriCommand.apiServer.stop]: {
     args: undefined;
     result: void;
+  };
+  [TauriCommand.apiServer.dashboardSnapshot]: {
+    args: undefined;
+    result: ApiServerDashboardSnapshot;
   };
 };
 

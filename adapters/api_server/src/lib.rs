@@ -111,7 +111,7 @@ pub struct ApiServerRuntimeConfig {
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, String>>>,
 }
 
 pub struct ApiServerRuntimeParts {
@@ -121,7 +121,7 @@ pub struct ApiServerRuntimeParts {
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, String>>>,
 }
 
 pub struct PreparedApiServerRuntime {
@@ -141,6 +141,20 @@ pub struct RunningApiServer {
     pub normalized_ip_whitelist: String,
     pub shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     pub join_handle: tokio::task::JoinHandle<Result<(), String>>,
+    dashboard: ApiServerDashboardHandle,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiServerDashboardSnapshot {
+    pub health: HealthResponse,
+    pub info: InfoResponse,
+    pub jobs: HashMap<String, JobStatus>,
+}
+
+#[derive(Clone)]
+pub struct ApiServerDashboardHandle {
+    state: ServerState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,6 +184,14 @@ impl std::fmt::Debug for RunningApiServer {
 }
 
 impl RunningApiServer {
+    pub async fn dashboard_snapshot(&self) -> Result<ApiServerDashboardSnapshot, String> {
+        self.dashboard.snapshot().await
+    }
+
+    pub fn dashboard_handle(&self) -> ApiServerDashboardHandle {
+        self.dashboard.clone()
+    }
+
     pub fn signal_shutdown(&mut self) {
         if let Some(sender) = self.shutdown_tx.take() {
             let _ = sender.send(());
@@ -185,6 +207,21 @@ impl RunningApiServer {
     pub async fn stop(mut self) -> Result<(), String> {
         self.signal_shutdown();
         self.wait().await
+    }
+}
+
+impl ApiServerDashboardHandle {
+    pub async fn snapshot(&self) -> Result<ApiServerDashboardSnapshot, String> {
+        let health = build_health_response(&self.state).await;
+        let configs = self.state.online_asr_config.read().await.clone();
+        let info = self
+            .state
+            .platform
+            .build_info_response(&self.state.models_dir, &configs)
+            .await?;
+        let jobs = self.state.job_manager.list_jobs().await;
+
+        Ok(ApiServerDashboardSnapshot { health, info, jobs })
     }
 }
 
@@ -559,28 +596,36 @@ pub async fn start_api_server_runtime(
     })
     .map_err(ApiServerStartError::Configuration)?;
     let normalized_ip_whitelist = prepared.normalized_ip_whitelist.clone();
-    let running = RunningApiServer {
-        normalized_ip_whitelist,
-        shutdown_tx: Some(shutdown_tx),
-        join_handle: tokio::spawn(async move {
-            let result = run_server(prepared.config).await;
-            if let Err(error) = &result {
-                log::error!("HTTP API Server failed: {}", error);
-            }
-            result
-        }),
-    };
+    let join_handle = tokio::spawn(async move {
+        let result = run_server(prepared.config).await;
+        if let Err(error) = &result {
+            log::error!("HTTP API Server failed: {}", error);
+        }
+        result
+    });
 
     match bind_rx.await {
-        Ok(Ok(())) => Ok(running),
+        Ok(Ok(dashboard)) => Ok(RunningApiServer {
+            normalized_ip_whitelist,
+            shutdown_tx: Some(shutdown_tx),
+            join_handle,
+            dashboard,
+        }),
         Ok(Err(error)) => {
-            let _ = running.stop().await;
+            let _ = shutdown_tx.send(());
+            let _ = join_handle.await;
             Err(ApiServerStartError::Runtime(error))
         }
         Err(_) => {
-            let error = running.stop().await.err().unwrap_or_else(|| {
-                "API server failed to start: task terminated prematurely".to_string()
-            });
+            let _ = shutdown_tx.send(());
+            let error = join_handle
+                .await
+                .map_err(|join_error| format!("API server task failed: {join_error}"))
+                .and_then(|result| result)
+                .err()
+                .unwrap_or_else(|| {
+                    "API server failed to start: task terminated prematurely".to_string()
+                });
             Err(ApiServerStartError::Runtime(error))
         }
     }
@@ -599,7 +644,7 @@ async fn ip_whitelist_middleware(
     }
 }
 
-pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
+async fn build_health_response(state: &ServerState) -> HealthResponse {
     let uptime = state.start_time.elapsed().as_secs();
 
     let cache_space_bytes = tokio::task::spawn_blocking({
@@ -628,13 +673,17 @@ pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthRespo
         }
     }
 
-    Json(HealthResponse {
+    HealthResponse {
         status: "ok".to_string(),
         uptime,
         active_jobs,
         pending_jobs,
         cache_space_bytes,
-    })
+    }
+}
+
+pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
+    Json(build_health_response(&state).await)
 }
 
 pub async fn handle_info(
@@ -1122,7 +1171,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         .merge(streaming_router)
         .merge(api_router)
         .layer(cors)
-        .with_state(state);
+        .with_state(state.clone());
     let addr = format!("{}:{}", host, port);
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,
@@ -1135,7 +1184,9 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         }
     };
     if let Some(tx) = bind_tx {
-        let _ = tx.send(Ok(()));
+        let _ = tx.send(Ok(ApiServerDashboardHandle {
+            state: state.clone(),
+        }));
     }
 
     log::info!("Starting HTTP API server on {}", addr);
@@ -1608,9 +1659,11 @@ mod tests {
         };
 
         let handle = tokio::spawn(async move { run_server(config).await });
-        let bind_res = bind_rx.await.unwrap();
-        assert!(bind_res.is_err());
-        assert!(bind_res.unwrap_err().contains("Address already in use"));
+        let bind_error = match bind_rx.await.unwrap() {
+            Ok(_) => panic!("occupied port should fail to bind"),
+            Err(error) => error,
+        };
+        assert!(bind_error.contains("Address already in use"));
 
         let _ = shutdown_tx.send(());
         let _ = handle.await;
@@ -1683,7 +1736,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn start_api_server_runtime_returns_stoppable_server() {
+    async fn start_api_server_runtime_returns_stoppable_server_with_dashboard_snapshot() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
@@ -1713,6 +1766,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(server.normalized_ip_whitelist, "127.0.0.0/8,::1/128");
+        let snapshot = server.dashboard_snapshot().await.unwrap();
+        assert_eq!(snapshot.health.status, "ok");
+        assert_eq!(snapshot.health.active_jobs, 0);
+        assert_eq!(snapshot.health.pending_jobs, 0);
+        assert!(snapshot.jobs.is_empty());
         server.stop().await.unwrap();
     }
 }

@@ -353,6 +353,13 @@ pub async fn stop_api_server(
     crate::app::server::stop_api_server(controller).await
 }
 
+#[tauri::command]
+pub async fn get_api_server_dashboard_snapshot(
+    controller: State<'_, crate::app::server::ApiServerController>,
+) -> Result<sona_api_server::ApiServerDashboardSnapshot, String> {
+    controller.dashboard_snapshot().await
+}
+
 // Wrapped media formats commands
 
 #[tauri::command]

@@ -161,32 +161,15 @@ describe('SettingsApiServerTab', () => {
     });
   });
 
-  it('renders Server Status and Job Queue when enabled', async () => {
+  it('loads Server Status and Job Queue through Tauri IPC without browser fetch', async () => {
     currentConfig.httpServerEnabled = true;
-
-    // Mock fetch
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-        if (url.endsWith('/health')) {
-            return Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ status: 'ok', version: '1.0.0', uptime: 3600 })
-            });
-        }
-        if (url.endsWith('/info')) {
-            return Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ platform: 'win32', gpuAvailable: true, models: [], vadInstalled: true, punctuationInstalled: true })
-            });
-        }
-        if (url.endsWith('/jobs')) {
-            return Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ 'test-job': 'Processing' })
-            });
-        }
-        return Promise.reject(new Error('Unknown URL'));
-    });
-    global.fetch = mockFetch as any;
+    const browserFetch = vi.fn().mockRejectedValue(new Error('browser fetch must not be used'));
+    global.fetch = browserFetch as typeof fetch;
+    vi.mocked(invokeTauri).mockResolvedValueOnce({
+      health: { status: 'ok', uptime: 3600, activeJobs: 1, pendingJobs: 0, cacheSpaceBytes: 0 },
+      info: { platform: 'win32', gpuAvailable: true, models: [], vadInstalled: true, punctuationInstalled: true },
+      jobs: { 'test-job': 'Processing' },
+    } as never);
 
     await act(async () => {
       render(<SettingsApiServerTab />);
@@ -200,11 +183,15 @@ describe('SettingsApiServerTab', () => {
         expect(screen.getByText('1h 0m 0s')).toBeDefined();
         expect(screen.getByText('Processing')).toBeDefined();
     });
+    expect(invokeTauri).toHaveBeenCalledWith('get_api_server_dashboard_snapshot');
+    expect(browserFetch).not.toHaveBeenCalled();
   });
 
   it('starts the API server with GPU acceleration, the 50MB upload default, and normalized whitelist sync', async () => {
     vi.useFakeTimers();
-    vi.mocked(invokeTauri).mockResolvedValueOnce('127.0.0.0/8,::1/128');
+    vi.mocked(invokeTauri)
+      .mockRejectedValueOnce(new Error('API server is not running'))
+      .mockResolvedValueOnce('127.0.0.0/8,::1/128');
     currentConfig = buildTestConfig({
       httpServerEnabled: true,
       httpServerHost: '127.0.0.1',
