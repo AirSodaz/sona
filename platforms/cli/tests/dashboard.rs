@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sona_core::history::HistorySaveRecordingRequest;
+use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
 use sona_core::project::{

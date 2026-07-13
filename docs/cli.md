@@ -9,7 +9,7 @@ This document tracks the commands that ship in the standalone CLI today:
 - `models list`
 - `models download`
 - `models delete`
-- `history list|query|transcript|snapshots|snapshot`
+- `history list|query|transcript|snapshots|snapshot|<mutation>`
 - `export transcript`
 - `serve`
 - `transcribe`
@@ -103,7 +103,7 @@ Companion models are not deleted automatically.
 
 ### `history`
 
-Query an existing Sona application data directory through the shared history query service.
+Query or mutate an existing Sona application data directory through the shared history services.
 
 ```bash
 sona-cli history list --app-data-dir ./sona-data --limit 50 --offset 0
@@ -111,12 +111,25 @@ sona-cli history query --app-data-dir ./sona-data --input ./workspace-query.json
 sona-cli history transcript --app-data-dir ./sona-data --history-id <ID> --json
 sona-cli history snapshots --app-data-dir ./sona-data --history-id <ID>
 sona-cli history snapshot --app-data-dir ./sona-data --history-id <ID> --snapshot-id <ID> --json
+sona-cli history create-live-draft --app-data-dir ./sona-data --id <ID> --audio-extension wav --json
+sona-cli history complete-live-draft --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --duration 12.5 --json
+sona-cli history save-recording --app-data-dir ./sona-data --input ./recording.json --audio ./recording.wav --json
+sona-cli history import-file --app-data-dir ./sona-data --input ./history-import.json --json
+sona-cli history update-transcript --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --json
+sona-cli history create-snapshot --app-data-dir ./sona-data --history-id <ID> --reason polish --segments ./segments.json --json
+sona-cli history update-meta --app-data-dir ./sona-data --history-id <ID> --updates ./history-meta.json
+sona-cli history assign-project --app-data-dir ./sona-data --history-id <ID> --project-id <PROJECT_ID>
+sona-cli history reassign-project --app-data-dir ./sona-data --current-project-id <PROJECT_ID>
+sona-cli history delete --app-data-dir ./sona-data --history-id <ID>
 ```
 
 - `query` accepts the same camelCase `HistoryWorkspaceQueryRequest` JSON contract as Tauri and UniFFI.
 - `list`, `query`, and `snapshots` use tables by default; `--json` preserves the complete machine-readable response.
 - `transcript` and `snapshot` display segment tables by default.
-- The application data directory must already exist; history query commands do not create missing directories.
+- `recording.json` contains `segments`, `duration`, optional `projectId`, and optional `audioExtension`; audio bytes are read only from `--audio`.
+- `history-import.json` uses the camelCase `HistorySaveImportedFileRequest` contract. `--segments` files contain a JSON array and `--updates` contains a JSON object.
+- Omit the target project option on `assign-project` or `reassign-project` to move records to the inbox.
+- The application data directory must already exist. Invalid mutation input is rejected before the lazy SQLite adapter opens the database.
 
 ### `export transcript`
 

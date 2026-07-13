@@ -46,8 +46,14 @@ async fn create_transcript_job_snapshot(
         let history_id = history_id.to_string();
         let segments = segments.to_vec();
         llm_helpers::run_llm_db_task_with_app(&app, move |store| {
+            let repository = Arc::new(store);
+            let mutation_service =
+                sona_core::history::mutation_service::HistoryMutationService::new(
+                    repository.clone(),
+                );
             llm_helpers::create_llm_transcript_snapshot_record(
-                &store,
+                repository.as_ref(),
+                &mutation_service,
                 &history_id,
                 reason,
                 segments,
@@ -119,7 +125,14 @@ where
     let fs_for_update = final_segments.clone();
     let history_item = if let Some(history_id) = history_id.clone() {
         llm_helpers::run_llm_db_task_with_app(&app, move |store| {
-            llm_helpers::update_llm_transcript_segments_record(&store, &history_id, fs_for_update)
+            let repository = Arc::new(store);
+            let mutation_service =
+                sona_core::history::mutation_service::HistoryMutationService::new(repository);
+            llm_helpers::update_llm_transcript_segments_record(
+                &mutation_service,
+                &history_id,
+                fs_for_update,
+            )
         })
         .await?
     } else {

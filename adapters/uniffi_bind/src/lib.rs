@@ -7,6 +7,7 @@ mod dashboard_bridge;
 mod diagnostics_bridge;
 mod export_bridge;
 mod facade;
+mod history_mutation_bridge;
 mod history_query_bridge;
 mod json_bridge;
 mod llm_bridge;
@@ -67,6 +68,8 @@ pub enum SonaCoreBindingError {
     Export { reason: String },
     #[error("{reason}")]
     HistoryQuery { reason: String },
+    #[error("{reason}")]
+    HistoryMutation { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -301,6 +304,94 @@ pub async fn load_history_transcript_snapshot_json(
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_history_transcript_snapshot_json(app_data_dir, history_id, snapshot_id)
         .await
+}
+
+#[uniffi::export]
+pub async fn create_history_live_draft_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::create_history_live_draft_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn complete_history_live_draft_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::complete_history_live_draft_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn save_history_recording_json(
+    app_data_dir: String,
+    request_json: String,
+    audio_bytes: Option<Vec<u8>>,
+    native_audio_path: Option<String>,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::save_history_recording_json(
+        app_data_dir,
+        request_json,
+        audio_bytes,
+        native_audio_path,
+    )
+    .await
+}
+
+#[uniffi::export]
+pub async fn save_history_imported_file_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::save_history_imported_file_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn delete_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::delete_history_items_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn update_history_transcript_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_history_transcript_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn create_history_transcript_snapshot_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::create_history_transcript_snapshot_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn update_history_item_meta_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_history_item_meta_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn update_history_project_assignments_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_history_project_assignments_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export]
+pub async fn reassign_history_project_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::reassign_history_project_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export]

@@ -10,17 +10,23 @@ use super::{
 };
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::paths::PathProvider;
+use sona_core::history::mutation_repository::{
+    HistoryCreateTranscriptSnapshotRequest, HistoryMutationError, HistoryUpdateTranscriptRequest,
+};
+use sona_core::history::mutation_service::HistoryMutationService;
+use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_sqlite::Database;
 
-pub(crate) async fn run_llm_db_task<T, F>(
+pub(crate) async fn run_llm_db_task<T, F, E>(
     app_local_data_dir: PathBuf,
     db: Arc<Database>,
     task: F,
 ) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
+    E: ToString,
 {
     tauri::async_runtime::spawn_blocking(move || {
         task(SqliteHistoryStore::new(app_local_data_dir, db)).map_err(|e| e.to_string())
@@ -29,14 +35,15 @@ where
     .map_err(|error| error.to_string())?
 }
 
-pub(crate) async fn run_llm_db_task_with_app<R, T, F>(
+pub(crate) async fn run_llm_db_task_with_app<R, T, F, E>(
     app: &AppHandle<R>,
     task: F,
 ) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
+    E: ToString,
 {
     let app_local_data_dir = crate::platform::paths::TauriPathProvider::from_app(app)
         .resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
@@ -45,16 +52,19 @@ where
 }
 
 pub(crate) fn create_llm_transcript_snapshot_record(
-    repository: &impl HistoryStore,
+    repository: &impl HistoryQueryRepository,
+    mutation_service: &HistoryMutationService,
     history_id: &str,
     reason: TranscriptSnapshotReason,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<TranscriptSnapshotMetadata>, HistoryStoreError> {
+) -> Result<Option<TranscriptSnapshotMetadata>, HistoryMutationError> {
     if history_id.trim().is_empty() || history_id == "current" || segments.is_empty() {
         return Ok(None);
     }
 
-    let items = repository.list_items()?;
+    let items = repository
+        .list_items()
+        .map_err(history_query_error_to_mutation)?;
     let Some(item) = items.iter().find(|entry| entry.id == history_id) else {
         return Ok(None);
     };
@@ -63,27 +73,41 @@ pub(crate) fn create_llm_transcript_snapshot_record(
         return Ok(None);
     }
 
-    let segments_value =
-        to_value(segments).map_err(|e| HistoryStoreError::Internal(e.to_string()))?;
-    repository
-        .create_transcript_snapshot(history_id, reason, segments_value)
+    let segments_value = to_value(segments)?;
+    mutation_service
+        .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+            history_id: history_id.to_string(),
+            reason,
+            segments: segments_value,
+        })
         .map(Some)
 }
 
 pub(crate) fn update_llm_transcript_segments_record(
-    repository: &impl HistoryStore,
+    mutation_service: &HistoryMutationService,
     history_id: &str,
     segments: Vec<TranscriptSegment>,
-) -> Result<Option<HistoryItemRecord>, HistoryStoreError> {
+) -> Result<Option<HistoryItemRecord>, HistoryMutationError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(None);
     }
 
-    let segments_value =
-        to_value(segments).map_err(|e| HistoryStoreError::Internal(e.to_string()))?;
-    repository
-        .update_transcript(history_id, segments_value)
+    let segments_value = to_value(segments)?;
+    mutation_service
+        .update_transcript(HistoryUpdateTranscriptRequest {
+            history_id: history_id.to_string(),
+            segments: segments_value,
+        })
         .map(Some)
+}
+
+fn history_query_error_to_mutation(error: HistoryStoreError) -> HistoryMutationError {
+    match error {
+        HistoryStoreError::InvalidRequest(reason) => HistoryMutationError::InvalidRequest(reason),
+        HistoryStoreError::Database(reason) => HistoryMutationError::Database(reason),
+        HistoryStoreError::Internal(reason) => HistoryMutationError::Internal(reason),
+        HistoryStoreError::Serialization(error) => HistoryMutationError::Serialization(error),
+    }
 }
 
 pub(crate) fn save_llm_summary_payload(
@@ -105,6 +129,7 @@ mod tests {
         HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest,
     };
     use serde_json::json;
+    use sona_core::history::mutation_repository::HistoryMutationRepository;
     use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_sqlite::Database;
     use tempfile::tempdir;
@@ -126,10 +151,13 @@ mod tests {
         }
     }
 
-    fn make_store() -> (tempfile::TempDir, SqliteHistoryStore) {
+    fn make_store() -> (tempfile::TempDir, Arc<SqliteHistoryStore>) {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::new(db));
+        let store = Arc::new(SqliteHistoryStore::new(
+            root.path().to_path_buf(),
+            Arc::new(db),
+        ));
         store.ensure_ready().unwrap();
         (root, store)
     }
@@ -137,6 +165,7 @@ mod tests {
     #[test]
     fn llm_history_helpers_create_snapshot_then_update_transcript() {
         let (_root, repository) = make_store();
+        let mutation_service = HistoryMutationService::new(repository.clone());
 
         let item = repository
             .save_recording(HistorySaveRecordingRequest {
@@ -150,7 +179,8 @@ mod tests {
             .unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
-            &repository,
+            repository.as_ref(),
+            &mutation_service,
             &item.id,
             TranscriptSnapshotReason::Translate,
             vec![segment("seg-1", "before")],
@@ -161,7 +191,7 @@ mod tests {
         let mut translated = segment("seg-1", "before");
         translated.translation = Some("after".to_string());
         let updated =
-            update_llm_transcript_segments_record(&repository, &item.id, vec![translated])
+            update_llm_transcript_segments_record(&mutation_service, &item.id, vec![translated])
                 .unwrap()
                 .unwrap();
 
@@ -182,23 +212,28 @@ mod tests {
     fn llm_history_helpers_skip_current_jobs_without_writing() {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let repository = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::new(db));
+        let repository = Arc::new(SqliteHistoryStore::new(
+            root.path().to_path_buf(),
+            Arc::new(db),
+        ));
+        let mutation_service = HistoryMutationService::new(repository.clone());
 
         let snapshot = create_llm_transcript_snapshot_record(
-            &repository,
+            repository.as_ref(),
+            &mutation_service,
             "current",
             TranscriptSnapshotReason::Polish,
             vec![segment("seg-1", "before")],
         )
         .unwrap();
         let updated = update_llm_transcript_segments_record(
-            &repository,
+            &mutation_service,
             "current",
             vec![segment("seg-1", "after")],
         )
         .unwrap();
         save_llm_summary_payload(
-            &repository,
+            repository.as_ref(),
             "current",
             json!({ "activeTemplateId": "general" }),
         )
@@ -210,8 +245,35 @@ mod tests {
     }
 
     #[test]
+    fn llm_query_errors_keep_their_mutation_error_category() {
+        for (query_error, expected) in [
+            (
+                HistoryStoreError::InvalidRequest("invalid".to_string()),
+                "invalid",
+            ),
+            (
+                HistoryStoreError::Database("database".to_string()),
+                "database",
+            ),
+            (
+                HistoryStoreError::Internal("internal".to_string()),
+                "internal",
+            ),
+        ] {
+            let mutation_error = history_query_error_to_mutation(query_error);
+            match (expected, mutation_error) {
+                ("invalid", HistoryMutationError::InvalidRequest(_))
+                | ("database", HistoryMutationError::Database(_))
+                | ("internal", HistoryMutationError::Internal(_)) => {}
+                (_, error) => panic!("unexpected mapped error: {error:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn llm_history_snapshot_helper_skips_drafts() {
         let (_root, repository) = make_store();
+        let mutation_service = HistoryMutationService::new(repository.clone());
 
         let draft = repository
             .create_live_draft(HistoryCreateLiveDraftRequest {
@@ -223,7 +285,8 @@ mod tests {
             .unwrap();
 
         let snapshot = create_llm_transcript_snapshot_record(
-            &repository,
+            repository.as_ref(),
+            &mutation_service,
             &draft.item.id,
             TranscriptSnapshotReason::Polish,
             vec![segment("seg-1", "before")],
@@ -255,7 +318,7 @@ mod tests {
             .unwrap();
 
         save_llm_summary_payload(
-            &repository,
+            repository.as_ref(),
             &item.id,
             json!({
                 "activeTemplateId": "meeting",

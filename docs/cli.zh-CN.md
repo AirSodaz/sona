@@ -9,7 +9,7 @@
 - `models list`
 - `models download`
 - `models delete`
-- `history list|query|transcript|snapshots|snapshot`
+- `history list|query|transcript|snapshots|snapshot|<mutation>`
 - `export transcript`
 - `serve`
 - `transcribe`
@@ -103,7 +103,7 @@ sona-cli models delete silero-vad --models-dir ./models --yes
 
 ### `history`
 
-通过共享的 history query service 查询已有的 Sona 应用数据目录。
+通过共享的 history service 查询或修改已有的 Sona 应用数据目录。
 
 ```bash
 sona-cli history list --app-data-dir ./sona-data --limit 50 --offset 0
@@ -111,12 +111,25 @@ sona-cli history query --app-data-dir ./sona-data --input ./workspace-query.json
 sona-cli history transcript --app-data-dir ./sona-data --history-id <ID> --json
 sona-cli history snapshots --app-data-dir ./sona-data --history-id <ID>
 sona-cli history snapshot --app-data-dir ./sona-data --history-id <ID> --snapshot-id <ID> --json
+sona-cli history create-live-draft --app-data-dir ./sona-data --id <ID> --audio-extension wav --json
+sona-cli history complete-live-draft --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --duration 12.5 --json
+sona-cli history save-recording --app-data-dir ./sona-data --input ./recording.json --audio ./recording.wav --json
+sona-cli history import-file --app-data-dir ./sona-data --input ./history-import.json --json
+sona-cli history update-transcript --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --json
+sona-cli history create-snapshot --app-data-dir ./sona-data --history-id <ID> --reason polish --segments ./segments.json --json
+sona-cli history update-meta --app-data-dir ./sona-data --history-id <ID> --updates ./history-meta.json
+sona-cli history assign-project --app-data-dir ./sona-data --history-id <ID> --project-id <PROJECT_ID>
+sona-cli history reassign-project --app-data-dir ./sona-data --current-project-id <PROJECT_ID>
+sona-cli history delete --app-data-dir ./sona-data --history-id <ID>
 ```
 
 - `query` 使用与 Tauri、UniFFI 相同的 camelCase `HistoryWorkspaceQueryRequest` JSON 契约。
 - `list`、`query`、`snapshots` 默认输出表格；`--json` 保留完整的机器可读响应。
 - `transcript`、`snapshot` 默认输出 segment 表格。
-- 应用数据目录必须已经存在；history 查询命令不会创建缺失目录。
+- `recording.json` 包含 `segments`、`duration`，以及可选的 `projectId`、`audioExtension`；音频字节只从 `--audio` 读取。
+- `history-import.json` 使用 camelCase `HistorySaveImportedFileRequest` 契约。`--segments` 文件是 JSON 数组，`--updates` 文件是 JSON 对象。
+- `assign-project` 或 `reassign-project` 不提供目标项目参数时，会把记录移回收件箱。
+- 应用数据目录必须已经存在；非法 mutation 输入会在 lazy SQLite adapter 打开数据库前被拒绝。
 
 ### `export transcript`
 

@@ -7,9 +7,9 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
     app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_query_bridge,
-    llm_bridge, model_bridge, project_bridge, recovery_bridge, runtime_bridge,
-    storage_usage_bridge, task_ledger_bridge,
+    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_mutation_bridge,
+    history_query_bridge, llm_bridge, model_bridge, project_bridge, recovery_bridge,
+    runtime_bridge, storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -205,6 +205,86 @@ impl SonaCoreFacade {
             snapshot_id,
         )
         .await
+    }
+
+    pub async fn create_history_live_draft_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::create_history_live_draft_json(app_data_dir, request_json).await
+    }
+
+    pub async fn complete_history_live_draft_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::complete_history_live_draft_json(app_data_dir, request_json).await
+    }
+
+    pub async fn save_history_recording_json(
+        app_data_dir: String,
+        request_json: String,
+        audio_bytes: Option<Vec<u8>>,
+        native_audio_path: Option<String>,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::save_history_recording_json(
+            app_data_dir,
+            request_json,
+            audio_bytes,
+            native_audio_path,
+        )
+        .await
+    }
+
+    pub async fn save_history_imported_file_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::save_history_imported_file_json(app_data_dir, request_json).await
+    }
+
+    pub async fn delete_history_items_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::delete_history_items_json(app_data_dir, request_json).await
+    }
+
+    pub async fn update_history_transcript_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::update_history_transcript_json(app_data_dir, request_json).await
+    }
+
+    pub async fn create_history_transcript_snapshot_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::create_history_transcript_snapshot_json(app_data_dir, request_json)
+            .await
+    }
+
+    pub async fn update_history_item_meta_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::update_history_item_meta_json(app_data_dir, request_json).await
+    }
+
+    pub async fn update_history_project_assignments_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::update_history_project_assignments_json(app_data_dir, request_json)
+            .await
+    }
+
+    pub async fn reassign_history_project_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::reassign_history_project_json(app_data_dir, request_json).await
     }
 
     pub fn default_vad_model_id() -> String {

@@ -9,6 +9,7 @@ edition.workspace = true
 async-trait = "0.1"
 bzip2 = "0.4"
 chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
+fs3 = "0.5"
 log = "0.4.22"
 rusqlite = { version = "0.40.1", features = ["bundled", "backup", "functions"] }
 serde = { version = "1", features = ["derive"] }

@@ -191,7 +191,8 @@ pub struct LiveRecordingDraftResult {
     pub audio_absolute_path: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct HistoryCreateLiveDraftRequest {
     pub id: Option<String>,
     pub audio_extension: String,
@@ -199,7 +200,8 @@ pub struct HistoryCreateLiveDraftRequest {
     pub icon: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct HistorySaveRecordingRequest {
     pub segments: Value,
     pub duration: f64,
@@ -209,7 +211,8 @@ pub struct HistorySaveRecordingRequest {
     pub audio_extension: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct HistorySaveImportedFileRequest {
     pub id: Option<String>,
     pub source_path: String,
@@ -359,6 +362,8 @@ pub struct HistoryBackupSnapshot {
 }
 
 pub mod item_factory;
+pub mod mutation_repository;
+pub mod mutation_service;
 pub mod query_repository;
 pub mod query_service;
 pub mod transcript_diff;

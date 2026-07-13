@@ -3,6 +3,10 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use sona_core::history::mutation_repository::{
+    HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationRepository,
+    HistoryUpdateTranscriptRequest,
+};
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::HistoryStore;
 use sona_sqlite::Database;
@@ -449,10 +453,10 @@ fn test_migration_and_crud() {
 
     // Update transcript
     let updated = store
-        .update_transcript(
-            &recording.id,
-            json!([segment_value("seg-new", "Updated text", 0.0, 3.0)]),
-        )
+        .update_transcript(HistoryUpdateTranscriptRequest {
+            history_id: recording.id.clone(),
+            segments: json!([segment_value("seg-new", "Updated text", 0.0, 3.0)]),
+        })
         .unwrap();
     assert_eq!(updated.preview_text, "Updated text...");
 
@@ -465,11 +469,11 @@ fn test_migration_and_crud() {
 
     // Create snapshot
     let snapshot = store
-        .create_transcript_snapshot(
-            &recording.id,
-            TranscriptSnapshotReason::Polish,
-            json!([segment_value("seg-new", "Snapshot text", 0.0, 1.0)]),
-        )
+        .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+            history_id: recording.id.clone(),
+            reason: TranscriptSnapshotReason::Polish,
+            segments: json!([segment_value("seg-new", "Snapshot text", 0.0, 1.0)]),
+        })
         .unwrap();
     assert_eq!(snapshot.reason, TranscriptSnapshotReason::Polish);
 
@@ -478,7 +482,9 @@ fn test_migration_and_crud() {
 
     // Delete
     store
-        .delete_items(std::slice::from_ref(&recording.id))
+        .delete_items(HistoryDeleteItemsRequest {
+            ids: vec![recording.id.clone()],
+        })
         .unwrap();
     let items = store.list_items().unwrap();
     assert_eq!(items.len(), 2);
@@ -514,11 +520,11 @@ fn test_backup_roundtrip() {
         .unwrap();
 
     let _snapshot = store
-        .create_transcript_snapshot(
-            &item.id,
-            TranscriptSnapshotReason::Polish,
-            json!([segment_value("seg-1", "Before backup", 0.0, 1.0)]),
-        )
+        .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+            history_id: item.id.clone(),
+            reason: TranscriptSnapshotReason::Polish,
+            segments: json!([segment_value("seg-1", "Before backup", 0.0, 1.0)]),
+        })
         .unwrap();
 
     // --- Export ---

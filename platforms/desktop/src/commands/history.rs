@@ -12,6 +12,11 @@ use crate::platform::history_repository::{
     PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use sona_core::history::mutation_repository::{
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
+    HistoryDeleteItemsRequest, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+};
 use sona_core::history_store::HistoryStore;
 
 #[tauri::command]
@@ -74,10 +79,10 @@ pub async fn history_create_live_draft<R: Runtime>(
         project_id,
         icon,
     };
-    crate::platform::history_repository::run_history_file_task(
+    crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
-        move |repository| repository.create_live_draft(request),
+        move |service| service.create_live_draft(request),
     )
     .await
 }
@@ -89,8 +94,13 @@ pub async fn history_complete_live_draft<R: Runtime>(
     segments: Value,
     duration: f64,
 ) -> Result<HistoryItemRecord, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.complete_live_draft(&history_id, segments, duration)
+    let request = HistoryCompleteLiveDraftRequest {
+        history_id,
+        segments,
+        duration,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.complete_live_draft(request)
     })
     .await
 }
@@ -115,10 +125,10 @@ pub async fn history_save_recording<R: Runtime>(
         native_audio_path,
         audio_extension,
     };
-    crate::platform::history_repository::run_history_file_task(
+    crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
-        move |repository| repository.save_recording(request),
+        move |service| service.save_recording(request),
     )
     .await
 }
@@ -143,10 +153,10 @@ pub async fn history_save_imported_file<R: Runtime>(
         project_id,
         converted_source_path,
     };
-    crate::platform::history_repository::run_history_file_task(
+    crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
-        move |repository| repository.save_imported_file(request),
+        move |service| service.save_imported_file(request),
     )
     .await
 }
@@ -157,10 +167,11 @@ pub async fn history_delete_items<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     ids: Vec<String>,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_file_task(
+    let request = HistoryDeleteItemsRequest { ids };
+    crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
-        move |repository| repository.delete_items(&ids),
+        move |service| service.delete_items(request),
     )
     .await
 }
@@ -182,8 +193,12 @@ pub async fn history_update_transcript<R: Runtime>(
     history_id: String,
     segments: Value,
 ) -> Result<HistoryItemRecord, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.update_transcript(&history_id, segments)
+    let request = HistoryUpdateTranscriptRequest {
+        history_id,
+        segments,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.update_transcript(request)
     })
     .await
 }
@@ -195,8 +210,13 @@ pub async fn history_create_transcript_snapshot<R: Runtime>(
     reason: TranscriptSnapshotReason,
     segments: Value,
 ) -> Result<TranscriptSnapshotMetadata, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.create_transcript_snapshot(&history_id, reason, segments)
+    let request = HistoryCreateTranscriptSnapshotRequest {
+        history_id,
+        reason,
+        segments,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.create_transcript_snapshot(request)
     })
     .await
 }
@@ -249,8 +269,12 @@ pub async fn history_update_item_meta<R: Runtime>(
     history_id: String,
     updates: Value,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.update_item_meta(&history_id, updates)
+    let request = HistoryUpdateItemMetaRequest {
+        history_id,
+        updates,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.update_item_meta(request)
     })
     .await
 }
@@ -261,8 +285,9 @@ pub async fn history_update_project_assignments<R: Runtime>(
     ids: Vec<String>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.update_project_assignments(&ids, project_id)
+    let request = HistoryUpdateProjectAssignmentsRequest { ids, project_id };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.update_project_assignments(request)
     })
     .await
 }
@@ -273,8 +298,12 @@ pub async fn history_reassign_project<R: Runtime>(
     current_project_id: String,
     next_project_id: Option<String>,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.reassign_project(current_project_id, next_project_id)
+    let request = HistoryReassignProjectRequest {
+        current_project_id,
+        next_project_id,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.reassign_project(request)
     })
     .await
 }

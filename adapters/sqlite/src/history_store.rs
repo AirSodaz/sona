@@ -7,6 +7,12 @@ use crate::ports::Database as DatabasePort;
 use serde_json::{Map, Value};
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
+use sona_core::history::mutation_repository::{
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
+    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
+    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+};
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::workspace_query::{
@@ -28,6 +34,7 @@ use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -38,9 +45,12 @@ use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
 use rusqlite::types::ToSql;
 use uuid::Uuid;
 
+use fs3::FileExt;
+
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
 const MILLIS_PER_DAY: u64 = 86_400_000;
 const HISTORY_DIR_NAME: &str = "history";
+const HISTORY_FILE_LOCK_NAME: &str = ".sona-history.lock";
 const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
 
 fn current_time_millis() -> Result<u64, String> {
@@ -357,6 +367,25 @@ impl<D> SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
+    fn with_history_file_lock<T>(
+        &self,
+        operation: impl FnOnce() -> Result<T, HistoryMutationError>,
+    ) -> Result<T, HistoryMutationError> {
+        fs::create_dir_all(&self.app_local_data_dir)
+            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.app_local_data_dir.join(HISTORY_FILE_LOCK_NAME))
+            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+        lock_file
+            .lock_exclusive()
+            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+        operation()
+    }
+
     fn history_dir(&self) -> PathBuf {
         self.app_local_data_dir.join(HISTORY_DIR_NAME)
     }
@@ -724,6 +753,17 @@ fn validate_id(id: &str, label: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn history_store_mutation_error(error: HistoryMutationError) -> HistoryStoreError {
+    match error {
+        HistoryMutationError::InvalidRequest(reason) => HistoryStoreError::InvalidRequest(reason),
+        HistoryMutationError::Database(reason) => HistoryStoreError::Database(reason),
+        HistoryMutationError::Serialization(error) => HistoryStoreError::Serialization(error),
+        HistoryMutationError::NotFound(reason) | HistoryMutationError::Internal(reason) => {
+            HistoryStoreError::Internal(reason)
+        }
+    }
+}
+
 fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
     let id: String = row.get("id")?;
     let timestamp_val: i64 = row.get("timestamp")?;
@@ -816,10 +856,18 @@ impl<D> SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
-    fn ensure_ready(&self) -> Result<(), HistoryStoreError> {
+    fn ensure_ready_inner(&self) -> Result<(), DatabaseError> {
         fs::create_dir_all(self.history_dir())
             .map_err(|e| DatabaseError::Internal(e.to_string()))?;
-        Ok(self.cleanup_stale_staged_audio_files()?)
+        self.cleanup_stale_staged_audio_files()
+    }
+
+    fn ensure_ready(&self) -> Result<(), HistoryStoreError> {
+        self.with_history_file_lock(|| {
+            self.ensure_ready_inner()
+                .map_err(HistoryMutationError::from)
+        })
+        .map_err(history_store_mutation_error)
     }
 
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
@@ -1037,8 +1085,8 @@ where
     fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
-    ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
-        self.ensure_ready()?;
+    ) -> Result<LiveRecordingDraftResult, HistoryMutationError> {
+        self.ensure_ready_inner()?;
         let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
         let item = sona_core::history::item_factory::create_live_draft_item(request, generated)
             .map_err(DatabaseError::Internal)?;
@@ -1063,7 +1111,7 @@ where
         history_id: &str,
         segments: Value,
         duration: f64,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
@@ -1103,8 +1151,8 @@ where
     fn save_recording(
         &self,
         request: HistorySaveRecordingRequest,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        self.ensure_ready()?;
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        self.ensure_ready_inner()?;
         let HistorySaveRecordingRequest {
             segments,
             duration,
@@ -1134,7 +1182,7 @@ where
             (None, Some(native_path)) => {
                 let source_path = PathBuf::from(&native_path);
                 if !source_path.is_file() {
-                    return Err(HistoryStoreError::Internal(format!(
+                    return Err(HistoryMutationError::Internal(format!(
                         "Native recording source file does not exist: {}",
                         source_path.to_string_lossy()
                     )));
@@ -1142,7 +1190,7 @@ where
                 self.stage_audio_copy(&source_path, target_path)?
             }
             (None, None) => {
-                return Err(HistoryStoreError::Internal(
+                return Err(HistoryMutationError::Internal(
                     "History recording save requires audio bytes or a native audio path."
                         .to_string(),
                 ));
@@ -1177,8 +1225,8 @@ where
     fn save_imported_file(
         &self,
         request: HistorySaveImportedFileRequest,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        self.ensure_ready()?;
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        self.ensure_ready_inner()?;
         let HistorySaveImportedFileRequest {
             id,
             source_path,
@@ -1206,7 +1254,7 @@ where
 
         let source = PathBuf::from(imported.copy_source_path);
         if !source.is_file() {
-            return Err(HistoryStoreError::Internal(format!(
+            return Err(HistoryMutationError::Internal(format!(
                 "Imported source file does not exist: {}",
                 source.to_string_lossy()
             )));
@@ -1240,7 +1288,7 @@ where
         Ok(item)
     }
 
-    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryStoreError> {
+    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryMutationError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -1318,7 +1366,7 @@ where
         &self,
         history_id: &str,
         segments: Value,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
@@ -1359,7 +1407,7 @@ where
         history_id: &str,
         reason: TranscriptSnapshotReason,
         segments: Value,
-    ) -> Result<TranscriptSnapshotMetadata, HistoryStoreError> {
+    ) -> Result<TranscriptSnapshotMetadata, HistoryMutationError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         let normalized_transcript =
             normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
@@ -1516,7 +1564,11 @@ where
         })?)
     }
 
-    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), HistoryStoreError> {
+    fn update_item_meta(
+        &self,
+        history_id: &str,
+        updates: Value,
+    ) -> Result<(), HistoryMutationError> {
         let updates = updates.as_object().ok_or_else(|| {
             DatabaseError::Internal("History item updates must be an object.".to_string())
         })?;
@@ -1579,7 +1631,7 @@ where
         &self,
         ids: &[String],
         project_id: Option<String>,
-    ) -> Result<(), HistoryStoreError> {
+    ) -> Result<(), HistoryMutationError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -1598,7 +1650,7 @@ where
         &self,
         current_project_id: String,
         next_project_id: Option<String>,
-    ) -> Result<(), HistoryStoreError> {
+    ) -> Result<(), HistoryMutationError> {
         Ok(self.get_db()?.with_write_connection(|conn| {
             conn.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
@@ -1949,83 +2001,98 @@ where
     }
 }
 
+impl<D> HistoryMutationRepository for SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
+    fn create_live_draft(
+        &self,
+        request: HistoryCreateLiveDraftRequest,
+    ) -> Result<LiveRecordingDraftResult, HistoryMutationError> {
+        self.with_history_file_lock(|| SqliteHistoryStore::create_live_draft(self, request))
+    }
+
+    fn complete_live_draft(
+        &self,
+        request: HistoryCompleteLiveDraftRequest,
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        SqliteHistoryStore::complete_live_draft(
+            self,
+            &request.history_id,
+            request.segments,
+            request.duration,
+        )
+    }
+
+    fn save_recording(
+        &self,
+        request: HistorySaveRecordingRequest,
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        self.with_history_file_lock(|| SqliteHistoryStore::save_recording(self, request))
+    }
+
+    fn save_imported_file(
+        &self,
+        request: HistorySaveImportedFileRequest,
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        self.with_history_file_lock(|| SqliteHistoryStore::save_imported_file(self, request))
+    }
+
+    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
+        self.with_history_file_lock(|| SqliteHistoryStore::delete_items(self, &request.ids))
+    }
+
+    fn update_transcript(
+        &self,
+        request: HistoryUpdateTranscriptRequest,
+    ) -> Result<HistoryItemRecord, HistoryMutationError> {
+        SqliteHistoryStore::update_transcript(self, &request.history_id, request.segments)
+    }
+
+    fn create_transcript_snapshot(
+        &self,
+        request: HistoryCreateTranscriptSnapshotRequest,
+    ) -> Result<TranscriptSnapshotMetadata, HistoryMutationError> {
+        SqliteHistoryStore::create_transcript_snapshot(
+            self,
+            &request.history_id,
+            request.reason,
+            request.segments,
+        )
+    }
+
+    fn update_item_meta(
+        &self,
+        request: HistoryUpdateItemMetaRequest,
+    ) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::update_item_meta(self, &request.history_id, request.updates)
+    }
+
+    fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::update_project_assignments(self, &request.ids, request.project_id)
+    }
+
+    fn reassign_project(
+        &self,
+        request: HistoryReassignProjectRequest,
+    ) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::reassign_project(
+            self,
+            request.current_project_id,
+            request.next_project_id,
+        )
+    }
+}
+
 impl<D> HistoryStore for SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
     fn ensure_ready(&self) -> Result<(), HistoryStoreError> {
         SqliteHistoryStore::ensure_ready(self)
-    }
-
-    fn create_live_draft(
-        &self,
-        request: HistoryCreateLiveDraftRequest,
-    ) -> Result<LiveRecordingDraftResult, HistoryStoreError> {
-        SqliteHistoryStore::create_live_draft(self, request)
-    }
-
-    fn complete_live_draft(
-        &self,
-        history_id: &str,
-        segments: Value,
-        duration: f64,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        SqliteHistoryStore::complete_live_draft(self, history_id, segments, duration)
-    }
-
-    fn save_recording(
-        &self,
-        request: HistorySaveRecordingRequest,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        SqliteHistoryStore::save_recording(self, request)
-    }
-
-    fn save_imported_file(
-        &self,
-        request: HistorySaveImportedFileRequest,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        SqliteHistoryStore::save_imported_file(self, request)
-    }
-
-    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryStoreError> {
-        SqliteHistoryStore::delete_items(self, ids)
-    }
-
-    fn update_transcript(
-        &self,
-        history_id: &str,
-        segments: Value,
-    ) -> Result<HistoryItemRecord, HistoryStoreError> {
-        SqliteHistoryStore::update_transcript(self, history_id, segments)
-    }
-
-    fn create_transcript_snapshot(
-        &self,
-        history_id: &str,
-        reason: TranscriptSnapshotReason,
-        segments: Value,
-    ) -> Result<TranscriptSnapshotMetadata, HistoryStoreError> {
-        SqliteHistoryStore::create_transcript_snapshot(self, history_id, reason, segments)
-    }
-
-    fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), HistoryStoreError> {
-        SqliteHistoryStore::update_item_meta(self, history_id, updates)
-    }
-
-    fn update_project_assignments(
-        &self,
-        ids: &[String],
-        project_id: Option<String>,
-    ) -> Result<(), HistoryStoreError> {
-        SqliteHistoryStore::update_project_assignments(self, ids, project_id)
-    }
-
-    fn reassign_project(
-        &self,
-        current_project_id: String,
-        next_project_id: Option<String>,
-    ) -> Result<(), HistoryStoreError> {
-        SqliteHistoryStore::reassign_project(self, current_project_id, next_project_id)
     }
 
     fn load_summary(&self, history_id: &str) -> Result<Option<Value>, HistoryStoreError> {
@@ -2155,9 +2222,19 @@ mod tests {
         rows.collect::<Result<Vec<_>, _>>().unwrap()
     }
 
-    fn assert_not_found<T>(result: Result<T, HistoryStoreError>, expected_id: &str) {
+    fn assert_query_not_found<T>(result: Result<T, HistoryStoreError>, expected_id: &str) {
         match result {
             Err(HistoryStoreError::Database(message)) => {
+                assert!(message.contains(expected_id));
+            }
+            Ok(_) => panic!("expected NotFoundError for missing history item"),
+            Err(error) => panic!("expected NotFoundError, got {error:?}"),
+        }
+    }
+
+    fn assert_mutation_not_found<T>(result: Result<T, HistoryMutationError>, expected_id: &str) {
+        match result {
+            Err(HistoryMutationError::NotFound(message)) => {
                 assert!(message.contains(expected_id));
             }
             Ok(_) => panic!("expected NotFoundError for missing history item"),
@@ -2552,9 +2629,9 @@ mod tests {
         });
 
         assert!(
-            matches!(result, Err(HistoryStoreError::Database(message)) if message.contains("History audio target already exists"))
+            matches!(result, Err(HistoryMutationError::Internal(message)) if message.contains("History audio target already exists"))
         );
-        assert_not_found(store.load_transcript("promote-fail"), "promote-fail");
+        assert_query_not_found(store.load_transcript("promote-fail"), "promote-fail");
         assert_eq!(std::fs::read(&target_path).unwrap(), vec![9, 9, 9]);
         let staged_entries = std::fs::read_dir(root.path().join("history"))
             .unwrap()
@@ -2567,6 +2644,78 @@ mod tests {
             })
             .count();
         assert_eq!(staged_entries, 0);
+    }
+
+    #[test]
+    fn mutation_readiness_filesystem_failures_remain_internal_errors() {
+        let root = tempdir().unwrap();
+        let blocked_app_data = root.path().join("app-data-file");
+        std::fs::write(&blocked_app_data, [1]).unwrap();
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(blocked_app_data, db);
+
+        let result = store.create_live_draft(HistoryCreateLiveDraftRequest {
+            id: Some("draft-1".to_string()),
+            audio_extension: "wav".to_string(),
+            project_id: None,
+            icon: None,
+        });
+
+        assert!(matches!(result, Err(HistoryMutationError::Internal(_))));
+    }
+
+    #[test]
+    fn history_file_lock_serializes_staging_cleanup_across_store_handles() {
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        let root = tempdir().unwrap();
+        let first = SqliteHistoryStore::with_db(
+            root.path().to_path_buf(),
+            Database::open_in_memory().unwrap(),
+        );
+        let second = SqliteHistoryStore::with_db(
+            root.path().to_path_buf(),
+            Database::open_in_memory().unwrap(),
+        );
+        let history_dir = root.path().join(HISTORY_DIR_NAME);
+        let staging_path = history_dir.join(format!("active{STAGED_AUDIO_MARKER}test"));
+        let staging_path_for_first = staging_path.clone();
+        let (staged_tx, staged_rx) = mpsc::channel();
+
+        thread::scope(|scope| {
+            let first_handle = scope.spawn(move || {
+                first
+                    .with_history_file_lock(|| {
+                        std::fs::create_dir_all(&history_dir)
+                            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+                        std::fs::write(&staging_path_for_first, [1, 2, 3])
+                            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+                        staged_tx.send(()).unwrap();
+                        thread::sleep(Duration::from_millis(150));
+                        assert!(staging_path_for_first.exists());
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            let second_handle = scope.spawn(move || {
+                staged_rx.recv().unwrap();
+                let started = Instant::now();
+                second
+                    .with_history_file_lock(|| {
+                        second
+                            .cleanup_stale_staged_audio_files()
+                            .map_err(HistoryMutationError::from)
+                    })
+                    .unwrap();
+                assert!(started.elapsed() >= Duration::from_millis(100));
+            });
+            first_handle.join().unwrap();
+            second_handle.join().unwrap();
+        });
+
+        assert!(!staging_path.exists());
     }
 
     #[test]
@@ -2653,7 +2802,7 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
-        assert_not_found(
+        assert_mutation_not_found(
             store.update_transcript(
                 "missing-history",
                 json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
@@ -2669,7 +2818,7 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
-        assert_not_found(
+        assert_mutation_not_found(
             store.complete_live_draft(
                 "missing-history",
                 json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
@@ -2686,7 +2835,7 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
-        assert_not_found(
+        assert_mutation_not_found(
             store.update_item_meta("missing-history", json!({ "title": "Missing" })),
             "missing-history",
         );
@@ -2699,7 +2848,7 @@ mod tests {
         let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
-        assert_not_found(
+        assert_mutation_not_found(
             store.create_transcript_snapshot(
                 "missing-history",
                 TranscriptSnapshotReason::Polish,

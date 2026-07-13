@@ -409,6 +409,25 @@ mod tests {
         rule
     }
 
+    async fn wait_for_payload_count(
+        state: &AutomationRuntimeState,
+        sink: &RecordingSink,
+        expected: usize,
+    ) {
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let has_expected_payloads = sink.payloads.lock().unwrap().len() >= expected;
+                let scheduler_is_idle = state.inner.pending_candidates.lock().unwrap().is_empty();
+                if has_expected_payloads && scheduler_is_idle {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for automation candidate payload");
+    }
+
     #[test]
     fn collect_candidate_paths_skips_files_inside_excluded_directory() {
         let dir = tempdir().unwrap();
@@ -544,7 +563,7 @@ mod tests {
         schedule_candidate(state.clone(), sink.clone(), rule.clone(), file_path.clone());
         schedule_candidate(state.clone(), sink.clone(), rule.clone(), file_path.clone());
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        wait_for_payload_count(&state, &sink, 1).await;
 
         let payloads = sink.payloads.lock().unwrap().clone();
         assert_eq!(payloads.len(), 1);
@@ -568,7 +587,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1)).await;
         schedule_candidate(state.clone(), sink.clone(), rule.clone(), file_path.clone());
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        wait_for_payload_count(&state, &sink, 1).await;
 
         let payloads = sink.payloads.lock().unwrap().clone();
         assert_eq!(payloads.len(), 1);

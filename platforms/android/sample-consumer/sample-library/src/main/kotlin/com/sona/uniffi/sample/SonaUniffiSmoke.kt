@@ -10,7 +10,11 @@ import uniffi.sona_uniffi_bind.FfiPolishedSegment
 import uniffi.sona_uniffi_bind.SonaCoreBindingException
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.createProjectJson
+import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
+import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
+import uniffi.sona_uniffi_bind.createHistoryTranscriptSnapshotJson
 import uniffi.sona_uniffi_bind.defaultConfigJson
+import uniffi.sona_uniffi_bind.deleteHistoryItemsJson
 import uniffi.sona_uniffi_bind.exportTranscriptFileJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadAppConfigJson
@@ -28,9 +32,15 @@ import uniffi.sona_uniffi_bind.parsePolishChunkJson
 import uniffi.sona_uniffi_bind.persistRecoveryQueueSnapshotJson
 import uniffi.sona_uniffi_bind.planPolishPromptChunksJson
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
+import uniffi.sona_uniffi_bind.reassignHistoryProjectJson
+import uniffi.sona_uniffi_bind.saveHistoryImportedFileJson
+import uniffi.sona_uniffi_bind.saveHistoryRecordingJson
 import uniffi.sona_uniffi_bind.saveRecoverySnapshotJson
 import uniffi.sona_uniffi_bind.saveAppConfigJson
 import uniffi.sona_uniffi_bind.upsertTaskLedgerRecordJson
+import uniffi.sona_uniffi_bind.updateHistoryItemMetaJson
+import uniffi.sona_uniffi_bind.updateHistoryProjectAssignmentsJson
+import uniffi.sona_uniffi_bind.updateHistoryTranscriptJson
 import uniffi.sona_uniffi_bind.validateAutomationRuleActivationJson
 
 private class RecordingAsrObserver : FfiAsrStreamingObserver {
@@ -136,6 +146,44 @@ object SonaUniffiSmoke {
         historyId: String,
         snapshotId: String,
     ): String = loadHistoryTranscriptSnapshotJson(appDataDir, historyId, snapshotId)
+
+    suspend fun createHistoryLiveDraft(appDataDir: String, requestJson: String): String =
+        createHistoryLiveDraftJson(appDataDir, requestJson)
+
+    suspend fun completeHistoryLiveDraft(appDataDir: String, requestJson: String): String =
+        completeHistoryLiveDraftJson(appDataDir, requestJson)
+
+    suspend fun saveHistoryRecording(
+        appDataDir: String,
+        requestJson: String,
+        audioBytes: ByteArray?,
+        nativeAudioPath: String?,
+    ): String = saveHistoryRecordingJson(appDataDir, requestJson, audioBytes, nativeAudioPath)
+
+    suspend fun saveHistoryImportedFile(appDataDir: String, requestJson: String): String =
+        saveHistoryImportedFileJson(appDataDir, requestJson)
+
+    suspend fun deleteHistoryItems(appDataDir: String, requestJson: String): String =
+        deleteHistoryItemsJson(appDataDir, requestJson)
+
+    suspend fun updateHistoryTranscript(appDataDir: String, requestJson: String): String =
+        updateHistoryTranscriptJson(appDataDir, requestJson)
+
+    suspend fun createHistoryTranscriptSnapshot(
+        appDataDir: String,
+        requestJson: String,
+    ): String = createHistoryTranscriptSnapshotJson(appDataDir, requestJson)
+
+    suspend fun updateHistoryItemMeta(appDataDir: String, requestJson: String): String =
+        updateHistoryItemMetaJson(appDataDir, requestJson)
+
+    suspend fun updateHistoryProjectAssignments(
+        appDataDir: String,
+        requestJson: String,
+    ): String = updateHistoryProjectAssignmentsJson(appDataDir, requestJson)
+
+    suspend fun reassignHistoryProject(appDataDir: String, requestJson: String): String =
+        reassignHistoryProjectJson(appDataDir, requestJson)
 
     fun loadProjects(appDataDir: String): String = loadProjectRepositoryStateJson(appDataDir)
 

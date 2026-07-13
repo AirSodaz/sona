@@ -45,6 +45,16 @@ const expectedUniffiExports = Object.freeze([
   'load_history_transcript_json',
   'list_history_transcript_snapshots_json',
   'load_history_transcript_snapshot_json',
+  'create_history_live_draft_json',
+  'complete_history_live_draft_json',
+  'save_history_recording_json',
+  'save_history_imported_file_json',
+  'delete_history_items_json',
+  'update_history_transcript_json',
+  'create_history_transcript_snapshot_json',
+  'update_history_item_meta_json',
+  'update_history_project_assignments_json',
+  'reassign_history_project_json',
   'default_vad_model_id',
   'default_punctuation_model_id',
   'preset_model_name',
@@ -109,6 +119,20 @@ const expectedUniffiErrorVariants = Object.freeze([
   'StorageUsage',
   'Export',
   'HistoryQuery',
+  'HistoryMutation',
+]);
+
+const expectedHistoryMutationExports = Object.freeze([
+  'create_history_live_draft_json',
+  'complete_history_live_draft_json',
+  'save_history_recording_json',
+  'save_history_imported_file_json',
+  'delete_history_items_json',
+  'update_history_transcript_json',
+  'create_history_transcript_snapshot_json',
+  'update_history_item_meta_json',
+  'update_history_project_assignments_json',
+  'reassign_history_project_json',
 ]);
 const desktopFrontendDependencies = [
   '@dnd-kit/core',
@@ -609,7 +633,10 @@ function readJavaScriptFunctionBlock(source, functionName) {
 
 function readKotlinFunctionItem(source, functionName) {
   const normalizedSource = source.replace(/\r\n/gu, '\n');
-  const signature = new RegExp(`^([ \\t]*)fun\\s+${functionName}\\b`, 'mu').exec(normalizedSource);
+  const signature = new RegExp(
+    `^([ \\t]*)(?:suspend\\s+)?fun\\s+${functionName}\\b`,
+    'mu',
+  ).exec(normalizedSource);
   if (!signature) {
     return '';
   }
@@ -676,7 +703,7 @@ function readKotlinDirectFunctionItem(objectBlock, functionName) {
         lineStart,
         lineEnd === -1 ? normalizedSource.length : lineEnd,
       );
-      if (new RegExp(`^[ \\t]*fun\\s+${functionName}\\b`, 'u').test(line)) {
+      if (new RegExp(`^[ \\t]*(?:suspend\\s+)?fun\\s+${functionName}\\b`, 'u').test(line)) {
         return readKotlinFunctionItem(normalizedSource.slice(lineStart), functionName);
       }
     }
@@ -960,4 +987,4 @@ function readWorkflowBuildTauriSteps(workflowName) {
   return steps;
 }
 
-export { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, desktopFrontendDependencies, expectedUniffiExports, expectedUniffiErrorVariants, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoDependencyEntries, readCargoStringArray, stripTomlLineComment, assertCargoDependencyVersionAndFeature, stripRustComments, rustProductionView, readRustFunctionBlock, readJavaScriptFunctionBlock, readKotlinFunctionItem, readKotlinObjectBlock, readKotlinDirectFunctionItem, stripKotlinCommentsAndLiterals, assertKotlinRecoveryImport, assertKotlinRecoveryCall, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke, scanRustSourcePolicyViolations, stripRustLineComment, readWorkflowStep, readWorkflowStepIndex, readWorkflowBuildTauriSteps };
+export { repoRoot, read, exists, desktopCrateSegments, desktopCratePath, desktopFrontendDependencies, expectedUniffiExports, expectedUniffiErrorVariants, expectedHistoryMutationExports, assertPrRecoveryCoverage, rustFilesUnder, readCargoDependencyNames, readCargoDependencySpec, readCargoDependencyEntries, readCargoStringArray, stripTomlLineComment, assertCargoDependencyVersionAndFeature, stripRustComments, rustProductionView, readRustFunctionBlock, readJavaScriptFunctionBlock, readKotlinFunctionItem, readKotlinObjectBlock, readKotlinDirectFunctionItem, stripKotlinCommentsAndLiterals, assertKotlinRecoveryImport, assertKotlinRecoveryCall, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke, scanRustSourcePolicyViolations, stripRustLineComment, readWorkflowStep, readWorkflowStepIndex, readWorkflowBuildTauriSteps };

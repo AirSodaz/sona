@@ -307,6 +307,19 @@ impl From<DatabaseError> for sona_core::history_store::HistoryStoreError {
     }
 }
 
+impl From<DatabaseError> for sona_core::history::mutation_repository::HistoryMutationError {
+    fn from(error: DatabaseError) -> Self {
+        use sona_core::history::mutation_repository::HistoryMutationError;
+
+        match error {
+            DatabaseError::NotFoundError(reason) => HistoryMutationError::NotFound(reason),
+            DatabaseError::SerializationError(error) => HistoryMutationError::Serialization(error),
+            DatabaseError::Internal(reason) => HistoryMutationError::Internal(reason),
+            error => HistoryMutationError::Database(error.to_string()),
+        }
+    }
+}
+
 impl Database {
     pub fn global_arc() -> Result<Arc<Database>, DatabaseError> {
         GLOBAL_DB

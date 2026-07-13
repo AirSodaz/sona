@@ -1,6 +1,8 @@
 pub(crate) mod llm_helpers;
 mod state;
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use sona_core::history::mutation_repository::HistoryMutationError;
+use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_sqlite::Database;
@@ -118,6 +120,46 @@ where
     tauri::async_runtime::spawn_blocking(move || {
         let repository = Arc::new(SqliteHistoryStore::new(app_local_data_dir, db));
         task(HistoryQueryService::new(repository)).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub async fn run_history_mutation_file_task<R, T, F>(
+    app: &AppHandle<R>,
+    state: &HistoryRepositoryState,
+    task: F,
+) -> Result<T, String>
+where
+    R: Runtime,
+    T: Send + 'static,
+    F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
+{
+    let app_local_data_dir =
+        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let db = crate::platform::database::sqlite_database(app);
+    let lock = state.file_lock.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = lock.lock().map_err(|error| error.to_string())?;
+        let repository = Arc::new(SqliteHistoryStore::new(app_local_data_dir, db));
+        task(HistoryMutationService::new(repository)).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub async fn run_history_mutation_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+where
+    R: Runtime,
+    T: Send + 'static,
+    F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
+{
+    let app_local_data_dir =
+        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let db = crate::platform::database::sqlite_database(app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let repository = Arc::new(SqliteHistoryStore::new(app_local_data_dir, db));
+        task(HistoryMutationService::new(repository)).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

@@ -731,6 +731,9 @@ mod tests {
     };
     use crate::history_store::SqliteHistoryStore;
     use serde_json::{Value, json};
+    use sona_core::history::mutation_repository::{
+        HistoryCreateTranscriptSnapshotRequest, HistoryMutationRepository,
+    };
     use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_core::history::{
         HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistorySaveRecordingRequest,
@@ -882,19 +885,19 @@ mod tests {
             .unwrap();
 
         let keep_snapshot = store
-            .create_transcript_snapshot(
-                &keep_item.id,
-                TranscriptSnapshotReason::Polish,
-                json!([{ "id": "seg-1", "text": "keep before" }]),
-            )
+            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+                history_id: keep_item.id.clone(),
+                reason: TranscriptSnapshotReason::Polish,
+                segments: json!([{ "id": "seg-1", "text": "keep before" }]),
+            })
             .unwrap();
 
         let _draft_snapshot = store
-            .create_transcript_snapshot(
-                "draft",
-                TranscriptSnapshotReason::Translate,
-                json!([{ "id": "seg-1", "text": "draft before" }]),
-            )
+            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+                history_id: "draft".to_string(),
+                reason: TranscriptSnapshotReason::Translate,
+                segments: json!([{ "id": "seg-1", "text": "draft before" }]),
+            })
             .unwrap();
 
         let archive_dir = tempdir().unwrap();
@@ -1318,19 +1321,19 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(1));
         let first = source_store
-            .create_transcript_snapshot(
-                &item.id,
-                TranscriptSnapshotReason::Polish,
-                json!([{ "id": "seg-1", "text": "before" }]),
-            )
+            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+                history_id: item.id.clone(),
+                reason: TranscriptSnapshotReason::Polish,
+                segments: json!([{ "id": "seg-1", "text": "before" }]),
+            })
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1));
         let second = source_store
-            .create_transcript_snapshot(
-                &item.id,
-                TranscriptSnapshotReason::Translate,
-                json!([{ "id": "seg-1", "text": "after" }]),
-            )
+            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+                history_id: item.id.clone(),
+                reason: TranscriptSnapshotReason::Translate,
+                segments: json!([{ "id": "seg-1", "text": "after" }]),
+            })
             .unwrap();
 
         let archive_dir = tempdir().unwrap();

@@ -140,6 +140,9 @@ mod tests {
     };
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
+    use sona_core::history::mutation_repository::{
+        HistoryCreateTranscriptSnapshotRequest, HistoryMutationRepository,
+    };
     use sona_core::history::{HistorySaveRecordingRequest, TranscriptSnapshotReason};
     use sona_core::history_store::HistoryStore;
     use sona_sqlite::{Database, SqliteHistoryStore};
@@ -168,7 +171,11 @@ mod tests {
             })
             .unwrap();
         let snapshot = store
-            .create_transcript_snapshot(&item.id, TranscriptSnapshotReason::Polish, segments)
+            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
+                history_id: item.id.clone(),
+                reason: TranscriptSnapshotReason::Polish,
+                segments,
+            })
             .unwrap();
         (item.id, snapshot.id)
     }

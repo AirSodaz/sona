@@ -7,7 +7,17 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { repoRoot, read, exists, expectedUniffiErrorVariants, assertCargoDependencyVersionAndFeature, assertAndroidRecoverySampleSmoke, assertAndroidRecoveryConsumerSmoke, assertStreamingAsrArchitecture, assertAndroidStreamingSmoke } from './test-support/repository.js';
+import {
+  assertAndroidRecoveryConsumerSmoke,
+  assertAndroidRecoverySampleSmoke,
+  assertAndroidStreamingSmoke,
+  assertCargoDependencyVersionAndFeature,
+  assertStreamingAsrArchitecture,
+  exists,
+  expectedUniffiErrorVariants,
+  read,
+  repoRoot,
+} from './test-support/repository.js';
 import { node, androidNdkAbiCases, androidNdkToolPaths, runAndroidNdkPrint } from './test-support/android-ndk-fixtures.js';
 
 const androidSherpaRuntimePath = path.join(repoRoot, 'scripts', 'android-sherpa-runtime.js');
