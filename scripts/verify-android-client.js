@@ -63,8 +63,10 @@ const gradleArgs = [
   '--no-daemon',
   ':application:testDebugUnitTest',
   ':adapters:android:testDebugUnitTest',
+  ':adapters:uniffi:testDebugUnitTest',
   ':adapters:android:assembleDebugAndroidTest',
   ':adapters:android:lintDebug',
+  ':app:testDebugUnitTest',
   ':app:assembleDebug',
   ':app:lintDebug',
 ];

@@ -27,6 +27,7 @@ The generated streaming surface is typed. Implement
 ```kotlin
 import uniffi.sona_uniffi_bind.FfiAsrInferenceMetric
 import uniffi.sona_uniffi_bind.FfiAsrModelLoadMetric
+import uniffi.sona_uniffi_bind.FfiAsrStreamingErrorEvent
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
@@ -37,6 +38,7 @@ fun createStreamingSession(requestJson: String): FfiAsrStreamingSession {
         override fun onTranscriptUpdate(event: FfiAsrTranscriptUpdateEvent) = Unit
         override fun onModelLoad(metric: FfiAsrModelLoadMetric) = Unit
         override fun onLiveInference(metric: FfiAsrInferenceMetric) = Unit
+        override fun onStreamingError(event: FfiAsrStreamingErrorEvent) = Unit
     }
 
     return createOnlineAsrStreamingSession(
@@ -168,6 +170,15 @@ file is excluded from device backup. Settings consumers receive only configured
 status plus save/clear capabilities. Plaintext resolution is available only to
 the live-recording coordinator when a session starts.
 
+The production online-recording path resolves the Volcengine provider manifest,
+opens the typed UniFFI streaming session, writes draft/checkpoint/complete history
+mutations through the shared SQLite binding, and maps remote streaming failures
+back to the application coordinator. The app requests microphone permission at
+the recording boundary and keeps the credential repository at `Application`
+scope, while each live-recording coordinator is owned by its recording
+`ViewModel`. The local engine remains disabled because the UniFFI surface does
+not yet export a local streaming session factory.
+
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client
 unit-test and APK gate from the repository root:
@@ -187,12 +198,12 @@ Each APK contains only its matching Sona UniFFI, sherpa-onnx, and ONNX Runtime
 native libraries. Set `SONA_ANDROID_ABIS` to one of the supported values when a
 single-ABI local build is sufficient.
 
-The verification command runs application and Android-adapter unit tests,
-assembles the adapter instrumentation-test APK, lints both the adapter and app,
-then assembles and validates both client APKs. Instrumentation assembly proves
-API compatibility but does not execute device APIs. Real microphone, recording
-callback, privacy-sensitive capture, and Android Keystore behavior must run on
-API 23 and API 37 emulators as the device QA gate.
+The verification command runs application, Android-adapter, UniFFI-adapter, and
+app unit tests, assembles the adapter instrumentation-test APK, lints both the
+adapter and app, then assembles and validates both client APKs. Instrumentation
+assembly proves API compatibility but does not execute device APIs. Real
+microphone, recording callback, privacy-sensitive capture, and Android Keystore
+behavior must run on API 23 and API 37 emulators as the device QA gate.
 
 GitHub Actions uses `.github/workflows/android-client.yml` as the reusable
 Android build entry point. Stable and nightly workflows call it with both ABIs,

@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use sona_core::ports::asr::{
-    AsrMode, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest, SherpaError,
+    AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
+    AsrTranscriptionRequest, SherpaError,
 };
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::{
@@ -11,6 +12,7 @@ use std::sync::{
 };
 use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
+use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -21,8 +23,10 @@ struct VolcengineStreamingSession {
     observer: Arc<dyn AsrRuntimeObserver>,
     request: AsrTranscriptionRequest,
     writer: Arc<Mutex<Option<VolcengineWriter>>>,
-    flushing: Arc<AtomicBool>,
+    stopping: Arc<AtomicBool>,
     final_response_received: Arc<Notify>,
+    final_response_outcome: Arc<Mutex<Option<Result<(), SherpaError>>>>,
+    reader_task: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 type VolcengineWriter = futures_util::stream::SplitSink<
@@ -45,8 +49,10 @@ pub fn create_volcengine_streaming_session(
         observer,
         request,
         writer: Arc::new(Mutex::new(None)),
-        flushing: Arc::new(AtomicBool::new(false)),
+        stopping: Arc::new(AtomicBool::new(false)),
         final_response_received: Arc::new(Notify::new()),
+        final_response_outcome: Arc::new(Mutex::new(None)),
+        reader_task: Arc::new(Mutex::new(None)),
     }))
 }
 
@@ -78,6 +84,8 @@ async fn start_streaming_recognizer_impl(
     session: &VolcengineStreamingSession,
     instance_id: &str,
 ) -> Result<(), SherpaError> {
+    session.stopping.store(false, Ordering::SeqCst);
+    *session.final_response_outcome.lock().await = None;
     let config = crate::resolve_volcengine_config_checked(
         &session.request,
         crate::VolcengineMode::Streaming,
@@ -140,29 +148,31 @@ async fn start_streaming_recognizer_impl(
     let normalization_options = session.request.normalization_options;
     let postprocessor =
         TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
-    let flushing = session.flushing.clone();
+    let stopping = session.stopping.clone();
     let final_response_received = session.final_response_received.clone();
+    let final_response_outcome = session.final_response_outcome.clone();
     let observer_for_task = observer.clone();
-    tokio::spawn(async move {
+    let reader_task = tokio::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
                 Ok(Message::Binary(frame)) => {
-                    let flush_final = flushing.load(Ordering::SeqCst);
                     match crate::parse_volcengine_server_response_frame(&frame)
                         .map_err(SherpaError::from)
-                        .and_then(|value| {
-                            value
+                        .and_then(|frame| {
+                            frame
+                                .payload
                                 .map(|value| {
                                     crate::volcengine_streaming_segments_from_response(
                                         &value,
-                                        flush_final,
+                                        frame.is_final,
                                     )
                                     .map_err(SherpaError::Generic)
                                 })
                                 .transpose()
                                 .map(|value| value.unwrap_or_default())
+                                .map(|segments| (segments, frame.is_final))
                         }) {
-                        Ok(segments) if !segments.is_empty() => {
+                        Ok((segments, is_final)) => {
                             let normalized = super::transcript::normalize_segments(
                                 segments,
                                 normalization_options,
@@ -179,26 +189,112 @@ async fn start_streaming_recognizer_impl(
                                     &update,
                                 );
                             }
+                            if is_final {
+                                publish_reader_outcome(
+                                    &final_response_outcome,
+                                    &final_response_received,
+                                    Ok(()),
+                                )
+                                .await;
+                                return;
+                            }
                         }
-                        Ok(_) => {}
-                        Err(error) => warn!("[Volcengine ASR] response parse failed: {error}"),
-                    }
-                    if flush_final {
-                        final_response_received.notify_waiters();
-                        break;
+                        Err(error) => {
+                            warn!("[Volcengine ASR] response parse failed: {error}");
+                            observe_streaming_error(
+                                observer_for_task.as_ref(),
+                                &instance_id_for_task,
+                                &error,
+                            );
+                            publish_reader_outcome(
+                                &final_response_outcome,
+                                &final_response_received,
+                                Err(error),
+                            )
+                            .await;
+                            return;
+                        }
                     }
                 }
-                Ok(Message::Close(_)) => break,
+                Ok(Message::Close(_)) => {
+                    let error = SherpaError::VolcengineWebSocketClosed;
+                    if !stopping.load(Ordering::SeqCst) {
+                        observe_streaming_error(
+                            observer_for_task.as_ref(),
+                            &instance_id_for_task,
+                            &error,
+                        );
+                    }
+                    publish_reader_outcome(
+                        &final_response_outcome,
+                        &final_response_received,
+                        Err(error),
+                    )
+                    .await;
+                    return;
+                }
                 Ok(_) => {}
                 Err(error) => {
                     warn!("[Volcengine ASR] websocket read failed: {error}");
-                    break;
+                    let error = SherpaError::VolcengineWebSocketReadFailed {
+                        error: error.to_string(),
+                    };
+                    if !stopping.load(Ordering::SeqCst) {
+                        observe_streaming_error(
+                            observer_for_task.as_ref(),
+                            &instance_id_for_task,
+                            &error,
+                        );
+                    }
+                    publish_reader_outcome(
+                        &final_response_outcome,
+                        &final_response_received,
+                        Err(error),
+                    )
+                    .await;
+                    return;
                 }
             }
         }
+
+        let error = SherpaError::VolcengineWebSocketClosed;
+        if !stopping.load(Ordering::SeqCst) {
+            observe_streaming_error(observer_for_task.as_ref(), &instance_id_for_task, &error);
+        }
+        publish_reader_outcome(
+            &final_response_outcome,
+            &final_response_received,
+            Err(error),
+        )
+        .await;
     });
+    *session.reader_task.lock().await = Some(reader_task);
 
     Ok(())
+}
+
+fn observe_streaming_error(
+    observer: &dyn AsrRuntimeObserver,
+    instance_id: &str,
+    error: &SherpaError,
+) {
+    observer.on_streaming_error(&AsrStreamingErrorEvent {
+        instance_id: instance_id.to_string(),
+        code: error.code().to_string(),
+        message: error.to_string(),
+    });
+}
+
+async fn publish_reader_outcome(
+    outcome: &Mutex<Option<Result<(), SherpaError>>>,
+    notification: &Notify,
+    value: Result<(), SherpaError>,
+) {
+    let mut outcome = outcome.lock().await;
+    if outcome.is_none() {
+        *outcome = Some(value);
+        notification.notify_waiters();
+    }
 }
 
 fn insert_header(
@@ -224,8 +320,8 @@ async fn feed_audio_chunk_impl(
     session: &VolcengineStreamingSession,
     samples: Vec<u8>,
 ) -> Result<(), SherpaError> {
-    let mut writer = session.writer.lock().await;
-    let Some(writer) = writer.as_mut() else {
+    let mut writer_guard = session.writer.lock().await;
+    let Some(writer) = writer_guard.as_mut() else {
         return Err(SherpaError::VolcengineWebSocketNotConnected);
     };
     writer
@@ -266,35 +362,70 @@ async fn feed_audio_samples_impl(
 async fn flush_streaming_recognizer_impl(
     session: &VolcengineStreamingSession,
 ) -> Result<(), SherpaError> {
-    let mut writer = session.writer.lock().await;
-    if let Some(writer) = writer.as_mut() {
-        session.flushing.store(true, Ordering::SeqCst);
-        let notified = session.final_response_received.notified();
-        tokio::pin!(notified);
-        notified.as_mut().enable();
-        writer
-            .send(Message::Binary(crate::build_volcengine_audio_frame(
-                &[],
-                true,
-            )))
-            .await
-            .map_err(|error| SherpaError::VolcengineEndFrameSendFailed {
-                error: error.to_string(),
-            })?;
-        let _ = tokio::time::timeout(Duration::from_millis(1500), notified).await;
+    let mut writer_guard = session.writer.lock().await;
+    let Some(writer) = writer_guard.as_mut() else {
+        return Err(SherpaError::VolcengineWebSocketNotConnected);
+    };
+    let notified = session.final_response_received.notified();
+    tokio::pin!(notified);
+    notified.as_mut().enable();
+    if let Some(outcome) = session.final_response_outcome.lock().await.clone() {
+        return outcome;
     }
-    Ok(())
+    writer
+        .send(Message::Binary(crate::build_volcengine_audio_frame(
+            &[],
+            true,
+        )))
+        .await
+        .map_err(|error| SherpaError::VolcengineEndFrameSendFailed {
+            error: error.to_string(),
+        })?;
+    drop(writer_guard);
+
+    if let Some(outcome) = session.final_response_outcome.lock().await.clone() {
+        return outcome;
+    }
+    if tokio::time::timeout(Duration::from_millis(1500), notified)
+        .await
+        .is_ok()
+    {
+        return session
+            .final_response_outcome
+            .lock()
+            .await
+            .clone()
+            .unwrap_or(Err(SherpaError::VolcengineWebSocketClosed));
+    }
+
+    let error = SherpaError::VolcengineFinalResponseTimeout;
+    observe_streaming_error(session.observer.as_ref(), &session.instance_id, &error);
+    publish_reader_outcome(
+        &session.final_response_outcome,
+        &session.final_response_received,
+        Err(error.clone()),
+    )
+    .await;
+    Err(error)
 }
 
 async fn stop_streaming_recognizer_impl(
     session: &VolcengineStreamingSession,
 ) -> Result<(), SherpaError> {
-    let session = Some(session);
-    if let Some(session) = session {
-        let mut writer = session.writer.lock().await;
-        if let Some(mut writer) = writer.take() {
-            let _ = writer.send(Message::Close(None)).await;
-        }
+    session.stopping.store(true, Ordering::SeqCst);
+    let mut writer = session.writer.lock().await;
+    if let Some(mut writer) = writer.take() {
+        let _ = writer.send(Message::Close(None)).await;
+    }
+    drop(writer);
+
+    if let Some(mut reader_task) = session.reader_task.lock().await.take()
+        && tokio::time::timeout(Duration::from_millis(1500), &mut reader_task)
+            .await
+            .is_err()
+    {
+        reader_task.abort();
+        let _ = reader_task.await;
     }
     Ok(())
 }
@@ -304,7 +435,7 @@ mod tests {
     use super::*;
     use futures_util::{SinkExt, StreamExt};
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingSession,
+        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
         AsrTranscriptUpdateEvent, AsrTranscriptionRequest, OnlineAsrProviderRequest, SherpaError,
         VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
@@ -322,6 +453,7 @@ mod tests {
     #[derive(Default)]
     struct RecordingObserver {
         events: StdMutex<Vec<AsrTranscriptUpdateEvent>>,
+        errors: StdMutex<Vec<AsrStreamingErrorEvent>>,
     }
 
     impl AsrRuntimeObserver for RecordingObserver {
@@ -332,6 +464,10 @@ mod tests {
         fn on_model_load(&self, _metric: &AsrModelLoadMetric) {}
 
         fn on_live_inference(&self, _metric: &AsrInferenceMetric) {}
+
+        fn on_streaming_error(&self, event: &AsrStreamingErrorEvent) {
+            self.errors.lock().unwrap().push(event.clone());
+        }
     }
 
     #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -370,21 +506,22 @@ mod tests {
         }
     }
 
-    fn server_result_frame() -> Vec<u8> {
+    fn server_result_frame(sequence: i32, text: &str, definite: bool) -> Vec<u8> {
         let payload = serde_json::to_vec(&serde_json::json!({
             "result": {
-                "text": "hello from mock",
+                "text": text,
                 "utterances": [{
                     "start_time": 0,
                     "end_time": 1000,
-                    "text": "hello from mock",
-                    "definite": true
+                    "text": text,
+                    "definite": definite
                 }]
             }
         }))
         .unwrap();
-        let mut frame = vec![0x11, 0x90, 0x10, 0x00];
-        frame.extend_from_slice(&1_u32.to_be_bytes());
+        let flags = if sequence < 0 { 0x93 } else { 0x91 };
+        let mut frame = vec![0x11, flags, 0x10, 0x00];
+        frame.extend_from_slice(&sequence.to_be_bytes());
         frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
         frame.extend_from_slice(&payload);
         frame
@@ -442,6 +579,53 @@ mod tests {
         session.feed_audio_samples(&[0.25, -0.25]).await.unwrap();
     }
 
+    async fn streaming_error_from_server_message(message: Message) -> AsrStreamingErrorEvent {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            websocket.send(message).await.unwrap();
+        });
+        let observer = Arc::new(RecordingObserver::default());
+        let session = create_volcengine_streaming_session(
+            "live-error".to_string(),
+            test_request(&format!("ws://{address}"), AsrMode::Streaming),
+            observer.clone(),
+        )
+        .unwrap();
+
+        session.start().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if !observer.errors.lock().unwrap().is_empty() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        session.stop().await.unwrap();
+        server.await.unwrap();
+
+        observer.errors.lock().unwrap()[0].clone()
+    }
+
+    #[tokio::test]
+    async fn reader_failures_are_reported_to_the_runtime_observer() {
+        for (message, expected_code) in [
+            (Message::Close(None), "VOLCENGINE_WEB_SOCKET_CLOSED"),
+            (Message::Binary(vec![0]), "VOLCENGINE_FRAME_TOO_SHORT"),
+        ] {
+            let error = streaming_error_from_server_message(message).await;
+            assert_eq!(
+                (error.instance_id.as_str(), error.code.as_str()),
+                ("live-error", expected_code),
+            );
+        }
+    }
+
     #[tokio::test]
     async fn local_websocket_covers_the_streaming_session_lifecycle() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -480,7 +664,11 @@ mod tests {
                 }
             }
             writer
-                .send(Message::Binary(server_result_frame()))
+                .send(Message::Binary(server_result_frame(
+                    -1,
+                    "hello from mock",
+                    true,
+                )))
                 .await
                 .unwrap();
             let close_observed = matches!(
@@ -536,5 +724,92 @@ mod tests {
         assert_eq!(events[0].update.upsert_segments.len(), 1);
         assert_eq!(events[0].update.upsert_segments[0].text, "hello from mock");
         assert!(events[0].update.upsert_segments[0].is_final);
+        assert!(observer.errors.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn flush_waits_for_the_protocol_final_response() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let partial_sent = Arc::new(Notify::new());
+        let release_final = Arc::new(Notify::new());
+        let partial_sent_for_server = partial_sent.clone();
+        let release_final_for_server = release_final.clone();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let (mut writer, mut reader) = websocket.split();
+            for _ in 0..2 {
+                assert!(matches!(reader.next().await, Some(Ok(Message::Binary(_)))));
+            }
+            writer
+                .send(Message::Binary(server_result_frame(1, "partial", false)))
+                .await
+                .unwrap();
+            partial_sent_for_server.notify_one();
+            release_final_for_server.notified().await;
+            writer
+                .send(Message::Binary(server_result_frame(-2, "final", true)))
+                .await
+                .unwrap();
+            let _ = reader.next().await;
+        });
+        let observer = Arc::new(RecordingObserver::default());
+        let session = create_volcengine_streaming_session(
+            "live-final".to_string(),
+            test_request(&format!("ws://{address}"), AsrMode::Streaming),
+            observer.clone(),
+        )
+        .unwrap();
+
+        session.start().await.unwrap();
+        let session_for_flush = session.clone();
+        let flush = tokio::spawn(async move { session_for_flush.flush().await });
+        partial_sent.notified().await;
+        tokio::task::yield_now().await;
+        assert!(!flush.is_finished());
+        release_final.notify_one();
+        flush.await.unwrap().unwrap();
+        session.stop().await.unwrap();
+        server.await.unwrap();
+
+        let events = observer.events.lock().unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| {
+                    let segment = &event.update.upsert_segments[0];
+                    (segment.text.as_str(), segment.is_final)
+                })
+                .collect::<Vec<_>>(),
+            vec![("partial", false), ("final", true)],
+        );
+    }
+
+    #[tokio::test]
+    async fn flush_without_a_final_response_returns_a_structured_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
+            let (_writer, mut reader) = websocket.split();
+            for _ in 0..2 {
+                assert!(matches!(reader.next().await, Some(Ok(Message::Binary(_)))));
+            }
+            let _ = reader.next().await;
+        });
+        let session = create_volcengine_streaming_session(
+            "live-timeout".to_string(),
+            test_request(&format!("ws://{address}"), AsrMode::Streaming),
+            Arc::new(RecordingObserver::default()),
+        )
+        .unwrap();
+
+        session.start().await.unwrap();
+        let error = session.flush().await.unwrap_err();
+        assert_eq!(error.code(), "VOLCENGINE_FINAL_RESPONSE_TIMEOUT");
+        session.stop().await.unwrap();
+        server.await.unwrap();
     }
 }

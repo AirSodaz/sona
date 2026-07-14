@@ -21,6 +21,11 @@ sealed interface StreamingTranscriptionEvent {
     data class Transcript(
         val update: TranscriptUpdate,
     ) : StreamingTranscriptionEvent
+
+    data class Failure(
+        val code: String,
+        val message: String,
+    ) : StreamingTranscriptionEvent
 }
 
 fun interface StreamingProviderCatalogPort {

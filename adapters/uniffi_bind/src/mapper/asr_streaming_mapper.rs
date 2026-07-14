@@ -1,4 +1,4 @@
-use sona_core::ports::asr::AsrTranscriptUpdateEvent;
+use sona_core::ports::asr::{AsrStreamingErrorEvent, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::transcript::{
     SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
@@ -84,6 +84,13 @@ pub struct FfiAsrTranscriptUpdateEvent {
     pub instance_id: String,
     pub stage: String,
     pub update: FfiTranscriptUpdate,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiAsrStreamingErrorEvent {
+    pub instance_id: String,
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -225,6 +232,16 @@ pub fn asr_transcript_update_event_to_ffi(
         instance_id: event.instance_id.clone(),
         stage: event.stage.clone(),
         update: transcript_update_to_ffi(&event.update),
+    }
+}
+
+pub fn asr_streaming_error_event_to_ffi(
+    event: &AsrStreamingErrorEvent,
+) -> FfiAsrStreamingErrorEvent {
+    FfiAsrStreamingErrorEvent {
+        instance_id: event.instance_id.clone(),
+        code: event.code.clone(),
+        message: event.message.clone(),
     }
 }
 

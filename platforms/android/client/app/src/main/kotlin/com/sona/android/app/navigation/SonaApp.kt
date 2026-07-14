@@ -26,13 +26,21 @@ import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.recording.RecordScreen
+import com.sona.android.app.feature.settings.CredentialSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.ui.theme.SonaTheme
+import com.sona.android.application.recording.LiveRecordingState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SonaApp(
     bootstrapState: SonaBootstrapUiState,
+    recordingState: LiveRecordingState,
+    credentialState: CredentialSettingsUiState,
+    microphonePermissionGranted: Boolean,
+    onRecordAction: () -> Unit,
+    onSaveCredential: (String) -> Unit,
+    onClearCredential: () -> Unit,
     onRetryBootstrap: () -> Unit,
 ) {
     var dynamicColorEnabled by rememberSaveable { mutableStateOf(false) }
@@ -97,6 +105,14 @@ fun SonaApp(
                     composable(SonaDestination.RECORD.route) {
                         RecordScreen(
                             bootstrapState = bootstrapState,
+                            recordingState = recordingState,
+                            microphonePermissionGranted = microphonePermissionGranted,
+                            onRecordAction = onRecordAction,
+                            onOpenSettings = {
+                                navController.navigate(SonaDestination.SETTINGS.route) {
+                                    launchSingleTop = true
+                                }
+                            },
                             onRetryBootstrap = onRetryBootstrap,
                         )
                     }
@@ -106,8 +122,11 @@ fun SonaApp(
                     composable(SonaDestination.SETTINGS.route) {
                         SettingsScreen(
                             bootstrapState = bootstrapState,
+                            credentialState = credentialState,
                             dynamicColorEnabled = dynamicColorEnabled,
                             onDynamicColorChanged = { dynamicColorEnabled = it },
+                            onSaveCredential = onSaveCredential,
+                            onClearCredential = onClearCredential,
                         )
                     }
                 }

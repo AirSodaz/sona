@@ -22,9 +22,14 @@ class RecordingFakes {
     ) : StreamingCredentialResolverPort {
         var credential: StreamingCredential? = StreamingCredential("secret")
         var loadFailure: Throwable? = null
+        var loadBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
 
         override suspend fun loadForStart(): StreamingCredential? {
             calls += "credential.loadForStart"
+            loadBarrier?.let { (started, release) ->
+                started.complete(Unit)
+                release.await()
+            }
             loadFailure?.let { throw it }
             return credential
         }
@@ -33,6 +38,7 @@ class RecordingFakes {
     class FakeProviderCatalog(
         private val calls: MutableList<String>,
     ) : StreamingProviderCatalogPort {
+        var failure: Throwable? = null
         var profile = StreamingProviderProfile(
             providerId = "volcengine-doubao",
             profileId = "volcengine-doubao-default",
@@ -42,6 +48,7 @@ class RecordingFakes {
 
         override suspend fun loadVolcengineStreamingProfile(): StreamingProviderProfile {
             calls += "provider.load"
+            failure?.let { throw it }
             return profile
         }
     }
@@ -54,9 +61,14 @@ class RecordingFakes {
         var checkpointFailuresRemaining: Int = 0
         var completeFailure: Throwable? = null
         var createFailure: Throwable? = null
+        var createBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
 
         override suspend fun createLiveDraft(request: CreateLiveDraftRequest): RecordingDraft {
             calls += "history.create"
+            createBarrier?.let { (started, release) ->
+                started.complete(Unit)
+                release.await()
+            }
             createFailure?.let { throw it }
             return RecordingDraft(
                 historyId = request.recordingId,
@@ -191,6 +203,7 @@ class RecordingFakes {
         var eventCollectorCompletions: Int = 0
         var feedBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
         var closeObservedActiveFeed: Boolean = false
+        var eventOnStop: StreamingTranscriptionEvent? = null
         private var activeFeeds: Int = 0
 
         override suspend fun open(
@@ -235,15 +248,19 @@ class RecordingFakes {
 
                 override suspend fun stop() {
                     calls += "asr.stop"
-                    stopFailure?.let { throw it }
-                    eventChannel.close()
+                    try {
+                        eventOnStop?.let { eventChannel.send(it) }
+                        stopFailure?.let { throw it }
+                    } finally {
+                        eventChannel.close()
+                    }
                 }
 
                 override fun close() {
                     calls += "asr.close"
                     closeObservedActiveFeed = closeObservedActiveFeed || activeFeeds > 0
-                    closeFailure?.let { throw it }
                     eventChannel.close()
+                    closeFailure?.let { throw it }
                 }
             }
         }
@@ -266,8 +283,11 @@ class RecordingFakes {
     class FakeRecordingIds(
         private val calls: MutableList<String>,
     ) : RecordingIdPort {
+        var failure: Throwable? = null
+
         override fun nextRecordingId(): String {
             calls += "id.next"
+            failure?.let { throw it }
             return "live-1"
         }
     }

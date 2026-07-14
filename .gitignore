@@ -45,6 +45,7 @@ docs/superpowers
 .superpowers
 
 .env
+.kotlin/
 target/
 target_*
 temp_*

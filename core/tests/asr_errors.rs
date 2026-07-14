@@ -29,3 +29,28 @@ fn string_errors_serialize_as_generic_asr_runtime_errors() {
         })
     );
 }
+
+#[test]
+fn streaming_transport_errors_expose_stable_codes() {
+    let cases = [
+        (
+            SherpaError::VolcengineWebSocketReadFailed {
+                error: "connection reset".to_string(),
+            },
+            "VOLCENGINE_WEB_SOCKET_READ_FAILED",
+        ),
+        (
+            SherpaError::VolcengineWebSocketClosed,
+            "VOLCENGINE_WEB_SOCKET_CLOSED",
+        ),
+        (
+            SherpaError::VolcengineFinalResponseTimeout,
+            "VOLCENGINE_FINAL_RESPONSE_TIMEOUT",
+        ),
+    ];
+
+    for (error, expected_code) in cases {
+        assert_eq!(error.code(), expected_code);
+        assert_eq!(serde_json::to_value(error).unwrap()["code"], expected_code);
+    }
+}

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent, NoopAsrRuntimeObserver,
-    SherpaError,
+    AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
+    NoopAsrRuntimeObserver, SherpaError,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::transcript::TranscriptUpdate;
@@ -12,6 +12,7 @@ struct RecordingObserver {
     updates: Mutex<Vec<AsrTranscriptUpdateEvent>>,
     model_loads: Mutex<Vec<AsrModelLoadMetric>>,
     live_inferences: Mutex<Vec<AsrInferenceMetric>>,
+    streaming_errors: Mutex<Vec<AsrStreamingErrorEvent>>,
 }
 
 impl AsrRuntimeObserver for RecordingObserver {
@@ -25,6 +26,10 @@ impl AsrRuntimeObserver for RecordingObserver {
 
     fn on_live_inference(&self, metric: &AsrInferenceMetric) {
         self.live_inferences.lock().unwrap().push(metric.clone());
+    }
+
+    fn on_streaming_error(&self, event: &AsrStreamingErrorEvent) {
+        self.streaming_errors.lock().unwrap().push(event.clone());
     }
 }
 
@@ -102,14 +107,24 @@ fn observer_accepts_typed_streaming_outputs() {
     };
     let model_load = model_load_metric();
     let live = live_metric();
+    let streaming_error = AsrStreamingErrorEvent {
+        instance_id: "live-1".to_string(),
+        code: "VOLCENGINE_WEB_SOCKET_CLOSED".to_string(),
+        message: "closed".to_string(),
+    };
 
     observer.on_transcript_update(&event);
     observer.on_model_load(&model_load);
     observer.on_live_inference(&live);
+    observer.on_streaming_error(&streaming_error);
 
     assert_eq!(*observer.updates.lock().unwrap(), vec![event]);
     assert_eq!(*observer.model_loads.lock().unwrap(), vec![model_load]);
     assert_eq!(*observer.live_inferences.lock().unwrap(), vec![live]);
+    assert_eq!(
+        *observer.streaming_errors.lock().unwrap(),
+        vec![streaming_error]
+    );
 }
 
 #[test]
@@ -127,6 +142,11 @@ fn noop_observer_accepts_all_outputs() {
     observer.on_transcript_update(&event);
     observer.on_model_load(&model_load_metric());
     observer.on_live_inference(&live_metric());
+    observer.on_streaming_error(&AsrStreamingErrorEvent {
+        instance_id: "live-1".to_string(),
+        code: "VOLCENGINE_WEB_SOCKET_CLOSED".to_string(),
+        message: "closed".to_string(),
+    });
 }
 
 #[tokio::test]

@@ -23,7 +23,7 @@ pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
 pub const MISTRAL_VOXTRAL_PROVIDER_ID: &str = "mistral-voxtral";
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum SherpaError {
     #[error("在线 ASR provider 配置缺失。")]
     OnlineProviderConfigMissing,
@@ -94,6 +94,15 @@ pub enum SherpaError {
     #[error("火山 ASR WebSocket 尚未连接。")]
     VolcengineWebSocketNotConnected,
 
+    #[error("火山 ASR WebSocket 读取失败：{error}")]
+    VolcengineWebSocketReadFailed { error: String },
+
+    #[error("火山 ASR WebSocket 连接意外关闭。")]
+    VolcengineWebSocketClosed,
+
+    #[error("等待火山 ASR 最终响应超时。")]
+    VolcengineFinalResponseTimeout,
+
     #[error("火山 ASR 音频发送失败：{error}")]
     VolcengineAudioSendFailed { error: String },
 
@@ -122,18 +131,9 @@ pub enum SherpaError {
     Generic(String),
 }
 
-impl Serialize for SherpaError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(Serialize)]
-        struct ErrorData<'a> {
-            code: &'a str,
-            message: String,
-        }
-
-        let code = match self {
+impl SherpaError {
+    pub fn code(&self) -> &'static str {
+        match self {
             Self::OnlineProviderConfigMissing => "ONLINE_PROVIDER_CONFIG_MISSING",
             Self::UnsupportedOnlineProvider { .. } => "UNSUPPORTED_ONLINE_PROVIDER",
             Self::OnlineSessionNotInitialized => "ONLINE_SESSION_NOT_INITIALIZED",
@@ -157,6 +157,9 @@ impl Serialize for SherpaError {
             Self::VolcengineConnectionFailed { .. } => "VOLCENGINE_CONNECTION_FAILED",
             Self::VolcengineInitFrameSendFailed { .. } => "VOLCENGINE_INIT_FRAME_SEND_FAILED",
             Self::VolcengineWebSocketNotConnected => "VOLCENGINE_WEB_SOCKET_NOT_CONNECTED",
+            Self::VolcengineWebSocketReadFailed { .. } => "VOLCENGINE_WEB_SOCKET_READ_FAILED",
+            Self::VolcengineWebSocketClosed => "VOLCENGINE_WEB_SOCKET_CLOSED",
+            Self::VolcengineFinalResponseTimeout => "VOLCENGINE_FINAL_RESPONSE_TIMEOUT",
             Self::VolcengineAudioSendFailed { .. } => "VOLCENGINE_AUDIO_SEND_FAILED",
             Self::VolcengineEndFrameSendFailed { .. } => "VOLCENGINE_END_FRAME_SEND_FAILED",
             Self::AudioFileReadFailed { .. } => "AUDIO_FILE_READ_FAILED",
@@ -170,10 +173,23 @@ impl Serialize for SherpaError {
             Self::VolcengineRealtimeOnlyForStreaming => "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING",
             Self::VolcengineBatchModeMismatch => "VOLCENGINE_BATCH_MODE_MISMATCH",
             Self::Generic(_) => "GENERIC_ERROR",
-        };
+        }
+    }
+}
+
+impl Serialize for SherpaError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Serialize)]
+        struct ErrorData<'a> {
+            code: &'a str,
+            message: String,
+        }
 
         let data = ErrorData {
-            code,
+            code: self.code(),
             message: self.to_string(),
         };
 
@@ -232,10 +248,19 @@ pub struct AsrTranscriptUpdateEvent {
     pub update: TranscriptUpdate,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AsrStreamingErrorEvent {
+    pub instance_id: String,
+    pub code: String,
+    pub message: String,
+}
+
 pub trait AsrRuntimeObserver: Send + Sync {
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent);
     fn on_model_load(&self, metric: &AsrModelLoadMetric);
     fn on_live_inference(&self, metric: &AsrInferenceMetric);
+
+    fn on_streaming_error(&self, _event: &AsrStreamingErrorEvent) {}
 }
 
 #[derive(Debug, Default, Clone, Copy)]

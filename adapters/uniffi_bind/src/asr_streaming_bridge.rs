@@ -1,15 +1,16 @@
 use crate::json_bridge::parse_core_json;
 use crate::mapper::{
-    asr_inference_metric_to_ffi, asr_model_load_metric_to_ffi, asr_transcript_update_event_to_ffi,
+    asr_inference_metric_to_ffi, asr_model_load_metric_to_ffi, asr_streaming_error_event_to_ffi,
+    asr_transcript_update_event_to_ffi,
 };
 use crate::{
-    FfiAsrInferenceMetric, FfiAsrModelLoadMetric, FfiAsrTranscriptUpdateEvent,
-    SonaCoreBindingResult,
+    FfiAsrInferenceMetric, FfiAsrModelLoadMetric, FfiAsrStreamingErrorEvent,
+    FfiAsrTranscriptUpdateEvent, SonaCoreBindingResult,
 };
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
-    GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, SherpaError,
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
+    AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
+    AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID,
+    MISTRAL_VOXTRAL_PROVIDER_ID, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::provider_resolution::{
@@ -23,6 +24,7 @@ pub trait FfiAsrStreamingObserver: Send + Sync {
     fn on_transcript_update(&self, event: FfiAsrTranscriptUpdateEvent);
     fn on_model_load(&self, metric: FfiAsrModelLoadMetric);
     fn on_live_inference(&self, metric: FfiAsrInferenceMetric);
+    fn on_streaming_error(&self, event: FfiAsrStreamingErrorEvent);
 }
 
 struct FfiAsrRuntimeObserver {
@@ -54,6 +56,13 @@ impl AsrRuntimeObserver for FfiAsrRuntimeObserver {
         let metric = asr_inference_metric_to_ffi(metric);
         let _ = catch_unwind(AssertUnwindSafe(|| {
             self.observer.on_live_inference(metric);
+        }));
+    }
+
+    fn on_streaming_error(&self, event: &AsrStreamingErrorEvent) {
+        let event = asr_streaming_error_event_to_ffi(event);
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            self.observer.on_streaming_error(event);
         }));
     }
 }
@@ -135,7 +144,7 @@ mod tests {
     use super::*;
     use crate::SonaCoreBindingError;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingSession,
+        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
         AsrTranscriptUpdateEvent, AsrTranscriptionRequest, MISTRAL_VOXTRAL_PROVIDER_ID,
         OnlineAsrProviderRequest, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
@@ -153,6 +162,7 @@ mod tests {
         transcript_events: Mutex<Vec<FfiAsrTranscriptUpdateEvent>>,
         model_metrics: Mutex<Vec<FfiAsrModelLoadMetric>>,
         inference_metrics: Mutex<Vec<FfiAsrInferenceMetric>>,
+        streaming_errors: Mutex<Vec<FfiAsrStreamingErrorEvent>>,
     }
 
     impl FfiAsrStreamingObserver for RecordingFfiObserver {
@@ -166,6 +176,10 @@ mod tests {
 
         fn on_live_inference(&self, metric: FfiAsrInferenceMetric) {
             self.inference_metrics.lock().unwrap().push(metric);
+        }
+
+        fn on_streaming_error(&self, event: FfiAsrStreamingErrorEvent) {
+            self.streaming_errors.lock().unwrap().push(event);
         }
     }
 
@@ -182,6 +196,10 @@ mod tests {
 
         fn on_live_inference(&self, _metric: FfiAsrInferenceMetric) {
             panic!("foreign inference callback panicked");
+        }
+
+        fn on_streaming_error(&self, _event: FfiAsrStreamingErrorEvent) {
+            panic!("foreign streaming error callback panicked");
         }
     }
 
@@ -360,13 +378,22 @@ mod tests {
         }
     }
 
+    fn sample_streaming_error() -> AsrStreamingErrorEvent {
+        AsrStreamingErrorEvent {
+            instance_id: "live-1".into(),
+            code: "VOLCENGINE_WEB_SOCKET_CLOSED".into(),
+            message: "closed".into(),
+        }
+    }
+
     #[test]
-    fn observer_adapter_forwards_all_three_typed_callbacks() {
+    fn observer_adapter_forwards_all_typed_callbacks() {
         let observer = Arc::new(RecordingFfiObserver::default());
         let adapter = FfiAsrRuntimeObserver::new(observer.clone());
         adapter.on_transcript_update(&sample_transcript_event());
         adapter.on_model_load(&sample_model_load_metric());
         adapter.on_live_inference(&sample_inference_metric());
+        adapter.on_streaming_error(&sample_streaming_error());
         assert_eq!(
             observer.transcript_events.lock().unwrap()[0].instance_id,
             "live-1"
@@ -379,6 +406,10 @@ mod tests {
             observer.inference_metrics.lock().unwrap()[0].stage,
             "streaming"
         );
+        assert_eq!(
+            observer.streaming_errors.lock().unwrap()[0].code,
+            "VOLCENGINE_WEB_SOCKET_CLOSED"
+        );
     }
 
     #[test]
@@ -390,6 +421,7 @@ mod tests {
                 adapter.on_transcript_update(&sample_transcript_event());
                 adapter.on_model_load(&sample_model_load_metric());
                 adapter.on_live_inference(&sample_inference_metric());
+                adapter.on_streaming_error(&sample_streaming_error());
             }))
             .is_ok()
         );

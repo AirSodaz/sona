@@ -3,6 +3,7 @@ package com.sona.uniffi.consumer
 import com.sona.uniffi.sample.SonaUniffiSmoke
 import uniffi.sona_uniffi_bind.FfiAsrInferenceMetric
 import uniffi.sona_uniffi_bind.FfiAsrModelLoadMetric
+import uniffi.sona_uniffi_bind.FfiAsrStreamingErrorEvent
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
@@ -40,6 +41,7 @@ private class RecordingAsrObserver : FfiAsrStreamingObserver {
     private var latestTranscriptUpdate: FfiAsrTranscriptUpdateEvent? = null
     private var latestModelLoad: FfiAsrModelLoadMetric? = null
     private var latestLiveInference: FfiAsrInferenceMetric? = null
+    private var latestStreamingError: FfiAsrStreamingErrorEvent? = null
 
     override fun onTranscriptUpdate(event: FfiAsrTranscriptUpdateEvent) {
         latestTranscriptUpdate = event
@@ -51,6 +53,10 @@ private class RecordingAsrObserver : FfiAsrStreamingObserver {
 
     override fun onLiveInference(metric: FfiAsrInferenceMetric) {
         latestLiveInference = metric
+    }
+
+    override fun onStreamingError(event: FfiAsrStreamingErrorEvent) {
+        latestStreamingError = event
     }
 }
 

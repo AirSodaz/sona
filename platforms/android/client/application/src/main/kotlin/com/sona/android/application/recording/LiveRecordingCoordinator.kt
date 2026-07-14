@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,10 +32,10 @@ class LiveRecordingCoordinator(
     private val scope: CoroutineScope,
     private val checkpointIntervalMillis: Long = 2_000,
     private val elapsedUpdateIntervalMillis: Long = 1_000,
-) {
+) : LiveRecordingUseCase {
     private val commandMutex = Mutex()
     private val mutableState = MutableStateFlow<LiveRecordingState>(LiveRecordingState.Idle)
-    val state: StateFlow<LiveRecordingState> = mutableState.asStateFlow()
+    override val state: StateFlow<LiveRecordingState> = mutableState.asStateFlow()
 
     private val ownerJob = scope.coroutineContext[Job]
     private val cleanupJob = SupervisorJob()
@@ -49,7 +51,7 @@ class LiveRecordingCoordinator(
         }
     }
 
-    suspend fun start() {
+    override suspend fun start() {
         commandMutex.withLock {
             if (ownerJob?.isActive == false) {
                 return
@@ -75,7 +77,19 @@ class LiveRecordingCoordinator(
                 mutableState.value = LiveRecordingState.NeedsConfiguration
                 return
             }
-            val profile = providerCatalog.loadVolcengineStreamingProfile()
+            val profile = try {
+                providerCatalog.loadVolcengineStreamingProfile()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                mutableState.value = LiveRecordingState.Failed(
+                    RecordingFailure(
+                        category = RecordingFailureCategory.STARTUP,
+                        message = "Unable to load streaming provider configuration.",
+                    ),
+                )
+                return
+            }
             if (
                 profile.providerId.isBlank() ||
                 profile.profileId.isBlank() ||
@@ -90,16 +104,29 @@ class LiveRecordingCoordinator(
                 )
                 return
             }
-            val recordingId = recordingIds.nextRecordingId()
+            val recordingId = try {
+                recordingIds.nextRecordingId()
+            } catch (_: Exception) {
+                mutableState.value = LiveRecordingState.Failed(
+                    RecordingFailure(
+                        category = RecordingFailureCategory.STARTUP,
+                        message = "Unable to prepare a new recording.",
+                    ),
+                )
+                return
+            }
             mutableState.value = LiveRecordingState.Preparing(recordingId)
 
             var draft: RecordingDraft? = null
             var microphone: MicrophoneCaptureSession? = null
             var transcription: StreamingTranscriptionSession? = null
             try {
-                draft = history.createLiveDraft(
-                    CreateLiveDraftRequest(recordingId = recordingId, audioExtension = "wav"),
-                )
+                draft = withContext(NonCancellable) {
+                    history.createLiveDraft(
+                        CreateLiveDraftRequest(recordingId = recordingId, audioExtension = "wav"),
+                    )
+                }
+                currentCoroutineContext().ensureActive()
                 microphone = microphoneCapture.open(
                     MicrophoneCaptureRequest(
                         recordingId = recordingId,
@@ -173,29 +200,34 @@ class LiveRecordingCoordinator(
             session.transcriptJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
                     openedTranscription.events.collect { event ->
-                        if (event is StreamingTranscriptionEvent.Transcript) {
-                            session.publicationMutex.withLock {
-                                val segments = session.transcriptMutex.withLock {
-                                    session.segments =
-                                        TranscriptReducer.apply(session.segments, event.update)
-                                    session.transcriptVersion += 1
-                                    session.segments
-                                }
-                                mutableState.update { current ->
-                                    if (current is LiveRecordingState.Recording) {
-                                        current.copy(segments = segments)
-                                    } else {
-                                        current
+                        when (event) {
+                            is StreamingTranscriptionEvent.Transcript -> {
+                                session.publicationMutex.withLock {
+                                    val segments = session.transcriptMutex.withLock {
+                                        session.segments =
+                                            TranscriptReducer.apply(session.segments, event.update)
+                                        session.transcriptVersion += 1
+                                        session.segments
                                     }
+                                    mutableState.update { current ->
+                                        if (current is LiveRecordingState.Recording) {
+                                            current.copy(segments = segments)
+                                        } else {
+                                            current
+                                        }
+                                    }
+                                    session.checkpointSignals.trySend(Unit)
                                 }
-                                session.checkpointSignals.trySend(Unit)
                             }
+
+                            is StreamingTranscriptionEvent.Failure ->
+                                degradeStreaming(session, awaitEventCollector = false)
                         }
                     }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    degradeStreaming(session, cancelEventCollector = false)
+                    degradeStreaming(session, awaitEventCollector = false)
                 }
             }
             session.frameJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -215,7 +247,7 @@ class LiveRecordingCoordinator(
                             }
                         }
                         if (feedFailed) {
-                            degradeStreaming(session, cancelEventCollector = true)
+                            degradeStreaming(session, awaitEventCollector = true)
                         }
                     }
                 } catch (error: CancellationException) {
@@ -260,7 +292,7 @@ class LiveRecordingCoordinator(
                             }
 
                             MicrophoneCaptureEvent.StreamingQueueOverflow ->
-                                degradeStreaming(session, cancelEventCollector = true)
+                                degradeStreaming(session, awaitEventCollector = true)
 
                             is MicrophoneCaptureEvent.Fatal -> when (event.kind) {
                                 MicrophoneCaptureFailureKind.AUDIO_READ -> {
@@ -350,7 +382,7 @@ class LiveRecordingCoordinator(
         }
     }
 
-    suspend fun stop() {
+    override suspend fun stop() {
         commandMutex.withLock {
             val session = activeSession ?: return
             mutableState.value = LiveRecordingState.Stopping(session.recordingId)
@@ -547,7 +579,7 @@ class LiveRecordingCoordinator(
 
     private suspend fun degradeStreaming(
         session: ActiveSession,
-        cancelEventCollector: Boolean,
+        awaitEventCollector: Boolean,
     ) {
         session.transcriptionMutex.withLock {
             val transcription = session.transcription ?: return
@@ -578,8 +610,8 @@ class LiveRecordingCoordinator(
                 }
             }
         }
-        if (cancelEventCollector) {
-            session.transcriptJob.cancelAndJoin()
+        if (awaitEventCollector) {
+            session.transcriptJob.join()
         }
     }
 

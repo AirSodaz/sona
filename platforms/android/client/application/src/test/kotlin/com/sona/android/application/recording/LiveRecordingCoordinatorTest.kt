@@ -65,6 +65,7 @@ class LiveRecordingCoordinatorTest {
     fun `feed failure before microphone start appears as audio only in initial state`() = runTest {
         val fakes = RecordingFakes()
         fakes.transcription.successfulFeedsBeforeFailure = 0
+        fakes.transcription.eventOnStop = transcriptEvent(id = "final", text = "last words")
         fakes.microphone.emitFrame(Pcm16Frame(byteArrayOf(1, 2)))
         val coordinator = LiveRecordingCoordinator(
             credentialResolver = fakes.credentialResolver,
@@ -90,6 +91,37 @@ class LiveRecordingCoordinatorTest {
             recording.streamingStatus,
         )
         coordinator.stop()
+
+        assertEquals(
+            listOf("last words"),
+            fakes.history.completedRequest?.segments?.map(TranscriptSegment::text),
+        )
+    }
+
+    @Test
+    fun `stop queued during credential loading closes the recording after startup`() = runTest {
+        val fakes = RecordingFakes()
+        val loadStarted = CompletableDeferred<Unit>()
+        val releaseLoad = CompletableDeferred<Unit>()
+        fakes.credentialResolver.loadBarrier = loadStarted to releaseLoad
+        val coordinator = createCoordinator(fakes, backgroundScope)
+
+        val startJob = launch { coordinator.start() }
+        runCurrent()
+        loadStarted.await()
+        val stopJob = launch { coordinator.stop() }
+        runCurrent()
+
+        assertFalse(stopJob.isCompleted)
+        releaseLoad.complete(Unit)
+        startJob.join()
+        stopJob.join()
+
+        assertEquals(LiveRecordingState.Completed("live-1"), coordinator.state.value)
+        assertEquals(
+            listOf("microphone.stop", "microphone.close"),
+            fakes.calls.filter { it == "microphone.stop" || it == "microphone.close" },
+        )
     }
 
     @Test
@@ -372,6 +404,33 @@ class LiveRecordingCoordinatorTest {
     }
 
     @Test
+    fun `reported ASR failure degrades recording without exposing provider detail`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = createCoordinator(fakes, backgroundScope)
+        coordinator.start()
+
+        fakes.transcription.emit(
+            StreamingTranscriptionEvent.Failure(
+                code = "VOLCENGINE_WEB_SOCKET_CLOSED",
+                message = "provider request secret",
+            ),
+        )
+        runCurrent()
+
+        val recording = coordinator.state.value as LiveRecordingState.Recording
+        assertEquals(
+            StreamingStatus.AudioOnly(
+                RecordingFailure(
+                    category = RecordingFailureCategory.STREAMING,
+                    message = "Live transcription stopped; audio recording continues.",
+                ),
+            ),
+            recording.streamingStatus,
+        )
+        coordinator.stop()
+    }
+
+    @Test
     fun `startup cancellation propagates instead of becoming a business failure`() = runTest {
         val fakes = RecordingFakes()
         fakes.history.createFailure = CancellationException("cancel start")
@@ -398,6 +457,64 @@ class LiveRecordingCoordinatorTest {
         assertEquals(
             listOf("credential.loadForStart", "provider.load", "id.next", "history.create"),
             fakes.calls,
+        )
+    }
+
+    @Test
+    fun `cancellation while draft creation is in flight deletes the acquired draft`() = runTest {
+        val fakes = RecordingFakes()
+        val createStarted = CompletableDeferred<Unit>()
+        val releaseCreate = CompletableDeferred<Unit>()
+        fakes.history.createBarrier = createStarted to releaseCreate
+        val coordinator = createCoordinator(fakes, backgroundScope)
+
+        val startJob = launch { coordinator.start() }
+        createStarted.await()
+        startJob.cancel()
+        releaseCreate.complete(Unit)
+        startJob.join()
+
+        assertEquals(LiveRecordingState.Idle, coordinator.state.value)
+        assertEquals(1, fakes.calls.count { it == "history.create" })
+        assertEquals(1, fakes.calls.count { it == "history.delete" })
+        assertFalse(fakes.calls.contains("microphone.open"))
+    }
+
+    @Test
+    fun `provider catalog failure becomes a redacted startup failure`() = runTest {
+        val fakes = RecordingFakes()
+        fakes.providerCatalog.failure = IllegalStateException("manifest path detail")
+        val coordinator = createCoordinator(fakes, backgroundScope)
+
+        coordinator.start()
+
+        assertEquals(
+            LiveRecordingState.Failed(
+                RecordingFailure(
+                    category = RecordingFailureCategory.STARTUP,
+                    message = "Unable to load streaming provider configuration.",
+                ),
+            ),
+            coordinator.state.value,
+        )
+    }
+
+    @Test
+    fun `recording id failure becomes a redacted startup failure`() = runTest {
+        val fakes = RecordingFakes()
+        fakes.recordingIds.failure = IllegalStateException("uuid source detail")
+        val coordinator = createCoordinator(fakes, backgroundScope)
+
+        coordinator.start()
+
+        assertEquals(
+            LiveRecordingState.Failed(
+                RecordingFailure(
+                    category = RecordingFailureCategory.STARTUP,
+                    message = "Unable to prepare a new recording.",
+                ),
+            ),
+            coordinator.state.value,
         )
     }
 
@@ -911,7 +1028,7 @@ class LiveRecordingCoordinatorTest {
     }
 
     @Test
-    fun `feed degradation cancels the event collector when ASR cleanup fails`() = runTest {
+    fun `feed degradation drains the event collector when ASR cleanup fails`() = runTest {
         val fakes = RecordingFakes()
         fakes.transcription.successfulFeedsBeforeFailure = 0
         fakes.transcription.stopFailure = IllegalStateException("provider stop detail")
@@ -1372,5 +1489,19 @@ class LiveRecordingCoordinatorTest {
             removeIds = emptyList(),
             upsertSegments = listOf(segment(id, text)),
         ),
+    )
+
+    private fun createCoordinator(
+        fakes: RecordingFakes,
+        scope: CoroutineScope,
+    ) = LiveRecordingCoordinator(
+        credentialResolver = fakes.credentialResolver,
+        providerCatalog = fakes.providerCatalog,
+        microphoneCapture = fakes.microphone,
+        streamingTranscription = fakes.transcription,
+        history = fakes.history,
+        monotonicClock = fakes.monotonicClock,
+        recordingIds = fakes.recordingIds,
+        scope = scope,
     )
 }

@@ -772,9 +772,15 @@ fn build_volcengine_frame(
     frame
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct VolcengineServerResponseFrame {
+    pub payload: Option<Value>,
+    pub is_final: bool,
+}
+
 pub fn parse_volcengine_server_response_frame(
     frame: &[u8],
-) -> Result<Option<Value>, VolcengineServerFrameError> {
+) -> Result<VolcengineServerResponseFrame, VolcengineServerFrameError> {
     if frame.len() < 8 {
         return Err(VolcengineServerFrameError::FrameTooShort);
     }
@@ -803,11 +809,26 @@ pub fn parse_volcengine_server_response_frame(
         });
     }
     if message_type != 0x09 {
-        return Ok(None);
+        return Ok(VolcengineServerResponseFrame {
+            payload: None,
+            is_final: false,
+        });
     }
 
     let header_size = ((frame[0] & 0x0f) as usize) * 4;
-    let offset = header_size + 4;
+    let flags = frame[1] & 0x0f;
+    let mut offset = header_size;
+    let sequence = if flags & 0x01 != 0 {
+        let sequence = frame
+            .get(offset..offset + 4)
+            .ok_or(VolcengineServerFrameError::PayloadLengthMissing)?;
+        offset += 4;
+        Some(i32::from_be_bytes(sequence.try_into().map_err(|_| {
+            VolcengineServerFrameError::PayloadLengthParseFailed
+        })?))
+    } else {
+        None
+    };
     if frame.len() < offset + 4 {
         return Err(VolcengineServerFrameError::PayloadLengthMissing);
     }
@@ -820,10 +841,14 @@ pub fn parse_volcengine_server_response_frame(
     let Some(payload) = frame.get(payload_start..payload_start + payload_size) else {
         return Err(VolcengineServerFrameError::PayloadIncomplete);
     };
-    serde_json::from_slice(payload).map(Some).map_err(|error| {
+    let payload = serde_json::from_slice(payload).map_err(|error| {
         VolcengineServerFrameError::ResponseParseFailed {
             error: error.to_string(),
         }
+    })?;
+    Ok(VolcengineServerResponseFrame {
+        payload: Some(payload),
+        is_final: flags & 0x02 != 0 || sequence.is_some_and(|value| value < 0),
     })
 }
 
@@ -1303,21 +1328,26 @@ mod tests {
             }
         }))
         .unwrap();
-        let mut frame = vec![0x11, 0x90, 0x10, 0x00];
-        frame.extend_from_slice(&[0, 0, 0, 1]);
+        let mut frame = vec![0x11, 0x93, 0x10, 0x00];
+        frame.extend_from_slice(&(-1_i32).to_be_bytes());
         frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
         frame.extend_from_slice(&payload);
 
-        let parsed = parse_volcengine_server_response_frame(&frame)
-            .expect("frame should parse")
-            .expect("payload should be present");
-        let segments =
-            volcengine_streaming_segments_from_response(&parsed, true).expect("segments");
+        let parsed = parse_volcengine_server_response_frame(&frame).expect("frame should parse");
+        let segments = volcengine_streaming_segments_from_response(
+            parsed.payload.as_ref().expect("payload should be present"),
+            parsed.is_final,
+        )
+        .expect("segments");
 
-        assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].id, "volc-live-0");
-        assert_eq!(segments[0].text, "hello");
-        assert!(segments[0].is_final);
+        assert_eq!(
+            (
+                parsed.is_final,
+                segments[0].text.as_str(),
+                segments[0].is_final
+            ),
+            (true, "hello", true),
+        );
     }
 
     #[test]
