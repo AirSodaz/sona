@@ -6,11 +6,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,16 +23,18 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.os.LocaleListCompat
 import com.sona.android.app.composition.SonaAppContainer
 import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
 import com.sona.android.app.feature.recording.ForegroundRecordingLifecycleEffect
 import com.sona.android.app.feature.recording.MicrophonePermissionDecision
 import com.sona.android.app.feature.recording.MicrophonePermissionPolicy
 import com.sona.android.app.feature.recording.RecordingViewModel
+import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.CredentialSettingsViewModel
 import com.sona.android.app.navigation.SonaApp
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val container: SonaAppContainer by lazy {
         (application as SonaApplication).container
     }
@@ -77,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 bootstrapState = bootstrapState,
                 recordingState = recordingState,
                 credentialState = credentialState,
+                appLanguage = currentAppLanguage(),
                 microphonePermissionGranted = microphonePermissionGranted,
                 onRecordAction = {
                     if (!recordingViewModel.actionRequiresMicrophonePermission()) {
@@ -106,6 +110,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onSaveCredential = credentialViewModel::save,
                 onClearCredential = credentialViewModel::clear,
+                onAppLanguageChanged = ::setAppLanguage,
                 onRetryBootstrap = bootstrapViewModel::refresh,
             )
             if (showPermissionRationale) {
@@ -158,6 +163,19 @@ class MainActivity : ComponentActivity() {
 
     private fun hasMicrophonePermission(): Boolean =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun currentAppLanguage(): AppLanguage = AppLanguage.fromLanguageTags(
+        AppCompatDelegate.getApplicationLocales().toLanguageTags(),
+    )
+
+    private fun setAppLanguage(language: AppLanguage) {
+        val locales = if (language == AppLanguage.SYSTEM) {
+            LocaleListCompat.getEmptyLocaleList()
+        } else {
+            LocaleListCompat.forLanguageTags(language.languageTag)
+        }
+        AppCompatDelegate.setApplicationLocales(locales)
+    }
 
     private fun openAppSettings() {
         startActivity(

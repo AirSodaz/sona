@@ -26,6 +26,7 @@ import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.recording.RecordScreen
+import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.CredentialSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.ui.theme.SonaTheme
@@ -33,14 +34,16 @@ import com.sona.android.application.recording.LiveRecordingState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SonaApp(
+internal fun SonaApp(
     bootstrapState: SonaBootstrapUiState,
     recordingState: LiveRecordingState,
     credentialState: CredentialSettingsUiState,
+    appLanguage: AppLanguage,
     microphonePermissionGranted: Boolean,
     onRecordAction: () -> Unit,
     onSaveCredential: (String) -> Unit,
     onClearCredential: () -> Unit,
+    onAppLanguageChanged: (AppLanguage) -> Unit,
     onRetryBootstrap: () -> Unit,
 ) {
     var dynamicColorEnabled by rememberSaveable { mutableStateOf(false) }
@@ -123,7 +126,9 @@ fun SonaApp(
                         SettingsScreen(
                             bootstrapState = bootstrapState,
                             credentialState = credentialState,
+                            appLanguage = appLanguage,
                             dynamicColorEnabled = dynamicColorEnabled,
+                            onAppLanguageChanged = onAppLanguageChanged,
                             onDynamicColorChanged = { dynamicColorEnabled = it },
                             onSaveCredential = onSaveCredential,
                             onClearCredential = onClearCredential,

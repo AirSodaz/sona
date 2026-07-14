@@ -1,6 +1,7 @@
 package com.sona.android.app.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,16 +14,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +55,9 @@ import com.sona.android.application.recording.CredentialStatus
 internal fun SettingsScreen(
     bootstrapState: SonaBootstrapUiState,
     credentialState: CredentialSettingsUiState,
+    appLanguage: AppLanguage,
     dynamicColorEnabled: Boolean,
+    onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
     onSaveCredential: (String) -> Unit,
     onClearCredential: () -> Unit,
@@ -65,6 +73,10 @@ internal fun SettingsScreen(
             text = stringResource(R.string.appearance_heading),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
+        )
+        LanguageSelector(
+            selectedLanguage = appLanguage,
+            onLanguageChanged = onAppLanguageChanged,
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -90,6 +102,64 @@ internal fun SettingsScreen(
             fontWeight = FontWeight.SemiBold,
         )
         RuntimeStatus(bootstrapState)
+    }
+}
+
+@Composable
+private fun LanguageSelector(
+    selectedLanguage: AppLanguage,
+    onLanguageChanged: (AppLanguage) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.language_label),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val menuWidth = maxWidth
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(selectedLanguage.labelRes),
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDropDown,
+                    contentDescription = null,
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.width(menuWidth),
+            ) {
+                AppLanguage.entries.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(language.labelRes)) },
+                        onClick = {
+                            expanded = false
+                            if (language != selectedLanguage) {
+                                onLanguageChanged(language)
+                            }
+                        },
+                        leadingIcon = {
+                            if (language == selectedLanguage) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                )
+                            } else {
+                                Spacer(Modifier.size(24.dp))
+                            }
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
