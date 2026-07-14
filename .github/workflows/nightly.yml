@@ -242,7 +242,11 @@ jobs:
 
       - name: Verify Android release artifacts
         run: |
-          for apk in app-arm64-v8a-debug.apk app-x86_64-debug.apk; do
+          for apk in \
+            app-arm64-v8a-debug.apk \
+            app-x86_64-debug.apk \
+            app-arm64-v8a-release-unsigned.apk \
+            app-x86_64-release-unsigned.apk; do
             count=$(find all-artifacts -type f -name "$apk" | wc -l)
             if [ "$count" -ne 1 ]; then
               echo "::error::Expected exactly one $apk, found $count"

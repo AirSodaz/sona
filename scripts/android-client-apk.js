@@ -44,7 +44,7 @@ function verifyAndroidClientApk(apkPath, abi) {
     throw new Error(`Android client does not deliver an APK for ABI ${abi}`);
   }
   if (!fs.existsSync(apkPath)) {
-    throw new Error(`Missing Android client debug APK at ${apkPath}`);
+    throw new Error(`Missing Android client APK at ${apkPath}`);
   }
 
   const entries = new Set(readZipEntries(fs.readFileSync(apkPath)));

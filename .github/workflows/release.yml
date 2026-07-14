@@ -186,7 +186,11 @@ jobs:
 
       - name: Verify Android release artifacts
         run: |
-          for apk in app-arm64-v8a-debug.apk app-x86_64-debug.apk; do
+          for apk in \
+            app-arm64-v8a-debug.apk \
+            app-x86_64-debug.apk \
+            app-arm64-v8a-release-unsigned.apk \
+            app-x86_64-release-unsigned.apk; do
             count=$(find all-artifacts -type f -name "$apk" | wc -l)
             if [ "$count" -ne 1 ]; then
               echo "::error::Expected exactly one $apk, found $count"
@@ -212,8 +216,9 @@ jobs:
           **Linux**
           [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)
 
-          **Android (preview debug builds)**
-          [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-debug.apk)
+          **Android (preview builds)**
+          Debug-signed: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-debug.apk)
+          Unsigned release: [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-arm64-v8a-release-unsigned.apk) | [x86_64](https://github.com/AirSodaz/sona/releases/download/$VERSION/app-x86_64-release-unsigned.apk)
           EOF
 
       - name: Build updater.json from signatures

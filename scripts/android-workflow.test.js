@@ -27,8 +27,14 @@ function workflowNeeds(job) {
 
 function assertAndroidReleaseDelivery(publishJob, releaseStepName) {
   const verification = workflowStep(publishJob, 'Verify Android release artifacts').run;
-  assert.match(verification, /app-arm64-v8a-debug\.apk/u);
-  assert.match(verification, /app-x86_64-debug\.apk/u);
+  for (const apk of [
+    'app-arm64-v8a-debug.apk',
+    'app-x86_64-debug.apk',
+    'app-arm64-v8a-release-unsigned.apk',
+    'app-x86_64-release-unsigned.apk',
+  ]) {
+    assert.match(verification, new RegExp(apk.replaceAll('.', '\\.'), 'u'));
+  }
   assert.match(verification, /find all-artifacts -type f -name "\$apk"/u);
   assert.match(verification, /"\$count" -ne 1/u);
   assert.match(verification, /exit 1/u);
@@ -45,7 +51,7 @@ function assertAndroidReleaseDelivery(publishJob, releaseStepName) {
   assert.equal(release.with.artifactErrorsFailBuild, true);
 }
 
-test('reusable Android workflow builds and uploads both independent APKs', () => {
+test('reusable Android workflow builds and uploads debug and release APKs', () => {
   const workflow = readWorkflow('android-client.yml');
   const workflowCallInput = workflow.on?.workflow_call?.inputs?.artifact_prefix;
   const workflowDispatchInput = workflow.on?.workflow_dispatch?.inputs?.artifact_prefix;
@@ -91,19 +97,28 @@ test('reusable Android workflow builds and uploads both independent APKs', () =>
   assert.doesNotMatch(JSON.stringify(job.steps), /yes \| sdkmanager/u);
 
   const buildStep = workflowStep(job, 'Build and verify Android client');
-  assert.deepEqual(buildStep.env, { SONA_ANDROID_ABIS: 'arm64-v8a,x86_64' });
+  assert.deepEqual(buildStep.env, {
+    SONA_ANDROID_ABIS: 'arm64-v8a,x86_64',
+    SONA_ANDROID_BUILD_RELEASE: 'true',
+  });
   assert.equal(buildStep.run, 'pnpm run verify:android-client');
 
   const expectedUploads = [
     {
-      stepName: 'Upload ARM64 APK',
+      stepName: 'Upload ARM64 APKs',
       artifactName: '${{ inputs.artifact_prefix }}-arm64-v8a',
-      apkPath: 'platforms/android/client/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk',
+      apkPaths: [
+        'platforms/android/client/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk',
+        'platforms/android/client/app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk',
+      ],
     },
     {
-      stepName: 'Upload x86_64 APK',
+      stepName: 'Upload x86_64 APKs',
       artifactName: '${{ inputs.artifact_prefix }}-x86_64',
-      apkPath: 'platforms/android/client/app/build/outputs/apk/debug/app-x86_64-debug.apk',
+      apkPaths: [
+        'platforms/android/client/app/build/outputs/apk/debug/app-x86_64-debug.apk',
+        'platforms/android/client/app/build/outputs/apk/release/app-x86_64-release-unsigned.apk',
+      ],
     },
   ];
 
@@ -115,7 +130,7 @@ test('reusable Android workflow builds and uploads both independent APKs', () =>
     const upload = workflowStep(job, expected.stepName);
     assert.equal(upload.uses, 'actions/upload-artifact@v7');
     assert.equal(upload.with.name, expected.artifactName);
-    assert.equal(upload.with.path, expected.apkPath);
+    assert.deepEqual(upload.with.path.trim().split(/\s+/u), expected.apkPaths);
     assert.equal(upload.with['if-no-files-found'], 'error');
     assert.equal(upload.with['retention-days'], 14);
   }
@@ -147,7 +162,7 @@ test('PR Android build initializes Java and the SDK in the Rust backend job', ()
   assert.doesNotMatch(JSON.stringify(job.steps), /yes \| sdkmanager/u);
 });
 
-test('stable release waits for Android and publishes both APKs', () => {
+test('stable release waits for Android and publishes all APKs', () => {
   const workflow = readWorkflow('release.yml');
   const androidJob = workflow.jobs?.['android-client'];
   const publishJob = workflow.jobs?.['publish-release'];
@@ -162,9 +177,13 @@ test('stable release waits for Android and publishes both APKs', () => {
   assert.equal(download.with['merge-multiple'], true);
 
   const releaseNotes = workflowStep(publishJob, 'Extract Release Notes').run;
-  assert.match(releaseNotes, /Android \(preview debug builds\)/u);
+  assert.match(releaseNotes, /Android \(preview builds\)/u);
+  assert.match(releaseNotes, /Debug-signed/u);
+  assert.match(releaseNotes, /Unsigned release/u);
   assert.match(releaseNotes, /app-arm64-v8a-debug\.apk/u);
   assert.match(releaseNotes, /app-x86_64-debug\.apk/u);
+  assert.match(releaseNotes, /app-arm64-v8a-release-unsigned\.apk/u);
+  assert.match(releaseNotes, /app-x86_64-release-unsigned\.apk/u);
   assertAndroidReleaseDelivery(publishJob, 'Create or Update GitHub Release');
   assert.doesNotMatch(JSON.stringify(workflow.jobs), /pnpm run verify:android-client/u);
 });
@@ -192,6 +211,8 @@ test('nightly release publishes APK assets without advertising them in notes', (
   assert.doesNotMatch(releaseBody, /Android preview APKs/u);
   assert.doesNotMatch(releaseBody, /app-arm64-v8a-debug\.apk/u);
   assert.doesNotMatch(releaseBody, /app-x86_64-debug\.apk/u);
+  assert.doesNotMatch(releaseBody, /app-arm64-v8a-release-unsigned\.apk/u);
+  assert.doesNotMatch(releaseBody, /app-x86_64-release-unsigned\.apk/u);
   assertAndroidReleaseDelivery(publishJob, 'Create or update nightly release');
   assert.doesNotMatch(JSON.stringify(workflow.jobs), /pnpm run verify:android-client/u);
 });

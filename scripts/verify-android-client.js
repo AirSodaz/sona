@@ -9,10 +9,14 @@ const repoRoot = path.resolve(path.dirname(__filename), '..');
 const clientProjectDir = path.join(repoRoot, 'platforms', 'android', 'client');
 const managedGradleRunner = path.join(repoRoot, 'scripts', 'run-managed-gradle.js');
 const defaultAndroidAbis = ['arm64-v8a', 'x86_64'];
-const apkFileNames = new Map([
-  ['arm64-v8a', 'app-arm64-v8a-debug.apk'],
-  ['x86_64', 'app-x86_64-debug.apk'],
-]);
+const supportedAndroidAbis = new Set(defaultAndroidAbis);
+const buildRelease = process.env.SONA_ANDROID_BUILD_RELEASE === 'true';
+const apkVariants = [
+  { outputDir: 'debug', fileSuffix: 'debug' },
+];
+if (buildRelease) {
+  apkVariants.push({ outputDir: 'release', fileSuffix: 'release-unsigned' });
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -41,7 +45,7 @@ function selectedAndroidAbis(value) {
     throw new Error('SONA_ANDROID_ABIS must select at least one Android ABI');
   }
   for (const abi of abis) {
-    if (!apkFileNames.has(abi)) {
+    if (!supportedAndroidAbis.has(abi)) {
       throw new Error(`Android client does not deliver an APK for ABI ${abi}`);
     }
   }
@@ -55,11 +59,7 @@ const gradleEnv = {
 };
 const androidAbis = selectedAndroidAbis(gradleEnv.SONA_ANDROID_ABIS ?? defaultAndroidAbiList);
 
-run(process.execPath, [
-  managedGradleRunner,
-  '--project-dir',
-  clientProjectDir,
-  '--',
+const gradleArgs = [
   '--no-daemon',
   ':application:testDebugUnitTest',
   ':adapters:android:testDebugUnitTest',
@@ -67,12 +67,32 @@ run(process.execPath, [
   ':adapters:android:lintDebug',
   ':app:assembleDebug',
   ':app:lintDebug',
+];
+if (buildRelease) {
+  gradleArgs.push(':app:assembleRelease');
+}
+
+run(process.execPath, [
+  managedGradleRunner,
+  '--project-dir',
+  clientProjectDir,
+  '--',
+  ...gradleArgs,
   '--quiet',
 ], { env: gradleEnv });
 
-const apkOutputDir = path.join(clientProjectDir, 'app', 'build', 'outputs', 'apk', 'debug');
-for (const abi of androidAbis) {
-  const apkPath = path.join(apkOutputDir, apkFileNames.get(abi));
-  verifyAndroidClientApk(apkPath, abi);
-  console.log(`Verified Sona Android ${abi} client at ${apkPath}`);
+for (const variant of apkVariants) {
+  const apkOutputDir = path.join(
+    clientProjectDir,
+    'app',
+    'build',
+    'outputs',
+    'apk',
+    variant.outputDir,
+  );
+  for (const abi of androidAbis) {
+    const apkPath = path.join(apkOutputDir, `app-${abi}-${variant.fileSuffix}.apk`);
+    verifyAndroidClientApk(apkPath, abi);
+    console.log(`Verified Sona Android ${abi} ${variant.outputDir} client at ${apkPath}`);
+  }
 }

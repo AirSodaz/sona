@@ -445,11 +445,7 @@ test('Android client has a repeatable local and CI verification entry point', ()
   assert.match(verifier, /path\.join\(repoRoot, 'scripts', 'run-managed-gradle\.js'\)/u);
   assert.match(verifier, /path\.join\(repoRoot, 'platforms', 'android', 'client'\)/u);
   const normalizedVerifier = normalizeNewlines(verifier);
-  const expectedGradleInvocation = `run(process.execPath, [
-  managedGradleRunner,
-  '--project-dir',
-  clientProjectDir,
-  '--',
+  const expectedGradleArgs = `const gradleArgs = [
   '--no-daemon',
   ':application:testDebugUnitTest',
   ':adapters:android:testDebugUnitTest',
@@ -457,12 +453,19 @@ test('Android client has a repeatable local and CI verification entry point', ()
   ':adapters:android:lintDebug',
   ':app:assembleDebug',
   ':app:lintDebug',
-  '--quiet',
-], { env: gradleEnv });`;
+];`;
   assert.equal(
-    normalizedVerifier.includes(expectedGradleInvocation),
+    normalizedVerifier.includes(expectedGradleArgs),
     true,
-    'Android verification must run one ordered serial Gradle gate',
+    'Android verification must preserve the ordered debug Gradle gate',
+  );
+  assert.match(
+    verifier,
+    /if \(buildRelease\) \{\s+gradleArgs\.push\(':app:assembleRelease'\);\s+\}/u,
+  );
+  assert.match(
+    verifier,
+    /run\(process\.execPath, \[\s+managedGradleRunner,[\s\S]*\.\.\.gradleArgs,[\s\S]*'--quiet',[\s\S]*\], \{ env: gradleEnv \}\);/u,
   );
   assert.equal(
     normalizedVerifier.match(/run\(process\.execPath, \[/gu)?.length,
@@ -473,7 +476,7 @@ test('Android client has a repeatable local and CI verification entry point', ()
     verifier,
     /SONA_ANDROID_ABIS:\s*process\.env\.SONA_ANDROID_ABIS\s*\?\?\s*'arm64-v8a,x86_64'/u,
   );
-  assert.match(apkVerifier, /Missing Android client debug APK/u);
+  assert.match(apkVerifier, /Missing Android client APK/u);
 
   assert.match(workflow, /uses: android-actions\/setup-android@v3/u);
   assert.match(workflow, /platforms;android-37\.0/u);
@@ -515,14 +518,18 @@ test('Android client verification delivers independent arm64-v8a and x86_64 APKs
     verifier,
     /SONA_ANDROID_ABIS:\s*process\.env\.SONA_ANDROID_ABIS\s*\?\?\s*'arm64-v8a,x86_64'/u,
   );
+  assert.match(
+    verifier,
+    /const buildRelease = process\.env\.SONA_ANDROID_BUILD_RELEASE === 'true'/u,
+  );
   assert.match(verifier, /':app:lintDebug'/u);
+  assert.match(verifier, /outputDir: 'release', fileSuffix: 'release-unsigned'/u);
   assert.match(
     verifier,
     /import \{ verifyAndroidClientApk \} from '\.\/android-client-apk\.js';/u,
   );
   assert.match(verifier, /verifyAndroidClientApk\(apkPath, abi\)/u);
   for (const abi of ['arm64-v8a', 'x86_64']) {
-    assert.match(verifier, new RegExp(`app-${abi}-debug\\.apk`, 'u'));
     assert.match(readme, new RegExp(`app-${abi}-debug\\.apk`, 'u'));
   }
 });
