@@ -25,6 +25,8 @@ import type {
 import { normalizeError } from '../../../utils/errorUtils';
 import {
   addLlmModel,
+  enrichLlmModelMetadata,
+  findLlmModelId,
   getProviderLlmModels,
   isProviderModelDiscoveryExpired,
   modelSummaryToMetadata,
@@ -86,7 +88,10 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const autoRefreshKeyRef = useRef<string | null>(null);
   const latestLlmStateRef = useRef(currentLlmState);
+  const isMountedRef = useRef(true);
+  const openProviderRef = useRef({ isOpen, provider });
   latestLlmStateRef.current = currentLlmState;
+  openProviderRef.current = { isOpen, provider };
   const savedModelCount = providerModels.length;
 
   const applyTrackedLlmSettings = useCallback((nextSettings: LlmAssistantConfig['llmSettings']) => {
@@ -95,6 +100,12 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     }
     applyLlmSettings(nextSettings);
   }, [applyLlmSettings]);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const refreshProviderModels = useCallback(async () => {
     if (!definition.supportsModelListing) {
@@ -180,6 +191,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       model,
       source: 'manual',
     });
+    const modelId = findLlmModelId(nextSettings, provider, model);
     applyTrackedLlmSettings(nextSettings);
     setDraftModelName('');
 
@@ -191,19 +203,26 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       ...buildLlmConfig(provider, setting, currentLlmState.customProviders),
       model,
     }).then((summary) => {
-      if (!summary || summary.model !== model) {
+      const requestContext = openProviderRef.current;
+      if (
+        !isMountedRef.current
+        || !requestContext.isOpen
+        || requestContext.provider !== provider
+        || !modelId
+        || !summary
+        || summary.model !== model
+      ) {
         return;
       }
       const metadata = modelSummaryToMetadata(summary);
       if (Object.keys(metadata).length === 0) {
         return;
       }
-      applyTrackedLlmSettings(addLlmModel(latestLlmStateRef.current, {
-        provider,
-        model,
-        source: 'manual',
-        metadata,
-      }));
+      const latestState = latestLlmStateRef.current;
+      const enrichedState = enrichLlmModelMetadata(latestState, modelId, metadata);
+      if (enrichedState !== latestState) {
+        applyTrackedLlmSettings(enrichedState);
+      }
     }).catch(() => {
       // Catalog enrichment is best-effort and must not block a manual model.
     });

@@ -81,7 +81,7 @@ describe('llm migration', () => {
     expect(llmSettings.selections.summaryModelId).toBe(llmSettings.modelOrder[0]);
   });
 
-  it('cleans dangling selections and invalid stored temperatures during normalization', () => {
+  it('normalizes persisted feature selections', () => {
     const { llmSettings } = ensureLlmState({
       llmSettings: {
         activeProvider: 'open_ai',
@@ -105,6 +105,9 @@ describe('llm migration', () => {
           summaryModelId: 'missing-model',
           polishTemperature: 9,
           translationTemperature: 1.2,
+          polishReasoningEnabled: true,
+          polishReasoningLevel: 'high',
+          translationReasoningLevel: 'invalid',
         },
       },
     } as any);
@@ -114,6 +117,11 @@ describe('llm migration', () => {
     expect(llmSettings.selections.summaryModelId).toBeUndefined();
     expect(llmSettings.selections.polishTemperature).toBeUndefined();
     expect(llmSettings.selections.translationTemperature).toBe(1.2);
+    expect(llmSettings.selections).toEqual(expect.objectContaining({
+      polishReasoningEnabled: true,
+      polishReasoningLevel: 'high',
+    }));
+    expect(llmSettings.selections.translationReasoningLevel).toBeUndefined();
   });
 
   it('bootstraps a translation-only fallback when no model survives migration', () => {

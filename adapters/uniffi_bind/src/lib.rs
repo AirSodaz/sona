@@ -13,6 +13,7 @@ mod history_query_bridge;
 mod json_bridge;
 mod llm_bridge;
 mod llm_runtime_bridge;
+mod llm_task_bridge;
 mod mapper;
 mod model_bridge;
 mod project_bridge;
@@ -22,13 +23,15 @@ mod storage_usage_bridge;
 mod task_ledger_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
+pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
     FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiBatchSegmentationMode,
     FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata,
     FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary, FfiLlmPromptChunk,
     FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
-    FfiLlmSegmentInput, FfiLlmTokenUsage, FfiModelCatalogGroup, FfiModelCatalogModel,
+    FfiLlmSegmentInput, FfiLlmTaskChunk, FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText,
+    FfiLlmTaskType, FfiLlmTokenUsage, FfiModelCatalogGroup, FfiModelCatalogModel,
     FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
     FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
     FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
@@ -644,6 +647,30 @@ pub async fn describe_llm_model_json(
     config_json: String,
 ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
     SonaCoreFacade::describe_llm_model_json(config_json).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_polish_json(
+    request_json: String,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    SonaCoreFacade::run_llm_polish_json(request_json, observer).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_translate_json(
+    request_json: String,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    SonaCoreFacade::run_llm_translate_json(request_json, observer).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_summary_json(
+    request_json: String,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    SonaCoreFacade::run_llm_summary_json(request_json, observer).await
 }
 
 #[uniffi::export]

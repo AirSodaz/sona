@@ -94,7 +94,7 @@ fn map_runtime_error(error: LlmRuntimeError) -> SonaCoreBindingError {
     }
 }
 
-fn port_error_code(kind: LlmPortErrorKind) -> &'static str {
+pub(crate) fn port_error_code(kind: LlmPortErrorKind) -> &'static str {
     match kind {
         LlmPortErrorKind::InvalidRequest => "invalid_request",
         LlmPortErrorKind::Authentication => "authentication",

@@ -1,16 +1,17 @@
 use crate::{
     FfiAsrStreamingObserver, FfiAsrStreamingSession, FfiBatchSegmentationMode,
     FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmModelSummary,
-    FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput, FfiModelCatalogSelectedIds,
-    FfiModelCatalogSnapshot, FfiModelSelectionPaths, FfiOnlineAsrProvider,
-    FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
-    FfiResolvedModelDownload, FfiRuntimePathStatus, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
-    FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, app_config_repository_bridge, asr_bridge,
-    asr_streaming_bridge, automation_bridge, backup_bridge, config_bridge, dashboard_bridge,
-    diagnostics_bridge, export_bridge, history_mutation_bridge, history_query_bridge, llm_bridge,
-    llm_runtime_bridge, model_bridge, project_bridge, recovery_bridge, runtime_bridge,
-    storage_usage_bridge, task_ledger_bridge,
+    FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput, FfiLlmTaskFinal, FfiLlmTaskObserver,
+    FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot, FfiModelSelectionPaths,
+    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
+    FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
+    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
+    app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
+    backup_bridge, config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge,
+    history_mutation_bridge, history_query_bridge, llm_bridge, llm_runtime_bridge, llm_task_bridge,
+    model_bridge, project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge,
+    task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -500,6 +501,27 @@ impl SonaCoreFacade {
         config_json: String,
     ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
         llm_runtime_bridge::describe_llm_model_json(config_json).await
+    }
+
+    pub async fn run_llm_polish_json(
+        request_json: String,
+        observer: Arc<dyn FfiLlmTaskObserver>,
+    ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+        llm_task_bridge::run_llm_polish_json(request_json, observer).await
+    }
+
+    pub async fn run_llm_translate_json(
+        request_json: String,
+        observer: Arc<dyn FfiLlmTaskObserver>,
+    ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+        llm_task_bridge::run_llm_translate_json(request_json, observer).await
+    }
+
+    pub async fn run_llm_summary_json(
+        request_json: String,
+        observer: Arc<dyn FfiLlmTaskObserver>,
+    ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+        llm_task_bridge::run_llm_summary_json(request_json, observer).await
     }
 
     pub fn validate_llm_config_json(config_json: String) -> SonaCoreBindingResult<()> {

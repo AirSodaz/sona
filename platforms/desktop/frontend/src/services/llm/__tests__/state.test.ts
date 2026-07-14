@@ -5,6 +5,7 @@ import {
   createLlmSettings,
   addCustomProvider,
   ensureProviderSetting,
+  enrichLlmModelMetadata,
   findLlmModelId,
   getModelDiscoveryStatus,
   getFeatureModelEntry,
@@ -336,13 +337,12 @@ describe('llm state', () => {
     const modelId = findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1')!;
     llmSettings = updateLlmModelMetadata(llmSettings, modelId, { cacheReadPrice: 0.25 });
 
-    const refreshed = syncProviderDiscoveredModels(llmSettings, 'open_ai', [{
-      model: 'gpt-4.1',
+    const refreshed = enrichLlmModelMetadata(llmSettings, modelId, {
       displayName: 'GPT 4.1',
       cacheReadPrice: 0.4,
       supportsPromptCaching: true,
       metadataSources: ['models_dev'],
-    }]);
+    });
 
     expect(refreshed.models[modelId]).toEqual(expect.objectContaining({
       metadata: expect.objectContaining({
@@ -353,6 +353,7 @@ describe('llm state', () => {
       }),
       metadataOverrides: expect.objectContaining({ cacheReadPrice: true }),
     }));
+    expect(enrichLlmModelMetadata(refreshed, 'missing', { displayName: 'stale' })).toBe(refreshed);
   });
 
   it('keeps edited manual model metadata outside discovered refreshes', () => {

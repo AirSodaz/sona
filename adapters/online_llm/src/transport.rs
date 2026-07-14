@@ -11,6 +11,18 @@ use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 pub(crate) fn classify_llm_port_error(message: impl Into<String>) -> LlmPortError {
     let message = message.into();
     let normalized = message.to_ascii_lowercase();
+    let has_status_context = ["http", "status", "response", "api error", "server"]
+        .iter()
+        .any(|marker| normalized.contains(marker));
+    let has_server_status = has_status_context
+        && normalized
+            .split(|character: char| !character.is_ascii_digit())
+            .filter_map(|token| {
+                (token.len() == 3)
+                    .then(|| token.parse::<u16>().ok())
+                    .flatten()
+            })
+            .any(|status| (500..=599).contains(&status));
     let kind = if normalized.contains("401") || normalized.contains("authentication") {
         LlmPortErrorKind::Authentication
     } else if normalized.contains("403") || normalized.contains("permission") {
@@ -19,11 +31,7 @@ pub(crate) fn classify_llm_port_error(message: impl Into<String>) -> LlmPortErro
         LlmPortErrorKind::RateLimited
     } else if normalized.contains("timed out") || normalized.contains("timeout") {
         LlmPortErrorKind::Timeout
-    } else if normalized.contains("500")
-        || normalized.contains("502")
-        || normalized.contains("503")
-        || normalized.contains("504")
-    {
+    } else if has_server_status {
         LlmPortErrorKind::Unavailable
     } else if normalized.contains("connection")
         || normalized.contains("connect")
@@ -42,7 +50,7 @@ pub(crate) fn classify_llm_port_error(message: impl Into<String>) -> LlmPortErro
     LlmPortError::new(kind, message)
 }
 
-fn reqwest_port_error(error: reqwest::Error) -> LlmPortError {
+pub(crate) fn reqwest_port_error(error: reqwest::Error) -> LlmPortError {
     let kind = if error.is_timeout() {
         LlmPortErrorKind::Timeout
     } else if error.is_connect() || error.is_request() {
@@ -53,8 +61,23 @@ fn reqwest_port_error(error: reqwest::Error) -> LlmPortError {
     LlmPortError::new(kind, error.to_string())
 }
 
-fn http_status_port_error(status: StatusCode, headers: &HeaderMap, body: String) -> LlmPortError {
+pub(crate) fn http_status_port_error(
+    status: StatusCode,
+    headers: &HeaderMap,
+    body: String,
+) -> LlmPortError {
+    let normalized_body = body.to_ascii_lowercase();
+    let streaming_unsupported = normalized_body.contains("stream")
+        && (normalized_body.contains("unsupported")
+            || normalized_body.contains("not support")
+            || normalized_body.contains("does not support"));
     let kind = match status {
+        _ if status.is_client_error()
+            && status != StatusCode::TOO_MANY_REQUESTS
+            && streaming_unsupported =>
+        {
+            LlmPortErrorKind::Unsupported
+        }
         StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::UNPROCESSABLE_ENTITY => {
             LlmPortErrorKind::InvalidRequest
         }
@@ -220,6 +243,14 @@ mod tests {
         assert_eq!(
             classify_llm_port_error("error sending request: connection refused").kind,
             LlmPortErrorKind::Network
+        );
+        assert_eq!(
+            classify_llm_port_error("provider response status: 529").kind,
+            LlmPortErrorKind::Unavailable
+        );
+        assert_eq!(
+            classify_llm_port_error("invalid JSON at column 529").kind,
+            LlmPortErrorKind::Protocol
         );
     }
 }

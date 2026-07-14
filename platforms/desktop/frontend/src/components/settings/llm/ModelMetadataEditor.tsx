@@ -77,13 +77,19 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
   t,
 }: ModelMetadataEditorProps) {
   const [draft, setDraft] = useState<ModelMetadataDraft>(() => createDraft(entry));
+  const [dirtyFields, setDirtyFields] = useState<Set<keyof ModelMetadataDraft>>(() => new Set());
   const [error, setError] = useState('');
+
+  const markDirty = (field: keyof ModelMetadataDraft) => {
+    setDirtyFields((current) => current.has(field) ? current : new Set(current).add(field));
+  };
 
   const setText = (
     field: keyof Pick<ModelMetadataDraft, 'displayName' | 'knowledgeCutoff' | 'releaseDate' | 'lastUpdated'>,
     value: string,
   ) => {
     setDraft((current) => ({ ...current, [field]: value }));
+    markDirty(field);
   };
 
   const setNumber = (
@@ -91,6 +97,7 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
     value: string,
   ) => {
     setDraft((current) => ({ ...current, [field]: value }));
+    markDirty(field);
     setError('');
   };
 
@@ -99,6 +106,7 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
     checked: boolean,
   ) => {
     setDraft((current) => ({ ...current, [field]: checked }));
+    markDirty(field);
   };
 
   const setModality = (
@@ -106,6 +114,7 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
     modality: LlmModality,
     checked: boolean,
   ) => {
+    markDirty(field);
     setDraft((current) => ({
       ...current,
       [field]: checked
@@ -133,7 +142,7 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
       return;
     }
 
-    onSave({
+    const metadata: Partial<LlmModelMetadata> = {
       displayName: parseOptionalText(draft.displayName),
       contextWindow: contextWindow ?? undefined,
       maxOutputTokens: maxOutputTokens ?? undefined,
@@ -151,7 +160,12 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
       supportsReasoning: draft.supportsReasoning,
       supportsStructuredOutput: draft.supportsStructuredOutput,
       supportsPromptCaching: draft.supportsPromptCaching,
+    };
+    const changes: Partial<LlmModelMetadata> = {};
+    dirtyFields.forEach((field) => {
+      changes[field] = metadata[field] as never;
     });
+    onSave(changes);
   };
 
   const textFields = [

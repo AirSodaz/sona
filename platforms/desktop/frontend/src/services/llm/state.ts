@@ -376,6 +376,30 @@ export function updateLlmModelMetadata(
   };
 }
 
+export function enrichLlmModelMetadata(
+  llmSettings: LlmSettings | undefined,
+  modelId: string,
+  metadata: Partial<LlmModelMetadata>,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const existing = current.models[modelId];
+  if (!existing) {
+    return current;
+  }
+
+  return {
+    ...current,
+    customProviders: current.customProviders ?? {},
+    models: {
+      ...current.models,
+      [modelId]: {
+        ...existing,
+        metadata: mergeModelMetadata(existing.metadata, metadata, existing.metadataOverrides),
+      },
+    },
+  };
+}
+
 export function removeLlmModel(
   llmSettings: LlmSettings | undefined,
   modelId: string,

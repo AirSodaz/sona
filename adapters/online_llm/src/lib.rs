@@ -18,7 +18,7 @@ pub use completion::{
 pub use gemini::{
     GeminiAdapter, GeminiGenerateContentRequestParts,
     build_gemini_generate_content_request_parts_for_reqwest, build_gemini_payload_for_request,
-    extract_gemini_usage,
+    extract_gemini_usage, extract_gemini_visible_text,
 };
 pub use model_discovery::{
     build_gemini_models_url, build_openai_models_urls, get_gemini_models, get_openai_models,
@@ -54,7 +54,8 @@ use sona_core::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
 use sona_core::llm::streaming_protocol::StreamTextAccumulator;
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelLister, LlmModelMetadataPort, LlmPortError,
-    LlmStreamingPort, LlmTextGenerator,
+    LlmStreamingPort, LlmTaskDelayPort, LlmTextGenerator, LlmTranslationPort,
+    LlmTranslationRequest,
 };
 
 use crate::models_dev::default_models_dev_catalog;
@@ -104,9 +105,111 @@ impl LlmStreamingPort for OnlineLlmAdapter {
         match stream_result {
             Ok(Some(response)) => Ok(response),
             Ok(None) => complete_with_provider(request).await,
-            Err(_) if !emitted_any => complete_with_provider(request).await,
-            Err(error) => Err(classify_llm_port_error(error)),
+            Err(error)
+                if !emitted_any
+                    && error.kind == sona_core::ports::llm::LlmPortErrorKind::Unsupported =>
+            {
+                complete_with_provider(request).await
+            }
+            Err(error) => Err(error),
         }
+    }
+}
+
+#[async_trait]
+impl LlmTaskDelayPort for OnlineLlmAdapter {
+    async fn delay(&self, duration: std::time::Duration) {
+        tokio::time::sleep(duration).await;
+    }
+}
+
+#[async_trait]
+impl LlmTranslationPort for OnlineLlmAdapter {
+    async fn translate_batch(
+        &self,
+        request: LlmTranslationRequest,
+    ) -> Result<Vec<String>, LlmPortError> {
+        let config = request.config;
+        let target_language = request.target_language;
+        let base_url = LlmApiUrl::parse(&config.base_url).map_err(classify_llm_port_error)?;
+        let client = base_url
+            .client(config.timeout_seconds)
+            .map_err(classify_llm_port_error)?;
+
+        match config.strategy {
+            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate => {
+                let response = post_json_request(
+                    &base_url,
+                    vec![("x-goog-api-key", config.api_key.clone())],
+                    serde_json::json!(GoogleTranslateRequest {
+                        q: request.texts,
+                        target: target_language,
+                        format: "text".to_string(),
+                    }),
+                    config.timeout_seconds,
+                )
+                .await?;
+                let response: GoogleTranslateResponse =
+                    serde_json::from_value(response).map_err(|error| {
+                        LlmPortError::new(
+                            sona_core::ports::llm::LlmPortErrorKind::Protocol,
+                            format!("Invalid Google Translate response: {error}"),
+                        )
+                    })?;
+                Ok(response
+                    .data
+                    .translations
+                    .into_iter()
+                    .map(|translation| translation.translated_text)
+                    .collect())
+            }
+            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree => {
+                let mut indexed = Vec::with_capacity(request.texts.len());
+                for (index, text) in request.texts.into_iter().enumerate() {
+                    let translation = fetch_google_translate_free_translation(
+                        &client,
+                        &base_url,
+                        &target_language,
+                        &text,
+                    )
+                    .await
+                    .map_err(google_translate_free_port_error)?;
+                    indexed.push((index, translation));
+                }
+                indexed.sort_by_key(|(index, _)| *index);
+                Ok(indexed
+                    .into_iter()
+                    .map(|(_, translation)| translation)
+                    .collect())
+            }
+            _ => Err(LlmPortError::new(
+                sona_core::ports::llm::LlmPortErrorKind::Unsupported,
+                "Direct translation is only available for Google Translate providers",
+            )),
+        }
+    }
+}
+
+fn google_translate_free_port_error(error: GoogleTranslateFreeAttemptError) -> LlmPortError {
+    match error {
+        GoogleTranslateFreeAttemptError::HttpStatus {
+            status,
+            retry_after,
+        } => {
+            let kind = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                sona_core::ports::llm::LlmPortErrorKind::RateLimited
+            } else if status.is_server_error() {
+                sona_core::ports::llm::LlmPortErrorKind::Unavailable
+            } else {
+                sona_core::ports::llm::LlmPortErrorKind::Protocol
+            };
+            LlmPortError {
+                kind,
+                message: format!("Google Translate Free API Error: {status}"),
+                retry_after_ms: retry_after.map(|duration| duration.as_millis() as u64),
+            }
+        }
+        GoogleTranslateFreeAttemptError::Message(message) => classify_llm_port_error(message),
     }
 }
 

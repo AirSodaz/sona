@@ -312,20 +312,25 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('adds a model through the searchable model input flow', async () => {
+    let resolveDescription!: (value: { model: string; displayName: string }) => void;
+    const description = new Promise<{ model: string; displayName: string }>((resolve) => {
+      resolveDescription = resolve;
+    });
     vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
       if (command === 'list_llm_models') {
         return [{ model: 'gpt-4o' }];
       }
       if (command === 'describe_llm_model') {
-        return { model: 'gpt-4.2-new', displayName: 'GPT-4.2 New' };
+        return description;
       }
       return 'OK';
     });
 
+    let unmount!: () => void;
     await act(async () => {
-      render(
+      ({ unmount } = render(
         <SettingsLLMServiceTab />,
-      );
+      ));
     });
 
     const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini');
@@ -342,7 +347,13 @@ describe('SettingsLLMServiceTab', () => {
         config: expect.objectContaining({ model: 'gpt-4.2-new' }),
       });
     });
-    expect(mockUpdateConfig).toHaveBeenCalled();
+    const updateCount = mockUpdateConfig.mock.calls.length;
+    await act(async () => {
+      unmount();
+      resolveDescription({ model: 'gpt-4.2-new', displayName: 'GPT-4.2 New' });
+      await description;
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(updateCount);
   });
 
   it('renders unified temperature controls for all three features', async () => {
@@ -934,10 +945,10 @@ describe('SettingsLLMServiceTab', () => {
         maxOutputTokens: 8192,
         supportsMultimodal: true,
       }),
-      metadataOverrides: expect.objectContaining({
+      metadataOverrides: {
         maxOutputTokens: true,
         supportsMultimodal: true,
-      }),
+      },
     }));
   });
 

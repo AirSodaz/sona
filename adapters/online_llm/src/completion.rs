@@ -4,7 +4,7 @@ use rig_core::completion::{CompletionModel, CompletionRequestBuilder};
 use serde_json::{Value, json};
 use sona_core::llm::provider_protocol::{
     MessageRole, StandardLlmRequest, StandardLlmResponse, build_standard_input,
-    normalize_token_usage,
+    normalize_token_usage, strategy_uses_openai_chat_payload,
 };
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::llm::tasks::LlmProviderStrategy;
@@ -38,8 +38,9 @@ pub(crate) fn build_rig_completion_request<M>(
 where
     M: CompletionModel,
 {
+    let input = completion_input(request);
     let mut builder = model
-        .completion_request(&request.input)
+        .completion_request(input)
         .temperature_opt(request.effective_temperature().map(f64::from))
         .max_tokens_opt(request.options.max_output_tokens);
 
@@ -51,9 +52,13 @@ where
         builder = builder.preamble(system_prompt.to_string());
     }
 
-    let schema = match &request.options.response_format {
-        LlmResponseFormat::Text => None,
-        LlmResponseFormat::JsonObject => Some(json!({"type": "object"})),
+    match &request.options.response_format {
+        LlmResponseFormat::Text => {}
+        LlmResponseFormat::JsonObject => {
+            if let Some(params) = rig_json_object_parameters(request.config.strategy) {
+                builder = builder.additional_params(params);
+            }
+        }
         LlmResponseFormat::JsonSchema { name, schema } => {
             let mut schema = schema.clone();
             if let Some(object) = schema.as_object_mut() {
@@ -61,23 +66,49 @@ where
                     .entry("title".to_string())
                     .or_insert_with(|| Value::String(name.clone()));
             }
-            Some(schema)
+            builder = builder.output_schema(
+                schemars::Schema::try_from(schema)
+                    .map_err(|error| format!("Invalid JSON Schema: {error}"))?,
+            );
         }
-    };
-    if let Some(schema) = schema {
-        builder = builder.output_schema(
-            schemars::Schema::try_from(schema)
-                .map_err(|error| format!("Invalid JSON Schema: {error}"))?,
-        );
     }
 
     Ok(builder)
 }
 
+fn rig_json_object_parameters(strategy: LlmProviderStrategy) -> Option<Value> {
+    if strategy_uses_openai_chat_payload(strategy)
+        || matches!(
+            strategy,
+            LlmProviderStrategy::AzureOpenAi
+                | LlmProviderStrategy::Copilot
+                | LlmProviderStrategy::Perplexity
+        )
+    {
+        return Some(json!({"response_format": {"type": "json_object"}}));
+    }
+    (strategy == LlmProviderStrategy::Gemini)
+        .then(|| json!({"generationConfig": {"responseMimeType": "application/json"}}))
+}
+
+pub(crate) fn completion_input(request: &LlmCompletionRequest) -> String {
+    if matches!(
+        &request.options.response_format,
+        LlmResponseFormat::JsonObject
+    ) {
+        format!(
+            "{}\n\nReturn only valid JSON with an object as the top-level value. Do not use Markdown fences.",
+            request.input
+        )
+    } else {
+        request.input.clone()
+    }
+}
+
 pub(crate) fn structured_schema(request: &LlmCompletionRequest) -> Result<Option<Value>, String> {
     let schema = match &request.options.response_format {
         LlmResponseFormat::Text => return Ok(None),
-        LlmResponseFormat::JsonObject => json!({"type": "object"}),
+        LlmResponseFormat::JsonObject => return Ok(None),
         LlmResponseFormat::JsonSchema { schema, .. } => schema.clone(),
     };
     if !schema.is_object() && !schema.is_boolean() {
@@ -185,4 +216,25 @@ pub fn build_standard_user_input(input: impl Into<String>, temperature: f32) -> 
         }],
         temperature,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rig_json_object_parameters_match_protocols() {
+        assert_eq!(
+            rig_json_object_parameters(LlmProviderStrategy::OpenAi),
+            Some(json!({"response_format": {"type": "json_object"}}))
+        );
+        assert_eq!(
+            rig_json_object_parameters(LlmProviderStrategy::Gemini),
+            Some(json!({"generationConfig": {"responseMimeType": "application/json"}}))
+        );
+        assert_eq!(
+            rig_json_object_parameters(LlmProviderStrategy::Anthropic),
+            None
+        );
+    }
 }

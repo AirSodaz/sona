@@ -8,14 +8,16 @@ use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
 use sona_core::llm::runtime::{
     LlmCompletionOptions, LlmCompletionRequest, LlmPromptCachePolicy, LlmResponseFormat,
+    LlmStreamDelta,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind};
+use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind, LlmStreamingPort};
 use sona_online_llm::{
     LlmApiUrl, OnlineLlmAdapter, build_anthropic_payload_for_request,
     build_gemini_payload_for_request, build_openai_chat_payload_for_request,
     build_openai_responses_payload, extract_anthropic_stream_usage, extract_gemini_usage,
-    extract_openai_responses_stream_usage, post_json_request, token_usage_from_rig_usage,
+    extract_gemini_visible_text, extract_openai_responses_stream_usage, post_json_request,
+    token_usage_from_rig_usage,
 };
 
 fn request() -> LlmCompletionRequest {
@@ -101,11 +103,12 @@ fn online_adapter_implements_completion_port() {
 }
 
 #[test]
-fn custom_reasoning_payloads_keep_structured_and_cache_options() {
+fn custom_reasoning_payloads_preserve_options_and_visible_output() {
     let mut anthropic = request();
     anthropic.config.strategy = LlmProviderStrategy::Anthropic;
     anthropic.options.reasoning_enabled = Some(true);
     anthropic.options.prompt_cache = LlmPromptCachePolicy::Automatic;
+    anthropic.options.max_output_tokens = Some(8192);
     let anthropic_payload = build_anthropic_payload_for_request(&anthropic, true).unwrap();
 
     assert_eq!(
@@ -116,9 +119,16 @@ fn custom_reasoning_payloads_keep_structured_and_cache_options() {
         anthropic_payload["output_config"]["format"]["type"],
         "json_schema"
     );
+    assert!(
+        anthropic_payload["thinking"]["budget_tokens"]
+            .as_u64()
+            .unwrap()
+            < 8192
+    );
 
     let mut gemini = request();
     gemini.config.strategy = LlmProviderStrategy::Gemini;
+    gemini.config.model = "gemini-2.5-flash".into();
     gemini.options.reasoning_enabled = Some(true);
     let gemini_payload = build_gemini_payload_for_request(&gemini).unwrap();
 
@@ -133,6 +143,48 @@ fn custom_reasoning_payloads_keep_structured_and_cache_options() {
     assert_eq!(
         gemini_payload["generationConfig"]["responseJsonSchema"]["type"],
         "object"
+    );
+    assert_eq!(
+        gemini_payload["generationConfig"]["thinkingConfig"]["thinkingBudget"],
+        256
+    );
+
+    anthropic.options.max_output_tokens = Some(1024);
+    assert!(build_anthropic_payload_for_request(&anthropic, false).is_err());
+    assert_eq!(
+        extract_gemini_visible_text(&json!({
+            "candidates": [{"content": {"parts": [
+                {"thought": true, "text": "analysis"}, {"text": "answer"}
+            ]}}]
+        })),
+        Some("answer".into())
+    );
+}
+
+#[test]
+fn json_object_mode_does_not_send_a_native_schema() {
+    let mut request = request();
+    request.options.response_format = LlmResponseFormat::JsonObject;
+
+    let chat = build_openai_chat_payload_for_request(&request, false, false).unwrap();
+    let responses = build_openai_responses_payload(&request, false);
+    let anthropic = build_anthropic_payload_for_request(&request, false).unwrap();
+    let gemini = build_gemini_payload_for_request(&request).unwrap();
+    assert_eq!(
+        json!({
+            "chat": chat["response_format"],
+            "responses": responses["text"]["format"],
+            "anthropicSchema": anthropic["output_config"],
+            "geminiMime": gemini["generationConfig"]["responseMimeType"],
+            "geminiSchema": gemini["generationConfig"]["responseJsonSchema"],
+        }),
+        json!({
+            "chat": {"type": "json_object"},
+            "responses": {"type": "json_object"},
+            "anthropicSchema": null,
+            "geminiMime": "application/json",
+            "geminiSchema": null,
+        })
     );
 }
 
@@ -233,4 +285,53 @@ async fn transport_preserves_retryable_error_metadata() {
         (error.kind, error.retry_after_ms),
         (LlmPortErrorKind::RateLimited, Some(9_000))
     );
+}
+
+#[tokio::test]
+async fn streaming_transport_preserves_retryable_status_metadata() {
+    for (status, retry_after, expected_kind, expected_retry_after) in [
+        (
+            "429 Too Many Requests",
+            Some("9"),
+            LlmPortErrorKind::RateLimited,
+            Some(9_000),
+        ),
+        (
+            "529 Site Overloaded",
+            None,
+            LlmPortErrorKind::Unavailable,
+            None,
+        ),
+    ] {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let status = status.to_string();
+        let retry_after = retry_after.map(str::to_string);
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = stream.read(&mut [0; 2048]);
+            let retry_header = retry_after
+                .map(|value| format!("Retry-After: {value}\r\n"))
+                .unwrap_or_default();
+            let response = format!(
+                "HTTP/1.1 {status}\r\n{retry_header}Content-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        let mut stream_request = request();
+        stream_request.config.base_url = format!("http://{address}");
+        stream_request.config.timeout_seconds = Some(2);
+        let mut emit = |_delta: LlmStreamDelta| Ok(());
+        let error = OnlineLlmAdapter
+            .stream_completion(stream_request, &mut emit)
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+
+        assert_eq!(
+            (error.kind, error.retry_after_ms),
+            (expected_kind, expected_retry_after)
+        );
+    }
 }

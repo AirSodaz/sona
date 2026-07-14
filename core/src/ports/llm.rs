@@ -1,5 +1,7 @@
 use crate::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
-use crate::llm::requests::{LlmGenerateRequest, LlmModelsRequest};
+use std::time::Duration;
+
+use crate::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use crate::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -67,6 +69,50 @@ pub trait LlmStreamingPort: Send + Sync {
         request: LlmCompletionRequest,
         emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
     ) -> Result<StandardLlmResponse, LlmPortError>;
+}
+
+#[derive(Clone, Debug)]
+pub struct LlmTranslationRequest {
+    pub config: LlmConfig,
+    pub texts: Vec<String>,
+    pub target_language: String,
+}
+
+#[async_trait]
+pub trait LlmTranslationPort: Send + Sync {
+    async fn translate_batch(
+        &self,
+        request: LlmTranslationRequest,
+    ) -> Result<Vec<String>, LlmPortError>;
+}
+
+#[async_trait]
+pub trait LlmTaskDelayPort: Send + Sync {
+    async fn delay(&self, duration: Duration);
+}
+
+pub trait LlmTaskRuntimePort:
+    Clone
+    + LlmCompletionPort
+    + LlmModelMetadataPort
+    + LlmStreamingPort
+    + LlmTranslationPort
+    + LlmTaskDelayPort
+    + Send
+    + Sync
+{
+}
+
+impl<T> LlmTaskRuntimePort for T where
+    T: Clone
+        + LlmCompletionPort
+        + LlmModelMetadataPort
+        + LlmStreamingPort
+        + LlmTranslationPort
+        + LlmTaskDelayPort
+        + Send
+        + Sync
+{
 }
 
 #[async_trait]

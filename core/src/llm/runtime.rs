@@ -262,20 +262,23 @@ where
             });
         }
         request.normalize_legacy_options();
+        validate_completion_options(&request.options)?;
         validate_response_format(&request.options.response_format)?;
 
         let requested_format = LlmResponseFormatKind::from(&request.options.response_format);
         let validation_format = request.options.response_format.clone();
         let mut warnings = Vec::new();
-        if matches!(
-            request.options.response_format,
-            LlmResponseFormat::JsonSchema { .. }
-        ) && self
-            .metadata
-            .describe_model(&request.config)
-            .await?
-            .and_then(|model| model.supports_structured_output)
-            == Some(false)
+        let requested_schema = match &request.options.response_format {
+            LlmResponseFormat::JsonSchema { schema, .. } => Some(schema.clone()),
+            _ => None,
+        };
+        if let Some(schema) = requested_schema
+            && self
+                .metadata
+                .describe_model(&request.config)
+                .await?
+                .and_then(|model| model.supports_structured_output)
+                == Some(false)
         {
             if request.options.capability_policy == LlmCapabilityPolicy::Strict {
                 return Err(LlmRuntimeError::UnsupportedCapability {
@@ -283,6 +286,10 @@ where
                     capability: "structured output".to_string(),
                 });
             }
+            request
+                .input
+                .push_str("\n\nReturn only a JSON object that satisfies this JSON Schema:\n");
+            request.input.push_str(&schema.to_string());
             request.options.response_format = LlmResponseFormat::JsonObject;
             warnings.push(
                 "Model metadata reports no structured output support; using JSON object mode"
@@ -320,6 +327,22 @@ where
             .await
             .map_err(Into::into)
     }
+}
+
+fn validate_completion_options(options: &LlmCompletionOptions) -> Result<(), LlmRuntimeError> {
+    if let Some(temperature) = options.temperature
+        && (!temperature.is_finite() || !(0.0..=2.0).contains(&temperature))
+    {
+        return Err(LlmRuntimeError::InvalidRequest {
+            reason: "Temperature must be between 0 and 2".to_string(),
+        });
+    }
+    if options.max_output_tokens == Some(0) {
+        return Err(LlmRuntimeError::InvalidRequest {
+            reason: "Maximum output tokens must be greater than zero".to_string(),
+        });
+    }
+    Ok(())
 }
 
 struct PreparedRequest {

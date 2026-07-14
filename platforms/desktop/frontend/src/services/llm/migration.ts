@@ -234,7 +234,20 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
     polishTemperature: normalizeTemperature(selections.polishTemperature),
     translationTemperature: normalizeTemperature(selections.translationTemperature),
     summaryTemperature: normalizeTemperature(selections.summaryTemperature),
+    polishReasoningEnabled:
+      typeof selections.polishReasoningEnabled === 'boolean' ? selections.polishReasoningEnabled : undefined,
+    polishReasoningLevel: normalizeReasoningLevel(selections.polishReasoningLevel),
+    translationReasoningEnabled:
+      typeof selections.translationReasoningEnabled === 'boolean' ? selections.translationReasoningEnabled : undefined,
+    translationReasoningLevel: normalizeReasoningLevel(selections.translationReasoningLevel),
+    summaryReasoningEnabled:
+      typeof selections.summaryReasoningEnabled === 'boolean' ? selections.summaryReasoningEnabled : undefined,
+    summaryReasoningLevel: normalizeReasoningLevel(selections.summaryReasoningLevel),
   };
+}
+
+function normalizeReasoningLevel(value: unknown): 'low' | 'medium' | 'high' | undefined {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
 }
 
 function applyLegacyTemperature(

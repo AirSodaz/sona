@@ -12,7 +12,7 @@ use sona_core::llm::usage::TokenUsage;
 use sona_core::ports::llm::LlmPortError;
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
     reasoning_budget_tokens, reasoning_level_label, structured_schema, token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
@@ -27,8 +27,15 @@ pub fn build_gemini_payload_for_request(request: &LlmCompletionRequest) -> Resul
     if request.effective_reasoning_enabled() {
         let level = request.effective_reasoning_level();
         generation_config["thinkingConfig"] = if request.config.model.contains("gemini-2.5") {
+            let budget = request
+                .options
+                .max_output_tokens
+                .map(|limit| {
+                    reasoning_budget_tokens(level).min(limit.min(u64::from(u32::MAX)) as u32)
+                })
+                .unwrap_or_else(|| reasoning_budget_tokens(level));
             json!({
-                "thinkingBudget": reasoning_budget_tokens(level),
+                "thinkingBudget": budget,
                 "includeThoughts": true,
             })
         } else {
@@ -38,19 +45,36 @@ pub fn build_gemini_payload_for_request(request: &LlmCompletionRequest) -> Resul
             })
         };
     }
-    if let Some(schema) = structured_schema(request)? {
+    if matches!(
+        &request.options.response_format,
+        sona_core::llm::runtime::LlmResponseFormat::JsonObject
+    ) {
+        generation_config["responseMimeType"] = json!("application/json");
+    } else if let Some(schema) = structured_schema(request)? {
         generation_config["responseMimeType"] = json!("application/json");
         generation_config["responseJsonSchema"] = schema;
     }
 
     let mut payload = json!({
-        "contents": [{"parts": [{"text": request.input}]}],
+        "contents": [{"parts": [{"text": completion_input(request)}]}],
         "generationConfig": generation_config,
     });
     if let Some(system_prompt) = request.system_prompt.as_deref() {
         payload["systemInstruction"] = json!({"parts": [{"text": system_prompt}]});
     }
     Ok(payload)
+}
+
+pub fn extract_gemini_visible_text(response: &Value) -> Option<String> {
+    let text = response
+        .pointer("/candidates/0/content/parts")?
+        .as_array()?
+        .iter()
+        .filter(|part| part.get("thought").and_then(Value::as_bool) != Some(true))
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    (!text.is_empty()).then_some(text)
 }
 
 #[derive(Clone, Debug)]
@@ -133,15 +157,9 @@ impl LlmAdapter for GeminiAdapter {
             )
             .await?;
 
-            let text = response
-                .pointer("/candidates/0/content/parts/0/text")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    classify_llm_port_error(
-                        "Gemini response did not contain text output".to_string(),
-                    )
-                })?
-                .to_string();
+            let text = extract_gemini_visible_text(&response).ok_or_else(|| {
+                classify_llm_port_error("Gemini response did not contain text output".to_string())
+            })?;
 
             let usage = response.get("usageMetadata").and_then(extract_gemini_usage);
 

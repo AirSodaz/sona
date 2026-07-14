@@ -212,6 +212,11 @@ async fn compatible_schema_mode_downgrades_and_reports_warning() {
             .response_format,
         LlmResponseFormat::JsonObject
     ));
+    assert!(
+        completion.requests.lock().unwrap()[0]
+            .input
+            .contains("JSON Schema")
+    );
 }
 
 #[tokio::test]
@@ -248,6 +253,26 @@ async fn invalid_schema_is_rejected_before_adapter_delegation() {
         .unwrap_err();
 
     assert!(matches!(error, LlmRuntimeError::InvalidRequest { .. }));
+    assert!(completion.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_completion_limits_are_rejected_before_adapter_delegation() {
+    let completion = FakeCompletionPort {
+        response: "unused".into(),
+        requests: Mutex::new(Vec::new()),
+    };
+    let service = LlmRuntimeService::new(&completion, FakeMetadataPort(None));
+
+    for (temperature, max_output_tokens) in [(Some(2.1), None), (None, Some(0))] {
+        let mut request = request(LlmResponseFormat::Text);
+        request.options.temperature = temperature;
+        request.options.max_output_tokens = max_output_tokens;
+        assert!(matches!(
+            service.complete(request).await,
+            Err(LlmRuntimeError::InvalidRequest { .. })
+        ));
+    }
     assert!(completion.requests.lock().unwrap().is_empty());
 }
 

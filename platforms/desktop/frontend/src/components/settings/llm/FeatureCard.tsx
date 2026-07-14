@@ -5,6 +5,7 @@ import { LlmFeature, LlmProvider } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import {
   addLlmModel,
+  enrichLlmModelMetadata,
   findLlmModelId,
   getProviderLlmModels,
   getFeatureModelEntry,
@@ -53,6 +54,7 @@ export const FeatureCard = React.memo(function FeatureCard({
 }: FeatureCardProps) {
   const currentLlmState = getCurrentLlmSettings(config);
   const latestLlmStateRef = useRef(currentLlmState);
+  const isMountedRef = useRef(true);
   latestLlmStateRef.current = currentLlmState;
   const applyTrackedLlmSettings = useCallback((nextSettings: LlmAssistantConfig['llmSettings']) => {
     if (nextSettings) {
@@ -60,6 +62,12 @@ export const FeatureCard = React.memo(function FeatureCard({
     }
     applyLlmSettings(nextSettings);
   }, [applyLlmSettings]);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
@@ -219,10 +227,11 @@ export const FeatureCard = React.memo(function FeatureCard({
       return existing?.provider === providerToSave && existing.model === trimmedModel;
     });
 
-    if (entryId) {
-      nextState = setFeatureModelSelection(nextState, featureId, entryId);
-      applyTrackedLlmSettings(nextState);
+    if (!entryId) {
+      return;
     }
+    nextState = setFeatureModelSelection(nextState, featureId, entryId);
+    applyTrackedLlmSettings(nextState);
 
     const providerSetting = nextState.providers[providerToSave];
     if (
@@ -238,20 +247,18 @@ export const FeatureCard = React.memo(function FeatureCard({
       ...buildLlmConfig(providerToSave, providerSetting, nextState.customProviders),
       model: trimmedModel,
     }).then((summary) => {
-      if (!summary || summary.model !== trimmedModel) {
+      if (!isMountedRef.current || !summary || summary.model !== trimmedModel) {
         return;
       }
       const metadata = modelSummaryToMetadata(summary);
       if (Object.keys(metadata).length === 0) {
         return;
       }
-      let enrichedState = addLlmModel(latestLlmStateRef.current, {
-        provider: providerToSave,
-        model: trimmedModel,
-        source: 'manual',
-        metadata,
-      });
-      enrichedState = setFeatureModelSelection(enrichedState, featureId, entryId);
+      const latestState = latestLlmStateRef.current;
+      const enrichedState = enrichLlmModelMetadata(latestState, entryId, metadata);
+      if (enrichedState === latestState) {
+        return;
+      }
       applyTrackedLlmSettings(enrichedState);
     }).catch(() => {
       // Catalog enrichment is best-effort and must not block a manual model.

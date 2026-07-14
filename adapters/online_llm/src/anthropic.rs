@@ -10,7 +10,7 @@ use sona_core::llm::runtime::{LlmCompletionRequest, LlmPromptCachePolicy};
 use sona_core::ports::llm::LlmPortError;
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
     reasoning_budget_tokens, structured_schema, token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
@@ -19,10 +19,11 @@ pub fn build_anthropic_payload_for_request(
     request: &LlmCompletionRequest,
     stream: bool,
 ) -> Result<Value, String> {
+    let max_tokens = request.options.max_output_tokens.unwrap_or(8192);
     let mut payload = json!({
         "model": request.config.model,
-        "messages": [{"role": "user", "content": request.input}],
-        "max_tokens": request.options.max_output_tokens.unwrap_or(8192),
+        "messages": [{"role": "user", "content": completion_input(request)}],
+        "max_tokens": max_tokens,
         "temperature": request.effective_temperature().unwrap_or(0.7),
         "stream": stream,
     });
@@ -38,11 +39,17 @@ pub fn build_anthropic_payload_for_request(
         };
     }
     if request.effective_reasoning_enabled() {
+        let max_budget = max_tokens.saturating_sub(1).min(u64::from(u32::MAX)) as u32;
+        if max_budget < 1024 {
+            return Err(
+                "Anthropic reasoning requires max_output_tokens to be greater than 1024"
+                    .to_string(),
+            );
+        }
         payload["thinking"] = json!({
             "type": "enabled",
-            "budget_tokens": reasoning_budget_tokens(
-                request.effective_reasoning_level()
-            ),
+            "budget_tokens": reasoning_budget_tokens(request.effective_reasoning_level())
+                .min(max_budget),
         });
         payload["temperature"] = json!(1.0);
     }
@@ -51,7 +58,7 @@ pub fn build_anthropic_payload_for_request(
     {
         payload["messages"][0]["content"] = json!([{
             "type": "text",
-            "text": request.input,
+            "text": completion_input(request),
             "cache_control": {"type": "ephemeral"}
         }]);
     }

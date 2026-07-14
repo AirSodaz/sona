@@ -5,7 +5,7 @@ use sona_core::llm::provider_protocol::{
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::ports::llm::LlmPortError;
 
-use crate::completion::port_result;
+use crate::completion::{completion_input, port_result};
 use crate::transport::{LlmApiUrl, post_json_request};
 
 pub async fn generate_with_openai_responses_api(
@@ -32,9 +32,10 @@ pub async fn generate_with_openai_responses_api(
 
 pub fn build_openai_responses_payload(request: &LlmCompletionRequest, stream: bool) -> Value {
     let config = &request.config;
+    let input = completion_input(request);
     let mut payload = json!({
         "model": config.model,
-        "input": request.input,
+        "input": input,
         "temperature": request.effective_temperature().unwrap_or(0.7),
         "stream": stream,
     });
@@ -52,10 +53,7 @@ pub fn build_openai_responses_payload(request: &LlmCompletionRequest, stream: bo
     let schema_format = match &request.options.response_format {
         LlmResponseFormat::Text => None,
         LlmResponseFormat::JsonObject => Some(json!({
-            "type": "json_schema",
-            "name": "json_object",
-            "strict": true,
-            "schema": {"type": "object"}
+            "type": "json_object"
         })),
         LlmResponseFormat::JsonSchema { name, schema } => Some(json!({
             "type": "json_schema",

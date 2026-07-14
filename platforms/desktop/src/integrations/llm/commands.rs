@@ -1,26 +1,16 @@
-use super::network::LlmApiUrl;
 use super::*;
-use futures_util::future::BoxFuture;
-use log::info;
+use async_trait::async_trait;
 use serde::Serialize;
 use sona_core::llm::runtime::LlmRuntimeService;
-use sona_core::ports::llm::{LlmCompletionPort, LlmModelMetadataPort, LlmTextGenerator};
+use sona_core::llm::runtime::LlmStreamDelta;
+use sona_core::llm::tasks::{LlmTaskEvent, LlmTaskObserver, LlmTaskService};
+use sona_core::ports::llm::{
+    LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmStreamingPort, LlmTaskDelayPort,
+    LlmTranslationPort, LlmTranslationRequest,
+};
+use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-
-fn polished_segment_id(item: &PolishedSegment) -> &str {
-    item.id.as_str()
-}
-
-fn translated_segment_id(item: &TranslatedSegment) -> &str {
-    item.id.as_str()
-}
-
-fn generate_segment_streaming<'a>(
-    request: LlmGenerateRequest,
-    emit_delta: &'a mut (dyn FnMut(&str, &str) -> Result<(), String> + Send),
-) -> BoxFuture<'a, Result<StandardLlmResponse, String>> {
-    Box::pin(generate_with_optional_streaming(request, emit_delta))
-}
 
 #[derive(Clone)]
 struct CommandEventEmitter {
@@ -52,16 +42,8 @@ impl CommandEventEmitter {
         self.emit(LLM_TASK_CHUNK_EVENT, payload)
     }
 
-    fn emit_summary_text(&self, task_id: &str, text: &str, delta: &str) -> Result<(), String> {
-        self.emit(
-            LLM_TASK_TEXT_EVENT,
-            LlmTaskTextPayload {
-                task_id: task_id.to_string(),
-                task_type: LlmTaskType::Summary,
-                text: text.to_string(),
-                delta: delta.to_string(),
-            },
-        )
+    fn emit_text(&self, payload: LlmTaskTextPayload) -> Result<(), String> {
+        self.emit(LLM_TASK_TEXT_EVENT, payload)
     }
 }
 
@@ -105,6 +87,142 @@ impl UsageRecorder {
         }
 
         emit_llm_usage_event(&self.app, &self.config, self.category, occurred_at, usage);
+    }
+}
+
+#[derive(Clone)]
+struct DesktopTaskRuntime {
+    inner: DesktopLlmAdapter,
+    usage: UsageRecorder,
+}
+
+impl DesktopTaskRuntime {
+    fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
+        Self {
+            inner: DesktopLlmAdapter::default(),
+            usage: UsageRecorder::new(app, config, category),
+        }
+    }
+}
+
+#[async_trait]
+impl LlmCompletionPort for DesktopTaskRuntime {
+    async fn complete(
+        &self,
+        request: LlmCompletionRequest,
+    ) -> Result<StandardLlmResponse, LlmPortError> {
+        let response = self.inner.complete(request).await?;
+        self.usage.record(&response);
+        Ok(response)
+    }
+}
+
+#[async_trait]
+impl LlmModelMetadataPort for DesktopTaskRuntime {
+    async fn describe_model(
+        &self,
+        config: &LlmConfig,
+    ) -> Result<Option<LlmModelSummary>, LlmPortError> {
+        self.inner.describe_model(config).await
+    }
+}
+
+#[async_trait]
+impl LlmStreamingPort for DesktopTaskRuntime {
+    async fn stream_completion(
+        &self,
+        request: LlmCompletionRequest,
+        emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
+    ) -> Result<StandardLlmResponse, LlmPortError> {
+        let response = self.inner.stream_completion(request, emit_delta).await?;
+        self.usage.record(&response);
+        Ok(response)
+    }
+}
+
+#[async_trait]
+impl LlmTaskDelayPort for DesktopTaskRuntime {
+    async fn delay(&self, duration: Duration) {
+        self.inner.delay(duration).await;
+    }
+}
+
+#[async_trait]
+impl LlmTranslationPort for DesktopTaskRuntime {
+    async fn translate_batch(
+        &self,
+        request: LlmTranslationRequest,
+    ) -> Result<Vec<String>, LlmPortError> {
+        let translations = self.inner.translate_batch(request).await?;
+        self.usage.record_usage(None);
+        Ok(translations)
+    }
+}
+
+type PolishChunkCallback =
+    Box<dyn FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static>;
+type TranslateChunkCallback =
+    Box<dyn FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static>;
+
+struct CommandTaskObserver {
+    events: CommandEventEmitter,
+    polish_chunk: Option<Mutex<PolishChunkCallback>>,
+    translate_chunk: Option<Mutex<TranslateChunkCallback>>,
+}
+
+impl CommandTaskObserver {
+    fn polish<F>(app: AppHandle, on_chunk: F) -> Self
+    where
+        F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
+    {
+        Self {
+            events: CommandEventEmitter::new(app),
+            polish_chunk: Some(Mutex::new(Box::new(on_chunk))),
+            translate_chunk: None,
+        }
+    }
+
+    fn translate<F>(app: AppHandle, on_chunk: F) -> Self
+    where
+        F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
+    {
+        Self {
+            events: CommandEventEmitter::new(app),
+            polish_chunk: None,
+            translate_chunk: Some(Mutex::new(Box::new(on_chunk))),
+        }
+    }
+
+    fn summary(app: AppHandle) -> Self {
+        Self {
+            events: CommandEventEmitter::new(app),
+            polish_chunk: None,
+            translate_chunk: None,
+        }
+    }
+}
+
+impl LlmTaskObserver for CommandTaskObserver {
+    fn on_event(&self, event: LlmTaskEvent) -> Result<(), String> {
+        match event {
+            LlmTaskEvent::Progress(payload) => self.events.emit_progress(payload),
+            LlmTaskEvent::PolishChunk(payload) => {
+                if let Some(callback) = &self.polish_chunk {
+                    let mut callback = callback.lock().map_err(|error| error.to_string())?;
+                    callback(&payload.items)?;
+                }
+                self.events.emit_chunk(payload)
+            }
+            LlmTaskEvent::TranslateChunk(payload) => {
+                if let Some(callback) = &self.translate_chunk {
+                    let mut callback = callback.lock().map_err(|error| error.to_string())?;
+                    callback(&payload.items)?;
+                }
+                self.events.emit_chunk(payload)
+            }
+            LlmTaskEvent::Text(payload) => self.events.emit_text(payload),
+            LlmTaskEvent::SummaryChunk(_) | LlmTaskEvent::Completed(_) => Ok(()),
+        }
     }
 }
 
@@ -154,49 +272,16 @@ pub(super) async fn polish_transcript_segments_with_observer<F>(
 where
     F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
 {
-    validate_polish_segments_request(&request)?;
-
-    let config = request.config.clone();
-    let context = request.context.clone();
-    let keywords = request.keywords.clone();
-    let chunk_events = CommandEventEmitter::new(app.clone());
-    let progress_events = CommandEventEmitter::new(app.clone());
-    let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Polish);
-    let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
-
-    run_streaming_segment_task(
-        SegmentTaskContext {
-            task_id: &request.task_id,
-            task_type: LlmTaskType::Polish,
-            segments: &request.segments,
-            chunk_size: request.chunk_size,
-            prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
-        },
-        StreamingSegmentTaskConfig {
-            build_prompt: move |chunk: &[LlmSegmentInput]| {
-                build_polish_prompt(chunk, context.as_deref(), keywords.as_deref())
-            },
-            parse_chunk: parse_polish_chunk,
-            build_request: move |prompt: String| LlmGenerateRequest {
-                config: config.clone(),
-                input: prompt,
-                source: None,
-            },
-            generate_streaming: generate_segment_streaming,
-            get_output_id: polished_segment_id,
-            on_success: move |response: &StandardLlmResponse| usage.record(response),
-            emit_chunk: move |payload: LlmTaskChunkPayload<PolishedSegment>| {
-                {
-                    let mut on_chunk_items =
-                        on_chunk_items.lock().map_err(|error| error.to_string())?;
-                    (on_chunk_items)(&payload.items)?;
-                }
-                chunk_events.emit_chunk(payload)
-            },
-            emit_progress: move |payload| progress_events.emit_progress(payload),
-        },
-    )
-    .await
+    let runtime = DesktopTaskRuntime::new(
+        app.clone(),
+        request.config.clone(),
+        LlmUsageCategory::Polish,
+    );
+    let observer = CommandTaskObserver::polish(app, on_chunk_items);
+    LlmTaskService::new(runtime)
+        .polish(request, &observer)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(crate) async fn translate_transcript_segments_command(
@@ -214,292 +299,32 @@ pub(super) async fn translate_transcript_segments_with_observer<F>(
 where
     F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
 {
-    validate_translate_segments_request(&request)?;
-
-    let config = request.config.clone();
-    let target_language = request.target_language.clone();
-    let target_language_name = request.target_language_name.clone();
-    let events = CommandEventEmitter::new(app.clone());
-    let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Translation);
-    let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
-
-    if matches!(
-        config.strategy,
-        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
-    ) {
-        let translate_strategy = config.strategy;
-        let base_url = LlmApiUrl::parse(&config.base_url)?;
-        let client = base_url.client(config.timeout_seconds)?;
-        let chunk_events = events.clone();
-        let progress_events = events.clone();
-        let usage = usage.clone();
-        let chunk_observer = on_chunk_items.clone();
-        return run_segment_task(
-            SegmentTaskContext {
-                task_id: &request.task_id,
-                task_type: LlmTaskType::Translate,
-                segments: &request.segments,
-                chunk_size: request.chunk_size,
-                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
-            },
-            BufferedSegmentTaskConfig {
-                build_prompt: move |chunk: &[LlmSegmentInput]| {
-                    let texts: Vec<String> = chunk.iter().map(|s| s.text.clone()).collect();
-                    serde_json::to_string(&texts).unwrap_or_default()
-                },
-                parse_chunk: move |response_text: &str,
-                                   chunk: &[LlmSegmentInput],
-                                   chunk_number: usize| {
-                    if translate_strategy == LlmProviderStrategy::GoogleTranslate {
-                        let parsed: GoogleTranslateResponse =
-                            serde_json::from_str(response_text).map_err(|error| {
-                                chunk_error(
-                                    LlmTaskType::Translate,
-                                    chunk_number,
-                                    format!("invalid JSON response: {error}"),
-                                )
-                            })?;
-
-                        if parsed.data.translations.len() != chunk.len() {
-                            return Err(chunk_error(
-                                LlmTaskType::Translate,
-                                chunk_number,
-                                format!(
-                                    "expected {} objects but received {}",
-                                    chunk.len(),
-                                    parsed.data.translations.len()
-                                ),
-                            ));
-                        }
-
-                        let mut translated_segments = Vec::with_capacity(chunk.len());
-                        for (index, translation) in parsed.data.translations.into_iter().enumerate()
-                        {
-                            translated_segments.push(TranslatedSegment {
-                                id: chunk[index].id.clone(),
-                                translation: translation.translated_text,
-                            });
-                        }
-
-                        Ok(translated_segments)
-                    } else {
-                        // GoogleTranslateFree returns raw JSON array of translations
-                        let translations: Vec<String> =
-                            serde_json::from_str(response_text).map_err(|e| {
-                                chunk_error(
-                                    LlmTaskType::Translate,
-                                    chunk_number,
-                                    format!("invalid free translation JSON: {e}"),
-                                )
-                            })?;
-
-                        if translations.len() != chunk.len() {
-                            return Err(chunk_error(
-                                LlmTaskType::Translate,
-                                chunk_number,
-                                format!(
-                                    "expected {} translations but received {}",
-                                    chunk.len(),
-                                    translations.len()
-                                ),
-                            ));
-                        }
-
-                        Ok(chunk
-                            .iter()
-                            .zip(translations)
-                            .map(|(s, t)| TranslatedSegment {
-                                id: s.id.clone(),
-                                translation: t,
-                            })
-                            .collect())
-                    }
-                },
-                generate_text: move |prompt: String| {
-                    let config = config.clone();
-                    let target_language = target_language.clone();
-                    let client = client.clone();
-                    let base_url = base_url.clone();
-                    let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
-                        Box::pin(async move {
-                            let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
-
-                            if config.strategy == LlmProviderStrategy::GoogleTranslate {
-                                let text = execute_google_translate_request(
-                                    &client,
-                                    &base_url,
-                                    config.api_key.as_str(),
-                                    texts,
-                                    target_language,
-                                )
-                                .await?;
-                                Ok(StandardLlmResponse { text, usage: None })
-                            } else {
-                                info!(
-                                    "[LLM] google_translate_free chunk fan-out: items={} max_concurrency={}",
-                                    texts.len(),
-                                    GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY
-                                );
-                                let translations = run_google_translate_free_requests_in_order(
-                                    texts,
-                                    GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY,
-                                    move |index, text| {
-                                        let client = client.clone();
-                                        let base_url = base_url.clone();
-                                        let target_language = target_language.clone();
-                                        async move {
-                                            execute_google_translate_free_request(
-                                                index,
-                                                text,
-                                                target_language,
-                                                move |text, target_language| {
-                                                    let client = client.clone();
-                                                    let base_url = base_url.clone();
-                                                    async move {
-                                                        fetch_google_translate_free_translation(
-                                                            &client,
-                                                            &base_url,
-                                                            target_language.as_str(),
-                                                            text.as_str(),
-                                                        )
-                                                        .await
-                                                    }
-                                                },
-                                                |delay| async move {
-                                                    tokio::time::sleep(delay).await;
-                                                },
-                                            )
-                                            .await
-                                        }
-                                    },
-                                )
-                                .await?;
-                                Ok(StandardLlmResponse {
-                                    text: serde_json::to_string(&translations)
-                                        .unwrap_or_default(),
-                                    usage: None,
-                                })
-                            }
-                        });
-                    future
-                },
-                on_success: move |response: &StandardLlmResponse| usage.record(response),
-                emit_chunk: move |payload: LlmTaskChunkPayload<TranslatedSegment>| {
-                    {
-                        let mut on_chunk_items =
-                            chunk_observer.lock().map_err(|error| error.to_string())?;
-                        (on_chunk_items)(&payload.items)?;
-                    }
-                    chunk_events.emit_chunk(payload)
-                },
-                emit_progress: move |payload| progress_events.emit_progress(payload),
-            },
-        )
-        .await;
-    }
-
-    let chunk_events = events.clone();
-    let progress_events = events;
-    let chunk_observer = on_chunk_items.clone();
-    run_streaming_segment_task(
-        SegmentTaskContext {
-            task_id: &request.task_id,
-            task_type: LlmTaskType::Translate,
-            segments: &request.segments,
-            chunk_size: request.chunk_size,
-            prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
-        },
-        StreamingSegmentTaskConfig {
-            build_prompt: move |chunk: &[LlmSegmentInput]| {
-                build_translate_prompt(chunk, &target_language, target_language_name.as_deref())
-            },
-            parse_chunk: parse_translate_chunk,
-            build_request: move |prompt: String| LlmGenerateRequest {
-                config: config.clone(),
-                input: prompt,
-                source: None,
-            },
-            generate_streaming: generate_segment_streaming,
-            get_output_id: translated_segment_id,
-            on_success: move |response: &StandardLlmResponse| usage.record(response),
-            emit_chunk: move |payload: LlmTaskChunkPayload<TranslatedSegment>| {
-                {
-                    let mut on_chunk_items =
-                        chunk_observer.lock().map_err(|error| error.to_string())?;
-                    (on_chunk_items)(&payload.items)?;
-                }
-                chunk_events.emit_chunk(payload)
-            },
-            emit_progress: move |payload| progress_events.emit_progress(payload),
-        },
-    )
-    .await
+    let runtime = DesktopTaskRuntime::new(
+        app.clone(),
+        request.config.clone(),
+        LlmUsageCategory::Translation,
+    );
+    let observer = CommandTaskObserver::translate(app, on_chunk_items);
+    LlmTaskService::new(runtime)
+        .translate(request, &observer)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(crate) async fn summarize_transcript_command(
     app: AppHandle,
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
-    validate_summarize_transcript_request(&request)?;
-
-    let task_id = request.task_id.clone();
-    let streamed_task_id = task_id.clone();
-    let buffered_config = request.config.clone();
-    let streamed_config = request.config.clone();
-    let buffered_llm = DesktopLlmAdapter::default();
-    let template = request.template;
-    let progress_events = CommandEventEmitter::new(app.clone());
-    let stream_events = progress_events.clone();
-    let buffered_usage = UsageRecorder::new(
+    let runtime = DesktopTaskRuntime::new(
         app.clone(),
         request.config.clone(),
         LlmUsageCategory::Summary,
     );
-    let streamed_usage = buffered_usage.clone();
-
-    run_summary_task(
-        &task_id,
-        &template,
-        &request.segments,
-        request.chunk_char_budget,
-        move |prompt| {
-            let config = buffered_config.clone();
-            let usage = buffered_usage.clone();
-            let llm = buffered_llm;
-            Box::pin(async move {
-                let response = llm
-                    .generate_text(LlmGenerateRequest {
-                        config,
-                        input: prompt,
-                        source: None,
-                    })
-                    .await?;
-                usage.record(&response);
-                Ok(response.text)
-            })
-        },
-        move |prompt| {
-            let config = streamed_config.clone();
-            let task_id = streamed_task_id.clone();
-            let events = stream_events.clone();
-            let usage = streamed_usage.clone();
-            Box::pin(async move {
-                let response = generate_with_optional_streaming(
-                    LlmGenerateRequest {
-                        config,
-                        input: prompt,
-                        source: None,
-                    },
-                    &mut |text, delta| events.emit_summary_text(task_id.as_str(), text, delta),
-                )
-                .await?;
-                usage.record(&response);
-                Ok(response.text)
-            })
-        },
-        move |payload| progress_events.emit_progress(payload),
-    )
-    .await
+    let observer = CommandTaskObserver::summary(app);
+    LlmTaskService::new(runtime)
+        .summarize(request, &observer)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(crate) async fn list_llm_models_command(

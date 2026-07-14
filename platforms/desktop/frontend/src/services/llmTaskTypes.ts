@@ -119,6 +119,7 @@ export interface LlmTaskTextPayload {
   taskType: 'summary';
   text: string;
   delta: string;
+  reset?: boolean;
 }
 
 interface LlmTaskChunkPayloadBase<TItems> {

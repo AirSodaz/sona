@@ -13,7 +13,7 @@ use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::LlmPortError;
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
     token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
@@ -205,6 +205,7 @@ pub fn build_openai_chat_payload_for_request(
     } else {
         request.config.strategy
     };
+    let input = completion_input(request);
     let mut payload = build_openai_chat_payload(
         OpenAiChatPayloadConfig {
             strategy,
@@ -213,7 +214,7 @@ pub fn build_openai_chat_payload_for_request(
             reasoning_enabled: request.effective_reasoning_enabled(),
             reasoning_level: request.effective_reasoning_level(),
         },
-        &request.input,
+        &input,
         stream,
     );
 
