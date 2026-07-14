@@ -11,6 +11,7 @@ This document tracks the commands that ship in the standalone CLI today:
 - `models delete`
 - `history list|query|transcript|snapshots|snapshot|<mutation>`
 - `export transcript`
+- `backup export|inspect|import`
 - `serve`
 - `transcribe`
 - `transcribe-live`
@@ -147,6 +148,18 @@ sona-cli export transcript --input ./segments.json --output ./transcript.txt --f
 - Supported formats: `json`, `txt`, `srt`, `vtt`, `md`.
 - Supported modes: `original` (default), `translation`, `bilingual`.
 - `--json` prints the output path and written byte count as machine-readable JSON.
+
+### `backup`
+
+Export all five supported application-state scopes, validate an archive without opening application data, or atomically replace the backed-up state from an archive.
+
+```bash
+sona-cli backup export --app-data-dir ./sona-data --output ./sona-backup.sona-backup --app-version 0.8.0
+sona-cli backup inspect --archive ./sona-backup.sona-backup
+sona-cli backup import --app-data-dir ./sona-data --archive ./sona-backup.sona-backup --default-rule-set-name "Default Rules" --confirm-replace
+```
+
+Import atomically replaces the `config`, `workspace`, `history`, `automation`, and `analytics` scopes. It requires `--confirm-replace` and never opens an interactive prompt. Task ledger and original audio are not included in backup archives.
 
 ### `serve`
 

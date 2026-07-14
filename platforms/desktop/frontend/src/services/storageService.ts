@@ -76,6 +76,10 @@ export const settingsStore = {
     // SQLite writes are committed by set(); kept for LazyStore API compatibility.
   },
 
+  async notifyExternalUpdate(key: string, value: unknown): Promise<void> {
+    await emitSettingUpdated(key, value);
+  },
+
   async onKeyChange<T>(
     key: string,
     callback: (value: T | null | undefined) => void,

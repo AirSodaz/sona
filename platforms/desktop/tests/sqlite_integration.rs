@@ -11,12 +11,9 @@ use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::HistoryStore;
 use sona_sqlite::Database;
 use sona_sqlite::legacy_migration::migrate_legacy_to_sqlite;
-use tauri_appsona_lib::platform::history_repository::backup::{
-    apply_prepared_history_import_inner, export_backup_archive_inner, prepare_backup_import_inner,
-};
 use tauri_appsona_lib::platform::history_repository::sqlite_store::SqliteHistoryStore;
 use tauri_appsona_lib::platform::history_repository::{
-    ExportBackupArchiveRequest, HistorySaveRecordingRequest, TranscriptSnapshotReason,
+    HistorySaveRecordingRequest, TranscriptSnapshotReason,
 };
 
 fn test_db() -> Arc<Database> {
@@ -488,97 +485,4 @@ fn test_migration_and_crud() {
         .unwrap();
     let items = store.list_items().unwrap();
     assert_eq!(items.len(), 2);
-}
-
-// =========================================================================
-// Test 2: Backup export/import roundtrip
-// =========================================================================
-
-#[test]
-fn test_backup_roundtrip() {
-    let db = test_db();
-    clear_db(db.as_ref());
-
-    // --- Setup data ---
-    let root = tempfile::TempDir::new().unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
-    store.ensure_ready().unwrap();
-
-    let item = store
-        .save_recording(HistorySaveRecordingRequest {
-            segments: json!([segment_value("seg-1", "Backup test", 0.0, 1.0)]),
-            duration: 1.0,
-            project_id: None,
-            audio_bytes: Some(vec![1, 2, 3]),
-            native_audio_path: None,
-            audio_extension: Some("wav".to_string()),
-        })
-        .unwrap();
-
-    store
-        .save_summary(&item.id, json!({"activeTemplateId": "general"}))
-        .unwrap();
-
-    let _snapshot = store
-        .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
-            history_id: item.id.clone(),
-            reason: TranscriptSnapshotReason::Polish,
-            segments: json!([segment_value("seg-1", "Before backup", 0.0, 1.0)]),
-        })
-        .unwrap();
-
-    // --- Export ---
-    let archive_dir = tempfile::TempDir::new().unwrap();
-    let archive_path = archive_dir.path().join("backup.tar.bz2");
-    let manifest = export_backup_archive_inner(
-        root.path(),
-        Arc::clone(&db),
-        ExportBackupArchiveRequest {
-            archive_path: archive_path.to_string_lossy().into_owned(),
-            app_version: "0.7.5".to_string(),
-            config: json!({"theme": "auto"}),
-            projects: vec![json!({"id": "project-1", "name": "Work", "defaults": {}})],
-            automation_rules: vec![json!({"id": "rule-1", "name": "Watch"})],
-            automation_processed_entries: vec![
-                json!({"ruleId": "rule-1", "filePath": "/watch/file.wav"}),
-            ],
-            analytics_content: r#"{"schemaVersion":1,"startedAt":"2026-01-01T00:00:00Z"}"#
-                .to_string(),
-        },
-    )
-    .unwrap();
-
-    assert_eq!(manifest.counts.history_items, 1);
-    assert_eq!(manifest.counts.transcript_files, 1);
-    assert_eq!(manifest.counts.summary_files, 1);
-
-    // --- Clear DB and import ---
-    clear_db(db.as_ref());
-    let restore_root = tempfile::TempDir::new().unwrap();
-
-    let (prepared, backup_snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
-    apply_prepared_history_import_inner(
-        restore_root.path(),
-        Arc::clone(&db),
-        &prepared.import_id,
-        &backup_snapshot.extraction_dir,
-    )
-    .unwrap();
-
-    // --- Verify imported data ---
-    let restored_store = SqliteHistoryStore::new(restore_root.path().to_path_buf(), db);
-    let items = restored_store.list_items().unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id, item.id);
-    assert_eq!(items[0].preview_text, "Backup test...");
-
-    let transcript = restored_store.load_transcript(&item.id).unwrap().unwrap();
-    assert_eq!(transcript.len(), 1);
-    assert_eq!(transcript[0].text, "Backup test");
-
-    let summary = restored_store.load_summary(&item.id).unwrap().unwrap();
-    assert_eq!(summary["activeTemplateId"], "general");
-
-    let snapshots = restored_store.list_transcript_snapshots(&item.id).unwrap();
-    assert_eq!(snapshots.len(), 1);
 }

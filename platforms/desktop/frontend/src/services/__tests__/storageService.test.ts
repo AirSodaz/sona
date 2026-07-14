@@ -92,4 +92,18 @@ describe('settingsStore SQLite adapter', () => {
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith({ theme: 'light' });
   });
+
+  it('broadcasts an externally committed config without writing it again', async () => {
+    const { settingsStore, STORE_KEY_CONFIG } = await import('../storageService');
+    const config = { configVersion: 7, theme: 'dark' };
+
+    await settingsStore.notifyExternalUpdate(STORE_KEY_CONFIG, config);
+
+    expect(emitMock).toHaveBeenCalledWith('app-setting-updated', {
+      key: STORE_KEY_CONFIG,
+      value: config,
+    });
+    expect(saveAppConfigMock).not.toHaveBeenCalled();
+    expect(setAppSettingMock).not.toHaveBeenCalled();
+  });
 });

@@ -405,42 +405,46 @@ pub async fn history_open_folder<R: Runtime>(
 #[tauri::command]
 pub async fn export_backup_archive<R: Runtime>(
     app: AppHandle<R>,
-    history_state: State<'_, HistoryRepositoryState>,
+    state: State<'_, PreparedBackupImportState>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    crate::platform::history_repository::export_backup_archive(&app, history_state.inner(), request)
-        .await
+    crate::platform::history_repository::export_backup_archive(&app, state.inner(), request).await
 }
 
 #[tauri::command]
-pub async fn prepare_backup_import(
+pub async fn prepare_backup_import<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, PreparedBackupImportState>,
     archive_path: String,
 ) -> Result<PreparedBackupImport, String> {
-    crate::platform::history_repository::prepare_backup_import(state.inner(), archive_path).await
+    crate::platform::history_repository::prepare_backup_import(&app, state.inner(), archive_path)
+        .await
 }
 
 #[tauri::command]
 pub async fn apply_prepared_history_import<R: Runtime>(
     app: AppHandle<R>,
-    history_state: State<'_, HistoryRepositoryState>,
-    prepared_state: State<'_, PreparedBackupImportState>,
+    state: State<'_, PreparedBackupImportState>,
     import_id: String,
 ) -> Result<(), String> {
     crate::platform::history_repository::apply_prepared_history_import(
         &app,
-        history_state.inner(),
-        prepared_state.inner(),
+        state.inner(),
         import_id,
     )
     .await
 }
 
 #[tauri::command]
-pub async fn dispose_prepared_backup_import(
+pub async fn dispose_prepared_backup_import<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, PreparedBackupImportState>,
     import_id: String,
 ) -> Result<(), String> {
-    crate::platform::history_repository::dispose_prepared_backup_import(state.inner(), import_id)
-        .await
+    crate::platform::history_repository::dispose_prepared_backup_import(
+        &app,
+        state.inner(),
+        import_id,
+    )
+    .await
 }

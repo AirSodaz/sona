@@ -9,6 +9,7 @@ pub use defaults::*;
 pub use error::ConfigError;
 pub use repository::*;
 pub use service::AppConfigRepositoryService;
+pub use service::{app_config_stored_state_from_value, app_config_value_from_stored_state};
 pub use types::*;
 
 use serde_json::Value;

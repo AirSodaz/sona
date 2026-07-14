@@ -266,11 +266,6 @@ type AutomationValidateActivationArgs = {
 type ExportBackupArchiveRequest = {
   archivePath: string;
   appVersion: string;
-  config: unknown;
-  projects: unknown[];
-  automationRules: unknown[];
-  automationProcessedEntries: unknown[];
-  analyticsContent: string;
 };
 
 type ListLlmModelsRequest = {

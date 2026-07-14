@@ -11,6 +11,7 @@
 - `models delete`
 - `history list|query|transcript|snapshots|snapshot|<mutation>`
 - `export transcript`
+- `backup export|inspect|import`
 - `serve`
 - `transcribe`
 - `transcribe-live`
@@ -147,6 +148,18 @@ sona-cli export transcript --input ./segments.json --output ./transcript.txt --f
 - 支持格式：`json`、`txt`、`srt`、`vtt`、`md`。
 - 支持模式：`original`（默认）、`translation`、`bilingual`。
 - `--json` 输出机器可读的目标路径和写入字节数。
+
+### `backup`
+
+导出全部五个应用状态范围、在不打开应用数据的情况下验证归档，或从归档中原子替换已备份状态。
+
+```bash
+sona-cli backup export --app-data-dir ./sona-data --output ./sona-backup.sona-backup --app-version 0.8.0
+sona-cli backup inspect --archive ./sona-backup.sona-backup
+sona-cli backup import --app-data-dir ./sona-data --archive ./sona-backup.sona-backup --default-rule-set-name "Default Rules" --confirm-replace
+```
+
+导入会原子替换 `config`、`workspace`、`history`、`automation` 和 `analytics` 范围。必须提供 `--confirm-replace`，且不会打开交互式提示。归档不包含任务账本和原始音频。
 
 ### `serve`
 

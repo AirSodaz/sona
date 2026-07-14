@@ -469,6 +469,7 @@ test('Android client has a repeatable local and CI verification entry point', ()
   assert.match(readme, /100-frame/u);
   assert.match(readme, /API 23 and API 37 emulators/u);
   assert.match(gitignore, /^\/client\/\.gradle\/$/mu);
+  assert.match(gitignore, /^\/client\/\.kotlin\/$/mu);
   assert.match(gitignore, /^\/client\/build\/$/mu);
   assert.match(gitignore, /^\/client\/\*\*\/build\/$/mu);
 });

@@ -17,38 +17,66 @@ where
 
 crate::impl_db_repository!(SqliteAutomationRepository);
 
-impl<D> SqliteAutomationRepository<D>
-where
-    D: DatabasePort,
-{
-    fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, DatabaseError> {
-        let mut stmt = conn.prepare_cached(
-            "SELECT id, name, project_id, preset_id, watch_directory, recursive, enabled,
-                    stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
-                    stage_translation_language, stage_export_enabled,
-                    export_directory, export_format, export_mode, export_prefix,
-                    created_at, updated_at
-             FROM automation_rules
-             ORDER BY id",
-        )?;
-        let rows = stmt.query_map([], map_row_to_rule_record)?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(DatabaseError::QueryError)
-    }
+pub(crate) fn load_automation_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<AutomationRepositoryState, DatabaseError> {
+    Ok(AutomationRepositoryState {
+        rules: load_rules(tx)?,
+        processed_entries: load_processed_entries(tx)?,
+    })
+}
 
-    fn load_processed_entries(
-        conn: &rusqlite::Connection,
-    ) -> Result<Vec<AutomationProcessedRecord>, DatabaseError> {
-        let mut stmt = conn.prepare_cached(
-            "SELECT id, rule_id, file_path, source_fingerprint, size, mtime_ms, status,
-                    processed_at, history_id, export_path, error_message
-             FROM automation_processed
-             ORDER BY id",
-        )?;
-        let rows = stmt.query_map([], map_row_to_processed_record)?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(DatabaseError::QueryError)
-    }
+pub(crate) fn replace_automation_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    state: &AutomationRepositoryState,
+) -> Result<(), DatabaseError> {
+    delete_automation_in_transaction(tx)?;
+    insert_automation_in_transaction(tx, state)
+}
+
+pub(crate) fn delete_automation_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<(), DatabaseError> {
+    tx.execute("DELETE FROM automation_processed", [])?;
+    tx.execute("DELETE FROM automation_rules", [])?;
+    Ok(())
+}
+
+pub(crate) fn insert_automation_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    state: &AutomationRepositoryState,
+) -> Result<(), DatabaseError> {
+    insert_rules(tx, &state.rules)?;
+    insert_processed_entries(tx, &state.processed_entries)
+}
+
+fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, DatabaseError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, name, project_id, preset_id, watch_directory, recursive, enabled,
+                stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
+                stage_translation_language, stage_export_enabled,
+                export_directory, export_format, export_mode, export_prefix,
+                created_at, updated_at
+         FROM automation_rules
+         ORDER BY id",
+    )?;
+    let rows = stmt.query_map([], map_row_to_rule_record)?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(DatabaseError::QueryError)
+}
+
+fn load_processed_entries(
+    conn: &rusqlite::Connection,
+) -> Result<Vec<AutomationProcessedRecord>, DatabaseError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, rule_id, file_path, source_fingerprint, size, mtime_ms, status,
+                processed_at, history_id, export_path, error_message
+         FROM automation_processed
+         ORDER BY id",
+    )?;
+    let rows = stmt.query_map([], map_row_to_processed_record)?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(DatabaseError::QueryError)
 }
 
 impl<D> AutomationStore for SqliteAutomationRepository<D>
@@ -62,10 +90,7 @@ where
                     let tx = conn
                         .unchecked_transaction()
                         .map_err(DatabaseError::QueryError)?;
-                    let state = AutomationRepositoryState {
-                        rules: Self::load_rules(&tx)?,
-                        processed_entries: Self::load_processed_entries(&tx)?,
-                    };
+                    let state = load_automation_in_transaction(&tx)?;
                     tx.commit().map_err(DatabaseError::QueryError)?;
                     Ok(state)
                 })
@@ -102,15 +127,7 @@ where
 
     fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String> {
         self.get_db()
-            .and_then(|db| {
-                db.with_transaction(|tx| {
-                    tx.execute("DELETE FROM automation_rules", [])?;
-                    insert_rules(tx, &state.rules)?;
-                    tx.execute("DELETE FROM automation_processed", [])?;
-                    insert_processed_entries(tx, &state.processed_entries)?;
-                    Ok(())
-                })
-            })
+            .and_then(|db| db.with_transaction(|tx| replace_automation_in_transaction(tx, state)))
             .map_err(|error| error.to_string())
     }
 }

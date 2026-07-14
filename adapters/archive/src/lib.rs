@@ -3,6 +3,12 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+mod backup;
+
+pub use backup::{
+    FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_EXPANDED_BYTES, MAX_BACKUP_FILE_BYTES,
+};
+
 pub fn extract_tar_bz2<F>(
     archive_path: &str,
     target_dir: &str,

@@ -1,9 +1,7 @@
 use crate::history::mutation_repository::HistoryMutationRepository;
 pub use crate::history::query_repository::HistoryQueryError as HistoryStoreError;
 use crate::history::query_repository::HistoryQueryRepository;
-use crate::history::{
-    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryBackupSnapshot,
-};
+use crate::history::{HistoryAudioCleanupReport, HistoryAudioCleanupRequest};
 use serde_json::Value;
 
 pub trait HistoryStore: HistoryQueryRepository + HistoryMutationRepository {
@@ -24,5 +22,4 @@ pub trait HistoryStore: HistoryQueryRepository + HistoryMutationRepository {
         &self,
         request: HistoryAudioCleanupRequest,
     ) -> Result<HistoryAudioCleanupReport, HistoryStoreError>;
-    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, HistoryStoreError>;
 }

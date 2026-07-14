@@ -5566,8 +5566,13 @@ name = "sona-archive"
 version = "0.8.0"
 dependencies = [
  "bzip2",
+ "serde",
+ "serde_json",
+ "sona-core",
  "tar",
  "tempfile",
+ "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5586,6 +5591,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "sona-api-server",
+ "sona-archive",
  "sona-core",
  "sona-export",
  "sona-local-asr",
@@ -5740,7 +5746,6 @@ name = "sona-sqlite"
 version = "0.8.0"
 dependencies = [
  "async-trait",
- "bzip2",
  "chrono",
  "fs3",
  "log",
@@ -5749,7 +5754,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sona-core",
- "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -5772,6 +5776,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sona-archive",
  "sona-core",
  "sona-export",
  "sona-local-asr",

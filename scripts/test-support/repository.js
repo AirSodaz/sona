@@ -40,6 +40,9 @@ const expectedUniffiExports = Object.freeze([
   'validate_automation_rule_activation_json',
   'normalize_export_format',
   'export_transcript_file_json',
+  'export_backup_archive_json',
+  'inspect_backup_archive_json',
+  'import_backup_archive_json',
   'list_history_items_json',
   'query_history_workspace_json',
   'load_history_transcript_json',
@@ -120,6 +123,7 @@ const expectedUniffiErrorVariants = Object.freeze([
   'Export',
   'HistoryQuery',
   'HistoryMutation',
+  'Backup',
 ]);
 
 const expectedHistoryMutationExports = Object.freeze([

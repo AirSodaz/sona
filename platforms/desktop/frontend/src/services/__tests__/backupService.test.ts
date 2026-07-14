@@ -24,9 +24,12 @@ const testContext = vi.hoisted(() => {
       queueItems: [] as Array<{ status: string }>,
     },
     config: initialConfig,
+    clearActiveTranscriptSessionMock: vi.fn(),
+    openTranscriptSessionMock: vi.fn(),
     historyServiceGetAudioUrlMock: vi.fn(),
     historyServiceLoadTranscriptMock: vi.fn(),
     historyStoreState: {
+      error: null as string | null,
       items: [] as any[],
       loadItems: vi.fn().mockResolvedValue(undefined),
     },
@@ -41,6 +44,7 @@ const testContext = vi.hoisted(() => {
     projectServiceGetAllMock: vi.fn(),
     projectServiceSaveAllMock: vi.fn().mockResolvedValue(undefined),
     projectState: {
+      error: null as string | null,
       loadProjects: vi.fn().mockResolvedValue(undefined),
     },
     readTextFileMock: vi.fn(),
@@ -48,6 +52,8 @@ const testContext = vi.hoisted(() => {
     saveAutomationRulesMock: vi.fn().mockResolvedValue(undefined),
     saveMock: vi.fn(),
     settingsStoreSaveMock: vi.fn().mockResolvedValue(undefined),
+    settingsStoreGetMock: vi.fn(),
+    settingsStoreNotifyExternalUpdateMock: vi.fn().mockResolvedValue(undefined),
     settingsStoreSetMock: vi.fn().mockResolvedValue(undefined),
     transcriptPlaybackState: {
       setAudioFile: vi.fn(),
@@ -111,6 +117,8 @@ vi.mock('../projectService', () => ({
 vi.mock('../storageService', () => ({
   STORE_KEY_CONFIG: 'sona-config',
   settingsStore: {
+    get: testContext.settingsStoreGetMock,
+    notifyExternalUpdate: testContext.settingsStoreNotifyExternalUpdateMock,
     save: testContext.settingsStoreSaveMock,
     set: testContext.settingsStoreSetMock,
   },
@@ -133,6 +141,9 @@ vi.mock('../../stores/configStore', () => ({
   useConfigStore: {
     getState: () => ({
       config: testContext.config,
+      setConfig: (patch: typeof testContext.config) => {
+        testContext.config = { ...testContext.config, ...patch };
+      },
     }),
     setState: (nextState: { config?: typeof testContext.config }) => {
       if (nextState.config) {
@@ -140,6 +151,11 @@ vi.mock('../../stores/configStore', () => ({
       }
     },
   },
+}));
+
+vi.mock('../../stores/transcriptCoordinator', () => ({
+  clearActiveTranscriptSession: testContext.clearActiveTranscriptSessionMock,
+  openTranscriptSession: testContext.openTranscriptSessionMock,
 }));
 
 vi.mock('../../stores/historyStore', () => ({
@@ -214,8 +230,10 @@ describe('backupService', () => {
     testContext.transcriptRuntimeState.isRecording = false;
     testContext.transcriptSessionState.sourceHistoryId = null;
     testContext.historyStoreState.items = [];
+    testContext.historyStoreState.error = null;
     testContext.historyStoreState.loadItems.mockResolvedValue(undefined);
     testContext.projectState.loadProjects.mockResolvedValue(undefined);
+    testContext.projectState.error = null;
     testContext.automationStoreState.stopAll.mockResolvedValue(undefined);
     testContext.automationStoreState.loadAndStart.mockResolvedValue(undefined);
     testContext.llmUsageReadRawMock.mockResolvedValue('{"schemaVersion":1}');
@@ -231,9 +249,10 @@ describe('backupService', () => {
       polishKeywordSets: [],
       speakerProfiles: [],
     } as any;
+    testContext.settingsStoreGetMock.mockResolvedValue(testContext.config);
   });
 
-  it('exports through the Rust archive command while keeping TS-owned config/project/automation payload assembly', async () => {
+  it('exports through Rust with only the archive path and app version', async () => {
     testContext.saveMock.mockResolvedValue('/backups/sona-backup.tar.bz2');
     testContext.projectServiceGetAllMock.mockResolvedValue([
       {
@@ -262,20 +281,15 @@ describe('backupService', () => {
 
     expect(result?.archivePath).toBe('/backups/sona-backup.tar.bz2');
     expect(testContext.invokeMock).toHaveBeenCalledWith('export_backup_archive', {
-      request: expect.objectContaining({
+      request: {
         archivePath: '/backups/sona-backup.tar.bz2',
         appVersion: packageJson.version,
-        projects: expect.arrayContaining([expect.objectContaining({ id: 'project-1' })]),
-        automationRules: [{ id: 'rule-1', name: 'Automation' }],
-        automationProcessedEntries: [{ ruleId: 'rule-1', filePath: 'C:\\watch\\meeting.wav' }],
-        analyticsContent: '{"schemaVersion":1}',
-      }),
+      },
     });
-    expect(testContext.llmUsageReadRawMock).toHaveBeenCalledTimes(1);
-    expect(testContext.readTextFileMock).not.toHaveBeenCalledWith(
-      'analytics/llm-usage.json',
-      expect.anything(),
-    );
+    expect(testContext.projectServiceGetAllMock).not.toHaveBeenCalled();
+    expect(testContext.loadAutomationRulesMock).not.toHaveBeenCalled();
+    expect(testContext.loadAutomationProcessedEntriesMock).not.toHaveBeenCalled();
+    expect(testContext.llmUsageReadRawMock).not.toHaveBeenCalled();
   });
 
   it('prepareImportBackup now returns a handle plus non-history payloads instead of extracted history files', async () => {
@@ -381,7 +395,7 @@ describe('backupService', () => {
     expect(prepared?.automationProcessedEntries).toEqual([{ ruleId: 'rule-sparse' }]);
   });
 
-  it('applies a prepared backup through the history-import handle and disposes it afterward', async () => {
+  it('atomically applies once, reloads config before stores, restarts automation, and disposes', async () => {
     const prepared: PreparedBackupImport = {
       importId: 'import-1',
       archivePath: '/imports/backup.tar.bz2',
@@ -458,6 +472,7 @@ describe('backupService', () => {
       config: migratedConfig,
       migrated: true,
     });
+    testContext.settingsStoreGetMock.mockResolvedValue(migratedConfig);
     testContext.historyStoreState.loadItems.mockImplementation(async () => {
       testContext.historyStoreState.items = [];
     });
@@ -472,27 +487,126 @@ describe('backupService', () => {
     await applyImportBackup(prepared);
 
     expect(testContext.automationStoreState.stopAll).toHaveBeenCalledTimes(1);
-    expect(testContext.settingsStoreSetMock).toHaveBeenCalledWith('sona-config', migratedConfig);
-    expect(testContext.settingsStoreSaveMock).toHaveBeenCalledTimes(1);
-    expect(testContext.projectServiceSaveAllMock).toHaveBeenCalledWith(prepared.projects);
-    expect(testContext.saveAutomationRulesMock).toHaveBeenCalledWith(prepared.automationRules);
-    expect(testContext.saveAutomationProcessedEntriesMock).toHaveBeenCalledWith(prepared.automationProcessedEntries);
-    expect(testContext.llmUsageReplaceRawMock).toHaveBeenCalledWith(prepared.analyticsContent);
-    expect(testContext.writeTextFileMock).not.toHaveBeenCalledWith(
-      'analytics/llm-usage.json',
-      expect.anything(),
-      expect.anything(),
+    expect(testContext.settingsStoreSetMock).not.toHaveBeenCalled();
+    expect(testContext.settingsStoreSaveMock).not.toHaveBeenCalled();
+    expect(testContext.settingsStoreNotifyExternalUpdateMock).toHaveBeenCalledWith(
+      'sona-config',
+      migratedConfig,
     );
+    expect(testContext.projectServiceSaveAllMock).not.toHaveBeenCalled();
+    expect(testContext.saveAutomationRulesMock).not.toHaveBeenCalled();
+    expect(testContext.saveAutomationProcessedEntriesMock).not.toHaveBeenCalled();
+    expect(testContext.llmUsageReplaceRawMock).not.toHaveBeenCalled();
     expect(testContext.invokeMock).toHaveBeenCalledWith('apply_prepared_history_import', {
       importId: 'import-1',
     });
     expect(testContext.projectState.loadProjects).toHaveBeenCalledTimes(1);
     expect(testContext.historyStoreState.loadItems).toHaveBeenCalledTimes(1);
     expect(testContext.automationStoreState.loadAndStart).toHaveBeenCalledTimes(1);
+    expect(testContext.settingsStoreGetMock.mock.invocationCallOrder[0]).toBeLessThan(
+      testContext.projectState.loadProjects.mock.invocationCallOrder[0],
+    );
+    expect(testContext.projectState.loadProjects.mock.invocationCallOrder[0]).toBeLessThan(
+      testContext.historyStoreState.loadItems.mock.invocationCallOrder[0],
+    );
+    expect(testContext.historyStoreState.loadItems.mock.invocationCallOrder[0]).toBeLessThan(
+      testContext.automationStoreState.loadAndStart.mock.invocationCallOrder[0],
+    );
     expect(testContext.transcriptPlaybackState.setAudioFile).toHaveBeenCalledTimes(0);
     expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
       importId: 'import-1',
     });
-    expect(testContext.config).toEqual(migratedConfig);
+    expect(testContext.config).toEqual(expect.objectContaining(migratedConfig));
+  });
+
+  it('disposes and recovers automation when an import is blocked before apply', async () => {
+    const prepared = { importId: 'blocked', archivePath: '/backup.tar.bz2' } as PreparedBackupImport;
+    testContext.transcriptRuntimeState.isRecording = true;
+    testContext.invokeMock.mockResolvedValue(undefined);
+
+    await expect(applyImportBackup(prepared)).rejects.toThrow('Stop Live Record');
+
+    expect(testContext.invokeMock).not.toHaveBeenCalledWith('apply_prepared_history_import', expect.anything());
+    expect(testContext.automationStoreState.loadAndStart).not.toHaveBeenCalled();
+    expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
+      importId: 'blocked',
+    });
+  });
+
+  it('preserves a stop failure while recovery and disposal remain best effort', async () => {
+    const prepared = { importId: 'stop-failure', archivePath: '/backup.tar.bz2' } as PreparedBackupImport;
+    const stopError = new Error('stop failed');
+    testContext.automationStoreState.stopAll.mockRejectedValue(stopError);
+    testContext.automationStoreState.loadAndStart.mockRejectedValue(new Error('restart failed'));
+    testContext.invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'dispose_prepared_backup_import') throw new Error('dispose failed');
+      throw new Error(`Unexpected invoke: ${command}`);
+    });
+
+    await expect(applyImportBackup(prepared)).rejects.toBe(stopError);
+
+    expect(testContext.automationStoreState.loadAndStart).toHaveBeenCalledTimes(1);
+    expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
+      importId: 'stop-failure',
+    });
+  });
+
+  it.each([
+    ['projects', testContext.projectState],
+    ['history', testContext.historyStoreState],
+  ])('reports a swallowed %s reload error after commit and clears the stale transcript', async (_name, store) => {
+    const prepared = { importId: 'reload-failure', archivePath: '/backup.tar.bz2' } as PreparedBackupImport;
+    testContext.transcriptSessionState.sourceHistoryId = 'active-history';
+    testContext.invokeMock.mockResolvedValue(undefined);
+    store.error = 'reload failed';
+
+    await expect(applyImportBackup(prepared)).rejects.toThrow('reload failed');
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('apply_prepared_history_import', {
+      importId: 'reload-failure',
+    });
+    expect(testContext.automationStoreState.loadAndStart).toHaveBeenCalledTimes(1);
+    expect(testContext.clearActiveTranscriptSessionMock).toHaveBeenCalledWith({ clearAudio: true });
+    expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
+      importId: 'reload-failure',
+    });
+  });
+
+  it('preserves the reload error when transcript cleanup also fails', async () => {
+    const prepared = { importId: 'primary-error', archivePath: '/backup.tar.bz2' } as PreparedBackupImport;
+    const primaryError = new Error('config reload failed');
+    testContext.settingsStoreGetMock.mockRejectedValue(primaryError);
+    testContext.clearActiveTranscriptSessionMock.mockImplementation(() => {
+      throw new Error('transcript cleanup failed');
+    });
+    testContext.invokeMock.mockResolvedValue(undefined);
+
+    await expect(applyImportBackup(prepared)).rejects.toBe(primaryError);
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
+      importId: 'primary-error',
+    });
+  });
+
+  it('reopens the active transcript after the committed restore is reloaded', async () => {
+    const prepared = { importId: 'transcript', archivePath: '/backup.tar.bz2' } as PreparedBackupImport;
+    const historyItem = { id: 'active-history', title: 'Restored', icon: 'mic' };
+    const segments = [{ id: 'segment-1', text: 'restored' }];
+    testContext.transcriptSessionState.sourceHistoryId = historyItem.id;
+    testContext.historyStoreState.items = [historyItem];
+    testContext.historyServiceLoadTranscriptMock.mockResolvedValue(segments);
+    testContext.historyServiceGetAudioUrlMock.mockResolvedValue('asset://restored.wav');
+    testContext.invokeMock.mockResolvedValue(undefined);
+
+    await applyImportBackup(prepared);
+
+    expect(testContext.openTranscriptSessionMock).toHaveBeenCalledWith({
+      segments,
+      sourceHistoryId: historyItem.id,
+      title: historyItem.title,
+      icon: historyItem.icon,
+      audioUrl: 'asset://restored.wav',
+    });
+    expect(testContext.transcriptPlaybackState.setAudioFile).toHaveBeenCalledWith(null);
   });
 });

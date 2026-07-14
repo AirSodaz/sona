@@ -1,8 +1,5 @@
 import packageJson from '../../package.json';
-import { loadAutomationProcessedEntries, loadAutomationRules, saveAutomationProcessedEntries, saveAutomationRules } from './automation/automationService';
-import { migrateConfig } from './configMigrationService';
 import { historyService } from './historyService';
-import { projectService } from './projectService';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
@@ -23,7 +20,6 @@ import {
 } from '../types/backup';
 import type { AppConfig } from '../types/config';
 import type { HistoryItem } from '../types/history';
-import type { ProjectRecord } from '../types/project';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import {
@@ -32,10 +28,7 @@ import {
   exportBackupArchive,
   prepareBackupImport,
 } from './tauri/backup';
-import { llmUsageReadRaw, llmUsageReplaceRaw } from './tauri/llmUsage';
 import { openDialog, saveDialog } from './tauri/platform/dialog';
-
-const ANALYTICS_FALLBACK_CONTENT = '[]';
 
 class BackupOperationBlockedError extends Error {
   constructor(public readonly blocker: BackupOperationBlocker, message: string) {
@@ -117,34 +110,24 @@ export interface BackupServicePorts {
   getHasBlockingQueueItems: () => boolean;
   stopAllAutomation: () => Promise<void>;
   loadAndStartAutomation: () => Promise<void>;
-  getConfig: () => AppConfig;
-  setConfig: (config: AppConfig) => void;
+  reloadConfig: () => Promise<void>;
   loadProjects: () => Promise<void>;
+  getProjectLoadError: () => string | null;
   loadHistoryItems: () => Promise<void>;
+  getHistoryLoadError: () => string | null;
   getTranscriptSourceHistoryId: () => string | null;
   getHistoryItems: () => HistoryItem[];
   clearActiveTranscriptSession: (options: { clearAudio: boolean }) => void;
   openTranscriptSession: typeof openTranscriptSession;
   setAudioFile: (file: File | null) => void;
-  loadAutomationRules: typeof loadAutomationRules;
-  loadAutomationProcessedEntries: typeof loadAutomationProcessedEntries;
-  saveAutomationRules: typeof saveAutomationRules;
-  saveAutomationProcessedEntries: typeof saveAutomationProcessedEntries;
-  migrateConfig: typeof migrateConfig;
-  projectServiceGetAll: typeof projectService.getAll;
-  projectServiceSaveAll: typeof projectService.saveAll;
   historyServiceLoadTranscript: typeof historyService.loadTranscript;
   historyServiceGetAudioUrl: typeof historyService.getAudioUrl;
-  llmUsageReadRaw: typeof llmUsageReadRaw;
-  llmUsageReplaceRaw: typeof llmUsageReplaceRaw;
   openDialog: typeof openDialog;
   saveDialog: typeof saveDialog;
   exportBackupArchive: typeof exportBackupArchive;
   prepareBackupImport: typeof prepareBackupImport;
   disposePreparedBackupImport: typeof disposePreparedBackupImport;
   applyPreparedHistoryImport: typeof applyPreparedHistoryImport;
-  settingsStoreSet: (key: string, value: unknown) => Promise<void>;
-  settingsStoreSave: () => Promise<void>;
   appVersion: string;
 }
 
@@ -202,32 +185,6 @@ export class BackupService {
     return typeof selected === 'string' && selected.trim().length > 0 ? selected : null;
   }
 
-  private async loadProjectsForBackup(config: AppConfig): Promise<ProjectRecord[]> {
-    const fallbackEnabledPolishKeywordSetIds = (config.polishKeywordSets || [])
-      .filter((set) => set.enabled)
-      .map((set) => set.id);
-    const fallbackEnabledSpeakerProfileIds = (config.speakerProfiles || [])
-      .filter((profile) => profile.enabled)
-      .map((profile) => profile.id);
-
-    return this.ports.projectServiceGetAll({
-      fallbackEnabledPolishKeywordSetIds,
-      fallbackEnabledSpeakerProfileIds,
-    });
-  }
-
-  private async loadAnalyticsContentForBackup(): Promise<string> {
-    try {
-      return await this.ports.llmUsageReadRaw();
-    } catch {
-      return ANALYTICS_FALLBACK_CONTENT;
-    }
-  }
-
-  private async writeAnalyticsImport(analyticsContent: string): Promise<void> {
-    await this.ports.llmUsageReplaceRaw(analyticsContent);
-  }
-
   private async syncOpenTranscriptAfterImport(): Promise<void> {
     const currentHistoryId = this.ports.getTranscriptSourceHistoryId();
 
@@ -269,22 +226,9 @@ export class BackupService {
       return null;
     }
 
-    const config = this.ports.getConfig();
-    const [projects, automationRules, automationProcessedEntries, analyticsContent] = await Promise.all([
-      this.loadProjectsForBackup(config),
-      this.ports.loadAutomationRules(),
-      this.ports.loadAutomationProcessedEntries(),
-      this.loadAnalyticsContentForBackup(),
-    ]);
-
     const manifest = await this.ports.exportBackupArchive<BackupManifestV1>({
       archivePath,
       appVersion: this.ports.appVersion,
-      config,
-      projects,
-      automationRules,
-      automationProcessedEntries,
-      analyticsContent,
     });
 
     return {
@@ -311,35 +255,59 @@ export class BackupService {
   }
 
   async applyImportBackup(prepared: PreparedBackupImport): Promise<void> {
-    this.ensureBackupOperationsIdle();
-
+    let backendApplied = false;
+    let automationStopAttempted = false;
     let automationReloaded = false;
-    await this.ports.stopAllAutomation();
-
+    let transcriptSynchronized = false;
     try {
-      const migration = await this.ports.migrateConfig(prepared.config);
-      const migratedConfig = migration.config;
-
-      await this.ports.settingsStoreSet(STORE_KEY_CONFIG, migratedConfig);
-      await this.ports.settingsStoreSave();
-      this.ports.setConfig(migratedConfig);
-
-      await this.ports.projectServiceSaveAll(prepared.projects);
-      await this.ports.saveAutomationRules(prepared.automationRules);
-      await this.ports.saveAutomationProcessedEntries(prepared.automationProcessedEntries);
-      await this.writeAnalyticsImport(prepared.analyticsContent);
+      this.ensureBackupOperationsIdle();
+      automationStopAttempted = true;
+      await this.ports.stopAllAutomation();
       await this.ports.applyPreparedHistoryImport(prepared.importId);
+      backendApplied = true;
 
-      await this.ports.loadProjects();
-      await this.ports.loadHistoryItems();
+      await this.ports.reloadConfig();
+      let projectReloadError: Error | null = null;
+      try {
+        await this.ports.loadProjects();
+        const error = this.ports.getProjectLoadError();
+        if (error) throw new Error(`Failed to reload projects after backup restore: ${error}`);
+      } catch (error) {
+        projectReloadError = error instanceof Error ? error : new Error(extractErrorMessage(error));
+      }
+
+      let historyReloadError: Error | null = null;
+      try {
+        await this.ports.loadHistoryItems();
+        const error = this.ports.getHistoryLoadError();
+        if (error) throw new Error(`Failed to reload history after backup restore: ${error}`);
+      } catch (error) {
+        historyReloadError = error instanceof Error ? error : new Error(extractErrorMessage(error));
+      }
+
+      if (projectReloadError) throw projectReloadError;
+      if (historyReloadError) throw historyReloadError;
+
       await this.ports.loadAndStartAutomation();
       automationReloaded = true;
       await this.syncOpenTranscriptAfterImport();
+      transcriptSynchronized = true;
     } finally {
-      if (!automationReloaded) {
+      if (automationStopAttempted && !automationReloaded) {
         await this.ports.loadAndStartAutomation().catch((error) => {
           logger.error('[Backup] Failed to restart automation after import error:', error);
         });
+      }
+
+      if (backendApplied && !transcriptSynchronized) {
+        try {
+          this.ports.clearActiveTranscriptSession({ clearAudio: true });
+        } catch (error) {
+          logger.error(
+            '[Backup] Failed to clear transcript after import error:',
+            extractErrorMessage(error),
+          );
+        }
       }
 
       await this.disposePreparedImport(prepared).catch((error) => {
@@ -360,34 +328,29 @@ export const backupService = createBackupService({
   )),
   stopAllAutomation: () => useAutomationStore.getState().stopAll(),
   loadAndStartAutomation: () => useAutomationStore.getState().loadAndStart(),
-  getConfig: () => useConfigStore.getState().config,
-  setConfig: (config) => useConfigStore.setState({ config }),
+  reloadConfig: async () => {
+    const config = await settingsStore.get<AppConfig>(STORE_KEY_CONFIG);
+    if (!config) throw new Error('Restored backup config is missing.');
+    useConfigStore.getState().setConfig(config);
+    await settingsStore.notifyExternalUpdate(STORE_KEY_CONFIG, config);
+  },
   loadProjects: () => useProjectStore.getState().loadProjects(),
+  getProjectLoadError: () => useProjectStore.getState().error,
   loadHistoryItems: () => useHistoryStore.getState().loadItems(),
+  getHistoryLoadError: () => useHistoryStore.getState().error,
   getTranscriptSourceHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId,
   getHistoryItems: () => useHistoryStore.getState().items,
   clearActiveTranscriptSession,
   openTranscriptSession,
   setAudioFile: (file) => useTranscriptPlaybackStore.getState().setAudioFile(file),
-  loadAutomationRules,
-  loadAutomationProcessedEntries,
-  saveAutomationRules,
-  saveAutomationProcessedEntries,
-  migrateConfig,
-  projectServiceGetAll: (options) => projectService.getAll(options),
-  projectServiceSaveAll: (projects) => projectService.saveAll(projects),
   historyServiceLoadTranscript: (historyId) => historyService.loadTranscript(historyId),
   historyServiceGetAudioUrl: (historyId) => historyService.getAudioUrl(historyId),
-  llmUsageReadRaw,
-  llmUsageReplaceRaw,
   openDialog,
   saveDialog,
   exportBackupArchive,
   prepareBackupImport,
   disposePreparedBackupImport,
   applyPreparedHistoryImport,
-  settingsStoreSet: (key, value) => settingsStore.set(key, value),
-  settingsStoreSave: () => settingsStore.save(),
   appVersion: packageJson.version,
 });
 

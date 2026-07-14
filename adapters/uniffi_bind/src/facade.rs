@@ -7,9 +7,9 @@ use crate::{
     FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
     app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_mutation_bridge,
-    history_query_bridge, llm_bridge, model_bridge, project_bridge, recovery_bridge,
-    runtime_bridge, storage_usage_bridge, task_ledger_bridge,
+    backup_bridge, config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge,
+    history_mutation_bridge, history_query_bridge, llm_bridge, model_bridge, project_bridge,
+    recovery_bridge, runtime_bridge, storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -163,6 +163,35 @@ impl SonaCoreFacade {
 
     pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
         export_bridge::export_transcript_file_json(input_json).await
+    }
+
+    pub async fn export_backup_archive_json(
+        app_data_dir: String,
+        archive_path: String,
+        app_version: String,
+    ) -> SonaCoreBindingResult<String> {
+        backup_bridge::export_backup_archive_json(app_data_dir, archive_path, app_version).await
+    }
+
+    pub async fn inspect_backup_archive_json(
+        archive_path: String,
+    ) -> SonaCoreBindingResult<String> {
+        backup_bridge::inspect_backup_archive_json(archive_path).await
+    }
+
+    pub async fn import_backup_archive_json(
+        app_data_dir: String,
+        archive_path: String,
+        default_rule_set_name: String,
+        confirm_replace: bool,
+    ) -> SonaCoreBindingResult<String> {
+        backup_bridge::import_backup_archive_json(
+            app_data_dir,
+            archive_path,
+            default_rule_set_name,
+            confirm_replace,
+        )
+        .await
     }
 
     pub async fn list_history_items_json(

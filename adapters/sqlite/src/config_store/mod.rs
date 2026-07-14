@@ -4,9 +4,42 @@ mod settings;
 
 use std::sync::Arc;
 
+use rusqlite::Transaction;
 use sona_core::config::{AppConfigStartupProjection, AppConfigStore, AppConfigStoredState};
 
-use crate::ports::Database as DatabasePort;
+use crate::{DatabaseError, ports::Database as DatabasePort};
+
+pub(crate) fn load_state_in_transaction(
+    tx: &Transaction<'_>,
+) -> Result<Option<AppConfigStoredState>, DatabaseError> {
+    let Some(base) = app_config::load(tx)? else {
+        return Ok(None);
+    };
+    let library = library::load(&tx)?;
+    Ok(Some(AppConfigStoredState {
+        base_config_json: base.base_config_json,
+        library,
+        config_version: base.config_version,
+        updated_at: base.updated_at,
+        startup_projection: base.startup_projection,
+    }))
+}
+
+pub(crate) fn replace_state_in_transaction(
+    tx: &Transaction<'_>,
+    state: &AppConfigStoredState,
+) -> Result<(), DatabaseError> {
+    library::replace(tx, &state.library, state.updated_at)?;
+    app_config::replace(tx, state)
+}
+
+pub(crate) fn clear_setting_in_transaction(
+    tx: &Transaction<'_>,
+    key: &str,
+) -> Result<(), DatabaseError> {
+    tx.execute("DELETE FROM app_settings WHERE key = ?1", [key])?;
+    Ok(())
+}
 
 #[derive(Clone)]
 pub struct SqliteConfigStore<D = crate::Database>
@@ -27,19 +60,9 @@ where
             .map_err(|error| error.to_string())?
             .with_connection(|conn| {
                 let tx = conn.unchecked_transaction()?;
-                let Some(base) = app_config::load(&tx)? else {
-                    tx.commit()?;
-                    return Ok(None);
-                };
-                let library = library::load(&tx)?;
+                let state = load_state_in_transaction(&tx)?;
                 tx.commit()?;
-                Ok(Some(AppConfigStoredState {
-                    base_config_json: base.base_config_json,
-                    library,
-                    config_version: base.config_version,
-                    updated_at: base.updated_at,
-                    startup_projection: base.startup_projection,
-                }))
+                Ok(state)
             })
             .map_err(|error| error.to_string())
     }
@@ -61,10 +84,7 @@ where
     fn replace_state(&self, state: AppConfigStoredState) -> Result<(), String> {
         self.get_db()
             .map_err(|error| error.to_string())?
-            .with_rw_transaction(|tx| {
-                app_config::replace(tx, &state)?;
-                library::replace(tx, &state.library, state.updated_at)
-            })
+            .with_rw_transaction(|tx| replace_state_in_transaction(tx, &state))
             .map_err(|error| error.to_string())
     }
 

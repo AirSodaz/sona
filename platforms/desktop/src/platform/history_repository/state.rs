@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use sona_core::history::PreparedBackupImportSnapshot;
+use sona_archive::FsBackupArchiveRepository;
 
 #[derive(Clone, Default)]
 pub struct HistoryRepositoryState {
@@ -12,33 +11,11 @@ pub struct HistoryRepositoryState {
 
 #[derive(Clone, Default)]
 pub struct PreparedBackupImportState {
-    inner: Arc<Mutex<HashMap<String, PreparedBackupImportSnapshot>>>,
+    archive: Arc<FsBackupArchiveRepository>,
 }
 
 impl PreparedBackupImportState {
-    pub(crate) fn insert(
-        &self,
-        import_id: String,
-        snapshot: PreparedBackupImportSnapshot,
-    ) -> Result<(), String> {
-        let mut guard = self.inner.lock().map_err(|error| error.to_string())?;
-        guard.insert(import_id, snapshot);
-        Ok(())
-    }
-
-    pub(crate) fn get(
-        &self,
-        import_id: &str,
-    ) -> Result<Option<PreparedBackupImportSnapshot>, String> {
-        let guard = self.inner.lock().map_err(|error| error.to_string())?;
-        Ok(guard.get(import_id).cloned())
-    }
-
-    pub(crate) fn remove(
-        &self,
-        import_id: &str,
-    ) -> Result<Option<PreparedBackupImportSnapshot>, String> {
-        let mut guard = self.inner.lock().map_err(|error| error.to_string())?;
-        Ok(guard.remove(import_id))
+    pub(crate) fn archive(&self) -> Arc<FsBackupArchiveRepository> {
+        Arc::clone(&self.archive)
     }
 }

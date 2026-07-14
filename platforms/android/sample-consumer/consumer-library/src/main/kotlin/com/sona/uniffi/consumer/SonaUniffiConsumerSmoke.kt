@@ -12,7 +12,10 @@ import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryTranscriptSnapshotJson
 import uniffi.sona_uniffi_bind.defaultConfigJson
 import uniffi.sona_uniffi_bind.deleteHistoryItemsJson
+import uniffi.sona_uniffi_bind.exportBackupArchiveJson
 import uniffi.sona_uniffi_bind.exportTranscriptFileJson
+import uniffi.sona_uniffi_bind.importBackupArchiveJson
+import uniffi.sona_uniffi_bind.inspectBackupArchiveJson
 import uniffi.sona_uniffi_bind.loadAutomationRepositoryStateJson
 import uniffi.sona_uniffi_bind.loadAppConfigJson
 import uniffi.sona_uniffi_bind.loadDashboardSnapshotJson
@@ -97,6 +100,27 @@ object SonaUniffiConsumerSmoke {
 
     suspend fun exportTranscript(inputJson: String): String =
         exportTranscriptFileJson(inputJson)
+
+    suspend fun exportBackupArchive(
+        appDataDir: String,
+        archivePath: String,
+        appVersion: String,
+    ): String = exportBackupArchiveJson(appDataDir, archivePath, appVersion)
+
+    suspend fun inspectBackupArchive(archivePath: String): String =
+        inspectBackupArchiveJson(archivePath)
+
+    suspend fun importBackupArchive(
+        appDataDir: String,
+        archivePath: String,
+        defaultRuleSetName: String,
+        confirmReplace: Boolean,
+    ): String = importBackupArchiveJson(
+        appDataDir,
+        archivePath,
+        defaultRuleSetName,
+        confirmReplace,
+    )
 
     suspend fun listHistory(appDataDir: String, limit: ULong?, offset: ULong?): String =
         listHistoryItemsJson(appDataDir, limit, offset)

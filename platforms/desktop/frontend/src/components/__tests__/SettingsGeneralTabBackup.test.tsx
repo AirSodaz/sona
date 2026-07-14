@@ -112,6 +112,7 @@ vi.mock('../settings/SettingsLayout', async (importOriginal) => {
 });
 
 vi.mock('../../services/backupService', () => ({
+  applyImportBackup: testContext.applyImportBackupMock,
   backupService: {
     applyImportBackup: testContext.applyImportBackupMock,
     disposePreparedImport: testContext.disposePreparedImportMock,
@@ -119,6 +120,7 @@ vi.mock('../../services/backupService', () => ({
     getBackupOperationBlocker: vi.fn(),
     prepareImportBackup: testContext.prepareImportBackupMock,
   },
+  disposePreparedImport: testContext.disposePreparedImportMock,
 }));
 
 vi.mock('../../services/backupWebDavService', () => ({

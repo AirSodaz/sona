@@ -39,7 +39,7 @@ impl<'a> AppConfigRepositoryService<'a> {
     pub fn load_config(&self) -> Result<Option<Value>, String> {
         self.store
             .load_state()?
-            .map(config_from_stored_state)
+            .map(app_config_value_from_stored_state)
             .transpose()
     }
 
@@ -55,7 +55,7 @@ impl<'a> AppConfigRepositoryService<'a> {
         let speaker_profile_count = state.library.speaker_profiles.len() as u64;
         let config_version = state.config_version;
         let updated_at = state.updated_at;
-        let config = config_from_stored_state(state)?;
+        let config = app_config_value_from_stored_state(state)?;
 
         Ok(Some(AppConfigRepositorySnapshot {
             config,
@@ -69,19 +69,9 @@ impl<'a> AppConfigRepositoryService<'a> {
     }
 
     pub fn save_config(&self, config: &Value) -> Result<(), String> {
-        let startup_projection = AppConfigStartupProjection::from_config(config);
-        let config_version = config_version_from_config(config);
         let updated_at = self.clock.now_ms().unwrap_or_default() as i64;
-        let (base_config, library) = extract_library_config(config);
-        let base_config_json = serde_json::to_string(&base_config).map_err(serialization_error)?;
-
-        self.store.replace_state(AppConfigStoredState {
-            base_config_json,
-            library,
-            config_version,
-            updated_at,
-            startup_projection,
-        })
+        self.store
+            .replace_state(app_config_stored_state_from_value(config, updated_at)?)
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<Value>, String> {
@@ -113,6 +103,24 @@ impl<'a> AppConfigRepositoryService<'a> {
             .load_startup_projection()?
             .map(startup_settings_from_projection))
     }
+}
+
+pub fn app_config_stored_state_from_value(
+    config: &Value,
+    updated_at: i64,
+) -> Result<AppConfigStoredState, String> {
+    let startup_projection = AppConfigStartupProjection::from_config(config);
+    let config_version = config_version_from_config(config);
+    let (base_config, library) = extract_library_config(config);
+    let base_config_json = serde_json::to_string(&base_config).map_err(serialization_error)?;
+
+    Ok(AppConfigStoredState {
+        base_config_json,
+        library,
+        config_version,
+        updated_at,
+        startup_projection,
+    })
 }
 
 impl AppConfigStartupProjection {
@@ -154,7 +162,7 @@ impl AppConfigStartupProjection {
     }
 }
 
-fn config_from_stored_state(state: AppConfigStoredState) -> Result<Value, String> {
+pub fn app_config_value_from_stored_state(state: AppConfigStoredState) -> Result<Value, String> {
     let config = serde_json::from_str(&state.base_config_json).map_err(serialization_error)?;
     inject_library_config(config, state.library)
 }

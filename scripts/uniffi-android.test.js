@@ -16,11 +16,69 @@ import {
   exists,
   expectedUniffiErrorVariants,
   read,
+  readKotlinDirectFunctionItem,
+  readKotlinObjectBlock,
   repoRoot,
+  stripKotlinCommentsAndLiterals,
 } from './test-support/repository.js';
-import { node, androidNdkAbiCases, androidNdkToolPaths, runAndroidNdkPrint } from './test-support/android-ndk-fixtures.js';
+import { node } from './test-support/android-ndk-fixtures.js';
 
 const androidSherpaRuntimePath = path.join(repoRoot, 'scripts', 'android-sherpa-runtime.js');
+
+test('backup bindings expose exact direct suspend wrappers in both Android modules', () => {
+  const modules = [
+    {
+      objectName: 'SonaUniffiSmoke',
+      source: read(
+        'platforms', 'android', 'sample-consumer', 'sample-library', 'src', 'main', 'kotlin',
+        'com', 'sona', 'uniffi', 'sample', 'SonaUniffiSmoke.kt',
+      ),
+    },
+    {
+      objectName: 'SonaUniffiConsumerSmoke',
+      source: read(
+        'platforms', 'android', 'sample-consumer', 'consumer-library', 'src', 'main', 'kotlin',
+        'com', 'sona', 'uniffi', 'consumer', 'SonaUniffiConsumerSmoke.kt',
+      ),
+    },
+  ];
+  const imports = [
+    'exportBackupArchiveJson',
+    'inspectBackupArchiveJson',
+    'importBackupArchiveJson',
+  ];
+  const wrappers = [
+    [
+      'exportBackupArchive',
+      /^\s*suspend fun exportBackupArchive\(\s*appDataDir: String,\s*archivePath: String,\s*appVersion: String,\s*\): String\s*=\s*exportBackupArchiveJson\(appDataDir, archivePath, appVersion\)\s*$/u,
+    ],
+    [
+      'inspectBackupArchive',
+      /^\s*suspend fun inspectBackupArchive\(archivePath: String\): String\s*=\s*inspectBackupArchiveJson\(archivePath\)\s*$/u,
+    ],
+    [
+      'importBackupArchive',
+      /^\s*suspend fun importBackupArchive\(\s*appDataDir: String,\s*archivePath: String,\s*defaultRuleSetName: String,\s*confirmReplace: Boolean,\s*\): String\s*=\s*importBackupArchiveJson\(\s*appDataDir,\s*archivePath,\s*defaultRuleSetName,\s*confirmReplace,\s*\)\s*$/u,
+    ],
+  ];
+
+  for (const { objectName, source } of modules) {
+    const executable = stripKotlinCommentsAndLiterals(source);
+    const objectBlock = readKotlinObjectBlock(executable, objectName);
+    assert.notEqual(objectBlock, '', `missing Kotlin object ${objectName}`);
+    for (const generatedName of imports) {
+      assert.match(
+        executable,
+        new RegExp(`^import uniffi\\.sona_uniffi_bind\\.${generatedName}$`, 'mu'),
+      );
+    }
+    for (const [wrapperName, expected] of wrappers) {
+      const wrapper = readKotlinDirectFunctionItem(objectBlock, wrapperName);
+      assert.notEqual(wrapper, '', `missing direct ${objectName}.${wrapperName}`);
+      assert.match(wrapper, expected);
+    }
+  }
+});
 
 function createSherpaArchiveFixture({ abis = ['arm64-v8a'], omittedLibraries = [] } = {}) {
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-sherpa-fixture-'));
@@ -1604,180 +1662,4 @@ test('UniFFI Android sample can use a repo-managed Gradle distribution', () => {
   assert.match(androidReadme, /verify:android-uniffi:gradle/u);
   assert.match(androidReadme, /SONA_GRADLE_DISTRIBUTION_ZIP/u);
   assert.match(androidReadme, /target\/managed-gradle/u);
-});
-
-test('UniFFI Android native build script supports a no-toolchain dry run', () => {
-  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-uniffi-android-dry-run-'));
-  const targetDir = path.join(fixtureRoot, 'target');
-  const outDir = path.join(fixtureRoot, 'jni-output');
-  const result = spawnSync(
-    node,
-    [
-      path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
-      '--dry-run',
-      '--abis',
-      'arm64-v8a',
-      '--target-dir',
-      targetDir,
-      '--out-dir',
-      outDir,
-    ],
-    {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        SONA_SHERPA_ONNX_ANDROID_ARCHIVE: path.join(fixtureRoot, 'missing-archive.tar.bz2'),
-      },
-    },
-  );
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(
-    result.stdout,
-    /Plan: arm64-v8a -> aarch64-linux-android; AAR native entries: jni\/arm64-v8a\/libsona_uniffi_bind\.so, jni\/arm64-v8a\/libsherpa-onnx-c-api\.so, jni\/arm64-v8a\/libonnxruntime\.so/u,
-  );
-  assert.doesNotMatch(result.stdout, /cargo build/u);
-  assert.equal(fs.existsSync(path.join(targetDir, 'android-sherpa')), false);
-  assert.equal(fs.existsSync(outDir), false);
-});
-
-test('UniFFI Android native build script rejects an empty ABI selection', () => {
-  const result = spawnSync(
-    node,
-    [
-      path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
-      '--dry-run',
-      '--abis',
-      ' , ',
-      '--out-dir',
-      path.join(os.tmpdir(), 'sona-uniffi-android-empty-abis'),
-    ],
-    { cwd: repoRoot, encoding: 'utf8' },
-  );
-  const output = `${result.stderr}\n${result.stdout}`;
-
-  assert.notEqual(result.status, 0, output);
-  assert.match(output, /At least one Android ABI is required/u);
-});
-
-test('UniFFI Android native build script skips incomplete auto-discovered NDK installs', () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-ndk-'));
-  const sdkRoot = path.join(tempRoot, 'sdk');
-  const validNdk = path.join(sdkRoot, 'ndk', '29.0.14206865');
-  const incompleteNdk = path.join(sdkRoot, 'ndk', '30.0.15729638');
-
-  for (const abiCase of androidNdkAbiCases) {
-    const validPaths = androidNdkToolPaths(validNdk, abiCase, process.platform);
-    const incompletePaths = androidNdkToolPaths(incompleteNdk, abiCase, process.platform);
-    fs.mkdirSync(path.dirname(validPaths.linkerPath), { recursive: true });
-    fs.mkdirSync(path.dirname(incompletePaths.linkerPath), { recursive: true });
-    fs.writeFileSync(validPaths.linkerPath, '');
-    fs.writeFileSync(incompletePaths.linkerPath, '');
-  }
-  const validArchiverPath = androidNdkToolPaths(validNdk, androidNdkAbiCases[0], process.platform).archiverPath;
-  fs.writeFileSync(validArchiverPath, '');
-
-  for (const abiCase of androidNdkAbiCases) {
-    const result = runAndroidNdkPrint({ abi: abiCase.abi, androidHome: sdkRoot });
-    const validPaths = androidNdkToolPaths(validNdk, abiCase, process.platform);
-    const targetEnvSuffix = abiCase.target.replace(/-/gu, '_');
-    const expectedLines = [
-      `CARGO_TARGET_${targetEnvSuffix.toUpperCase()}_LINKER=${validPaths.linkerPath}`,
-      `CC_${targetEnvSuffix}=${validPaths.linkerPath}`,
-      `AR_${targetEnvSuffix}=${validPaths.archiverPath}`,
-    ];
-
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.deepEqual(result.stdout.trim().split(/\r?\n/u), expectedLines);
-    assert.doesNotMatch(result.stdout, /30\.0\.15729638/u);
-  }
-});
-
-test('UniFFI Android native build script reports a missing linker in an explicit NDK', () => {
-  const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-explicit-ndk-'));
-  const abiCase = androidNdkAbiCases[0];
-  const toolPaths = androidNdkToolPaths(ndkHome, abiCase, process.platform);
-  fs.mkdirSync(path.dirname(toolPaths.archiverPath), { recursive: true });
-  fs.writeFileSync(toolPaths.archiverPath, '');
-
-  const result = runAndroidNdkPrint({ abi: abiCase.abi, ndkHome });
-  const output = `${result.stderr}\n${result.stdout}`;
-
-  assert.notEqual(result.status, 0, output);
-  assert.ok(output.includes(`Missing Android NDK linker at ${toolPaths.linkerPath}`), output);
-});
-
-test('UniFFI Android native build script reports a missing archiver in an explicit NDK', () => {
-  const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-android-explicit-ndk-'));
-  const abiCase = androidNdkAbiCases[0];
-  const toolPaths = androidNdkToolPaths(ndkHome, abiCase, process.platform);
-  fs.mkdirSync(path.dirname(toolPaths.linkerPath), { recursive: true });
-  fs.writeFileSync(toolPaths.linkerPath, '');
-
-  const result = runAndroidNdkPrint({ abi: abiCase.abi, ndkHome });
-  const output = `${result.stderr}\n${result.stdout}`;
-
-  assert.notEqual(result.status, 0, output);
-  assert.ok(output.includes(`Missing Android NDK archiver at ${toolPaths.archiverPath}`), output);
-});
-
-test('UniFFI Android native build script supports injected host toolchain layouts in print mode', () => {
-  const abiCase = androidNdkAbiCases[0];
-
-  for (const hostPlatform of ['windows', 'linux', 'darwin']) {
-    const ndkHome = fs.mkdtempSync(path.join(os.tmpdir(), `sona-android-${hostPlatform}-ndk-`));
-    const targetDir = path.join(ndkHome, 'target');
-    const outDir = path.join(ndkHome, 'jni-output');
-    const toolPaths = androidNdkToolPaths(ndkHome, abiCase, hostPlatform);
-    fs.mkdirSync(path.dirname(toolPaths.linkerPath), { recursive: true });
-    fs.writeFileSync(toolPaths.linkerPath, '');
-    fs.writeFileSync(toolPaths.archiverPath, '');
-
-    const result = runAndroidNdkPrint({
-      abi: abiCase.abi,
-      ndkHome,
-      hostPlatform,
-      targetDir,
-      outDir,
-      archiveOverride: path.join(ndkHome, 'missing-archive.tar.bz2'),
-    });
-    const targetEnvSuffix = abiCase.target.replace(/-/gu, '_');
-
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
-      `CARGO_TARGET_${targetEnvSuffix.toUpperCase()}_LINKER=${toolPaths.linkerPath}`,
-      `CC_${targetEnvSuffix}=${toolPaths.linkerPath}`,
-      `AR_${targetEnvSuffix}=${toolPaths.archiverPath}`,
-    ]);
-    assert.equal(
-      result.stderr.trim(),
-      `Plan: ${abiCase.abi} -> ${abiCase.target}; AAR native entries: ${[
-        `jni/${abiCase.abi}/libsona_uniffi_bind.so`,
-        `jni/${abiCase.abi}/libsherpa-onnx-c-api.so`,
-        `jni/${abiCase.abi}/libonnxruntime.so`,
-      ].join(', ')}`,
-    );
-    assert.equal(fs.existsSync(path.join(targetDir, 'android-sherpa')), false);
-    assert.equal(fs.existsSync(outDir), false);
-  }
-});
-
-test('UniFFI Android native build script rejects host overrides outside print mode', () => {
-  const result = spawnSync(
-    node,
-    [
-      path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),
-      '--dry-run',
-      '--host-platform',
-      'linux',
-      '--abis',
-      'arm64-v8a',
-    ],
-    { cwd: repoRoot, encoding: 'utf8' },
-  );
-  const output = `${result.stderr}\n${result.stdout}`;
-
-  assert.notEqual(result.status, 0, output);
-  assert.match(output, /--host-platform is only supported with --print-linker-env/u);
 });

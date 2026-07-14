@@ -798,10 +798,6 @@ test('desktop history repository facade lives in platform without repositories m
   assert.match(platformHistory, /app\.opener\(\)[\s\S]*\.open_path\(/u);
   assert.match(historyCommand, /crate::platform::history_repository::run_history_file_task\(\s*&app,\s*state\.inner\(\),/u);
   assert.match(historyCommand, /crate::platform::history_repository::run_history_db_task\(\s*&app,/u);
-  assert.match(historyCommand, /crate::platform::history_repository::export_backup_archive\(\s*&app,\s*history_state\.inner\(\),\s*request\s*,?\s*\)\s*\.await/u);
-  assert.match(historyCommand, /crate::platform::history_repository::prepare_backup_import\(\s*state\.inner\(\),\s*archive_path\s*,?\s*\)\s*\.await/u);
-  assert.match(historyCommand, /crate::platform::history_repository::apply_prepared_history_import\(\s*&app,\s*history_state\.inner\(\),\s*prepared_state\.inner\(\),\s*import_id\s*,?\s*\)\s*\.await/u);
-  assert.match(historyCommand, /crate::platform::history_repository::dispose_prepared_backup_import\(\s*state\.inner\(\),\s*import_id\s*,?\s*\)\s*\.await/u);
   assert.match(historyCommand, /crate::platform::history_repository::open_history_folder\(&app, state\.inner\(\)\)\.await/u);
   assert.match(historyCommand, /crate::platform::history_repository::build_transcript_diff\(/u);
   assert.match(historyCommand, /crate::platform::history_repository::restore_transcript_diff_rows\(/u);
@@ -1835,10 +1831,6 @@ test('history filesystem helpers are owned by sqlite adapter', () => {
   const coreHistory = read('core', 'src', 'history', 'mod.rs');
   const coreCargo = read('core', 'Cargo.toml');
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
-  const sqliteHistoryFs = fs.readFileSync(
-    path.join(repoRoot, 'adapters', 'sqlite', 'src', 'history_fs_utils.rs'),
-    'utf8',
-  );
   const platformHistory = fs.readFileSync(
     desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
@@ -1849,9 +1841,6 @@ test('history filesystem helpers are owned by sqlite adapter', () => {
   assert.doesNotMatch(coreCargo, /^bzip2\s*=/mu);
   assert.doesNotMatch(coreCargo, /^tar\s*=/mu);
   assert.match(sqliteLib, /^pub mod history_fs_utils;/mu);
-  assert.match(platformHistory, /pub\(crate\) use sona_sqlite::history_fs_utils as fs_utils;/u);
-  assert.match(sqliteHistoryFs, /pub fn create_tar_bz2_archive/u);
-  assert.match(sqliteHistoryFs, /pub fn extract_tar_bz2_archive/u);
   assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'fs_utils.rs'), false);
   assert.doesNotMatch(platformHistory, /^pub\(crate\) mod fs_utils;/mu);
 });
@@ -1871,18 +1860,15 @@ test('SQLite history store is owned by sqlite adapter', () => {
   assert.doesNotMatch(platformHistory, /^pub mod sqlite_store;/mu);
 });
 
-test('history backup archive persistence is owned by sqlite adapter', () => {
+test('history archive and legacy repository paths remain owned by adapters', () => {
   const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
   const platformHistory = fs.readFileSync(
     desktopCratePath('src', 'platform', 'history_repository.rs'),
     'utf8',
   );
 
-  assert.ok(exists('adapters', 'sqlite', 'src', 'history_backup.rs'));
   assert.ok(exists('adapters', 'sqlite', 'src', 'history_archive.rs'));
-  assert.match(sqliteLib, /^pub mod history_backup;/mu);
   assert.match(sqliteLib, /^pub mod history_archive;/mu);
-  assert.match(platformHistory, /pub use sona_sqlite::history_backup as backup;/u);
   assert.equal(exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'backup.rs'), false);
   assert.equal(
     exists(...desktopCrateSegments, 'src', 'repositories', 'history', 'repository.rs'),

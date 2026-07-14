@@ -12,6 +12,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [dependencies]
 serde = "1"
 serde_json = "1"
+sona-archive = { path = "../archive" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../export" }
 sona-local-asr = { path = "../local_asr" }

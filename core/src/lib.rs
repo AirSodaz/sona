@@ -1,4 +1,5 @@
 pub mod automation;
+pub mod backup;
 pub mod config;
 pub mod dashboard;
 pub mod domain;

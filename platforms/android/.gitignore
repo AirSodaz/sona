@@ -3,5 +3,6 @@
 /sample-consumer/build/
 /sample-consumer/**/build/
 /client/.gradle/
+/client/.kotlin/
 /client/build/
 /client/**/build/

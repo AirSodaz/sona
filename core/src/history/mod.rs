@@ -1,15 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use crate::transcription::transcript::TranscriptSegment;
 
-#[derive(Clone, Debug)]
-pub struct PreparedBackupImportSnapshot {
-    pub archive_path: String,
-    pub extraction_dir: PathBuf,
-}
+pub use crate::backup::{
+    BackupManifest, BackupManifestCounts, BackupManifestScopes, PreparedBackupImport,
+};
 
 #[derive(
     Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,
@@ -300,56 +297,15 @@ pub struct TranscriptDiffResult {
 pub struct ExportBackupArchiveRequest {
     pub archive_path: String,
     pub app_version: String,
+    #[serde(default)]
     pub config: Value,
+    #[serde(default)]
     pub projects: Vec<Value>,
+    #[serde(default)]
     pub automation_rules: Vec<Value>,
+    #[serde(default)]
     pub automation_processed_entries: Vec<Value>,
-    pub analytics_content: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BackupManifest {
-    pub schema_version: u64,
-    pub created_at: String,
-    pub app_version: String,
-    pub history_mode: String,
-    pub scopes: BackupManifestScopes,
-    pub counts: BackupManifestCounts,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BackupManifestScopes {
-    pub config: bool,
-    pub workspace: bool,
-    pub history: bool,
-    pub automation: bool,
-    pub analytics: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct BackupManifestCounts {
-    pub projects: u64,
-    pub history_items: u64,
-    pub transcript_files: u64,
-    pub summary_files: u64,
-    pub automation_rules: u64,
-    pub automation_processed_entries: u64,
-    pub analytics_files: u64,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct PreparedBackupImport {
-    pub import_id: String,
-    pub archive_path: String,
-    pub manifest: BackupManifest,
-    pub config: Value,
-    pub projects: Vec<Value>,
-    pub automation_rules: Vec<Value>,
-    pub automation_processed_entries: Vec<Value>,
+    #[serde(default)]
     pub analytics_content: String,
 }
 

@@ -1,6 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { backupService } from '../../../services/backupService';
+import {
+  applyImportBackup,
+  backupService,
+  disposePreparedImport,
+} from '../../../services/backupService';
 import { backupWebDavService } from '../../../services/backupWebDavService';
 import { useBatchQueueStore } from '../../../stores/batchQueueStore';
 import { useDialogStore } from '../../../stores/dialogStore';
@@ -33,6 +37,11 @@ const EMPTY_WEBDAV_CONFIG: BackupWebDavConfig = {
   remoteDir: '',
   username: '',
   password: '',
+};
+
+export const preparedBackupImportActions = {
+  apply: applyImportBackup,
+  dispose: disposePreparedImport,
 };
 
 interface UseBackupSettingsControllerArgs {
@@ -300,8 +309,7 @@ export function useBackupSettingsController({
               defaultValue: 'Import Backup',
             }),
           ),
-          apply: backupService.applyImportBackup,
-          dispose: backupService.disposePreparedImport,
+          ...preparedBackupImportActions,
           alertSuccess: showImportSuccessAlert,
           onError: (error) =>
             showBackupError(
@@ -402,8 +410,7 @@ export function useBackupSettingsController({
               defaultValue: 'Restore',
             }),
           ),
-          apply: backupService.applyImportBackup,
-          dispose: backupService.disposePreparedImport,
+          ...preparedBackupImportActions,
           alertSuccess: showImportSuccessAlert,
           onError: (error) =>
             showBackupError(

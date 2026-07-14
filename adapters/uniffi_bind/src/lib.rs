@@ -2,6 +2,7 @@ mod app_config_repository_bridge;
 mod asr_bridge;
 mod asr_streaming_bridge;
 mod automation_bridge;
+mod backup_bridge;
 mod config_bridge;
 mod dashboard_bridge;
 mod diagnostics_bridge;
@@ -70,6 +71,8 @@ pub enum SonaCoreBindingError {
     HistoryQuery { reason: String },
     #[error("{reason}")]
     HistoryMutation { reason: String },
+    #[error("{reason}")]
+    Backup { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -261,6 +264,36 @@ pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
 #[uniffi::export]
 pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::export_transcript_file_json(input_json).await
+}
+
+#[uniffi::export]
+pub async fn export_backup_archive_json(
+    app_data_dir: String,
+    archive_path: String,
+    app_version: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::export_backup_archive_json(app_data_dir, archive_path, app_version).await
+}
+
+#[uniffi::export]
+pub async fn inspect_backup_archive_json(archive_path: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::inspect_backup_archive_json(archive_path).await
+}
+
+#[uniffi::export]
+pub async fn import_backup_archive_json(
+    app_data_dir: String,
+    archive_path: String,
+    default_rule_set_name: String,
+    confirm_replace: bool,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::import_backup_archive_json(
+        app_data_dir,
+        archive_path,
+        default_rule_set_name,
+        confirm_replace,
+    )
+    .await
 }
 
 #[uniffi::export]

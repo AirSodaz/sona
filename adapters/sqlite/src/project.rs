@@ -1,6 +1,7 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
+use rusqlite::types::Type;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::dashboard::ports::ProjectRepository;
 use sona_core::project::{
@@ -102,23 +103,87 @@ fn project_update_sql() -> String {
     format!("UPDATE projects SET {assignments} WHERE id = :id")
 }
 
+fn load_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, DatabaseError> {
+    let columns = project_select_columns();
+    let mut stmt = conn.prepare_cached(&format!(
+        "SELECT {columns} FROM projects ORDER BY sort_order, id"
+    ))?;
+    let rows = stmt.query_map([], map_row_to_project)?;
+    let mut projects = Vec::new();
+    for row in rows {
+        let mut project = row?;
+        hydrate_project_default_links(conn, &mut project)?;
+        projects.push(project);
+    }
+    Ok(projects)
+}
+
+pub(crate) fn load_projects_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<Vec<ProjectRecord>, DatabaseError> {
+    load_projects(tx)
+}
+
+pub(crate) fn insert_projects_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    projects: &[ProjectRecord],
+) -> Result<(), DatabaseError> {
+    let sql = project_insert_sql();
+    for (sort_order, project) in projects.iter().enumerate() {
+        write_project_row(tx, &sql, project, sort_order as i64)?;
+        replace_project_default_links(tx, &project.id, &project.defaults)?;
+    }
+    Ok(())
+}
+
+fn upsert_projects_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    projects: &[ProjectRecord],
+) -> Result<(), DatabaseError> {
+    let sql = project_upsert_sql();
+    for (sort_order, project) in projects.iter().enumerate() {
+        write_project_row(tx, &sql, project, sort_order as i64)?;
+        replace_project_default_links(tx, &project.id, &project.defaults)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn delete_projects_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<(), DatabaseError> {
+    tx.execute("DELETE FROM project_default_links", [])?;
+    tx.execute("DELETE FROM projects", [])?;
+    Ok(())
+}
+
+pub(crate) fn replace_projects_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    projects: &[ProjectRecord],
+) -> Result<(), DatabaseError> {
+    tx.execute(
+        "CREATE TEMPORARY TABLE keep_projects (id TEXT PRIMARY KEY)",
+        [],
+    )?;
+    {
+        let mut keep = tx.prepare_cached("INSERT INTO keep_projects (id) VALUES (?1)")?;
+        for project in projects.iter().filter(|project| !project.id.is_empty()) {
+            keep.execute([project.id.as_str()])?;
+        }
+    }
+    tx.execute(
+        "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
+        [],
+    )?;
+    tx.execute("DROP TABLE keep_projects", [])?;
+    upsert_projects_in_transaction(tx, projects)
+}
+
 impl<D> SqliteProjectRepository<D>
 where
     D: DatabasePort,
 {
     fn list_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, DatabaseError> {
-        let columns = project_select_columns();
-        let mut stmt = conn.prepare_cached(&format!(
-            "SELECT {columns} FROM projects ORDER BY sort_order"
-        ))?;
-        let rows = stmt.query_map([], map_row_to_project)?;
-        let mut projects = Vec::new();
-        for row in rows {
-            let mut project = row?;
-            hydrate_project_default_links(conn, &mut project)?;
-            projects.push(project);
-        }
-        Ok(projects)
+        load_projects(conn)
     }
 
     fn get_by_id_from_conn(
@@ -254,33 +319,7 @@ where
 
     fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
         self.get_db()
-            .and_then(|db| {
-                db.with_transaction(|tx| {
-                    tx.execute(
-                        "CREATE TEMPORARY TABLE keep_projects (id TEXT PRIMARY KEY)",
-                        [],
-                    )?;
-                    {
-                        let mut keep =
-                            tx.prepare_cached("INSERT INTO keep_projects (id) VALUES (?1)")?;
-                        for project in projects.iter().filter(|project| !project.id.is_empty()) {
-                            keep.execute([project.id.as_str()])?;
-                        }
-                    }
-                    tx.execute(
-                        "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
-                        [],
-                    )?;
-                    tx.execute("DROP TABLE keep_projects", [])?;
-
-                    let sql = project_upsert_sql();
-                    for (sort_order, project) in projects.iter().enumerate() {
-                        write_project_row(tx, &sql, project, sort_order as i64)?;
-                        replace_project_default_links(tx, &project.id, &project.defaults)?;
-                    }
-                    Ok(())
-                })
-            })
+            .and_then(|db| db.with_transaction(|tx| replace_projects_in_transaction(tx, &projects)))
             .map_err(|error| error.to_string())
     }
 
@@ -443,9 +482,16 @@ fn map_row_to_project(row: &rusqlite::Row) -> rusqlite::Result<ProjectRecord> {
         name,
         description,
         icon,
-        created_at: created_at as u64,
-        updated_at: updated_at as u64,
+        created_at: checked_u64_column(row, "created_at", created_at)?,
+        updated_at: checked_u64_column(row, "updated_at", updated_at)?,
         defaults,
+    })
+}
+
+fn checked_u64_column(row: &rusqlite::Row<'_>, column: &str, value: i64) -> rusqlite::Result<u64> {
+    let column_index = row.as_ref().column_index(column)?;
+    u64::try_from(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(column_index, Type::Integer, Box::new(error))
     })
 }
 

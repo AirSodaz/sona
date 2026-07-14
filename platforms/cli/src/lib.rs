@@ -1,6 +1,7 @@
 mod app_config;
 mod asr_adapter;
 mod automation;
+mod backup;
 mod config_template;
 mod dashboard;
 mod desktop_paths;
@@ -167,6 +168,8 @@ enum Commands {
     AppConfig(app_config::AppConfigArgs),
     /// Inspects persisted automation rules and processed entries.
     Automation(automation::AutomationArgs),
+    /// Exports, inspects, or imports complete Sona backup archives.
+    Backup(backup::BackupArgs),
     /// Shows a read-only dashboard snapshot.
     Dashboard(dashboard::DashboardArgs),
     /// Builds diagnostics snapshots from host-provided facts.
@@ -234,6 +237,7 @@ fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput
     let output = match command {
         Commands::AppConfig(args) => app_config::run_app_config(args),
         Commands::Automation(args) => automation::run_automation(args),
+        Commands::Backup(args) => backup::run_backup(args),
         Commands::Dashboard(args) => dashboard::run_dashboard(args),
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args),

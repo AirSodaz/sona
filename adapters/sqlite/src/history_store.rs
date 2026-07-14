@@ -32,9 +32,9 @@ use sona_core::history::{
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -42,7 +42,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
-use rusqlite::types::ToSql;
+use rusqlite::types::{ToSql, Type};
 use uuid::Uuid;
 
 use fs3::FileExt;
@@ -52,6 +52,28 @@ const MILLIS_PER_DAY: u64 = 86_400_000;
 const HISTORY_DIR_NAME: &str = "history";
 const HISTORY_FILE_LOCK_NAME: &str = ".sona-history.lock";
 const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
+
+#[must_use]
+pub(crate) struct HistoryFileLockGuard {
+    _file: File,
+}
+
+pub(crate) fn acquire_history_file_lock(
+    app_local_data_dir: &Path,
+) -> Result<HistoryFileLockGuard, DatabaseError> {
+    fs::create_dir_all(app_local_data_dir)
+        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(app_local_data_dir.join(HISTORY_FILE_LOCK_NAME))
+        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+    file.lock_exclusive()
+        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+    Ok(HistoryFileLockGuard { _file: file })
+}
 
 fn current_time_millis() -> Result<u64, String> {
     SystemTime::now()
@@ -132,7 +154,7 @@ fn history_insert_sql() -> String {
     )
 }
 
-pub fn insert_history_item_row(
+pub(crate) fn insert_history_item_row(
     tx: &rusqlite::Transaction<'_>,
     item: &HistoryItemRecord,
     transcript_path: &str,
@@ -141,7 +163,8 @@ pub fn insert_history_item_row(
     let status_str = item.status.to_string();
     let audio_status_str = item.audio_status.to_string();
     let draft_source_str = item.draft_source.map(|s| s.to_string());
-    let timestamp = item.timestamp as i64;
+    let timestamp = i64::try_from(item.timestamp)
+        .map_err(|_| DatabaseError::Internal("History timestamp exceeds SQLite range.".into()))?;
 
     tx.execute(
         &history_insert_sql(),
@@ -164,6 +187,281 @@ pub fn insert_history_item_row(
     )?;
 
     Ok(())
+}
+
+pub(crate) struct PreparedHistoryRestore {
+    items: Vec<PreparedHistoryItem>,
+    summaries: Vec<(String, String)>,
+    snapshots: Vec<PreparedTranscriptSnapshot>,
+}
+
+struct PreparedHistoryItem {
+    item: HistoryItemRecord,
+    transcript_json: String,
+}
+
+struct PreparedTranscriptSnapshot {
+    id: String,
+    history_id: String,
+    reason: &'static str,
+    created_at: i64,
+    segment_count: i64,
+    segments_json: String,
+}
+
+pub(crate) fn prepare_history_restore(
+    snapshot: &HistoryBackupSnapshot,
+) -> Result<PreparedHistoryRestore, String> {
+    let mut item_ids = HashSet::new();
+    for item in &snapshot.items {
+        let safe_id = ensure_safe_file_name(&item.id, "History item ID")?;
+        if safe_id != item.id || !item_ids.insert(item.id.clone()) {
+            return Err(format!(
+                "History item ID is invalid or duplicated: {}",
+                item.id
+            ));
+        }
+        if item.status != HistoryItemStatus::Complete || item.draft_source.is_some() {
+            return Err(format!("Backup history item must be complete: {}", item.id));
+        }
+        i64::try_from(item.timestamp)
+            .map_err(|_| format!("History timestamp exceeds SQLite range: {}", item.id))?;
+        if !item.duration.is_finite() || item.duration < 0.0 {
+            return Err(format!("History duration is invalid: {}", item.id));
+        }
+    }
+
+    let mut transcripts = HashMap::new();
+    for (file_name, value) in &snapshot.transcript_files {
+        let safe_name = ensure_safe_file_name(file_name, "Backup transcript file name")?;
+        if safe_name != *file_name {
+            return Err("Backup transcript file name is invalid.".to_string());
+        }
+        let history_id = file_name
+            .strip_suffix(".json")
+            .filter(|id| item_ids.contains(*id))
+            .ok_or_else(|| format!("Backup transcript is orphaned: {file_name}"))?;
+        let normalized = normalize_history_transcript_segments(value.clone())?;
+        let serialized =
+            serde_json::to_string(&normalized.segments).map_err(|error| error.to_string())?;
+        if transcripts
+            .insert(history_id.to_string(), serialized)
+            .is_some()
+        {
+            return Err(format!("Backup transcript is duplicated: {file_name}"));
+        }
+    }
+    if transcripts.len() != item_ids.len() {
+        return Err("Backup must contain exactly one transcript per history item.".to_string());
+    }
+
+    let mut prepared_items = Vec::with_capacity(snapshot.items.len());
+    for item in &snapshot.items {
+        let transcript_json = transcripts
+            .remove(&item.id)
+            .ok_or_else(|| format!("Backup history item is missing its transcript: {}", item.id))?;
+        prepared_items.push(PreparedHistoryItem {
+            item: item.clone(),
+            transcript_json,
+        });
+    }
+
+    let mut summaries_by_id = HashMap::new();
+    for (history_id, value) in &snapshot.summary_files {
+        let safe_id = ensure_safe_file_name(history_id, "Backup summary history ID")?;
+        if safe_id != *history_id || !item_ids.contains(history_id) || !value.is_object() {
+            return Err(format!("Backup summary is invalid: {history_id}"));
+        }
+        let payload = serde_json::to_string(value).map_err(|error| error.to_string())?;
+        if summaries_by_id
+            .insert(history_id.clone(), payload)
+            .is_some()
+        {
+            return Err(format!("Backup summary is duplicated: {history_id}"));
+        }
+    }
+    let summaries = snapshot
+        .items
+        .iter()
+        .filter_map(|item| {
+            summaries_by_id
+                .remove(&item.id)
+                .map(|payload| (item.id.clone(), payload))
+        })
+        .collect();
+
+    let mut indexes: HashMap<String, Vec<TranscriptSnapshotMetadata>> = HashMap::new();
+    let mut records: HashMap<(String, String), TranscriptSnapshotRecord> = HashMap::new();
+    for (relative_path, value) in &snapshot.snapshot_files {
+        let parts = relative_path.split('/').collect::<Vec<_>>();
+        if parts.len() != 3 || parts[0] != "versions" || !item_ids.contains(parts[1]) {
+            return Err(format!(
+                "Backup transcript snapshot path is invalid: {relative_path}"
+            ));
+        }
+        let history_id = parts[1];
+        let safe_history_id = ensure_safe_file_name(history_id, "Snapshot history ID")?;
+        if safe_history_id != history_id {
+            return Err(format!(
+                "Backup transcript snapshot path is invalid: {relative_path}"
+            ));
+        }
+        if parts[2] == "index.json" {
+            let metadata: Vec<TranscriptSnapshotMetadata> =
+                serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+            if indexes.insert(history_id.to_string(), metadata).is_some() {
+                return Err(format!("Backup snapshot index is invalid: {relative_path}"));
+            }
+            continue;
+        }
+
+        let snapshot_id = parts[2].strip_suffix(".json").ok_or_else(|| {
+            format!("Backup transcript snapshot path is invalid: {relative_path}")
+        })?;
+        let safe_snapshot_id = ensure_safe_file_name(snapshot_id, "Transcript snapshot ID")?;
+        if safe_snapshot_id != snapshot_id {
+            return Err(format!(
+                "Backup transcript snapshot path is invalid: {relative_path}"
+            ));
+        }
+        let record: TranscriptSnapshotRecord =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        if records
+            .insert((history_id.to_string(), snapshot_id.to_string()), record)
+            .is_some()
+        {
+            return Err(format!(
+                "Backup transcript snapshot is duplicated: {relative_path}"
+            ));
+        }
+    }
+
+    let mut indexed_records = HashSet::new();
+    let mut prepared_snapshots = Vec::new();
+    for item in &snapshot.items {
+        let Some(metadata_list) = indexes.remove(&item.id) else {
+            continue;
+        };
+        for metadata in metadata_list {
+            let safe_id = ensure_safe_file_name(&metadata.id, "Transcript snapshot ID")?;
+            let key = (item.id.clone(), metadata.id.clone());
+            if safe_id != metadata.id
+                || metadata.history_id != item.id
+                || !indexed_records.insert(key.clone())
+            {
+                return Err(format!(
+                    "Backup transcript snapshot metadata is invalid: {}",
+                    metadata.id
+                ));
+            }
+            let record = records.remove(&key).ok_or_else(|| {
+                format!(
+                    "Backup transcript snapshot record is missing: {}",
+                    metadata.id
+                )
+            })?;
+            if record.metadata != metadata {
+                return Err(format!(
+                    "Backup transcript snapshot metadata does not match: {}",
+                    metadata.id
+                ));
+            }
+            let normalized = normalize_history_transcript_segments(
+                serde_json::to_value(&record.segments).map_err(|error| error.to_string())?,
+            )?;
+            if metadata.segment_count != normalized.segments.len() as u64 {
+                return Err(format!(
+                    "Backup transcript snapshot segment count does not match: {}",
+                    metadata.id
+                ));
+            }
+            prepared_snapshots.push(PreparedTranscriptSnapshot {
+                id: metadata.id,
+                history_id: metadata.history_id,
+                reason: transcript_snapshot_reason_str(metadata.reason),
+                created_at: i64::try_from(metadata.created_at).map_err(|_| {
+                    "Transcript snapshot timestamp exceeds SQLite range.".to_string()
+                })?,
+                segment_count: i64::try_from(metadata.segment_count).map_err(|_| {
+                    "Transcript snapshot segment count exceeds SQLite range.".to_string()
+                })?,
+                segments_json: serde_json::to_string(&normalized.segments)
+                    .map_err(|error| error.to_string())?,
+            });
+        }
+    }
+    if !indexes.is_empty() || !records.is_empty() {
+        return Err("Backup transcript snapshot set contains orphaned entries.".to_string());
+    }
+
+    Ok(PreparedHistoryRestore {
+        items: prepared_items,
+        summaries,
+        snapshots: prepared_snapshots,
+    })
+}
+
+fn transcript_snapshot_reason_str(reason: TranscriptSnapshotReason) -> &'static str {
+    match reason {
+        TranscriptSnapshotReason::Polish => "polish",
+        TranscriptSnapshotReason::Translate => "translate",
+        TranscriptSnapshotReason::Retranscribe => "retranscribe",
+        TranscriptSnapshotReason::Restore => "restore",
+    }
+}
+
+pub(crate) fn delete_history_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<(), DatabaseError> {
+    tx.execute("DELETE FROM transcript_snapshots", [])?;
+    tx.execute("DELETE FROM history_summaries", [])?;
+    tx.execute("DELETE FROM history_transcripts", [])?;
+    tx.execute("DELETE FROM history_items", [])?;
+    Ok(())
+}
+
+pub(crate) fn insert_history_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    prepared: &PreparedHistoryRestore,
+) -> Result<(), DatabaseError> {
+    for prepared_item in &prepared.items {
+        let transcript_path = format!("{}.json", prepared_item.item.id);
+        insert_history_item_row(tx, &prepared_item.item, &transcript_path)?;
+        tx.execute(
+            "INSERT INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
+            rusqlite::params![prepared_item.item.id, prepared_item.transcript_json],
+        )?;
+    }
+    for (history_id, payload) in &prepared.summaries {
+        tx.execute(
+            "INSERT INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
+            rusqlite::params![history_id, payload],
+        )?;
+    }
+    for snapshot in &prepared.snapshots {
+        tx.execute(
+            "INSERT INTO transcript_snapshots (
+                id, history_id, reason, created_at, segment_count, segments
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                snapshot.id,
+                snapshot.history_id,
+                snapshot.reason,
+                snapshot.created_at,
+                snapshot.segment_count,
+                snapshot.segments_json,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn replace_history_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    prepared: &PreparedHistoryRestore,
+) -> Result<(), DatabaseError> {
+    delete_history_in_transaction(tx)?;
+    insert_history_in_transaction(tx, prepared)
 }
 
 fn current_workspace_date_filter_thresholds() -> HistoryWorkspaceDateFilterThresholds {
@@ -371,17 +669,7 @@ where
         &self,
         operation: impl FnOnce() -> Result<T, HistoryMutationError>,
     ) -> Result<T, HistoryMutationError> {
-        fs::create_dir_all(&self.app_local_data_dir)
-            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
-        let lock_file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(self.app_local_data_dir.join(HISTORY_FILE_LOCK_NAME))
-            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
-        lock_file
-            .lock_exclusive()
+        let _guard = acquire_history_file_lock(&self.app_local_data_dir)
             .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
         operation()
     }
@@ -780,15 +1068,55 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
     let status_str: String = row.get("status")?;
     let draft_source_str: Option<String> = row.get("draft_source")?;
 
-    let kind = HistoryItemKind::from_str(&kind_str).unwrap_or(HistoryItemKind::Recording);
-    let audio_status =
-        HistoryAudioStatus::from_str(&audio_status_str).unwrap_or(HistoryAudioStatus::Available);
-    let status = HistoryItemStatus::from_str(&status_str).unwrap_or(HistoryItemStatus::Complete);
-    let draft_source = draft_source_str.and_then(|s| HistoryDraftSource::from_str(&s).ok());
+    let timestamp = checked_history_u64_column(row, "timestamp", timestamp_val)?;
+    if !duration.is_finite() || duration < 0.0 {
+        return Err(invalid_history_column(
+            row,
+            "duration",
+            Type::Real,
+            format!("invalid history duration: {duration}"),
+        ));
+    }
+    let kind = HistoryItemKind::from_str(&kind_str).map_err(|_| {
+        invalid_history_column(
+            row,
+            "kind",
+            Type::Text,
+            format!("unknown history item kind: {kind_str}"),
+        )
+    })?;
+    let audio_status = HistoryAudioStatus::from_str(&audio_status_str).map_err(|_| {
+        invalid_history_column(
+            row,
+            "audio_status",
+            Type::Text,
+            format!("unknown history audio status: {audio_status_str}"),
+        )
+    })?;
+    let status = HistoryItemStatus::from_str(&status_str).map_err(|_| {
+        invalid_history_column(
+            row,
+            "status",
+            Type::Text,
+            format!("unknown history item status: {status_str}"),
+        )
+    })?;
+    let draft_source = draft_source_str
+        .map(|value| {
+            HistoryDraftSource::from_str(&value).map_err(|_| {
+                invalid_history_column(
+                    row,
+                    "draft_source",
+                    Type::Text,
+                    format!("unknown history draft source: {value}"),
+                )
+            })
+        })
+        .transpose()?;
 
     Ok(HistoryItemRecord {
         id,
-        timestamp: timestamp_val as u64,
+        timestamp,
         duration,
         audio_path,
         audio_status,
@@ -802,6 +1130,34 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
         status,
         draft_source,
     })
+}
+
+fn checked_history_u64_column(
+    row: &rusqlite::Row<'_>,
+    column: &str,
+    value: i64,
+) -> rusqlite::Result<u64> {
+    let column_index = row.as_ref().column_index(column)?;
+    u64::try_from(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(column_index, Type::Integer, Box::new(error))
+    })
+}
+
+fn invalid_history_column(
+    row: &rusqlite::Row<'_>,
+    column: &str,
+    data_type: Type,
+    message: String,
+) -> rusqlite::Error {
+    let column_index = row.as_ref().column_index(column).unwrap_or_default();
+    rusqlite::Error::FromSqlConversionFailure(
+        column_index,
+        data_type,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message,
+        )),
+    )
 }
 
 fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String, Value>) {
@@ -1789,158 +2145,190 @@ where
         Ok(self.run_audio_cleanup(request, true)?)
     }
 
-    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
-        Ok(self.get_db()?.with_transaction(|tx| {
-            let columns = history_select_columns(None, &[]);
-            let mut stmt = tx.prepare_cached(
-                &format!("SELECT {columns} FROM history_items WHERE status != 'draft' ORDER BY timestamp DESC")
-            )?;
-            let rows = stmt.query_map([], map_row_to_item)?;
-            let mut items = Vec::new();
-            for r in rows {
-                let mut item = r?;
-                item.status = HistoryItemStatus::Complete;
-                item.draft_source = None;
-                items.push(item);
-            }
-            if items.is_empty() {
-                return Ok(HistoryBackupSnapshot {
-                    items,
-                    transcript_files: vec![],
-                    summary_files: vec![],
-                    snapshot_files: vec![],
-                });
-            }
-
-            let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-            let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-
-            // Bulk fetch transcripts
-            let mut transcript_files: Vec<(String, Value)> = Vec::with_capacity(items.len());
-
-            {
-                let sql = format!(
-                    "SELECT history_id, segments FROM history_transcripts WHERE history_id IN ({})",
-                    placeholders
-                );
-                let mut stmt = tx.prepare_cached(&sql)?;
-                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
-                let mut transcript_map: std::collections::HashMap<String, Value> =
-                    std::collections::HashMap::new();
-                while let Some(row) = rows.next()? {
-                    let history_id: String = row.get(0)?;
-                    let segments_str: String = row.get(1)?;
-                    let val: Value = serde_json::from_str(&segments_str)?;
-                    transcript_map.insert(history_id, val);
-                }
-
-                for item in &items {
-                    let transcript_val = match transcript_map.remove(item.id.as_str()) {
-                        Some(val) => ensure_json_array_value(
-                            val,
-                            &format!("Transcript for history item {}", item.id),
-                        ).map_err(DatabaseError::Internal)?,
-                        None => {
-                            return Err(DatabaseError::NotFoundError(
-                                format!("History item \"{}\" is missing its transcript file.", item.title),
-                            ));
-                        }
-                    };
-                    transcript_files.push((format!("{}.json", item.id), transcript_val));
-                }
-            }
-
-            // Bulk fetch summaries
-            let mut summary_files: Vec<(String, Value)> = Vec::new();
-            {
-                let sql = format!(
-                    "SELECT history_id, payload FROM history_summaries WHERE history_id IN ({})",
-                    placeholders
-                );
-                let mut stmt = tx.prepare_cached(&sql)?;
-                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
-                while let Some(row) = rows.next()? {
-                    let history_id: String = row.get(0)?;
-                    let payload_str: String = row.get(1)?;
-                    let val: Value = serde_json::from_str(&payload_str)?;
-                    summary_files.push((history_id, val));
-                }
-            }
-
-            // Bulk fetch snapshots with segments
-            let mut snapshot_files: Vec<(String, Value)> = Vec::new();
-            {
-                let sql = format!(
-                    "SELECT id, history_id, reason, created_at, segment_count, segments
-                     FROM transcript_snapshots
-                     WHERE history_id IN ({})
-                     ORDER BY created_at DESC, id DESC",
-                    placeholders
-                );
-                let mut stmt = tx.prepare_cached(&sql)?;
-                let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
-                let mut snapshots_by_item: std::collections::HashMap<String, Vec<TranscriptSnapshotRecord>> =
-                    std::collections::HashMap::new();
-                while let Some(row) = rows.next()? {
-                    let snapshot_id: String = row.get(0)?;
-                    let history_id: String = row.get(1)?;
-                    let reason_str: String = row.get(2)?;
-                    let created_at: i64 = row.get(3)?;
-                    let segment_count: i64 = row.get(4)?;
-                    let segments_str: String = row.get(5)?;
-
-                    let reason = match reason_str.as_str() {
-                        "polish" => TranscriptSnapshotReason::Polish,
-                        "translate" => TranscriptSnapshotReason::Translate,
-                        "retranscribe" => TranscriptSnapshotReason::Retranscribe,
-                        "restore" => TranscriptSnapshotReason::Restore,
-                        _ => TranscriptSnapshotReason::Polish,
-                    };
-
-                    let parsed_val: Value = serde_json::from_str(&segments_str)?;
-
-                    let normalized = normalize_history_transcript_segments(parsed_val)
-                        .map_err(DatabaseError::Internal)?;
-
-                    let metadata = TranscriptSnapshotMetadata {
-                        id: snapshot_id,
-                        history_id: history_id.clone(),
-                        reason,
-                        created_at: created_at as u64,
-                        segment_count: segment_count as u64,
-                    };
-
-                    snapshots_by_item
-                        .entry(history_id)
-                        .or_default()
-                        .push(TranscriptSnapshotRecord { metadata, segments: normalized.segments });
-                }
-
-                for item in &items {
-                    if let Some(records) = snapshots_by_item.remove(item.id.as_str()) {
-                        let meta_list: Vec<TranscriptSnapshotMetadata> = records.iter().map(|r| r.metadata.clone()).collect();
-                        snapshot_files.push((
-                            format!("versions/{}/index.json", item.id),
-                            serde_json::to_value(&meta_list)?,
-                        ));
-                        for rec in records {
-                            snapshot_files.push((
-                                format!("versions/{}/{}.json", item.id, rec.metadata.id),
-                                serde_json::to_value(&rec)?,
-                            ));
-                        }
-                    }
-                }
-            }
-
-            Ok(HistoryBackupSnapshot {
-                items,
-                transcript_files,
-                summary_files,
-                snapshot_files,
-            })
-        })?)
+    pub(crate) fn history_snapshot_for_backup(
+        &self,
+    ) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
+        let _history_lock = acquire_history_file_lock(&self.app_local_data_dir)?;
+        Ok(self
+            .get_db()?
+            .with_rw_transaction(load_history_backup_in_transaction)?)
     }
+}
+
+pub(crate) fn load_history_backup_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<HistoryBackupSnapshot, DatabaseError> {
+    let columns = history_select_columns(None, &[]);
+    let mut stmt = tx.prepare_cached(&format!(
+        "SELECT {columns}
+         FROM history_items
+         WHERE status != 'draft'
+         ORDER BY timestamp DESC, id"
+    ))?;
+    let rows = stmt.query_map([], map_row_to_item)?;
+    let mut items = Vec::new();
+    for row in rows {
+        let mut item = row?;
+        item.status = HistoryItemStatus::Complete;
+        item.draft_source = None;
+        items.push(item);
+    }
+    drop(stmt);
+    if items.is_empty() {
+        return Ok(HistoryBackupSnapshot {
+            items,
+            transcript_files: Vec::new(),
+            summary_files: Vec::new(),
+            snapshot_files: Vec::new(),
+        });
+    }
+
+    let ids = items
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect::<Vec<_>>();
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+    let transcript_sql = format!(
+        "SELECT history_id, segments
+         FROM history_transcripts
+         WHERE history_id IN ({placeholders})"
+    );
+    let mut transcript_stmt = tx.prepare_cached(&transcript_sql)?;
+    let mut transcript_rows = transcript_stmt.query(rusqlite::params_from_iter(ids.iter()))?;
+    let mut transcripts = HashMap::new();
+    while let Some(row) = transcript_rows.next()? {
+        let history_id: String = row.get(0)?;
+        let segments: String = row.get(1)?;
+        transcripts.insert(history_id, serde_json::from_str::<Value>(&segments)?);
+    }
+    drop(transcript_rows);
+    drop(transcript_stmt);
+    let mut transcript_files = Vec::with_capacity(items.len());
+    for item in &items {
+        let transcript = transcripts.remove(&item.id).ok_or_else(|| {
+            DatabaseError::NotFoundError(format!(
+                "History item \"{}\" is missing its transcript file.",
+                item.title
+            ))
+        })?;
+        let transcript = ensure_json_array_value(
+            transcript,
+            &format!("Transcript for history item {}", item.id),
+        )
+        .map_err(DatabaseError::Internal)?;
+        let normalized =
+            normalize_history_transcript_segments(transcript).map_err(DatabaseError::Internal)?;
+        transcript_files.push((
+            format!("{}.json", item.id),
+            serde_json::to_value(normalized.segments)?,
+        ));
+    }
+
+    let summary_sql = format!(
+        "SELECT history_id, payload
+         FROM history_summaries
+         WHERE history_id IN ({placeholders})"
+    );
+    let mut summary_stmt = tx.prepare_cached(&summary_sql)?;
+    let mut summary_rows = summary_stmt.query(rusqlite::params_from_iter(ids.iter()))?;
+    let mut summaries = HashMap::new();
+    while let Some(row) = summary_rows.next()? {
+        let history_id: String = row.get(0)?;
+        let payload: String = row.get(1)?;
+        summaries.insert(history_id, serde_json::from_str::<Value>(&payload)?);
+    }
+    drop(summary_rows);
+    drop(summary_stmt);
+    let summary_files = items
+        .iter()
+        .filter_map(|item| {
+            summaries
+                .remove(&item.id)
+                .map(|summary| (item.id.clone(), summary))
+        })
+        .collect();
+
+    let snapshot_sql = format!(
+        "SELECT id, history_id, reason, created_at, segment_count, segments
+         FROM transcript_snapshots
+         WHERE history_id IN ({placeholders})
+         ORDER BY created_at DESC, id DESC"
+    );
+    let mut snapshot_stmt = tx.prepare_cached(&snapshot_sql)?;
+    let mut snapshot_rows = snapshot_stmt.query(rusqlite::params_from_iter(ids.iter()))?;
+    let mut snapshots_by_item: HashMap<String, Vec<TranscriptSnapshotRecord>> = HashMap::new();
+    while let Some(row) = snapshot_rows.next()? {
+        let snapshot_id: String = row.get(0)?;
+        let history_id: String = row.get(1)?;
+        let reason: String = row.get(2)?;
+        let created_at: i64 = row.get(3)?;
+        let segment_count: i64 = row.get(4)?;
+        let segments: String = row.get(5)?;
+        let reason = match reason.as_str() {
+            "polish" => TranscriptSnapshotReason::Polish,
+            "translate" => TranscriptSnapshotReason::Translate,
+            "retranscribe" => TranscriptSnapshotReason::Retranscribe,
+            "restore" => TranscriptSnapshotReason::Restore,
+            value => {
+                return Err(DatabaseError::Internal(format!(
+                    "Unknown transcript snapshot reason: {value}"
+                )));
+            }
+        };
+        let normalized = normalize_history_transcript_segments(serde_json::from_str(&segments)?)
+            .map_err(DatabaseError::Internal)?;
+        let metadata = TranscriptSnapshotMetadata {
+            id: snapshot_id,
+            history_id: history_id.clone(),
+            reason,
+            created_at: u64::try_from(created_at).map_err(|_| {
+                DatabaseError::Internal("Transcript snapshot timestamp is negative.".to_string())
+            })?,
+            segment_count: u64::try_from(segment_count).map_err(|_| {
+                DatabaseError::Internal(
+                    "Transcript snapshot segment count is negative.".to_string(),
+                )
+            })?,
+        };
+        snapshots_by_item
+            .entry(history_id)
+            .or_default()
+            .push(TranscriptSnapshotRecord {
+                metadata,
+                segments: normalized.segments,
+            });
+    }
+    drop(snapshot_rows);
+    drop(snapshot_stmt);
+
+    let mut snapshot_files = Vec::new();
+    for item in &items {
+        let Some(records) = snapshots_by_item.remove(&item.id) else {
+            continue;
+        };
+        let metadata = records
+            .iter()
+            .map(|record| record.metadata.clone())
+            .collect::<Vec<_>>();
+        snapshot_files.push((
+            format!("versions/{}/index.json", item.id),
+            serde_json::to_value(metadata)?,
+        ));
+        for record in records {
+            snapshot_files.push((
+                format!("versions/{}/{}.json", item.id, record.metadata.id),
+                serde_json::to_value(record)?,
+            ));
+        }
+    }
+
+    Ok(HistoryBackupSnapshot {
+        items,
+        transcript_files,
+        summary_files,
+        snapshot_files,
+    })
 }
 
 impl<D> HistoryQueryRepository for SqliteHistoryStore<D>
@@ -2127,10 +2515,6 @@ where
         request: HistoryAudioCleanupRequest,
     ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
         SqliteHistoryStore::cleanup_audio(self, request)
-    }
-
-    fn history_snapshot_for_backup(&self) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
-        SqliteHistoryStore::history_snapshot_for_backup(self)
     }
 }
 

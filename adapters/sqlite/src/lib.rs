@@ -1,9 +1,9 @@
 pub mod analytics;
 pub mod automation;
+pub mod backup_state;
 pub mod config_store;
 pub mod error;
 pub mod history_archive;
-pub mod history_backup;
 pub mod history_fs_utils;
 pub mod history_store;
 pub mod legacy_migration;
@@ -15,6 +15,7 @@ pub mod storage_usage;
 pub mod task_ledger;
 
 pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
+pub use backup_state::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 pub use config_store::SqliteConfigStore;
 pub use error::DatabaseError;
 pub use history_archive::HistoryRepository;
@@ -509,7 +510,7 @@ impl Database {
         )))
     }
 
-    /// Opens an in-memory database for testing.
+    /// Opens an in-memory database for tests and target-independent validation.
     /// Uses a single connection since in-memory databases are per-connection
     /// and cannot be shared across multiple handles.
     pub fn open_in_memory() -> Result<Self, DatabaseError> {
