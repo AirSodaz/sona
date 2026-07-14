@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.8333333"
+        android:scaleY="0.8333333">
+        <path
+            android:fillColor="@color/ic_launcher_background"
+            android:pathData="M112,0H400C461.856,0 512,50.144 512,112V400C512,461.856 461.856,512 400,512H112C50.144,512 0,461.856 0,400V112C0,50.144 50.144,0 112,0Z" />
+        <group
+            android:pivotX="256"
+            android:pivotY="256"
+            android:scaleX="0.78"
+            android:scaleY="0.78">
+            <path
+                android:fillColor="@android:color/transparent"
+                android:pathData="M320,112C272,112 192,112 192,192C192,272 320,240 320,320C320,400 240,400 192,400"
+                android:strokeColor="@color/ic_launcher_foreground"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:strokeWidth="48" />
+            <path
+                android:fillColor="@android:color/transparent"
+                android:pathData="M128,224L128,288"
+                android:strokeAlpha="0.6"
+                android:strokeColor="@color/ic_launcher_foreground"
+                android:strokeLineCap="round"
+                android:strokeWidth="32" />
+            <path
+                android:fillColor="@android:color/transparent"
+                android:pathData="M384,224L384,288"
+                android:strokeAlpha="0.6"
+                android:strokeColor="@color/ic_launcher_foreground"
+                android:strokeLineCap="round"
+                android:strokeWidth="32" />
+        </group>
+    </group>
+</vector>
