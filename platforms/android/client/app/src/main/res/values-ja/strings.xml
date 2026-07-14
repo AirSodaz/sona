@@ -32,11 +32,17 @@
     <string name="action_clear">消去</string>
     <string name="action_continue">続行</string>
     <string name="action_cancel">キャンセル</string>
+    <string name="action_back">戻る</string>
     <string name="library_empty">録音はまだありません</string>
     <string name="appearance_heading">外観</string>
+    <string name="settings_appearance_summary">言語と配色</string>
+    <string name="settings_recognition_heading">音声認識</string>
+    <string name="settings_recognition_summary">オンライン認証情報とローカルランタイム</string>
     <string name="language_label">言語</string>
     <string name="language_follow_system">システムに従う</string>
     <string name="dynamic_color">システムの配色を使用</string>
+    <string name="appearance_color_heading">配色</string>
+    <string name="appearance_settings_error">外観設定を保存できませんでした</string>
     <string name="online_credentials_heading">オンライン認識の認証情報</string>
     <string name="credentials_configured">設定済み</string>
     <string name="credentials_not_configured">未設定</string>

@@ -12,8 +12,20 @@ enum class SonaDestination(
     val route: String,
     @param:StringRes val labelRes: Int,
     val icon: ImageVector,
+    val routePattern: String = route,
 ) {
     RECORD("record", R.string.destination_record, Icons.Rounded.Mic),
     LIBRARY("library", R.string.destination_library, Icons.Rounded.FolderOpen),
-    SETTINGS("settings", R.string.destination_settings, Icons.Rounded.Settings),
+    SETTINGS(
+        route = "settings",
+        labelRes = R.string.destination_settings,
+        icon = Icons.Rounded.Settings,
+        routePattern = "settings?section={section}",
+    ),
+    ;
+
+    fun matches(candidateRoute: String?): Boolean =
+        candidateRoute?.substringBefore('?') == route
 }
+
+internal const val SETTINGS_SECTION_ARGUMENT = "section"

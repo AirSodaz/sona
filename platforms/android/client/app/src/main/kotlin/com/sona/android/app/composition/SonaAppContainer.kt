@@ -5,6 +5,7 @@ import android.content.Context
 import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
+import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
@@ -15,6 +16,7 @@ import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.recording.LiveRecordingCoordinator
 import com.sona.android.application.recording.LiveRecordingUseCase
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
+import com.sona.android.application.settings.AppearanceSettingsPort
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,7 @@ class SonaAppContainer(context: Context) {
     private val appDataDir = createAppDataDir(appContext)
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
+    private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
     private val providerCatalog = UniffiStreamingProviderCatalogAdapter()
     private val microphoneCapture = AndroidMicrophoneCapturePort(
         backendFactory = ::createAudioBackend,
@@ -35,6 +38,7 @@ class SonaAppContainer(context: Context) {
     private val recordingIds = UuidRecordingIdPort()
 
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
+    val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingUseCase =

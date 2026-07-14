@@ -32,11 +32,17 @@
     <string name="action_clear">清除</string>
     <string name="action_continue">继续</string>
     <string name="action_cancel">取消</string>
+    <string name="action_back">返回</string>
     <string name="library_empty">暂无记录</string>
     <string name="appearance_heading">外观</string>
+    <string name="settings_appearance_summary">语言和配色</string>
+    <string name="settings_recognition_heading">语音识别</string>
+    <string name="settings_recognition_summary">在线凭据和本地运行库</string>
     <string name="language_label">语言</string>
     <string name="language_follow_system">跟随系统</string>
     <string name="dynamic_color">使用系统配色</string>
+    <string name="appearance_color_heading">配色</string>
+    <string name="appearance_settings_error">无法保存外观设置</string>
     <string name="online_credentials_heading">在线识别凭据</string>
     <string name="credentials_configured">已配置</string>
     <string name="credentials_not_configured">未配置</string>

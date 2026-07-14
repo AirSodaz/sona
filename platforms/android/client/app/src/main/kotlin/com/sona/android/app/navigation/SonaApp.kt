@@ -12,24 +12,24 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.sona.android.app.BuildConfig
-import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.settings.AppLanguage
+import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CredentialSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
+import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.ui.theme.SonaTheme
 import com.sona.android.application.recording.LiveRecordingState
 
@@ -38,6 +38,7 @@ import com.sona.android.application.recording.LiveRecordingState
 internal fun SonaApp(
     bootstrapState: SonaBootstrapUiState,
     recordingState: LiveRecordingState,
+    appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     appLanguage: AppLanguage,
     microphonePermissionGranted: Boolean,
@@ -45,22 +46,21 @@ internal fun SonaApp(
     onSaveCredential: (String) -> Unit,
     onClearCredential: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onRetryBootstrap: () -> Unit,
 ) {
-    var dynamicColorEnabled by rememberSaveable { mutableStateOf(false) }
-
-    SonaTheme(dynamicColorEnabled = dynamicColorEnabled) {
+    SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.RECORD.route
-        val currentDestination = SonaDestination.entries.firstOrNull { it.route == currentRoute }
+        val currentDestination = SonaDestination.entries.firstOrNull { it.matches(currentRoute) }
             ?: SonaDestination.RECORD
 
         NavigationSuiteScaffold(
             navigationSuiteItems = {
                 SonaDestination.entries.forEach { destination ->
                     item(
-                        selected = currentRoute == destination.route,
+                        selected = destination.matches(currentRoute),
                         onClick = {
                             navController.navigate(destination.route) {
                                 popUpTo(SonaDestination.RECORD.route) { saveState = true }
@@ -81,22 +81,24 @@ internal fun SonaApp(
         ) {
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = {
-                            Column {
-                                Text(
-                                    text = BuildConfig.APP_NAME,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = stringResource(currentDestination.labelRes),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                    )
+                    if (currentDestination != SonaDestination.SETTINGS) {
+                        TopAppBar(
+                            title = {
+                                Column {
+                                    Text(
+                                        text = BuildConfig.APP_NAME,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = stringResource(currentDestination.labelRes),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                        )
+                    }
                 },
             ) { contentPadding ->
                 NavHost(
@@ -113,7 +115,7 @@ internal fun SonaApp(
                             microphonePermissionGranted = microphonePermissionGranted,
                             onRecordAction = onRecordAction,
                             onOpenSettings = {
-                                navController.navigate(SonaDestination.SETTINGS.route) {
+                                navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
                                     launchSingleTop = true
                                 }
                             },
@@ -123,14 +125,26 @@ internal fun SonaApp(
                     composable(SonaDestination.LIBRARY.route) {
                         LibraryScreen()
                     }
-                    composable(SonaDestination.SETTINGS.route) {
+                    composable(
+                        route = SonaDestination.SETTINGS.routePattern,
+                        arguments = listOf(
+                            navArgument(SETTINGS_SECTION_ARGUMENT) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                    ) { entry ->
                         SettingsScreen(
+                            initialSection = SettingsSection.fromRoute(
+                                entry.arguments?.getString(SETTINGS_SECTION_ARGUMENT),
+                            ),
                             bootstrapState = bootstrapState,
+                            appearanceState = appearanceState,
                             credentialState = credentialState,
                             appLanguage = appLanguage,
-                            dynamicColorEnabled = dynamicColorEnabled,
                             onAppLanguageChanged = onAppLanguageChanged,
-                            onDynamicColorChanged = { dynamicColorEnabled = it },
+                            onDynamicColorChanged = onDynamicColorChanged,
                             onSaveCredential = onSaveCredential,
                             onClearCredential = onClearCredential,
                         )
@@ -140,3 +154,6 @@ internal fun SonaApp(
         }
     }
 }
+
+internal fun settingsRoute(section: SettingsSection): String =
+    "${SonaDestination.SETTINGS.route}?$SETTINGS_SECTION_ARGUMENT=${section.route}"

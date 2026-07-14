@@ -31,6 +31,7 @@ import com.sona.android.app.feature.recording.MicrophonePermissionDecision
 import com.sona.android.app.feature.recording.MicrophonePermissionPolicy
 import com.sona.android.app.feature.recording.RecordingViewModel
 import com.sona.android.app.feature.settings.AppLanguage
+import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CredentialSettingsViewModel
 import com.sona.android.app.navigation.SonaApp
 
@@ -49,11 +50,15 @@ class MainActivity : AppCompatActivity() {
             val recordingViewModel: RecordingViewModel = viewModel(
                 factory = RecordingViewModel.factory(container::createLiveRecording),
             )
+            val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
+                factory = AppearanceSettingsViewModel.factory(container.appearanceSettings),
+            )
             val credentialViewModel: CredentialSettingsViewModel = viewModel(
                 factory = CredentialSettingsViewModel.factory(container.credentialSettings),
             )
             val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
+            val appearanceState by appearanceSettingsViewModel.state.collectAsStateWithLifecycle()
             val credentialState by credentialViewModel.state.collectAsStateWithLifecycle()
             var microphonePermissionGranted by remember {
                 mutableStateOf(hasMicrophonePermission())
@@ -79,6 +84,7 @@ class MainActivity : AppCompatActivity() {
             SonaApp(
                 bootstrapState = bootstrapState,
                 recordingState = recordingState,
+                appearanceState = appearanceState,
                 credentialState = credentialState,
                 appLanguage = currentAppLanguage(),
                 microphonePermissionGranted = microphonePermissionGranted,
@@ -111,6 +117,7 @@ class MainActivity : AppCompatActivity() {
                 onSaveCredential = credentialViewModel::save,
                 onClearCredential = credentialViewModel::clear,
                 onAppLanguageChanged = ::setAppLanguage,
+                onDynamicColorChanged = appearanceSettingsViewModel::setDynamicColorEnabled,
                 onRetryBootstrap = bootstrapViewModel::refresh,
             )
             if (showPermissionRationale) {

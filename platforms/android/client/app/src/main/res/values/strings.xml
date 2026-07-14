@@ -32,8 +32,12 @@
     <string name="action_clear">Clear</string>
     <string name="action_continue">Continue</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_back">Back</string>
     <string name="library_empty">No recordings yet</string>
     <string name="appearance_heading">Appearance</string>
+    <string name="settings_appearance_summary">Language and colors</string>
+    <string name="settings_recognition_heading">Speech recognition</string>
+    <string name="settings_recognition_summary">Online credentials and local runtime</string>
     <string name="language_label">Language</string>
     <string name="language_follow_system">Follow system</string>
     <string name="language_english" translatable="false">English</string>
@@ -42,6 +46,8 @@
     <string name="language_japanese" translatable="false">日本語</string>
     <string name="language_korean" translatable="false">한국어</string>
     <string name="dynamic_color">Use system colors</string>
+    <string name="appearance_color_heading">Colors</string>
+    <string name="appearance_settings_error">Appearance setting could not be saved</string>
     <string name="online_credentials_heading">Online recognition credentials</string>
     <string name="credentials_configured">Configured</string>
     <string name="credentials_not_configured">Not configured</string>

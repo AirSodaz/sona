@@ -32,11 +32,17 @@
     <string name="action_clear">지우기</string>
     <string name="action_continue">계속</string>
     <string name="action_cancel">취소</string>
+    <string name="action_back">뒤로</string>
     <string name="library_empty">아직 녹음이 없습니다</string>
     <string name="appearance_heading">모양</string>
+    <string name="settings_appearance_summary">언어 및 색상</string>
+    <string name="settings_recognition_heading">음성 인식</string>
+    <string name="settings_recognition_summary">온라인 자격 증명 및 로컬 런타임</string>
     <string name="language_label">언어</string>
     <string name="language_follow_system">시스템 설정 따르기</string>
     <string name="dynamic_color">시스템 색상 사용</string>
+    <string name="appearance_color_heading">색상</string>
+    <string name="appearance_settings_error">모양 설정을 저장할 수 없습니다</string>
     <string name="online_credentials_heading">온라인 인식 자격 증명</string>
     <string name="credentials_configured">설정됨</string>
     <string name="credentials_not_configured">설정되지 않음</string>
