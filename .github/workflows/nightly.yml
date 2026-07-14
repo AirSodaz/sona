@@ -361,6 +361,16 @@ jobs:
           echo "Generated updater.json:"
           cat updater.json
 
+      - name: Collect release artifact paths
+        id: release-artifacts
+        run: |
+          {
+            echo "paths<<EOF"
+            find all-artifacts -type f -print
+            echo "updater.json"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create or update nightly release
         uses: ncipollo/release-action@v1
         with:
@@ -373,9 +383,6 @@ jobs:
             This is an unstable, unsigned-for-trust-only-by-you build for testing.
             Use the [stable releases](https://github.com/AirSodaz/sona/releases/latest) for everyday use.
 
-            **Android preview APKs:**
-            [ARM64](https://github.com/${{ github.repository }}/releases/download/nightly/app-arm64-v8a-debug.apk) | [x86_64](https://github.com/${{ github.repository }}/releases/download/nightly/app-x86_64-debug.apk)
-
             **Changes since last nightly:**
             ```
             ${{ steps.changelog.outputs.changelog }}
@@ -387,4 +394,4 @@ jobs:
           replacesArtifacts: true
           artifactErrorsFailBuild: true
           token: ${{ github.token }}
-          artifacts: "all-artifacts/**/*,updater.json"
+          artifacts: ${{ steps.release-artifacts.outputs.paths }}

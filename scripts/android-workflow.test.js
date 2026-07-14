@@ -33,8 +33,15 @@ function assertAndroidReleaseDelivery(publishJob, releaseStepName) {
   assert.match(verification, /"\$count" -ne 1/u);
   assert.match(verification, /exit 1/u);
 
+  const artifactPaths = workflowStep(publishJob, 'Collect release artifact paths');
+  assert.equal(artifactPaths.id, 'release-artifacts');
+  assert.match(
+    artifactPaths.run,
+    /\{\s+echo "paths<<EOF"\s+find all-artifacts -type f -print\s+echo "updater\.json"\s+echo "EOF"\s+\} >> "\$GITHUB_OUTPUT"/u,
+  );
+
   const release = workflowStep(publishJob, releaseStepName);
-  assert.equal(release.with.artifacts, 'all-artifacts/**/*,updater.json');
+  assert.equal(release.with.artifacts, '${{ steps.release-artifacts.outputs.paths }}');
   assert.equal(release.with.artifactErrorsFailBuild, true);
 }
 
@@ -155,13 +162,14 @@ test('stable release waits for Android and publishes both APKs', () => {
   assert.equal(download.with['merge-multiple'], true);
 
   const releaseNotes = workflowStep(publishJob, 'Extract Release Notes').run;
+  assert.match(releaseNotes, /Android \(preview debug builds\)/u);
   assert.match(releaseNotes, /app-arm64-v8a-debug\.apk/u);
   assert.match(releaseNotes, /app-x86_64-debug\.apk/u);
   assertAndroidReleaseDelivery(publishJob, 'Create or Update GitHub Release');
   assert.doesNotMatch(JSON.stringify(workflow.jobs), /pnpm run verify:android-client/u);
 });
 
-test('nightly release waits for Android and publishes both APKs', () => {
+test('nightly release publishes APK assets without advertising them in notes', () => {
   const workflow = readWorkflow('nightly.yml');
   const androidJob = workflow.jobs?.['android-client'];
   const publishJob = workflow.jobs?.['publish-nightly'];
@@ -181,8 +189,9 @@ test('nightly release waits for Android and publishes both APKs', () => {
   assert.equal(download.with['merge-multiple'], true);
 
   const releaseBody = workflowStep(publishJob, 'Create or update nightly release').with.body;
-  assert.match(releaseBody, /app-arm64-v8a-debug\.apk/u);
-  assert.match(releaseBody, /app-x86_64-debug\.apk/u);
+  assert.doesNotMatch(releaseBody, /Android preview APKs/u);
+  assert.doesNotMatch(releaseBody, /app-arm64-v8a-debug\.apk/u);
+  assert.doesNotMatch(releaseBody, /app-x86_64-debug\.apk/u);
   assertAndroidReleaseDelivery(publishJob, 'Create or update nightly release');
   assert.doesNotMatch(JSON.stringify(workflow.jobs), /pnpm run verify:android-client/u);
 });
