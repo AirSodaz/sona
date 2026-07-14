@@ -1,7 +1,8 @@
 use crate::integrations::llm::{
-    LlmGenerateRequest, LlmModelSummary, LlmModelsRequest, PolishSegmentsRequest, PolishedSegment,
-    SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranscriptLlmJobResult,
-    TranscriptSummaryResult, TranslateSegmentsRequest, TranslatedSegment,
+    LlmCompletionRequest, LlmCompletionResponse, LlmConfig, LlmGenerateRequest, LlmModelSummary,
+    LlmModelsRequest, PolishSegmentsRequest, PolishedSegment, SummarizeTranscriptRequest,
+    TranscriptLlmJobRequest, TranscriptLlmJobResult, TranscriptSummaryResult,
+    TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::platform::history_repository::HistoryRepositoryState;
 use tauri::{AppHandle, State};
@@ -12,6 +13,14 @@ pub async fn generate_llm_text(
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
     crate::integrations::llm::generate_llm_text_command(app, request).await
+}
+
+#[tauri::command]
+pub async fn complete_llm(
+    app: AppHandle,
+    request: LlmCompletionRequest,
+) -> Result<LlmCompletionResponse, String> {
+    crate::integrations::llm::complete_llm_command(app, request).await
 }
 
 #[tauri::command]
@@ -50,6 +59,11 @@ pub async fn run_transcript_llm_job(
 #[tauri::command]
 pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
     crate::integrations::llm::list_llm_models_command(request).await
+}
+
+#[tauri::command]
+pub async fn describe_llm_model(config: LlmConfig) -> Result<Option<LlmModelSummary>, String> {
+    crate::integrations::llm::describe_llm_model_command(config).await
 }
 
 #[tauri::command]

@@ -38,6 +38,12 @@ import type {
   TranscriptSegment,
 } from "../../types/transcript";
 import type {
+  LlmCompletionRequest,
+  LlmCompletionResponse,
+  LlmConfig,
+  LlmDiscoveredModelSummary,
+} from "../../types/llm";
+import type {
   TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
@@ -271,19 +277,8 @@ type ExportBackupArchiveRequest = {
 type ListLlmModelsRequest = {
   provider: string;
   strategy?: string;
-  baseUrl?: string;
-  apiKey?: string;
-};
-
-type LlmModelSummary = {
-  model: string;
-  inputPrice?: number;
-  outputPrice?: number;
-  contextWindow?: number;
-  maxOutputTokens?: number;
-  supportsMultimodal?: boolean;
-  supportsTools?: boolean;
-  supportsReasoning?: boolean;
+  baseUrl: string;
+  apiKey: string;
 };
 
 export type ModelSelectionPaths = {
@@ -672,9 +667,17 @@ export type TauriCommandContractMap = {
     args: { request: LlmGenerateCommandRequest };
     result: string;
   };
+  [TauriCommand.llm.complete]: {
+    args: { request: LlmCompletionRequest };
+    result: LlmCompletionResponse;
+  };
+  [TauriCommand.llm.describeModel]: {
+    args: { config: LlmConfig };
+    result: LlmDiscoveredModelSummary | null;
+  };
   [TauriCommand.llm.listModels]: {
     args: { request: ListLlmModelsRequest };
-    result: LlmModelSummary[];
+    result: LlmDiscoveredModelSummary[];
   };
   [TauriCommand.llm.polishTranscriptSegments]: {
     args: { request: PolishSegmentsRequest };

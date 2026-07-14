@@ -17,6 +17,7 @@ sona-core = { path = "../../core" }
 sona-export = { path = "../export" }
 sona-local-asr = { path = "../local_asr" }
 sona-online-asr = { path = "../online_asr" }
+sona-online-llm = { path = "../online_llm" }
 sona-recovery-fs = { path = "../recovery_fs" }
 sona-runtime-fs = { path = "../runtime_fs" }
 sona-sqlite = { path = "../sqlite" }
@@ -25,5 +26,6 @@ tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { version = "0.32", features = ["tokio"] }
 
 [dev-dependencies]
+async-trait = "0.1"
 sha2 = "0.10"
 tempfile = "3"

@@ -1407,6 +1407,8 @@ fn ensure_llm_state(source: &Value) -> Value {
     let models = normalize_stored_models(source.pointer("/llmSettings/models"));
     let model_order =
         normalize_stored_model_order(source.pointer("/llmSettings/modelOrder"), &models);
+    let model_discovery =
+        normalize_stored_model_discovery(source.pointer("/llmSettings/modelDiscovery"));
     let selections =
         normalize_stored_selections(source.pointer("/llmSettings/selections"), &models);
 
@@ -1416,6 +1418,7 @@ fn ensure_llm_state(source: &Value) -> Value {
         "providers": providers,
         "models": models,
         "modelOrder": model_order,
+        "modelDiscovery": model_discovery,
         "selections": selections,
     });
 
@@ -1679,12 +1682,153 @@ fn normalize_stored_models(value: Option<&Value>) -> Map<String, Value> {
             continue;
         };
         let provider = normalize_provider(entry.get("provider"));
-        models.insert(
-            id.to_string(),
-            json!({ "id": id, "provider": provider, "model": model }),
-        );
+        let mut normalized = Map::new();
+        normalized.insert("id".to_string(), json!(id));
+        normalized.insert("provider".to_string(), json!(provider));
+        normalized.insert("model".to_string(), json!(model));
+        if let Some(source) = entry
+            .get("source")
+            .and_then(Value::as_str)
+            .filter(|source| matches!(*source, "manual" | "discovered"))
+        {
+            normalized.insert("source".to_string(), json!(source));
+        }
+        if let Some(metadata) = normalize_model_metadata(entry.get("metadata")) {
+            normalized.insert("metadata".to_string(), metadata);
+        }
+        if let Some(overrides) = normalize_model_metadata_overrides(entry.get("metadataOverrides"))
+        {
+            normalized.insert("metadataOverrides".to_string(), overrides);
+        }
+        models.insert(id.to_string(), Value::Object(normalized));
     }
     models
+}
+
+const MODEL_METADATA_KEYS: [&str; 17] = [
+    "displayName",
+    "inputPrice",
+    "outputPrice",
+    "cacheReadPrice",
+    "cacheWritePrice",
+    "contextWindow",
+    "maxOutputTokens",
+    "knowledgeCutoff",
+    "releaseDate",
+    "lastUpdated",
+    "inputModalities",
+    "outputModalities",
+    "supportsMultimodal",
+    "supportsTools",
+    "supportsReasoning",
+    "supportsStructuredOutput",
+    "supportsPromptCaching",
+];
+
+fn normalize_model_metadata(value: Option<&Value>) -> Option<Value> {
+    let source = value?.as_object()?;
+    let mut metadata = Map::new();
+    for key in [
+        "displayName",
+        "knowledgeCutoff",
+        "releaseDate",
+        "lastUpdated",
+    ] {
+        if let Some(value) = source.get(key).and_then(non_empty_str) {
+            metadata.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in [
+        "inputPrice",
+        "outputPrice",
+        "cacheReadPrice",
+        "cacheWritePrice",
+    ] {
+        if let Some(value) = source
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|value| value.is_finite() && *value >= 0.0)
+        {
+            metadata.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in ["contextWindow", "maxOutputTokens"] {
+        if let Some(value) = source.get(key).and_then(Value::as_u64) {
+            metadata.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in [
+        "supportsMultimodal",
+        "supportsTools",
+        "supportsReasoning",
+        "supportsStructuredOutput",
+        "supportsPromptCaching",
+    ] {
+        if let Some(value) = source.get(key).and_then(Value::as_bool) {
+            metadata.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in ["inputModalities", "outputModalities"] {
+        if let Some(values) =
+            normalize_string_values(source.get(key), &["text", "image", "audio", "video", "pdf"])
+        {
+            metadata.insert(key.to_string(), values);
+        }
+    }
+    if let Some(values) =
+        normalize_string_values(source.get("metadataSources"), &["provider", "models_dev"])
+    {
+        metadata.insert("metadataSources".to_string(), values);
+    }
+    (!metadata.is_empty()).then_some(Value::Object(metadata))
+}
+
+fn normalize_model_metadata_overrides(value: Option<&Value>) -> Option<Value> {
+    let source = value?.as_object()?;
+    let mut overrides = Map::new();
+    for key in MODEL_METADATA_KEYS {
+        if source.get(key).and_then(Value::as_bool) == Some(true) {
+            overrides.insert(key.to_string(), Value::Bool(true));
+        }
+    }
+    (!overrides.is_empty()).then_some(Value::Object(overrides))
+}
+
+fn normalize_string_values(value: Option<&Value>, allowed: &[&str]) -> Option<Value> {
+    let mut seen = HashSet::new();
+    let values = value?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|value| allowed.contains(value))
+        .filter(|value| seen.insert((*value).to_string()))
+        .map(|value| json!(value))
+        .collect::<Vec<_>>();
+    (!values.is_empty()).then_some(Value::Array(values))
+}
+
+fn normalize_stored_model_discovery(value: Option<&Value>) -> Map<String, Value> {
+    let mut discovery = Map::new();
+    let Some(source) = value.and_then(Value::as_object) else {
+        return discovery;
+    };
+    for (raw_provider, raw_status) in source {
+        let Some(status) = raw_status.as_object() else {
+            continue;
+        };
+        let (Some(fetched_at), Some(expires_at)) = (
+            status.get("fetchedAt").and_then(non_empty_str),
+            status.get("expiresAt").and_then(non_empty_str),
+        ) else {
+            continue;
+        };
+        let provider = normalize_provider(Some(&Value::String(raw_provider.clone())));
+        discovery.insert(
+            provider,
+            json!({ "fetchedAt": fetched_at, "expiresAt": expires_at }),
+        );
+    }
+    discovery
 }
 
 fn normalize_stored_model_order(value: Option<&Value>, models: &Map<String, Value>) -> Vec<Value> {
@@ -1730,6 +1874,28 @@ fn normalize_stored_selections(
         "summaryTemperature",
     ] {
         if let Some(value) = normalize_temperature(object.get(key)) {
+            selections.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in [
+        "polishReasoningEnabled",
+        "translationReasoningEnabled",
+        "summaryReasoningEnabled",
+    ] {
+        if let Some(value) = object.get(key).and_then(Value::as_bool) {
+            selections.insert(key.to_string(), json!(value));
+        }
+    }
+    for key in [
+        "polishReasoningLevel",
+        "translationReasoningLevel",
+        "summaryReasoningLevel",
+    ] {
+        if let Some(value) = object
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "low" | "medium" | "high"))
+        {
             selections.insert(key.to_string(), json!(value));
         }
     }
@@ -2505,6 +2671,72 @@ mod tests {
         assert_eq!(
             result.config["llmSettings"]["models"]["model-1"]["provider"],
             "custom-acme"
+        );
+    }
+
+    #[test]
+    fn llm_state_preserves_runtime_metadata_discovery_and_reasoning() {
+        let normalized = ensure_llm_state(&json!({
+            "llmSettings": {
+                "activeProvider": "open_ai",
+                "providers": {
+                    "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "key" }
+                },
+                "models": {
+                    "model-1": {
+                        "id": "model-1",
+                        "provider": "open_ai",
+                        "model": "gpt-test",
+                        "source": "discovered",
+                        "metadata": {
+                            "displayName": "GPT Test",
+                            "cacheReadPrice": 0.5,
+                            "inputModalities": ["text", "image", "invalid"],
+                            "supportsStructuredOutput": true,
+                            "metadataSources": ["provider", "models_dev"]
+                        },
+                        "metadataOverrides": {
+                            "cacheReadPrice": true,
+                            "metadataSources": true,
+                            "unknown": true
+                        }
+                    }
+                },
+                "modelOrder": ["model-1"],
+                "modelDiscovery": {
+                    "open_ai": {
+                        "fetchedAt": "2026-07-15T00:00:00Z",
+                        "expiresAt": "2026-07-16T00:00:00Z"
+                    }
+                },
+                "selections": {
+                    "polishModelId": "model-1",
+                    "polishReasoningEnabled": true,
+                    "polishReasoningLevel": "high"
+                }
+            }
+        }));
+
+        let metadata = &normalized["models"]["model-1"]["metadata"];
+        assert_eq!(
+            (
+                metadata["displayName"].as_str(),
+                metadata["inputModalities"].as_array().map(Vec::len),
+                metadata["supportsStructuredOutput"].as_bool(),
+            ),
+            (Some("GPT Test"), Some(2), Some(true))
+        );
+        assert_eq!(
+            (
+                normalized["selections"]["polishReasoningEnabled"].as_bool(),
+                normalized["selections"]["polishReasoningLevel"].as_str(),
+                normalized["modelDiscovery"]["open_ai"]["expiresAt"].as_str(),
+            ),
+            (Some(true), Some("high"), Some("2026-07-16T00:00:00Z"))
+        );
+        assert_eq!(
+            normalized["models"]["model-1"]["metadataOverrides"],
+            json!({ "cacheReadPrice": true })
         );
     }
 

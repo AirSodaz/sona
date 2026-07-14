@@ -48,6 +48,7 @@ impl LlmModelLister for EchoLlmAdapter {
             supports_reasoning: None,
             supports_tools: None,
             supports_multimodal: None,
+            ..LlmModelSummary::default()
         }])
     }
 }

@@ -18,6 +18,7 @@ sona-api-server = { path = "../../adapters/api_server" }
 sona-archive = { path = "../../adapters/archive" }
 sona-local-asr = { path = "../../adapters/local_asr" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }
+sona-online-llm = { path = "../../adapters/online_llm" }
 sona-recovery-fs = { path = "../../adapters/recovery_fs" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-sqlite = { path = "../../adapters/sqlite" }

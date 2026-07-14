@@ -151,6 +151,7 @@ mod tests {
                     prompt_tokens: 8,
                     completion_tokens: 5,
                     total_tokens: 13,
+                    ..TokenUsage::default()
                 }),
             },
         )

@@ -1,10 +1,11 @@
 use serde_json::json;
 use sona_core::llm::provider_protocol::{
-    GeminiModel, LlmModelSummary, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
+    GeminiModel, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
     build_gemini_generate_content_request_parts, build_standard_input, clean_gemini_base_url,
-    extract_text_from_json_response, extract_usage_from_json_response, format_gemini_models_url,
-    format_openai_models_urls, gemini_model_to_summary, join_url, openai_model_to_summary,
-    strategy_supports_model_listing, strategy_uses_openai_chat_payload,
+    extract_anthropic_text_response, extract_text_from_json_response,
+    extract_usage_from_json_response, format_gemini_models_url, format_openai_models_urls,
+    gemini_model_to_summary, join_url, openai_model_to_summary, strategy_supports_model_listing,
+    strategy_uses_openai_chat_payload,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
@@ -70,17 +71,20 @@ fn provider_model_summaries_are_core_owned() {
     });
 
     assert_eq!(
-        gemini_summary,
-        LlmModelSummary {
-            model: "gemini-2.5-pro".to_string(),
-            input_price: None,
-            output_price: None,
-            context_window: Some(1_048_576),
-            max_output_tokens: Some(65_536),
-            supports_multimodal: Some(true),
-            supports_tools: Some(true),
-            supports_reasoning: None,
-        }
+        (
+            gemini_summary.model.as_str(),
+            gemini_summary.context_window,
+            gemini_summary.max_output_tokens,
+            gemini_summary.supports_multimodal,
+            gemini_summary.supports_tools,
+        ),
+        (
+            "gemini-2.5-pro",
+            Some(1_048_576),
+            Some(65_536),
+            Some(true),
+            Some(true),
+        )
     );
     assert_eq!(openai_summary.model, "gpt-4.1-mini");
     assert_eq!(openai_summary.context_window, None);
@@ -134,7 +138,9 @@ fn response_text_and_usage_are_extracted_without_adapter_state() {
         ],
         "usage": {
             "input_tokens": 3,
-            "output_tokens": 5
+            "output_tokens": 5,
+            "prompt_tokens_details": {"cached_tokens": 2},
+            "completion_tokens_details": {"reasoning_tokens": 1}
         }
     });
 
@@ -148,10 +154,33 @@ fn response_text_and_usage_are_extracted_without_adapter_state() {
             prompt_tokens: 3,
             completion_tokens: 5,
             total_tokens: 8,
+            cached_input_tokens: 2,
+            reasoning_tokens: 1,
+            ..TokenUsage::default()
         })
     );
     assert_eq!(
         join_url("https://api.openai.com/v1", "/v1/responses"),
         "https://api.openai.com/v1/responses"
+    );
+}
+
+#[test]
+fn anthropic_usage_preserves_prompt_cache_breakdown() {
+    let (_, usage) = extract_anthropic_text_response(&json!({
+        "content": [{"type": "text", "text": "ok"}],
+        "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 2
+        }
+    }))
+    .unwrap();
+    let usage = usage.unwrap();
+
+    assert_eq!(
+        (usage.cached_input_tokens, usage.cache_creation_input_tokens),
+        (6, 2)
     );
 }

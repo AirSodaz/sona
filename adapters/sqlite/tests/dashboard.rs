@@ -94,6 +94,7 @@ fn read_only_snapshot_includes_analytics_usage() {
                 prompt_tokens: 20,
                 completion_tokens: 5,
                 total_tokens: 25,
+                ..TokenUsage::default()
             }),
         },
     )
@@ -170,6 +171,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
                 prompt_tokens: 20,
                 completion_tokens: 5,
                 total_tokens: 25,
+                ..TokenUsage::default()
             }),
         },
     )
@@ -239,7 +241,7 @@ fn read_only_dashboard_rejects_future_schema() {
         error,
         DatabaseError::UnsupportedSchemaVersion {
             found: 99,
-            current: 1
+            current: 2
         }
     ));
 }

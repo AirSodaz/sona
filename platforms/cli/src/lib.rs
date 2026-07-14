@@ -11,6 +11,7 @@ mod history;
 mod init_config;
 mod live_audio;
 mod live_output;
+mod llm;
 mod models;
 mod projects;
 mod recovery;
@@ -178,6 +179,8 @@ enum Commands {
     Export(export::ExportArgs),
     /// Queries persisted history through the shared core service.
     History(history::HistoryArgs),
+    /// Generates text or structured output and discovers online LLM models.
+    Llm(llm::LlmArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
@@ -242,6 +245,7 @@ fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args),
         Commands::History(args) => history::run_history(args),
+        Commands::Llm(args) => llm::run_llm(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),

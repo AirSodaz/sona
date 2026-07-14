@@ -5,9 +5,11 @@ import { LlmFeature, LlmProvider } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import {
   addLlmModel,
+  findLlmModelId,
   getProviderLlmModels,
   getFeatureModelEntry,
   isProviderModelDiscoveryExpired,
+  modelSummaryToMetadata,
   setFeatureModelSelection,
   setFeatureTemperature,
   setFeatureReasoningEnabled,
@@ -16,11 +18,12 @@ import {
 } from '../../../services/llm/state';
 import { isFeatureLlmConfigComplete } from '../../../services/llm/configUtils';
 import {
+  buildLlmConfig,
   DEFAULT_LLM_TEMPERATURE,
   getProviderDefinition,
   listProviderDefinitions,
 } from '../../../services/llm/providers';
-import { listLlmModels } from '../../../services/tauri/llm';
+import { describeLlmModel, listLlmModels } from '../../../services/tauri/llm';
 import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
 
 interface FeatureCardProps {
@@ -49,6 +52,14 @@ export const FeatureCard = React.memo(function FeatureCard({
   headerAction,
 }: FeatureCardProps) {
   const currentLlmState = getCurrentLlmSettings(config);
+  const latestLlmStateRef = useRef(currentLlmState);
+  latestLlmStateRef.current = currentLlmState;
+  const applyTrackedLlmSettings = useCallback((nextSettings: LlmAssistantConfig['llmSettings']) => {
+    if (nextSettings) {
+      latestLlmStateRef.current = nextSettings;
+    }
+    applyLlmSettings(nextSettings);
+  }, [applyLlmSettings]);
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
@@ -86,11 +97,15 @@ export const FeatureCard = React.memo(function FeatureCard({
   }, [modelEntry]);
 
   const handleReasoningEnabledChange = (enabled: boolean) => {
-    applyLlmSettings(setFeatureReasoningEnabled(currentLlmState, featureId, enabled));
+    applyTrackedLlmSettings(setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled));
   };
 
   const handleReasoningLevelChange = (level: string) => {
-    applyLlmSettings(setFeatureReasoningLevel(currentLlmState, featureId, level as 'low' | 'medium' | 'high'));
+    applyTrackedLlmSettings(setFeatureReasoningLevel(
+      latestLlmStateRef.current,
+      featureId,
+      level as 'low' | 'medium' | 'high',
+    ));
   };
 
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
@@ -133,23 +148,24 @@ export const FeatureCard = React.memo(function FeatureCard({
   }, [modelCandidates, localModelName]);
 
   const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
-    const persistedModels = getProviderLlmModels(currentLlmState, provider);
-    const isCacheExpired = isProviderModelDiscoveryExpired(currentLlmState, provider);
+    const latestLlmState = latestLlmStateRef.current;
+    const persistedModels = getProviderLlmModels(latestLlmState, provider);
+    const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
     if (persistedModels.length > 0 && !isCacheExpired) {
       setModelCandidates(persistedModels.map((entry) => entry.model));
       setIsLoadingCandidates(false);
       return;
     }
 
-    const setting = currentLlmState.providers[provider];
-    if (!getProviderDefinition(provider, currentLlmState.customProviders).supportsModelListing || !setting) {
+    const setting = latestLlmState.providers[provider];
+    if (!getProviderDefinition(provider, latestLlmState.customProviders).supportsModelListing || !setting) {
       setModelCandidates([]);
       setIsLoadingCandidates(false);
       return;
     }
     setIsLoadingCandidates(true);
     try {
-      const strategy = getProviderDefinition(provider, currentLlmState.customProviders).strategy;
+      const strategy = getProviderDefinition(provider, latestLlmState.customProviders).strategy;
       const fetchedAt = new Date().toISOString();
       const result = await listLlmModels({ provider, strategy, baseUrl: setting.apiHost, apiKey: setting.apiKey });
       const models = Array.isArray(result)
@@ -158,13 +174,13 @@ export const FeatureCard = React.memo(function FeatureCard({
           .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
         : [];
       setModelCandidates(models);
-      applyLlmSettings(syncProviderDiscoveredModels(currentLlmState, provider, result, fetchedAt));
+      applyTrackedLlmSettings(syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt));
     } catch {
       setModelCandidates(persistedModels.map((entry) => entry.model));
     } finally {
       setIsLoadingCandidates(false);
     }
-  }, [applyLlmSettings, currentLlmState]);
+  }, [applyTrackedLlmSettings]);
 
   useEffect(() => {
     if (!isActive) {
@@ -195,7 +211,9 @@ export const FeatureCard = React.memo(function FeatureCard({
       return;
     }
 
-    let nextState = addLlmModel(currentLlmState, { provider: providerToSave, model: trimmedModel });
+    const latestLlmState = latestLlmStateRef.current;
+    const isManualAddition = !findLlmModelId(latestLlmState, providerToSave, trimmedModel);
+    let nextState = addLlmModel(latestLlmState, { provider: providerToSave, model: trimmedModel });
     const entryId = nextState.modelOrder.find((id) => {
       const existing = nextState.models[id];
       return existing?.provider === providerToSave && existing.model === trimmedModel;
@@ -203,8 +221,41 @@ export const FeatureCard = React.memo(function FeatureCard({
 
     if (entryId) {
       nextState = setFeatureModelSelection(nextState, featureId, entryId);
-      applyLlmSettings(nextState);
+      applyTrackedLlmSettings(nextState);
     }
+
+    const providerSetting = nextState.providers[providerToSave];
+    if (
+      !isManualAddition
+      || !providerSetting
+      || providerToSave === 'google_translate'
+      || providerToSave === 'google_translate_free'
+    ) {
+      return;
+    }
+
+    void describeLlmModel({
+      ...buildLlmConfig(providerToSave, providerSetting, nextState.customProviders),
+      model: trimmedModel,
+    }).then((summary) => {
+      if (!summary || summary.model !== trimmedModel) {
+        return;
+      }
+      const metadata = modelSummaryToMetadata(summary);
+      if (Object.keys(metadata).length === 0) {
+        return;
+      }
+      let enrichedState = addLlmModel(latestLlmStateRef.current, {
+        provider: providerToSave,
+        model: trimmedModel,
+        source: 'manual',
+        metadata,
+      });
+      enrichedState = setFeatureModelSelection(enrichedState, featureId, entryId);
+      applyTrackedLlmSettings(enrichedState);
+    }).catch(() => {
+      // Catalog enrichment is best-effort and must not block a manual model.
+    });
   };
 
   const handleProviderChange = (newProvider: string) => {
@@ -261,7 +312,7 @@ export const FeatureCard = React.memo(function FeatureCard({
   };
 
   const handleTempChange = (val: number) => {
-    applyLlmSettings(setFeatureTemperature(currentLlmState, featureId, val));
+    applyTrackedLlmSettings(setFeatureTemperature(latestLlmStateRef.current, featureId, val));
   };
 
   const isComplete = isFeatureLlmConfigComplete(config, featureId);

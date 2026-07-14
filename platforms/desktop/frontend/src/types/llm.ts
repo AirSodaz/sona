@@ -95,27 +95,55 @@ export interface LlmProviderSetting {
 
 export type LlmModelSource = 'manual' | 'discovered';
 
+export type LlmModality = 'text' | 'image' | 'audio' | 'video' | 'pdf';
+
+export type LlmModelMetadataSource = 'provider' | 'models_dev';
+
 export interface LlmModelMetadata {
+  /** Human-readable model name supplied by the provider or model catalog. */
+  displayName?: string;
   /** Input token price, if the provider reports it. */
   inputPrice?: number;
   /** Output token price, if the provider reports it. */
   outputPrice?: number;
+  /** Cached input token price, if the model catalog reports it. */
+  cacheReadPrice?: number;
+  /** Cache creation token price, if the model catalog reports it. */
+  cacheWritePrice?: number;
   /** Maximum context window supported by the model. */
   contextWindow?: number;
   /** Maximum output token limit supported by the model. */
   maxOutputTokens?: number;
+  /** Knowledge cutoff reported by the model catalog. */
+  knowledgeCutoff?: string;
+  /** Model release date reported by the model catalog. */
+  releaseDate?: string;
+  /** Last model update date reported by the model catalog. */
+  lastUpdated?: string;
+  /** Modalities accepted by the model. */
+  inputModalities?: LlmModality[];
+  /** Modalities emitted by the model. */
+  outputModalities?: LlmModality[];
   /** Whether the model supports multimodal input/output. */
   supportsMultimodal?: boolean;
   /** Whether the model supports tool calling. */
   supportsTools?: boolean;
   /** Whether the model supports deeper reasoning modes. */
   supportsReasoning?: boolean;
+  /** Whether the model supports a native structured-output schema. */
+  supportsStructuredOutput?: boolean;
+  /** Whether the provider supports managed prompt caching for this model. */
+  supportsPromptCaching?: boolean;
+  /** Sources that contributed metadata; provider values take precedence. */
+  metadataSources?: LlmModelMetadataSource[];
 }
 
-export interface LlmDiscoveredModelSummary extends LlmModelMetadata {
+export type LlmDiscoveredModelSummary = {
   /** Provider-reported model name. */
   model: string;
-}
+} & {
+  [Key in keyof LlmModelMetadata]?: LlmModelMetadata[Key] | null;
+};
 
 export interface LlmModelEntry {
   /** Stable identifier for the configured model entry. */
@@ -198,6 +226,68 @@ export interface LlmConfig {
   reasoningLevel?: 'low' | 'medium' | 'high';
   /** Global LLM Request timeout in seconds. */
   timeoutSeconds?: number;
+}
+
+export type LlmJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | LlmJsonValue[]
+  | { [key: string]: LlmJsonValue };
+
+export type LlmResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | { type: 'json_schema'; name: string; schema: LlmJsonValue };
+
+export type LlmResponseFormatKind = 'text' | 'json_object' | 'json_schema';
+
+export type LlmPromptCachePolicy = 'disabled' | 'automatic';
+
+export type LlmCapabilityPolicy = 'strict' | 'compatible';
+
+export interface LlmCompletionOptions {
+  temperature?: number;
+  maxOutputTokens?: number;
+  reasoningEnabled?: boolean;
+  reasoningLevel?: string;
+  responseFormat?: LlmResponseFormat;
+  promptCache?: LlmPromptCachePolicy;
+  capabilityPolicy?: LlmCapabilityPolicy;
+}
+
+export type LlmGenerateSource = 'title_generation' | 'connection_test' | 'generic';
+
+export interface LlmCompletionRequest {
+  config: LlmConfig;
+  systemPrompt?: string;
+  input: string;
+  options?: LlmCompletionOptions;
+  source?: LlmGenerateSource;
+}
+
+export interface LlmTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  reasoningTokens: number;
+}
+
+export interface LlmExecutionMetadata {
+  requestedFormat: LlmResponseFormatKind;
+  appliedFormat: LlmResponseFormatKind;
+  warnings: string[];
+  attempts: number;
+}
+
+export interface LlmCompletionResponse {
+  text: string;
+  json?: LlmJsonValue;
+  usage: LlmTokenUsage | null;
+  execution: LlmExecutionMetadata;
 }
 
 export type SummaryTemplateId = string;

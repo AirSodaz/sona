@@ -2,12 +2,17 @@ use serde::Serialize;
 
 pub use sona_core::domain::LlmProvider;
 pub use sona_core::llm::provider_protocol::{
-    LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
+    LlmModality, LlmModelMetadataSource, LlmModelSummary, MessageRole, StandardLlmRequest,
+    StandardLlmResponse, StandardMessage,
 };
 pub use sona_core::llm::requests::{
     HistorySummaryPayload, LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload,
     PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
     TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
+};
+pub use sona_core::llm::runtime::{
+    LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
+    LlmExecutionMetadata, LlmPromptCachePolicy, LlmResponseFormat, LlmResponseFormatKind,
 };
 pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,

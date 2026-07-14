@@ -9,7 +9,12 @@ import type {
   TranslateSegmentsRequest,
 } from '../llmTaskTypes';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
-import type { LlmDiscoveredModelSummary } from '../../types/transcript';
+import type {
+  LlmCompletionRequest,
+  LlmCompletionResponse,
+  LlmConfig,
+  LlmDiscoveredModelSummary,
+} from '../../types/transcript';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -17,11 +22,19 @@ export async function generateLlmText(request: LlmGenerateCommandRequest): Promi
   return invokeTauri(TauriCommand.llm.generateText, { request });
 }
 
+export async function completeLlm(request: LlmCompletionRequest): Promise<LlmCompletionResponse> {
+  return invokeTauri(TauriCommand.llm.complete, { request });
+}
+
+export async function describeLlmModel(config: LlmConfig): Promise<LlmDiscoveredModelSummary | null> {
+  return invokeTauri(TauriCommand.llm.describeModel, { config });
+}
+
 export async function listLlmModels(request: {
   provider: string;
   strategy?: string;
-  baseUrl?: string;
-  apiKey?: string;
+  baseUrl: string;
+  apiKey: string;
 }): Promise<LlmDiscoveredModelSummary[]> {
   return invokeTauri(TauriCommand.llm.listModels, { request });
 }

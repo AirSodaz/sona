@@ -73,6 +73,7 @@ fn seed(app_data_dir: &Path, transcript_text: &str) -> Arc<Database> {
                 prompt_tokens: 20,
                 completion_tokens: 5,
                 total_tokens: 25,
+                ..TokenUsage::default()
             }),
         },
     )

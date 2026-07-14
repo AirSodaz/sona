@@ -32,6 +32,8 @@ val buildSonaUniffiAndroidLibraries = tasks.register<Exec>("buildSonaUniffiAndro
     inputs.file(File(repoRoot, "adapters/local_asr/Cargo.toml"))
     inputs.file(File(repoRoot, "adapters/local_asr/build.rs"))
     inputs.dir(File(repoRoot, "adapters/local_asr/src"))
+    inputs.file(File(repoRoot, "adapters/online_llm/Cargo.toml"))
+    inputs.dir(File(repoRoot, "adapters/online_llm/src"))
     inputs.dir(File(repoRoot, "core/src"))
     inputs.file(File(repoRoot, "scripts/build-uniffi-android-libs.js"))
     inputs.file(File(repoRoot, "scripts/android-sherpa-runtime.js"))

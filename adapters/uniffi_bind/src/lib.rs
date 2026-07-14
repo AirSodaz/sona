@@ -12,6 +12,7 @@ mod history_mutation_bridge;
 mod history_query_bridge;
 mod json_bridge;
 mod llm_bridge;
+mod llm_runtime_bridge;
 mod mapper;
 mod model_bridge;
 mod project_bridge;
@@ -24,21 +25,23 @@ pub use facade::SonaCoreFacade;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
     FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiBatchSegmentationMode,
-    FfiConfigMigrationResult, FfiLlmConfig, FfiLlmPromptChunk, FfiLlmProvider,
-    FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmSegmentInput, FfiModelCatalogGroup,
-    FfiModelCatalogModel, FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults,
-    FfiModelCatalogSection, FfiModelCatalogSectionType, FfiModelCatalogSelectedIds,
-    FfiModelCatalogSelectionOptions, FfiModelCatalogSnapshot, FfiModelDependencyConfigKey,
-    FfiModelDependencyRequest, FfiModelDependencyRequestsForModel, FfiModelIdByNormalizedPathEntry,
-    FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths,
-    FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode,
-    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
-    FfiPolishedSegment, FfiPresetModel, FfiRequiredCompanionModels, FfiResolvedModelDownload,
-    FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution, FfiSpeakerCandidate,
-    FfiSpeakerTag, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiSummaryTemplateConfig,
-    FfiTimestampSupportHint, FfiTranscriptSegment, FfiTranscriptTiming, FfiTranscriptTimingLevel,
-    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, FfiTranscriptUpdate,
-    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
+    FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata,
+    FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary, FfiLlmPromptChunk,
+    FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
+    FfiLlmSegmentInput, FfiLlmTokenUsage, FfiModelCatalogGroup, FfiModelCatalogModel,
+    FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
+    FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
+    FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
+    FfiModelDependencyRequestsForModel, FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry,
+    FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths, FfiOnlineAsrBatchCapability,
+    FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider,
+    FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
+    FfiRequiredCompanionModels, FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus,
+    FfiSpeakerAttribution, FfiSpeakerCandidate, FfiSpeakerTag, FfiSummarizeTranscriptRequest,
+    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTimestampSupportHint,
+    FfiTranscriptSegment, FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
+    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
 };
 
 uniffi::setup_scaffolding!();
@@ -57,6 +60,12 @@ pub enum SonaCoreBindingError {
     Project { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
+    #[error("{reason}")]
+    LlmRuntime {
+        code: String,
+        reason: String,
+        retry_after_ms: Option<u64>,
+    },
     #[error("{reason}")]
     ConfigRepository { reason: String },
     #[error("{reason}")]
@@ -614,6 +623,27 @@ pub fn find_llm_provider_by_id_or_alias(id_or_alias: String) -> Option<FfiLlmPro
 #[uniffi::export]
 pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
     SonaCoreFacade::llm_config_from_json(config_json)
+}
+
+#[uniffi::export]
+pub async fn complete_llm_json(
+    request_json: String,
+) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
+    SonaCoreFacade::complete_llm_json(request_json).await
+}
+
+#[uniffi::export]
+pub async fn list_llm_models_json(
+    request_json: String,
+) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
+    SonaCoreFacade::list_llm_models_json(request_json).await
+}
+
+#[uniffi::export]
+pub async fn describe_llm_model_json(
+    config_json: String,
+) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
+    SonaCoreFacade::describe_llm_model_json(config_json).await
 }
 
 #[uniffi::export]

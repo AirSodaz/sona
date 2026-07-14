@@ -33,7 +33,7 @@ import {
   historySaveRecording,
   historyUpdateTranscript,
 } from '../history';
-import { generateLlmText, runTranscriptLlmJob } from '../llm';
+import { completeLlm, describeLlmModel, generateLlmText, runTranscriptLlmJob } from '../llm';
 import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import {
@@ -676,6 +676,38 @@ describe('tauri boundary wrappers', () => {
         input: 'hello',
         source: 'generic',
       },
+    });
+  });
+
+  it('typed llm wrappers preserve completion and model-description IPC shapes', async () => {
+    const response = {
+      text: '{"answer":true}',
+      json: { answer: true },
+      usage: null,
+      execution: {
+        requestedFormat: 'json_object' as const,
+        appliedFormat: 'json_object' as const,
+        warnings: [],
+        attempts: 1,
+      },
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(response)
+      .mockResolvedValueOnce({ model: 'gpt-4.1', displayName: 'GPT-4.1' });
+
+    const request = {
+      config: {} as any,
+      input: 'answer',
+      options: { responseFormat: { type: 'json_object' as const } },
+    };
+    await expect(completeLlm(request)).resolves.toEqual(response);
+    await expect(describeLlmModel({ model: 'gpt-4.1' } as any)).resolves.toEqual(
+      expect.objectContaining({ displayName: 'GPT-4.1' }),
+    );
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llm.complete, { request });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llm.describeModel, {
+      config: { model: 'gpt-4.1' },
     });
   });
 

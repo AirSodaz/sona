@@ -19,6 +19,9 @@ struct PreparedLlmUsageRow {
     prompt_tokens: i64,
     completion_tokens: i64,
     total_tokens: i64,
+    cached_input_tokens: i64,
+    cache_creation_input_tokens: i64,
+    reasoning_tokens: i64,
 }
 
 pub(crate) fn parse_raw(content: &str) -> Result<PreparedLlmUsageRows, String> {
@@ -64,6 +67,17 @@ fn parse_usage_row(row: &Value, index: usize) -> Result<PreparedLlmUsageRow, Str
             .filter(|value| *value >= 0)
             .ok_or_else(|| format!("LLM usage row at index {index} has invalid {key}."))
     };
+    let optional_token_field = |key: &str| {
+        row.get(key)
+            .map(|value| {
+                value
+                    .as_i64()
+                    .filter(|value| *value >= 0)
+                    .ok_or_else(|| format!("LLM usage row at index {index} has invalid {key}."))
+            })
+            .transpose()
+            .map(|value| value.unwrap_or(0))
+    };
     Ok(PreparedLlmUsageRow {
         occurred_at: string_field("occurredAt")?,
         provider: string_field("provider")?,
@@ -71,12 +85,16 @@ fn parse_usage_row(row: &Value, index: usize) -> Result<PreparedLlmUsageRow, Str
         prompt_tokens: token_field("promptTokens")?,
         completion_tokens: token_field("completionTokens")?,
         total_tokens: token_field("totalTokens")?,
+        cached_input_tokens: optional_token_field("cachedInputTokens")?,
+        cache_creation_input_tokens: optional_token_field("cacheCreationInputTokens")?,
+        reasoning_tokens: optional_token_field("reasoningTokens")?,
     })
 }
 
 fn read_raw_from_connection(conn: &rusqlite::Connection) -> Result<String, DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens
+        "SELECT occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens,
+                cached_input_tokens, cache_creation_input_tokens, reasoning_tokens
          FROM analytics.llm_usage
          ORDER BY occurred_at, id",
     )?;
@@ -87,6 +105,9 @@ fn read_raw_from_connection(conn: &rusqlite::Connection) -> Result<String, Datab
         let prompt_tokens: i64 = row.get(3)?;
         let completion_tokens: i64 = row.get(4)?;
         let total_tokens: i64 = row.get(5)?;
+        let cached_input_tokens: i64 = row.get(6)?;
+        let cache_creation_input_tokens: i64 = row.get(7)?;
+        let reasoning_tokens: i64 = row.get(8)?;
         Ok(serde_json::json!({
             "occurredAt": occurred_at,
             "provider": provider,
@@ -94,6 +115,9 @@ fn read_raw_from_connection(conn: &rusqlite::Connection) -> Result<String, Datab
             "promptTokens": prompt_tokens,
             "completionTokens": completion_tokens,
             "totalTokens": total_tokens,
+            "cachedInputTokens": cached_input_tokens,
+            "cacheCreationInputTokens": cache_creation_input_tokens,
+            "reasoningTokens": reasoning_tokens,
         }))
     })?;
     let items = rows.collect::<Result<Vec<_>, _>>()?;
@@ -113,8 +137,9 @@ pub(crate) fn replace_raw_in_transaction(
     tx.execute("DELETE FROM analytics.llm_usage", [])?;
     let mut stmt = tx.prepare_cached(
         "INSERT INTO analytics.llm_usage (
-            occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens,
+            cached_input_tokens, cache_creation_input_tokens, reasoning_tokens
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )?;
     for row in &prepared.rows {
         stmt.execute(rusqlite::params![
@@ -124,33 +149,32 @@ pub(crate) fn replace_raw_in_transaction(
             row.prompt_tokens,
             row.completion_tokens,
             row.total_tokens,
+            row.cached_input_tokens,
+            row.cache_creation_input_tokens,
+            row.reasoning_tokens,
         ])?;
     }
     Ok(())
 }
 
 pub fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseError> {
-    let prompt_tokens = record
-        .usage
-        .as_ref()
-        .map(|u| u.prompt_tokens as i64)
-        .unwrap_or(0);
-    let completion_tokens = record
-        .usage
-        .as_ref()
-        .map(|u| u.completion_tokens as i64)
-        .unwrap_or(0);
-    let total_tokens = record
-        .usage
-        .as_ref()
-        .map(|u| {
-            if u.total_tokens > 0 {
-                u.total_tokens as i64
-            } else {
-                u.prompt_tokens as i64 + u.completion_tokens as i64
-            }
-        })
-        .unwrap_or(0);
+    let usage = record.usage.as_ref().cloned().unwrap_or_default();
+    let prompt_tokens = sqlite_token_count(usage.prompt_tokens, "prompt tokens")?;
+    let completion_tokens = sqlite_token_count(usage.completion_tokens, "completion tokens")?;
+    let total_tokens = sqlite_token_count(
+        if usage.total_tokens > 0 {
+            usage.total_tokens
+        } else {
+            usage.prompt_tokens.saturating_add(usage.completion_tokens)
+        },
+        "total tokens",
+    )?;
+    let cached_input_tokens = sqlite_token_count(usage.cached_input_tokens, "cached input tokens")?;
+    let cache_creation_input_tokens = sqlite_token_count(
+        usage.cache_creation_input_tokens,
+        "cache creation input tokens",
+    )?;
+    let reasoning_tokens = sqlite_token_count(usage.reasoning_tokens, "reasoning tokens")?;
 
     let provider = &record.provider;
     let category = serde_json::to_string(&record.category)
@@ -160,8 +184,10 @@ pub fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseE
 
     db.with_write_connection(|conn| {
         conn.execute(
-            "INSERT INTO analytics.llm_usage (occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO analytics.llm_usage (
+                occurred_at, provider, category, prompt_tokens, completion_tokens, total_tokens,
+                cached_input_tokens, cache_creation_input_tokens, reasoning_tokens
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 record.occurred_at,
                 provider,
@@ -169,10 +195,18 @@ pub fn record_usage(db: &Database, record: &UsageRecord) -> Result<(), DatabaseE
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
+                cached_input_tokens,
+                cache_creation_input_tokens,
+                reasoning_tokens,
             ],
         )?;
         Ok(())
     })
+}
+
+fn sqlite_token_count(value: u64, label: &str) -> Result<i64, DatabaseError> {
+    i64::try_from(value)
+        .map_err(|_| DatabaseError::Internal(format!("LLM {label} exceed SQLite integer range.")))
 }
 
 pub fn read_stats(db: &Database) -> Result<LlmUsageStatsFile, DatabaseError> {
@@ -486,6 +520,9 @@ fn append_bucket_rows(
                 index,
                 "totalTokens",
             )?,
+            cached_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            reasoning_tokens: 0,
         });
     }
     for _ in 0..bucket.calls_without_usage {
@@ -496,6 +533,9 @@ fn append_bucket_rows(
             prompt_tokens: 0,
             completion_tokens: 0,
             total_tokens: 0,
+            cached_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            reasoning_tokens: 0,
         });
     }
     Ok(())
@@ -614,6 +654,7 @@ mod tests {
                     prompt_tokens: 10,
                     completion_tokens: 5,
                     total_tokens: 0,
+                    ..TokenUsage::default()
                 }),
             },
         )
@@ -658,6 +699,9 @@ mod tests {
                     prompt_tokens: 100,
                     completion_tokens: 50,
                     total_tokens: 150,
+                    cached_input_tokens: 40,
+                    cache_creation_input_tokens: 3,
+                    reasoning_tokens: 7,
                 }),
             },
         )
@@ -668,6 +712,14 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0]["provider"], "test_provider");
         assert_eq!(parsed[0]["totalTokens"], 150);
+        assert_eq!(
+            (
+                parsed[0]["cachedInputTokens"].as_u64(),
+                parsed[0]["cacheCreationInputTokens"].as_u64(),
+                parsed[0]["reasoningTokens"].as_u64(),
+            ),
+            (Some(40), Some(3), Some(7))
+        );
     }
 
     #[test]

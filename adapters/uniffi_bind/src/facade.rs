@@ -1,15 +1,16 @@
 use crate::{
     FfiAsrStreamingObserver, FfiAsrStreamingSession, FfiBatchSegmentationMode,
-    FfiConfigMigrationResult, FfiLlmConfig, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput,
-    FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot, FfiModelSelectionPaths,
-    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
-    FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
-    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
-    app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    backup_bridge, config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge,
-    history_mutation_bridge, history_query_bridge, llm_bridge, model_bridge, project_bridge,
-    recovery_bridge, runtime_bridge, storage_usage_bridge, task_ledger_bridge,
+    FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmModelSummary,
+    FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput, FfiModelCatalogSelectedIds,
+    FfiModelCatalogSnapshot, FfiModelSelectionPaths, FfiOnlineAsrProvider,
+    FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
+    FfiResolvedModelDownload, FfiRuntimePathStatus, FfiSummarizeTranscriptRequest,
+    FfiSummarySegmentInput, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, app_config_repository_bridge, asr_bridge,
+    asr_streaming_bridge, automation_bridge, backup_bridge, config_bridge, dashboard_bridge,
+    diagnostics_bridge, export_bridge, history_mutation_bridge, history_query_bridge, llm_bridge,
+    llm_runtime_bridge, model_bridge, project_bridge, recovery_bridge, runtime_bridge,
+    storage_usage_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -481,6 +482,24 @@ impl SonaCoreFacade {
 
     pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
         llm_bridge::llm_config_from_json(config_json)
+    }
+
+    pub async fn complete_llm_json(
+        request_json: String,
+    ) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
+        llm_runtime_bridge::complete_llm_json(request_json).await
+    }
+
+    pub async fn list_llm_models_json(
+        request_json: String,
+    ) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
+        llm_runtime_bridge::list_llm_models_json(request_json).await
+    }
+
+    pub async fn describe_llm_model_json(
+        config_json: String,
+    ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
+        llm_runtime_bridge::describe_llm_model_json(config_json).await
     }
 
     pub fn validate_llm_config_json(config_json: String) -> SonaCoreBindingResult<()> {

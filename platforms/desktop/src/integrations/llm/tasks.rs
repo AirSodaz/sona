@@ -1,8 +1,6 @@
-#[cfg(test)]
-pub(crate) use sona_core::llm::requests::validate_llm_config;
 pub(crate) use sona_core::llm::requests::{
-    validate_llm_generate_request, validate_polish_segments_request,
-    validate_summarize_transcript_request, validate_translate_segments_request,
+    validate_polish_segments_request, validate_summarize_transcript_request,
+    validate_translate_segments_request,
 };
 #[cfg(test)]
 pub(crate) use sona_core::llm::tasks::plan_segment_task_chunks;

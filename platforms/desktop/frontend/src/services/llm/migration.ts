@@ -6,6 +6,7 @@ import type {
   LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
+  LlmModality,
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
@@ -19,14 +20,81 @@ import {
 } from './state';
 
 const EDITABLE_MODEL_METADATA_KEYS = [
+  'displayName',
   'inputPrice',
   'outputPrice',
+  'cacheReadPrice',
+  'cacheWritePrice',
   'contextWindow',
   'maxOutputTokens',
+  'knowledgeCutoff',
+  'releaseDate',
+  'lastUpdated',
+  'inputModalities',
+  'outputModalities',
   'supportsMultimodal',
   'supportsTools',
   'supportsReasoning',
+  'supportsStructuredOutput',
+  'supportsPromptCaching',
 ] as const satisfies (keyof LlmModelMetadata)[];
+
+const LLM_MODALITIES = new Set<LlmModality>(['text', 'image', 'audio', 'video', 'pdf']);
+
+function sanitizeOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function sanitizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return value.trim() || undefined;
+}
+
+function sanitizeOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function sanitizeModalities(value: unknown): LlmModality[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return [...new Set(value.filter((item): item is LlmModality => LLM_MODALITIES.has(item as LlmModality)))];
+}
+
+function sanitizeModelMetadata(metadata: unknown): LlmModelMetadata | undefined {
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
+  const candidate = metadata as Record<string, unknown>;
+  const metadataSources = Array.isArray(candidate.metadataSources)
+    ? [...new Set(candidate.metadataSources.filter((source): source is 'provider' | 'models_dev' => (
+      source === 'provider' || source === 'models_dev'
+    )))]
+    : undefined;
+
+  return {
+    displayName: sanitizeOptionalString(candidate.displayName),
+    inputPrice: sanitizeOptionalNumber(candidate.inputPrice),
+    outputPrice: sanitizeOptionalNumber(candidate.outputPrice),
+    cacheReadPrice: sanitizeOptionalNumber(candidate.cacheReadPrice),
+    cacheWritePrice: sanitizeOptionalNumber(candidate.cacheWritePrice),
+    contextWindow: sanitizeOptionalNumber(candidate.contextWindow),
+    maxOutputTokens: sanitizeOptionalNumber(candidate.maxOutputTokens),
+    knowledgeCutoff: sanitizeOptionalString(candidate.knowledgeCutoff),
+    releaseDate: sanitizeOptionalString(candidate.releaseDate),
+    lastUpdated: sanitizeOptionalString(candidate.lastUpdated),
+    inputModalities: sanitizeModalities(candidate.inputModalities),
+    outputModalities: sanitizeModalities(candidate.outputModalities),
+    supportsMultimodal: sanitizeOptionalBoolean(candidate.supportsMultimodal),
+    supportsTools: sanitizeOptionalBoolean(candidate.supportsTools),
+    supportsReasoning: sanitizeOptionalBoolean(candidate.supportsReasoning),
+    supportsStructuredOutput: sanitizeOptionalBoolean(candidate.supportsStructuredOutput),
+    supportsPromptCaching: sanitizeOptionalBoolean(candidate.supportsPromptCaching),
+    metadataSources,
+  };
+}
 
 function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): LlmModelEntry | null {
   if (!entry) {
@@ -45,17 +113,7 @@ function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): L
     provider,
     model,
     source: entry.source === 'discovered' ? 'discovered' : 'manual',
-    metadata: entry.metadata && typeof entry.metadata === 'object' ? {
-      inputPrice: typeof entry.metadata.inputPrice === 'number' ? entry.metadata.inputPrice : undefined,
-      outputPrice: typeof entry.metadata.outputPrice === 'number' ? entry.metadata.outputPrice : undefined,
-      contextWindow: typeof entry.metadata.contextWindow === 'number' ? entry.metadata.contextWindow : undefined,
-      maxOutputTokens: typeof entry.metadata.maxOutputTokens === 'number' ? entry.metadata.maxOutputTokens : undefined,
-      supportsMultimodal:
-        typeof entry.metadata.supportsMultimodal === 'boolean' ? entry.metadata.supportsMultimodal : undefined,
-      supportsTools: typeof entry.metadata.supportsTools === 'boolean' ? entry.metadata.supportsTools : undefined,
-      supportsReasoning:
-        typeof entry.metadata.supportsReasoning === 'boolean' ? entry.metadata.supportsReasoning : undefined,
-    } : undefined,
+    metadata: sanitizeModelMetadata(entry.metadata),
     metadataOverrides: sanitizeMetadataOverrides(entry.metadataOverrides),
   };
 }

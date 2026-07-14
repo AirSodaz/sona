@@ -227,8 +227,17 @@ describe('llm migration', () => {
             provider: 'open_ai',
             model: 'gpt-4.1',
             metadata: {
+              displayName: ' GPT-4.1 ',
               contextWindow: 128000,
+              cacheReadPrice: 0.5,
+              inputModalities: ['text', 'image', 'invalid', 'text'],
               supportsTools: true,
+              supportsStructuredOutput: true,
+              metadataSources: ['provider', 'models_dev', 'invalid'],
+            },
+            metadataOverrides: {
+              cacheReadPrice: true,
+              metadataSources: true,
             },
           },
         },
@@ -244,9 +253,13 @@ describe('llm migration', () => {
       model: 'gpt-4.1',
       source: 'manual',
       metadata: expect.objectContaining({
+        displayName: 'GPT-4.1',
         contextWindow: 128000,
+        inputModalities: ['text', 'image'],
         supportsTools: true,
+        metadataSources: ['provider', 'models_dev'],
       }),
+      metadataOverrides: { cacheReadPrice: true },
     }));
     expect(llmSettings.selections.polishModelId).toBe('open-ai-test');
   });

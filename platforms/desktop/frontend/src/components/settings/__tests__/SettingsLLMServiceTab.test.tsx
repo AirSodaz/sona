@@ -312,6 +312,16 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('adds a model through the searchable model input flow', async () => {
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return [{ model: 'gpt-4o' }];
+      }
+      if (command === 'describe_llm_model') {
+        return { model: 'gpt-4.2-new', displayName: 'GPT-4.2 New' };
+      }
+      return 'OK';
+    });
+
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
@@ -327,6 +337,11 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.keyDown(modelInput, { key: 'Enter' });
     });
 
+    await waitFor(() => {
+      expect(tauriApi.invoke).toHaveBeenCalledWith('describe_llm_model', {
+        config: expect.objectContaining({ model: 'gpt-4.2-new' }),
+      });
+    });
     expect(mockUpdateConfig).toHaveBeenCalled();
   });
 
@@ -599,7 +614,10 @@ describe('SettingsLLMServiceTab', () => {
     llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
       {
         model: 'gpt-4.1',
+        displayName: 'GPT-4.1',
         contextWindow: 128000,
+        knowledgeCutoff: '2024-06',
+        supportsStructuredOutput: true,
       },
     ]);
     currentConfig = {
@@ -639,6 +657,9 @@ describe('SettingsLLMServiceTab', () => {
     expect(testButton.getAttribute('data-tooltip-pos')).toBe('top');
     expect(testButton.textContent).toBe('');
     expect(testButton.querySelector('svg')).not.toBeNull();
+    expect(screen.getByText('GPT-4.1')).toBeDefined();
+    expect(screen.getByLabelText('settings.llm.capability_structured_output')).toBeDefined();
+    expect(screen.getByText('settings.llm.model_knowledge_cutoff: 2024-06')).toBeDefined();
   });
 
   it('only refreshes provider models from details after an explicit refresh click', async () => {

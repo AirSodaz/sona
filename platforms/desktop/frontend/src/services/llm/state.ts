@@ -43,15 +43,30 @@ const FEATURE_REASONING_LEVEL_KEYS = {
   summary: 'summaryReasoningLevel',
 } as const;
 
-const EDITABLE_MODEL_METADATA_KEYS = [
+const MODEL_METADATA_KEYS = [
+  'displayName',
   'inputPrice',
   'outputPrice',
+  'cacheReadPrice',
+  'cacheWritePrice',
   'contextWindow',
   'maxOutputTokens',
+  'knowledgeCutoff',
+  'releaseDate',
+  'lastUpdated',
+  'inputModalities',
+  'outputModalities',
   'supportsMultimodal',
   'supportsTools',
   'supportsReasoning',
+  'supportsStructuredOutput',
+  'supportsPromptCaching',
+  'metadataSources',
 ] as const satisfies (keyof LlmModelMetadata)[];
+
+const EDITABLE_MODEL_METADATA_KEYS = MODEL_METADATA_KEYS.filter(
+  (key): key is Exclude<(typeof MODEL_METADATA_KEYS)[number], 'metadataSources'> => key !== 'metadataSources',
+);
 
 const MODEL_DISCOVERY_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -251,7 +266,9 @@ export function addLlmModel(
     const metadata = mergeModelMetadata(existing.metadata, entry.metadata, metadataOverrides);
     const nextEntry: LlmModelEntry = {
       ...existing,
-      source: entry.source ?? existing.source ?? 'manual',
+      source: entry.source === 'manual' || existing.source === 'manual'
+        ? 'manual'
+        : entry.source ?? existing.source ?? 'manual',
       metadata,
       metadataOverrides,
     };
@@ -305,11 +322,15 @@ function mergeModelMetadata(
     ...existing,
   };
 
-  for (const key of EDITABLE_MODEL_METADATA_KEYS) {
+  for (const key of MODEL_METADATA_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(incoming, key)) {
+      continue;
+    }
     if (overrides?.[key]) {
       continue;
     }
-    next[key] = incoming[key] as never;
+    const value = incoming[key];
+    next[key] = (Array.isArray(value) ? [...value] : value) as never;
   }
 
   return next;
@@ -527,15 +548,7 @@ export function syncProviderDiscoveredModels(
       provider,
       model,
       source: 'discovered',
-      metadata: {
-        inputPrice: discoveredModel.inputPrice,
-        outputPrice: discoveredModel.outputPrice,
-        contextWindow: discoveredModel.contextWindow,
-        maxOutputTokens: discoveredModel.maxOutputTokens,
-        supportsMultimodal: discoveredModel.supportsMultimodal,
-        supportsTools: discoveredModel.supportsTools,
-        supportsReasoning: discoveredModel.supportsReasoning,
-      },
+      metadata: modelSummaryToMetadata(discoveredModel),
     });
   }
 
@@ -553,6 +566,20 @@ export function syncProviderDiscoveredModels(
       [provider]: createDiscoveryStatus(fetchedAt),
     },
   };
+}
+
+export function modelSummaryToMetadata(
+  summary: LlmDiscoveredModelSummary,
+): LlmModelMetadata {
+  const metadata: LlmModelMetadata = {};
+  for (const key of MODEL_METADATA_KEYS) {
+    const value = summary[key];
+    if (value === undefined || value === null) {
+      continue;
+    }
+    metadata[key] = (Array.isArray(value) ? [...value] : value) as never;
+  }
+  return metadata;
 }
 
 export function getFeatureModelId(

@@ -3,7 +3,8 @@ use super::*;
 use futures_util::future::BoxFuture;
 use log::info;
 use serde::Serialize;
-use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
+use sona_core::llm::runtime::LlmRuntimeService;
+use sona_core::ports::llm::{LlmCompletionPort, LlmModelMetadataPort, LlmTextGenerator};
 use tauri::{AppHandle, Emitter};
 
 fn polished_segment_id(item: &PolishedSegment) -> &str {
@@ -81,6 +82,10 @@ impl UsageRecorder {
     }
 
     fn record(&self, response: &StandardLlmResponse) {
+        self.record_usage(response.usage.clone());
+    }
+
+    fn record_usage(&self, usage: Option<TokenUsage>) {
         let occurred_at = crate::platform::time::utc_now_rfc3339();
         if let Err(error) = crate::platform::llm_usage::record_usage(
             &self.app,
@@ -88,7 +93,7 @@ impl UsageRecorder {
                 occurred_at: occurred_at.clone(),
                 provider: self.config.provider.as_str(),
                 category: self.category,
-                usage: response.usage.clone(),
+                usage: usage.clone(),
             },
         ) {
             log::warn!(
@@ -99,27 +104,39 @@ impl UsageRecorder {
             );
         }
 
-        emit_llm_usage_event(
-            &self.app,
-            &self.config,
-            self.category,
-            occurred_at,
-            response.usage.clone(),
-        );
+        emit_llm_usage_event(&self.app, &self.config, self.category, occurred_at, usage);
     }
+}
+
+pub(super) async fn complete_llm_with_port<P>(
+    request: LlmCompletionRequest,
+    port: P,
+) -> Result<LlmCompletionResponse, String>
+where
+    P: Clone + LlmCompletionPort + LlmModelMetadataPort,
+{
+    LlmRuntimeService::new(&port, port.clone())
+        .complete(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+pub(crate) async fn complete_llm_command(
+    app: AppHandle,
+    request: LlmCompletionRequest,
+) -> Result<LlmCompletionResponse, String> {
+    let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
+    let usage = UsageRecorder::new(app, request.config.clone(), category);
+    let response = complete_llm_with_port(request, DesktopLlmAdapter::default()).await?;
+    usage.record_usage(response.usage.clone());
+    Ok(response)
 }
 
 pub(crate) async fn generate_llm_text_command(
     app: AppHandle,
     request: LlmGenerateRequest,
 ) -> Result<String, String> {
-    validate_llm_generate_request(&request)?;
-
-    let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
-    let usage = UsageRecorder::new(app, request.config.clone(), category);
-    let response = DesktopLlmAdapter::default().generate_text(request).await?;
-    usage.record(&response);
-    Ok(response.text)
+    Ok(complete_llm_command(app, request.into()).await?.text)
 }
 
 pub(crate) async fn polish_transcript_segments_command(
@@ -488,5 +505,19 @@ pub(crate) async fn summarize_transcript_command(
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    DesktopLlmAdapter::default().list_models(request).await
+    let adapter = DesktopLlmAdapter::default();
+    LlmRuntimeService::new(&adapter, adapter)
+        .list_models(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+pub(crate) async fn describe_llm_model_command(
+    config: LlmConfig,
+) -> Result<Option<LlmModelSummary>, String> {
+    let adapter = DesktopLlmAdapter::default();
+    LlmRuntimeService::new(&adapter, adapter)
+        .describe_model(&config)
+        .await
+        .map_err(|error| error.to_string())
 }

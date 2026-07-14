@@ -7,6 +7,25 @@ use crate::llm::usage::TokenUsage;
 #[cfg(feature = "specta")]
 use specta::Type;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum LlmModality {
+    Text,
+    Image,
+    Audio,
+    Video,
+    Pdf,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum LlmModelMetadataSource {
+    Provider,
+    ModelsDev,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 pub enum MessageRole {
@@ -39,18 +58,40 @@ pub struct StandardLlmResponse {
     pub usage: Option<TokenUsage>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct LlmModelSummary {
     pub model: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
     pub input_price: Option<f64>,
     pub output_price: Option<f64>,
+    #[serde(default)]
+    pub cache_read_price: Option<f64>,
+    #[serde(default)]
+    pub cache_write_price: Option<f64>,
     pub context_window: Option<u64>,
     pub max_output_tokens: Option<u64>,
+    #[serde(default)]
+    pub knowledge_cutoff: Option<String>,
+    #[serde(default)]
+    pub release_date: Option<String>,
+    #[serde(default)]
+    pub last_updated: Option<String>,
+    #[serde(default)]
+    pub input_modalities: Vec<LlmModality>,
+    #[serde(default)]
+    pub output_modalities: Vec<LlmModality>,
     pub supports_multimodal: Option<bool>,
     pub supports_tools: Option<bool>,
     pub supports_reasoning: Option<bool>,
+    #[serde(default)]
+    pub supports_structured_output: Option<bool>,
+    #[serde(default)]
+    pub supports_prompt_caching: Option<bool>,
+    #[serde(default)]
+    pub metadata_sources: Vec<LlmModelMetadataSource>,
 }
 
 #[derive(Deserialize)]
@@ -205,6 +246,9 @@ pub fn gemini_model_to_summary(model: GeminiModel) -> Option<LlmModelSummary> {
         supports_multimodal: Some(true),
         supports_tools,
         supports_reasoning: None,
+        supports_structured_output: None,
+        metadata_sources: vec![LlmModelMetadataSource::Provider],
+        ..LlmModelSummary::default()
     })
 }
 
@@ -218,6 +262,9 @@ pub fn openai_model_to_summary(model: OpenAiModel) -> LlmModelSummary {
         supports_multimodal: None,
         supports_tools: None,
         supports_reasoning: None,
+        supports_structured_output: None,
+        metadata_sources: vec![LlmModelMetadataSource::Provider],
+        ..LlmModelSummary::default()
     }
 }
 
@@ -231,6 +278,9 @@ pub fn ollama_model_to_summary(model: OllamaModel) -> LlmModelSummary {
         supports_multimodal: None,
         supports_tools: None,
         supports_reasoning: None,
+        supports_structured_output: None,
+        metadata_sources: vec![LlmModelMetadataSource::Provider],
+        ..LlmModelSummary::default()
     }
 }
 
@@ -369,9 +419,10 @@ pub fn normalize_token_usage(
     }
 
     Some(TokenUsage {
-        prompt_tokens: prompt_tokens.min(u32::MAX as u64) as u32,
-        completion_tokens: completion_tokens.min(u32::MAX as u64) as u32,
-        total_tokens: normalized_total.min(u32::MAX as u64) as u32,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens: normalized_total,
+        ..TokenUsage::default()
     })
 }
 
@@ -394,11 +445,24 @@ pub fn extract_anthropic_text_response(
     }
 
     let usage = response.get("usage").and_then(|u| {
-        normalize_token_usage(
-            u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
-            u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
-            0,
-        )
+        let input_tokens = u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
+        let output_tokens = u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0);
+        let cached_input_tokens = u
+            .get("cache_read_input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let cache_creation_input_tokens = u
+            .get("cache_creation_input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let total_tokens = input_tokens
+            .saturating_add(output_tokens)
+            .saturating_add(cached_input_tokens)
+            .saturating_add(cache_creation_input_tokens);
+        let mut usage = normalize_token_usage(input_tokens, output_tokens, total_tokens)?;
+        usage.cached_input_tokens = cached_input_tokens;
+        usage.cache_creation_input_tokens = cache_creation_input_tokens;
+        Some(usage)
     });
 
     Ok((text_parts.join("\n"), usage))
@@ -422,7 +486,22 @@ pub fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> 
         .and_then(Value::as_u64)
         .unwrap_or(0);
 
-    normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)
+    let mut normalized = normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)?;
+    normalized.cached_input_tokens = usage
+        .pointer("/prompt_tokens_details/cached_tokens")
+        .or_else(|| usage.pointer("/input_tokens_details/cached_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    normalized.cache_creation_input_tokens = usage
+        .get("cache_creation_input_tokens")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    normalized.reasoning_tokens = usage
+        .pointer("/completion_tokens_details/reasoning_tokens")
+        .or_else(|| usage.pointer("/output_tokens_details/reasoning_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    Some(normalized)
 }
 
 pub fn build_standard_input(req: &StandardLlmRequest) -> String {

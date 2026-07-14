@@ -100,6 +100,8 @@ export const TauriCommand = {
     replaceRaw: 'llm_usage_replace_raw',
   },
   llm: {
+    complete: 'complete_llm',
+    describeModel: 'describe_llm_model',
     generateText: 'generate_llm_text',
     listModels: 'list_llm_models',
     polishTranscriptSegments: 'polish_transcript_segments',

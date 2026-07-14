@@ -151,6 +151,10 @@ describe('llm state', () => {
     });
     llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
       {
+        model: 'manual-model',
+        displayName: 'Manual Model',
+      },
+      {
         model: 'gpt-4.1',
         contextWindow: 100000,
         supportsMultimodal: true,
@@ -162,7 +166,11 @@ describe('llm state', () => {
     ]);
 
     expect(getProviderLlmModels(llmSettings, 'open_ai')).toEqual([
-      expect.objectContaining({ model: 'manual-model', source: 'manual' }),
+      expect.objectContaining({
+        model: 'manual-model',
+        source: 'manual',
+        metadata: expect.objectContaining({ displayName: 'Manual Model' }),
+      }),
       expect.objectContaining({
         model: 'gpt-4.1',
         source: 'discovered',
@@ -314,6 +322,37 @@ describe('llm state', () => {
       contextWindow: true,
       supportsTools: true,
     });
+  });
+
+  it('merges enriched model metadata without replacing user overrides', () => {
+    let llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [{
+      model: 'gpt-4.1',
+      displayName: 'GPT-4.1',
+      cacheReadPrice: 0.5,
+      inputModalities: ['text', 'image'],
+      supportsStructuredOutput: true,
+      metadataSources: ['provider', 'models_dev'],
+    }]);
+    const modelId = findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1')!;
+    llmSettings = updateLlmModelMetadata(llmSettings, modelId, { cacheReadPrice: 0.25 });
+
+    const refreshed = syncProviderDiscoveredModels(llmSettings, 'open_ai', [{
+      model: 'gpt-4.1',
+      displayName: 'GPT 4.1',
+      cacheReadPrice: 0.4,
+      supportsPromptCaching: true,
+      metadataSources: ['models_dev'],
+    }]);
+
+    expect(refreshed.models[modelId]).toEqual(expect.objectContaining({
+      metadata: expect.objectContaining({
+        displayName: 'GPT 4.1',
+        cacheReadPrice: 0.25,
+        supportsPromptCaching: true,
+        metadataSources: ['models_dev'],
+      }),
+      metadataOverrides: expect.objectContaining({ cacheReadPrice: true }),
+    }));
   });
 
   it('keeps edited manual model metadata outside discovered refreshes', () => {

@@ -813,7 +813,7 @@ fn read_only_open_keeps_future_schema_error_semantics() {
         error,
         DatabaseError::UnsupportedSchemaVersion {
             found: 99,
-            current: 1
+            current: 2
         }
     ));
 }
@@ -835,7 +835,7 @@ fn read_only_open_keeps_schema_migration_required_error_semantics() {
         error,
         DatabaseError::SchemaMigrationRequired {
             found: 0,
-            current: 1
+            current: 2
         }
     ));
 }

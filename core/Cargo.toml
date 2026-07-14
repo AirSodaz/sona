@@ -23,6 +23,7 @@ thiserror = "2.0.18"
 futures-util = "0.3"
 toml = "0.8.20"
 infer = "0.16"
+jsonschema = { version = "0.37", default-features = false }
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros"] }

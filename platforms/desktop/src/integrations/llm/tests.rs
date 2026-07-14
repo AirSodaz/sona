@@ -1,6 +1,7 @@
-use super::commands::list_llm_models_command;
+use super::commands::{complete_llm_with_port, list_llm_models_command};
 use super::network::LlmApiUrl;
 use super::*;
+use async_trait::async_trait;
 use futures_util::future::BoxFuture;
 use reqwest::{StatusCode, header::RETRY_AFTER};
 use serde_json::json;
@@ -8,6 +9,10 @@ use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments,
 };
+use sona_core::llm::provider_protocol::StandardLlmResponse;
+use sona_core::llm::runtime::{LlmCompletionOptions, LlmCompletionRequest, LlmResponseFormat};
+use sona_core::llm::usage::TokenUsage;
+use sona_core::ports::llm::{LlmCompletionPort, LlmModelMetadataPort, LlmPortError};
 use std::{
     sync::{
         Arc, Mutex,
@@ -100,6 +105,65 @@ fn sample_llm_config(base_url: &str) -> LlmConfig {
         reasoning_enabled: None,
         reasoning_level: None,
     }
+}
+
+#[derive(Clone)]
+struct FakeRuntimePort;
+
+#[async_trait]
+impl LlmCompletionPort for FakeRuntimePort {
+    async fn complete(
+        &self,
+        _request: LlmCompletionRequest,
+    ) -> Result<StandardLlmResponse, LlmPortError> {
+        Ok(StandardLlmResponse {
+            text: r#"{"answer":42}"#.to_string(),
+            usage: Some(TokenUsage {
+                prompt_tokens: 8,
+                completion_tokens: 2,
+                total_tokens: 10,
+                cached_input_tokens: 4,
+                ..TokenUsage::default()
+            }),
+        })
+    }
+}
+
+#[async_trait]
+impl LlmModelMetadataPort for FakeRuntimePort {
+    async fn describe_model(
+        &self,
+        config: &LlmConfig,
+    ) -> Result<Option<LlmModelSummary>, LlmPortError> {
+        Ok(Some(LlmModelSummary {
+            model: config.model.clone(),
+            supports_structured_output: Some(true),
+            ..LlmModelSummary::default()
+        }))
+    }
+}
+
+#[tokio::test]
+async fn typed_completion_keeps_json_usage_and_execution_metadata() {
+    let response = complete_llm_with_port(
+        LlmCompletionRequest {
+            config: sample_llm_config("https://api.example.com"),
+            system_prompt: None,
+            input: "answer".to_string(),
+            options: LlmCompletionOptions {
+                response_format: LlmResponseFormat::JsonObject,
+                ..LlmCompletionOptions::default()
+            },
+            source: Some(LlmGenerateSource::Generic),
+        },
+        FakeRuntimePort,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.json, Some(json!({"answer": 42})));
+    assert_eq!(response.usage.unwrap().cached_input_tokens, 4);
+    assert_eq!(response.execution.attempts, 1);
 }
 
 #[test]

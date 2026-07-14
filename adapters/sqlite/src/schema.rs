@@ -1,10 +1,12 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 1;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 2;
 type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
-const MIGRATIONS: &[(i64, &str, MigrationFn)] =
-    &[(1, "Initial complete SQLite schema", migrate_v1)];
+const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
+    (1, "Initial complete SQLite schema", migrate_v1),
+    (2, "Preserve detailed LLM token usage", migrate_v2),
+];
 
 /// Runs pending schema migrations in version order.
 ///
@@ -357,6 +359,17 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+fn migrate_v2(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "ALTER TABLE analytics.llm_usage
+             ADD COLUMN cached_input_tokens INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE analytics.llm_usage
+             ADD COLUMN cache_creation_input_tokens INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE analytics.llm_usage
+             ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0;",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,14 +445,14 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![1]);
+        assert_eq!(schema_versions(&db), vec![1, 2]);
     }
 
     #[test]
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (3)", [])?;
             Ok(())
         })
         .unwrap();
@@ -448,11 +461,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 2,
-                current: 1
+                found: 3,
+                current: 2
             }
         ));
-        assert_eq!(schema_versions(&db), vec![1, 2]);
+        assert_eq!(schema_versions(&db), vec![1, 2, 3]);
     }
 
     #[test]
@@ -466,7 +479,7 @@ mod tests {
 
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![0, 1]);
+        assert_eq!(schema_versions(&db), vec![0, 1, 2]);
     }
 
     #[test]

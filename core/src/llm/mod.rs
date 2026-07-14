@@ -1,7 +1,9 @@
 pub mod jobs;
+pub mod model_catalog;
 pub mod provider_protocol;
 pub mod providers;
 pub mod requests;
+pub mod runtime;
 pub mod streaming_protocol;
 pub mod tasks;
 pub mod usage;
