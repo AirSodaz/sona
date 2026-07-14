@@ -1,4 +1,4 @@
-package com.sona.android.app
+package com.sona.android.app.navigation
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.sona.android.app.R
 
 enum class SonaDestination(
     val route: String,

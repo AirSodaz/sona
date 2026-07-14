@@ -1,4 +1,4 @@
-package com.sona.android.adapters.uniffi
+package com.sona.android.adapters.uniffi.bootstrap
 
 import com.sona.android.application.bootstrap.SonaBootstrapPort
 import com.sona.android.application.bootstrap.SonaBootstrapSnapshot

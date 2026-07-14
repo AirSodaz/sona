@@ -145,6 +145,13 @@ host boundary explicit:
 - `:app` owns Android lifecycle, adaptive Compose navigation, and dependency
   composition.
 
+Kotlin sources stay feature-first inside those module boundaries. The app keeps
+dependency construction under `composition`, navigation under `navigation`, and
+screen-specific state and UI under `feature/<name>`. The application recording
+slice keeps its models and policies together while separating credential,
+microphone, streaming, history, and system ports into cohesive files. Android
+framework and UniFFI implementations remain grouped by adapter capability.
+
 The recording adapter captures 16 kHz mono PCM16 from the platform
 `VOICE_RECOGNITION` source. Accepted audio is written to a checkpointing WAV
 file before it is offered to streaming ASR as 640-byte frames. The non-blocking

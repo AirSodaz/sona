@@ -1,4 +1,4 @@
-package com.sona.android.app
+package com.sona.android.app.feature.bootstrap
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -23,7 +23,7 @@ sealed interface SonaBootstrapUiState {
     ) : SonaBootstrapUiState
 }
 
-class SonaViewModel(
+class SonaBootstrapViewModel(
     private val loadSonaBootstrap: LoadSonaBootstrap,
 ) : ViewModel() {
     private val mutableBootstrapState = MutableStateFlow<SonaBootstrapUiState>(
@@ -53,8 +53,8 @@ class SonaViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    require(modelClass.isAssignableFrom(SonaViewModel::class.java))
-                    return SonaViewModel(loadSonaBootstrap) as T
+                    require(modelClass.isAssignableFrom(SonaBootstrapViewModel::class.java))
+                    return SonaBootstrapViewModel(loadSonaBootstrap) as T
                 }
             }
     }

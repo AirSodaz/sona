@@ -153,6 +153,7 @@ test('Android UniFFI adapter is the only outbound binding owner', () => {
     'android',
     'adapters',
     'uniffi',
+    'bootstrap',
     'UniffiSonaBootstrapAdapter.kt',
   );
 
@@ -192,9 +193,13 @@ test('Android UniFFI adapter is the only outbound binding owner', () => {
 });
 
 test('Android recording platform adapters enforce capture and credential boundaries', () => {
-  const recordingPorts = readClientFile(
+  const credentialPorts = readClientFile(
     'application', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'application',
-    'recording', 'RecordingPorts.kt',
+    'recording', 'CredentialPorts.kt',
+  );
+  const microphonePorts = readClientFile(
+    'application', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'application',
+    'recording', 'MicrophonePorts.kt',
   );
   const captureSession = readClientFile(
     'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
@@ -218,9 +223,12 @@ test('Android recording platform adapters enforce capture and credential boundar
   );
   const adapterManifest = readClientFile('adapters', 'android', 'src', 'main', 'AndroidManifest.xml');
 
-  const settingsContract = declarationBody(recordingPorts, 'interface StreamingCredentialSettingsPort');
+  const settingsContract = declarationBody(
+    credentialPorts,
+    'interface StreamingCredentialSettingsPort',
+  );
   const resolverContract = declarationBody(
-    recordingPorts,
+    credentialPorts,
     'fun interface StreamingCredentialResolverPort',
   );
   assert.match(settingsContract, /val status: Flow<CredentialStatus>/u);
@@ -234,10 +242,10 @@ test('Android recording platform adapters enforce capture and credential boundar
   );
 
   assert.match(
-    recordingPorts,
+    microphonePorts,
     /enum class MicrophoneCaptureFailureKind\s*\{\s*AUDIO_READ,\s*STORAGE_WRITE,\s*\}/u,
   );
-  assert.match(recordingPorts, /data object StreamingQueueOverflow : MicrophoneCaptureEvent/u);
+  assert.match(microphonePorts, /data object StreamingQueueOverflow : MicrophoneCaptureEvent/u);
   const captureBody = declarationBody(captureSession, 'class AndroidMicrophoneCaptureSession');
   const capturePump = declarationBody(captureSession, 'private suspend fun pumpAudio()');
   const overflowHandler = declarationBody(
@@ -353,16 +361,32 @@ test('Android Compose shell is native, adaptive, and wired at one composition ro
     'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'MainActivity.kt',
   );
   const container = readClientFile(
-    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaAppContainer.kt',
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'composition',
+    'SonaAppContainer.kt',
   );
   const app = readClientFile(
-    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaApp.kt',
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation',
+    'SonaApp.kt',
   );
   const destinations = readClientFile(
-    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaDestination.kt',
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation',
+    'SonaDestination.kt',
   );
   const viewModel = readClientFile(
-    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaViewModel.kt',
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'bootstrap',
+    'SonaBootstrapViewModel.kt',
+  );
+  const recordScreen = readClientFile(
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
+    'RecordScreen.kt',
+  );
+  const libraryScreen = readClientFile(
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'library',
+    'LibraryScreen.kt',
+  );
+  const settingsScreen = readClientFile(
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
+    'SettingsScreen.kt',
   );
   const theme = readClientFile(
     'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'ui', 'theme', 'SonaTheme.kt',
@@ -376,15 +400,17 @@ test('Android Compose shell is native, adaptive, and wired at one composition ro
   assert.match(container, /UniffiSonaBootstrapAdapter\(\)/u);
   assert.match(container, /LoadSonaBootstrap\(/u);
   assert.match(viewModel, /sealed interface SonaBootstrapUiState/u);
+  assert.match(viewModel, /class SonaBootstrapViewModel/u);
   assert.match(viewModel, /viewModelScope\.launch/u);
 
   assert.match(app, /NavigationSuiteScaffold\(/u);
   assert.match(app, /rememberNavController\(\)/u);
   assert.match(app, /NavHost\(/u);
-  assert.match(app, /SingleChoiceSegmentedButtonRow\(/u);
   assert.match(app, /dynamicColorEnabled/u);
-  assert.match(app, /Switch\(/u);
-  assert.match(app, /enabled\s*=\s*false/u);
+  assert.match(recordScreen, /SingleChoiceSegmentedButtonRow\(/u);
+  assert.match(recordScreen, /enabled\s*=\s*false/u);
+  assert.match(libraryScreen, /fun LibraryScreen\(\)/u);
+  assert.match(settingsScreen, /Switch\(/u);
   assert.match(destinations, /RECORD/u);
   assert.match(destinations, /LIBRARY/u);
   assert.match(destinations, /SETTINGS/u);
@@ -531,7 +557,8 @@ test('Android client theme remains API 23 compatible and declares branded launch
 
 test('Android bootstrap linkage failures are mapped into the error UI state', () => {
   const viewModel = readClientFile(
-    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaViewModel.kt',
+    'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'bootstrap',
+    'SonaBootstrapViewModel.kt',
   );
   assert.match(viewModel, /catch \(error: LinkageError\)/u);
   assert.match(viewModel, /SonaBootstrapUiState\.Error\(error\.message\.orEmpty\(\)\)/u);

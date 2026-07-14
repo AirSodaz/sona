@@ -7,6 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sona.android.app.composition.SonaAppContainer
+import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
+import com.sona.android.app.navigation.SonaApp
 
 class MainActivity : ComponentActivity() {
     private val container by lazy { SonaAppContainer() }
@@ -15,13 +18,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val sonaViewModel: SonaViewModel = viewModel(
-                factory = SonaViewModel.factory(container.loadSonaBootstrap),
+            val bootstrapViewModel: SonaBootstrapViewModel = viewModel(
+                factory = SonaBootstrapViewModel.factory(container.loadSonaBootstrap),
             )
-            val bootstrapState by sonaViewModel.bootstrapState.collectAsStateWithLifecycle()
+            val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             SonaApp(
                 bootstrapState = bootstrapState,
-                onRetryBootstrap = sonaViewModel::refresh,
+                onRetryBootstrap = bootstrapViewModel::refresh,
             )
         }
     }
