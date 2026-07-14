@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { repoRoot } from './repository.js';
+import { repoRoot } from './repo-root.js';
 
 const node = process.execPath;
 function makeTempRepo() {

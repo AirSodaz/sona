@@ -22,37 +22,15 @@ Recommended branch names:
 
 Agent-assisted branches can also use a `codex/...` prefix, for example `codex/feat-workspace-search`.
 
-## Local setup
+## Local setup and validation
 
-Install dependencies:
+Follow the [development guide](docs/development.md) for prerequisites, installation, development commands, and source builds.
 
-```bash
-corepack enable
-pnpm install
-```
-
-Start the app in development:
-
-```bash
-pnpm run tauri dev
-```
-
-Run frontend tests:
+Run the smallest validation that covers your change. Common frontend and script checks are:
 
 ```bash
 pnpm test
-```
-
-Build the app:
-
-```bash
-pnpm run build
-```
-
-Verify the packaged CLI bundle when you touch packaging or CLI behavior:
-
-```bash
-pnpm run verify:cli-bundle
+pnpm run test:scripts
 ```
 
 Run the CI-style frontend gates before opening broad PRs:
@@ -157,12 +135,8 @@ Before opening a PR:
 - Update repo docs for user-visible workflow or settings changes.
 - Include screenshots or video for UI changes when they help reviewers.
 
-The main repo doc surfaces to check are:
-
-- `README.md`
-- `README.zh-CN.md`
-- `docs/user-guide.md`
-- `docs/user-guide.zh-CN.md`
+The main repo doc surfaces to check are the bilingual root README, user guide,
+CLI guide, and development guide.
 
 If your branch intentionally leaves unrelated working tree changes out of the PR, say so clearly in the PR description.
 

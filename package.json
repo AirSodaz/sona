@@ -30,8 +30,7 @@
     "@commitlint/cli": "^21.1.0",
     "@commitlint/config-conventional": "^21.1.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.8",
-    "yaml": "^2.9.0"
+    "lint-staged": "^17.0.8"
   },
   "lint-staged": {
     "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "pnpm run lint:staged --"

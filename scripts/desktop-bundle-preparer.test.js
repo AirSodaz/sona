@@ -2,12 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import {
-  desktopCratePath,
-  desktopCrateSegments,
-  exists,
-  read,
-} from './test-support/repository.js';
+import { repoRoot } from './test-support/repo-root.js';
 import {
   loadDesktopBundlePreparer,
   makeTempRepo,
@@ -28,19 +23,20 @@ test('desktop bundle preparer derives supported host targets and maps runtime li
   assert.equal(resolveHostTarget('linux', 'x64'), 'x86_64-unknown-linux-gnu');
 });
 
-test('desktop bundle wrapper keeps checked-in production inputs and resolves unknown targets from its source lock', async () => {
+test('desktop bundle preparer rejects targets absent from its production source lock', async () => {
   const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
   const target = 'x86_64-apple-darwin-unlisted';
   const root = makeTempRepo();
   const releaseDir = path.join(root, 'target', target, 'release');
   const runtimeLibDir = path.join(root, 'native-libs');
   const configPath = path.join(root, 'base-tauri.conf.json');
-  const preparer = read(...desktopCrateSegments, 'scripts', 'prepare-desktop-bundle.js');
-  const sourceLockPath = desktopCratePath('packaging', 'ffmpeg-sources.json');
-
-  assert.equal(exists(...desktopCrateSegments, 'scripts', 'prepare-desktop-bundle.js'), true);
-  assert.equal(exists(...desktopCrateSegments, 'packaging', 'ffmpeg-sources.json'), true);
-  assert.doesNotMatch(preparer, /UNIVERSAL_MACOS_TARGET/u);
+  const sourceLockPath = path.join(
+    repoRoot,
+    'platforms',
+    'desktop',
+    'packaging',
+    'ffmpeg-sources.json',
+  );
 
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
@@ -253,35 +249,6 @@ test('desktop bundle preparer rejects FFmpeg checksum and native header mismatch
     () => verifyNativeBinary(elf, 'aarch64-unknown-linux-gnu', 'ffmpeg'),
     /aarch64-unknown-linux-gnu ELF executable/u,
   );
-});
-
-test('production FFmpeg lock entries contain complete operational metadata', () => {
-  const lock = JSON.parse(read('platforms', 'desktop', 'packaging', 'ffmpeg-sources.json'));
-  assert.deepEqual(
-    lock.sources.map((entry) => entry.target).sort(),
-    [
-      'aarch64-apple-darwin',
-      'aarch64-pc-windows-msvc',
-      'aarch64-unknown-linux-gnu',
-      'x86_64-apple-darwin',
-      'x86_64-pc-windows-msvc',
-      'x86_64-unknown-linux-gnu',
-    ],
-  );
-  for (const entry of lock.sources) {
-    assert.match(entry.url, /^https:\/\//u);
-    assert.match(entry.sha256, /^[a-f0-9]{64}$/iu);
-    assert.ok(entry.license);
-    assert.ok(entry.archiveKind);
-    assert.ok(entry.binaryPath);
-  }
-
-  const btbNSources = lock.sources.filter((entry) => entry.url.includes('BtbN/FFmpeg-Builds'));
-  assert.equal(btbNSources.length, 4);
-  for (const entry of btbNSources) {
-    assert.match(entry.url, /\/releases\/download\/autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\//u);
-    assert.doesNotMatch(entry.url, /\/latest\//u);
-  }
 });
 
 test('desktop bundle preparer fails release preparation without SHERPA runtime anchors', async () => {

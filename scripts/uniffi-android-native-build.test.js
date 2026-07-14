@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { repoRoot } from './test-support/repository.js';
+import { repoRoot } from './test-support/repo-root.js';
 import {
   androidNdkAbiCases,
   androidNdkToolPaths,

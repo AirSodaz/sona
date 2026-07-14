@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { repoRoot } from './repository.js';
+import { repoRoot } from './repo-root.js';
 
 const node = process.execPath;
 const androidNdkAbiCases = [

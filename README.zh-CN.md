@@ -29,111 +29,15 @@
 
 如果您想查看面向终端用户的完整使用说明，请阅读[用户指南](docs/user-guide.zh-CN.md)。其中包含首次设置、`Live Record`、`Batch Import`、`工作区` / `项目` / `Inbox`、转录编辑、说话人校对、版本快照、LLM 功能、`语音输入法`、导出、`仪表盘` / 备份 / 恢复入口，以及常见问题。
 
-### CLI
+## 📚 文档中心
 
-Sona 现在通过独立的 `sona-cli` 二进制提供命令行工作流。桌面 Tauri 应用不再解析 CLI 子命令；release 和 nightly 构建会把同平台的 `sona-cli` 放进桌面安装包资源中，因此它可以复用随包携带的 Sherpa-onnx 动态链接库。
+根据您要完成的工作选择对应文档：
 
-安装包说明：
-
-- Windows/macOS/Linux 安装包会包含与平台匹配的 `sona-cli` 资源。
-- `sona-cli` 与桌面可执行文件相互独立，也可以单独构建为发布二进制。
-
-如果您是从源码构建，可以直接在 workspace 中运行或构建 CLI：
-
-```bash
-cargo run -p sona-cli -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
-cargo run -p sona-cli -- transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
-cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
-pnpm run build:sona-cli
-```
-
-当前独立 CLI 范围：
-
-- 单文件离线转写
-- 使用本地流式模型实时转写麦克风或原始 stdin 音频
-- 预置模型列表查看、模型下载与模型删除
-- 从已有 segment JSON 导出转录
-- 共享的历史列表、工作区查询、转录/快照查看与写操作
-- 备份归档导出、检查与显式确认后的恢复
-- 通过 `sona-cli serve` 启动共享本地 HTTP API 服务
-- 运行时路径状态检查
-- 带注释的 `sona-cli.toml` 初始模板生成
-
-完整 CLI 说明和 `sona-cli init-config` TOML 模板工作流请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
-
-### 从源码构建
-
-#### 前置条件
-
-*   **Node.js**: v20 或更高版本 (用于构建前端)。
-*   **Rust**: 稳定版 (用于 Tauri 后端)。
-*   **包管理器**: 通过 Corepack 使用 `pnpm` (推荐)。
-
-##### Linux 依赖
-如果您使用的是 Linux (Ubuntu/Debian)，请确保您已安装必要的系统依赖：
-
-```bash
-sudo apt-get update
-sudo apt-get install libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    file \
-    libssl-dev \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libasound2-dev
-```
-
-#### 安装步骤
-
-1.  **克隆仓库**
-    ```bash
-    git clone https://github.com/AirSodaz/sona.git
-    cd sona
-    ```
-
-2.  **安装依赖**
-    ```bash
-    corepack enable
-    pnpm install
-    ```
-
-3.  **运行应用**
-    ```bash
-    pnpm run tauri dev
-    ```
-
-4.  **运行前端测试**
-    ```bash
-    pnpm test
-    ```
-
-## 📦 模型管理
-
-Sona 允许您选择最适合您需求的 AI 模型，无论是离线转录还是在线助手。
-
-### 离线转录
-1.  进入 **Settings > Model Settings**（设置 > 模型设置）。
-2.  从精心挑选的高性能模型列表中进行选择：
-    *   **SenseVoice**：多语言支持和情感识别的最佳选择。
-    *   **Whisper (Tiny)**：OpenAI Whisper 模型的轻量级版本。
-    *   **Paraformer**：专为流式识别优化。
-3.  点击 **Download**（下载）。模型将自动保存在本地。
-
-### LLM 助手（润色、翻译与摘要）
-1.  进入 **Settings > LLM Service**（设置 > LLM 服务）。
-2.  选择您的服务提供商（OpenAI、Anthropic、Gemini 或 Ollama）。
-3.  输入您的 API 密钥和 Base URL（如果适用）。
-4.  选择为润色、翻译和摘要生成提供支持的模型。
-
-## 🏗️ 构建
-
-要构建生产环境用的应用程序：
-
-```bash
-pnpm run tauri build
-```
-
-桌面安装包会根据构建目标生成在 `target/release/bundle` 或 `target/<triple>/release/bundle` 目录中。
+| 文档 | 内容 | 语言 |
+| --- | --- | --- |
+| 用户指南 | 安装、首次设置、转录、编辑和导出 | [简体中文](docs/user-guide.zh-CN.md) · [English](docs/user-guide.md) |
+| CLI 指南 | 独立命令、自动化、实时转录和配置 | [简体中文](docs/cli.zh-CN.md) · [English](docs/cli.md) |
+| HTTP API 参考 | 服务配置、认证、接口和 Webhook | [简体中文](docs/api.zh-CN.md) · [English](docs/api.md) |
+| 开发指南 | 本地环境、测试、桌面构建和 CLI 构建 | [简体中文](docs/development.zh-CN.md) · [English](docs/development.md) |
+| Nightly 工作流 | Nightly 触发条件、构建任务、产物和发布 | [简体中文](docs/nightly-workflow.zh-CN.md) · [English](docs/nightly-workflow.md) |
+| 参与贡献 | 分支、验证、提交和 Pull Request 要求 | [English](CONTRIBUTING.md) |

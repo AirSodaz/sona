@@ -28,7 +28,7 @@ For most users, the simplest path is the latest release build:
 
 - Download Sona from [GitHub Releases](https://github.com/AirSodaz/sona/releases/latest).
 - Launch the app.
-- If you are building from source, use the setup instructions in the [project README](../README.md).
+- If you are building from source, use the setup instructions in the [development guide](development.md).
 
 When Sona opens for the first time, it can block the main workflow with `First Run Setup`. If you defer setup, Sona can later show a reminder banner until the required offline setup is complete.
 
@@ -480,4 +480,4 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### I want to build or develop Sona
 
-- Use the [project README](../README.md) for source builds and development commands.
+- Use the [development guide](development.md) for source builds and development commands.

@@ -29,111 +29,15 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, speaker review, version snapshots, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
 
-### CLI
+## 📚 Documentation
 
-Sona ships command-line workflows through the standalone `sona-cli` binary. The desktop Tauri app no longer parses CLI subcommands; release and nightly builds stage `sona-cli` into the same-platform desktop installer resources so it can share the bundled Sherpa-onnx dynamic libraries.
+Choose the guide that matches what you want to do:
 
-Installed package notes:
-
-- Windows/macOS/Linux packages include the matching `sona-cli` resource beside the desktop bundle resources.
-- `sona-cli` is independent from the desktop executable and can also be built as its own release binary.
-
-Source builds can run or build the CLI directly from the workspace:
-
-```bash
-cargo run -p sona-cli -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
-cargo run -p sona-cli -- transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
-cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
-pnpm run build:sona-cli
-```
-
-Current standalone CLI scope:
-
-- Single-file offline transcription
-- Real-time microphone or raw-stdin transcription with local streaming models
-- Preset model listing, downloads, and deletion
-- Transcript export from existing segment JSON
-- Shared history listing, workspace query, transcript/snapshot inspection, and mutations
-- Backup archive export, inspection, and confirmed restore
-- Shared local HTTP API server via `sona-cli serve`
-- Runtime path status inspection
-- Commented `sona-cli.toml` starter generation
-
-For the full CLI guide and the `sona-cli init-config` TOML template workflow, read [docs/cli.md](docs/cli.md).
-
-### Build from Source
-
-#### Prerequisites
-
-*   **Node.js**: v20 or later (for frontend build).
-*   **Rust**: Stable release (required for the Tauri backend).
-*   **Package Manager**: `pnpm` via Corepack (recommended).
-
-##### Linux Requirements
-If you are running on Linux (Ubuntu/Debian), ensure you have the necessary system dependencies:
-
-```bash
-sudo apt-get update
-sudo apt-get install libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    file \
-    libssl-dev \
-    libgtk-3-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libasound2-dev
-```
-
-#### Installation
-
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/AirSodaz/sona.git
-    cd sona
-    ```
-
-2.  **Install dependencies**
-    ```bash
-    corepack enable
-    pnpm install
-    ```
-
-3.  **Run the application**
-    ```bash
-    pnpm run tauri dev
-    ```
-
-4.  **Run frontend tests**
-    ```bash
-    pnpm test
-    ```
-
-## 📦 Model Management
-
-Sona allows you to choose the AI model that best fits your needs, both for offline transcription and online assistance.
-
-### Offline Transcription
-1.  Navigate to **Settings > Model Settings**.
-2.  Choose from a curated list of high-performance models:
-    *   **SenseVoice**: Best for multilingual support and emotion recognition.
-    *   **Whisper (Tiny)**: Lightweight version of OpenAI's Whisper model.
-    *   **Paraformer**: Optimized for streaming.
-3.  Click **Download**. The model will be automatically stored locally.
-
-### LLM Assistant (Polish, Translate, Summary)
-1.  Navigate to **Settings > LLM Service**.
-2.  Select your provider (OpenAI, Anthropic, Gemini, or Ollama).
-3.  Enter your API Key and Base URL (if applicable).
-4.  Select the models that power polish, translation, and summary generation.
-
-## 🏗️ Building
-
-To build the application for production:
-
-```bash
-pnpm run tauri build
-```
-
-Desktop bundles are generated under `target/release/bundle` or `target/<triple>/release/bundle` depending on the build target.
+| Resource | What it covers | Languages |
+| --- | --- | --- |
+| User Guide | Installation, first-run setup, transcription, editing, and export | [English](docs/user-guide.md) · [简体中文](docs/user-guide.zh-CN.md) |
+| CLI Guide | Standalone commands, automation, live transcription, and configuration | [English](docs/cli.md) · [简体中文](docs/cli.zh-CN.md) |
+| HTTP API Reference | Server configuration, authentication, endpoints, and webhooks | [English](docs/api.md) · [简体中文](docs/api.zh-CN.md) |
+| Development Guide | Local setup, testing, desktop builds, and CLI builds | [English](docs/development.md) · [简体中文](docs/development.zh-CN.md) |
+| Nightly Workflow | Nightly triggers, build jobs, artifacts, and publishing | [English](docs/nightly-workflow.md) · [简体中文](docs/nightly-workflow.zh-CN.md) |
+| Contributing | Branches, validation, commits, and pull request expectations | [English](CONTRIBUTING.md) |

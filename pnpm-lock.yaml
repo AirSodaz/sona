@@ -23,9 +23,6 @@ importers:
       lint-staged:
         specifier: ^17.0.8
         version: 17.0.8
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
 
   platforms/desktop/frontend:
     dependencies:
@@ -4228,7 +4225,8 @@ snapshots:
 
   yallist@3.1.1: {}
 
-  yaml@2.9.0: {}
+  yaml@2.9.0:
+    optional: true
 
   yargs-parser@22.0.0: {}
 
