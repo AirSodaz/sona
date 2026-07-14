@@ -43,7 +43,7 @@ jobs:
           java-version: 17
 
       - name: Android SDK setup
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: >-
             platforms;android-37.0

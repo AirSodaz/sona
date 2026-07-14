@@ -118,7 +118,7 @@ jobs:
         run: rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Android SDK setup
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: >-
             platforms;android-37.0
