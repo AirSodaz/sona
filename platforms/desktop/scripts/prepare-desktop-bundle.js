@@ -7,6 +7,9 @@ import { gunzipSync } from 'node:zlib';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DOWNLOAD_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_DELAY_MS = 1_000;
+
 export function resolveHostTarget(platform = process.platform, arch = process.arch) {
   if (platform === 'win32') {
     return arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
@@ -106,15 +109,50 @@ async function stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRo
   fs.rmSync(extractionRoot, { recursive: true, force: true });
 }
 
-async function readDownload(url) {
+export async function readDownload(
+  url,
+  {
+    fetchImpl = globalThis.fetch,
+    waitForRetry = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+  } = {},
+) {
   if (url.startsWith('file:')) {
     return fs.readFileSync(fileURLToPath(url));
   }
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Unable to download FFmpeg source ${url}: ${response.status} ${response.statusText}`);
+
+  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
+    let response;
+    try {
+      response = await fetchImpl(url);
+      if (response.ok) {
+        return Buffer.from(await response.arrayBuffer());
+      }
+    } catch (error) {
+      if (attempt === DOWNLOAD_ATTEMPTS) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Unable to download FFmpeg source ${url} after ${DOWNLOAD_ATTEMPTS} attempts: ${message}`,
+          { cause: error },
+        );
+      }
+      await waitForRetry(DOWNLOAD_RETRY_DELAY_MS * attempt);
+      continue;
+    }
+
+    const httpError = new Error(
+      `Unable to download FFmpeg source ${url}: ${response.status} ${response.statusText}`,
+    );
+    if (!isRetryableDownloadStatus(response.status) || attempt === DOWNLOAD_ATTEMPTS) {
+      throw httpError;
+    }
+    await waitForRetry(DOWNLOAD_RETRY_DELAY_MS * attempt);
   }
-  return Buffer.from(await response.arrayBuffer());
+
+  throw new Error(`Unable to download FFmpeg source ${url}.`);
+}
+
+function isRetryableDownloadStatus(status) {
+  return [408, 425, 429].includes(status) || (status >= 500 && status <= 599);
 }
 
 export function verifySha256(content, expectedHash, sourceUrl) {

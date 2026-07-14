@@ -23,6 +23,28 @@ test('desktop bundle preparer derives supported host targets and maps runtime li
   assert.equal(resolveHostTarget('linux', 'x64'), 'x86_64-unknown-linux-gnu');
 });
 
+test('desktop bundle downloader retries transient fetch failures', async () => {
+  const { readDownload } = await loadDesktopBundlePreparer();
+  let attempts = 0;
+  const retryDelays = [];
+
+  const archive = await readDownload('https://example.invalid/ffmpeg.zip', {
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts < 3) throw new TypeError('fetch failed');
+      return {
+        ok: true,
+        arrayBuffer: async () => Buffer.from('ffmpeg'),
+      };
+    },
+    waitForRetry: async (delayMs) => retryDelays.push(delayMs),
+  });
+
+  assert.equal(archive.toString(), 'ffmpeg');
+  assert.equal(attempts, 3);
+  assert.deepEqual(retryDelays, [1_000, 2_000]);
+});
+
 test('desktop bundle preparer rejects targets absent from its production source lock', async () => {
   const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
   const target = 'x86_64-apple-darwin-unlisted';

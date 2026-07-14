@@ -8,7 +8,6 @@
     <string name="engine_label">识别引擎</string>
     <string name="engine_online">在线</string>
     <string name="engine_local">本地</string>
-    <string name="record_timer_idle">00:00</string>
     <string name="record_action_description">开始录音</string>
     <string name="stop_recording_action_description">停止录音</string>
     <string name="status_preparing">准备中</string>
