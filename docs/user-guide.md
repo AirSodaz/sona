@@ -34,7 +34,7 @@ When Sona opens for the first time, it can block the main workflow with `First R
 
 ### Need CLI?
 
-If you want command-line batch transcription, read the dedicated [CLI guide](cli.md). This user guide stays focused on the desktop app.
+If you want command-line file or live transcription, model management, history/export/backup automation, or the local HTTP API server, read the dedicated [CLI guide](cli.md). This user guide stays focused on the desktop app.
 
 ## 3. First Run Setup
 
@@ -155,15 +155,16 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 1. Review the segment list in the editor.
 2. Click a timestamp to seek playback to that time.
 3. Double-click segment text, or use the edit action, to start editing.
-4. Press `Enter` to save the current segment.
-5. Press `Shift + Enter` to split the current segment at the cursor.
-6. Use the merge action to combine a segment with the next one.
-7. Use the delete action to remove a segment after confirmation.
-8. Press `Ctrl + F` to search inside the transcript.
-9. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
-10. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
-11. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
-12. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft workspace item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
+4. Right-click a read-only segment for `Copy` and `Select All`. While editing, right-click for `Cut`, `Copy`, `Paste`, `Select All`, `Bold`, `Italic`, and `Underline`; the keyboard context-menu key or `Shift + F10` opens the same menu.
+5. Press `Enter` to save the current segment.
+6. Press `Shift + Enter` to split the current segment at the cursor.
+7. Use the merge action to combine a segment with the next one.
+8. Use the delete action to remove a segment after confirmation.
+9. Press `Ctrl + F` to search inside the transcript.
+10. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
+11. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
+12. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
+13. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft workspace item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
 
 ### Result
 
@@ -294,8 +295,9 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 5. Open a project when you want new recordings or imports to stay attached to that project.
 6. Use the project header buttons to start `Live Record` or open `Batch Import` while keeping the current project context.
 7. Click any saved item to open it in the built-in detail pane and continue editing without leaving `Workspace`.
-8. Use search, filters, sort, and `List View` / `Grid View` / `Table View` to narrow the current scope.
-9. Turn on selection mode if you want to move items between `Inbox` and projects, or delete several items at once.
+8. Right-click a project for `Open` or `Project Settings`, and right-click a saved item for `Open`, `Rename`, or `Delete`. The keyboard context-menu key or `Shift + F10` opens the same actions for the focused row.
+9. Use search, filters, sort, and `List View` / `Grid View` / `Table View` to narrow the current scope.
+10. Turn on selection mode if you want to move items between `Inbox` and projects, or delete several items at once.
 
 ### Project Settings
 

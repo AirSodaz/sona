@@ -42,6 +42,7 @@ Sona 现在通过独立的 `sona-cli` 二进制提供命令行工作流。桌面
 
 ```bash
 cargo run -p sona-cli -- transcribe ./sample.mp4 -c ./sona-cli.toml --output ./sample.srt
+cargo run -p sona-cli -- transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
 pnpm run build:sona-cli
 ```
@@ -49,7 +50,11 @@ pnpm run build:sona-cli
 当前独立 CLI 范围：
 
 - 单文件离线转写
+- 使用本地流式模型实时转写麦克风或原始 stdin 音频
 - 预置模型列表查看、模型下载与模型删除
+- 从已有 segment JSON 导出转录
+- 共享的历史列表、工作区查询、转录/快照查看与写操作
+- 备份归档导出、检查与显式确认后的恢复
 - 通过 `sona-cli serve` 启动共享本地 HTTP API 服务
 - 运行时路径状态检查
 - 带注释的 `sona-cli.toml` 初始模板生成
