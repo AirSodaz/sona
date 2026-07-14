@@ -206,12 +206,21 @@ microphone, recording callback, privacy-sensitive capture, and Android Keystore
 behavior must run on API 23 and API 37 emulators as the device QA gate.
 
 GitHub Actions uses `.github/workflows/android-client.yml` as the reusable
-Android build entry point. Stable and nightly workflows call it with both ABIs,
-publish the two APKs as separate workflow artifacts, and attach both files to
-tagged or nightly GitHub releases. A manually dispatched Android workflow uses
-the same build and verification path.
+Android build entry point. Stable and nightly workflows call it with both ABIs
+and build debug-signed plus unsigned release APKs, producing four files for a
+tagged or nightly GitHub release. A manually dispatched Android workflow uses
+the stable channel by default and follows the same build and verification path.
+
+Stable builds use the application ID `com.sona.android`, the application name
+`Sona`, and the version defaults from the app Gradle configuration. Nightly
+builds pass `SONA_ANDROID_CHANNEL=nightly` together with the workflow version
+and run number, producing `com.sona.android.nightly`, `Sona Nightly`, and a
+monotonically increasing nightly version. The separate application IDs let both
+channels be installed together, with independent Android app data and stored
+credentials.
 
 These CI outputs are currently debug-signed preview packages. They are
-installable for testing, but they are not production-signed and a package from
-one CI run may need to be uninstalled before installing a package signed by a
-different run's generated debug key.
+installable for testing, while the release APKs remain unsigned. The workflows
+do not use a persistent Android signing key, so a debug package from one CI run
+may need to be uninstalled before installing a package signed by a different
+run's generated debug key.

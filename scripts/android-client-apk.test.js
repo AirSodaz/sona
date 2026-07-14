@@ -4,6 +4,47 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+async function loadAndroidClientVerifier() {
+  try {
+    return await import('./android-client-apk.js');
+  } catch (error) {
+    assert.fail(`Android client APK verifier module is unavailable: ${error.message}`);
+  }
+}
+
+function createOutputMetadata({
+  applicationId,
+  variantName,
+  versionCode,
+  versionName,
+  abis,
+  fileSuffix,
+}) {
+  return {
+    version: 3,
+    artifactType: {
+      type: 'APK',
+      kind: 'Directory',
+    },
+    applicationId,
+    variantName,
+    elements: abis.map((abi) => ({
+      type: 'SINGLE',
+      filters: [
+        {
+          filterType: 'ABI',
+          value: abi,
+        },
+      ],
+      attributes: [],
+      versionCode,
+      versionName,
+      outputFile: `app-${abi}-${fileSuffix}.apk`,
+    })),
+    elementType: 'File',
+  };
+}
+
 function createStoredZip(entryNames) {
   const localEntries = [];
   const centralEntries = [];
@@ -40,12 +81,7 @@ function createStoredZip(entryNames) {
 }
 
 test('APK verification rejects every required native library under a foreign ABI', async () => {
-  let verifyAndroidClientApk;
-  try {
-    ({ verifyAndroidClientApk } = await import('./android-client-apk.js'));
-  } catch (error) {
-    assert.fail(`Android client APK verifier module is unavailable: ${error.message}`);
-  }
+  const { verifyAndroidClientApk } = await loadAndroidClientVerifier();
 
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-client-apk-'));
   const apkPath = path.join(fixtureRoot, 'app-arm64-v8a-debug.apk');
@@ -78,6 +114,138 @@ test('APK verification rejects every required native library under a foreign ABI
     assert.throws(
       () => verifyAndroidClientApk(apkPath, 'arm64-v8a'),
       /Unexpected lib\/armeabi-v7a\/libonnxruntime\.so/u,
+    );
+  } finally {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('Android build identity resolves stable defaults and explicit nightly values', async () => {
+  const { resolveAndroidClientBuildIdentity } = await loadAndroidClientVerifier();
+
+  assert.deepEqual(resolveAndroidClientBuildIdentity({}), {
+    channel: 'stable',
+    applicationId: 'com.sona.android',
+    appName: 'Sona',
+    versionCode: 1,
+    versionName: '0.8.0',
+  });
+
+  assert.deepEqual(resolveAndroidClientBuildIdentity({
+    SONA_ANDROID_CHANNEL: ' nightly ',
+    SONA_ANDROID_VERSION_CODE: '123',
+    SONA_ANDROID_VERSION_NAME: ' 0.8.0-123 ',
+  }), {
+    channel: 'nightly',
+    applicationId: 'com.sona.android.nightly',
+    appName: 'Sona Nightly',
+    versionCode: 123,
+    versionName: '0.8.0-123',
+  });
+});
+
+test('Android build identity rejects invalid channel and version values', async () => {
+  const { resolveAndroidClientBuildIdentity } = await loadAndroidClientVerifier();
+
+  assert.throws(
+    () => resolveAndroidClientBuildIdentity({ SONA_ANDROID_CHANNEL: 'preview' }),
+    /SONA_ANDROID_CHANNEL must be stable or nightly/u,
+  );
+  assert.throws(
+    () => resolveAndroidClientBuildIdentity({
+      SONA_ANDROID_CHANNEL: 'nightly',
+      SONA_ANDROID_VERSION_CODE: '123',
+    }),
+    /SONA_ANDROID_VERSION_NAME is required for nightly builds/u,
+  );
+  assert.throws(
+    () => resolveAndroidClientBuildIdentity({
+      SONA_ANDROID_CHANNEL: 'nightly',
+      SONA_ANDROID_VERSION_NAME: '0.8.0-123',
+    }),
+    /SONA_ANDROID_VERSION_CODE is required for nightly builds/u,
+  );
+  for (const versionCode of ['0', '1.5', '2100000001']) {
+    assert.throws(
+      () => resolveAndroidClientBuildIdentity({
+        SONA_ANDROID_CHANNEL: 'nightly',
+        SONA_ANDROID_VERSION_CODE: versionCode,
+        SONA_ANDROID_VERSION_NAME: '0.8.0-123',
+      }),
+      /SONA_ANDROID_VERSION_CODE must be an integer from 1 to 2100000000/u,
+    );
+  }
+});
+
+test('Android output metadata verification checks channel identity and every APK', async () => {
+  const { verifyAndroidClientOutputMetadata } = await loadAndroidClientVerifier();
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-client-metadata-'));
+  const metadataPath = path.join(fixtureRoot, 'output-metadata.json');
+  const stableMetadata = createOutputMetadata({
+    applicationId: 'com.sona.android',
+    variantName: 'debug',
+    versionCode: 1,
+    versionName: '0.8.0',
+    abis: ['arm64-v8a', 'x86_64'],
+    fileSuffix: 'debug',
+  });
+
+  try {
+    fs.writeFileSync(metadataPath, JSON.stringify(stableMetadata));
+    assert.doesNotThrow(() => verifyAndroidClientOutputMetadata(metadataPath, {
+      applicationId: 'com.sona.android',
+      variantName: 'debug',
+      versionCode: 1,
+      versionName: '0.8.0',
+      abis: ['arm64-v8a', 'x86_64'],
+      fileSuffix: 'debug',
+    }));
+
+    const nightlyMetadata = createOutputMetadata({
+      applicationId: 'com.sona.android.nightly',
+      variantName: 'release',
+      versionCode: 123,
+      versionName: '0.8.0-123',
+      abis: ['arm64-v8a'],
+      fileSuffix: 'release-unsigned',
+    });
+    fs.writeFileSync(metadataPath, JSON.stringify(nightlyMetadata));
+    assert.doesNotThrow(() => verifyAndroidClientOutputMetadata(metadataPath, {
+      applicationId: 'com.sona.android.nightly',
+      variantName: 'release',
+      versionCode: 123,
+      versionName: '0.8.0-123',
+      abis: ['arm64-v8a'],
+      fileSuffix: 'release-unsigned',
+    }));
+
+    assert.throws(
+      () => verifyAndroidClientOutputMetadata(metadataPath, {
+        applicationId: 'com.sona.android',
+        variantName: 'release',
+        versionCode: 123,
+        versionName: '0.8.0-123',
+        abis: ['arm64-v8a'],
+        fileSuffix: 'release-unsigned',
+      }),
+      /Expected Android applicationId com\.sona\.android, found com\.sona\.android\.nightly/u,
+    );
+
+    const missingAbiMetadata = {
+      ...nightlyMetadata,
+      elements: [],
+    };
+    fs.writeFileSync(metadataPath, JSON.stringify(missingAbiMetadata));
+    assert.throws(
+      () => verifyAndroidClientOutputMetadata(metadataPath, {
+        applicationId: 'com.sona.android.nightly',
+        variantName: 'release',
+        versionCode: 123,
+        versionName: '0.8.0-123',
+        abis: ['arm64-v8a'],
+        fileSuffix: 'release-unsigned',
+      }),
+      /Expected output metadata for 1 Android ABI, found 0/u,
     );
   } finally {
     fs.rmSync(fixtureRoot, { recursive: true, force: true });

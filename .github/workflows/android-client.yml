@@ -8,6 +8,21 @@ on:
         required: false
         type: string
         default: android-client
+      channel:
+        description: Android build channel (stable or nightly)
+        required: false
+        type: string
+        default: stable
+      version_name:
+        description: Android version name override
+        required: false
+        type: string
+        default: ""
+      version_code:
+        description: Android version code override
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       artifact_prefix:
@@ -15,6 +30,21 @@ on:
         required: false
         type: string
         default: android-client
+      channel:
+        description: Android build channel (stable or nightly)
+        required: false
+        type: string
+        default: stable
+      version_name:
+        description: Android version name override
+        required: false
+        type: string
+        default: ""
+      version_code:
+        description: Android version code override
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -68,6 +98,9 @@ jobs:
         env:
           SONA_ANDROID_ABIS: arm64-v8a,x86_64
           SONA_ANDROID_BUILD_RELEASE: "true"
+          SONA_ANDROID_CHANNEL: ${{ inputs.channel }}
+          SONA_ANDROID_VERSION_CODE: ${{ inputs.version_code }}
+          SONA_ANDROID_VERSION_NAME: ${{ inputs.version_name }}
         run: pnpm run verify:android-client
 
       - name: Upload ARM64 APKs

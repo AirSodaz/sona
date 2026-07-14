@@ -2,7 +2,11 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyAndroidClientApk } from './android-client-apk.js';
+import {
+  resolveAndroidClientBuildIdentity,
+  verifyAndroidClientApk,
+  verifyAndroidClientOutputMetadata,
+} from './android-client-apk.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
@@ -58,6 +62,7 @@ const gradleEnv = {
   SONA_ANDROID_ABIS: process.env.SONA_ANDROID_ABIS ?? 'arm64-v8a,x86_64',
 };
 const androidAbis = selectedAndroidAbis(gradleEnv.SONA_ANDROID_ABIS ?? defaultAndroidAbiList);
+const buildIdentity = resolveAndroidClientBuildIdentity(gradleEnv);
 
 const gradleArgs = [
   '--no-daemon',
@@ -91,6 +96,17 @@ for (const variant of apkVariants) {
     'outputs',
     'apk',
     variant.outputDir,
+  );
+  verifyAndroidClientOutputMetadata(
+    path.join(apkOutputDir, 'output-metadata.json'),
+    {
+      applicationId: buildIdentity.applicationId,
+      variantName: variant.outputDir,
+      versionCode: buildIdentity.versionCode,
+      versionName: buildIdentity.versionName,
+      abis: androidAbis,
+      fileSuffix: variant.fileSuffix,
+    },
   );
   for (const abi of androidAbis) {
     const apkPath = path.join(apkOutputDir, `app-${abi}-${variant.fileSuffix}.apk`);

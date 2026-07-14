@@ -74,6 +74,9 @@ jobs:
     uses: ./.github/workflows/android-client.yml
     with:
       artifact_prefix: nightly-assets-android
+      channel: nightly
+      version_code: ${{ format('{0}', github.run_number) }}
+      version_name: ${{ needs.prepare.outputs.version }}
 
   build-tauri:
     needs: prepare

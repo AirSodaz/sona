@@ -5,6 +5,45 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val maximumAndroidVersionCode = 2_100_000_000L
+
+fun environmentValue(name: String): String =
+    providers.environmentVariable(name).orNull?.trim().orEmpty()
+
+val sonaAndroidChannel = environmentValue("SONA_ANDROID_CHANNEL").ifEmpty { "stable" }
+require(sonaAndroidChannel == "stable" || sonaAndroidChannel == "nightly") {
+    "SONA_ANDROID_CHANNEL must be stable or nightly"
+}
+
+val suppliedAndroidVersionName = environmentValue("SONA_ANDROID_VERSION_NAME")
+val suppliedAndroidVersionCode = environmentValue("SONA_ANDROID_VERSION_CODE")
+if (sonaAndroidChannel == "nightly") {
+    require(suppliedAndroidVersionName.isNotEmpty()) {
+        "SONA_ANDROID_VERSION_NAME is required for nightly builds"
+    }
+    require(suppliedAndroidVersionCode.isNotEmpty()) {
+        "SONA_ANDROID_VERSION_CODE is required for nightly builds"
+    }
+}
+
+val sonaAndroidVersionName = suppliedAndroidVersionName.ifEmpty { "0.8.0" }
+val sonaAndroidVersionCodeValue = suppliedAndroidVersionCode.ifEmpty { "1" }
+val parsedAndroidVersionCode = sonaAndroidVersionCodeValue.toLongOrNull()
+require(
+    sonaAndroidVersionCodeValue.matches(Regex("[0-9]+")) &&
+        parsedAndroidVersionCode != null &&
+        parsedAndroidVersionCode in 1L..maximumAndroidVersionCode,
+) {
+    "SONA_ANDROID_VERSION_CODE must be an integer from 1 to $maximumAndroidVersionCode"
+}
+val sonaAndroidVersionCode = checkNotNull(parsedAndroidVersionCode).toInt()
+val sonaAndroidApplicationId = if (sonaAndroidChannel == "nightly") {
+    "com.sona.android.nightly"
+} else {
+    "com.sona.android"
+}
+val sonaAndroidAppName = if (sonaAndroidChannel == "nightly") "Sona Nightly" else "Sona"
+
 val sonaAndroidAbis = providers.environmentVariable("SONA_ANDROID_ABIS")
     .orElse("arm64-v8a,x86_64")
     .get()
@@ -22,14 +61,17 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.sona.android"
+        applicationId = sonaAndroidApplicationId
         minSdk = 23
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.8.0"
+        versionCode = sonaAndroidVersionCode
+        versionName = sonaAndroidVersionName
+        manifestPlaceholders["sonaAppName"] = sonaAndroidAppName
+        buildConfigField("String", "APP_NAME", "\"$sonaAndroidAppName\"")
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 

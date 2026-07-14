@@ -22,6 +22,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.sona.android.app.BuildConfig
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryScreen
@@ -84,7 +85,7 @@ internal fun SonaApp(
                         title = {
                             Column {
                                 Text(
-                                    text = stringResource(R.string.app_name),
+                                    text = BuildConfig.APP_NAME,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
