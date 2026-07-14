@@ -1216,6 +1216,14 @@ test('UniFFI Kotlin bindings are generated through the 0.32 Android Gradle integ
   assert.match(generateScript, /--library/u);
   assert.match(generateScript, /--language/u);
   assert.match(generateScript, /kotlin/u);
+  assert.match(
+    generateScript,
+    /run\(cargo, \['build', '-p', 'sona-uniffi-bind', '--target-dir', targetDir, \.\.\.releaseFlag\]\)/u,
+  );
+  assert.match(
+    generateScript,
+    /run\(cargo,\s*\[\s*'run',\s*'-p',\s*'sona-uniffi-bindgen',\s*'--target-dir',\s*targetDir,\s*'--',\s*'generate'/u,
+  );
   assert.match(generateScript, /fs\.rmSync\(outDir,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/u);
   assert.match(gradleIntegration, /generateSonaUniffiKotlin/u);
   assert.match(gradleIntegration, /scripts\/generate-uniffi-kotlin\.js/u);
@@ -1370,6 +1378,18 @@ test('UniFFI Android Gradle integration builds ABI-scoped native libraries', () 
   assert.match(buildScript, /sherpa-onnx-sources\.json/u);
   assert.match(buildScript, /SONA_SHERPA_ONNX_ANDROID_ARCHIVE/u);
   assert.match(buildScript, /SHERPA_ONNX_LIB_DIR/u);
+  assert.match(
+    buildScript,
+    /function runCargoBuild\(target, profile, minSdk, sherpaLibDir, targetDir\)/u,
+  );
+  assert.match(
+    buildScript,
+    /spawnSync\(cargo, \[[\s\S]*'--target',\s*target,\s*'--target-dir',\s*targetDir,\s*\.\.\.releaseFlag[\s\S]*\]/u,
+  );
+  assert.match(
+    buildScript,
+    /runCargoBuild\(target, profile, minSdk, sherpaLibDir, targetDir\)/u,
+  );
   assert.match(gradleIntegration, /buildSonaUniffiAndroidLibraries/u);
   assert.match(gradleIntegration, /scripts\/build-uniffi-android-libs\.js/u);
   assert.match(gradleIntegration, /providers\.environmentVariable\("SONA_ANDROID_ABIS"\)/u);

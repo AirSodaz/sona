@@ -13,6 +13,22 @@ class StreamingCredential(
     override fun toString(): String = "StreamingCredential(apiKey=<redacted>)"
 }
 
+enum class CredentialStatus {
+    NOT_CONFIGURED,
+    CONFIGURED,
+}
+
+interface StreamingCredentialSettingsPort {
+    val status: Flow<CredentialStatus>
+
+    suspend fun save(credential: StreamingCredential)
+    suspend fun clear()
+}
+
+fun interface StreamingCredentialResolverPort {
+    suspend fun loadForStart(): StreamingCredential?
+}
+
 data class StreamingProviderProfile(
     val providerId: String,
     val profileId: String,
@@ -61,13 +77,29 @@ data class CapturedAudio(
     val bytesWritten: Long,
 )
 
+data class AudioInputConfiguration(
+    val deviceName: String?,
+    val sampleRateHz: Int?,
+    val channelCount: Int?,
+    val preprocessing: List<String>,
+)
+
 sealed interface AudioInputEvent {
+    data object MonitoringUnavailable : AudioInputEvent
     data object Active : AudioInputEvent
     data object Silenced : AudioInputEvent
+    data class ConfigurationChanged(val configuration: AudioInputConfiguration) : AudioInputEvent
+}
 
-    data class DeviceChanged(
-        val deviceName: String?,
-    ) : AudioInputEvent
+enum class MicrophoneCaptureFailureKind {
+    AUDIO_READ,
+    STORAGE_WRITE,
+}
+
+sealed interface MicrophoneCaptureEvent {
+    data class Input(val event: AudioInputEvent) : MicrophoneCaptureEvent
+    data object StreamingQueueOverflow : MicrophoneCaptureEvent
+    data class Fatal(val kind: MicrophoneCaptureFailureKind) : MicrophoneCaptureEvent
 }
 
 data class StreamingTranscriptionRequest(
@@ -84,12 +116,6 @@ sealed interface StreamingTranscriptionEvent {
     ) : StreamingTranscriptionEvent
 }
 
-interface StreamingCredentialRepository {
-    suspend fun load(): StreamingCredential?
-    suspend fun save(credential: StreamingCredential)
-    suspend fun clear()
-}
-
 fun interface StreamingProviderCatalogPort {
     suspend fun loadVolcengineStreamingProfile(): StreamingProviderProfile
 }
@@ -100,7 +126,7 @@ interface MicrophoneCapturePort {
 
 interface MicrophoneCaptureSession : AutoCloseable {
     val frames: Flow<Pcm16Frame>
-    val inputEvents: Flow<AudioInputEvent>
+    val events: Flow<MicrophoneCaptureEvent>
 
     suspend fun start()
     suspend fun stop()

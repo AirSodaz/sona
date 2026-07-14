@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class LiveRecordingCoordinator(
-    private val credentialRepository: StreamingCredentialRepository,
+    private val credentialResolver: StreamingCredentialResolverPort,
     private val providerCatalog: StreamingProviderCatalogPort,
     private val microphoneCapture: MicrophoneCapturePort,
     private val streamingTranscription: StreamingTranscriptionPort,
@@ -58,7 +58,19 @@ class LiveRecordingCoordinator(
                 return
             }
 
-            val credential = credentialRepository.load()
+            val credential = try {
+                credentialResolver.loadForStart()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                mutableState.value = LiveRecordingState.Failed(
+                    RecordingFailure(
+                        category = RecordingFailureCategory.STARTUP,
+                        message = "Unable to start live transcription.",
+                    ),
+                )
+                return
+            }
             if (credential == null || credential.apiKey.isBlank()) {
                 mutableState.value = LiveRecordingState.NeedsConfiguration
                 return
@@ -189,15 +201,21 @@ class LiveRecordingCoordinator(
             session.frameJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
                     openedMicrophone.frames.collect { frame ->
-                        val activeTranscription = session.transcription
-                        if (activeTranscription != null) {
-                            try {
-                                activeTranscription.feed(frame)
-                            } catch (error: CancellationException) {
-                                throw error
-                            } catch (_: Exception) {
-                                degradeStreaming(session, cancelEventCollector = true)
+                        var feedFailed = false
+                        session.transcriptionMutex.withLock {
+                            val activeTranscription = session.transcription
+                            if (activeTranscription != null) {
+                                try {
+                                    activeTranscription.feed(frame)
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (_: Exception) {
+                                    feedFailed = true
+                                }
                             }
+                        }
+                        if (feedFailed) {
+                            degradeStreaming(session, cancelEventCollector = true)
                         }
                     }
                 } catch (error: CancellationException) {
@@ -214,22 +232,60 @@ class LiveRecordingCoordinator(
                     scope.launch { stop() }
                 }
             }
-            session.inputJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            session.captureEventJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
-                    openedMicrophone.inputEvents.collect { event ->
-                        val inputStatus = when (event) {
-                            AudioInputEvent.Active -> AudioInputStatus.Active
-                            AudioInputEvent.Silenced -> AudioInputStatus.Silenced
-                            is AudioInputEvent.DeviceChanged ->
-                                AudioInputStatus.DeviceChanged(event.deviceName)
-                        }
-                        session.publicationMutex.withLock {
-                            session.inputStatus = inputStatus
-                            mutableState.update { current ->
-                                if (current is LiveRecordingState.Recording) {
-                                    current.copy(inputStatus = inputStatus)
-                                } else {
-                                    current
+                    openedMicrophone.events.collect { event ->
+                        when (event) {
+                            is MicrophoneCaptureEvent.Input -> {
+                                val inputStatus = when (val inputEvent = event.event) {
+                                    AudioInputEvent.MonitoringUnavailable ->
+                                        AudioInputStatus.MonitoringUnavailable
+                                    AudioInputEvent.Active -> AudioInputStatus.Active
+                                    AudioInputEvent.Silenced -> AudioInputStatus.Silenced
+                                    is AudioInputEvent.ConfigurationChanged ->
+                                        AudioInputStatus.DeviceChanged(
+                                            inputEvent.configuration.deviceName,
+                                        )
+                                }
+                                session.publicationMutex.withLock {
+                                    session.inputStatus = inputStatus
+                                    mutableState.update { current ->
+                                        if (current is LiveRecordingState.Recording) {
+                                            current.copy(inputStatus = inputStatus)
+                                        } else {
+                                            current
+                                        }
+                                    }
+                                }
+                            }
+
+                            MicrophoneCaptureEvent.StreamingQueueOverflow ->
+                                degradeStreaming(session, cancelEventCollector = true)
+
+                            is MicrophoneCaptureEvent.Fatal -> when (event.kind) {
+                                MicrophoneCaptureFailureKind.AUDIO_READ -> {
+                                    recordCompletionWarning(
+                                        session,
+                                        RecordingFailure(
+                                            category = RecordingFailureCategory.AUDIO,
+                                            message =
+                                                "Recording saved after microphone capture stopped unexpectedly.",
+                                        ),
+                                    )
+                                    scope.launch { stop() }
+                                }
+
+                                MicrophoneCaptureFailureKind.STORAGE_WRITE -> {
+                                    session.persistenceFailureMutex.withLock {
+                                        if (session.persistenceFailure == null) {
+                                            session.persistenceFailure = RecordingFailure(
+                                                category = RecordingFailureCategory.PERSISTENCE,
+                                                message =
+                                                    "Recording could not be finalized; incomplete draft preserved.",
+                                            )
+                                        }
+                                    }
+                                    scope.launch { stop() }
                                 }
                             }
                         }
@@ -301,9 +357,8 @@ class LiveRecordingCoordinator(
 
             withContext(NonCancellable) {
                 session.elapsedJob?.cancelAndJoin()
-                val microphoneStoppedCleanly = try {
+                try {
                     session.microphone.stop()
-                    true
                 } catch (_: Exception) {
                     recordCompletionWarning(
                         session,
@@ -313,16 +368,12 @@ class LiveRecordingCoordinator(
                                 "Recording saved after microphone shutdown reported an error.",
                         ),
                     )
-                    false
                 }
-                if (microphoneStoppedCleanly) {
-                    session.frameJob.join()
-                    session.inputJob.join()
-                } else {
-                    session.frameJob.cancelAndJoin()
-                    session.inputJob.cancelAndJoin()
+                session.frameJob.join()
+                session.captureEventJob.join()
+                var persistenceFailure = session.persistenceFailureMutex.withLock {
+                    session.persistenceFailure
                 }
-                var persistenceFailure: RecordingFailure? = null
                 val capturedAudio = try {
                     session.microphone.finish()
                 } catch (_: Exception) {
@@ -463,7 +514,7 @@ class LiveRecordingCoordinator(
             session.checkpointSignals.close()
             session.checkpointJob.cancelAndJoin()
             session.frameJob.cancelAndJoin()
-            session.inputJob.cancelAndJoin()
+            session.captureEventJob.cancelAndJoin()
             session.transcriptJob.cancelAndJoin()
 
             val transcription = session.transcriptionMutex.withLock {
@@ -565,12 +616,14 @@ class LiveRecordingCoordinator(
         val transcriptionMutex = Mutex()
         val transcriptMutex = Mutex()
         val warningMutex = Mutex()
+        val persistenceFailureMutex = Mutex()
         val publicationMutex = Mutex()
         val checkpointSignals = Channel<Unit>(Channel.CONFLATED)
         var segments: List<TranscriptSegment> = emptyList()
         var transcriptVersion: Long = 0
         var lastCheckpointVersion: Long = 0
         var completionWarning: RecordingFailure? = null
+        var persistenceFailure: RecordingFailure? = null
         var streamingStatus: StreamingStatus = StreamingStatus.Connected
         var inputStatus: AudioInputStatus = AudioInputStatus.Active
         var startedAtMillis: Long = 0
@@ -578,7 +631,7 @@ class LiveRecordingCoordinator(
         lateinit var checkpointJob: Job
         lateinit var transcriptJob: Job
         lateinit var frameJob: Job
-        lateinit var inputJob: Job
+        lateinit var captureEventJob: Job
     }
 
     private data class TranscriptSnapshot(

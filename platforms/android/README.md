@@ -139,9 +139,27 @@ The native Compose client lives under `platforms/android/client` and keeps its
 host boundary explicit:
 
 - `:application` owns platform-neutral models, ports, and use cases.
+- `:adapters:android` owns Android framework integration for microphone capture,
+  WAV persistence, input monitoring, secure credential storage, clocks, and IDs.
 - `:adapters:uniffi` is the only module that imports generated UniFFI APIs.
 - `:app` owns Android lifecycle, adaptive Compose navigation, and dependency
   composition.
+
+The recording adapter captures 16 kHz mono PCM16 from the platform
+`VOICE_RECOGNITION` source. Accepted audio is written to a checkpointing WAV
+file before it is offered to streaming ASR as 640-byte frames. The non-blocking
+100-frame queue holds two seconds of audio. If that queue overflows, the
+adapter stops further ASR delivery and reports the overflow while continuing to
+write the complete WAV recording. Android 7.0 and later use recording callbacks
+for input monitoring, Android 10 and later report client silencing, and Android
+11 and later mark the capture as privacy-sensitive.
+
+Streaming credentials are encrypted with a non-exportable Android Keystore
+AES-256-GCM key and provider-generated IVs. DataStore persists only the versioned
+encrypted envelope under `noBackupFilesDir`; it never stores plaintext and the
+file is excluded from device backup. Settings consumers receive only configured
+status plus save/clear capabilities. Plaintext resolution is available only to
+the live-recording coordinator when a session starts.
 
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client
@@ -161,6 +179,13 @@ The default client verification builds and validates two independent debug APKs:
 Each APK contains only its matching Sona UniFFI, sherpa-onnx, and ONNX Runtime
 native libraries. Set `SONA_ANDROID_ABIS` to one of the supported values when a
 single-ABI local build is sufficient.
+
+The verification command runs application and Android-adapter unit tests,
+assembles the adapter instrumentation-test APK, lints both the adapter and app,
+then assembles and validates both client APKs. Instrumentation assembly proves
+API compatibility but does not execute device APIs. Real microphone, recording
+callback, privacy-sensitive capture, and Android Keystore behavior must run on
+API 23 and API 37 emulators as the device QA gate.
 
 GitHub Actions uses `.github/workflows/android-client.yml` as the reusable
 Android build entry point. Stable and nightly workflows call it with both ABIs,

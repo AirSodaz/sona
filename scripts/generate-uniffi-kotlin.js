@@ -58,7 +58,7 @@ const skipBuild = args.includes('--skip-build');
 const cargo = process.env.CARGO ?? 'cargo';
 
 if (!skipBuild) {
-  run(cargo, ['build', '-p', 'sona-uniffi-bind', ...releaseFlag]);
+  run(cargo, ['build', '-p', 'sona-uniffi-bind', '--target-dir', targetDir, ...releaseFlag]);
 }
 
 const libraryPath = path.join(targetDir, profileDir, dynamicLibraryName('sona_uniffi_bind'));
@@ -72,6 +72,8 @@ run(cargo, [
   'run',
   '-p',
   'sona-uniffi-bindgen',
+  '--target-dir',
+  targetDir,
   '--',
   'generate',
   '--library',

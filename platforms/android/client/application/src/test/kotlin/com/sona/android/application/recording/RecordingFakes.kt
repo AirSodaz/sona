@@ -4,11 +4,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 
 class RecordingFakes {
     val calls = mutableListOf<String>()
-    val credentialRepository = FakeCredentialRepository(calls)
+    val credentialResolver = FakeCredentialResolver(calls)
     val providerCatalog = FakeProviderCatalog(calls)
     val history = FakeRecordingHistory(calls)
     val microphone = FakeMicrophoneCapture(calls)
@@ -16,22 +17,16 @@ class RecordingFakes {
     val monotonicClock = FakeMonotonicClock()
     val recordingIds = FakeRecordingIds(calls)
 
-    class FakeCredentialRepository(
+    class FakeCredentialResolver(
         private val calls: MutableList<String>,
-    ) : StreamingCredentialRepository {
+    ) : StreamingCredentialResolverPort {
         var credential: StreamingCredential? = StreamingCredential("secret")
+        var loadFailure: Throwable? = null
 
-        override suspend fun load(): StreamingCredential? {
-            calls += "credential.load"
+        override suspend fun loadForStart(): StreamingCredential? {
+            calls += "credential.loadForStart"
+            loadFailure?.let { throw it }
             return credential
-        }
-
-        override suspend fun save(credential: StreamingCredential) {
-            this.credential = credential
-        }
-
-        override suspend fun clear() {
-            credential = null
         }
     }
 
@@ -99,11 +94,13 @@ class RecordingFakes {
         private val calls: MutableList<String>,
     ) : MicrophoneCapturePort {
         private val frameChannel = Channel<Pcm16Frame>(Channel.UNLIMITED)
-        private val inputChannel = Channel<AudioInputEvent>(Channel.UNLIMITED)
+        private val eventChannel = Channel<MicrophoneCaptureEvent>(Channel.UNLIMITED)
         var capturedAudio = CapturedAudio(durationMillis = 125, bytesWritten = 2)
         var startFailure: Throwable? = null
         var onStart: (() -> Unit)? = null
         var stopBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
+        var captureEventBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
+        var stopAttemptFinished: CompletableDeferred<Unit>? = null
         var stopFailure: Throwable? = null
         var frameFailureOnStop: Throwable? = null
         var finishFailure: Throwable? = null
@@ -113,7 +110,13 @@ class RecordingFakes {
             calls += "microphone.open"
             return object : MicrophoneCaptureSession {
                 override val frames: Flow<Pcm16Frame> = frameChannel.receiveAsFlow()
-                override val inputEvents: Flow<AudioInputEvent> = inputChannel.receiveAsFlow()
+                override val events: Flow<MicrophoneCaptureEvent> =
+                    eventChannel.receiveAsFlow().onEach {
+                        captureEventBarrier?.let { (started, release) ->
+                            started.complete(Unit)
+                            release.await()
+                        }
+                    }
 
                 override suspend fun start() {
                     calls += "microphone.start"
@@ -123,18 +126,22 @@ class RecordingFakes {
 
                 override suspend fun stop() {
                     calls += "microphone.stop"
-                    stopBarrier?.let { (started, release) ->
-                        started.complete(Unit)
-                        release.await()
+                    try {
+                        stopBarrier?.let { (started, release) ->
+                            started.complete(Unit)
+                            release.await()
+                        }
+                        val frameFailure = frameFailureOnStop
+                        if (frameFailure == null) {
+                            frameChannel.close()
+                        } else {
+                            frameChannel.close(frameFailure)
+                        }
+                        eventChannel.close()
+                        stopFailure?.let { throw it }
+                    } finally {
+                        stopAttemptFinished?.complete(Unit)
                     }
-                    stopFailure?.let { throw it }
-                    val frameFailure = frameFailureOnStop
-                    if (frameFailure == null) {
-                        frameChannel.close()
-                    } else {
-                        frameChannel.close(frameFailure)
-                    }
-                    inputChannel.close()
                 }
 
                 override suspend fun finish(): CapturedAudio {
@@ -155,15 +162,19 @@ class RecordingFakes {
         }
 
         suspend fun emitInput(event: AudioInputEvent) {
-            inputChannel.send(event)
+            emitCaptureEvent(MicrophoneCaptureEvent.Input(event))
+        }
+
+        suspend fun emitCaptureEvent(event: MicrophoneCaptureEvent) {
+            eventChannel.send(event)
         }
 
         fun failFrames(error: Throwable) {
             frameChannel.close(error)
         }
 
-        fun failInputEvents(error: Throwable) {
-            inputChannel.close(error)
+        fun failEvents(error: Throwable) {
+            eventChannel.close(error)
         }
     }
 
@@ -178,6 +189,9 @@ class RecordingFakes {
         var stopFailure: Throwable? = null
         var closeFailure: Throwable? = null
         var eventCollectorCompletions: Int = 0
+        var feedBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
+        var closeObservedActiveFeed: Boolean = false
+        private var activeFeeds: Int = 0
 
         override suspend fun open(
             request: StreamingTranscriptionRequest,
@@ -196,13 +210,22 @@ class RecordingFakes {
 
                 override suspend fun feed(frame: Pcm16Frame) {
                     calls += "asr.feed"
-                    if (
-                        successfulFeedsBeforeFailure != null &&
-                        fedFrames.size >= checkNotNull(successfulFeedsBeforeFailure)
-                    ) {
-                        throw IllegalStateException("provider feed detail")
+                    activeFeeds += 1
+                    try {
+                        feedBarrier?.let { (started, release) ->
+                            started.complete(Unit)
+                            release.await()
+                        }
+                        if (
+                            successfulFeedsBeforeFailure != null &&
+                            fedFrames.size >= checkNotNull(successfulFeedsBeforeFailure)
+                        ) {
+                            throw IllegalStateException("provider feed detail")
+                        }
+                        fedFrames += frame
+                    } finally {
+                        activeFeeds -= 1
                     }
-                    fedFrames += frame
                 }
 
                 override suspend fun flush() {
@@ -218,6 +241,7 @@ class RecordingFakes {
 
                 override fun close() {
                     calls += "asr.close"
+                    closeObservedActiveFeed = closeObservedActiveFeed || activeFeeds > 0
                     closeFailure?.let { throw it }
                     eventChannel.close()
                 }

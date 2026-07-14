@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,7 +22,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.transcription.emit(transcriptEvent(id = "early", text = "already here"))
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -41,9 +42,9 @@ class LiveRecordingCoordinatorTest {
     @Test
     fun `input failure before microphone start appears in initial recording state`() = runTest {
         val fakes = RecordingFakes()
-        fakes.microphone.failInputEvents(IllegalStateException("early input detail"))
+        fakes.microphone.failEvents(IllegalStateException("early input detail"))
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -66,7 +67,7 @@ class LiveRecordingCoordinatorTest {
         fakes.transcription.successfulFeedsBeforeFailure = 0
         fakes.microphone.emitFrame(Pcm16Frame(byteArrayOf(1, 2)))
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -97,7 +98,7 @@ class LiveRecordingCoordinatorTest {
         val ownerJob = SupervisorJob()
         val ownerScope = CoroutineScope(ownerJob + StandardTestDispatcher(testScheduler))
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -121,7 +122,7 @@ class LiveRecordingCoordinatorTest {
     fun `microphone frame stream failure automatically saves with an audio warning`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -154,7 +155,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.frameFailureOnStop = IllegalStateException("shutdown read detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -184,7 +185,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.stopFailure = IllegalStateException("stop detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -215,7 +216,7 @@ class LiveRecordingCoordinatorTest {
         fakes.microphone.stopBarrier = stopStarted to releaseStop
         fakes.microphone.stopFailure = IllegalStateException("stop detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -248,7 +249,7 @@ class LiveRecordingCoordinatorTest {
         fakes.transcription.flushFailure = IllegalStateException("flush detail")
         fakes.microphone.closeFailure = IllegalStateException("close detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -275,7 +276,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.closeFailure = IllegalStateException("audio close detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -304,11 +305,11 @@ class LiveRecordingCoordinatorTest {
     }
 
     @Test
-    fun `microphone stop failure cancels capture collectors and still saves audio`() = runTest {
+    fun `microphone stop failure drains capture collectors and still saves audio`() = runTest {
         val fakes = RecordingFakes()
         fakes.microphone.stopFailure = IllegalStateException("audio stop detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -341,7 +342,7 @@ class LiveRecordingCoordinatorTest {
     fun `ASR event stream failure degrades recording without waiting for another frame`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -375,7 +376,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.history.createFailure = CancellationException("cancel start")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -395,7 +396,7 @@ class LiveRecordingCoordinatorTest {
         assertEquals("cancel start", cancellation?.message)
         assertEquals(LiveRecordingState.Idle, coordinator.state.value)
         assertEquals(
-            listOf("credential.load", "provider.load", "id.next", "history.create"),
+            listOf("credential.loadForStart", "provider.load", "id.next", "history.create"),
             fakes.calls,
         )
     }
@@ -405,7 +406,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.startFailure = CancellationException("cancel microphone start")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -434,7 +435,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.finishFailure = IllegalStateException("storage path detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -469,7 +470,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.transcription.stopFailure = IllegalStateException("provider stop detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -502,7 +503,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.transcription.flushFailure = IllegalStateException("provider flush detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -536,7 +537,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.startFailure = IllegalStateException("audio device detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -569,7 +570,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.microphone.capturedAudio = CapturedAudio(durationMillis = 250, bytesWritten = 8_000)
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -593,7 +594,7 @@ class LiveRecordingCoordinatorTest {
             fakes.monotonicClock.nowMillis = 5_000
         }
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -618,7 +619,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.history.checkpointFailuresRemaining = 1
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -655,7 +656,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.history.checkpointFailuresRemaining = 1
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -691,7 +692,7 @@ class LiveRecordingCoordinatorTest {
     fun `input silencing changes status without fabricating transcript text`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -716,7 +717,7 @@ class LiveRecordingCoordinatorTest {
         runTest {
             val fakes = RecordingFakes()
             val coordinator = LiveRecordingCoordinator(
-                credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
                 providerCatalog = fakes.providerCatalog,
                 microphoneCapture = fakes.microphone,
                 streamingTranscription = fakes.transcription,
@@ -727,7 +728,7 @@ class LiveRecordingCoordinatorTest {
             )
             coordinator.start()
 
-            fakes.microphone.failInputEvents(IllegalStateException("device callback detail"))
+            fakes.microphone.failEvents(IllegalStateException("device callback detail"))
             runCurrent()
 
             val recording = coordinator.state.value as LiveRecordingState.Recording
@@ -745,7 +746,7 @@ class LiveRecordingCoordinatorTest {
     fun `repeated start and stop commands do not duplicate session resources`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -772,7 +773,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.history.completeFailure = IllegalStateException("database path detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -802,9 +803,9 @@ class LiveRecordingCoordinatorTest {
     @Test
     fun `blank stored credential is treated as not configured`() = runTest {
         val fakes = RecordingFakes()
-        fakes.credentialRepository.credential = StreamingCredential("   ")
+        fakes.credentialResolver.credential = StreamingCredential("   ")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -817,14 +818,14 @@ class LiveRecordingCoordinatorTest {
         coordinator.start()
 
         assertEquals(LiveRecordingState.NeedsConfiguration, coordinator.state.value)
-        assertEquals(listOf("credential.load"), fakes.calls)
+        assertEquals(listOf("credential.loadForStart"), fakes.calls)
     }
 
     @Test
     fun `transcript checkpoints are throttled and use the newest snapshot`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -860,7 +861,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.transcription.successfulFeedsBeforeFailure = 1
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -916,7 +917,7 @@ class LiveRecordingCoordinatorTest {
         fakes.transcription.stopFailure = IllegalStateException("provider stop detail")
         fakes.transcription.closeFailure = IllegalStateException("provider close detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -940,7 +941,7 @@ class LiveRecordingCoordinatorTest {
         val fakes = RecordingFakes()
         fakes.transcription.startFailure = IllegalStateException("secret provider detail")
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -963,7 +964,7 @@ class LiveRecordingCoordinatorTest {
         )
         assertEquals(
             listOf(
-                "credential.load",
+                "credential.loadForStart",
                 "provider.load",
                 "id.next",
                 "history.create",
@@ -985,7 +986,7 @@ class LiveRecordingCoordinatorTest {
             streamingEndpoint = "   ",
         )
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -1006,15 +1007,15 @@ class LiveRecordingCoordinatorTest {
             ),
             coordinator.state.value,
         )
-        assertEquals(listOf("credential.load", "provider.load"), fakes.calls)
+        assertEquals(listOf("credential.loadForStart", "provider.load"), fakes.calls)
     }
 
     @Test
     fun `missing credential stops before creating recording resources`() = runTest {
         val fakes = RecordingFakes()
-        fakes.credentialRepository.credential = null
+        fakes.credentialResolver.credential = null
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -1027,14 +1028,14 @@ class LiveRecordingCoordinatorTest {
         coordinator.start()
 
         assertEquals(LiveRecordingState.NeedsConfiguration, coordinator.state.value)
-        assertEquals(listOf("credential.load"), fakes.calls)
+        assertEquals(listOf("credential.loadForStart"), fakes.calls)
     }
 
     @Test
     fun `starts streams and completes a recording in application order`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
-            credentialRepository = fakes.credentialRepository,
+            credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
             microphoneCapture = fakes.microphone,
             streamingTranscription = fakes.transcription,
@@ -1069,7 +1070,7 @@ class LiveRecordingCoordinatorTest {
         assertEquals(LiveRecordingState.Completed("live-1"), coordinator.state.value)
         assertEquals(
             listOf(
-                "credential.load",
+                "credential.loadForStart",
                 "provider.load",
                 "id.next",
                 "history.create",
@@ -1087,6 +1088,272 @@ class LiveRecordingCoordinatorTest {
             ),
             fakes.calls.filterNot { it == "asr.feed" },
         )
+    }
+
+    @Test
+    fun `credential resolver failure becomes a redacted startup failure`() = runTest {
+        val fakes = RecordingFakes()
+        fakes.credentialResolver.loadFailure =
+            IllegalStateException("keystore alias and plaintext detail")
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+
+        coordinator.start()
+
+        val failure = (coordinator.state.value as LiveRecordingState.Failed).failure
+        assertEquals(RecordingFailureCategory.STARTUP, failure.category)
+        assertEquals("Unable to start live transcription.", failure.message)
+        assertFalse(failure.message.contains("keystore alias and plaintext detail"))
+        assertEquals(listOf("credential.loadForStart"), fakes.calls)
+    }
+
+    @Test
+    fun `monitoring unavailable event updates input status without stopping capture`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitInput(AudioInputEvent.MonitoringUnavailable)
+        runCurrent()
+
+        assertEquals(
+            AudioInputStatus.MonitoringUnavailable,
+            (coordinator.state.value as LiveRecordingState.Recording).inputStatus,
+        )
+        assertEquals(0, fakes.calls.count { it == "microphone.stop" })
+        coordinator.stop()
+    }
+
+    @Test
+    fun `input configuration event publishes the selected device`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitInput(
+            AudioInputEvent.ConfigurationChanged(
+                AudioInputConfiguration(
+                    deviceName = "USB microphone",
+                    sampleRateHz = 48_000,
+                    channelCount = 1,
+                    preprocessing = listOf("noise-suppression"),
+                ),
+            ),
+        )
+        runCurrent()
+
+        assertEquals(
+            AudioInputStatus.DeviceChanged("USB microphone"),
+            (coordinator.state.value as LiveRecordingState.Recording).inputStatus,
+        )
+        coordinator.stop()
+    }
+
+    @Test
+    fun `streaming queue overflow closes ASR while microphone recording continues`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitCaptureEvent(MicrophoneCaptureEvent.StreamingQueueOverflow)
+        runCurrent()
+
+        assertTrue(
+            (coordinator.state.value as LiveRecordingState.Recording).streamingStatus
+                is StreamingStatus.AudioOnly,
+        )
+        assertEquals(1, fakes.calls.count { it == "asr.stop" })
+        assertEquals(1, fakes.calls.count { it == "asr.close" })
+        assertEquals(0, fakes.calls.count { it == "microphone.stop" })
+
+        fakes.microphone.emitFrame(Pcm16Frame(byteArrayOf(3, 4)))
+        runCurrent()
+        assertTrue(fakes.transcription.fedFrames.isEmpty())
+
+        coordinator.stop()
+        assertEquals(1, fakes.calls.count { it == "history.complete" })
+    }
+
+    @Test
+    fun `overflow waits for an in flight ASR feed before closing the session`() = runTest {
+        val fakes = RecordingFakes()
+        val feedStarted = CompletableDeferred<Unit>()
+        val releaseFeed = CompletableDeferred<Unit>()
+        fakes.transcription.feedBarrier = feedStarted to releaseFeed
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        val frame = Pcm16Frame(byteArrayOf(1, 2))
+        fakes.microphone.emitFrame(frame)
+        runCurrent()
+        feedStarted.await()
+
+        fakes.microphone.emitCaptureEvent(MicrophoneCaptureEvent.StreamingQueueOverflow)
+        runCurrent()
+        assertEquals(0, fakes.calls.count { it == "asr.close" })
+
+        releaseFeed.complete(Unit)
+        runCurrent()
+
+        assertArrayEquals(frame.bytes, fakes.transcription.fedFrames.single().bytes)
+        assertFalse(fakes.transcription.closeObservedActiveFeed)
+        assertEquals(1, fakes.calls.count { it == "asr.close" })
+        coordinator.stop()
+    }
+
+    @Test
+    fun `audio read fatal stops and completes with an audio warning`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitCaptureEvent(
+            MicrophoneCaptureEvent.Fatal(MicrophoneCaptureFailureKind.AUDIO_READ),
+        )
+        runCurrent()
+
+        assertEquals(
+            LiveRecordingState.Completed(
+                historyId = "live-1",
+                warning = RecordingFailure(
+                    category = RecordingFailureCategory.AUDIO,
+                    message =
+                        "Recording saved after microphone capture stopped unexpectedly.",
+                ),
+            ),
+            coordinator.state.value,
+        )
+        assertEquals(1, fakes.calls.count { it == "microphone.stop" })
+    }
+
+    @Test
+    fun `storage write fatal latches the final persistence failure`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitCaptureEvent(
+            MicrophoneCaptureEvent.Fatal(MicrophoneCaptureFailureKind.STORAGE_WRITE),
+        )
+        runCurrent()
+
+        assertEquals(
+            LiveRecordingState.Failed(
+                RecordingFailure(
+                    category = RecordingFailureCategory.PERSISTENCE,
+                    message =
+                        "Recording could not be finalized; incomplete draft preserved.",
+                ),
+            ),
+            coordinator.state.value,
+        )
+        assertEquals(1, fakes.calls.count { it == "microphone.stop" })
+    }
+
+    @Test
+    fun `queued storage fatal survives microphone stop failure`() = runTest {
+        val fakes = RecordingFakes()
+        val captureEventStarted = CompletableDeferred<Unit>()
+        val releaseCaptureEvent = CompletableDeferred<Unit>()
+        val stopAttemptFinished = CompletableDeferred<Unit>()
+        fakes.microphone.captureEventBarrier = captureEventStarted to releaseCaptureEvent
+        fakes.microphone.stopAttemptFinished = stopAttemptFinished
+        fakes.microphone.stopFailure = IllegalStateException("terminal stop detail")
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+        )
+        coordinator.start()
+
+        fakes.microphone.emitCaptureEvent(
+            MicrophoneCaptureEvent.Fatal(MicrophoneCaptureFailureKind.STORAGE_WRITE),
+        )
+        captureEventStarted.await()
+        val stopJob = launch { coordinator.stop() }
+        stopAttemptFinished.await()
+        runCurrent()
+        releaseCaptureEvent.complete(Unit)
+        stopJob.join()
+
+        assertEquals(
+            LiveRecordingState.Failed(
+                RecordingFailure(
+                    category = RecordingFailureCategory.PERSISTENCE,
+                    message =
+                        "Recording could not be finalized; incomplete draft preserved.",
+                ),
+            ),
+            coordinator.state.value,
+        )
+        assertEquals(1, fakes.calls.count { it == "microphone.stop" })
     }
 
     private fun segment(id: String, text: String): TranscriptSegment = TranscriptSegment(

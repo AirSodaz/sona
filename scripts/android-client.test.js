@@ -24,6 +24,29 @@ function readClientFile(...segments) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
+function declarationBody(source, marker) {
+  const declarationStart = source.indexOf(marker);
+  assert.notEqual(declarationStart, -1, `missing declaration: ${marker}`);
+  const bodyStart = source.indexOf('{', declarationStart);
+  assert.notEqual(bodyStart, -1, `missing declaration body: ${marker}`);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === '{') {
+      depth += 1;
+    } else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(declarationStart, index + 1);
+      }
+    }
+  }
+  assert.fail(`unterminated declaration body: ${marker}`);
+}
+
+function normalizeNewlines(source) {
+  return source.replaceAll('\r\n', '\n');
+}
+
 function readPngDimensions(...segments) {
   const filePath = clientPath(...segments);
   assert.equal(fs.existsSync(filePath), true, `missing PNG file: ${filePath}`);
@@ -168,6 +191,163 @@ test('Android UniFFI adapter is the only outbound binding owner', () => {
   }
 });
 
+test('Android recording platform adapters enforce capture and credential boundaries', () => {
+  const recordingPorts = readClientFile(
+    'application', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'application',
+    'recording', 'RecordingPorts.kt',
+  );
+  const captureSession = readClientFile(
+    'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'audio', 'AndroidMicrophoneCaptureSession.kt',
+  );
+  const frameworkBackend = readClientFile(
+    'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'audio', 'FrameworkAudioRecordBackend.kt',
+  );
+  const credentialDataStore = readClientFile(
+    'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'credential', 'CredentialDataStore.kt',
+  );
+  const credentialCipher = readClientFile(
+    'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'credential', 'AndroidKeyStoreCredentialCipher.kt',
+  );
+  const credentialRepository = readClientFile(
+    'adapters', 'android', 'src', 'main', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'credential', 'AndroidStreamingCredentialRepository.kt',
+  );
+  const adapterManifest = readClientFile('adapters', 'android', 'src', 'main', 'AndroidManifest.xml');
+
+  const settingsContract = declarationBody(recordingPorts, 'interface StreamingCredentialSettingsPort');
+  const resolverContract = declarationBody(
+    recordingPorts,
+    'fun interface StreamingCredentialResolverPort',
+  );
+  assert.match(settingsContract, /val status: Flow<CredentialStatus>/u);
+  assert.match(settingsContract, /suspend fun save\(credential: StreamingCredential\)/u);
+  assert.match(settingsContract, /suspend fun clear\(\)/u);
+  assert.doesNotMatch(settingsContract, /loadForStart/u);
+  assert.match(resolverContract, /suspend fun loadForStart\(\): StreamingCredential\?/u);
+  assert.match(
+    credentialRepository,
+    /StreamingCredentialSettingsPort, StreamingCredentialResolverPort/u,
+  );
+
+  assert.match(
+    recordingPorts,
+    /enum class MicrophoneCaptureFailureKind\s*\{\s*AUDIO_READ,\s*STORAGE_WRITE,\s*\}/u,
+  );
+  assert.match(recordingPorts, /data object StreamingQueueOverflow : MicrophoneCaptureEvent/u);
+  const captureBody = declarationBody(captureSession, 'class AndroidMicrophoneCaptureSession');
+  const capturePump = declarationBody(captureSession, 'private suspend fun pumpAudio()');
+  const overflowHandler = declarationBody(
+    captureSession,
+    'private fun disableFrameDeliveryForOverflow()',
+  );
+  const fatalHandler = declarationBody(
+    captureSession,
+    'private suspend fun failCapture(kind: MicrophoneCaptureFailureKind)',
+  );
+  assert.match(captureBody, /const val FRAME_SIZE_BYTES = 640/u);
+  assert.match(captureBody, /const val FRAME_QUEUE_CAPACITY = 100/u);
+  assert.match(
+    captureBody,
+    /Channel<Pcm16Frame>\(capacity = FRAME_QUEUE_CAPACITY\)/u,
+  );
+  assert.match(capturePump, /failCapture\(MicrophoneCaptureFailureKind\.AUDIO_READ\)/u);
+  assert.match(capturePump, /failCapture\(MicrophoneCaptureFailureKind\.STORAGE_WRITE\)/u);
+  assert.ok(capturePump.indexOf('writer.write(') < capturePump.indexOf('frameChannel.trySend('));
+  assert.match(
+    overflowHandler,
+    /eventChannel\.trySend\(MicrophoneCaptureEvent\.StreamingQueueOverflow\)/u,
+  );
+  assert.match(fatalHandler, /eventChannel\.trySend\(MicrophoneCaptureEvent\.Fatal\(kind\)\)/u);
+
+  const constructionPolicy = declarationBody(
+    frameworkBackend,
+    'data class FrameworkAudioRecordConstructionPolicy',
+  );
+  const frameworkFactory = declarationBody(
+    frameworkBackend,
+    'fun create(context: Context): FrameworkAudioRecordBackend',
+  );
+  const configurationSnapshot = declarationBody(
+    frameworkBackend,
+    'private fun AudioRecordingConfiguration.toSnapshot()',
+  );
+  const privacyApi = declarationBody(frameworkBackend, 'private object Api30AudioRecordBuilder');
+  assert.match(constructionPolicy, /audioSource = MediaRecorder\.AudioSource\.VOICE_RECOGNITION/u);
+  assert.match(constructionPolicy, /privacySensitive = apiLevel >= API_WITH_PRIVACY_SENSITIVE/u);
+  assert.match(
+    frameworkFactory,
+    /Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.R[\s\S]*Api30AudioRecordBuilder\.configurePrivacySensitive\(builder\)/u,
+  );
+  assert.match(
+    frameworkFactory,
+    /Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.N[\s\S]*Api24PlatformAudioRecordingMonitor\(audioManager\)/u,
+  );
+  assert.match(
+    configurationSnapshot,
+    /Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.Q[\s\S]*isClientSilenced/u,
+  );
+  assert.match(privacyApi, /builder\.setPrivacySensitive\(true\)/u);
+
+  const dataStoreFactory = declarationBody(credentialDataStore, 'companion object');
+  const keyStorePolicy = declarationBody(
+    credentialCipher,
+    'data class AndroidKeyStoreCredentialPolicy',
+  );
+  assert.match(
+    dataStoreFactory,
+    /resolveCredentialStorageFile\(context\.noBackupFilesDir, DEFAULT_FILE_NAME\)/u,
+  );
+  assert.match(dataStoreFactory, /DEFAULT_FILE_NAME = "streaming_credentials\.preferences_pb"/u);
+  assert.match(
+    keyStorePolicy,
+    /val production = AndroidKeyStoreCredentialPolicy\([\s\S]*alias = "sona\.streaming_credential\.aes_gcm\.v1"/u,
+  );
+  assert.match(
+    keyStorePolicy,
+    /aadValue = "sona\/android\/streaming-credential\/v1"\.encodeToByteArray\(\)/u,
+  );
+  assert.match(
+    adapterManifest,
+    /^\s*<uses-permission android:name="android\.permission\.RECORD_AUDIO" \/>\s*$/mu,
+  );
+
+  const captureTests = readClientFile(
+    'adapters', 'android', 'src', 'test', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'audio', 'AndroidMicrophoneCaptureSessionTest.kt',
+  );
+  const frameworkTests = readClientFile(
+    'adapters', 'android', 'src', 'test', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'audio', 'FrameworkAudioRecordBackendTest.kt',
+  );
+  const wavTests = readClientFile(
+    'adapters', 'android', 'src', 'test', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'wav', 'CheckpointingWavWriterTest.kt',
+  );
+  const credentialTests = readClientFile(
+    'adapters', 'android', 'src', 'test', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'credential', 'AndroidStreamingCredentialRepositoryTest.kt',
+  );
+  const frameworkDeviceTests = readClientFile(
+    'adapters', 'android', 'src', 'androidTest', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'audio', 'FrameworkAudioRecordBackendInstrumentedTest.kt',
+  );
+  const credentialDeviceTests = readClientFile(
+    'adapters', 'android', 'src', 'androidTest', 'kotlin', 'com', 'sona', 'android',
+    'adapters', 'android', 'credential',
+    'AndroidStreamingCredentialRepositoryInstrumentedTest.kt',
+  );
+  assert.match(captureTests, /the 101st queued frame overflows once while later PCM still reaches WAV/u);
+  assert.match(frameworkTests, /API 23 emits unavailable without creating a callback/u);
+  assert.match(wavTests, /one second checkpoint updates both lengths before finish/u);
+  assert.match(credentialTests, /cancellation is rethrown by save load clear and status without mutation/u);
+  assert.match(frameworkDeviceTests, /api23LoadsAndStartsWithoutLinkingMonitoringOrPrivacyApis/u);
+  assert.match(credentialDeviceTests, /realSaveLoadOverwriteAndClearUseANonExportableKeyAndFreshEnvelope/u);
+});
+
 test('Android Compose shell is native, adaptive, and wired at one composition root', () => {
   const mainActivity = readClientFile(
     'app', 'src', 'main', 'kotlin', 'com', 'sona', 'android', 'app', 'MainActivity.kt',
@@ -238,9 +418,31 @@ test('Android client has a repeatable local and CI verification entry point', ()
   assert.equal(packageJson.scripts['verify:android-client'], 'node scripts/verify-android-client.js');
   assert.match(verifier, /path\.join\(repoRoot, 'scripts', 'run-managed-gradle\.js'\)/u);
   assert.match(verifier, /path\.join\(repoRoot, 'platforms', 'android', 'client'\)/u);
-  assert.match(verifier, /':application:testDebugUnitTest'/u);
-  assert.match(verifier, /':app:assembleDebug'/u);
-  assert.match(verifier, /':app:lintDebug'/u);
+  const normalizedVerifier = normalizeNewlines(verifier);
+  const expectedGradleInvocation = `run(process.execPath, [
+  managedGradleRunner,
+  '--project-dir',
+  clientProjectDir,
+  '--',
+  '--no-daemon',
+  ':application:testDebugUnitTest',
+  ':adapters:android:testDebugUnitTest',
+  ':adapters:android:assembleDebugAndroidTest',
+  ':adapters:android:lintDebug',
+  ':app:assembleDebug',
+  ':app:lintDebug',
+  '--quiet',
+], { env: gradleEnv });`;
+  assert.equal(
+    normalizedVerifier.includes(expectedGradleInvocation),
+    true,
+    'Android verification must run one ordered serial Gradle gate',
+  );
+  assert.equal(
+    normalizedVerifier.match(/run\(process\.execPath, \[/gu)?.length,
+    1,
+    'Android verification must have exactly one managed Gradle invocation',
+  );
   assert.match(
     verifier,
     /SONA_ANDROID_ABIS:\s*process\.env\.SONA_ANDROID_ABIS\s*\?\?\s*'arm64-v8a,x86_64'/u,
@@ -260,6 +462,12 @@ test('Android client has a repeatable local and CI verification entry point', ()
   assert.match(readme, /pnpm run verify:android-client/u);
   assert.match(readme, /app-arm64-v8a-debug\.apk/u);
   assert.match(readme, /app-x86_64-debug\.apk/u);
+  assert.match(readme, /`:adapters:android` owns Android framework integration/u);
+  assert.match(readme, /AES-256-GCM/u);
+  assert.match(readme, /`noBackupFilesDir`/u);
+  assert.match(readme, /640-byte/u);
+  assert.match(readme, /100-frame/u);
+  assert.match(readme, /API 23 and API 37 emulators/u);
   assert.match(gitignore, /^\/client\/\.gradle\/$/mu);
   assert.match(gitignore, /^\/client\/build\/$/mu);
   assert.match(gitignore, /^\/client\/\*\*\/build\/$/mu);

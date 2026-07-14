@@ -1,6 +1,7 @@
 package com.sona.android.application.recording
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -15,11 +16,18 @@ import org.junit.Test
 class RecordingPortsContractTest {
     @Test
     fun `recording adapters can satisfy every port without platform types`() = runTest {
-        val credentialRepository = MemoryCredentialRepository()
+        val credentialSettings = MemoryCredentialSettings()
         val credential = StreamingCredential(apiKey = "secret")
         assertFalse(credential.toString().contains("secret"))
-        credentialRepository.save(credential)
-        assertEquals(credential, credentialRepository.load())
+        credentialSettings.save(credential)
+        assertEquals(CredentialStatus.CONFIGURED, credentialSettings.status.first())
+        assertEquals(
+            setOf("clear", "getStatus", "save"),
+            StreamingCredentialSettingsPort::class.java.declaredMethods.map { it.name }.toSet(),
+        )
+
+        val credentialResolver = StreamingCredentialResolverPort { credential }
+        assertEquals(credential, credentialResolver.loadForStart())
 
         val profile = StreamingProviderProfile(
             providerId = "volcengine-doubao",
@@ -50,7 +58,7 @@ class RecordingPortsContractTest {
         )
         microphoneSession.start()
         assertArrayEquals(byteArrayOf(1, 2), microphoneSession.frames.first().bytes)
-        assertNull(microphoneSession.inputEvents.firstOrNull())
+        assertNull(microphoneSession.events.firstOrNull())
         microphoneSession.stop()
         assertEquals(CapturedAudio(durationMillis = 125, bytesWritten = 2), microphoneSession.finish())
         microphoneSession.close()
@@ -89,21 +97,20 @@ class RecordingPortsContractTest {
         assertEquals(125, MonotonicClockPort { 125 }.elapsedRealtimeMillis())
         assertEquals("live-2", RecordingIdPort { "live-2" }.nextRecordingId())
 
-        credentialRepository.clear()
-        assertNull(credentialRepository.load())
+        credentialSettings.clear()
+        assertEquals(CredentialStatus.NOT_CONFIGURED, credentialSettings.status.first())
     }
 
-    private class MemoryCredentialRepository : StreamingCredentialRepository {
-        private var credential: StreamingCredential? = null
-
-        override suspend fun load(): StreamingCredential? = credential
+    private class MemoryCredentialSettings : StreamingCredentialSettingsPort {
+        private val mutableStatus = MutableStateFlow(CredentialStatus.NOT_CONFIGURED)
+        override val status: Flow<CredentialStatus> = mutableStatus
 
         override suspend fun save(credential: StreamingCredential) {
-            this.credential = credential
+            mutableStatus.value = CredentialStatus.CONFIGURED
         }
 
         override suspend fun clear() {
-            credential = null
+            mutableStatus.value = CredentialStatus.NOT_CONFIGURED
         }
     }
 
@@ -131,7 +138,7 @@ class RecordingPortsContractTest {
         override suspend fun open(request: MicrophoneCaptureRequest): MicrophoneCaptureSession =
             object : MicrophoneCaptureSession {
                 override val frames: Flow<Pcm16Frame> = flowOf(frame)
-                override val inputEvents: Flow<AudioInputEvent> = emptyFlow()
+                override val events: Flow<MicrophoneCaptureEvent> = emptyFlow()
 
                 override suspend fun start() = Unit
 

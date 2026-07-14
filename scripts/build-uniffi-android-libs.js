@@ -163,7 +163,7 @@ function toolchainEnvForTarget(target, minSdk, hostPlatform) {
   };
 }
 
-function runCargoBuild(target, profile, minSdk, sherpaLibDir) {
+function runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir) {
   const releaseFlag = profile === 'release' ? ['--release'] : [];
   const cargo = process.env.CARGO ?? 'cargo';
   const env = {
@@ -171,7 +171,16 @@ function runCargoBuild(target, profile, minSdk, sherpaLibDir) {
     ...toolchainEnvForTarget(target, minSdk, process.platform),
     SHERPA_ONNX_LIB_DIR: sherpaLibDir,
   };
-  const result = spawnSync(cargo, ['build', '-p', 'sona-uniffi-bind', '--target', target, ...releaseFlag], {
+  const result = spawnSync(cargo, [
+    'build',
+    '-p',
+    'sona-uniffi-bind',
+    '--target',
+    target,
+    '--target-dir',
+    targetDir,
+    ...releaseFlag,
+  ], {
     cwd: repoRoot,
     env,
     stdio: 'inherit',
@@ -255,7 +264,7 @@ for (const abi of abis) {
     continue;
   }
   const sherpaLibDir = path.join(preparedSherpaRuntime.rootDir, 'jniLibs', abi);
-  runCargoBuild(target, profile, minSdk, sherpaLibDir);
+  runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir);
   copyAndroidLibrary(targetDir, target, profile, abi, outDir);
   stageAndroidSherpaRuntime(preparedSherpaRuntime, abi, outDir);
 }
