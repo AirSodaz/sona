@@ -62,6 +62,7 @@ class RecordingFakes {
         var completeFailure: Throwable? = null
         var createFailure: Throwable? = null
         var createBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
+        var checkpointBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
 
         override suspend fun createLiveDraft(request: CreateLiveDraftRequest): RecordingDraft {
             calls += "history.create"
@@ -81,6 +82,10 @@ class RecordingFakes {
             segments: List<TranscriptSegment>,
         ) {
             calls += "history.checkpoint"
+            checkpointBarrier?.let { (started, release) ->
+                started.complete(Unit)
+                release.await()
+            }
             checkpointRequests += segments
             if (checkpointFailuresRemaining > 0) {
                 checkpointFailuresRemaining -= 1

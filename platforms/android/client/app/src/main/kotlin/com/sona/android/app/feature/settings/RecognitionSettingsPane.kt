@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +33,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,15 +54,27 @@ import com.sona.android.application.recording.CredentialStatus
 internal fun RecognitionSettingsPane(
     bootstrapState: SonaBootstrapUiState,
     credentialState: CredentialSettingsUiState,
-    onSaveCredential: (String) -> Unit,
+    requestCredentialFocus: Boolean,
+    onCredentialInputChanged: (String) -> Unit,
+    onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCredentialFocusConsumed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val initialFocusRequester = remember { FocusRequester() }
+    val credentialFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        initialFocusRequester.requestFocus()
-        keyboardController?.hide()
+    var focusInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(requestCredentialFocus) {
+        if (requestCredentialFocus) {
+            credentialFocusRequester.requestFocus()
+            focusInitialized = true
+            onCredentialFocusConsumed()
+        } else if (!focusInitialized) {
+            initialFocusRequester.requestFocus()
+            keyboardController?.hide()
+            focusInitialized = true
+        }
     }
 
     Box(
@@ -82,6 +94,8 @@ internal fun RecognitionSettingsPane(
         ) {
             CredentialSettings(
                 state = credentialState,
+                focusRequester = credentialFocusRequester,
+                onCredentialInputChanged = onCredentialInputChanged,
                 onSave = onSaveCredential,
                 onClear = onClearCredential,
             )
@@ -99,36 +113,33 @@ internal fun RecognitionSettingsPane(
 @Composable
 private fun CredentialSettings(
     state: CredentialSettingsUiState,
-    onSave: (String) -> Unit,
+    focusRequester: FocusRequester,
+    onCredentialInputChanged: (String) -> Unit,
+    onSave: () -> Unit,
     onClear: () -> Unit,
 ) {
-    var apiKey by remember { mutableStateOf("") }
-    var apiKeyVisible by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.status, state.operationInProgress) {
-        if (state.status == CredentialStatus.CONFIGURED && !state.operationInProgress) {
-            apiKey = ""
-        }
-    }
+    var apiKeyVisible by remember { mutableStateOf(false) }
 
     Text(
-        text = stringResource(R.string.online_credentials_heading),
+        text = stringResource(R.string.online_recognition_heading),
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
     )
     Text(
         text = when (state.status) {
-            null -> stringResource(R.string.status_loading)
-            CredentialStatus.CONFIGURED -> stringResource(R.string.credentials_configured)
-            CredentialStatus.NOT_CONFIGURED -> stringResource(R.string.credentials_not_configured)
+            CredentialStatus.CONFIGURED -> stringResource(R.string.credential_configured)
+            CredentialStatus.NOT_CONFIGURED -> stringResource(R.string.credential_not_configured)
         },
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     OutlinedTextField(
-        value = apiKey,
-        onValueChange = { apiKey = it },
+        value = state.credentialInput,
+        onValueChange = onCredentialInputChanged,
         enabled = !state.operationInProgress,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(stringResource(R.string.api_key_label)) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester),
+        label = { Text(stringResource(R.string.credential_api_key)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         visualTransformation = if (apiKeyVisible) {
@@ -145,15 +156,19 @@ private fun CredentialSettings(
                         Icons.Rounded.Visibility
                     },
                     contentDescription = stringResource(
-                        if (apiKeyVisible) R.string.hide_api_key else R.string.show_api_key,
+                        if (apiKeyVisible) {
+                            R.string.action_hide_credential
+                        } else {
+                            R.string.action_show_credential
+                        },
                     ),
                 )
             }
         },
     )
-    if (state.hasError) {
+    if (state.operationFailed) {
         Text(
-            text = stringResource(R.string.credentials_error),
+            text = stringResource(R.string.credential_operation_failed),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -169,12 +184,12 @@ private fun CredentialSettings(
             ) {
                 Icon(Icons.Rounded.DeleteOutline, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_clear))
+                Text(stringResource(R.string.action_clear_credential))
             }
         }
         Button(
-            onClick = { onSave(apiKey) },
-            enabled = apiKey.isNotBlank() && !state.operationInProgress,
+            onClick = onSave,
+            enabled = state.credentialInput.isNotBlank() && !state.operationInProgress,
         ) {
             Icon(
                 imageVector = Icons.Rounded.Save,
@@ -182,7 +197,10 @@ private fun CredentialSettings(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.action_save))
+            Text(stringResource(R.string.action_save_credential))
+        }
+        if (state.operationInProgress) {
+            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         }
     }
 }

@@ -170,6 +170,13 @@ file is excluded from device backup. Settings consumers receive only configured
 status plus save/clear capabilities. Plaintext resolution is available only to
 the live-recording coordinator when a session starts.
 
+The settings screen masks credential input by default and supports explicit
+show, hide, save, and clear actions. Plaintext input remains only in the
+settings `ViewModel`; it is never written to saved instance state, Compose
+saveable state, logs, or user-visible errors, and is cleared after a successful
+save or clear. Starting a recording without configured credentials opens the
+settings screen and focuses the API key field.
+
 The production online-recording path resolves the Volcengine provider manifest,
 opens the typed UniFFI streaming session, writes draft/checkpoint/complete history
 mutations through the shared SQLite binding, and maps remote streaming failures
@@ -178,6 +185,15 @@ the recording boundary and keeps the credential repository at `Application`
 scope, while each live-recording coordinator is owned by its recording
 `ViewModel`. The local engine remains disabled because the UniFFI surface does
 not yet export a local streaming session factory.
+
+Recording is foreground-only. The first start requests microphone permission;
+a denial can be retried after the rationale, while a permanent denial offers a
+shortcut to the app's system settings and permission is checked again when the
+activity resumes. `ProcessLifecycleOwner` stops and saves an active recording
+when the application enters the background. Activity recreation such as device
+rotation does not stop it. After a successful stop, the recording screen keeps
+the saved result (including any audio-only warning) visible and allows another
+recording; the library screen remains a placeholder in this client slice.
 
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client
@@ -204,6 +220,9 @@ adapter and app, then assembles and validates both client APKs. Instrumentation
 assembly proves API compatibility but does not execute device APIs. Real
 microphone, recording callback, privacy-sensitive capture, and Android Keystore
 behavior must run on API 23 and API 37 emulators as the device QA gate.
+The API 37 gate uses a 16 KB page-size system image; the APK must launch without
+Android page-size compatibility mode, and every packaged native library must
+use at least `0x4000` ELF load-segment alignment.
 
 GitHub Actions uses `.github/workflows/android-client.yml` as the reusable
 Android build entry point. Stable and nightly workflows call it with both ABIs

@@ -32,7 +32,7 @@ class LiveRecordingCoordinator(
     private val scope: CoroutineScope,
     private val checkpointIntervalMillis: Long = 2_000,
     private val elapsedUpdateIntervalMillis: Long = 1_000,
-) : LiveRecordingUseCase {
+) : LiveRecordingController {
     private val commandMutex = Mutex()
     private val mutableState = MutableStateFlow<LiveRecordingState>(LiveRecordingState.Idle)
     override val state: StateFlow<LiveRecordingState> = mutableState.asStateFlow()
@@ -188,9 +188,11 @@ class LiveRecordingCoordinator(
                         )
                     }
                     try {
-                        history.checkpointTranscript(session.historyId, snapshot.segments)
-                        session.transcriptMutex.withLock {
-                            session.lastCheckpointVersion = snapshot.version
+                        withContext(NonCancellable) {
+                            history.checkpointTranscript(session.historyId, snapshot.segments)
+                            session.transcriptMutex.withLock {
+                                session.lastCheckpointVersion = snapshot.version
+                            }
                         }
                     } catch (_: Exception) {
                         session.checkpointSignals.trySend(Unit)
@@ -595,13 +597,13 @@ class LiveRecordingCoordinator(
             }
             session.transcription = null
         }
+        val failure = RecordingFailure(
+            category = RecordingFailureCategory.STREAMING,
+            message = "Live transcription stopped; audio recording continues.",
+        )
+        recordCompletionWarning(session, failure)
         session.publicationMutex.withLock {
-            session.streamingStatus = StreamingStatus.AudioOnly(
-                RecordingFailure(
-                    category = RecordingFailureCategory.STREAMING,
-                    message = "Live transcription stopped; audio recording continues.",
-                ),
-            )
+            session.streamingStatus = StreamingStatus.AudioOnly(failure)
             mutableState.update { current ->
                 if (current is LiveRecordingState.Recording) {
                     current.copy(streamingStatus = session.streamingStatus)

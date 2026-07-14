@@ -5,13 +5,50 @@ import org.junit.Test
 
 class MicrophonePermissionPolicyTest {
     @Test
-    fun `maps permission state to the next recording action`() {
-        fun decide(granted: Boolean, requested: Boolean, rationale: Boolean) =
-            MicrophonePermissionPolicy.decide(granted, requested, rationale)
+    fun `granted permission proceeds directly to recording`() {
+        assertEquals(
+            MicrophonePermissionDecision.START_RECORDING,
+            MicrophonePermissionPolicy.decide(
+                isGranted = true,
+                hasRequestedBefore = true,
+                shouldShowRationale = false,
+            ),
+        )
+    }
 
-        assertEquals(MicrophonePermissionDecision.START_RECORDING, decide(true, true, false))
-        assertEquals(MicrophonePermissionDecision.REQUEST_PERMISSION, decide(false, false, false))
-        assertEquals(MicrophonePermissionDecision.SHOW_RATIONALE, decide(false, true, true))
-        assertEquals(MicrophonePermissionDecision.OPEN_APP_SETTINGS, decide(false, true, false))
+    @Test
+    fun `first use requests microphone permission`() {
+        assertEquals(
+            MicrophonePermissionDecision.REQUEST_PERMISSION,
+            MicrophonePermissionPolicy.decide(
+                isGranted = false,
+                hasRequestedBefore = false,
+                shouldShowRationale = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `denial with rationale shows the in-app rationale`() {
+        assertEquals(
+            MicrophonePermissionDecision.SHOW_RATIONALE,
+            MicrophonePermissionPolicy.decide(
+                isGranted = false,
+                hasRequestedBefore = true,
+                shouldShowRationale = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `permanent denial directs the user to app settings`() {
+        assertEquals(
+            MicrophonePermissionDecision.OPEN_APP_SETTINGS,
+            MicrophonePermissionPolicy.decide(
+                isGranted = false,
+                hasRequestedBefore = true,
+                shouldShowRationale = false,
+            ),
+        )
     }
 }

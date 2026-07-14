@@ -1,110 +1,108 @@
 package com.sona.android.app.feature.recording
 
-import com.sona.android.app.MainDispatcherRule
-import com.sona.android.application.recording.AudioInputStatus
+import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingState
-import com.sona.android.application.recording.LiveRecordingUseCase
-import com.sona.android.application.recording.StreamingStatus
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RecordingViewModelTest {
     @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    val mainDispatcherRule = RecordingMainDispatcherRule()
 
     @Test
-    fun `idle action starts through a ViewModel owned recording scope`() = runTest {
-        val recording = FakeLiveRecording()
-        var ownerScope: CoroutineScope? = null
+    fun `creates the controller with the view model scope and exposes its state`() {
+        val controller = FakeLiveRecordingController()
+        var capturedScope: CoroutineScope? = null
+
         val viewModel = RecordingViewModel { scope ->
-            ownerScope = scope
-            recording
+            capturedScope = scope
+            controller
         }
 
-        viewModel.onRecordAction()
-        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(listOf("start"), recording.calls)
-        assertNotNull(ownerScope?.coroutineContext?.get(Job))
-        assertTrue(viewModel.actionRequiresMicrophonePermission())
+        assertSame(controller.state, viewModel.state)
+        assertNotNull(capturedScope)
+        assertTrue(capturedScope?.coroutineContext?.get(Job)?.isActive == true)
     }
 
     @Test
-    fun `recording action stops and does not request permission again`() = runTest {
-        val recording = FakeLiveRecording().apply {
-            mutableState.value = LiveRecordingState.Recording(
-                recordingId = "recording-1",
-                elapsedMillis = 1_000,
-                segments = emptyList(),
-                streamingStatus = StreamingStatus.Connected,
-                inputStatus = AudioInputStatus.Active,
-            )
-        }
-        val viewModel = RecordingViewModel { recording }
+    fun `start recording delegates to the controller`() = runTest(mainDispatcherRule.dispatcher) {
+        val controller = FakeLiveRecordingController()
+        val viewModel = RecordingViewModel { controller }
 
-        viewModel.onRecordAction()
-        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+        viewModel.startRecording()
+        advanceUntilIdle()
 
-        assertEquals(listOf("stop"), recording.calls)
-        assertFalse(viewModel.actionRequiresMicrophonePermission())
+        assertEquals(1, controller.startCalls)
     }
 
     @Test
-    fun `preparing and stopping states ignore duplicate actions`() = runTest {
-        val recording = FakeLiveRecording()
-        val viewModel = RecordingViewModel { recording }
+    fun `stop recording delegates to the controller`() = runTest(mainDispatcherRule.dispatcher) {
+        val controller = FakeLiveRecordingController()
+        val viewModel = RecordingViewModel { controller }
 
-        recording.mutableState.value = LiveRecordingState.Preparing("recording-1")
-        viewModel.onRecordAction()
-        recording.mutableState.value = LiveRecordingState.Stopping("recording-1")
-        viewModel.onRecordAction()
-        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+        viewModel.stopRecording()
+        advanceUntilIdle()
 
-        assertEquals(emptyList<String>(), recording.calls)
+        assertEquals(1, controller.stopCalls)
     }
 
     @Test
-    fun `app background always forwards stop so startup races are serialized by the use case`() = runTest {
-        val recording = FakeLiveRecording()
-        val viewModel = RecordingViewModel { recording }
+    fun `moving the app to the background stops through the same controller`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val controller = FakeLiveRecordingController()
+            val viewModel = RecordingViewModel { controller }
 
-        viewModel.stopForBackground()
-        recording.mutableState.value = LiveRecordingState.Preparing("recording-1")
-        viewModel.stopForBackground()
-        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.stopForBackground()
+            advanceUntilIdle()
 
-        assertEquals(listOf("stop", "stop"), recording.calls)
+            assertEquals(1, controller.stopCalls)
+        }
+}
+
+private class FakeLiveRecordingController : LiveRecordingController {
+    override val state: StateFlow<LiveRecordingState> = MutableStateFlow(LiveRecordingState.Idle)
+    var startCalls = 0
+        private set
+    var stopCalls = 0
+        private set
+
+    override suspend fun start() {
+        startCalls += 1
     }
 
-    @Test
-    fun `timer formatting is stable across minute and hour boundaries`() {
-        assertEquals("00:00", formatElapsedMillis(-1))
-        assertEquals("01:05", formatElapsedMillis(65_999))
-        assertEquals("01:01:01", formatElapsedMillis(3_661_000))
+    override suspend fun stop() {
+        stopCalls += 1
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class RecordingMainDispatcherRule(
+    val dispatcher: TestDispatcher = StandardTestDispatcher(),
+) : TestWatcher() {
+    override fun starting(description: Description) {
+        Dispatchers.setMain(dispatcher)
     }
 
-    private class FakeLiveRecording : LiveRecordingUseCase {
-        val mutableState = MutableStateFlow<LiveRecordingState>(LiveRecordingState.Idle)
-        val calls = mutableListOf<String>()
-
-        override val state: StateFlow<LiveRecordingState> = mutableState
-
-        override suspend fun start() {
-            calls += "start"
-        }
-
-        override suspend fun stop() {
-            calls += "stop"
-        }
+    override fun finished(description: Description) {
+        Dispatchers.resetMain()
     }
 }

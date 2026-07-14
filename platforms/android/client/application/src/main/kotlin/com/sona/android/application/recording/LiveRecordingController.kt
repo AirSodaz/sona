@@ -2,7 +2,7 @@ package com.sona.android.application.recording
 
 import kotlinx.coroutines.flow.StateFlow
 
-interface LiveRecordingUseCase {
+interface LiveRecordingController {
     val state: StateFlow<LiveRecordingState>
 
     suspend fun start()

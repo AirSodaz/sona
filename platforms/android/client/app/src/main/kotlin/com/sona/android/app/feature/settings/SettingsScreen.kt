@@ -45,10 +45,13 @@ internal fun SettingsScreen(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     appLanguage: AppLanguage,
+    requestCredentialFocus: Boolean,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onSaveCredential: (String) -> Unit,
+    onCredentialInputChanged: (String) -> Unit,
+    onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCredentialFocusConsumed: () -> Unit,
 ) {
     val navigator = rememberListDetailPaneScaffoldNavigator<SettingsSection>()
     val scope = rememberCoroutineScope()
@@ -99,11 +102,14 @@ internal fun SettingsScreen(
                     appearanceState = appearanceState,
                     credentialState = credentialState,
                     appLanguage = appLanguage,
+                    requestCredentialFocus = requestCredentialFocus,
                     onBack = { scope.launch { navigator.navigateBack() } },
                     onAppLanguageChanged = onAppLanguageChanged,
                     onDynamicColorChanged = onDynamicColorChanged,
+                    onCredentialInputChanged = onCredentialInputChanged,
                     onSaveCredential = onSaveCredential,
                     onClearCredential = onClearCredential,
+                    onCredentialFocusConsumed = onCredentialFocusConsumed,
                 )
             }
         },
@@ -162,11 +168,14 @@ private fun SettingsDetailPane(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     appLanguage: AppLanguage,
+    requestCredentialFocus: Boolean,
     onBack: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onSaveCredential: (String) -> Unit,
+    onCredentialInputChanged: (String) -> Unit,
+    onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCredentialFocusConsumed: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -193,8 +202,11 @@ private fun SettingsDetailPane(
             SettingsSection.RECOGNITION -> RecognitionSettingsPane(
                 bootstrapState = bootstrapState,
                 credentialState = credentialState,
+                requestCredentialFocus = requestCredentialFocus,
+                onCredentialInputChanged = onCredentialInputChanged,
                 onSaveCredential = onSaveCredential,
                 onClearCredential = onClearCredential,
+                onCredentialFocusConsumed = onCredentialFocusConsumed,
                 modifier = Modifier.weight(1f),
             )
         }

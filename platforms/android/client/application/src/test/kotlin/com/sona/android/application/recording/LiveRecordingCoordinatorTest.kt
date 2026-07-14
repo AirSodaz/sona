@@ -806,6 +806,48 @@ class LiveRecordingCoordinatorTest {
     }
 
     @Test
+    fun `stop waits for an in-flight checkpoint before completing history`() = runTest {
+        val fakes = RecordingFakes()
+        val checkpointStarted = CompletableDeferred<Unit>()
+        val releaseCheckpoint = CompletableDeferred<Unit>()
+        fakes.history.checkpointBarrier = checkpointStarted to releaseCheckpoint
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+            checkpointIntervalMillis = 1,
+        )
+        coordinator.start()
+        fakes.transcription.emit(transcriptEvent(id = "final", text = "final transcript"))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        checkpointStarted.await()
+
+        val stopJob = launch { coordinator.stop() }
+        runCurrent()
+
+        assertFalse(stopJob.isCompleted)
+        assertFalse(fakes.calls.contains("history.complete"))
+        releaseCheckpoint.complete(Unit)
+        stopJob.join()
+
+        assertEquals(
+            listOf("final transcript"),
+            fakes.history.checkpointRequests.single().map(TranscriptSegment::text),
+        )
+        assertEquals(
+            listOf("final transcript"),
+            fakes.history.completedRequest?.segments?.map(TranscriptSegment::text),
+        )
+    }
+
+    @Test
     fun `input silencing changes status without fabricating transcript text`() = runTest {
         val fakes = RecordingFakes()
         val coordinator = LiveRecordingCoordinator(
@@ -1024,7 +1066,16 @@ class LiveRecordingCoordinatorTest {
         )
         assertEquals(1, fakes.calls.count { it == "asr.stop" })
         assertEquals(1, fakes.calls.count { it == "asr.close" })
-        assertEquals(LiveRecordingState.Completed("live-1"), coordinator.state.value)
+        assertEquals(
+            LiveRecordingState.Completed(
+                historyId = "live-1",
+                warning = RecordingFailure(
+                    category = RecordingFailureCategory.STREAMING,
+                    message = "Live transcription stopped; audio recording continues.",
+                ),
+            ),
+            coordinator.state.value,
+        )
     }
 
     @Test
@@ -1050,7 +1101,16 @@ class LiveRecordingCoordinatorTest {
 
         assertEquals(1, fakes.transcription.eventCollectorCompletions)
         coordinator.stop()
-        assertEquals(LiveRecordingState.Completed("live-1"), coordinator.state.value)
+        assertEquals(
+            LiveRecordingState.Completed(
+                historyId = "live-1",
+                warning = RecordingFailure(
+                    category = RecordingFailureCategory.STREAMING,
+                    message = "Live transcription stopped; audio recording continues.",
+                ),
+            ),
+            coordinator.state.value,
+        )
     }
 
     @Test

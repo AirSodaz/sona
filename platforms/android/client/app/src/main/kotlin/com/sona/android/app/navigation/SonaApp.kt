@@ -12,6 +12,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +27,7 @@ import androidx.navigation.navArgument
 import com.sona.android.app.BuildConfig
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryScreen
+import com.sona.android.app.feature.recording.ForegroundRecordingLifecycleEffect
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
@@ -41,20 +45,34 @@ internal fun SonaApp(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     appLanguage: AppLanguage,
-    microphonePermissionGranted: Boolean,
-    onRecordAction: () -> Unit,
-    onSaveCredential: (String) -> Unit,
-    onClearCredential: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
     onRetryBootstrap: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onAppBackground: () -> Unit,
+    onCredentialInputChanged: (String) -> Unit,
+    onSaveCredential: () -> Unit,
+    onClearCredential: () -> Unit,
 ) {
+    var credentialFocusRequested by rememberSaveable { mutableStateOf(false) }
+
+    ForegroundRecordingLifecycleEffect(onAppBackground)
+
     SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.RECORD.route
         val currentDestination = SonaDestination.entries.firstOrNull { it.matches(currentRoute) }
             ?: SonaDestination.RECORD
+        val onConfigureCredential = {
+            credentialFocusRequested = true
+            navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
+                popUpTo(SonaDestination.RECORD.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
 
         NavigationSuiteScaffold(
             navigationSuiteItems = {
@@ -112,14 +130,11 @@ internal fun SonaApp(
                         RecordScreen(
                             bootstrapState = bootstrapState,
                             recordingState = recordingState,
-                            microphonePermissionGranted = microphonePermissionGranted,
-                            onRecordAction = onRecordAction,
-                            onOpenSettings = {
-                                navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
-                                    launchSingleTop = true
-                                }
-                            },
+                            credentialStatus = credentialState.status,
                             onRetryBootstrap = onRetryBootstrap,
+                            onStartRecording = onStartRecording,
+                            onStopRecording = onStopRecording,
+                            onConfigureCredential = onConfigureCredential,
                         )
                     }
                     composable(SonaDestination.LIBRARY.route) {
@@ -143,10 +158,15 @@ internal fun SonaApp(
                             appearanceState = appearanceState,
                             credentialState = credentialState,
                             appLanguage = appLanguage,
+                            requestCredentialFocus = credentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
                             onDynamicColorChanged = onDynamicColorChanged,
+                            onCredentialInputChanged = onCredentialInputChanged,
                             onSaveCredential = onSaveCredential,
                             onClearCredential = onClearCredential,
+                            onCredentialFocusConsumed = {
+                                credentialFocusRequested = false
+                            },
                         )
                     }
                 }

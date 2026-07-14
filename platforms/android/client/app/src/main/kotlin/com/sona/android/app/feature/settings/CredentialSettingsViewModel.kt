@@ -10,91 +10,109 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class CredentialSettingsUiState(
-    val status: CredentialStatus? = null,
+    val status: CredentialStatus = CredentialStatus.NOT_CONFIGURED,
+    val credentialInput: String = "",
     val operationInProgress: Boolean = false,
-    val hasError: Boolean = false,
-)
+    val operationFailed: Boolean = false,
+) {
+    override fun toString(): String =
+        "CredentialSettingsUiState(" +
+            "status=$status, " +
+            "credentialInput=<redacted>, " +
+            "operationInProgress=$operationInProgress, " +
+            "operationFailed=$operationFailed)"
+}
 
 class CredentialSettingsViewModel(
-    private val settings: StreamingCredentialSettingsPort,
+    private val settingsPort: StreamingCredentialSettingsPort,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(CredentialSettingsUiState())
-    val state: StateFlow<CredentialSettingsUiState> = mutableState.asStateFlow()
+    private val mutableUiState = MutableStateFlow(CredentialSettingsUiState())
+    val uiState: StateFlow<CredentialSettingsUiState> = mutableUiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            settings.status
-                .catch { error ->
-                    if (error is CancellationException) throw error
-                    mutableState.update { it.copy(hasError = true) }
+            try {
+                settingsPort.status.collect { status ->
+                    mutableUiState.update { it.copy(status = status) }
                 }
-                .collect { status ->
-                    mutableState.update { it.copy(status = status, hasError = false) }
-                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                mutableUiState.update { it.copy(operationFailed = true) }
+            }
         }
     }
 
-    fun save(apiKey: String) {
-        if (apiKey.isBlank()) {
-            mutableState.update { it.copy(hasError = true) }
+    fun onCredentialInputChanged(value: String) {
+        mutableUiState.update {
+            it.copy(credentialInput = value, operationFailed = false)
+        }
+    }
+
+    fun saveCredential() {
+        val current = mutableUiState.value
+        if (current.operationInProgress || current.credentialInput.isBlank()) {
             return
         }
-        if (mutableState.value.operationInProgress) return
-        mutableState.update { it.copy(operationInProgress = true, hasError = false) }
+        mutableUiState.value = current.copy(
+            operationInProgress = true,
+            operationFailed = false,
+        )
         viewModelScope.launch {
             try {
-                settings.save(StreamingCredential(apiKey))
-                mutableState.update {
-                    it.copy(
-                        status = CredentialStatus.CONFIGURED,
-                        operationInProgress = false,
-                    )
-                }
+                settingsPort.save(StreamingCredential(current.credentialInput))
+                mutableUiState.update { it.copy(credentialInput = "") }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                mutableState.update {
-                    it.copy(operationInProgress = false, hasError = true)
-                }
+                mutableUiState.update { it.copy(operationFailed = true) }
+            } finally {
+                mutableUiState.update { it.copy(operationInProgress = false) }
             }
         }
     }
 
-    fun clear() {
-        if (mutableState.value.operationInProgress) return
-        mutableState.update { it.copy(operationInProgress = true, hasError = false) }
+    fun clearCredential() {
+        val current = mutableUiState.value
+        if (current.operationInProgress) {
+            return
+        }
+        mutableUiState.value = current.copy(
+            operationInProgress = true,
+            operationFailed = false,
+        )
         viewModelScope.launch {
             try {
-                settings.clear()
-                mutableState.update {
-                    it.copy(
-                        status = CredentialStatus.NOT_CONFIGURED,
-                        operationInProgress = false,
-                    )
-                }
+                settingsPort.clear()
+                mutableUiState.update { it.copy(credentialInput = "") }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                mutableState.update {
-                    it.copy(operationInProgress = false, hasError = true)
-                }
+                mutableUiState.update { it.copy(operationFailed = true) }
+            } finally {
+                mutableUiState.update { it.copy(operationInProgress = false) }
             }
         }
+    }
+
+    override fun onCleared() {
+        mutableUiState.update { it.copy(credentialInput = "") }
     }
 
     companion object {
-        fun factory(settings: StreamingCredentialSettingsPort): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    require(modelClass.isAssignableFrom(CredentialSettingsViewModel::class.java))
-                    return CredentialSettingsViewModel(settings) as T
-                }
+        fun factory(
+            settingsPort: StreamingCredentialSettingsPort,
+        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                require(modelClass.isAssignableFrom(CredentialSettingsViewModel::class.java))
+                return CredentialSettingsViewModel(settingsPort) as T
             }
+        }
     }
 }

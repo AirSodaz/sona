@@ -13,17 +13,16 @@ import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
+import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
-import com.sona.android.application.recording.LiveRecordingUseCase
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
 import com.sona.android.application.settings.AppearanceSettingsPort
-import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
 class SonaAppContainer(context: Context) {
     private val appContext = context.applicationContext
-    private val appDataDir = createAppDataDir(appContext)
+    private val appDataDir = appContext.filesDir.absolutePath
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
@@ -41,7 +40,7 @@ class SonaAppContainer(context: Context) {
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
 
-    fun createLiveRecording(scope: CoroutineScope): LiveRecordingUseCase =
+    fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(
             credentialResolver = credentialRepository,
             providerCatalog = providerCatalog,
@@ -55,14 +54,4 @@ class SonaAppContainer(context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun createAudioBackend() = FrameworkAudioRecordBackend.create(appContext)
-
-    private companion object {
-        fun createAppDataDir(context: Context): String {
-            val directory = File(context.filesDir, "sona")
-            check(directory.isDirectory || directory.mkdirs()) {
-                "Unable to create the Sona app data directory."
-            }
-            return directory.absolutePath
-        }
-    }
 }
