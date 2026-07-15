@@ -1,8 +1,7 @@
 use clap::{Args, Subcommand};
-use sona_core::storage_usage::{StorageUsageService, StorageUsageSnapshot};
-use sona_sqlite::LazySqliteStorageUsageRepository;
+use sona_core::storage_usage::StorageUsageSnapshot;
+use sona_sqlite::load_storage_usage_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::table::{append_table_row, append_table_separator, column_widths};
 use crate::{CliError, CliOutput, CliResult};
@@ -38,10 +37,11 @@ pub fn run_storage(args: StorageArgs) -> CliResult<CliOutput> {
 fn run_storage_usage(args: StorageUsageArgs) -> CliResult<CliOutput> {
     let app_data_dir =
         std::path::absolute(args.app_data_dir).map_err(|error| CliError::Io(error.to_string()))?;
-    let repository = LazySqliteStorageUsageRepository::new(app_data_dir);
-    let snapshot = StorageUsageService::new(Arc::new(repository))
-        .load_snapshot_at(sona_runtime_fs::storage_usage_generated_at_now())
-        .map_err(|error| CliError::Io(error.to_string()))?;
+    let snapshot = load_storage_usage_snapshot(
+        app_data_dir,
+        sona_runtime_fs::storage_usage_generated_at_now(),
+    )
+    .map_err(|error| CliError::Io(error.to_string()))?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?

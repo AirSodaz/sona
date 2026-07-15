@@ -1,10 +1,14 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 use sona_core::storage_usage::{StorageUsageError, StorageUsageRepository};
-use sona_sqlite::{Database, LazySqliteStorageUsageRepository};
+use sona_sqlite::{
+    Database, LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
+    load_storage_usage_snapshot_with_database,
+};
 
 fn file_hashes(root: &Path) -> BTreeMap<PathBuf, String> {
     let mut files = BTreeMap::new();
@@ -43,7 +47,7 @@ fn missing_directory_is_rejected_without_creation() {
 #[test]
 fn valid_collection_reads_active_wal_and_analytics_without_modifying_source_files() {
     let dir = tempfile::tempdir().unwrap();
-    let writer = Database::open(dir.path()).unwrap();
+    let writer = Arc::new(Database::open(dir.path()).unwrap());
     writer
         .with_write_connection(|connection| {
             connection.execute_batch(
@@ -70,14 +74,18 @@ fn valid_collection_reads_active_wal_and_analytics_without_modifying_source_file
     fs::write(dir.path().join("history").join("recording.wav"), [1_u8; 9]).unwrap();
     let before = file_hashes(dir.path());
 
-    let measurements = LazySqliteStorageUsageRepository::new(dir.path().to_path_buf())
-        .collect_measurements()
-        .unwrap();
+    let snapshot = load_storage_usage_snapshot(
+        dir.path().to_path_buf(),
+        "2026-07-15T20:00:00.000Z".to_string(),
+    )
+    .unwrap();
 
-    assert_eq!(measurements.history_audio.bytes, 9);
-    assert!(measurements.database.sqlite.dbstat_available);
+    assert_eq!(snapshot.generated_at, "2026-07-15T20:00:00.000Z");
+    assert_eq!(snapshot.categories.audio.history_audio_bytes, 9);
+    assert!(snapshot.categories.database.sqlite.dbstat_available);
     assert!(
-        measurements
+        snapshot
+            .categories
             .database
             .sqlite
             .index_entries
@@ -89,5 +97,29 @@ fn valid_collection_reads_active_wal_and_analytics_without_modifying_source_file
             })
     );
     assert_eq!(file_hashes(dir.path()), before);
+
+    let before_shared = file_hashes(dir.path());
+
+    let shared_snapshot = load_storage_usage_snapshot_with_database(
+        dir.path().to_path_buf(),
+        Arc::clone(&writer),
+        "2026-07-15T20:01:00.000Z".to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(shared_snapshot.categories.audio.history_audio_bytes, 9);
+    assert!(shared_snapshot.categories.database.sqlite.dbstat_available);
+    let after_shared = file_hashes(dir.path());
+    for durable_file in [
+        "sona.db",
+        "sona.db-wal",
+        "sona-analytics.db",
+        "sona-analytics.db-wal",
+    ] {
+        assert_eq!(
+            after_shared.get(Path::new(durable_file)),
+            before_shared.get(Path::new(durable_file))
+        );
+    }
     drop(writer);
 }

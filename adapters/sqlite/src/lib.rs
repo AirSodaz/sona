@@ -30,7 +30,10 @@ pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
 pub use project::{SqliteProjectAdapter, SqliteProjectRepository};
-pub use storage_usage_repository::LazySqliteStorageUsageRepository;
+pub use storage_usage_repository::{
+    LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
+    load_storage_usage_snapshot_with_database,
+};
 pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 
 use rusqlite::functions::FunctionFlags;

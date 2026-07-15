@@ -11,11 +11,12 @@ pub async fn get_usage_snapshot<R: Runtime>(
     let db = crate::platform::database::sqlite_database(app);
 
     tauri::async_runtime::spawn_blocking(move || {
-        let repository =
-            sona_sqlite::storage_usage::SqliteStorageUsageRepository::new(app_local_data_dir, db);
-        sona_core::storage_usage::StorageUsageService::new(std::sync::Arc::new(repository))
-            .load_snapshot_at(sona_runtime_fs::storage_usage_generated_at_now())
-            .map_err(|error| error.to_string())
+        sona_sqlite::load_storage_usage_snapshot_with_database(
+            app_local_data_dir,
+            db,
+            sona_runtime_fs::storage_usage_generated_at_now(),
+        )
+        .map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

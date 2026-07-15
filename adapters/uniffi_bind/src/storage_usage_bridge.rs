@@ -1,8 +1,6 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use sona_core::storage_usage::StorageUsageService;
-use sona_sqlite::LazySqliteStorageUsageRepository;
+use sona_sqlite::load_storage_usage_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub(crate) async fn load_storage_usage_snapshot_json(
     app_data_dir: String,
@@ -15,10 +13,11 @@ pub(crate) async fn load_storage_usage_snapshot_json(
 fn build_storage_usage_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(storage_usage_error)?;
-    let repository = LazySqliteStorageUsageRepository::new(app_data_dir);
-    let snapshot = StorageUsageService::new(Arc::new(repository))
-        .load_snapshot_at(sona_runtime_fs::storage_usage_generated_at_now())
-        .map_err(storage_usage_error)?;
+    let snapshot = load_storage_usage_snapshot(
+        app_data_dir,
+        sona_runtime_fs::storage_usage_generated_at_now(),
+    )
+    .map_err(storage_usage_error)?;
     let canonical = serde_json::to_value(snapshot).map_err(storage_usage_error)?;
     serde_json::to_string(&canonical).map_err(storage_usage_error)
 }
