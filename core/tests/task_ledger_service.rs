@@ -1,4 +1,5 @@
 use serde_json::json;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{TaskLedgerKind, TaskLedgerRecord, TaskLedgerStatus};
@@ -90,6 +91,20 @@ impl TaskLedgerStore for FailingStore {
     }
 }
 
+struct FixedClock(Result<u64, String>);
+
+impl UnixMillisClock for FixedClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        self.0.clone()
+    }
+}
+
+static DEFAULT_CLOCK: FixedClock = FixedClock(Ok(0));
+
+fn service<'a>(store: &'a dyn TaskLedgerStore) -> TaskLedgerService<'a> {
+    TaskLedgerService::new(store, &DEFAULT_CLOCK)
+}
+
 fn record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
     TaskLedgerRecord {
         id: id.into(),
@@ -117,7 +132,7 @@ fn record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
 #[test]
 fn upsert_normalizes_identity_title_nonfinite_progress_and_zero_timestamps() {
     let store = MemoryStore::default();
-    let service = TaskLedgerService::new(&store);
+    let service = service(&store);
     let mut task = record("  task-1  ", TaskLedgerStatus::Pending);
     task.title = "   ".into();
     task.progress = f64::NAN;
@@ -136,7 +151,7 @@ fn upsert_normalizes_identity_title_nonfinite_progress_and_zero_timestamps() {
 #[test]
 fn upsert_clamps_finite_progress_to_percent_bounds() {
     let store = MemoryStore::default();
-    let service = TaskLedgerService::new(&store);
+    let service = service(&store);
     let mut lower = record("lower", TaskLedgerStatus::Pending);
     lower.progress = -1.0;
     let mut upper = record("upper", TaskLedgerStatus::Pending);
@@ -153,9 +168,7 @@ fn upsert_clamps_finite_progress_to_percent_bounds() {
 fn load_recovers_running_task_with_default_interruption_error() {
     let store = MemoryStore::with_records([record("running", TaskLedgerStatus::Running)]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .load_snapshot_at(6_000)
-        .unwrap();
+    let snapshot = service(&store).load_snapshot_at(6_000).unwrap();
 
     assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
     assert!(!snapshot.tasks[0].cancelable);
@@ -171,9 +184,7 @@ fn load_preserves_nonempty_interruption_error() {
     task.error_message = Some("Cancellation was pending".into());
     let store = MemoryStore::with_records([task]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .load_snapshot_at(6_000)
-        .unwrap();
+    let snapshot = service(&store).load_snapshot_at(6_000).unwrap();
 
     assert_eq!(
         snapshot.tasks[0].error_message.as_deref(),
@@ -188,9 +199,7 @@ fn load_supplies_zero_timestamps_from_host_time() {
     task.updated_at = 0;
     let store = MemoryStore::with_records([task]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .load_snapshot_at(6_000)
-        .unwrap();
+    let snapshot = service(&store).load_snapshot_at(6_000).unwrap();
 
     assert_eq!(snapshot.tasks[0].created_at, 6_000);
     assert_eq!(snapshot.tasks[0].updated_at, 6_000);
@@ -206,9 +215,7 @@ fn load_filters_resolved_tasks_and_sorts_retained_ids() {
         record("cancelled", TaskLedgerStatus::Cancelled),
     ]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .load_snapshot_at(6_000)
-        .unwrap();
+    let snapshot = service(&store).load_snapshot_at(6_000).unwrap();
 
     assert_eq!(
         snapshot
@@ -224,7 +231,7 @@ fn load_filters_resolved_tasks_and_sorts_retained_ids() {
 fn patch_merges_object_forces_id_and_supplies_update_time() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
-    let snapshot = TaskLedgerService::new(&store)
+    let snapshot = service(&store)
         .patch_task_at("task-2", json!({"id":"changed","progress":75.0}), 7_000)
         .unwrap();
 
@@ -237,7 +244,7 @@ fn patch_merges_object_forces_id_and_supplies_update_time() {
 fn nonobject_patch_still_updates_timestamp() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
-    let snapshot = TaskLedgerService::new(&store)
+    let snapshot = service(&store)
         .patch_task_at("task-2", json!(null), 7_000)
         .unwrap();
 
@@ -249,7 +256,7 @@ fn nonobject_patch_still_updates_timestamp() {
 fn invalid_patch_returns_serialization_error() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
-    let error = TaskLedgerService::new(&store)
+    let error = service(&store)
         .patch_task_at("task-2", json!({"status":"not-a-status"}), 7_000)
         .unwrap_err();
 
@@ -260,7 +267,7 @@ fn invalid_patch_returns_serialization_error() {
 fn patch_missing_record_is_noop() {
     let store = MemoryStore::default();
 
-    let snapshot = TaskLedgerService::new(&store)
+    let snapshot = service(&store)
         .patch_task_at("missing", json!({"progress":75.0}), 7_000)
         .unwrap();
 
@@ -274,9 +281,7 @@ fn remove_returns_snapshot_without_removed_record() {
         record("remove", TaskLedgerStatus::Failed),
     ]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .remove_task_at("remove", 8_000)
-        .unwrap();
+    let snapshot = service(&store).remove_task_at("remove", 8_000).unwrap();
 
     assert_eq!(snapshot.tasks.len(), 1);
     assert_eq!(snapshot.tasks[0].id, "keep");
@@ -291,9 +296,7 @@ fn clear_resolved_removes_only_terminal_records() {
         record("cancelled", TaskLedgerStatus::Cancelled),
     ]);
 
-    let snapshot = TaskLedgerService::new(&store)
-        .clear_resolved_at(8_000)
-        .unwrap();
+    let snapshot = service(&store).clear_resolved_at(8_000).unwrap();
 
     assert_eq!(
         snapshot
@@ -308,7 +311,7 @@ fn clear_resolved_removes_only_terminal_records() {
 
 #[test]
 fn empty_snapshot_has_no_update_time() {
-    let snapshot = TaskLedgerService::new(&MemoryStore::default())
+    let snapshot = service(&MemoryStore::default())
         .load_snapshot_at(9_000)
         .unwrap();
 
@@ -319,7 +322,7 @@ fn empty_snapshot_has_no_update_time() {
 
 #[test]
 fn store_errors_are_returned_unchanged() {
-    let service = TaskLedgerService::new(&FailingStore);
+    let service = service(&FailingStore);
 
     assert_eq!(
         service.load_snapshot_at(9_000).unwrap_err(),
@@ -343,4 +346,42 @@ fn store_errors_are_returned_unchanged() {
         service.clear_resolved_at(9_000).unwrap_err(),
         "store failure"
     );
+}
+
+#[test]
+fn task_ledger_runtime_methods_use_the_injected_clock() {
+    let store = MemoryStore::default();
+    let clock = FixedClock(Ok(10_000));
+    let service = TaskLedgerService::new(&store, &clock);
+    let mut pending = record("runtime", TaskLedgerStatus::Pending);
+    pending.created_at = 0;
+    pending.updated_at = 0;
+
+    let upserted = service.upsert_task(pending).unwrap();
+    let patched = service
+        .patch_task("runtime", json!({"progress": 75.0}))
+        .unwrap();
+    let loaded = service.load_snapshot().unwrap();
+    let removed = service.remove_task("runtime").unwrap();
+    let cleared = service.clear_resolved().unwrap();
+
+    assert_eq!(upserted.tasks[0].created_at, 10_000);
+    assert_eq!(patched.tasks[0].updated_at, 10_000);
+    assert_eq!(loaded.tasks[0].updated_at, 10_000);
+    assert!(removed.tasks.is_empty());
+    assert!(cleared.tasks.is_empty());
+}
+
+#[test]
+fn task_ledger_runtime_methods_propagate_clock_errors_before_writes() {
+    let store = MemoryStore::default();
+    let clock = FixedClock(Err("task ledger clock unavailable".to_string()));
+    let service = TaskLedgerService::new(&store, &clock);
+
+    let error = service
+        .upsert_task(record("runtime", TaskLedgerStatus::Pending))
+        .unwrap_err();
+
+    assert_eq!(error, "task ledger clock unavailable");
+    assert!(store.records().is_empty());
 }

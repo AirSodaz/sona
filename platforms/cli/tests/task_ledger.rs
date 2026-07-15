@@ -3,6 +3,7 @@ use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
+use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteLedgerRepository};
 use std::path::Path;
 use std::sync::Arc;
@@ -35,7 +36,7 @@ fn record(id: &str, title: &str, progress: f64, updated_at: u64) -> TaskLedgerRe
 fn seed(app_data_dir: &Path, records: Vec<TaskLedgerRecord>) {
     let database = Arc::new(Database::open(app_data_dir).unwrap());
     let repository = SqliteLedgerRepository::new(database);
-    let service = TaskLedgerService::new(&repository);
+    let service = TaskLedgerService::new(&repository, &SystemClock);
     for record in records {
         let now_ms = record.updated_at;
         service.upsert_task_at(record, now_ms).unwrap();
@@ -163,7 +164,7 @@ fn task_ledger_list_reads_committed_wal_without_modifying_files() {
     let dir = tempfile::tempdir().unwrap();
     let database = Arc::new(Database::open(dir.path()).unwrap());
     let repository = SqliteLedgerRepository::new(Arc::clone(&database));
-    TaskLedgerService::new(&repository)
+    TaskLedgerService::new(&repository, &SystemClock)
         .upsert_task_at(record("wal-task", "Committed in WAL", 15.0, 1_500), 1_500)
         .unwrap();
     let wal_path = dir.path().join("sona.db-wal");
@@ -185,7 +186,7 @@ fn task_ledger_list_rejects_wal_without_shm_without_modifying_files() {
     seed(source.path(), Vec::new());
     let database = Arc::new(Database::open(source.path()).unwrap());
     let repository = SqliteLedgerRepository::new(Arc::clone(&database));
-    TaskLedgerService::new(&repository)
+    TaskLedgerService::new(&repository, &SystemClock)
         .upsert_task_at(
             record("orphan-wal-task", "Committed in orphan WAL", 20.0, 1_600),
             1_600,
@@ -229,7 +230,7 @@ fn task_ledger_list_rejects_future_database_schema() {
     let database = Database::open(dir.path()).unwrap();
     database
         .with_connection(|connection| {
-            connection.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
+            connection.execute("INSERT INTO schema_version (version) VALUES (99)", [])?;
             Ok(())
         })
         .unwrap();
@@ -250,7 +251,7 @@ fn task_ledger_list_rejects_future_database_schema() {
     assert!(
         error
             .to_string()
-            .contains("Unsupported database schema version 2")
+            .contains("Unsupported database schema version 99")
     );
 }
 

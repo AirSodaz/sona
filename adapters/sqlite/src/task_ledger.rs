@@ -210,10 +210,25 @@ mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
+    use sona_core::ports::time::UnixMillisClock;
     use sona_core::task_ledger::repository::TaskLedgerStore;
     use sona_core::task_ledger::service::TaskLedgerService;
     use std::path::PathBuf;
     use std::sync::Arc;
+
+    struct TestClock;
+
+    impl UnixMillisClock for TestClock {
+        fn now_ms(&self) -> Result<u64, String> {
+            Ok(0)
+        }
+    }
+
+    static TEST_CLOCK: TestClock = TestClock;
+
+    fn service(repository: &SqliteLedgerRepository) -> TaskLedgerService<'_> {
+        TaskLedgerService::new(repository, &TEST_CLOCK)
+    }
 
     fn make_record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
         TaskLedgerRecord {
@@ -263,7 +278,7 @@ mod tests {
         let task = make_record("  legacy-id  ", TaskLedgerStatus::Pending);
         TaskLedgerStore::upsert_record(&repo, &task).unwrap();
 
-        let snapshot = TaskLedgerService::new(&repo)
+        let snapshot = service(&repo)
             .patch_task_at("  legacy-id  ", json!({"progress": 75.0}), 2_000)
             .unwrap();
 
@@ -312,7 +327,7 @@ mod tests {
     fn test_ledger_upsert_and_load() {
         let db = Arc::new(Database::open_in_memory().unwrap());
         let repo = SqliteLedgerRepository::new(Arc::clone(&db));
-        let service = TaskLedgerService::new(&repo);
+        let service = service(&repo);
 
         let record = make_record("task-1", TaskLedgerStatus::Running);
         let snapshot = service.upsert_task_at(record, 2_000).unwrap();
@@ -325,7 +340,7 @@ mod tests {
     fn test_ledger_patch_task() {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
-        let service = TaskLedgerService::new(&repo);
+        let service = service(&repo);
 
         let record = make_record("task-2", TaskLedgerStatus::Pending);
         service.upsert_task_at(record, 2_000).unwrap();
@@ -341,7 +356,7 @@ mod tests {
     fn test_ledger_remove_task() {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
-        let service = TaskLedgerService::new(&repo);
+        let service = service(&repo);
 
         let record = make_record("task-3", TaskLedgerStatus::Pending);
         service.upsert_task_at(record, 2_000).unwrap();
@@ -353,7 +368,7 @@ mod tests {
     fn test_ledger_clear_resolved() {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
-        let service = TaskLedgerService::new(&repo);
+        let service = service(&repo);
 
         service
             .upsert_task_at(make_record("t1", TaskLedgerStatus::Pending), 2_000)
@@ -377,7 +392,7 @@ mod tests {
     fn test_ledger_upsert_round_trips_typed_columns() {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
-        let service = TaskLedgerService::new(&repo);
+        let service = service(&repo);
 
         let mut record = make_record("typed-task", TaskLedgerStatus::Failed);
         record.kind = TaskLedgerKind::Automation;
@@ -453,9 +468,7 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
 
-        let snapshot = TaskLedgerService::new(&repo)
-            .load_snapshot_at(2_000)
-            .unwrap();
+        let snapshot = service(&repo).load_snapshot_at(2_000).unwrap();
         assert!(snapshot.tasks.is_empty());
     }
 }

@@ -1,23 +1,24 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
+use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteLedgerRepository};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) fn load_task_ledger_snapshot_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    load_task_ledger_snapshot_json_at(app_data_dir, now_ms())
+    load_task_ledger_snapshot_json_with_clock(app_data_dir, &SystemClock)
 }
 
 pub(crate) fn upsert_task_ledger_record_json(
     app_data_dir: String,
     record_json: String,
 ) -> SonaCoreBindingResult<String> {
-    upsert_task_ledger_record_json_at(app_data_dir, record_json, now_ms())
+    upsert_task_ledger_record_json_with_clock(app_data_dir, record_json, &SystemClock)
 }
 
 pub(crate) fn patch_task_ledger_record_json(
@@ -25,87 +26,87 @@ pub(crate) fn patch_task_ledger_record_json(
     id: String,
     patch_json: String,
 ) -> SonaCoreBindingResult<String> {
-    patch_task_ledger_record_json_at(app_data_dir, id, patch_json, now_ms())
+    patch_task_ledger_record_json_with_clock(app_data_dir, id, patch_json, &SystemClock)
 }
 
 pub(crate) fn remove_task_ledger_record_json(
     app_data_dir: String,
     id: String,
 ) -> SonaCoreBindingResult<String> {
-    remove_task_ledger_record_json_at(app_data_dir, id, now_ms())
+    remove_task_ledger_record_json_with_clock(app_data_dir, id, &SystemClock)
 }
 
 pub(crate) fn clear_resolved_task_ledger_records_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    clear_resolved_task_ledger_records_json_at(app_data_dir, now_ms())
+    clear_resolved_task_ledger_records_json_with_clock(app_data_dir, &SystemClock)
 }
 
-fn load_task_ledger_snapshot_json_at(
+fn load_task_ledger_snapshot_json_with_clock(
     app_data_dir: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
-    with_task_ledger_service(&app_data_dir, |service| service.load_snapshot_at(now_ms))
+    with_task_ledger_service(&app_data_dir, clock, |service| service.load_snapshot())
         .and_then(serialize_snapshot)
 }
 
-fn upsert_task_ledger_record_json_at(
+fn upsert_task_ledger_record_json_with_clock(
     app_data_dir: String,
     record_json: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let record = serde_json::from_str::<TaskLedgerRecord>(&record_json).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
             reason: format!("Invalid task ledger record JSON: {error}"),
         }
     })?;
-    with_task_ledger_service(&app_data_dir, |service| {
-        service.upsert_task_at(record, now_ms)
-    })
-    .and_then(serialize_snapshot)
+    with_task_ledger_service(&app_data_dir, clock, |service| service.upsert_task(record))
+        .and_then(serialize_snapshot)
 }
 
-fn patch_task_ledger_record_json_at(
+fn patch_task_ledger_record_json_with_clock(
     app_data_dir: String,
     id: String,
     patch_json: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let patch = serde_json::from_str::<Value>(&patch_json).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
             reason: format!("Invalid task ledger patch JSON: {error}"),
         }
     })?;
-    with_task_ledger_service(&app_data_dir, |service| {
-        service.patch_task_at(&id, patch, now_ms)
+    with_task_ledger_service(&app_data_dir, clock, |service| {
+        service.patch_task(&id, patch)
     })
     .and_then(serialize_snapshot)
 }
 
-fn remove_task_ledger_record_json_at(
+fn remove_task_ledger_record_json_with_clock(
     app_data_dir: String,
     id: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
-    with_task_ledger_service(&app_data_dir, |service| service.remove_task_at(&id, now_ms))
+    with_task_ledger_service(&app_data_dir, clock, |service| service.remove_task(&id))
         .and_then(serialize_snapshot)
 }
 
-fn clear_resolved_task_ledger_records_json_at(
+fn clear_resolved_task_ledger_records_json_with_clock(
     app_data_dir: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
-    with_task_ledger_service(&app_data_dir, |service| service.clear_resolved_at(now_ms))
+    with_task_ledger_service(&app_data_dir, clock, |service| service.clear_resolved())
         .and_then(serialize_snapshot)
 }
 
-fn with_task_ledger_service<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
-where
-    F: for<'a> FnOnce(TaskLedgerService<'a>) -> Result<T, String>,
-{
+fn with_task_ledger_service<T>(
+    app_data_dir: &str,
+    clock: &dyn UnixMillisClock,
+    operation: impl FnOnce(&TaskLedgerService<'_>) -> Result<T, String>,
+) -> SonaCoreBindingResult<T> {
     let database = Database::open(Path::new(app_data_dir)).map_err(task_ledger_error)?;
     let repository = SqliteLedgerRepository::new(Arc::new(database));
-    operation(TaskLedgerService::new(&repository)).map_err(task_ledger_error)
+    let service = TaskLedgerService::new(&repository, clock);
+    operation(&service).map_err(task_ledger_error)
 }
 
 fn serialize_snapshot(snapshot: TaskLedgerSnapshot) -> SonaCoreBindingResult<String> {
@@ -118,11 +119,58 @@ fn task_ledger_error(reason: impl ToString) -> SonaCoreBindingError {
     }
 }
 
-fn now_ms() -> u64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+#[cfg(test)]
+struct FixedClock(u64);
+
+#[cfg(test)]
+impl UnixMillisClock for FixedClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        Ok(self.0)
+    }
+}
+
+#[cfg(test)]
+fn load_task_ledger_snapshot_json_at(
+    app_data_dir: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    load_task_ledger_snapshot_json_with_clock(app_data_dir, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn upsert_task_ledger_record_json_at(
+    app_data_dir: String,
+    record_json: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    upsert_task_ledger_record_json_with_clock(app_data_dir, record_json, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn patch_task_ledger_record_json_at(
+    app_data_dir: String,
+    id: String,
+    patch_json: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    patch_task_ledger_record_json_with_clock(app_data_dir, id, patch_json, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn remove_task_ledger_record_json_at(
+    app_data_dir: String,
+    id: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    remove_task_ledger_record_json_with_clock(app_data_dir, id, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn clear_resolved_task_ledger_records_json_at(
+    app_data_dir: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    clear_resolved_task_ledger_records_json_with_clock(app_data_dir, &FixedClock(now_ms))
 }
 
 #[cfg(test)]

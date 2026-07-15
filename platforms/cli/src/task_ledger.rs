@@ -2,10 +2,10 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
+use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteLedgerRepository};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -42,8 +42,9 @@ fn run_task_ledger_list(args: TaskLedgerListArgs) -> CliResult<CliOutput> {
     let database = Database::open_read_only(&args.app_data_dir)
         .map_err(|error| CliError::Io(error.to_string()))?;
     let repository = SqliteLedgerRepository::new(Arc::new(database));
-    let snapshot = TaskLedgerService::new(&repository)
-        .load_snapshot_at(now_ms())
+    let clock = SystemClock;
+    let snapshot = TaskLedgerService::new(&repository, &clock)
+        .load_snapshot()
         .map_err(CliError::Io)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
@@ -99,11 +100,4 @@ fn enum_label<T: Serialize>(value: &T) -> CliResult<String> {
             "Task ledger enum did not serialize as a string".to_string(),
         )),
     }
-}
-
-fn now_ms() -> u64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }

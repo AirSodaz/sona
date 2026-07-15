@@ -1,5 +1,7 @@
 use serde_json::Value;
 
+use crate::ports::time::UnixMillisClock;
+
 use super::repository::TaskLedgerStore;
 use super::types::{TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus};
 
@@ -7,11 +9,16 @@ const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
 
 pub struct TaskLedgerService<'a> {
     store: &'a dyn TaskLedgerStore,
+    clock: &'a dyn UnixMillisClock,
 }
 
 impl<'a> TaskLedgerService<'a> {
-    pub fn new(store: &'a dyn TaskLedgerStore) -> Self {
-        Self { store }
+    pub fn new(store: &'a dyn TaskLedgerStore, clock: &'a dyn UnixMillisClock) -> Self {
+        Self { store, clock }
+    }
+
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+        self.load_snapshot_at(self.clock.now_ms()?)
     }
 
     pub fn load_snapshot_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
@@ -29,6 +36,10 @@ impl<'a> TaskLedgerService<'a> {
         self.load_snapshot_at(now_ms)
     }
 
+    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<TaskLedgerSnapshot, String> {
+        self.upsert_task_at(record, self.clock.now_ms()?)
+    }
+
     pub fn patch_task_at(
         &self,
         id: &str,
@@ -40,15 +51,27 @@ impl<'a> TaskLedgerService<'a> {
         self.load_snapshot_at(now_ms)
     }
 
+    pub fn patch_task(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+        self.patch_task_at(id, patch, self.clock.now_ms()?)
+    }
+
     pub fn remove_task_at(&self, id: &str, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
         self.store.remove_record(id)?;
         self.load_snapshot_at(now_ms)
+    }
+
+    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, String> {
+        self.remove_task_at(id, self.clock.now_ms()?)
     }
 
     pub fn clear_resolved_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
         let mut should_remove = |record: &TaskLedgerRecord| !is_retained_status(&record.status);
         self.store.remove_records_matching(&mut should_remove)?;
         self.load_snapshot_at(now_ms)
+    }
+
+    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, String> {
+        self.clear_resolved_at(self.clock.now_ms()?)
     }
 }
 
