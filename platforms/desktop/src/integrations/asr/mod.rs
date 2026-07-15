@@ -1,21 +1,17 @@
-use sona_core::transcription::provider_resolution::{
-    AsrProviderCapability, resolve_asr_provider_id,
-};
+use sona_core::ports::asr::LOCAL_SHERPA_PROVIDER_ID;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
 
 mod adapter;
 mod batch;
-mod groq;
 mod metrics;
-mod mistral;
 mod observer;
+mod online;
 mod state;
 mod traits;
 mod transcript;
 mod types;
-mod volcengine;
 
 const BATCH_PROGRESS_EVENT: &str = "batch-progress";
 
@@ -44,8 +40,7 @@ pub use sona_local_asr::runtime::RecognizerPool;
 pub use state::AsrState;
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter};
 pub(crate) use transcript::{
-    apply_timeline_normalization, finalize_transcript_text, normalize_recognizer_text,
-    synthesize_durations,
+    finalize_transcript_text, normalize_recognizer_text, synthesize_durations,
 };
 pub use types::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
@@ -55,25 +50,16 @@ pub use types::{
     TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate, VolcengineDoubaoAsrConfig,
 };
 
-const DESKTOP_ASR_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [
-    AsrProviderCapability::new(sona_core::ports::asr::LOCAL_SHERPA_PROVIDER_ID, true),
-    AsrProviderCapability::new(sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID, true),
-    AsrProviderCapability::new(sona_core::ports::asr::GROQ_WHISPER_PROVIDER_ID, false),
-    AsrProviderCapability::new(sona_core::ports::asr::MISTRAL_VOXTRAL_PROVIDER_ID, false),
-];
-
 fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>> {
     static ADAPTERS: OnceLock<HashMap<&'static str, Arc<dyn AsrProviderAdapter>>> = OnceLock::new();
     ADAPTERS.get_or_init(|| {
         let mut map: HashMap<&'static str, Arc<dyn AsrProviderAdapter>> = HashMap::new();
         let local = LocalSherpaAdapter;
         map.insert(local.provider_id(), Arc::new(local));
-        let volcengine = volcengine::VolcengineAdapter;
-        map.insert(volcengine.provider_id(), Arc::new(volcengine));
-        let groq = groq::GroqWhisperAdapter;
-        map.insert(groq.provider_id(), Arc::new(groq));
-        let mistral = mistral::MistralVoxtralAdapter;
-        map.insert(mistral.provider_id(), Arc::new(mistral));
+        for capability in sona_online_asr::ONLINE_ASR_PROVIDER_CAPABILITIES {
+            let adapter = online::DesktopOnlineAsrAdapter::new(capability.provider_id);
+            map.insert(adapter.provider_id(), Arc::new(adapter));
+        }
         map
     })
 }
@@ -85,7 +71,10 @@ pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str,
 pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn AsrProviderAdapter>, SherpaError> {
-    let provider_id = resolve_asr_provider_id(request, &DESKTOP_ASR_CAPABILITIES)?;
+    let provider_id = match request.engine() {
+        AsrEngine::LocalSherpa => LOCAL_SHERPA_PROVIDER_ID,
+        AsrEngine::Online => sona_online_asr::resolve_online_asr_provider_id(request)?,
+    };
     asr_adapters()
         .get(provider_id)
         .cloned()

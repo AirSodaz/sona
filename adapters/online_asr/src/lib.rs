@@ -3,19 +3,102 @@ use base64::Engine;
 use reqwest::multipart;
 use serde_json::Value;
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
-    OnlineBatchTranscriber, OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest,
+    AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
+    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber,
+    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, SherpaError,
     VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+};
+use sona_core::transcription::provider_resolution::{
+    AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
 };
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
     TranscriptTimingUnit,
 };
 use std::fmt;
+use std::sync::Arc;
 
 mod volcengine;
 
 pub use volcengine::streaming::create_volcengine_streaming_session;
+
+pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 3] = [
+    AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+    AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
+    AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
+];
+
+pub fn resolve_online_asr_provider_id(
+    request: &AsrTranscriptionRequest,
+) -> Result<&'static str, SherpaError> {
+    resolve_asr_provider_id(request, &ONLINE_ASR_PROVIDER_CAPABILITIES)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OnlineAsrAdapter;
+
+impl OnlineAsrAdapter {
+    pub async fn transcribe_batch(
+        &self,
+        input: OnlineBatchTranscriptionRequest,
+    ) -> Result<OnlineBatchTranscriptionOutput, SherpaError> {
+        let provider_id = resolve_online_asr_provider_id(&input.request)?;
+        match provider_id {
+            VOLCENGINE_DOUBAO_PROVIDER_ID => {
+                if input.request.mode != AsrMode::Batch {
+                    return Err(SherpaError::VolcengineBatchModeMismatch);
+                }
+                resolve_volcengine_config_checked(&input.request, VolcengineMode::Batch)
+                    .map_err(SherpaError::from)?;
+                VolcengineDoubaoBatchTranscriber::default()
+                    .transcribe(input)
+                    .await
+                    .map_err(|error| SherpaError::VolcengineBatchRequestFailed { error })
+            }
+            GROQ_WHISPER_PROVIDER_ID => GroqWhisperBatchTranscriber::default()
+                .transcribe(input)
+                .await
+                .map_err(SherpaError::Generic),
+            MISTRAL_VOXTRAL_PROVIDER_ID => MistralVoxtralBatchTranscriber::default()
+                .transcribe(input)
+                .await
+                .map_err(SherpaError::Generic),
+            _ => Err(SherpaError::UnsupportedOnlineProvider {
+                provider_id: provider_id.to_string(),
+            }),
+        }
+    }
+
+    pub fn create_streaming_session(
+        &self,
+        instance_id: String,
+        request: AsrTranscriptionRequest,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, SherpaError> {
+        let provider_id =
+            resolve_asr_streaming_provider_id(&request, &ONLINE_ASR_PROVIDER_CAPABILITIES)?;
+        match provider_id {
+            VOLCENGINE_DOUBAO_PROVIDER_ID => {
+                create_volcengine_streaming_session(instance_id, request, observer)
+            }
+            _ => Err(SherpaError::UnsupportedOnlineProvider {
+                provider_id: provider_id.to_string(),
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl OnlineBatchTranscriber for OnlineAsrAdapter {
+    async fn transcribe(
+        &self,
+        request: OnlineBatchTranscriptionRequest,
+    ) -> Result<OnlineBatchTranscriptionOutput, String> {
+        self.transcribe_batch(request)
+            .await
+            .map_err(|error| error.to_string())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WhisperCompatibleProvider {
@@ -1015,18 +1098,21 @@ mod tests {
     use serde_json::json;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-        MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver, OnlineAsrProviderRequest,
+        OnlineBatchTranscriber, OnlineBatchTranscriptionRequest, SherpaError,
+        VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     };
 
     use crate::{
-        VolcengineConfigError, VolcengineMode, WhisperCompatibleProvider,
-        build_volcengine_audio_frame, build_volcengine_flash_batch_request_body,
-        build_volcengine_full_client_request_frame, detect_audio_format,
-        f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
-        resolve_volcengine_config, resolve_volcengine_config_checked, resolve_whisper_config,
+        ONLINE_ASR_PROVIDER_CAPABILITIES, OnlineAsrAdapter, VolcengineConfigError, VolcengineMode,
+        WhisperCompatibleProvider, build_volcengine_audio_frame,
+        build_volcengine_flash_batch_request_body, build_volcengine_full_client_request_frame,
+        detect_audio_format, f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
+        resolve_online_asr_provider_id, resolve_volcengine_config,
+        resolve_volcengine_config_checked, resolve_whisper_config,
         segments_from_volcengine_response, segments_from_whisper_response,
         volcengine_streaming_segments_from_response,
     };
@@ -1048,6 +1134,107 @@ mod tests {
                 },
             },
         }
+    }
+
+    #[test]
+    fn online_runtime_adapter_owns_the_provider_capability_table() {
+        let capabilities = ONLINE_ASR_PROVIDER_CAPABILITIES
+            .iter()
+            .map(|capability| (capability.provider_id, capability.supports_streaming))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            capabilities,
+            vec![
+                (VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+                (GROQ_WHISPER_PROVIDER_ID, false),
+                (MISTRAL_VOXTRAL_PROVIDER_ID, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn online_runtime_adapter_implements_the_core_batch_port() {
+        fn assert_batch_port<T: OnlineBatchTranscriber>() {}
+
+        assert_batch_port::<OnlineAsrAdapter>();
+    }
+
+    #[tokio::test]
+    async fn online_runtime_adapter_routes_batch_requests_before_network_access() {
+        let request = online_request(
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            json!({
+                "apiKey": "  "
+            }),
+        );
+
+        let error = OnlineAsrAdapter
+            .transcribe_batch(OnlineBatchTranscriptionRequest {
+                file_path: "missing.wav".into(),
+                request,
+            })
+            .await
+            .expect_err("invalid provider config should fail before reading the audio file");
+
+        assert!(matches!(error, SherpaError::VolcengineApiKeyMissing));
+    }
+
+    #[test]
+    fn online_runtime_adapter_routes_streaming_requests_before_network_access() {
+        let mut groq = online_request(
+            GROQ_WHISPER_PROVIDER_ID,
+            json!({
+                "apiKey": "groq-key"
+            }),
+        );
+        groq.mode = AsrMode::Streaming;
+
+        let error = OnlineAsrAdapter
+            .create_streaming_session(
+                "live-groq".to_string(),
+                groq,
+                std::sync::Arc::new(NoopAsrRuntimeObserver),
+            )
+            .err()
+            .expect("batch-only providers must be rejected before network access");
+        assert!(matches!(
+            error,
+            SherpaError::StreamingNotSupported { provider_id }
+                if provider_id == GROQ_WHISPER_PROVIDER_ID
+        ));
+
+        let mut volcengine = online_request(
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            json!({
+                "apiKey": "  "
+            }),
+        );
+        volcengine.mode = AsrMode::Streaming;
+
+        let error = OnlineAsrAdapter
+            .create_streaming_session(
+                "live-volcengine".to_string(),
+                volcengine,
+                std::sync::Arc::new(NoopAsrRuntimeObserver),
+            )
+            .err()
+            .expect("invalid provider config should fail before network access");
+        assert!(matches!(error, SherpaError::VolcengineApiKeyMissing));
+    }
+
+    #[test]
+    fn online_runtime_adapter_rejects_unknown_providers() {
+        let request = online_request("custom-online-provider", json!({}));
+
+        let error = resolve_online_asr_provider_id(&request)
+            .expect_err("unregistered providers must not cross the adapter boundary");
+
+        assert!(matches!(
+            error,
+            SherpaError::UnsupportedOnlineProvider { provider_id }
+                if provider_id == "custom-online-provider"
+        ));
     }
 
     #[test]

@@ -5685,6 +5685,7 @@ dependencies = [
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sqlite",
+ "sona-ts-bind",
  "sona-webdav",
  "specta",
  "specta-typescript",

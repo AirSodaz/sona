@@ -18,13 +18,17 @@ pub fn run() {
 
 #[cfg(debug_assertions)]
 fn export_typescript_bindings() -> Result<(), specta_typescript::Error> {
-    let bindings_path = std::path::Path::new("frontend/src/bindings.ts");
+    let bindings_path = typescript_bindings_path();
     let temporary_path = std::env::temp_dir().join(format!(
         "sona-tauri-specta-bindings-{}.ts",
         std::process::id()
     ));
-    export_typescript_bindings_to(bindings_path, &temporary_path)?;
+    export_typescript_bindings_to(&bindings_path, &temporary_path)?;
     Ok(())
+}
+
+fn typescript_bindings_path() -> std::path::PathBuf {
+    sona_ts_bind::desktop_bindings_output("frontend")
 }
 
 fn export_typescript_bindings_to(
@@ -32,9 +36,9 @@ fn export_typescript_bindings_to(
     temporary_path: &std::path::Path,
 ) -> Result<bool, specta_typescript::Error> {
     let export_result = tauri_specta::Builder::<tauri::Wry>::new()
-        .typ::<sona_core::domain::LlmProvider>()
-        .typ::<sona_core::domain::PolishPresetId>()
-        .typ::<sona_core::domain::SummaryTemplateId>()
+        .typ::<sona_ts_bind::LlmProvider>()
+        .typ::<sona_ts_bind::PolishPresetId>()
+        .typ::<sona_ts_bind::SummaryTemplateId>()
         .export(specta_typescript::Typescript::default(), &temporary_path);
 
     if let Err(error) = export_result {
@@ -164,8 +168,16 @@ pub fn run_app() -> Result<(), tauri::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::write_bindings_if_changed;
+    use super::{typescript_bindings_path, write_bindings_if_changed};
     use std::fs;
+
+    #[test]
+    fn resolves_typescript_binding_path_through_the_ts_adapter() {
+        assert_eq!(
+            typescript_bindings_path(),
+            std::path::PathBuf::from("frontend").join("src/bindings.ts")
+        );
+    }
 
     #[test]
     fn writes_bindings_only_when_generated_content_changes() {

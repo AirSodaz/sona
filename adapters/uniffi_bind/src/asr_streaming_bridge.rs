@@ -8,14 +8,10 @@ use crate::{
     FfiAsrTranscriptUpdateEvent, SonaCoreBindingResult,
 };
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
-    AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    AsrEngine, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
+    AsrTranscriptUpdateEvent, AsrTranscriptionRequest, SherpaError,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
-use sona_core::transcription::provider_resolution::{
-    AsrProviderCapability, resolve_asr_streaming_provider_id,
-};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
@@ -101,19 +97,6 @@ impl FfiAsrStreamingSession {
     }
 }
 
-const UNIFFI_STREAMING_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [
-    AsrProviderCapability::new(LOCAL_SHERPA_PROVIDER_ID, false),
-    AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
-    AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
-    AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
-];
-
-fn resolve_uniffi_streaming_provider_id(
-    request: &AsrTranscriptionRequest,
-) -> SonaCoreBindingResult<&'static str> {
-    resolve_asr_streaming_provider_id(request, &UNIFFI_STREAMING_CAPABILITIES).map_err(Into::into)
-}
-
 pub(crate) fn create_online_asr_streaming_session(
     instance_id: String,
     request_json: String,
@@ -121,20 +104,17 @@ pub(crate) fn create_online_asr_streaming_session(
 ) -> SonaCoreBindingResult<Arc<FfiAsrStreamingSession>> {
     let request: AsrTranscriptionRequest =
         parse_core_json(&request_json, "ASR transcription request")?;
-    let provider_id = resolve_uniffi_streaming_provider_id(&request)?;
-    let inner = match provider_id {
-        VOLCENGINE_DOUBAO_PROVIDER_ID => sona_online_asr::create_volcengine_streaming_session(
-            instance_id,
-            request,
-            Arc::new(FfiAsrRuntimeObserver::new(observer)),
-        )?,
-        _ => {
-            return Err(SherpaError::UnsupportedOnlineProvider {
-                provider_id: provider_id.to_owned(),
-            }
-            .into());
+    if request.engine() != AsrEngine::Online {
+        return Err(SherpaError::StreamingNotSupported {
+            provider_id: request.provider_id().to_owned(),
         }
-    };
+        .into());
+    }
+    let inner = sona_online_asr::OnlineAsrAdapter.create_streaming_session(
+        instance_id,
+        request,
+        Arc::new(FfiAsrRuntimeObserver::new(observer)),
+    )?;
 
     Ok(Arc::new(FfiAsrStreamingSession { inner }))
 }
@@ -145,8 +125,9 @@ mod tests {
     use crate::SonaCoreBindingError;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, MISTRAL_VOXTRAL_PROVIDER_ID,
-        OnlineAsrProviderRequest, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
+        MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, SherpaError,
+        VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
     use sona_core::transcription::postprocess::{
@@ -544,18 +525,6 @@ mod tests {
         )
         .err()
         .expect("unsupported streaming provider should fail");
-        assert!(matches!(
-            error,
-            SonaCoreBindingError::AsrRuntime { code, .. }
-                if code == "STREAMING_NOT_SUPPORTED"
-        ));
-    }
-
-    #[test]
-    fn uniffi_resolver_preserves_mistral_streaming_error() {
-        let request: AsrTranscriptionRequest =
-            serde_json::from_str(&request_json(MISTRAL_VOXTRAL_PROVIDER_ID, "streaming")).unwrap();
-        let error = resolve_uniffi_streaming_provider_id(&request).unwrap_err();
         assert!(matches!(
             error,
             SonaCoreBindingError::AsrRuntime { code, .. }

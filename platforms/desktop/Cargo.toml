@@ -22,7 +22,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 sona-archive = { path = "../../adapters/archive" }
 sona-api-server = { path = "../../adapters/api_server" }
-sona-core = { path = "../../core", features = ["specta"] }
+sona-core = { path = "../../core" }
 sona-export = { path = "../../adapters/export" }
 sona-local-asr = { path = "../../adapters/local_asr" }
 sona-media-detector = { path = "../../adapters/media_detector" }
@@ -32,6 +32,7 @@ sona-online-asr = { path = "../../adapters/online_asr" }
 sona-recovery-fs = { path = "../../adapters/recovery_fs" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-sqlite = { path = "../../adapters/sqlite" }
+sona-ts-bind = { path = "../../adapters/ts_bind" }
 sona-webdav = { path = "../../adapters/webdav" }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"

@@ -1,9 +1,9 @@
 //! TypeScript-facing metadata for Sona core bindings.
 //!
-//! Desktop currently generates concrete Tauri command bindings from
-//! the desktop Tauri host with tauri-specta. This crate keeps core-owned TS binding
-//! metadata in the workspace so future non-Tauri consumers can depend on the
-//! same pure Rust types without reaching into the desktop crate.
+//! The desktop Tauri host owns the concrete tauri-specta builder while consuming
+//! the core type re-exports and output path metadata from this adapter. Future
+//! non-Tauri consumers can use the same pure Rust types without reaching into the
+//! desktop crate.
 
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
 pub use sona_core::llm::provider_protocol::{
@@ -39,6 +39,10 @@ pub use sona_core::transcription::transcript::{
 };
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
+
+pub fn desktop_bindings_output(frontend_root: impl AsRef<std::path::Path>) -> std::path::PathBuf {
+    frontend_root.as_ref().join(DESKTOP_BINDINGS_OUTPUT)
+}
 
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmProvider",
@@ -122,6 +126,14 @@ mod tests {
     #[test]
     fn keeps_desktop_binding_output_explicit() {
         assert_eq!(DESKTOP_BINDINGS_OUTPUT, "src/bindings.ts");
+    }
+
+    #[test]
+    fn resolves_desktop_binding_output_from_the_frontend_root() {
+        assert_eq!(
+            desktop_bindings_output("frontend"),
+            std::path::PathBuf::from("frontend").join("src/bindings.ts")
+        );
     }
 
     #[test]
