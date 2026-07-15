@@ -9,10 +9,12 @@ pub use diagnostics_time::diagnostics_scanned_at_now;
 pub use storage_usage_time::storage_usage_generated_at_now;
 
 use serde::Serialize;
-use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::service::{
+    AutomationFileSystem, AutomationIdGenerator, AutomationValidationService,
+};
 use sona_core::automation::{
-    AutomationRuntimePathMetadata, AutomationRuntimeRuleConfig,
-    should_consider_runtime_candidate_path,
+    AutomationRule, AutomationRuleValidationResult, AutomationRuntimePathMetadata,
+    AutomationRuntimeRuleConfig, should_consider_runtime_candidate_path,
 };
 use sona_core::export::ExportFormat;
 use sona_core::models::catalog::ModelSummary;
@@ -55,6 +57,18 @@ impl AutomationFileSystem for NativeAutomationFileSystem {
     fn create_dir_all(&self, path: &str) -> bool {
         fs::create_dir_all(path).is_ok()
     }
+}
+
+pub fn validate_native_automation_rule_activation(
+    rule: &AutomationRule,
+    global_config: &serde_json::Value,
+    project: Option<&serde_json::Value>,
+) -> AutomationRuleValidationResult {
+    AutomationValidationService::new(&NativeAutomationFileSystem).validate_rule_activation(
+        rule,
+        global_config,
+        project,
+    )
 }
 
 impl AutomationIdGenerator for UuidGenerator {

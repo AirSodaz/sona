@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
-use sona_core::automation::{AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig};
+use sona_core::automation::{
+    AutomationRule, AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig,
+};
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::FileSystem;
@@ -22,7 +24,8 @@ use sona_runtime_fs::{
     load_transcribe_live_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
     resolve_batch_input_source, resolve_live_transcribe_plan_with_runtime_paths,
     resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
+    validate_native_automation_rule_activation, write_cli_config_template_file,
+    write_json_pretty_atomic, write_transcript_output_file,
 };
 use uuid::{Uuid, Version};
 
@@ -53,6 +56,36 @@ fn native_automation_file_system_probes_and_creates_directories() {
         &fs,
         regular_file.to_string_lossy().as_ref()
     ));
+}
+
+#[test]
+fn native_automation_validation_entrypoint_probes_paths_and_prepares_export_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let watch_directory = dir.path().join("watch");
+    let export_directory = dir.path().join("export");
+    let model_path = dir.path().join("model.onnx");
+    std::fs::create_dir(&watch_directory).unwrap();
+    std::fs::write(&model_path, b"model").unwrap();
+    let rule: AutomationRule = serde_json::from_value(serde_json::json!({
+        "name": "Rule",
+        "projectId": "inbox",
+        "watchDirectory": watch_directory,
+        "stageConfig": {},
+        "exportConfig": {
+            "directory": export_directory,
+            "mode": "original"
+        }
+    }))
+    .unwrap();
+
+    let result = validate_native_automation_rule_activation(
+        &rule,
+        &serde_json::json!({"offlineModelPath": model_path}),
+        None,
+    );
+
+    assert!(result.valid, "unexpected validation result: {result:?}");
+    assert!(export_directory.is_dir());
 }
 
 #[test]

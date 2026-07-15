@@ -1,8 +1,7 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 use sona_core::automation::AutomationRule;
-use sona_core::automation::service::AutomationValidationService;
-use sona_runtime_fs::{NativeAutomationFileSystem, UuidGenerator};
+use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
 use sona_sqlite::{Database, SqliteAutomationAdapter};
 use std::path::Path;
 use std::sync::Arc;
@@ -61,8 +60,8 @@ pub(crate) fn validate_automation_rule_activation_json(
         .as_deref()
         .map(|json| parse_json_object("project", json))
         .transpose()?;
-    let result = AutomationValidationService::new(&NativeAutomationFileSystem)
-        .validate_rule_activation(&rule, &global_config, project.as_ref());
+    let result =
+        validate_native_automation_rule_activation(&rule, &global_config, project.as_ref());
     serialize_automation(result)
 }
 

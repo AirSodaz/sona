@@ -1,7 +1,6 @@
 use serde_json::Value;
-use sona_core::automation::service::AutomationValidationService;
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
-use sona_runtime_fs::{NativeAutomationFileSystem, UuidGenerator};
+use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
 use sona_sqlite::SqliteAutomationAdapter;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
@@ -13,11 +12,7 @@ pub fn validate_rule_activation_inner(
     global_config: &Value,
     project: Option<&Value>,
 ) -> AutomationRuleValidationResult {
-    AutomationValidationService::new(&NativeAutomationFileSystem).validate_rule_activation(
-        rule,
-        global_config,
-        project,
-    )
+    validate_native_automation_rule_activation(rule, global_config, project)
 }
 
 pub async fn validate_rule_activation(
