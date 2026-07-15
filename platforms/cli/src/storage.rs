@@ -1,7 +1,6 @@
 use clap::{Args, Subcommand};
 use sona_core::storage_usage::{StorageUsageService, StorageUsageSnapshot};
-use sona_sqlite::Database;
-use sona_sqlite::storage_usage::SqliteStorageUsageRepository;
+use sona_sqlite::LazySqliteStorageUsageRepository;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -39,11 +38,7 @@ pub fn run_storage(args: StorageArgs) -> CliResult<CliOutput> {
 fn run_storage_usage(args: StorageUsageArgs) -> CliResult<CliOutput> {
     let app_data_dir =
         std::path::absolute(args.app_data_dir).map_err(|error| CliError::Io(error.to_string()))?;
-    let database = Arc::new(
-        Database::open_read_only_with_analytics(&app_data_dir)
-            .map_err(|error| CliError::Io(error.to_string()))?,
-    );
-    let repository = SqliteStorageUsageRepository::new(app_data_dir, database);
+    let repository = LazySqliteStorageUsageRepository::new(app_data_dir);
     let snapshot = StorageUsageService::new(Arc::new(repository))
         .load_snapshot_at(sona_runtime_fs::storage_usage_generated_at_now())
         .map_err(|error| CliError::Io(error.to_string()))?;

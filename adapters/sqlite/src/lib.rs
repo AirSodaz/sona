@@ -15,6 +15,7 @@ pub mod ports;
 pub mod project;
 pub mod schema;
 pub mod storage_usage;
+pub mod storage_usage_repository;
 pub mod task_ledger;
 
 pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
@@ -27,6 +28,7 @@ pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
 pub use project::SqliteProjectRepository;
+pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use task_ledger::SqliteLedgerRepository;
 
 use rusqlite::functions::FunctionFlags;
