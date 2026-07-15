@@ -2,7 +2,7 @@ use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
-use sona_sqlite::{Database, SqliteHistoryStore};
+use sona_sqlite::LazySqliteHistoryQueryRepository;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -91,8 +91,7 @@ fn with_service<T>(
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_query_error)?;
     ensure_existing_directory(&app_data_dir)?;
-    let database = Database::open(&app_data_dir).map_err(history_query_error)?;
-    let repository = SqliteHistoryStore::new(app_data_dir, Arc::new(database));
+    let repository = LazySqliteHistoryQueryRepository::new(app_data_dir);
     operation(HistoryQueryService::new(Arc::new(repository))).map_err(history_query_error)
 }
 

@@ -20,7 +20,7 @@ use sona_core::history::{
     LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
-use sona_sqlite::{Database, LazySqliteHistoryMutationRepository, SqliteHistoryStore};
+use sona_sqlite::{LazySqliteHistoryMutationRepository, LazySqliteHistoryQueryRepository};
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -530,10 +530,9 @@ fn run_reassign_project(args: HistoryReassignProjectArgs) -> CliResult<CliOutput
 
 fn open_service(app_data_dir: PathBuf) -> CliResult<HistoryQueryService> {
     let app_data_dir = existing_app_data_dir(app_data_dir)?;
-    let database =
-        Database::open(&app_data_dir).map_err(|error| CliError::Io(error.to_string()))?;
-    let repository = SqliteHistoryStore::new(app_data_dir, Arc::new(database));
-    Ok(HistoryQueryService::new(Arc::new(repository)))
+    Ok(HistoryQueryService::new(Arc::new(
+        LazySqliteHistoryQueryRepository::new(app_data_dir),
+    )))
 }
 
 fn open_mutation_service(app_data_dir: PathBuf) -> CliResult<HistoryMutationService> {
