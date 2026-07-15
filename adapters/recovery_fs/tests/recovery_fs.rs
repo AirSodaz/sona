@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::types::RecoverySnapshot;
-use sona_recovery_fs::FsRecoverySnapshotStore;
+use sona_recovery_fs::{FsRecoveryAdapter, FsRecoverySnapshotStore};
 use std::fs::{self, File};
 use tempfile::tempdir;
 
@@ -79,4 +79,35 @@ fn load_returns_an_error_when_recovery_directory_cannot_be_created() {
     let store = FsRecoverySnapshotStore::new(blocked);
 
     assert!(store.load_snapshot_value().is_err());
+}
+
+#[test]
+fn recovery_adapter_composes_snapshot_store_source_paths_and_clock() {
+    let dir = tempdir().unwrap();
+    let source_path = dir.path().join("recording.wav");
+    fs::write(&source_path, b"audio").unwrap();
+    let adapter = FsRecoveryAdapter::new(dir.path().to_path_buf());
+
+    let saved = adapter
+        .save_snapshot_at(
+            vec![json!({
+                "id": "recovery-1",
+                "filename": "recording.wav",
+                "filePath": source_path,
+                "resolution": "pending",
+                "segments": []
+            })],
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(saved.updated_at, Some(42));
+    assert_eq!(saved.items[0].updated_at, 42);
+    assert!(saved.items[0].has_source_file);
+    assert!(saved.items[0].can_resume);
+
+    let loaded = adapter.load_snapshot_at(43).unwrap();
+
+    assert_eq!(loaded.updated_at, Some(42));
+    assert_eq!(loaded.items[0].updated_at, 42);
 }

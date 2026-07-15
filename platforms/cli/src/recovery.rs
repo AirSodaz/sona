@@ -1,8 +1,6 @@
 use clap::{Args, Subcommand};
-use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::RecoverySnapshot;
-use sona_recovery_fs::FsRecoverySnapshotStore;
-use sona_runtime_fs::{FsSourcePathStatusProvider, SystemClock};
+use sona_recovery_fs::FsRecoveryAdapter;
 use std::path::PathBuf;
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
@@ -37,11 +35,9 @@ pub fn run_recovery(args: RecoveryArgs) -> CliResult<CliOutput> {
 }
 
 fn run_recovery_list(args: RecoveryListArgs) -> CliResult<CliOutput> {
-    let store = FsRecoverySnapshotStore::new(args.app_data_dir);
-    let source_paths = FsSourcePathStatusProvider;
-    let clock = SystemClock;
-    let service = RecoveryService::new(&store, &source_paths, &clock);
-    let snapshot = service.load_snapshot().map_err(CliError::Io)?;
+    let snapshot = FsRecoveryAdapter::new(args.app_data_dir)
+        .load_snapshot()
+        .map_err(CliError::Io)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?
