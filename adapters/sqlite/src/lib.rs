@@ -29,7 +29,7 @@ pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
 pub use project::SqliteProjectRepository;
 pub use storage_usage_repository::LazySqliteStorageUsageRepository;
-pub use task_ledger::SqliteLedgerRepository;
+pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 
 use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, Transaction, TransactionBehavior};

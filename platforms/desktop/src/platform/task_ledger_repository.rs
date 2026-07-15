@@ -1,24 +1,24 @@
 use serde_json::Value;
-use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerRecord, TaskLedgerSnapshot,
 };
 use sona_runtime_fs::SystemClock;
+use sona_sqlite::SqliteTaskLedgerAdapter;
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::event::{EventEmitter, TauriEventEmitter};
 
-async fn run_task_ledger_service_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+async fn run_task_ledger_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
-    F: for<'a> FnOnce(TaskLedgerService<'a>) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, String> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
-        let repository = sona_sqlite::task_ledger::SqliteLedgerRepository::new(db);
-        let clock = SystemClock;
-        task(TaskLedgerService::new(&repository, &clock))
+        let adapter = SqliteTaskLedgerAdapter::new(db, Arc::new(SystemClock));
+        task(&adapter)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -35,7 +35,7 @@ fn emit_task_ledger_snapshot(
 }
 
 pub async fn load_snapshot<R: Runtime>(app: &AppHandle<R>) -> Result<TaskLedgerSnapshot, String> {
-    run_task_ledger_service_task(app, |service| service.load_snapshot()).await
+    run_task_ledger_adapter_task(app, |adapter| adapter.load_snapshot()).await
 }
 
 pub async fn upsert_task<R: Runtime>(
@@ -43,7 +43,7 @@ pub async fn upsert_task<R: Runtime>(
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
     let snapshot =
-        run_task_ledger_service_task(app, move |service| service.upsert_task(record)).await?;
+        run_task_ledger_adapter_task(app, move |adapter| adapter.upsert_task(record)).await?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
@@ -55,7 +55,7 @@ pub async fn patch_task<R: Runtime>(
     patch: Value,
 ) -> Result<TaskLedgerSnapshot, String> {
     let snapshot =
-        run_task_ledger_service_task(app, move |service| service.patch_task(&id, patch)).await?;
+        run_task_ledger_adapter_task(app, move |adapter| adapter.patch_task(&id, patch)).await?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
@@ -66,14 +66,14 @@ pub async fn remove_task<R: Runtime>(
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
     let snapshot =
-        run_task_ledger_service_task(app, move |service| service.remove_task(&id)).await?;
+        run_task_ledger_adapter_task(app, move |adapter| adapter.remove_task(&id)).await?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
 }
 
 pub async fn clear_resolved<R: Runtime>(app: &AppHandle<R>) -> Result<TaskLedgerSnapshot, String> {
-    let snapshot = run_task_ledger_service_task(app, |service| service.clear_resolved()).await?;
+    let snapshot = run_task_ledger_adapter_task(app, |adapter| adapter.clear_resolved()).await?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)

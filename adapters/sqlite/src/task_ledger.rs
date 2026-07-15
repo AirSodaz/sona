@@ -2,9 +2,11 @@ use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::repository::TaskLedgerStore;
+use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
-    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerRecord, TaskLedgerStatus,
+    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
 use std::sync::Arc;
 
@@ -26,6 +28,50 @@ where
 }
 
 crate::impl_db_repository!(SqliteLedgerRepository);
+
+pub struct SqliteTaskLedgerAdapter<D = crate::Database>
+where
+    D: DatabasePort,
+{
+    repository: SqliteLedgerRepository<D>,
+    clock: Arc<dyn UnixMillisClock>,
+}
+
+impl<D> SqliteTaskLedgerAdapter<D>
+where
+    D: DatabasePort,
+{
+    pub fn new(db: Arc<D>, clock: Arc<dyn UnixMillisClock>) -> Self {
+        Self {
+            repository: SqliteLedgerRepository::new(db),
+            clock,
+        }
+    }
+
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+        self.service().load_snapshot()
+    }
+
+    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<TaskLedgerSnapshot, String> {
+        self.service().upsert_task(record)
+    }
+
+    pub fn patch_task(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+        self.service().patch_task(id, patch)
+    }
+
+    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, String> {
+        self.service().remove_task(id)
+    }
+
+    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, String> {
+        self.service().clear_resolved()
+    }
+
+    fn service(&self) -> TaskLedgerService<'_> {
+        TaskLedgerService::new(&self.repository, self.clock.as_ref())
+    }
+}
 
 impl<D> TaskLedgerStore for SqliteLedgerRepository<D>
 where
@@ -210,9 +256,7 @@ mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
-    use sona_core::ports::time::UnixMillisClock;
     use sona_core::task_ledger::repository::TaskLedgerStore;
-    use sona_core::task_ledger::service::TaskLedgerService;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -225,6 +269,14 @@ mod tests {
     }
 
     static TEST_CLOCK: TestClock = TestClock;
+
+    struct FixedClock(u64);
+
+    impl UnixMillisClock for FixedClock {
+        fn now_ms(&self) -> Result<u64, String> {
+            Ok(self.0)
+        }
+    }
 
     fn service(repository: &SqliteLedgerRepository) -> TaskLedgerService<'_> {
         TaskLedgerService::new(repository, &TEST_CLOCK)
@@ -252,6 +304,22 @@ mod tests {
             template_id: None,
             target_language: None,
         }
+    }
+
+    #[test]
+    fn task_ledger_adapter_composes_repository_and_clock() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let adapter = SqliteTaskLedgerAdapter::new(db, Arc::new(FixedClock(2_000)));
+        let mut record = make_record("adapter-task", TaskLedgerStatus::Pending);
+        record.created_at = 0;
+        record.updated_at = 0;
+
+        let snapshot = adapter.upsert_task(record).unwrap();
+
+        assert_eq!(snapshot.updated_at, Some(2_000));
+        assert_eq!(snapshot.tasks[0].id, "adapter-task");
+        assert_eq!(snapshot.tasks[0].created_at, 2_000);
+        assert_eq!(snapshot.tasks[0].updated_at, 2_000);
     }
 
     #[test]
