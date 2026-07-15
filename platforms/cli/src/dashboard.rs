@@ -1,10 +1,7 @@
 use clap::{Args, Subcommand};
-use sona_core::dashboard::DashboardService;
 use sona_core::dashboard::models::DashboardSnapshotDomainModel;
-use sona_sqlite::analytics::SqliteAnalyticsRepository;
-use sona_sqlite::{Database, SqliteHistoryStore, SqliteProjectRepository};
+use sona_sqlite::load_dashboard_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::table::{append_table_row, append_table_separator, column_widths};
 use crate::{CliError, CliOutput, CliResult};
@@ -43,22 +40,15 @@ pub fn run_dashboard(args: DashboardArgs) -> CliResult<CliOutput> {
 fn run_dashboard_show(args: DashboardShowArgs) -> CliResult<CliOutput> {
     let app_data_dir =
         std::path::absolute(args.app_data_dir).map_err(|error| CliError::Io(error.to_string()))?;
-    let database = Arc::new(
-        Database::open_read_only_with_analytics(&app_data_dir)
-            .map_err(|error| CliError::Io(error.to_string()))?,
-    );
-    let service = DashboardService::new(
-        Arc::new(SqliteHistoryStore::new(app_data_dir, Arc::clone(&database))),
-        Arc::new(SqliteProjectRepository::new(Arc::clone(&database))),
-        Arc::new(SqliteAnalyticsRepository::new(database)),
-    );
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(|error| CliError::Other(error.to_string()))?;
     let snapshot = runtime
-        .block_on(
-            service.build_snapshot_at(args.deep, sona_runtime_fs::dashboard_snapshot_time_now()),
-        )
+        .block_on(load_dashboard_snapshot(
+            app_data_dir,
+            args.deep,
+            sona_runtime_fs::dashboard_snapshot_time_now(),
+        ))
         .map_err(|error| CliError::Io(error.to_string()))?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)

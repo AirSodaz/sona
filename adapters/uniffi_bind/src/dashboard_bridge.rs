@@ -1,9 +1,6 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use sona_core::dashboard::DashboardService;
-use sona_sqlite::analytics::SqliteAnalyticsRepository;
-use sona_sqlite::{Database, SqliteHistoryStore, SqliteProjectRepository};
+use sona_sqlite::load_dashboard_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub(crate) async fn load_dashboard_snapshot_json(
     app_data_dir: String,
@@ -19,18 +16,15 @@ fn build_dashboard_snapshot_json(
     deep: bool,
 ) -> SonaCoreBindingResult<String> {
     let app_data_dir = std::path::absolute(PathBuf::from(app_data_dir)).map_err(dashboard_error)?;
-    let database =
-        Arc::new(Database::open_read_only_with_analytics(&app_data_dir).map_err(dashboard_error)?);
-    let service = DashboardService::new(
-        Arc::new(SqliteHistoryStore::new(app_data_dir, Arc::clone(&database))),
-        Arc::new(SqliteProjectRepository::new(Arc::clone(&database))),
-        Arc::new(SqliteAnalyticsRepository::new(database)),
-    );
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(dashboard_error)?;
     let snapshot = runtime
-        .block_on(service.build_snapshot_at(deep, sona_runtime_fs::dashboard_snapshot_time_now()))
+        .block_on(load_dashboard_snapshot(
+            app_data_dir,
+            deep,
+            sona_runtime_fs::dashboard_snapshot_time_now(),
+        ))
         .map_err(dashboard_error)?;
     let canonical = serde_json::to_value(snapshot).map_err(dashboard_error)?;
     serde_json::to_string(&canonical).map_err(dashboard_error)

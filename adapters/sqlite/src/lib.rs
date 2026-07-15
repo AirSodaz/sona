@@ -3,6 +3,7 @@ pub mod automation;
 pub mod backup_state;
 pub mod backup_state_repository;
 pub mod config_store;
+pub mod dashboard_repository;
 pub mod error;
 pub mod history_archive;
 pub mod history_fs_utils;
@@ -24,6 +25,9 @@ pub use automation::{
 pub use backup_state::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 pub use backup_state_repository::LazySqliteBackupStateRepository;
 pub use config_store::{SqliteAppConfigAdapter, SqliteConfigStore};
+pub use dashboard_repository::{
+    SqliteDashboardService, create_dashboard_service, load_dashboard_snapshot,
+};
 pub use error::DatabaseError;
 pub use history_archive::HistoryRepository;
 pub use history_mutation_repository::LazySqliteHistoryMutationRepository;

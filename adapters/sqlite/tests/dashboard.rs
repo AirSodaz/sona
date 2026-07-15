@@ -6,7 +6,7 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sona_core::dashboard::{DashboardService, DashboardSnapshotTime};
+use sona_core::dashboard::{DashboardServiceError, DashboardSnapshotTime};
 use sona_core::history::HistorySaveRecordingRequest;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history_store::HistoryStore;
@@ -15,9 +15,11 @@ use sona_core::project::{
     DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
     ProjectDefaults, ProjectRecord, ProjectStore,
 };
-use sona_sqlite::analytics::SqliteAnalyticsRepository;
 use sona_sqlite::llm_usage::{read_stats, record_usage};
-use sona_sqlite::{Database, DatabaseError, SqliteHistoryStore, SqliteProjectRepository};
+use sona_sqlite::{
+    Database, SqliteHistoryStore, SqliteProjectRepository, create_dashboard_service,
+    load_dashboard_snapshot,
+};
 
 fn project() -> ProjectRecord {
     ProjectRecord {
@@ -184,20 +186,17 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let before = file_hashes(dir.path());
 
     let read_only = Arc::new(Database::open_read_only_with_analytics(dir.path()).unwrap());
-    let service = DashboardService::new(
-        Arc::new(SqliteHistoryStore::new(
-            dir.path().to_path_buf(),
-            Arc::clone(&read_only),
-        )),
-        Arc::new(SqliteProjectRepository::new(Arc::clone(&read_only))),
-        Arc::new(SqliteAnalyticsRepository::new(read_only)),
-    );
+    let service = create_dashboard_service(dir.path().to_path_buf(), read_only);
     let runtime = runtime();
     let shallow = runtime
         .block_on(service.build_snapshot_at(false, snapshot_time()))
         .unwrap();
     let deep = runtime
-        .block_on(service.build_snapshot_at(true, snapshot_time()))
+        .block_on(load_dashboard_snapshot(
+            dir.path().to_path_buf(),
+            true,
+            snapshot_time(),
+        ))
         .unwrap();
 
     assert_eq!(shallow.generated_at, "2026-07-13T08:00:00.000Z");
@@ -225,7 +224,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
 }
 
 #[test]
-fn read_only_dashboard_rejects_future_schema() {
+fn lazy_dashboard_entrypoint_rejects_future_schema() {
     let dir = tempfile::tempdir().unwrap();
     let db = Database::open(dir.path()).unwrap();
     db.with_write_connection(|connection| {
@@ -235,13 +234,33 @@ fn read_only_dashboard_rejects_future_schema() {
     .unwrap();
     drop(db);
 
-    let error = Database::open_read_only_with_analytics(dir.path()).unwrap_err();
+    let error = runtime()
+        .block_on(load_dashboard_snapshot(
+            dir.path().to_path_buf(),
+            false,
+            snapshot_time(),
+        ))
+        .unwrap_err();
 
     assert!(matches!(
         error,
-        DatabaseError::UnsupportedSchemaVersion {
-            found: 99,
-            current: 2
-        }
+        DashboardServiceError::Internal(reason) if reason.contains("99")
     ));
+}
+
+#[test]
+fn lazy_dashboard_entrypoint_rejects_missing_directory_without_creating_it() {
+    let root = tempfile::tempdir().unwrap();
+    let missing = root.path().join("missing");
+
+    let error = runtime()
+        .block_on(load_dashboard_snapshot(
+            missing.clone(),
+            false,
+            snapshot_time(),
+        ))
+        .unwrap_err();
+
+    assert!(matches!(error, DashboardServiceError::Internal(_)));
+    assert!(!missing.exists());
 }
