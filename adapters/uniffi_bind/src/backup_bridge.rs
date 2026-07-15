@@ -1,42 +1,14 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use serde::Serialize;
 use sona_archive::FsBackupArchiveRepository;
 use sona_core::backup::{
-    BackupApplyResult, BackupDataset, BackupError, BackupExportRequest, BackupImportRequest,
-    BackupInspectRequest, BackupRestoreDataset, BackupService, BackupStateRepository,
+    BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupService,
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteBackupStateRepository, validate_backup_restore_dataset};
+use sona_sqlite::LazySqliteBackupStateRepository;
 
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-
-struct LazySqliteBackupStateRepository {
-    app_data_dir: PathBuf,
-}
-
-impl LazySqliteBackupStateRepository {
-    fn new(app_data_dir: PathBuf) -> Self {
-        Self { app_data_dir }
-    }
-}
-
-impl BackupStateRepository for LazySqliteBackupStateRepository {
-    fn snapshot(&self) -> Result<BackupDataset, BackupError> {
-        ensure_existing_directory(&self.app_data_dir)?;
-        let database = Database::open(&self.app_data_dir).map_err(backup_database_error)?;
-        SqliteBackupStateRepository::new(self.app_data_dir.clone(), Arc::new(database)).snapshot()
-    }
-
-    fn replace_all(&self, dataset: BackupRestoreDataset) -> Result<BackupApplyResult, BackupError> {
-        validate_backup_restore_dataset(&dataset)?;
-        ensure_existing_directory(&self.app_data_dir)?;
-        let database = Database::open(&self.app_data_dir).map_err(backup_database_error)?;
-        SqliteBackupStateRepository::new(self.app_data_dir.clone(), Arc::new(database))
-            .replace_all(dataset)
-    }
-}
 
 pub(crate) async fn export_backup_archive_json(
     app_data_dir: String,
@@ -136,21 +108,6 @@ fn utf8_path(path: &Path, label: &str) -> SonaCoreBindingResult<String> {
             path.display()
         ))
     })
-}
-
-fn ensure_existing_directory(path: &Path) -> Result<(), BackupError> {
-    if path.is_dir() {
-        Ok(())
-    } else {
-        Err(BackupError::State(format!(
-            "Application data directory does not exist or is not a directory: {}",
-            path.display()
-        )))
-    }
-}
-
-fn backup_database_error(error: impl ToString) -> BackupError {
-    BackupError::State(error.to_string())
 }
 
 fn canonical_json(value: impl Serialize) -> SonaCoreBindingResult<String> {

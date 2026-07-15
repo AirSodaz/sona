@@ -20,8 +20,9 @@ use sona_core::history::{HistoryBackupSnapshot, HistoryItemStatus};
 use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
 use sona_sqlite::ports::Database as DatabasePort;
 use sona_sqlite::{
-    Database, DatabaseError, SqliteAutomationRepository, SqliteBackupStateRepository,
-    SqliteConfigStore, SqliteProjectRepository, llm_usage, validate_backup_restore_dataset,
+    Database, DatabaseError, LazySqliteBackupStateRepository, SqliteAutomationRepository,
+    SqliteBackupStateRepository, SqliteConfigStore, SqliteProjectRepository, llm_usage,
+    validate_backup_restore_dataset,
 };
 use tempfile::TempDir;
 
@@ -434,6 +435,69 @@ fn target_independent_restore_preflight_rejects_relationship_and_sql_constraints
         matches!(error, BackupError::InvalidBackup(ref reason) if reason.contains("UNIQUE constraint failed")),
         "unexpected repository error: {error:?}"
     );
+}
+
+#[test]
+fn lazy_repository_snapshot_requires_an_existing_directory_without_creating_it() {
+    let parent = tempfile::tempdir().unwrap();
+    let app_data_dir = parent.path().join("missing-app-data");
+    let repository = LazySqliteBackupStateRepository::new(app_data_dir.clone());
+
+    let error = repository.snapshot().unwrap_err();
+
+    assert!(
+        matches!(error, BackupError::State(ref reason) if reason == &format!(
+            "Application data directory does not exist or is not a directory: {}",
+            app_data_dir.display()
+        )),
+        "unexpected repository error: {error:?}"
+    );
+    assert!(!app_data_dir.exists());
+}
+
+#[test]
+fn lazy_repository_validates_restore_before_checking_the_target_directory() {
+    let fixture = Fixture::new();
+    fixture.seed("before");
+    let mut duplicate_projects = fixture.repository.snapshot().unwrap();
+    duplicate_projects
+        .projects
+        .push(duplicate_projects.projects[0].clone());
+    let restore = restore_dataset(duplicate_projects, "duplicate-projects");
+
+    let parent = tempfile::tempdir().unwrap();
+    let app_data_dir = parent.path().join("missing-app-data");
+    let repository = LazySqliteBackupStateRepository::new(app_data_dir.clone());
+
+    let error = repository.replace_all(restore).unwrap_err();
+
+    assert!(
+        matches!(error, BackupError::InvalidBackup(ref reason) if reason.contains("duplicate project IDs")),
+        "unexpected repository error: {error:?}"
+    );
+    assert!(!app_data_dir.exists());
+}
+
+#[test]
+fn lazy_repository_rejects_a_valid_restore_when_the_target_directory_is_missing() {
+    let fixture = Fixture::new();
+    fixture.seed("before");
+    let restore = restore_dataset(fixture.repository.snapshot().unwrap(), "valid-restore");
+
+    let parent = tempfile::tempdir().unwrap();
+    let app_data_dir = parent.path().join("missing-app-data");
+    let repository = LazySqliteBackupStateRepository::new(app_data_dir.clone());
+
+    let error = repository.replace_all(restore).unwrap_err();
+
+    assert!(
+        matches!(error, BackupError::State(ref reason) if reason == &format!(
+            "Application data directory does not exist or is not a directory: {}",
+            app_data_dir.display()
+        )),
+        "unexpected repository error: {error:?}"
+    );
+    assert!(!app_data_dir.exists());
 }
 
 fn dataset_value(dataset: &BackupDataset) -> Value {

@@ -1,15 +1,13 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use clap::{Args, Subcommand};
 use serde::Serialize;
 use sona_archive::FsBackupArchiveRepository;
 use sona_core::backup::{
-    BackupApplyResult, BackupDataset, BackupError, BackupExportRequest, BackupImportRequest,
-    BackupInspectRequest, BackupRestoreDataset, BackupService, BackupStateRepository,
+    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupService,
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteBackupStateRepository, validate_backup_restore_dataset};
+use sona_sqlite::LazySqliteBackupStateRepository;
 
 use crate::{CliError, CliOutput, CliResult};
 
@@ -96,36 +94,10 @@ impl ValidatedBackupCommand {
     }
 }
 
-struct CliBackupStateRepository {
-    app_data_dir: PathBuf,
-}
-
-impl BackupStateRepository for CliBackupStateRepository {
-    fn snapshot(&self) -> Result<BackupDataset, BackupError> {
-        let database = Database::open(&self.app_data_dir).map_err(backup_database_error)?;
-        SqliteBackupStateRepository::new(self.app_data_dir.clone(), Arc::new(database)).snapshot()
-    }
-
-    fn replace_all(&self, dataset: BackupRestoreDataset) -> Result<BackupApplyResult, BackupError> {
-        validate_backup_restore_dataset(&dataset)?;
-        if !self.app_data_dir.is_dir() {
-            return Err(BackupError::State(format!(
-                "Application data directory does not exist or is not a directory: {}",
-                self.app_data_dir.display()
-            )));
-        }
-        let database = Database::open(&self.app_data_dir).map_err(backup_database_error)?;
-        SqliteBackupStateRepository::new(self.app_data_dir.clone(), Arc::new(database))
-            .replace_all(dataset)
-    }
-}
-
 pub fn run_backup(args: BackupArgs) -> CliResult<CliOutput> {
     let command = validate_command(args.command)?;
     let archive = FsBackupArchiveRepository::new();
-    let state = CliBackupStateRepository {
-        app_data_dir: command.app_data_dir(),
-    };
+    let state = LazySqliteBackupStateRepository::new(command.app_data_dir());
     let clock = SystemClock;
     let service = BackupService::new(&archive, &state, &clock);
 
@@ -252,10 +224,6 @@ fn canonical_json(value: impl Serialize) -> CliResult<CliOutput> {
     serde_json::to_string(&canonical)
         .map(CliOutput::stdout)
         .map_err(|error| CliError::Serialize(error.to_string()))
-}
-
-fn backup_database_error(error: impl std::fmt::Display) -> BackupError {
-    BackupError::State(error.to_string())
 }
 
 fn map_backup_error(error: BackupError) -> CliError {
