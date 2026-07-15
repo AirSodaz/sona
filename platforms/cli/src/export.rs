@@ -2,11 +2,10 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 use sona_core::export::{
-    ExportError, ExportFormat, ExportMode, ExportService, ExportTranscriptFileRequest,
-    ExportTranscriptFileResult,
+    ExportError, ExportFormat, ExportMode, ExportTranscriptFileRequest, ExportTranscriptFileResult,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
-use sona_export::FsTranscriptExportRepository;
+use sona_export::export_transcript_file;
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -69,9 +68,7 @@ fn run_export_transcript(args: ExportTranscriptArgs) -> CliResult<CliOutput> {
         mode,
         output_path: args.output.to_string_lossy().into_owned(),
     };
-    let result = ExportService::new(FsTranscriptExportRepository)
-        .export_transcript_file(request)
-        .map_err(map_export_error)?;
+    let result = export_transcript_file(request).map_err(map_export_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&result)
             .map_err(|error| CliError::Serialize(error.to_string()))?

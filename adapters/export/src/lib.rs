@@ -18,8 +18,6 @@ impl TranscriptExportRepository for FsTranscriptExportRepository {
 
 pub fn export_transcript_file(
     request: ExportTranscriptFileRequest,
-) -> Result<ExportTranscriptFileResult, String> {
-    ExportService::new(FsTranscriptExportRepository)
-        .export_transcript_file(request)
-        .map_err(|error| error.to_string())
+) -> Result<ExportTranscriptFileResult, ExportError> {
+    ExportService::new(FsTranscriptExportRepository).export_transcript_file(request)
 }

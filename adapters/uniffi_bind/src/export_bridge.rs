@@ -1,6 +1,6 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use sona_core::export::{ExportService, ExportTranscriptFileRequest};
-use sona_export::FsTranscriptExportRepository;
+use sona_core::export::ExportTranscriptFileRequest;
+use sona_export::export_transcript_file;
 
 pub(crate) async fn export_transcript_file_json(
     input_json: String,
@@ -13,9 +13,7 @@ pub(crate) async fn export_transcript_file_json(
 fn build_export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
     let request: ExportTranscriptFileRequest =
         serde_json::from_str(&input_json).map_err(export_error)?;
-    let result = ExportService::new(FsTranscriptExportRepository)
-        .export_transcript_file(request)
-        .map_err(export_error)?;
+    let result = export_transcript_file(request).map_err(export_error)?;
     let canonical = serde_json::to_value(result).map_err(export_error)?;
     serde_json::to_string(&canonical).map_err(export_error)
 }
