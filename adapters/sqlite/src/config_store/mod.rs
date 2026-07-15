@@ -5,7 +5,13 @@ mod settings;
 use std::sync::Arc;
 
 use rusqlite::Transaction;
-use sona_core::config::{AppConfigStartupProjection, AppConfigStore, AppConfigStoredState};
+use serde_json::Value;
+use sona_core::config::{
+    AppConfigRepositoryService, AppConfigRepositorySnapshot, AppConfigStartupProjection,
+    AppConfigStore, AppConfigStoredState,
+};
+use sona_core::ports::time::UnixMillisClock;
+use sona_core::runtime::serve::ServeStartupSettings;
 
 use crate::{DatabaseError, ports::Database as DatabasePort};
 
@@ -50,6 +56,58 @@ where
 }
 
 crate::impl_db_repository!(SqliteConfigStore);
+
+pub struct SqliteAppConfigAdapter<D = crate::Database>
+where
+    D: DatabasePort,
+{
+    store: SqliteConfigStore<D>,
+    clock: Arc<dyn UnixMillisClock>,
+}
+
+impl<D> SqliteAppConfigAdapter<D>
+where
+    D: DatabasePort,
+{
+    pub fn new(db: Arc<D>, clock: Arc<dyn UnixMillisClock>) -> Self {
+        Self {
+            store: SqliteConfigStore::new(db),
+            clock,
+        }
+    }
+
+    pub fn load_config(&self) -> Result<Option<Value>, String> {
+        self.service().load_config()
+    }
+
+    pub fn inspect_state(&self) -> Result<Option<AppConfigRepositorySnapshot>, String> {
+        self.service().inspect_state()
+    }
+
+    pub fn save_config(&self, config: &Value) -> Result<(), String> {
+        self.service().save_config(config)
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, String> {
+        self.service().get_setting(key)
+    }
+
+    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), String> {
+        self.service().set_setting(key, value)
+    }
+
+    pub fn load_app_config_payload(&self) -> Result<Option<Value>, String> {
+        self.service().load_app_config_payload()
+    }
+
+    pub fn load_serve_startup_settings(&self) -> Result<Option<ServeStartupSettings>, String> {
+        self.service().load_serve_startup_settings()
+    }
+
+    fn service(&self) -> AppConfigRepositoryService<'_> {
+        AppConfigRepositoryService::new(&self.store, self.clock.as_ref())
+    }
+}
 
 impl<D> AppConfigStore for SqliteConfigStore<D>
 where

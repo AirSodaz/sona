@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
-use sona_core::config::{AppConfigRepositoryService, AppConfigRepositorySnapshot};
+use sona_core::config::AppConfigRepositorySnapshot;
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteConfigStore};
+use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -39,8 +39,7 @@ pub fn run_app_config(args: AppConfigArgs) -> CliResult<CliOutput> {
 fn run_app_config_show(args: AppConfigShowArgs) -> CliResult<CliOutput> {
     let database = Database::open_read_only(&args.app_data_dir)
         .map_err(|error| CliError::Io(error.to_string()))?;
-    let store = SqliteConfigStore::new(Arc::new(database));
-    let snapshot = AppConfigRepositoryService::new(&store, &SystemClock)
+    let snapshot = SqliteAppConfigAdapter::new(Arc::new(database), Arc::new(SystemClock))
         .inspect_state()
         .map_err(CliError::Io)?;
     let output = if args.json {

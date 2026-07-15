@@ -1,14 +1,13 @@
 use crate::json_bridge::parse_core_json;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
-use sona_core::config::AppConfigRepositoryService;
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteConfigStore};
+use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
-    with_app_config_repository(&app_data_dir, |service| service.load_config())?
+    with_app_config_adapter(&app_data_dir, |adapter| adapter.load_config())?
         .map(|config| serde_json::to_string(&config).map_err(config_repository_error))
         .transpose()
 }
@@ -18,14 +17,14 @@ pub(crate) fn save_app_config_json(
     config_json: String,
 ) -> SonaCoreBindingResult<()> {
     let config: Value = parse_core_json(&config_json, "app config")?;
-    with_app_config_repository(&app_data_dir, |service| service.save_config(&config))
+    with_app_config_adapter(&app_data_dir, |adapter| adapter.save_config(&config))
 }
 
 pub(crate) fn get_app_setting_json(
     app_data_dir: String,
     key: String,
 ) -> SonaCoreBindingResult<Option<String>> {
-    with_app_config_repository(&app_data_dir, |service| service.get_setting(&key))?
+    with_app_config_adapter(&app_data_dir, |adapter| adapter.get_setting(&key))?
         .map(|value| serde_json::to_string(&value).map_err(config_repository_error))
         .transpose()
 }
@@ -36,17 +35,16 @@ pub(crate) fn set_app_setting_json(
     value_json: String,
 ) -> SonaCoreBindingResult<()> {
     let value: Value = parse_core_json(&value_json, "app setting")?;
-    with_app_config_repository(&app_data_dir, |service| service.set_setting(&key, &value))
+    with_app_config_adapter(&app_data_dir, |adapter| adapter.set_setting(&key, &value))
 }
 
-fn with_app_config_repository<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
+fn with_app_config_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
 where
-    F: for<'a> FnOnce(&AppConfigRepositoryService<'a>) -> Result<T, String>,
+    F: FnOnce(&SqliteAppConfigAdapter) -> Result<T, String>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(config_repository_error)?;
-    let store = SqliteConfigStore::new(Arc::new(database));
-    operation(&AppConfigRepositoryService::new(&store, &SystemClock))
-        .map_err(config_repository_error)
+    let adapter = SqliteAppConfigAdapter::new(Arc::new(database), Arc::new(SystemClock));
+    operation(&adapter).map_err(config_repository_error)
 }
 
 fn config_repository_error(reason: impl ToString) -> SonaCoreBindingError {

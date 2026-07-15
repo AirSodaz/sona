@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use sona_core::config::{
-    AppConfigLibrary, AppConfigRepositoryService, AppConfigStartupProjection, AppConfigStore,
-    AppConfigStoredState, HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord,
-    PolishPresetRecord, SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
+    AppConfigLibrary, AppConfigStartupProjection, AppConfigStore, AppConfigStoredState,
+    HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord,
+    SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
     TextReplacementRuleRecord, TextReplacementSetRecord,
 };
 use sona_core::ports::time::UnixMillisClock;
-use sona_sqlite::{Database, DatabaseError, SqliteConfigStore};
+use sona_sqlite::{Database, DatabaseError, SqliteAppConfigAdapter, SqliteConfigStore};
 
 struct FixedClock;
 
@@ -770,10 +770,10 @@ fn startup_reads_do_not_depend_on_unrelated_library_tables() {
         Ok(())
     })
     .unwrap();
-    let service = AppConfigRepositoryService::new(&store, &FixedClock);
+    let adapter = SqliteAppConfigAdapter::new(db, Arc::new(FixedClock));
 
-    let payload = service.load_app_config_payload().unwrap().unwrap();
-    let settings = service.load_serve_startup_settings().unwrap().unwrap();
+    let payload = adapter.load_app_config_payload().unwrap().unwrap();
+    let settings = adapter.load_serve_startup_settings().unwrap().unwrap();
 
     assert_eq!(payload["label"], "startup");
     assert!(settings.enabled);

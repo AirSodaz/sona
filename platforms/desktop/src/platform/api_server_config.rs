@@ -1,10 +1,9 @@
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-use sona_core::config::AppConfigRepositoryService;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, DatabaseError, SqliteConfigStore};
+use sona_sqlite::{Database, DatabaseError, SqliteAppConfigAdapter};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -32,20 +31,20 @@ fn database_for_app_local_data_dir_or_open(
     open_database(app_local_data_dir).map(Arc::new)
 }
 
-fn with_config_service<T>(
+fn with_config_adapter<T>(
     app_local_data_dir: &Path,
-    load: impl FnOnce(&AppConfigRepositoryService<'_>) -> Result<T, String>,
+    load: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, String>,
 ) -> Result<T, String> {
     let database =
         database_for_app_local_data_dir(app_local_data_dir).map_err(|error| error.to_string())?;
-    let store = SqliteConfigStore::new(database);
-    load(&AppConfigRepositoryService::new(&store, &SystemClock))
+    let adapter = SqliteAppConfigAdapter::new(database, Arc::new(SystemClock));
+    load(&adapter)
 }
 
 fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    with_config_service(&app_local_data_dir, |service| {
-        service.load_app_config_payload()
+    with_config_adapter(&app_local_data_dir, |adapter| {
+        adapter.load_app_config_payload()
     })
     .map_err(|error| {
         log::warn!("[API Server] Failed to load SQLite app config: {error}");
@@ -57,8 +56,8 @@ fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_j
 
 fn load_sqlite_serve_startup_settings(provider: &dyn PathProvider) -> Option<ServeStartupSettings> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
-    with_config_service(&app_local_data_dir, |service| {
-        service.load_serve_startup_settings()
+    with_config_adapter(&app_local_data_dir, |adapter| {
+        adapter.load_serve_startup_settings()
     })
     .map_err(|error| {
         log::warn!("[API Server] Failed to load SQLite startup settings: {error}");
@@ -116,16 +115,14 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
 mod tests {
     use super::*;
     use crate::platform::paths::{MockPathProvider, PathKind};
-    use sona_sqlite::Database;
-    use sona_sqlite::config_store::SqliteConfigStore;
+    use sona_sqlite::{Database, SqliteAppConfigAdapter};
     use std::cell::Cell;
     use std::collections::HashMap as StdHashMap;
     use std::path::Path as StdPath;
     use std::sync::Arc;
 
     fn save_config(db: Arc<Database>, config: &serde_json::Value) {
-        let store = SqliteConfigStore::new(db);
-        AppConfigRepositoryService::new(&store, &SystemClock)
+        SqliteAppConfigAdapter::new(db, Arc::new(SystemClock))
             .save_config(config)
             .unwrap();
     }
