@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use sona_archive::FsBackupArchiveRepository;
+use sona_archive::FsBackupAdapter;
 use sona_core::backup::{
-    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupService,
+    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest,
 };
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::LazySqliteBackupStateRepository;
@@ -96,21 +96,21 @@ impl ValidatedBackupCommand {
 
 pub fn run_backup(args: BackupArgs) -> CliResult<CliOutput> {
     let command = validate_command(args.command)?;
-    let archive = FsBackupArchiveRepository::new();
-    let state = LazySqliteBackupStateRepository::new(command.app_data_dir());
-    let clock = SystemClock;
-    let service = BackupService::new(&archive, &state, &clock);
+    let adapter = FsBackupAdapter::new(
+        LazySqliteBackupStateRepository::new(command.app_data_dir()),
+        SystemClock,
+    );
 
     match command {
-        ValidatedBackupCommand::Export { request, .. } => service
+        ValidatedBackupCommand::Export { request, .. } => adapter
             .export_archive(request)
             .map_err(map_backup_error)
             .and_then(canonical_json),
-        ValidatedBackupCommand::Inspect(request) => service
+        ValidatedBackupCommand::Inspect(request) => adapter
             .inspect_archive(request)
             .map_err(map_backup_error)
             .and_then(canonical_json),
-        ValidatedBackupCommand::Import { request, .. } => service
+        ValidatedBackupCommand::Import { request, .. } => adapter
             .import_archive(request)
             .map_err(map_backup_error)
             .and_then(canonical_json),

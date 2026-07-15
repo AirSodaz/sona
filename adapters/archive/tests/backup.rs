@@ -5,20 +5,23 @@ use std::path::{Path, PathBuf};
 use bzip2::write::BzEncoder;
 use serde_json::{Value, json};
 use sona_archive::{
-    FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_EXPANDED_BYTES, MAX_BACKUP_FILE_BYTES,
+    FsBackupAdapter, FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_EXPANDED_BYTES,
+    MAX_BACKUP_FILE_BYTES,
 };
 use sona_core::automation::repository::{
     AutomationProcessedRecord, AutomationRepositoryState, AutomationRuleRecord,
     AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig,
 };
 use sona_core::backup::{
-    BackupArchivePort, BackupDataset, BackupError, BackupManifest, BackupManifestCounts,
-    BackupManifestScopes,
+    BackupApplyResult, BackupArchivePort, BackupDataset, BackupError, BackupExportRequest,
+    BackupInspectRequest, BackupManifest, BackupManifestCounts, BackupManifestScopes,
+    BackupRestoreDataset, BackupStateRepository,
 };
 use sona_core::history::{
     HistoryAudioStatus, HistoryBackupSnapshot, HistoryItemKind, HistoryItemRecord,
     HistoryItemStatus,
 };
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{ProjectDefaults, ProjectRecord};
 use tar::{EntryType, Header};
 use uuid::Uuid;
@@ -417,6 +420,54 @@ fn assert_prepare_fails_cleanly(
         "prepare failure left extraction artifacts"
     );
     error.to_string()
+}
+
+struct FixedBackupState(BackupDataset);
+
+impl BackupStateRepository for FixedBackupState {
+    fn snapshot(&self) -> Result<BackupDataset, BackupError> {
+        Ok(self.0.clone())
+    }
+
+    fn replace_all(
+        &self,
+        _dataset: BackupRestoreDataset,
+    ) -> Result<BackupApplyResult, BackupError> {
+        unreachable!("export and inspect must not replace backup state")
+    }
+}
+
+struct FixedClock(u64);
+
+impl UnixMillisClock for FixedClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        Ok(self.0)
+    }
+}
+
+#[test]
+fn filesystem_backup_adapter_composes_archive_state_and_clock() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("adapter.sona-backup");
+    let archive_path = archive_path.to_string_lossy().into_owned();
+    let adapter = FsBackupAdapter::new(FixedBackupState(dataset()), FixedClock(1_234));
+
+    let manifest = adapter
+        .export_archive(BackupExportRequest {
+            archive_path: archive_path.clone(),
+            app_version: "0.8.0".to_string(),
+        })
+        .unwrap();
+
+    assert_eq!(manifest.created_at, "1970-01-01T00:00:01.234Z");
+    assert!(Path::new(&archive_path).is_file());
+
+    let preview = adapter
+        .inspect_archive(BackupInspectRequest { archive_path })
+        .unwrap();
+
+    assert_eq!(preview.manifest.app_version, "0.8.0");
+    assert_eq!(preview.manifest.counts.projects, 1);
 }
 
 #[test]

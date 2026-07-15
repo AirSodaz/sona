@@ -1,15 +1,15 @@
 pub(crate) mod llm_helpers;
 mod state;
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
-use sona_archive::FsBackupArchiveRepository;
+use sona_archive::FsBackupAdapter;
 use sona_core::backup::{
     BackupApplyPreparedImportRequest, BackupError, BackupExportRequest, BackupPrepareImportRequest,
-    BackupService,
 };
 use sona_core::history::mutation_repository::HistoryMutationError;
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_runtime_fs::SystemClock;
 pub use sona_sqlite::history_store as sqlite_store;
 use sona_sqlite::{Database, SqliteBackupStateRepository};
 pub use sqlite_store::SqliteHistoryStore;
@@ -165,7 +165,7 @@ where
     .map_err(|error| error.to_string())?
 }
 
-async fn run_backup_service<R, T, F>(
+async fn run_backup_adapter_task<R, T, F>(
     app: &AppHandle<R>,
     state: &PreparedBackupImportState,
     task: F,
@@ -173,7 +173,7 @@ async fn run_backup_service<R, T, F>(
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(&FsBackupArchiveRepository, &SqliteBackupStateRepository) -> Result<T, BackupError>
+    F: FnOnce(&FsBackupAdapter<SqliteBackupStateRepository, SystemClock>) -> Result<T, BackupError>
         + Send
         + 'static,
 {
@@ -183,7 +183,8 @@ where
     let archive = state.archive();
     tauri::async_runtime::spawn_blocking(move || {
         let repository = SqliteBackupStateRepository::new(app_local_data_dir, db);
-        task(archive.as_ref(), &repository).map_err(|error| error.to_string())
+        let adapter = FsBackupAdapter::with_archive(archive, repository, SystemClock);
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -194,13 +195,11 @@ pub async fn export_backup_archive<R: Runtime>(
     state: &PreparedBackupImportState,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    run_backup_service(app, state, move |archive, repository| {
-        BackupService::new(archive, repository, &sona_runtime_fs::SystemClock).export_archive(
-            BackupExportRequest {
-                archive_path: request.archive_path,
-                app_version: request.app_version,
-            },
-        )
+    run_backup_adapter_task(app, state, move |adapter| {
+        adapter.export_archive(BackupExportRequest {
+            archive_path: request.archive_path,
+            app_version: request.app_version,
+        })
     })
     .await
 }
@@ -210,9 +209,8 @@ pub async fn prepare_backup_import<R: Runtime>(
     state: &PreparedBackupImportState,
     archive_path: String,
 ) -> Result<PreparedBackupImport, String> {
-    run_backup_service(app, state, move |archive, repository| {
-        BackupService::new(archive, repository, &sona_runtime_fs::SystemClock)
-            .prepare_import(BackupPrepareImportRequest { archive_path })
+    run_backup_adapter_task(app, state, move |adapter| {
+        adapter.prepare_import(BackupPrepareImportRequest { archive_path })
     })
     .await
 }
@@ -222,8 +220,8 @@ pub async fn apply_prepared_history_import<R: Runtime>(
     state: &PreparedBackupImportState,
     import_id: String,
 ) -> Result<(), String> {
-    run_backup_service(app, state, move |archive, repository| {
-        BackupService::new(archive, repository, &sona_runtime_fs::SystemClock)
+    run_backup_adapter_task(app, state, move |adapter| {
+        adapter
             .apply_prepared_import(BackupApplyPreparedImportRequest {
                 import_id,
                 default_rule_set_name: "Default Rules".to_string(),
@@ -238,9 +236,8 @@ pub async fn dispose_prepared_backup_import<R: Runtime>(
     state: &PreparedBackupImportState,
     import_id: String,
 ) -> Result<(), String> {
-    run_backup_service(app, state, move |archive, repository| {
-        BackupService::new(archive, repository, &sona_runtime_fs::SystemClock)
-            .dispose_prepared_import(&import_id)
+    run_backup_adapter_task(app, state, move |adapter| {
+        adapter.dispose_prepared_import(&import_id)
     })
     .await
 }

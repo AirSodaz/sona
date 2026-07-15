@@ -1,10 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use sona_archive::FsBackupArchiveRepository;
-use sona_core::backup::{
-    BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupService,
-};
+use sona_archive::FsBackupAdapter;
+use sona_core::backup::{BackupExportRequest, BackupImportRequest, BackupInspectRequest};
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::LazySqliteBackupStateRepository;
 
@@ -25,10 +23,11 @@ pub(crate) async fn export_backup_archive_json(
         let archive_path =
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup export archive")?;
-        let archive = FsBackupArchiveRepository::new();
-        let state = LazySqliteBackupStateRepository::new(app_data_dir);
-        let service = BackupService::new(&archive, &state, &SystemClock);
-        service
+        let adapter = FsBackupAdapter::new(
+            LazySqliteBackupStateRepository::new(app_data_dir),
+            SystemClock,
+        );
+        adapter
             .export_archive(BackupExportRequest {
                 archive_path,
                 app_version,
@@ -49,10 +48,11 @@ pub(crate) async fn inspect_backup_archive_json(
         let archive_path =
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup inspect archive")?;
-        let archive = FsBackupArchiveRepository::new();
-        let state = LazySqliteBackupStateRepository::new(PathBuf::new());
-        let service = BackupService::new(&archive, &state, &SystemClock);
-        service
+        let adapter = FsBackupAdapter::new(
+            LazySqliteBackupStateRepository::new(PathBuf::new()),
+            SystemClock,
+        );
+        adapter
             .inspect_archive(BackupInspectRequest { archive_path })
             .map_err(backup_error)
             .and_then(canonical_json)
@@ -77,10 +77,11 @@ pub(crate) async fn import_backup_archive_json(
         let archive_path =
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup import archive")?;
-        let archive = FsBackupArchiveRepository::new();
-        let state = LazySqliteBackupStateRepository::new(app_data_dir);
-        let service = BackupService::new(&archive, &state, &SystemClock);
-        service
+        let adapter = FsBackupAdapter::new(
+            LazySqliteBackupStateRepository::new(app_data_dir),
+            SystemClock,
+        );
+        adapter
             .import_archive(BackupImportRequest {
                 archive_path,
                 default_rule_set_name,

@@ -9,13 +9,16 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::backup::{
-    BackupArchivePort, BackupDataset, BackupError, BackupManifest, PreparedBackupImport,
+    BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort, BackupDataset,
+    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupManifest,
+    BackupPrepareImportRequest, BackupService, BackupStateRepository, PreparedBackupImport,
     PreparedBackupSession, validate_backup_manifest,
 };
 use sona_core::history::{
     HistoryBackupSnapshot, HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata,
     TranscriptSnapshotRecord,
 };
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectRecord;
 use uuid::Uuid;
 
@@ -55,6 +58,77 @@ struct PreparedBackupWorkspace {
 #[derive(Clone, Default)]
 pub struct FsBackupArchiveRepository {
     prepared: Arc<Mutex<HashMap<String, PreparedBackupWorkspace>>>,
+}
+
+pub struct FsBackupAdapter<S, C>
+where
+    S: BackupStateRepository,
+    C: UnixMillisClock,
+{
+    archive: Arc<FsBackupArchiveRepository>,
+    state: S,
+    clock: C,
+}
+
+impl<S, C> FsBackupAdapter<S, C>
+where
+    S: BackupStateRepository,
+    C: UnixMillisClock,
+{
+    pub fn new(state: S, clock: C) -> Self {
+        Self::with_archive(Arc::new(FsBackupArchiveRepository::new()), state, clock)
+    }
+
+    pub fn with_archive(archive: Arc<FsBackupArchiveRepository>, state: S, clock: C) -> Self {
+        Self {
+            archive,
+            state,
+            clock,
+        }
+    }
+
+    pub fn export_archive(
+        &self,
+        request: BackupExportRequest,
+    ) -> Result<BackupManifest, BackupError> {
+        self.service().export_archive(request)
+    }
+
+    pub fn prepare_import(
+        &self,
+        request: BackupPrepareImportRequest,
+    ) -> Result<PreparedBackupImport, BackupError> {
+        self.service().prepare_import(request)
+    }
+
+    pub fn apply_prepared_import(
+        &self,
+        request: BackupApplyPreparedImportRequest,
+    ) -> Result<BackupApplyResult, BackupError> {
+        self.service().apply_prepared_import(request)
+    }
+
+    pub fn dispose_prepared_import(&self, import_id: &str) -> Result<(), BackupError> {
+        self.service().dispose_prepared_import(import_id)
+    }
+
+    pub fn inspect_archive(
+        &self,
+        request: BackupInspectRequest,
+    ) -> Result<PreparedBackupImport, BackupError> {
+        self.service().inspect_archive(request)
+    }
+
+    pub fn import_archive(
+        &self,
+        request: BackupImportRequest,
+    ) -> Result<BackupApplyResult, BackupError> {
+        self.service().import_archive(request)
+    }
+
+    fn service(&self) -> BackupService<'_> {
+        BackupService::new(self.archive.as_ref(), &self.state, &self.clock)
+    }
 }
 
 impl FsBackupArchiveRepository {
