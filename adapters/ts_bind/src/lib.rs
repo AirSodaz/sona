@@ -44,6 +44,26 @@ pub fn desktop_bindings_output(frontend_root: impl AsRef<std::path::Path>) -> st
     frontend_root.as_ref().join(DESKTOP_BINDINGS_OUTPUT)
 }
 
+/// Core-owned types currently emitted into the desktop TypeScript bindings.
+///
+/// The Tauri host owns the concrete exporter and command registration, while
+/// this adapter owns the transport-neutral core type boundary.
+pub fn desktop_types() -> specta::Types {
+    specta::Types::default()
+        .register::<LlmProvider>()
+        .register::<PolishPresetId>()
+        .register::<SummaryTemplateId>()
+        .register::<LlmTaskType>()
+        .register::<LlmSegmentInput>()
+        .register::<SummarySegmentInput>()
+        .register::<PolishedSegment>()
+        .register::<TranslatedSegment>()
+        .register::<TranscriptSummaryResult>()
+        .register::<LlmTaskProgressPayload>()
+        .register::<LlmTaskChunkPayload<PolishedSegment>>()
+        .register::<LlmTaskTextPayload>()
+}
+
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmProvider",
     "PolishPresetId",
@@ -134,6 +154,39 @@ mod tests {
             desktop_bindings_output("frontend"),
             std::path::PathBuf::from("frontend").join("src/bindings.ts")
         );
+    }
+
+    #[test]
+    fn desktop_type_registry_contains_the_frontend_contracts() {
+        let types = desktop_types();
+        let names = types
+            .into_sorted_iter()
+            .map(|datatype| datatype.name.as_ref())
+            .collect::<Vec<_>>();
+
+        for expected in [
+            "LlmProvider",
+            "PolishPresetId",
+            "SummaryTemplateId",
+            "LlmTaskType",
+            "LlmSegmentInput",
+            "SummarySegmentInput",
+            "PolishedSegment",
+            "TranslatedSegment",
+            "TranscriptSummaryResult",
+            "LlmTaskProgressPayload",
+            "LlmTaskChunkPayload",
+            "LlmTaskTextPayload",
+        ] {
+            assert!(names.contains(&expected), "missing {expected}");
+        }
+    }
+
+    #[test]
+    fn desktop_type_registry_is_typescript_exportable() {
+        specta_typescript::Typescript::default()
+            .export(&desktop_types(), specta_serde::PhasesFormat)
+            .unwrap();
     }
 
     #[test]

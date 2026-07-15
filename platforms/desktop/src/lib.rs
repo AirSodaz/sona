@@ -35,10 +35,9 @@ fn export_typescript_bindings_to(
     bindings_path: &std::path::Path,
     temporary_path: &std::path::Path,
 ) -> Result<bool, specta_typescript::Error> {
+    let core_types = sona_ts_bind::desktop_types();
     let export_result = tauri_specta::Builder::<tauri::Wry>::new()
-        .typ::<sona_ts_bind::LlmProvider>()
-        .typ::<sona_ts_bind::PolishPresetId>()
-        .typ::<sona_ts_bind::SummaryTemplateId>()
+        .types(&core_types)
         .export(specta_typescript::Typescript::default(), &temporary_path);
 
     if let Err(error) = export_result {

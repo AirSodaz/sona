@@ -57,8 +57,8 @@ pub fn llm_task_progress_to_ffi(payload: LlmTaskProgressPayload) -> FfiLlmTaskPr
     FfiLlmTaskProgress {
         task_id: payload.task_id,
         task_type: llm_task_type_to_ffi(payload.task_type),
-        completed_chunks: payload.completed_chunks as u64,
-        total_chunks: payload.total_chunks as u64,
+        completed_chunks: u64::from(payload.completed_chunks),
+        total_chunks: u64::from(payload.total_chunks),
     }
 }
 
@@ -71,8 +71,8 @@ where
     Ok(FfiLlmTaskChunk {
         task_id: payload.task_id,
         task_type: llm_task_type_to_ffi(payload.task_type),
-        chunk_index: payload.chunk_index as u64,
-        total_chunks: payload.total_chunks as u64,
+        chunk_index: u64::from(payload.chunk_index),
+        total_chunks: u64::from(payload.total_chunks),
         items_json: Some(serde_json::to_string(&payload.items)?),
         text: None,
     })
@@ -82,8 +82,8 @@ pub fn llm_task_summary_chunk_to_ffi(payload: LlmTaskSummaryChunkPayload) -> Ffi
     FfiLlmTaskChunk {
         task_id: payload.task_id,
         task_type: FfiLlmTaskType::Summary,
-        chunk_index: payload.chunk_index as u64,
-        total_chunks: payload.total_chunks as u64,
+        chunk_index: u64::from(payload.chunk_index),
+        total_chunks: u64::from(payload.total_chunks),
         items_json: None,
         text: Some(payload.text),
     }

@@ -1,4 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
+import type {
+  LlmSegmentInput as GeneratedLlmSegmentInput,
+  LlmTaskChunkPayload as GeneratedLlmTaskChunkPayload,
+  LlmTaskProgressPayload as GeneratedLlmTaskProgressPayload,
+  LlmTaskTextPayload as GeneratedLlmTaskTextPayload,
+  LlmTaskType as GeneratedLlmTaskType,
+  PolishedSegment as GeneratedPolishedSegment,
+  SummarySegmentInput as GeneratedSummarySegmentInput,
+  TranscriptSummaryResult as GeneratedTranscriptSummaryResult,
+  TranslatedSegment as GeneratedTranslatedSegment,
+} from '../bindings';
 import {
   HistorySummaryPayload,
   LlmConfig,
@@ -14,22 +25,13 @@ export const LLM_TASK_CHUNK_EVENT = TauriEvent.llm.taskChunk;
 export const LLM_TASK_TEXT_EVENT = TauriEvent.llm.taskText;
 export const LLM_TRANSCRIPT_JOB_UPDATE_EVENT = TauriEvent.llm.transcriptJobUpdate;
 
-export type LlmTaskType = 'polish' | 'translate' | 'summary';
+export type LlmTaskType = GeneratedLlmTaskType;
 
-export interface LlmSegmentInput {
-  id: string;
-  text: string;
-}
+export type LlmSegmentInput = GeneratedLlmSegmentInput;
 
-export interface PolishedSegment {
-  id: string;
-  text: string;
-}
+export type PolishedSegment = GeneratedPolishedSegment;
 
-export interface TranslatedSegment {
-  id: string;
-  translation: string;
-}
+export type TranslatedSegment = GeneratedTranslatedSegment;
 
 export interface PolishSegmentsRequest {
   taskId: string;
@@ -49,11 +51,10 @@ export interface TranslateSegmentsRequest {
   targetLanguageName?: string; // Add English descriptive name field
 }
 
-export interface SummarySegmentInput extends LlmSegmentInput {
+export type SummarySegmentInput = Omit<GeneratedSummarySegmentInput, 'start' | 'end'> & {
   start: number;
   end: number;
-  isFinal: boolean;
-}
+};
 
 export interface SummarizeTranscriptRequest {
   taskId: string;
@@ -63,10 +64,9 @@ export interface SummarizeTranscriptRequest {
   chunkCharBudget?: number;
 }
 
-export interface TranscriptSummaryResult {
+export type TranscriptSummaryResult = GeneratedTranscriptSummaryResult & {
   templateId: SummaryTemplateId;
-  content: string;
-}
+};
 
 interface TranscriptLlmJobRequestBase {
   taskId: string;
@@ -107,36 +107,26 @@ export interface TranscriptLlmJobResult {
   historyItem?: Partial<HistoryItem>;
 }
 
-export interface LlmTaskProgressPayload {
-  taskId: string;
-  taskType: LlmTaskType;
-  completedChunks: number;
-  totalChunks: number;
-}
+export type LlmTaskProgressPayload = GeneratedLlmTaskProgressPayload;
 
-export interface LlmTaskTextPayload {
-  taskId: string;
+export type LlmTaskTextPayload = Omit<GeneratedLlmTaskTextPayload, 'taskType' | 'reset'> & {
   taskType: 'summary';
-  text: string;
-  delta: string;
   reset?: boolean;
-}
+};
 
-interface LlmTaskChunkPayloadBase<TItems> {
-  taskId: string;
-  taskType: LlmTaskType;
-  chunkIndex: number;
-  totalChunks: number;
-  items: TItems[];
-}
-
-export interface PolishTaskChunkPayload extends LlmTaskChunkPayloadBase<PolishedSegment> {
+export type PolishTaskChunkPayload = Omit<
+  GeneratedLlmTaskChunkPayload<PolishedSegment>,
+  'taskType'
+> & {
   taskType: 'polish';
-}
+};
 
-export interface TranslateTaskChunkPayload extends LlmTaskChunkPayloadBase<TranslatedSegment> {
+export type TranslateTaskChunkPayload = Omit<
+  GeneratedLlmTaskChunkPayload<TranslatedSegment>,
+  'taskType'
+> & {
   taskType: 'translate';
-}
+};
 
 export type LlmTaskChunkPayload = PolishTaskChunkPayload | TranslateTaskChunkPayload;
 

@@ -18,7 +18,59 @@ export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize
 
 export type LlmProvider_Serialize = ({ Builtin: BuiltinLlmProvider_Serialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
+export type LlmSegmentInput = {
+	id: string,
+	text: string,
+};
+
+export type LlmTaskChunkPayload<T> = {
+	taskId: string,
+	taskType: LlmTaskType,
+	chunkIndex: number,
+	totalChunks: number,
+	items: T[],
+};
+
+export type LlmTaskProgressPayload = {
+	taskId: string,
+	taskType: LlmTaskType,
+	completedChunks: number,
+	totalChunks: number,
+};
+
+export type LlmTaskTextPayload = {
+	taskId: string,
+	taskType: LlmTaskType,
+	text: string,
+	delta: string,
+	reset: boolean,
+};
+
+export type LlmTaskType = "polish" | "translate" | "summary";
+
 export type PolishPresetId = ({ Builtin: BuiltinPolishPresetId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
+
+export type PolishedSegment = {
+	id: string,
+	text: string,
+};
+
+export type SummarySegmentInput = {
+	id: string,
+	text: string,
+	start: number | null,
+	end: number | null,
+	isFinal: boolean,
+};
 
 export type SummaryTemplateId = ({ Builtin: BuiltinSummaryTemplateId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
+export type TranscriptSummaryResult = {
+	templateId: string,
+	content: string,
+};
+
+export type TranslatedSegment = {
+	id: string,
+	translation: string,
+};

@@ -188,8 +188,8 @@ pub struct TranscriptSummaryResult {
 pub struct LlmTaskProgressPayload {
     pub task_id: String,
     pub task_type: LlmTaskType,
-    pub completed_chunks: usize,
-    pub total_chunks: usize,
+    pub completed_chunks: u32,
+    pub total_chunks: u32,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -198,8 +198,8 @@ pub struct LlmTaskProgressPayload {
 pub struct LlmTaskChunkPayload<T> {
     pub task_id: String,
     pub task_type: LlmTaskType,
-    pub chunk_index: usize,
-    pub total_chunks: usize,
+    pub chunk_index: u32,
+    pub total_chunks: u32,
     pub items: Vec<T>,
 }
 

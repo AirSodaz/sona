@@ -30,8 +30,8 @@ const MAX_SUMMARY_REDUCE_ROUNDS: usize = 8;
 #[serde(rename_all = "camelCase")]
 pub struct LlmTaskSummaryChunkPayload {
     pub task_id: String,
-    pub chunk_index: usize,
-    pub total_chunks: usize,
+    pub chunk_index: u32,
+    pub total_chunks: u32,
     pub text: String,
 }
 
@@ -172,8 +172,8 @@ where
                 LlmTaskEvent::PolishChunk(super::LlmTaskChunkPayload {
                     task_id: request.task_id.clone(),
                     task_type: super::LlmTaskType::Polish,
-                    chunk_index: chunk_index + 1,
-                    total_chunks,
+                    chunk_index: portable_chunk_counter("chunk index", chunk_index + 1)?,
+                    total_chunks: portable_chunk_counter("total chunks", total_chunks)?,
                     items: items.clone(),
                 }),
             )?;
@@ -282,8 +282,8 @@ where
                 LlmTaskEvent::TranslateChunk(super::LlmTaskChunkPayload {
                     task_id: request.task_id.clone(),
                     task_type: super::LlmTaskType::Translate,
-                    chunk_index: chunk_index + 1,
-                    total_chunks,
+                    chunk_index: portable_chunk_counter("chunk index", chunk_index + 1)?,
+                    total_chunks: portable_chunk_counter("total chunks", total_chunks)?,
                     items: items.clone(),
                 }),
             )?;
@@ -412,8 +412,8 @@ where
                 observer,
                 LlmTaskEvent::SummaryChunk(LlmTaskSummaryChunkPayload {
                     task_id: request.task_id.clone(),
-                    chunk_index: chunk_index + 1,
-                    total_chunks,
+                    chunk_index: portable_chunk_counter("chunk index", chunk_index + 1)?,
+                    total_chunks: portable_chunk_counter("total chunks", total_chunks)?,
                     text: text.clone(),
                 }),
             )?;
@@ -1012,8 +1012,33 @@ fn emit_progress(
         LlmTaskEvent::Progress(super::LlmTaskProgressPayload {
             task_id: task_id.to_string(),
             task_type,
-            completed_chunks,
-            total_chunks,
+            completed_chunks: portable_chunk_counter("completed chunks", completed_chunks)?,
+            total_chunks: portable_chunk_counter("total chunks", total_chunks)?,
         }),
     )
+}
+
+fn portable_chunk_counter(label: &str, value: usize) -> Result<u32, LlmTaskError> {
+    u32::try_from(value).map_err(|_| LlmTaskError::InvalidRequest {
+        reason: format!("LLM task {label} exceeds the portable event range"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LlmTaskError, portable_chunk_counter};
+
+    #[test]
+    fn portable_chunk_counters_reject_values_above_u32() {
+        let Ok(value) = usize::try_from(u64::from(u32::MAX) + 1) else {
+            return;
+        };
+
+        let error = portable_chunk_counter("total chunks", value).unwrap_err();
+        assert!(matches!(error, LlmTaskError::InvalidRequest { .. }));
+        assert_eq!(
+            error.to_string(),
+            "LLM task total chunks exceeds the portable event range"
+        );
+    }
 }
