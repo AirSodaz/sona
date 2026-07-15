@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::service::RecoveryService;
@@ -64,6 +65,20 @@ impl SourcePathStatusProvider for FixedSourcePaths {
     }
 }
 
+struct FixedClock(Result<u64, String>);
+
+impl UnixMillisClock for FixedClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        self.0.clone()
+    }
+}
+
+static DEFAULT_CLOCK: FixedClock = FixedClock(Ok(0));
+
+fn service<'a>(store: &'a MemoryRecoveryStore, paths: &'a FixedSourcePaths) -> RecoveryService<'a> {
+    RecoveryService::new(store, paths, &DEFAULT_CLOCK)
+}
+
 fn pending_saved_item() -> Value {
     json!({
         "id": "pending",
@@ -124,7 +139,7 @@ fn load_normalizes_stored_items_with_supplied_time_and_source_status() {
         }]
     }));
     let paths = FixedSourcePaths::missing();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
 
     let snapshot = service.load_snapshot_at(5_000).unwrap();
 
@@ -137,7 +152,7 @@ fn load_normalizes_stored_items_with_supplied_time_and_source_status() {
 fn save_keeps_only_pending_items_and_persists_canonical_snapshot() {
     let store = MemoryRecoveryStore::empty();
     let paths = FixedSourcePaths::file();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
 
     let snapshot = service
         .save_snapshot_at(vec![pending_saved_item(), resolved_saved_item()], 6_000)
@@ -159,7 +174,7 @@ fn save_keeps_only_pending_items_and_persists_canonical_snapshot() {
 fn persist_removes_resolved_ids_and_retains_unobserved_pending_items() {
     let store = MemoryRecoveryStore::new(existing_snapshot_with_ids(&["resolved", "retained"]));
     let paths = FixedSourcePaths::file();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
 
     let snapshot = service
         .persist_queue_snapshot_at(
@@ -200,7 +215,7 @@ fn load_keeps_valid_stored_items_when_a_sibling_is_corrupt() {
         ]
     }));
     let paths = FixedSourcePaths::file();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
 
     let snapshot = service.load_snapshot_at(8_000).unwrap();
 
@@ -219,7 +234,7 @@ fn load_keeps_valid_stored_items_when_a_sibling_is_corrupt() {
 fn persist_keeps_valid_queue_items_when_a_sibling_is_corrupt() {
     let store = MemoryRecoveryStore::empty();
     let paths = FixedSourcePaths::file();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
 
     let snapshot = service
         .persist_queue_snapshot_at(
@@ -247,7 +262,7 @@ fn persist_keeps_valid_queue_items_when_a_sibling_is_corrupt() {
 fn save_keeps_valid_segments_when_a_sibling_segment_is_corrupt() {
     let store = MemoryRecoveryStore::empty();
     let paths = FixedSourcePaths::file();
-    let service = RecoveryService::new(&store, &paths);
+    let service = service(&store, &paths);
     let item = json!({
         "id": "recording",
         "filename": "recording.wav",
@@ -271,4 +286,35 @@ fn save_keeps_valid_segments_when_a_sibling_segment_is_corrupt() {
         vec!["segment-1", "segment-2"]
     );
     assert_eq!(store.saved_snapshot().unwrap(), snapshot);
+}
+
+#[test]
+fn recovery_runtime_methods_use_the_injected_clock() {
+    let store = MemoryRecoveryStore::new(existing_snapshot_with_ids(&["loaded"]));
+    let paths = FixedSourcePaths::file();
+    let clock = FixedClock(Ok(11_000));
+    let service = RecoveryService::new(&store, &paths, &clock);
+
+    let loaded = service.load_snapshot().unwrap();
+    let saved = service.save_snapshot(vec![pending_saved_item()]).unwrap();
+    let persisted = service
+        .persist_queue_snapshot(vec![queue_item("queued", None)], Vec::new())
+        .unwrap();
+
+    assert_eq!(loaded.items[0].updated_at, 11_000);
+    assert_eq!(saved.updated_at, Some(11_000));
+    assert_eq!(persisted.updated_at, Some(11_000));
+}
+
+#[test]
+fn recovery_runtime_methods_propagate_clock_errors() {
+    let store = MemoryRecoveryStore::empty();
+    let paths = FixedSourcePaths::file();
+    let clock = FixedClock(Err("recovery clock unavailable".to_string()));
+    let service = RecoveryService::new(&store, &paths, &clock);
+
+    let error = service.load_snapshot().unwrap_err();
+
+    assert_eq!(error, "recovery clock unavailable");
+    assert!(store.saved_snapshot().is_none());
 }

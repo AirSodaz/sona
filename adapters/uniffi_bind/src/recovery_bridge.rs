@@ -1,21 +1,21 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::RecoverySnapshot;
 use sona_recovery_fs::FsRecoverySnapshotStore;
-use sona_runtime_fs::FsSourcePathStatusProvider;
+use sona_runtime_fs::{FsSourcePathStatusProvider, SystemClock};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    load_recovery_snapshot_json_at(app_data_dir, now_ms())
+    load_recovery_snapshot_json_with_clock(app_data_dir, &SystemClock)
 }
 
 pub(crate) fn save_recovery_snapshot_json(
     app_data_dir: String,
     items_json: String,
 ) -> SonaCoreBindingResult<String> {
-    save_recovery_snapshot_json_at(app_data_dir, items_json, now_ms())
+    save_recovery_snapshot_json_with_clock(app_data_dir, items_json, &SystemClock)
 }
 
 pub(crate) fn persist_recovery_queue_snapshot_json(
@@ -23,49 +23,55 @@ pub(crate) fn persist_recovery_queue_snapshot_json(
     queue_items_json: String,
     resolved_ids: Vec<String>,
 ) -> SonaCoreBindingResult<String> {
-    persist_recovery_queue_snapshot_json_at(app_data_dir, queue_items_json, resolved_ids, now_ms())
+    persist_recovery_queue_snapshot_json_with_clock(
+        app_data_dir,
+        queue_items_json,
+        resolved_ids,
+        &SystemClock,
+    )
 }
 
-fn load_recovery_snapshot_json_at(
+fn load_recovery_snapshot_json_with_clock(
     app_data_dir: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
-    let store = FsRecoverySnapshotStore::new(PathBuf::from(app_data_dir));
-    let source_paths = FsSourcePathStatusProvider;
-    let service = RecoveryService::new(&store, &source_paths);
-    let snapshot = service.load_snapshot_at(now_ms).map_err(recovery_error)?;
+    let snapshot = with_recovery_service(app_data_dir, clock, |service| service.load_snapshot())?;
     serialize_snapshot(&snapshot)
 }
 
-fn save_recovery_snapshot_json_at(
+fn save_recovery_snapshot_json_with_clock(
     app_data_dir: String,
     items_json: String,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let items = parse_json_array("items", &items_json)?;
-    let store = FsRecoverySnapshotStore::new(PathBuf::from(app_data_dir));
-    let source_paths = FsSourcePathStatusProvider;
-    let service = RecoveryService::new(&store, &source_paths);
-    let snapshot = service
-        .save_snapshot_at(items, now_ms)
-        .map_err(recovery_error)?;
+    let snapshot =
+        with_recovery_service(app_data_dir, clock, |service| service.save_snapshot(items))?;
     serialize_snapshot(&snapshot)
 }
 
-fn persist_recovery_queue_snapshot_json_at(
+fn persist_recovery_queue_snapshot_json_with_clock(
     app_data_dir: String,
     queue_items_json: String,
     resolved_ids: Vec<String>,
-    now_ms: u64,
+    clock: &dyn UnixMillisClock,
 ) -> SonaCoreBindingResult<String> {
     let queue_items = parse_json_array("queue items", &queue_items_json)?;
+    let snapshot = with_recovery_service(app_data_dir, clock, |service| {
+        service.persist_queue_snapshot(queue_items, resolved_ids)
+    })?;
+    serialize_snapshot(&snapshot)
+}
+
+fn with_recovery_service<T>(
+    app_data_dir: String,
+    clock: &dyn UnixMillisClock,
+    operation: impl FnOnce(&RecoveryService<'_>) -> Result<T, String>,
+) -> SonaCoreBindingResult<T> {
     let store = FsRecoverySnapshotStore::new(PathBuf::from(app_data_dir));
     let source_paths = FsSourcePathStatusProvider;
-    let service = RecoveryService::new(&store, &source_paths);
-    let snapshot = service
-        .persist_queue_snapshot_at(queue_items, resolved_ids, now_ms)
-        .map_err(recovery_error)?;
-    serialize_snapshot(&snapshot)
+    let service = RecoveryService::new(&store, &source_paths, clock);
+    operation(&service).map_err(recovery_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -90,11 +96,46 @@ fn recovery_error(reason: String) -> SonaCoreBindingError {
     SonaCoreBindingError::Recovery { reason }
 }
 
-fn now_ms() -> u64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+#[cfg(test)]
+struct FixedClock(u64);
+
+#[cfg(test)]
+impl UnixMillisClock for FixedClock {
+    fn now_ms(&self) -> Result<u64, String> {
+        Ok(self.0)
+    }
+}
+
+#[cfg(test)]
+fn load_recovery_snapshot_json_at(
+    app_data_dir: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    load_recovery_snapshot_json_with_clock(app_data_dir, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn save_recovery_snapshot_json_at(
+    app_data_dir: String,
+    items_json: String,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    save_recovery_snapshot_json_with_clock(app_data_dir, items_json, &FixedClock(now_ms))
+}
+
+#[cfg(test)]
+fn persist_recovery_queue_snapshot_json_at(
+    app_data_dir: String,
+    queue_items_json: String,
+    resolved_ids: Vec<String>,
+    now_ms: u64,
+) -> SonaCoreBindingResult<String> {
+    persist_recovery_queue_snapshot_json_with_clock(
+        app_data_dir,
+        queue_items_json,
+        resolved_ids,
+        &FixedClock(now_ms),
+    )
 }
 
 #[cfg(test)]

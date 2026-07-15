@@ -1,6 +1,7 @@
 use serde_json::Value;
 use std::collections::HashSet;
 
+use crate::ports::time::UnixMillisClock;
 use crate::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_value_with_source_paths,
     recovered_item_from_saved_value_with_source_paths, snapshot_from_items_with_timestamp,
@@ -12,17 +13,24 @@ use crate::recovery::types::RecoverySnapshot;
 pub struct RecoveryService<'a> {
     store: &'a dyn RecoverySnapshotStore,
     source_paths: &'a dyn SourcePathStatusProvider,
+    clock: &'a dyn UnixMillisClock,
 }
 
 impl<'a> RecoveryService<'a> {
     pub fn new(
         store: &'a dyn RecoverySnapshotStore,
         source_paths: &'a dyn SourcePathStatusProvider,
+        clock: &'a dyn UnixMillisClock,
     ) -> Self {
         Self {
             store,
             source_paths,
+            clock,
         }
+    }
+
+    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, String> {
+        self.load_snapshot_at(self.clock.now_ms()?)
     }
 
     pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, String> {
@@ -52,6 +60,10 @@ impl<'a> RecoveryService<'a> {
         let snapshot = snapshot_from_items_with_timestamp(items, now_ms);
         self.store.save_snapshot(&snapshot)?;
         Ok(snapshot)
+    }
+
+    pub fn save_snapshot(&self, items: Vec<Value>) -> Result<RecoverySnapshot, String> {
+        self.save_snapshot_at(items, self.clock.now_ms()?)
     }
 
     pub fn persist_queue_snapshot_at(
@@ -87,6 +99,14 @@ impl<'a> RecoveryService<'a> {
         let snapshot = snapshot_from_items_with_timestamp(items, now_ms);
         self.store.save_snapshot(&snapshot)?;
         Ok(snapshot)
+    }
+
+    pub fn persist_queue_snapshot(
+        &self,
+        queue_items: Vec<Value>,
+        resolved_ids: Vec<String>,
+    ) -> Result<RecoverySnapshot, String> {
+        self.persist_queue_snapshot_at(queue_items, resolved_ids, self.clock.now_ms()?)
     }
 }
 

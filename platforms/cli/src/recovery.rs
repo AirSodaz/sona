@@ -2,9 +2,8 @@ use clap::{Args, Subcommand};
 use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::RecoverySnapshot;
 use sona_recovery_fs::FsRecoverySnapshotStore;
-use sona_runtime_fs::FsSourcePathStatusProvider;
+use sona_runtime_fs::{FsSourcePathStatusProvider, SystemClock};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -40,8 +39,9 @@ pub fn run_recovery(args: RecoveryArgs) -> CliResult<CliOutput> {
 fn run_recovery_list(args: RecoveryListArgs) -> CliResult<CliOutput> {
     let store = FsRecoverySnapshotStore::new(args.app_data_dir);
     let source_paths = FsSourcePathStatusProvider;
-    let service = RecoveryService::new(&store, &source_paths);
-    let snapshot = service.load_snapshot_at(now_ms()).map_err(CliError::Io)?;
+    let clock = SystemClock;
+    let service = RecoveryService::new(&store, &source_paths, &clock);
+    let snapshot = service.load_snapshot().map_err(CliError::Io)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -50,13 +50,6 @@ fn run_recovery_list(args: RecoveryListArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
-}
-
-fn now_ms() -> u64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 fn render_recovery_table(snapshot: &RecoverySnapshot) -> String {
