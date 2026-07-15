@@ -10,9 +10,16 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,17 +30,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -51,6 +62,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -61,6 +74,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
+import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.application.recording.AudioInputStatus
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.LiveRecordingState
@@ -175,38 +189,39 @@ internal fun RecordScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = stringResource(R.string.record_heading),
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(8.dp))
         BootstrapStatus(bootstrapState, onRetryBootstrap)
-        Spacer(Modifier.height(18.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.engine_label),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        Spacer(Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = true,
-                onClick = {},
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                label = { Text(stringResource(R.string.engine_online)) },
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.engine_label),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            SegmentedButton(
-                selected = false,
-                onClick = {},
-                enabled = false,
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                label = { Text(stringResource(R.string.engine_local)) },
-            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = true,
+                    onClick = {},
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    label = { Text(stringResource(R.string.engine_online)) },
+                )
+                SegmentedButton(
+                    selected = false,
+                    onClick = {},
+                    enabled = false,
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    label = { Text(stringResource(R.string.engine_local)) },
+                )
+            }
         }
-        Spacer(Modifier.height(14.dp))
+
         RecordingNotices(
             state = recordingState,
             permissionIssue = permissionIssue,
@@ -217,12 +232,14 @@ internal fun RecordScreen(
             onOpenAppSettings = { context.openAppSettings() },
             onConfigureCredential = onConfigureCredential,
         )
+
         TranscriptList(
             segments = displayedSegments,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
         )
+
         RecordControls(
             elapsedMillis = elapsedMillis,
             state = recordingState,
@@ -251,35 +268,83 @@ private fun TranscriptList(
     LazyColumn(
         state = listState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 8.dp)
     ) {
         if (segments.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
+                        .height(160.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = MaterialTheme.shapes.medium
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(R.string.transcript_waiting),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.transcript_waiting),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         } else {
             items(segments, key = TranscriptSegment::id) { segment ->
-                Text(
-                    text = segment.text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (segment.isFinal) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    fontWeight = if (segment.isFinal) FontWeight.Normal else FontWeight.Medium,
-                )
+                val containerColor = if (segment.isFinal) {
+                    MaterialTheme.colorScheme.surfaceContainer
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                }
+                val contentColor = if (segment.isFinal) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                }
+
+                Card(
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = containerColor,
+                        contentColor = contentColor
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        segment.speaker?.label?.takeIf(String::isNotBlank)?.let { speaker ->
+                            Text(
+                                text = speaker,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (segment.isFinal) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        Text(
+                            text = segment.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (segment.isFinal) FontWeight.Normal else FontWeight.Medium,
+                        )
+                    }
+                }
             }
         }
     }
@@ -302,7 +367,11 @@ private fun RecordingNotices(
     )
 
     if (state is LiveRecordingState.NeedsConfiguration) {
-        TextButton(onClick = onConfigureCredential) {
+        Spacer(Modifier.height(4.dp))
+        FilledTonalButton(
+            onClick = onConfigureCredential,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(stringResource(R.string.action_configure_credential))
         }
     }
@@ -337,7 +406,11 @@ private fun RecordingNotices(
                 text = stringResource(R.string.microphone_permission_rationale),
                 isWarning = true,
             )
-            TextButton(onClick = onRetryPermission) {
+            Spacer(Modifier.height(4.dp))
+            FilledTonalButton(
+                onClick = onRetryPermission,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(stringResource(R.string.action_grant_permission))
             }
         }
@@ -346,7 +419,11 @@ private fun RecordingNotices(
                 text = stringResource(R.string.microphone_permission_settings),
                 isWarning = true,
             )
-            TextButton(onClick = onOpenAppSettings) {
+            Spacer(Modifier.height(4.dp))
+            FilledTonalButton(
+                onClick = onOpenAppSettings,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(stringResource(R.string.action_open_app_settings))
             }
         }
@@ -362,30 +439,55 @@ private fun NoticeRow(
     text: String,
     isWarning: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (isWarning) {
+    if (isWarning) {
+        Card(
+            shape = MaterialTheme.shapes.small,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.WarningAmber,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
-                imageVector = Icons.Rounded.WarningAmber,
+                imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                 modifier = Modifier.size(18.dp),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isWarning) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
     }
 }
 
@@ -399,6 +501,8 @@ private fun RecordControls(
     onStop: () -> Unit,
 ) {
     val recording = state is LiveRecordingState.Recording
+    val recordingColor = LocalSonaRecordingColor.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -407,44 +511,109 @@ private fun RecordControls(
     ) {
         Text(
             text = formatRecordingTimer(elapsedMillis),
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (recording) recordingColor else MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(20.dp))
         if (state is LiveRecordingState.Preparing || state is LiveRecordingState.Stopping) {
             Box(
-                modifier = Modifier.size(88.dp),
+                modifier = Modifier.size(96.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(Modifier.size(42.dp))
+                CircularProgressIndicator(Modifier.size(44.dp))
             }
         } else {
-            FilledIconButton(
-                onClick = if (recording) onStop else onStart,
-                enabled = if (recording) {
-                    presentation.isStopAvailable
-                } else {
-                    presentation.isStartAvailable && bootstrapReady
-                },
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (recording) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                ),
-                modifier = Modifier.size(88.dp),
-            ) {
-                Icon(
-                    imageVector = if (recording) Icons.Rounded.Stop else Icons.Rounded.Mic,
-                    contentDescription = stringResource(
-                        if (recording) {
-                            R.string.record_stop_description
-                        } else {
-                            R.string.record_action_description
-                        },
+            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+            val pulseScale by if (recording) {
+                infiniteTransition.animateFloat(
+                    initialValue = 1.0f,
+                    targetValue = 1.35f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200),
+                        repeatMode = RepeatMode.Reverse
                     ),
-                    modifier = Modifier.size(34.dp),
+                    label = "scale"
                 )
+            } else {
+                remember { mutableStateOf(1.0f) }
+            }
+
+            val pulseAlpha by if (recording) {
+                infiniteTransition.animateFloat(
+                    initialValue = 0.45f,
+                    targetValue = 0.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "alpha"
+                )
+            } else {
+                remember { mutableStateOf(0.0f) }
+            }
+
+            val enabled = if (recording) {
+                presentation.isStopAvailable
+            } else {
+                presentation.isStartAvailable && bootstrapReady
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(110.dp)
+            ) {
+                if (recording) {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .scale(pulseScale)
+                            .background(
+                                color = recordingColor.copy(alpha = pulseAlpha),
+                                shape = CircleShape
+                            )
+                    )
+                }
+
+                FloatingActionButton(
+                    onClick = {
+                        if (enabled) {
+                            if (recording) onStop() else onStart()
+                        }
+                    },
+                    shape = CircleShape,
+                    containerColor = if (!enabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    } else if (recording) {
+                        recordingColor
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+                    contentColor = if (!enabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    } else if (recording) {
+                        Color.White
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    },
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = if (enabled) 4.dp else 0.dp,
+                        pressedElevation = if (enabled) 2.dp else 0.dp
+                    ),
+                    modifier = Modifier.size(76.dp)
+                ) {
+                    Icon(
+                        imageVector = if (recording) Icons.Rounded.Stop else Icons.Rounded.Mic,
+                        contentDescription = stringResource(
+                            if (recording) {
+                                R.string.record_stop_description
+                            } else {
+                                R.string.record_action_description
+                            }
+                        ),
+                        modifier = Modifier.size(34.dp),
+                    )
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -456,30 +625,65 @@ private fun BootstrapStatus(
     bootstrapState: SonaBootstrapUiState,
     onRetryBootstrap: () -> Unit,
 ) {
-    when (bootstrapState) {
-        SonaBootstrapUiState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.status_loading))
-        }
-        is SonaBootstrapUiState.Ready -> Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.status_ready))
-        }
-        is SonaBootstrapUiState.Error -> Row(verticalAlignment = Alignment.CenterVertically) {
+    Card(
+        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = stringResource(R.string.status_error),
-                color = MaterialTheme.colorScheme.error,
+                text = stringResource(R.string.engine_label) + ": ",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onRetryBootstrap) {
-                Text(stringResource(R.string.action_retry))
+            Spacer(Modifier.width(4.dp))
+            when (bootstrapState) {
+                SonaBootstrapUiState.Loading -> {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.status_loading),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                is SonaBootstrapUiState.Ready -> {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.status_ready),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                is SonaBootstrapUiState.Error -> {
+                    Text(
+                        text = stringResource(R.string.status_error),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.weight(1f))
+                    FilledTonalButton(
+                        onClick = onRetryBootstrap,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_retry),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
             }
         }
     }

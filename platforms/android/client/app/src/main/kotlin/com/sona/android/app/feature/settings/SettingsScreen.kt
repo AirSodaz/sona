@@ -2,13 +2,21 @@ package com.sona.android.app.feature.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,8 +43,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import kotlinx.coroutines.launch
@@ -184,35 +196,103 @@ private fun SettingsSectionList(
     onSectionSelected: (SettingsSection) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text(stringResource(R.string.destination_settings)) })
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(title = {
+            Text(
+                text = stringResource(R.string.destination_settings),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        })
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+        ) {
             items(SettingsSection.entries, key = { it.route }) { section ->
                 val selected = showSelection && section == selectedSection
-                ListItem(
-                    headlineContent = { Text(stringResource(section.labelRes)) },
-                    supportingContent = { Text(stringResource(section.summaryRes)) },
-                    leadingContent = {
-                        Icon(section.icon, contentDescription = null)
-                    },
-                    trailingContent = {
-                        if (!showSelection) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    colors = ListItemDefaults.colors(
-                        containerColor = if (selected) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
+                val containerColor = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                }
+
+                val contentColor = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+
+                Card(
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = containerColor,
+                        contentColor = contentColor
                     ),
-                    modifier = Modifier.clickable { onSectionSelected(section) },
-                )
-                if (section != SettingsSection.entries.last()) {
-                    HorizontalDivider()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSectionSelected(section) }
+                ) {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = stringResource(section.labelRes),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = stringResource(section.summaryRes),
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        },
+                        leadingContent = {
+                            Card(
+                                shape = MaterialTheme.shapes.small,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selected) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.12f)
+                                    } else {
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                    }
+                                )
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = section.icon,
+                                        contentDescription = null,
+                                        tint = if (selected) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        },
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            if (!showSelection) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = contentColor.copy(alpha = 0.6f)
+                                )
+                            }
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = Color.Transparent,
+                            headlineColor = contentColor,
+                            supportingColor = contentColor
+                        )
+                    )
                 }
             }
         }
@@ -238,7 +318,14 @@ private fun SettingsDetailPane(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(section.labelRes)) },
+            title = {
+                Text(
+                    text = stringResource(section.labelRes),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
             navigationIcon = {
                 if (showBack) {
                     IconButton(onClick = onBack) {

@@ -9,20 +9,22 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -90,6 +92,8 @@ internal fun SonaApp(
             }
         }
 
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
         NavigationSuiteScaffold(
             navigationSuiteItems = {
                 SonaDestination.entries.forEach { destination ->
@@ -114,9 +118,11 @@ internal fun SonaApp(
             },
         ) {
             Scaffold(
+                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                 topBar = {
                     if (currentDestination != SonaDestination.SETTINGS) {
-                        TopAppBar(
+                        MediumTopAppBar(
+                            scrollBehavior = scrollBehavior,
                             navigationIcon = {
                                 if (isLibraryDetail) {
                                     IconButton(onClick = { navController.popBackStack() }) {
@@ -131,8 +137,9 @@ internal fun SonaApp(
                                 Column {
                                     Text(
                                         text = BuildConfig.APP_NAME,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         text = stringResource(currentDestination.labelRes),
@@ -141,6 +148,10 @@ internal fun SonaApp(
                                     )
                                 }
                             },
+                            colors = TopAppBarDefaults.mediumTopAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.background,
+                                scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                            )
                         )
                     }
                 },

@@ -4,7 +4,6 @@ import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,14 +16,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,58 +56,95 @@ internal fun AppearanceSettingsPane(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 20.dp)
                 .align(Alignment.TopCenter),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text(
-                text = stringResource(R.string.language_label),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            LanguageSelector(
-                selectedLanguage = appLanguage,
-                onLanguageChanged = onAppLanguageChanged,
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                HorizontalDivider()
-                Text(
-                    text = stringResource(R.string.appearance_color_heading),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                val enabled = state.isLoaded && !state.operationInProgress
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = enabled) {
-                            onDynamicColorChanged(!state.dynamicColorEnabled)
-                        }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+            Card(
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.dynamic_color),
-                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.language_label),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.width(16.dp))
-                    Switch(
-                        checked = state.dynamicColorEnabled,
-                        onCheckedChange = onDynamicColorChanged,
-                        enabled = enabled,
+                    LanguageSelector(
+                        selectedLanguage = appLanguage,
+                        onLanguageChanged = onAppLanguageChanged,
                     )
                 }
-                if (state.hasError) {
-                    Text(
-                        text = stringResource(R.string.appearance_settings_error),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Card(
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.appearance_color_heading),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        val enabled = state.isLoaded && !state.operationInProgress
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = enabled) {
+                                    onDynamicColorChanged(!state.dynamicColorEnabled)
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.dynamic_color),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = stringResource(R.string.appearance_dynamic_color_description),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Switch(
+                                checked = state.dynamicColorEnabled,
+                                onCheckedChange = onDynamicColorChanged,
+                                enabled = enabled,
+                            )
+                        }
+                        if (state.hasError) {
+                            Text(
+                                text = stringResource(R.string.appearance_settings_error),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageSelector(
     selectedLanguage: AppLanguage,
@@ -114,25 +152,24 @@ private fun LanguageSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val menuWidth = maxWidth
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = stringResource(selectedLanguage.labelRes),
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                imageVector = Icons.Rounded.ArrowDropDown,
-                contentDescription = null,
-            )
-        }
-        DropdownMenu(
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = stringResource(selectedLanguage.labelRes),
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium
+        )
+        ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.width(menuWidth),
+            onDismissRequest = { expanded = false }
         ) {
             AppLanguage.entries.forEach { language ->
                 DropdownMenuItem(
@@ -148,6 +185,7 @@ private fun LanguageSelector(
                             Icon(
                                 imageVector = Icons.Rounded.Check,
                                 contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         } else {
                             Spacer(Modifier.size(24.dp))

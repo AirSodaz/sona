@@ -72,7 +72,9 @@
     <string name="language_korean" translatable="false">한국어</string>
     <string name="dynamic_color">Use system colors</string>
     <string name="appearance_color_heading">Colors</string>
+    <string name="appearance_dynamic_color_description">System theme colors adapt to your wallpaper color</string>
     <string name="appearance_settings_error">Appearance setting could not be saved</string>
+    <string name="credential_status_label">Status</string>
     <string name="runtime_heading">Local runtime</string>
     <string name="local_runtime_ready">Ready</string>
     <string name="local_runtime_unavailable">Unavailable</string>

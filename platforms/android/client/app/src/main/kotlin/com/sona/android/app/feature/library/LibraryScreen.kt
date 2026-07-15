@@ -1,8 +1,11 @@
 package com.sona.android.app.feature.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +21,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +40,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,13 +95,14 @@ internal fun LibraryScreen(
             ) {
                 Text(
                     text = stringResource(R.string.library_heading),
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
                 if (state.isRefreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
                 }
                 IconButton(
                     onClick = onRefresh,
@@ -104,8 +114,7 @@ internal fun LibraryScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
 
             when {
                 state.isInitialLoading -> LibraryLoading(modifier = Modifier.weight(1f))
@@ -123,10 +132,11 @@ internal fun LibraryScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
                         items(state.items, key = RecordingLibraryItem::historyId) { item ->
                             LibraryItemRow(item = item, onClick = { onOpenItem(item.historyId) })
-                            HorizontalDivider()
                         }
                         if (state.isLoadingMore) {
                             item(key = "library-loading-more") {
@@ -137,7 +147,8 @@ internal fun LibraryScreen(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                }
+    }
+
                             }
                         }
                     }
@@ -153,55 +164,84 @@ private fun LibraryItemRow(
     onClick: () -> Unit,
 ) {
     val fallbackTitle = stringResource(R.string.library_detail_heading)
-    Row(
+    val containerColor = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
+
+    val status = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+        stringResource(R.string.library_status_draft)
+    } else {
+        stringResource(R.string.library_status_complete)
+    }
+
+    val accessibilityDescription = stringResource(
+        R.string.library_item_metadata,
+        formatLibraryTimestamp(item.timestampEpochMillis),
+        formatRecordingTimer(item.durationMillis),
+        status
+    )
+
+    Card(
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .semantics {
+                contentDescription = accessibilityDescription
+            }
     ) {
-        Icon(
-            imageVector = if (item.status == RecordingLibraryItemStatus.DRAFT) {
-                Icons.Rounded.Schedule
-            } else {
-                Icons.Rounded.CheckCircle
-            },
-            contentDescription = null,
-            tint = if (item.status == RecordingLibraryItemStatus.DRAFT) {
-                MaterialTheme.colorScheme.tertiary
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title.ifBlank { fallbackTitle },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+                    Icons.Rounded.Schedule
+                } else {
+                    Icons.Rounded.CheckCircle
+                },
+                contentDescription = null,
+                tint = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+                    MaterialTheme.colorScheme.tertiary
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.size(24.dp),
             )
-            Spacer(Modifier.height(4.dp))
-            LibraryItemMetadata(item)
-            if (item.previewText.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = item.previewText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    text = item.title.ifBlank { fallbackTitle },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(6.dp))
+                LibraryItemMetadata(item)
+                if (item.previewText.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = item.previewText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
+            Spacer(Modifier.width(12.dp))
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
         }
-        Spacer(Modifier.width(12.dp))
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -212,16 +252,52 @@ internal fun LibraryItemMetadata(item: RecordingLibraryItem) {
     } else {
         stringResource(R.string.library_status_complete)
     }
-    Text(
-        text = stringResource(
-            R.string.library_item_metadata,
-            formatLibraryTimestamp(item.timestampEpochMillis),
-            formatRecordingTimer(item.durationMillis),
-            status,
-        ),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+
+    val statusColor = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = formatLibraryTimestamp(item.timestampEpochMillis),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "•",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Text(
+            text = formatRecordingTimer(item.durationMillis),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "•",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Card(
+            shape = MaterialTheme.shapes.extraSmall,
+            colors = CardDefaults.cardColors(
+                containerColor = statusColor.copy(alpha = 0.12f),
+                contentColor = statusColor
+            )
+        ) {
+            Text(
+                text = status,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -240,12 +316,33 @@ internal fun LibraryLoading(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LibraryEmpty(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.library_empty),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = MaterialTheme.shapes.medium
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.FolderOpen,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(48.dp)
+            )
+            Text(
+                text = stringResource(R.string.library_empty),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -254,13 +351,25 @@ private fun LibraryEmptyError(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                shape = MaterialTheme.shapes.medium
+            )
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = stringResource(R.string.library_load_failed),
                 color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
             )
-            TextButton(onClick = onRetry) {
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(onClick = onRetry) {
                 Text(stringResource(R.string.action_retry))
             }
         }
@@ -269,20 +378,36 @@ private fun LibraryEmptyError(
 
 @Composable
 private fun LibraryInlineError(onRetry: () -> Unit) {
-    Row(
+    Card(
+        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 8.dp)
     ) {
-        Text(
-            text = stringResource(R.string.library_load_failed),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onRetry) {
-            Text(stringResource(R.string.action_retry))
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.library_load_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            FilledTonalButton(
+                onClick = onRetry,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                modifier = Modifier.height(30.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.action_retry),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
         }
     }
 }
