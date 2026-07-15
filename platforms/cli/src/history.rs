@@ -7,9 +7,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryDeleteItemsRequest, HistoryMutationError, HistoryReassignProjectRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryError;
@@ -20,7 +20,7 @@ use sona_core::history::{
     LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
-use sona_sqlite::{Database, SqliteHistoryStore};
+use sona_sqlite::{Database, LazySqliteHistoryMutationRepository, SqliteHistoryStore};
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -539,97 +539,8 @@ fn open_service(app_data_dir: PathBuf) -> CliResult<HistoryQueryService> {
 fn open_mutation_service(app_data_dir: PathBuf) -> CliResult<HistoryMutationService> {
     let app_data_dir = existing_app_data_dir(app_data_dir)?;
     Ok(HistoryMutationService::new(Arc::new(
-        CliHistoryMutationRepository { app_data_dir },
+        LazySqliteHistoryMutationRepository::new(app_data_dir),
     )))
-}
-
-struct CliHistoryMutationRepository {
-    app_data_dir: PathBuf,
-}
-
-impl CliHistoryMutationRepository {
-    fn with_store<T>(
-        &self,
-        operation: impl FnOnce(&SqliteHistoryStore) -> Result<T, HistoryMutationError>,
-    ) -> Result<T, HistoryMutationError> {
-        let database = Database::open(&self.app_data_dir)
-            .map_err(|error| HistoryMutationError::Database(error.to_string()))?;
-        let store = SqliteHistoryStore::new(self.app_data_dir.clone(), Arc::new(database));
-        operation(&store)
-    }
-}
-
-impl HistoryMutationRepository for CliHistoryMutationRepository {
-    fn create_live_draft(
-        &self,
-        request: HistoryCreateLiveDraftRequest,
-    ) -> Result<LiveRecordingDraftResult, HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::create_live_draft(store, request))
-    }
-
-    fn complete_live_draft(
-        &self,
-        request: HistoryCompleteLiveDraftRequest,
-    ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::complete_live_draft(store, request))
-    }
-
-    fn save_recording(
-        &self,
-        request: HistorySaveRecordingRequest,
-    ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::save_recording(store, request))
-    }
-
-    fn save_imported_file(
-        &self,
-        request: HistorySaveImportedFileRequest,
-    ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::save_imported_file(store, request))
-    }
-
-    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::delete_items(store, request))
-    }
-
-    fn update_transcript(
-        &self,
-        request: HistoryUpdateTranscriptRequest,
-    ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::update_transcript(store, request))
-    }
-
-    fn create_transcript_snapshot(
-        &self,
-        request: HistoryCreateTranscriptSnapshotRequest,
-    ) -> Result<TranscriptSnapshotMetadata, HistoryMutationError> {
-        self.with_store(|store| {
-            HistoryMutationRepository::create_transcript_snapshot(store, request)
-        })
-    }
-
-    fn update_item_meta(
-        &self,
-        request: HistoryUpdateItemMetaRequest,
-    ) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::update_item_meta(store, request))
-    }
-
-    fn update_project_assignments(
-        &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
-    ) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| {
-            HistoryMutationRepository::update_project_assignments(store, request)
-        })
-    }
-
-    fn reassign_project(
-        &self,
-        request: HistoryReassignProjectRequest,
-    ) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::reassign_project(store, request))
-    }
 }
 
 fn existing_app_data_dir(app_data_dir: PathBuf) -> CliResult<PathBuf> {

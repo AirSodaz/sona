@@ -5,6 +5,7 @@ pub mod config_store;
 pub mod error;
 pub mod history_archive;
 pub mod history_fs_utils;
+pub mod history_mutation_repository;
 pub mod history_store;
 pub mod legacy_migration;
 pub mod llm_usage;
@@ -19,6 +20,7 @@ pub use backup_state::{SqliteBackupStateRepository, validate_backup_restore_data
 pub use config_store::SqliteConfigStore;
 pub use error::DatabaseError;
 pub use history_archive::HistoryRepository;
+pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
 pub use history_store::SqliteHistoryStore;
 pub use project::SqliteProjectRepository;
 pub use task_ledger::SqliteLedgerRepository;
