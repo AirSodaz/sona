@@ -67,7 +67,9 @@
     <string name="language_follow_system">跟隨系統</string>
     <string name="dynamic_color">使用系統配色</string>
     <string name="appearance_color_heading">配色</string>
+    <string name="appearance_dynamic_color_description">系統主題配色會依桌布顏色自動調整</string>
     <string name="appearance_settings_error">無法儲存外觀設定</string>
+    <string name="credential_status_label">狀態</string>
     <string name="runtime_heading">本機執行階段</string>
     <string name="local_runtime_ready">已就緒</string>
     <string name="local_runtime_unavailable">無法使用</string>

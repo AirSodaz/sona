@@ -67,7 +67,9 @@
     <string name="language_follow_system">시스템 설정 따르기</string>
     <string name="dynamic_color">시스템 색상 사용</string>
     <string name="appearance_color_heading">색상</string>
+    <string name="appearance_dynamic_color_description">시스템 테마 색상이 배경화면 색상에 맞게 조정됩니다</string>
     <string name="appearance_settings_error">모양 설정을 저장할 수 없습니다</string>
+    <string name="credential_status_label">상태</string>
     <string name="runtime_heading">로컬 런타임</string>
     <string name="local_runtime_ready">준비됨</string>
     <string name="local_runtime_unavailable">사용할 수 없음</string>

@@ -67,7 +67,9 @@
     <string name="language_follow_system">システムに従う</string>
     <string name="dynamic_color">システムの配色を使用</string>
     <string name="appearance_color_heading">配色</string>
+    <string name="appearance_dynamic_color_description">システムのテーマカラーが壁紙の色に合わせて調整されます</string>
     <string name="appearance_settings_error">外観設定を保存できませんでした</string>
+    <string name="credential_status_label">状態</string>
     <string name="runtime_heading">ローカルランタイム</string>
     <string name="local_runtime_ready">準備完了</string>
     <string name="local_runtime_unavailable">利用できません</string>

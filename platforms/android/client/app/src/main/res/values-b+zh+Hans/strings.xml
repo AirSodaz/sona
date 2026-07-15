@@ -67,7 +67,9 @@
     <string name="language_follow_system">跟随系统</string>
     <string name="dynamic_color">使用系统配色</string>
     <string name="appearance_color_heading">配色</string>
+    <string name="appearance_dynamic_color_description">系统主题配色会根据壁纸颜色自动调整</string>
     <string name="appearance_settings_error">无法保存外观设置</string>
+    <string name="credential_status_label">状态</string>
     <string name="runtime_heading">本地运行库</string>
     <string name="local_runtime_ready">已就绪</string>
     <string name="local_runtime_unavailable">不可用</string>
