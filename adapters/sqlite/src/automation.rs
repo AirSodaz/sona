@@ -1,10 +1,12 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
+use serde_json::Value;
 pub use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::automation::repository::{
     AutomationProcessedRecord, AutomationRuleRecord, AutomationRuleRecordExportConfig,
     AutomationRuleRecordStageConfig, AutomationStore,
 };
+use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -16,6 +18,50 @@ where
 }
 
 crate::impl_db_repository!(SqliteAutomationRepository);
+
+pub struct SqliteAutomationAdapter<D = crate::Database>
+where
+    D: DatabasePort,
+{
+    repository: SqliteAutomationRepository<D>,
+    ids: Arc<dyn AutomationIdGenerator>,
+}
+
+impl<D> SqliteAutomationAdapter<D>
+where
+    D: DatabasePort,
+{
+    pub fn new(db: Arc<D>, ids: Arc<dyn AutomationIdGenerator>) -> Self {
+        Self {
+            repository: SqliteAutomationRepository::new(db),
+            ids,
+        }
+    }
+
+    pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+        self.service().load_state()
+    }
+
+    pub fn replace_rules_json(&self, rules: Vec<Value>) -> Result<(), String> {
+        self.service().replace_rules_json(rules)
+    }
+
+    pub fn replace_processed_entries_json(&self, entries: Vec<Value>) -> Result<(), String> {
+        self.service().replace_processed_entries_json(entries)
+    }
+
+    pub fn replace_state_json(
+        &self,
+        rules: Vec<Value>,
+        processed_entries: Vec<Value>,
+    ) -> Result<(), String> {
+        self.service().replace_state_json(rules, processed_entries)
+    }
+
+    fn service(&self) -> AutomationRepositoryService<'_> {
+        AutomationRepositoryService::new(&self.repository, self.ids.as_ref())
+    }
+}
 
 pub(crate) fn load_automation_in_transaction(
     tx: &rusqlite::Transaction<'_>,
@@ -251,7 +297,6 @@ mod tests {
         AutomationProcessedRecord, AutomationRuleRecord, AutomationRuleRecordExportConfig,
         AutomationRuleRecordStageConfig, AutomationStore,
     };
-    use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
     use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
 
@@ -474,18 +519,19 @@ mod tests {
     }
 
     #[test]
-    fn service_persists_canonical_defaults_and_generated_ids() {
-        let (_, repo) = repository();
+    fn automation_adapter_persists_canonical_defaults_and_generated_ids() {
+        let (db, _) = repository();
         let ids = SequenceIds(Mutex::new(vec![
             "rule-generated".into(),
             "entry-generated".into(),
         ]));
+        let adapter = SqliteAutomationAdapter::new(db, Arc::new(ids));
 
-        AutomationRepositoryService::new(&repo, &ids)
+        adapter
             .replace_state_json(vec![object(&[])], vec![object(&[])])
             .unwrap();
 
-        let state = AutomationStore::load_state(&repo).unwrap();
+        let state = adapter.load_state().unwrap();
         assert_eq!(
             state.rules,
             vec![AutomationRuleRecord {

@@ -1,16 +1,16 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 use sona_core::automation::AutomationRule;
-use sona_core::automation::service::{AutomationRepositoryService, AutomationValidationService};
+use sona_core::automation::service::AutomationValidationService;
 use sona_runtime_fs::{NativeAutomationFileSystem, UuidGenerator};
-use sona_sqlite::{Database, SqliteAutomationRepository};
+use sona_sqlite::{Database, SqliteAutomationAdapter};
 use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) fn load_automation_repository_state_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    with_automation_repository(&app_data_dir, |service| service.load_state())
+    with_automation_adapter(&app_data_dir, |adapter| adapter.load_state())
         .and_then(serialize_automation)
 }
 
@@ -19,9 +19,9 @@ pub(crate) fn replace_automation_rules_json(
     rules_json: String,
 ) -> SonaCoreBindingResult<String> {
     let rules = parse_json_array("automation rules", &rules_json)?;
-    with_automation_repository(&app_data_dir, |service| {
-        service.replace_rules_json(rules)?;
-        service.load_state()
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_rules_json(rules)?;
+        adapter.load_state()
     })
     .and_then(serialize_automation)
 }
@@ -31,9 +31,9 @@ pub(crate) fn replace_automation_processed_entries_json(
     entries_json: String,
 ) -> SonaCoreBindingResult<String> {
     let entries = parse_json_array("automation processed entries", &entries_json)?;
-    with_automation_repository(&app_data_dir, |service| {
-        service.replace_processed_entries_json(entries)?;
-        service.load_state()
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_processed_entries_json(entries)?;
+        adapter.load_state()
     })
     .and_then(serialize_automation)
 }
@@ -43,9 +43,9 @@ pub(crate) fn replace_automation_repository_state_json(
     state_json: String,
 ) -> SonaCoreBindingResult<String> {
     let (rules, processed_entries) = parse_repository_state(&state_json)?;
-    with_automation_repository(&app_data_dir, |service| {
-        service.replace_state_json(rules, processed_entries)?;
-        service.load_state()
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_state_json(rules, processed_entries)?;
+        adapter.load_state()
     })
     .and_then(serialize_automation)
 }
@@ -66,17 +66,13 @@ pub(crate) fn validate_automation_rule_activation_json(
     serialize_automation(result)
 }
 
-fn with_automation_repository<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
+fn with_automation_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
 where
-    F: for<'a> FnOnce(AutomationRepositoryService<'a>) -> Result<T, String>,
+    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, String>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(automation_error)?;
-    let repository = SqliteAutomationRepository::new(Arc::new(database));
-    operation(AutomationRepositoryService::new(
-        &repository,
-        &UuidGenerator,
-    ))
-    .map_err(automation_error)
+    let adapter = SqliteAutomationAdapter::new(Arc::new(database), Arc::new(UuidGenerator));
+    operation(&adapter).map_err(automation_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {

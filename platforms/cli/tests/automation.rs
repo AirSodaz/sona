@@ -309,10 +309,18 @@ fn automation_list_rejects_future_database_schema_without_modifying_files() {
     let dir = tempfile::tempdir().unwrap();
     seed_empty(dir.path());
     let database = Database::open(dir.path()).unwrap();
-    database
+    let future_version = database
         .with_connection(|connection| {
-            connection.execute("INSERT INTO schema_version (version) VALUES (2)", [])?;
-            Ok(())
+            let current_version =
+                connection.query_row("SELECT MAX(version) FROM schema_version", [], |row| {
+                    row.get::<_, i64>(0)
+                })?;
+            let future_version = current_version + 1;
+            connection.execute(
+                "INSERT INTO schema_version (version) VALUES (?1)",
+                [future_version],
+            )?;
+            Ok(future_version)
         })
         .unwrap();
     drop(database);
@@ -330,10 +338,8 @@ fn automation_list_rejects_future_database_schema_without_modifying_files() {
     .unwrap_err();
 
     assert!(matches!(error, sona_cli::CliError::Io(_)));
-    assert!(
-        error
-            .to_string()
-            .contains("Unsupported database schema version 2")
-    );
+    assert!(error.to_string().contains(&format!(
+        "Unsupported database schema version {future_version}"
+    )));
     assert_eq!(directory_files(dir.path()), before);
 }

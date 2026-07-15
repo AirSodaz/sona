@@ -18,7 +18,9 @@ pub mod storage_usage;
 pub mod storage_usage_repository;
 pub mod task_ledger;
 
-pub use automation::{AutomationRepositoryState, SqliteAutomationRepository};
+pub use automation::{
+    AutomationRepositoryState, SqliteAutomationAdapter, SqliteAutomationRepository,
+};
 pub use backup_state::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 pub use backup_state_repository::LazySqliteBackupStateRepository;
 pub use config_store::{SqliteAppConfigAdapter, SqliteConfigStore};

@@ -1,7 +1,9 @@
 use serde_json::Value;
-use sona_core::automation::service::{AutomationRepositoryService, AutomationValidationService};
+use sona_core::automation::service::AutomationValidationService;
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use sona_runtime_fs::{NativeAutomationFileSystem, UuidGenerator};
+use sona_sqlite::SqliteAutomationAdapter;
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
 pub use sona_sqlite::automation::AutomationRepositoryState;
@@ -30,17 +32,16 @@ pub async fn validate_rule_activation(
     .map_err(|error| error.to_string())
 }
 
-pub async fn run_automation_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+async fn run_automation_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(sona_sqlite::automation::SqliteAutomationRepository) -> Result<T, String>
-        + Send
-        + 'static,
+    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, String> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
-        task(sona_sqlite::automation::SqliteAutomationRepository::new(db))
+        let adapter = SqliteAutomationAdapter::new(db, Arc::new(UuidGenerator));
+        task(&adapter)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -49,29 +50,22 @@ where
 pub async fn load_repository_state<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<AutomationRepositoryState, String> {
-    run_automation_task(app, |repository| {
-        AutomationRepositoryService::new(&repository, &UuidGenerator).load_state()
-    })
-    .await
+    run_automation_adapter_task(app, |adapter| adapter.load_state()).await
 }
 
 pub async fn persist_rules<R: Runtime>(
     app: &AppHandle<R>,
     rules: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(app, move |repository| {
-        AutomationRepositoryService::new(&repository, &UuidGenerator).replace_rules_json(rules)
-    })
-    .await
+    run_automation_adapter_task(app, move |adapter| adapter.replace_rules_json(rules)).await
 }
 
 pub async fn persist_processed_entries<R: Runtime>(
     app: &AppHandle<R>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(app, move |repository| {
-        AutomationRepositoryService::new(&repository, &UuidGenerator)
-            .replace_processed_entries_json(processed_entries)
+    run_automation_adapter_task(app, move |adapter| {
+        adapter.replace_processed_entries_json(processed_entries)
     })
     .await
 }
@@ -81,9 +75,8 @@ pub async fn persist_repository_state<R: Runtime>(
     rules: Vec<Value>,
     processed_entries: Vec<Value>,
 ) -> Result<(), String> {
-    run_automation_task(app, move |repository| {
-        AutomationRepositoryService::new(&repository, &UuidGenerator)
-            .replace_state_json(rules, processed_entries)
+    run_automation_adapter_task(app, move |adapter| {
+        adapter.replace_state_json(rules, processed_entries)
     })
     .await
 }
