@@ -3,19 +3,26 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Args, Subcommand, ValueEnum};
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::llm::provider_protocol::LlmModelSummary;
 #[cfg(test)]
 use sona_core::llm::requests::LlmConfig;
-use sona_core::llm::requests::LlmModelsRequest;
+use sona_core::llm::requests::{
+    LlmModelsRequest, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
+};
 use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
     LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError, LlmRuntimeService,
 };
+use sona_core::llm::tasks::{
+    LlmTaskError, LlmTaskService, PolishedSegment, TranscriptSummaryResult, TranslatedSegment,
+};
 use sona_core::llm::usage::LlmGenerateSource;
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelMetadataPort, LlmPortErrorKind,
+    LlmTaskRuntimePort,
 };
 use sona_online_llm::OnlineLlmAdapter;
 
@@ -34,6 +41,12 @@ enum LlmCommands {
     Generate(LlmGenerateArgs),
     /// Lists models available from the configured provider.
     Models(LlmModelsArgs),
+    /// Runs the shared core polish task.
+    Polish(LlmTaskArgs),
+    /// Runs the shared core translation task.
+    Translate(LlmTaskArgs),
+    /// Runs the shared core transcript summary task.
+    Summary(LlmTaskArgs),
 }
 
 #[derive(Debug, Args)]
@@ -115,6 +128,19 @@ struct LlmModelsArgs {
     output: OutputArg,
 }
 
+#[derive(Debug, Args)]
+struct LlmTaskArgs {
+    /// JSON file containing the core task request object.
+    #[arg(long, value_name = "FILE")]
+    request_json: PathBuf,
+    /// Environment variable whose value overrides config.apiKey in the request JSON.
+    #[arg(long, value_name = "NAME")]
+    api_key_env: Option<String>,
+    /// Terminal output format.
+    #[arg(long, value_enum, default_value_t = OutputArg::Json)]
+    output: OutputArg,
+}
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum ResponseFormatArg {
     Text,
@@ -157,6 +183,30 @@ pub fn run_llm(args: LlmArgs) -> CliResult<CliOutput> {
                 let adapter = OnlineLlmAdapter;
                 let models = execute_models(request, &adapter, adapter).await?;
                 render_models(&models, args.output)
+            })
+        }
+        LlmCommands::Polish(args) => {
+            let output = args.output;
+            let request = load_task_request(&args.request_json, args.api_key_env.as_deref())?;
+            run_async(move || async move {
+                let result = execute_polish(request, OnlineLlmAdapter).await?;
+                render_polished_segments(&result, output)
+            })
+        }
+        LlmCommands::Translate(args) => {
+            let output = args.output;
+            let request = load_task_request(&args.request_json, args.api_key_env.as_deref())?;
+            run_async(move || async move {
+                let result = execute_translate(request, OnlineLlmAdapter).await?;
+                render_translated_segments(&result, output)
+            })
+        }
+        LlmCommands::Summary(args) => {
+            let output = args.output;
+            let request = load_task_request(&args.request_json, args.api_key_env.as_deref())?;
+            run_async(move || async move {
+                let result = execute_summary(request, OnlineLlmAdapter).await?;
+                render_summary_result(&result, output)
             })
         }
     }
@@ -256,6 +306,45 @@ where
         .map_err(map_runtime_error)
 }
 
+async fn execute_polish<R>(
+    request: PolishSegmentsRequest,
+    runtime: R,
+) -> CliResult<Vec<PolishedSegment>>
+where
+    R: LlmTaskRuntimePort,
+{
+    LlmTaskService::new(runtime)
+        .polish(request, &())
+        .await
+        .map_err(map_task_error)
+}
+
+async fn execute_translate<R>(
+    request: TranslateSegmentsRequest,
+    runtime: R,
+) -> CliResult<Vec<TranslatedSegment>>
+where
+    R: LlmTaskRuntimePort,
+{
+    LlmTaskService::new(runtime)
+        .translate(request, &())
+        .await
+        .map_err(map_task_error)
+}
+
+async fn execute_summary<R>(
+    request: SummarizeTranscriptRequest,
+    runtime: R,
+) -> CliResult<TranscriptSummaryResult>
+where
+    R: LlmTaskRuntimePort,
+{
+    LlmTaskService::new(runtime)
+        .summarize(request, &())
+        .await
+        .map_err(map_task_error)
+}
+
 fn load_json_config<T: DeserializeOwned>(path: &Path, api_key_env: Option<&str>) -> CliResult<T> {
     let mut value: Value = serde_json::from_str(&read_utf8_file(path, "LLM config")?)
         .map_err(|error| CliError::Validation(format!("Invalid LLM config JSON: {error}")))?;
@@ -270,6 +359,33 @@ fn load_json_config<T: DeserializeOwned>(path: &Path, api_key_env: Option<&str>)
     }
     serde_json::from_value(value)
         .map_err(|error| CliError::Validation(format!("Invalid LLM config: {error}")))
+}
+
+fn load_task_request<T: DeserializeOwned>(path: &Path, api_key_env: Option<&str>) -> CliResult<T> {
+    let mut value: Value = serde_json::from_str(&read_utf8_file(path, "LLM task request")?)
+        .map_err(|error| CliError::Validation(format!("Invalid LLM task request JSON: {error}")))?;
+    if let Some(name) = api_key_env {
+        let api_key = std::env::var(name).map_err(|_| {
+            CliError::Validation(format!("Environment variable '{name}' is not set"))
+        })?;
+        override_task_request_api_key(&mut value, api_key)?;
+    }
+    serde_json::from_value(value)
+        .map_err(|error| CliError::Validation(format!("Invalid LLM task request: {error}")))
+}
+
+fn override_task_request_api_key(value: &mut Value, api_key: String) -> CliResult<()> {
+    let request = value.as_object_mut().ok_or_else(|| {
+        CliError::Validation("LLM task request JSON must be an object".to_string())
+    })?;
+    let config = request
+        .get_mut("config")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            CliError::Validation("LLM task request JSON must contain a config object".to_string())
+        })?;
+    config.insert("apiKey".to_string(), Value::String(api_key));
+    Ok(())
 }
 
 fn read_selected_text(text: Option<&str>, file: Option<&Path>, stdin: bool) -> CliResult<String> {
@@ -363,6 +479,70 @@ fn render_models(models: &[LlmModelSummary], output: OutputArg) -> CliResult<Cli
     Ok(CliOutput::stdout(output))
 }
 
+fn render_polished_segments(
+    segments: &[PolishedSegment],
+    output: OutputArg,
+) -> CliResult<CliOutput> {
+    match output {
+        OutputArg::Json => render_json(segments),
+        OutputArg::Text => render_task_segments_table(
+            ["ID", "TEXT"],
+            segments
+                .iter()
+                .map(|segment| [segment.id.as_str(), segment.text.as_str()]),
+        ),
+    }
+}
+
+fn render_translated_segments(
+    segments: &[TranslatedSegment],
+    output: OutputArg,
+) -> CliResult<CliOutput> {
+    match output {
+        OutputArg::Json => render_json(segments),
+        OutputArg::Text => render_task_segments_table(
+            ["ID", "TRANSLATION"],
+            segments
+                .iter()
+                .map(|segment| [segment.id.as_str(), segment.translation.as_str()]),
+        ),
+    }
+}
+
+fn render_summary_result(
+    result: &TranscriptSummaryResult,
+    output: OutputArg,
+) -> CliResult<CliOutput> {
+    match output {
+        OutputArg::Json => render_json(result),
+        OutputArg::Text => Ok(CliOutput::stdout(result.content.clone())),
+    }
+}
+
+fn render_task_segments_table<'a>(
+    headers: [&str; 2],
+    rows: impl IntoIterator<Item = [&'a str; 2]>,
+) -> CliResult<CliOutput> {
+    let rows = rows
+        .into_iter()
+        .map(|row| row.map(sanitize_table_cell))
+        .collect::<Vec<_>>();
+    let widths = column_widths(&headers, &rows);
+    let mut output = String::new();
+    append_table_row(&mut output, &headers, &widths);
+    append_table_separator(&mut output, &widths);
+    for row in &rows {
+        append_table_row(&mut output, &[row[0].as_str(), row[1].as_str()], &widths);
+    }
+    Ok(CliOutput::stdout(output))
+}
+
+fn render_json(value: impl Serialize) -> CliResult<CliOutput> {
+    serde_json::to_string_pretty(&value)
+        .map(CliOutput::stdout)
+        .map_err(|error| CliError::Serialize(error.to_string()))
+}
+
 fn optional_number(value: Option<u64>) -> String {
     value.map(|value| value.to_string()).unwrap_or_default()
 }
@@ -385,6 +565,23 @@ fn map_runtime_error(error: LlmRuntimeError) -> CliError {
     let message = error.to_string();
     match error {
         LlmRuntimeError::InvalidRequest { reason } => CliError::Validation(reason),
+        error => map_runtime_error_with_message(error, message),
+    }
+}
+
+fn map_task_error(error: LlmTaskError) -> CliError {
+    let message = error.to_string();
+    match error {
+        LlmTaskError::InvalidRequest { reason } => CliError::Validation(reason),
+        LlmTaskError::InvalidResponse { .. } => CliError::Model(message),
+        LlmTaskError::Observer { .. } => CliError::Other(message),
+        LlmTaskError::Runtime { source, .. } => map_runtime_error_with_message(source, message),
+    }
+}
+
+fn map_runtime_error_with_message(error: LlmRuntimeError, message: String) -> CliError {
+    match error {
+        LlmRuntimeError::InvalidRequest { .. } => CliError::Validation(message),
         LlmRuntimeError::UnsupportedCapability { .. } | LlmRuntimeError::InvalidResponse { .. } => {
             CliError::Model(message)
         }
@@ -550,5 +747,115 @@ mod tests {
         );
         assert_eq!(models[1].max_output_tokens, Some(4096));
         assert!(fake.models_request.lock().unwrap().is_some());
+    }
+
+    #[test]
+    fn task_subcommands_are_recognized_by_the_cli_parser() {
+        for command in ["polish", "translate", "summary"] {
+            let error = crate::run_cli_from_args([
+                "sona-cli",
+                "llm",
+                command,
+                "--request-json",
+                "missing-request.json",
+            ])
+            .expect_err("the request file should fail after parsing");
+
+            assert!(
+                !matches!(error, crate::CliError::Usage(_)),
+                "{command} was rejected as an unknown CLI subcommand: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn task_request_loading_reads_nested_config_api_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let request_path = directory.path().join("polish-request.json");
+        std::fs::write(
+            &request_path,
+            r#"{
+                "taskId": "polish-1",
+                "config": {
+                    "provider": "open_ai",
+                    "baseUrl": "https://api.example.com",
+                    "apiKey": "nested-secret",
+                    "model": "test-model"
+                },
+                "segments": [{"id": "segment-1", "text": "hello"}]
+            }"#,
+        )
+        .unwrap();
+
+        let request: PolishSegmentsRequest = load_task_request(&request_path, None).unwrap();
+
+        assert_eq!(request.config.api_key, "nested-secret");
+        assert_eq!(request.segments[0].id, "segment-1");
+    }
+
+    #[test]
+    fn task_request_api_key_override_updates_nested_config() {
+        let mut request = serde_json::json!({
+            "config": {
+                "apiKey": "request-secret"
+            }
+        });
+
+        override_task_request_api_key(&mut request, "environment-secret".to_string()).unwrap();
+
+        assert_eq!(request["config"]["apiKey"], "environment-secret");
+        assert!(request.get("apiKey").is_none());
+    }
+
+    #[test]
+    fn segment_task_results_render_as_json_and_text() {
+        let polished = vec![PolishedSegment {
+            id: "segment-1".to_string(),
+            text: "hello\nworld".to_string(),
+        }];
+        let polished_json = render_polished_segments(&polished, OutputArg::Json).unwrap();
+        let polished_text = render_polished_segments(&polished, OutputArg::Text).unwrap();
+
+        assert_eq!(
+            serde_json::from_str::<Value>(&polished_json.stdout).unwrap(),
+            serde_json::json!([{"id": "segment-1", "text": "hello\nworld"}])
+        );
+        assert!(polished_text.stdout.contains("ID"));
+        assert!(polished_text.stdout.contains("TEXT"));
+        assert!(polished_text.stdout.contains("segment-1"));
+        assert!(polished_text.stdout.contains(r"hello\nworld"));
+
+        let translated = vec![TranslatedSegment {
+            id: "segment-2".to_string(),
+            translation: "bonjour".to_string(),
+        }];
+        let translated_json = render_translated_segments(&translated, OutputArg::Json).unwrap();
+        let translated_text = render_translated_segments(&translated, OutputArg::Text).unwrap();
+
+        assert_eq!(
+            serde_json::from_str::<Value>(&translated_json.stdout).unwrap(),
+            serde_json::json!([{"id": "segment-2", "translation": "bonjour"}])
+        );
+        assert!(translated_text.stdout.contains("TRANSLATION"));
+        assert!(translated_text.stdout.contains("bonjour"));
+    }
+
+    #[test]
+    fn summary_task_result_renders_as_json_and_text() {
+        let result = TranscriptSummaryResult {
+            template_id: "general".to_string(),
+            content: "Summary content".to_string(),
+        };
+        let json = render_summary_result(&result, OutputArg::Json).unwrap();
+        let text = render_summary_result(&result, OutputArg::Text).unwrap();
+
+        assert_eq!(
+            serde_json::from_str::<Value>(&json.stdout).unwrap(),
+            serde_json::json!({
+                "templateId": "general",
+                "content": "Summary content"
+            })
+        );
+        assert_eq!(text.stdout, "Summary content");
     }
 }
