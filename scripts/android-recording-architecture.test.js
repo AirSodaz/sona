@@ -121,13 +121,23 @@ test('Android recording composition preserves lifecycle, permission, and credent
   assert.match(lifecycleEffect, /Lifecycle\.Event\.ON_STOP/u);
 
   assert.match(settingsScreen, /NavigableListDetailPaneScaffold/u);
+  assert.match(settingsScreen, /initialDestinationHistory/u);
   assert.match(settingsScreen, /requestCredentialFocus/u);
+  assert.match(settingsScreen, /credentialFocusSessionActive/u);
+  assert.match(settingsScreen, /DisposableEffect/u);
+  assert.doesNotMatch(
+    settingsScreen,
+    /initialSection\s*==\s*SettingsSection\.RECOGNITION/u,
+  );
   assert.match(recognitionSettingsPane, /PasswordVisualTransformation/u);
   assert.match(recognitionSettingsPane, /value = state\.credentialInput/u);
+  assert.match(recognitionSettingsPane, /onGloballyPositioned/u);
+  assert.doesNotMatch(recognitionSettingsPane, /else if \(!focusInitialized\)/u);
   assert.doesNotMatch(recognitionSettingsPane, /rememberSaveable/u);
   assert.match(settingsViewModel, /credentialInput=<redacted>/u);
   assert.doesNotMatch(settingsViewModel, /SavedStateHandle/u);
   assert.match(navigation, /credentialFocusRequested/u);
+  assert.doesNotMatch(navigation, /credentialFocusRequested by rememberSaveable/u);
 });
 
 test('Android verification runs all recording tests in one serial Gradle invocation', () => {
@@ -157,5 +167,15 @@ test('Android verification runs all recording tests in one serial Gradle invocat
     bindingsGradle,
     /net\.java\.dev\.jna:jna:5\.19\.1@aar/u,
     'Android JNA must use the API 37-verified 16 KB-aligned release',
+  );
+});
+
+test('Android app desugars JNA Java APIs for API 23', () => {
+  const appGradle = read('platforms', 'android', 'client', 'app', 'build.gradle.kts');
+
+  assert.match(appGradle, /isCoreLibraryDesugaringEnabled\s*=\s*true/u);
+  assert.match(
+    appGradle,
+    /coreLibraryDesugaring\("com\.android\.tools:desugar_jdk_libs:2\.1\.5"\)/u,
   );
 });

@@ -5,17 +5,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.os.LocaleListCompat
 import com.sona.android.app.composition.SonaAppContainer
 import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
+import com.sona.android.app.feature.library.LibraryViewModel
 import com.sona.android.app.feature.recording.RecordingViewModel
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CredentialSettingsViewModel
 import com.sona.android.app.navigation.SonaApp
+import com.sona.android.application.recording.LiveRecordingState
 
 class MainActivity : AppCompatActivity() {
     private val container: SonaAppContainer by lazy {
@@ -32,6 +35,9 @@ class MainActivity : AppCompatActivity() {
             val recordingViewModel: RecordingViewModel = viewModel(
                 factory = RecordingViewModel.factory(container::createLiveRecording),
             )
+            val libraryViewModel: LibraryViewModel = viewModel(
+                factory = LibraryViewModel.factory(container.recordingLibrary),
+            )
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
                 factory = AppearanceSettingsViewModel.factory(container.appearanceSettings),
             )
@@ -40,11 +46,18 @@ class MainActivity : AppCompatActivity() {
             )
             val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
+            val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
             val appearanceState by appearanceSettingsViewModel.state.collectAsStateWithLifecycle()
             val credentialState by credentialViewModel.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(recordingState) {
+                if (recordingState is LiveRecordingState.Completed) {
+                    libraryViewModel.refresh()
+                }
+            }
             SonaApp(
                 bootstrapState = bootstrapState,
                 recordingState = recordingState,
+                libraryState = libraryState,
                 appearanceState = appearanceState,
                 credentialState = credentialState,
                 appLanguage = currentAppLanguage(),
@@ -54,6 +67,10 @@ class MainActivity : AppCompatActivity() {
                 onStartRecording = recordingViewModel::startRecording,
                 onStopRecording = recordingViewModel::stopRecording,
                 onAppBackground = recordingViewModel::stopForBackground,
+                onRefreshLibrary = libraryViewModel::refresh,
+                onLoadMoreLibrary = libraryViewModel::loadNextPage,
+                onRetryLibrary = libraryViewModel::retryList,
+                onLoadLibraryTranscript = libraryViewModel::loadTranscript,
                 onCredentialInputChanged = credentialViewModel::onCredentialInputChanged,
                 onSaveCredential = credentialViewModel::saveCredential,
                 onClearCredential = credentialViewModel::clearCredential,

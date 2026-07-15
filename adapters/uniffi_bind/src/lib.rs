@@ -308,7 +308,7 @@ pub async fn import_backup_archive_json(
     .await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_history_items_json(
     app_data_dir: String,
     limit: Option<u64>,
@@ -317,7 +317,7 @@ pub async fn list_history_items_json(
     SonaCoreFacade::list_history_items_json(app_data_dir, limit, offset).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn query_history_workspace_json(
     app_data_dir: String,
     request_json: String,
@@ -325,7 +325,7 @@ pub async fn query_history_workspace_json(
     SonaCoreFacade::query_history_workspace_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_history_transcript_json(
     app_data_dir: String,
     history_id: String,
@@ -333,7 +333,7 @@ pub async fn load_history_transcript_json(
     SonaCoreFacade::load_history_transcript_json(app_data_dir, history_id).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_history_transcript_snapshots_json(
     app_data_dir: String,
     history_id: String,
@@ -341,7 +341,7 @@ pub async fn list_history_transcript_snapshots_json(
     SonaCoreFacade::list_history_transcript_snapshots_json(app_data_dir, history_id).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn load_history_transcript_snapshot_json(
     app_data_dir: String,
     history_id: String,
@@ -351,7 +351,7 @@ pub async fn load_history_transcript_snapshot_json(
         .await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn create_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
@@ -359,7 +359,7 @@ pub async fn create_history_live_draft_json(
     SonaCoreFacade::create_history_live_draft_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
@@ -367,7 +367,7 @@ pub async fn complete_history_live_draft_json(
     SonaCoreFacade::complete_history_live_draft_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn save_history_recording_json(
     app_data_dir: String,
     request_json: String,
@@ -383,7 +383,7 @@ pub async fn save_history_recording_json(
     .await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn save_history_imported_file_json(
     app_data_dir: String,
     request_json: String,
@@ -391,7 +391,7 @@ pub async fn save_history_imported_file_json(
     SonaCoreFacade::save_history_imported_file_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn delete_history_items_json(
     app_data_dir: String,
     request_json: String,
@@ -399,7 +399,7 @@ pub async fn delete_history_items_json(
     SonaCoreFacade::delete_history_items_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_transcript_json(
     app_data_dir: String,
     request_json: String,
@@ -407,7 +407,7 @@ pub async fn update_history_transcript_json(
     SonaCoreFacade::update_history_transcript_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn create_history_transcript_snapshot_json(
     app_data_dir: String,
     request_json: String,
@@ -415,7 +415,7 @@ pub async fn create_history_transcript_snapshot_json(
     SonaCoreFacade::create_history_transcript_snapshot_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_item_meta_json(
     app_data_dir: String,
     request_json: String,
@@ -423,7 +423,7 @@ pub async fn update_history_item_meta_json(
     SonaCoreFacade::update_history_item_meta_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_project_assignments_json(
     app_data_dir: String,
     request_json: String,
@@ -431,7 +431,7 @@ pub async fn update_history_project_assignments_json(
     SonaCoreFacade::update_history_project_assignments_json(app_data_dir, request_json).await
 }
 
-#[uniffi::export]
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn reassign_history_project_json(
     app_data_dir: String,
     request_json: String,

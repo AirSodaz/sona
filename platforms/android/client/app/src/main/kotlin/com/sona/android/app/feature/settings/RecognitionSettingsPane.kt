@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,19 +59,21 @@ internal fun RecognitionSettingsPane(
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
-    onCredentialFocusConsumed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val initialFocusRequester = remember { FocusRequester() }
     val credentialFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var focusInitialized by remember { mutableStateOf(false) }
-    LaunchedEffect(requestCredentialFocus) {
-        if (requestCredentialFocus) {
+    var credentialFieldPlaced by remember { mutableStateOf(false) }
+    val onCredentialFieldPlaced = remember {
+        { credentialFieldPlaced = true }
+    }
+    LaunchedEffect(requestCredentialFocus, credentialFieldPlaced) {
+        if (requestCredentialFocus && credentialFieldPlaced) {
             credentialFocusRequester.requestFocus()
-            focusInitialized = true
-            onCredentialFocusConsumed()
-        } else if (!focusInitialized) {
+            keyboardController?.show()
+        } else if (!requestCredentialFocus && !focusInitialized) {
             initialFocusRequester.requestFocus()
             keyboardController?.hide()
             focusInitialized = true
@@ -95,6 +98,7 @@ internal fun RecognitionSettingsPane(
             CredentialSettings(
                 state = credentialState,
                 focusRequester = credentialFocusRequester,
+                onCredentialFieldPlaced = onCredentialFieldPlaced,
                 onCredentialInputChanged = onCredentialInputChanged,
                 onSave = onSaveCredential,
                 onClear = onClearCredential,
@@ -114,6 +118,7 @@ internal fun RecognitionSettingsPane(
 private fun CredentialSettings(
     state: CredentialSettingsUiState,
     focusRequester: FocusRequester,
+    onCredentialFieldPlaced: () -> Unit,
     onCredentialInputChanged: (String) -> Unit,
     onSave: () -> Unit,
     onClear: () -> Unit,
@@ -138,7 +143,8 @@ private fun CredentialSettings(
         enabled = !state.operationInProgress,
         modifier = Modifier
             .fillMaxWidth()
-            .focusRequester(focusRequester),
+            .focusRequester(focusRequester)
+            .onGloballyPositioned { onCredentialFieldPlaced() },
         label = { Text(stringResource(R.string.credential_api_key)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

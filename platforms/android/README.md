@@ -193,7 +193,16 @@ activity resumes. `ProcessLifecycleOwner` stops and saves an active recording
 when the application enters the background. Activity recreation such as device
 rotation does not stop it. After a successful stop, the recording screen keeps
 the saved result (including any audio-only warning) visible and allows another
-recording; the library screen remains a placeholder in this client slice.
+recording.
+
+The Library screen reads recording history through a platform-neutral
+application port backed by the existing UniFFI history query functions. It
+shows draft and completed recordings newest-first, refreshes when the screen is
+opened or a recording completes, and loads additional pages as the user
+scrolls. Drafts remain visible instead of being silently removed. Selecting a
+row opens a transcript detail destination that loads the canonical persisted
+segments and presents a localized loading, empty, or retry state without
+exposing binding or database error text.
 
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client

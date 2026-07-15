@@ -6,6 +6,8 @@ import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.deleteHistoryItemsJson
+import uniffi.sona_uniffi_bind.loadHistoryTranscriptJson
+import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
 import uniffi.sona_uniffi_bind.findOnlineAsrProvider
 import uniffi.sona_uniffi_bind.onlineAsrProviderRequest
 import uniffi.sona_uniffi_bind.updateHistoryTranscriptJson
@@ -120,6 +122,8 @@ internal interface UniffiHistoryBindings {
     suspend fun updateTranscript(appDataDir: String, requestJson: String): String
     suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String
     suspend fun deleteItems(appDataDir: String, requestJson: String): String
+    suspend fun queryWorkspace(appDataDir: String, requestJson: String): String
+    suspend fun loadTranscript(appDataDir: String, historyId: String): String
 }
 
 internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
@@ -134,4 +138,10 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
 
     override suspend fun deleteItems(appDataDir: String, requestJson: String): String =
         deleteHistoryItemsJson(appDataDir, requestJson)
+
+    override suspend fun queryWorkspace(appDataDir: String, requestJson: String): String =
+        queryHistoryWorkspaceJson(appDataDir, requestJson)
+
+    override suspend fun loadTranscript(appDataDir: String, historyId: String): String =
+        loadHistoryTranscriptJson(appDataDir, historyId)
 }

@@ -25,7 +25,9 @@ enum class SonaDestination(
     ;
 
     fun matches(candidateRoute: String?): Boolean =
-        candidateRoute?.substringBefore('?') == route
+        candidateRoute?.substringBefore('?')?.let { candidate ->
+            candidate == route || candidate.startsWith("$route/")
+        } == true
 }
 
 internal const val SETTINGS_SECTION_ARGUMENT = "section"

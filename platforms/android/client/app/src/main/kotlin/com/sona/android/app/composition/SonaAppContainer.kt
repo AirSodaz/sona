@@ -13,6 +13,7 @@ import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
+import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
@@ -39,6 +40,7 @@ class SonaAppContainer(context: Context) {
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
+    val recordingLibrary: RecordingLibraryPort = history
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(

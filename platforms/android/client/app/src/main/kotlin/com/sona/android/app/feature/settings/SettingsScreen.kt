@@ -22,13 +22,17 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldDestinationItem
 import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,18 +50,27 @@ internal fun SettingsScreen(
     credentialState: CredentialSettingsUiState,
     appLanguage: AppLanguage,
     requestCredentialFocus: Boolean,
+    onCredentialFocusConsumed: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
-    onCredentialFocusConsumed: () -> Unit,
 ) {
-    val navigator = rememberListDetailPaneScaffoldNavigator<SettingsSection>()
+    val initialDestinationHistory = remember(initialSection) {
+        settingsDestinationHistory(initialSection)
+    }
+    val navigator = rememberListDetailPaneScaffoldNavigator<SettingsSection>(
+        initialDestinationHistory = initialDestinationHistory,
+    )
     val scope = rememberCoroutineScope()
     var selectedSectionRoute by rememberSaveable {
         mutableStateOf(initialSection?.route ?: SettingsSection.APPEARANCE.route)
     }
+    var credentialFocusSessionActive by remember {
+        mutableStateOf(requestCredentialFocus)
+    }
+    val currentOnCredentialFocusConsumed by rememberUpdatedState(onCredentialFocusConsumed)
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
@@ -66,15 +79,39 @@ internal fun SettingsScreen(
         PaneAdaptedValue.Expanded
     val isTwoPane = listPaneVisible && detailPaneVisible
     val canNavigateBack = !listPaneVisible && navigator.canNavigateBack()
+    val consumeCredentialFocusSession = {
+        if (credentialFocusSessionActive) {
+            credentialFocusSessionActive = false
+            onCredentialFocusConsumed()
+        }
+    }
+    val navigateBack: () -> Unit = {
+        consumeCredentialFocusSession()
+        scope.launch { navigator.navigateBack() }
+    }
 
+    LaunchedEffect(requestCredentialFocus) {
+        if (requestCredentialFocus) {
+            credentialFocusSessionActive = true
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { currentOnCredentialFocusConsumed() }
+    }
     LaunchedEffect(initialSection) {
         initialSection?.let { section ->
             selectedSectionRoute = section.route
-            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
+            val currentDestination = navigator.currentDestination
+            if (
+                currentDestination?.pane != ListDetailPaneScaffoldRole.Detail ||
+                currentDestination.contentKey != section
+            ) {
+                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
+            }
         }
     }
     BackHandler(enabled = canNavigateBack) {
-        scope.launch { navigator.navigateBack() }
+        navigateBack()
     }
 
     NavigableListDetailPaneScaffold(
@@ -85,6 +122,9 @@ internal fun SettingsScreen(
                     selectedSection = selectedSection,
                     showSelection = isTwoPane,
                     onSectionSelected = { section ->
+                        if (section != SettingsSection.RECOGNITION) {
+                            consumeCredentialFocusSession()
+                        }
                         selectedSectionRoute = section.route
                         scope.launch {
                             navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, section)
@@ -102,18 +142,38 @@ internal fun SettingsScreen(
                     appearanceState = appearanceState,
                     credentialState = credentialState,
                     appLanguage = appLanguage,
-                    requestCredentialFocus = requestCredentialFocus,
-                    onBack = { scope.launch { navigator.navigateBack() } },
+                    requestCredentialFocus = credentialFocusSessionActive,
+                    onBack = navigateBack,
                     onAppLanguageChanged = onAppLanguageChanged,
                     onDynamicColorChanged = onDynamicColorChanged,
                     onCredentialInputChanged = onCredentialInputChanged,
                     onSaveCredential = onSaveCredential,
                     onClearCredential = onClearCredential,
-                    onCredentialFocusConsumed = onCredentialFocusConsumed,
                 )
             }
         },
     )
+}
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+internal fun settingsDestinationHistory(
+    initialSection: SettingsSection?,
+): List<ThreePaneScaffoldDestinationItem<SettingsSection>> {
+    val listDestination = ThreePaneScaffoldDestinationItem<SettingsSection>(
+        pane = ListDetailPaneScaffoldRole.List,
+        contentKey = null,
+    )
+    return if (initialSection == null) {
+        listOf(listDestination)
+    } else {
+        listOf(
+            listDestination,
+            ThreePaneScaffoldDestinationItem(
+                pane = ListDetailPaneScaffoldRole.Detail,
+                contentKey = initialSection,
+            ),
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -175,7 +235,6 @@ private fun SettingsDetailPane(
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
-    onCredentialFocusConsumed: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -206,7 +265,6 @@ private fun SettingsDetailPane(
                 onCredentialInputChanged = onCredentialInputChanged,
                 onSaveCredential = onSaveCredential,
                 onClearCredential = onClearCredential,
-                onCredentialFocusConsumed = onCredentialFocusConsumed,
                 modifier = Modifier.weight(1f),
             )
         }
