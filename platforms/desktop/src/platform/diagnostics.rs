@@ -1,15 +1,13 @@
 use crate::integrations::asr::AsrState;
 use crate::platform::paths::{PathKind, PathProvider};
-use std::sync::Arc;
 use tauri::State;
 
-use sona_core::runtime::diagnostics::DiagnosticsService;
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathStatus, SelectedModelsInput, VoiceTypingReadinessInput,
 };
-use sona_runtime_fs::FsDiagnosticsEnrichmentRepository;
+use sona_runtime_fs::build_diagnostics_snapshot;
 
 pub async fn get_diagnostics_core_snapshot(
     provider: &dyn PathProvider,
@@ -24,17 +22,13 @@ pub async fn get_diagnostics_core_snapshot(
         .resolve_path(PathKind::AppLogData)
         .map_err(|error| error.to_string())?;
     input.asr_runtime_metrics = state.metrics_snapshot().await;
-    let scanned_at = sona_runtime_fs::diagnostics_scanned_at_now();
 
     tauri::async_runtime::spawn_blocking(move || {
         input.runtime_environment =
             crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir(
                 log_dir,
             )?;
-        let repository = FsDiagnosticsEnrichmentRepository::new(models_dir);
-        DiagnosticsService::new(Arc::new(repository))
-            .build_snapshot_at(input, scanned_at)
-            .map_err(|error| error.to_string())
+        build_diagnostics_snapshot(models_dir, input).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

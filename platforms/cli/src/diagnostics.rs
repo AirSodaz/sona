@@ -1,10 +1,7 @@
 use clap::{Args, Subcommand};
-use sona_core::runtime::diagnostics::{
-    DiagnosticsCoreInput, DiagnosticsCoreSnapshot, DiagnosticsService,
-};
-use sona_runtime_fs::FsDiagnosticsEnrichmentRepository;
+use sona_core::runtime::diagnostics::{DiagnosticsCoreInput, DiagnosticsCoreSnapshot};
+use sona_runtime_fs::build_diagnostics_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -51,9 +48,7 @@ fn run_diagnostics_snapshot(args: DiagnosticsSnapshotArgs) -> CliResult<CliOutpu
         .map_err(|error| CliError::Validation(error.to_string()))?;
     let app_data_dir =
         std::path::absolute(args.app_data_dir).map_err(|error| CliError::Io(error.to_string()))?;
-    let repository = FsDiagnosticsEnrichmentRepository::new(app_data_dir.join("models"));
-    let snapshot = DiagnosticsService::new(Arc::new(repository))
-        .build_snapshot_at(input, sona_runtime_fs::diagnostics_scanned_at_now())
+    let snapshot = build_diagnostics_snapshot(app_data_dir.join("models"), input)
         .map_err(|error| CliError::Io(error.to_string()))?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)

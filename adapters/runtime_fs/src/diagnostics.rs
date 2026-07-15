@@ -1,8 +1,10 @@
 use sona_core::runtime::diagnostics::{
-    DiagnosticsConfigInput, DiagnosticsEnrichmentMeasurements, DiagnosticsEnrichmentRepository,
-    DiagnosticsError, PathStatusesInput, RuntimePathStatus,
+    DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsCoreSnapshot,
+    DiagnosticsEnrichmentMeasurements, DiagnosticsEnrichmentRepository, DiagnosticsError,
+    DiagnosticsService, PathStatusesInput, RuntimePathStatus,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub struct FsDiagnosticsEnrichmentRepository {
     models_dir: PathBuf,
@@ -31,6 +33,15 @@ impl DiagnosticsEnrichmentRepository for FsDiagnosticsEnrichmentRepository {
             },
         })
     }
+}
+
+pub fn build_diagnostics_snapshot(
+    models_dir: PathBuf,
+    input: DiagnosticsCoreInput,
+) -> Result<DiagnosticsCoreSnapshot, DiagnosticsError> {
+    let repository = FsDiagnosticsEnrichmentRepository::new(models_dir);
+    DiagnosticsService::new(Arc::new(repository))
+        .build_snapshot_at(input, crate::diagnostics_scanned_at_now())
 }
 
 fn resolve_optional_path(path: &str) -> Option<RuntimePathStatus> {

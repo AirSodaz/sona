@@ -10,19 +10,19 @@ use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::diagnostics::{
-    DiagnosticsConfigInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
+    DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
 };
 use sona_core::runtime::environment::RuntimePathKind;
 use sona_core::transcription::runtime::{BatchInputSource, LiveTranscribeOptions};
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
-    RealFileSystem, SystemClock, UuidGenerator, collect_automation_runtime_candidate_paths,
-    ensure_directory_exists, is_preset_model_installed_at, load_legacy_settings_app_config,
-    load_transcribe_config_file, load_transcribe_live_config_file, path_exists,
-    plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
-    resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
-    select_desktop_models_dir_from_app_roots, write_cli_config_template_file,
-    write_json_pretty_atomic, write_transcript_output_file,
+    RealFileSystem, SystemClock, UuidGenerator, build_diagnostics_snapshot,
+    collect_automation_runtime_candidate_paths, ensure_directory_exists,
+    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
+    load_transcribe_live_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
+    resolve_batch_input_source, resolve_live_transcribe_plan_with_runtime_paths,
+    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
+    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
 };
 use uuid::{Uuid, Version};
 
@@ -417,6 +417,36 @@ fn diagnostics_repository_creates_models_directory_and_maps_failures() {
     let error = FsDiagnosticsEnrichmentRepository::new(blocked)
         .collect_measurements(&config)
         .unwrap_err();
+
+    assert!(matches!(error, DiagnosticsError::Repository(_)));
+}
+
+#[test]
+fn diagnostics_adapter_entrypoint_builds_snapshot_and_preserves_typed_errors() {
+    let input = || -> DiagnosticsCoreInput {
+        serde_json::from_value(serde_json::json!({
+            "config": {
+                "streamingModelPath": "",
+                "batchModelPath": ""
+            },
+            "permissionState": "unknown",
+            "microphoneProbe": {"options": [], "available": false, "errorMessage": null},
+            "systemAudioProbe": {"options": [], "available": false, "errorMessage": null},
+            "voiceTypingReadiness": {"state": "unknown", "lastErrorMessage": null}
+        }))
+        .unwrap()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+
+    let snapshot = build_diagnostics_snapshot(models_dir.clone(), input()).unwrap();
+
+    assert!(models_dir.is_dir());
+    assert!(snapshot.scanned_at.ends_with('Z'));
+
+    let blocked = dir.path().join("blocked-models");
+    std::fs::write(&blocked, b"not a directory").unwrap();
+    let error = build_diagnostics_snapshot(blocked, input()).unwrap_err();
 
     assert!(matches!(error, DiagnosticsError::Repository(_)));
 }

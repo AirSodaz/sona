@@ -1,8 +1,7 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use sona_core::runtime::diagnostics::{DiagnosticsCoreInput, DiagnosticsService};
-use sona_runtime_fs::FsDiagnosticsEnrichmentRepository;
+use sona_core::runtime::diagnostics::DiagnosticsCoreInput;
+use sona_runtime_fs::build_diagnostics_snapshot;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub(crate) async fn load_diagnostics_snapshot_json(
     app_data_dir: String,
@@ -21,9 +20,7 @@ fn build_diagnostics_snapshot_json(
         serde_json::from_str(&input_json).map_err(diagnostics_error)?;
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(diagnostics_error)?;
-    let repository = FsDiagnosticsEnrichmentRepository::new(app_data_dir.join("models"));
-    let snapshot = DiagnosticsService::new(Arc::new(repository))
-        .build_snapshot_at(input, sona_runtime_fs::diagnostics_scanned_at_now())
+    let snapshot = build_diagnostics_snapshot(app_data_dir.join("models"), input)
         .map_err(diagnostics_error)?;
     let canonical = serde_json::to_value(snapshot).map_err(diagnostics_error)?;
     serde_json::to_string(&canonical).map_err(diagnostics_error)
