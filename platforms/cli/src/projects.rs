@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
-use sona_core::project::{ProjectRecord, ProjectRepositoryService, ProjectRepositorySnapshot};
+use sona_core::project::{ProjectRecord, ProjectRepositorySnapshot};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::{Database, SqliteProjectRepository};
+use sona_sqlite::{Database, SqliteProjectAdapter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -39,10 +39,13 @@ pub fn run_projects(args: ProjectsArgs) -> CliResult<CliOutput> {
 fn run_projects_list(args: ProjectsListArgs) -> CliResult<CliOutput> {
     let database = Database::open_read_only(&args.app_data_dir)
         .map_err(|error| CliError::Io(error.to_string()))?;
-    let repository = SqliteProjectRepository::new(Arc::new(database));
-    let state = ProjectRepositoryService::new(&repository, &UuidGenerator, &SystemClock)
-        .load_state()
-        .map_err(CliError::Io)?;
+    let state = SqliteProjectAdapter::new(
+        Arc::new(database),
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+    )
+    .load_state()
+    .map_err(CliError::Io)?;
     let output = if args.json {
         serde_json::to_string_pretty(&state)
             .map_err(|error| CliError::Serialize(error.to_string()))?

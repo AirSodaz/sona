@@ -2,11 +2,14 @@ use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
+use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::dashboard::ports::ProjectRepository;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
-    ACTIVE_PROJECT_SETTINGS_KEY, ProjectDefaults, ProjectPatch, ProjectRecord, ProjectStore,
-    ProjectStoredState,
+    ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaults,
+    ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
+    ProjectRepositorySnapshot, ProjectStore, ProjectStoredState,
 };
 use std::sync::Arc;
 
@@ -19,6 +22,76 @@ where
 }
 
 crate::impl_db_repository!(SqliteProjectRepository);
+
+pub struct SqliteProjectAdapter<D = crate::Database>
+where
+    D: DatabasePort,
+{
+    repository: SqliteProjectRepository<D>,
+    ids: Arc<dyn ProjectIdGenerator>,
+    clock: Arc<dyn UnixMillisClock>,
+}
+
+impl<D> SqliteProjectAdapter<D>
+where
+    D: DatabasePort,
+{
+    pub fn new(
+        db: Arc<D>,
+        ids: Arc<dyn ProjectIdGenerator>,
+        clock: Arc<dyn UnixMillisClock>,
+    ) -> Self {
+        Self {
+            repository: SqliteProjectRepository::new(db),
+            ids,
+            clock,
+        }
+    }
+
+    pub fn load_state(&self) -> Result<ProjectRepositorySnapshot, String> {
+        self.service().load_state()
+    }
+
+    pub fn list_projects(&self, options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
+        self.service().list_projects(options)
+    }
+
+    pub fn replace_projects_json(&self, projects: Vec<Value>) -> Result<(), String> {
+        self.service().replace_projects_json(projects)
+    }
+
+    pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
+        self.service().create_project(input)
+    }
+
+    pub fn update_project_json(
+        &self,
+        project_id: &str,
+        updates: Value,
+    ) -> Result<Option<ProjectRecord>, String> {
+        self.service().update_project_json(project_id, updates)
+    }
+
+    pub fn delete_project(&self, project_id: &str) -> Result<(), String> {
+        self.service().delete_project(project_id)
+    }
+
+    pub fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+        self.service().reorder_projects(project_ids)
+    }
+
+    pub fn get_active_project_selection(&self) -> Result<ActiveProjectSelection, String> {
+        self.service().get_active_project_selection()
+    }
+
+    pub fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), String> {
+        self.service().set_active_project_id(project_id)
+    }
+
+    fn service(&self) -> ProjectRepositoryService<'_> {
+        ProjectRepositoryService::new(&self.repository, self.ids.as_ref(), self.clock.as_ref())
+    }
+}
 
 const PROJECT_COLUMNS: [&str; 14] = [
     "id",
@@ -612,11 +685,7 @@ where
 mod tests {
     use super::*;
     use crate::Database;
-    use sona_core::ports::time::UnixMillisClock;
-    use sona_core::project::{
-        ProjectCreateInput, ProjectDefaultsInput, ProjectDefaultsPatch, ProjectIdGenerator,
-        ProjectListOptions, ProjectPatch, ProjectRepositoryService, ProjectStore,
-    };
+    use sona_core::project::{ProjectDefaultsInput, ProjectDefaultsPatch};
     use std::path::PathBuf;
 
     fn record(id: &str, name: &str, timestamp: u64) -> ProjectRecord {
@@ -1135,6 +1204,29 @@ mod tests {
         fn now_ms(&self) -> Result<u64, String> {
             Ok(777)
         }
+    }
+
+    #[test]
+    fn project_adapter_composes_repository_ids_and_clock() {
+        let adapter = SqliteProjectAdapter::new(
+            Arc::new(Database::open_in_memory().unwrap()),
+            Arc::new(FixedId),
+            Arc::new(FixedClock),
+        );
+
+        let created = adapter
+            .create_project(ProjectCreateInput {
+                name: "Adapter project".to_string(),
+                description: None,
+                icon: None,
+                defaults: ProjectDefaultsInput::default(),
+            })
+            .unwrap();
+
+        assert_eq!(created.id, "fixed-id");
+        assert_eq!(created.created_at, 777);
+        assert_eq!(created.updated_at, 777);
+        assert_eq!(adapter.load_state().unwrap().projects, vec![created]);
     }
 
     #[test]

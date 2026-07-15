@@ -1,18 +1,21 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::{ProjectCreateInput, ProjectIdGenerator, ProjectRepositoryService};
+use sona_core::project::{ProjectCreateInput, ProjectIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::{Database, SqliteProjectRepository};
+use sona_sqlite::{Database, SqliteProjectAdapter};
 use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) fn load_project_repository_state_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    with_project_repository(&app_data_dir, &UuidGenerator, &SystemClock, |service| {
-        service.load_state()
-    })
+    with_project_adapter(
+        &app_data_dir,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+        |adapter| adapter.load_state(),
+    )
     .and_then(serialize_project)
 }
 
@@ -21,16 +24,24 @@ pub(crate) fn replace_projects_json(
     projects_json: String,
 ) -> SonaCoreBindingResult<()> {
     let projects = parse_json_array("projects", &projects_json)?;
-    with_project_repository(&app_data_dir, &UuidGenerator, &SystemClock, |service| {
-        service.replace_projects_json(projects)
-    })
+    with_project_adapter(
+        &app_data_dir,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+        |adapter| adapter.replace_projects_json(projects),
+    )
 }
 
 pub(crate) fn create_project_json(
     app_data_dir: String,
     input_json: String,
 ) -> SonaCoreBindingResult<String> {
-    create_project_json_with_runtime(app_data_dir, input_json, &UuidGenerator, &SystemClock)
+    create_project_json_with_runtime(
+        app_data_dir,
+        input_json,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+    )
 }
 
 pub(crate) fn update_project_json(
@@ -38,7 +49,12 @@ pub(crate) fn update_project_json(
     project_id: String,
     updates_json: String,
 ) -> SonaCoreBindingResult<String> {
-    update_project_json_with_clock(app_data_dir, project_id, updates_json, &SystemClock)
+    update_project_json_with_clock(
+        app_data_dir,
+        project_id,
+        updates_json,
+        Arc::new(SystemClock),
+    )
 }
 
 pub(crate) fn delete_project(
@@ -46,9 +62,12 @@ pub(crate) fn delete_project(
     project_id: String,
 ) -> SonaCoreBindingResult<()> {
     let project_id = parse_project_id("project ID", &project_id)?;
-    with_project_repository(&app_data_dir, &UuidGenerator, &SystemClock, |service| {
-        service.delete_project(&project_id)
-    })
+    with_project_adapter(
+        &app_data_dir,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+        |adapter| adapter.delete_project(&project_id),
+    )
 }
 
 pub(crate) fn reorder_projects_json(
@@ -56,9 +75,12 @@ pub(crate) fn reorder_projects_json(
     project_ids_json: String,
 ) -> SonaCoreBindingResult<String> {
     let project_ids = parse_project_ids(&project_ids_json)?;
-    with_project_repository(&app_data_dir, &UuidGenerator, &SystemClock, |service| {
-        service.reorder_projects(project_ids)
-    })
+    with_project_adapter(
+        &app_data_dir,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+        |adapter| adapter.reorder_projects(project_ids),
+    )
     .and_then(serialize_project)
 }
 
@@ -69,20 +91,23 @@ pub(crate) fn set_active_project_id(
     let project_id = project_id
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
-    with_project_repository(&app_data_dir, &UuidGenerator, &SystemClock, |service| {
-        service.set_active_project_id(project_id)
-    })
+    with_project_adapter(
+        &app_data_dir,
+        Arc::new(UuidGenerator),
+        Arc::new(SystemClock),
+        |adapter| adapter.set_active_project_id(project_id),
+    )
 }
 
 fn create_project_json_with_runtime(
     app_data_dir: String,
     input_json: String,
-    ids: &dyn ProjectIdGenerator,
-    clock: &dyn UnixMillisClock,
+    ids: Arc<dyn ProjectIdGenerator>,
+    clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
     let input = parse_json_object_as::<ProjectCreateInput>("project input", &input_json)?;
-    with_project_repository(&app_data_dir, ids, clock, |service| {
-        service.create_project(input)
+    with_project_adapter(&app_data_dir, ids, clock, |adapter| {
+        adapter.create_project(input)
     })
     .and_then(serialize_project)
 }
@@ -91,28 +116,28 @@ fn update_project_json_with_clock(
     app_data_dir: String,
     project_id: String,
     updates_json: String,
-    clock: &dyn UnixMillisClock,
+    clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
     let project_id = parse_project_id("project ID", &project_id)?;
     let updates = parse_json_object("project updates", &updates_json)?;
-    with_project_repository(&app_data_dir, &UuidGenerator, clock, |service| {
-        service.update_project_json(&project_id, updates)
+    with_project_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
+        adapter.update_project_json(&project_id, updates)
     })
     .and_then(serialize_project)
 }
 
-fn with_project_repository<T, F>(
+fn with_project_adapter<T, F>(
     app_data_dir: &str,
-    ids: &dyn ProjectIdGenerator,
-    clock: &dyn UnixMillisClock,
+    ids: Arc<dyn ProjectIdGenerator>,
+    clock: Arc<dyn UnixMillisClock>,
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: for<'a> FnOnce(ProjectRepositoryService<'a>) -> Result<T, String>,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, String>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(project_error)?;
-    let repository = SqliteProjectRepository::new(Arc::new(database));
-    operation(ProjectRepositoryService::new(&repository, ids, clock)).map_err(project_error)
+    let adapter = SqliteProjectAdapter::new(Arc::new(database), ids, clock);
+    operation(&adapter).map_err(project_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -204,7 +229,12 @@ fn create_project_json_at(
         }
     }
 
-    create_project_json_with_runtime(app_data_dir, input_json, &FixedId(id), &FixedClock(now_ms))
+    create_project_json_with_runtime(
+        app_data_dir,
+        input_json,
+        Arc::new(FixedId(id)),
+        Arc::new(FixedClock(now_ms)),
+    )
 }
 
 #[cfg(test)]
@@ -214,7 +244,12 @@ fn update_project_json_at(
     updates_json: String,
     now_ms: u64,
 ) -> SonaCoreBindingResult<String> {
-    update_project_json_with_clock(app_data_dir, project_id, updates_json, &FixedClock(now_ms))
+    update_project_json_with_clock(
+        app_data_dir,
+        project_id,
+        updates_json,
+        Arc::new(FixedClock(now_ms)),
+    )
 }
 
 #[cfg(test)]

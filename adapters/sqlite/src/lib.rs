@@ -27,7 +27,7 @@ pub use history_archive::HistoryRepository;
 pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
-pub use project::SqliteProjectRepository;
+pub use project::{SqliteProjectAdapter, SqliteProjectRepository};
 pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 

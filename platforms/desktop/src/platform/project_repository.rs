@@ -3,27 +3,26 @@ use std::future::Future;
 use serde_json::Value;
 use sona_core::project::{
     ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaultsInput,
-    ProjectListOptions, ProjectRecord, ProjectRepositoryService, active_project_id_from_value,
+    ProjectListOptions, ProjectRecord, active_project_id_from_value,
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::project::SqliteProjectRepository;
+use sona_sqlite::SqliteProjectAdapter;
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
 pub(crate) const SETTINGS_FILE_NAME: &str = "settings.json";
 
-async fn run_project_service<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+async fn run_project_adapter<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + 'static,
-    F: for<'a> FnOnce(ProjectRepositoryService<'a>) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, String> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
-        let repository = SqliteProjectRepository::new(db);
-        let ids = UuidGenerator;
-        let clock = SystemClock;
-        task(ProjectRepositoryService::new(&repository, &ids, &clock))
+        let adapter = SqliteProjectAdapter::new(db, Arc::new(UuidGenerator), Arc::new(SystemClock));
+        task(&adapter)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -34,8 +33,8 @@ pub async fn list_projects<R: Runtime>(
     fallback_enabled_polish_keyword_set_ids: Option<Vec<String>>,
     fallback_enabled_speaker_profile_ids: Option<Vec<String>>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_service(app, move |service| {
-        service.list_projects(ProjectListOptions {
+    run_project_adapter(app, move |adapter| {
+        adapter.list_projects(ProjectListOptions {
             fallback_enabled_polish_keyword_set_ids: fallback_enabled_polish_keyword_set_ids
                 .unwrap_or_default(),
             fallback_enabled_speaker_profile_ids: fallback_enabled_speaker_profile_ids
@@ -49,7 +48,7 @@ pub async fn replace_projects<R: Runtime>(
     app: &AppHandle<R>,
     projects: Vec<Value>,
 ) -> Result<(), String> {
-    run_project_service(app, move |service| service.replace_projects_json(projects)).await
+    run_project_adapter(app, move |adapter| adapter.replace_projects_json(projects)).await
 }
 
 pub async fn create_project<R: Runtime>(
@@ -59,8 +58,8 @@ pub async fn create_project<R: Runtime>(
     icon: Option<String>,
     defaults: ProjectDefaultsInput,
 ) -> Result<ProjectRecord, String> {
-    run_project_service(app, move |service| {
-        service.create_project(ProjectCreateInput {
+    run_project_adapter(app, move |adapter| {
+        adapter.create_project(ProjectCreateInput {
             name,
             description,
             icon,
@@ -75,8 +74,8 @@ pub async fn update_project<R: Runtime>(
     project_id: String,
     updates: Value,
 ) -> Result<Option<ProjectRecord>, String> {
-    run_project_service(app, move |service| {
-        service.update_project_json(&project_id, updates)
+    run_project_adapter(app, move |adapter| {
+        adapter.update_project_json(&project_id, updates)
     })
     .await
 }
@@ -85,21 +84,21 @@ pub async fn delete_project<R: Runtime>(
     app: &AppHandle<R>,
     project_id: String,
 ) -> Result<(), String> {
-    run_project_service(app, move |service| service.delete_project(&project_id)).await
+    run_project_adapter(app, move |adapter| adapter.delete_project(&project_id)).await
 }
 
 pub async fn reorder_projects<R: Runtime>(
     app: &AppHandle<R>,
     project_ids: Vec<String>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_service(app, move |service| service.reorder_projects(project_ids)).await
+    run_project_adapter(app, move |adapter| adapter.reorder_projects(project_ids)).await
 }
 
 pub async fn get_active_project_id<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Option<String>, String> {
     let selection =
-        run_project_service(app, |service| service.get_active_project_selection()).await?;
+        run_project_adapter(app, |adapter| adapter.get_active_project_selection()).await?;
     if selection.setting_exists {
         return Ok(selection.project_id);
     }
@@ -111,8 +110,8 @@ pub async fn get_active_project_id<R: Runtime>(
         selection,
         || legacy_store.get(ACTIVE_PROJECT_SETTINGS_KEY),
         |project_id| async move {
-            run_project_service(app, move |service| {
-                service.set_active_project_id(Some(project_id))
+            run_project_adapter(app, move |adapter| {
+                adapter.set_active_project_id(Some(project_id))
             })
             .await
         },
@@ -145,8 +144,8 @@ pub async fn set_active_project_id<R: Runtime>(
     app: &AppHandle<R>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    run_project_service(app, move |service| {
-        service.set_active_project_id(project_id)
+    run_project_adapter(app, move |adapter| {
+        adapter.set_active_project_id(project_id)
     })
     .await
 }
