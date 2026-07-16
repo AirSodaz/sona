@@ -16,6 +16,7 @@ pub use service::ExportService;
 
 /// Supported transcript export formats for every Sona frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum ExportFormat {
     Json,
@@ -55,6 +56,7 @@ impl ExportFormat {
 
 /// Selects which transcript text fields are included in an export.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum ExportMode {
     Original,

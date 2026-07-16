@@ -10,15 +10,18 @@ pub async fn export_transcript_file(
     mode: ExportMode,
     output_path: String,
 ) -> Result<ExportTranscriptFileResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        export_transcript_file_with_fs(ExportTranscriptFileRequest {
-            segments,
-            format,
-            mode,
-            output_path,
-        })
-        .map_err(|error| error.to_string())
+    let request = ExportTranscriptFileRequest {
+        segments,
+        format,
+        mode,
+        output_path,
+    };
+    sona_ts_bind::validate_export_transcript_request_for_typescript(&request)?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        export_transcript_file_with_fs(request).map_err(|error| error.to_string())
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+    sona_ts_bind::validate_export_transcript_result_for_typescript(&result)?;
+    Ok(result)
 }

@@ -22,6 +22,9 @@ pub use sona_core::dashboard::models::{
     UsageTrendPoint,
 };
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
+pub use sona_core::export::{
+    ExportFormat, ExportMode, ExportTranscriptFileRequest, ExportTranscriptFileResult,
+};
 pub use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReassignProjectRequest,
@@ -167,6 +170,21 @@ pub fn validate_dashboard_snapshot_for_typescript(
     Ok(())
 }
 
+pub fn validate_export_transcript_request_for_typescript(
+    request: &ExportTranscriptFileRequest,
+) -> Result<(), String> {
+    for (index, segment) in request.segments.iter().enumerate() {
+        validate_transcript_segment_numbers(&format!("$.segments[{index}]"), segment)?;
+    }
+    validate_typescript_safe_integers(request)
+}
+
+pub fn validate_export_transcript_result_for_typescript(
+    result: &ExportTranscriptFileResult,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(result)
+}
+
 pub fn validate_task_ledger_record_for_typescript(record: &TaskLedgerRecord) -> Result<(), String> {
     validate_typescript_safe_integers(record)?;
     validate_task_ledger_record_numbers("$", record)
@@ -203,6 +221,48 @@ fn validate_task_ledger_record_numbers(
     record: &TaskLedgerRecord,
 ) -> Result<(), String> {
     validate_finite_typescript_number(&format!("{path}.progress"), record.progress)
+}
+
+fn validate_transcript_segment_numbers(
+    path: &str,
+    segment: &TranscriptSegment,
+) -> Result<(), String> {
+    validate_finite_typescript_number(&format!("{path}.start"), segment.start)?;
+    validate_finite_typescript_number(&format!("{path}.end"), segment.end)?;
+
+    if let Some(timing) = segment.timing.as_ref() {
+        for (index, unit) in timing.units.iter().enumerate() {
+            let unit_path = format!("{path}.timing.units[{index}]");
+            validate_finite_typescript_number(&format!("{unit_path}.start"), unit.start)?;
+            validate_finite_typescript_number(&format!("{unit_path}.end"), unit.end)?;
+        }
+    }
+    for (field, values) in [
+        ("timestamps", segment.timestamps.as_deref()),
+        ("durations", segment.durations.as_deref()),
+    ] {
+        if let Some(values) = values {
+            for (index, value) in values.iter().enumerate() {
+                validate_finite_typescript_number(
+                    &format!("{path}.{field}[{index}]"),
+                    f64::from(*value),
+                )?;
+            }
+        }
+    }
+    if let Some(score) = segment.speaker.as_ref().and_then(|speaker| speaker.score) {
+        validate_finite_typescript_number(&format!("{path}.speaker.score"), f64::from(score))?;
+    }
+    if let Some(attribution) = segment.speaker_attribution.as_ref() {
+        for (index, candidate) in attribution.candidates.iter().enumerate() {
+            validate_finite_typescript_number(
+                &format!("{path}.speakerAttribution.candidates[{index}].score"),
+                f64::from(candidate.score),
+            )?;
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_speaker_leaders(path: &str, speakers: &[SpeakerLeader]) -> Result<(), String> {
@@ -286,6 +346,10 @@ pub fn desktop_types() -> specta::Types {
         .register::<SpeakerStats>()
         .register::<ContentStats>()
         .register::<DashboardSnapshotDomainModel>()
+        .register::<ExportFormat>()
+        .register::<ExportMode>()
+        .register::<ExportTranscriptFileRequest>()
+        .register::<ExportTranscriptFileResult>()
         .register::<TaskLedgerKind>()
         .register::<TaskLedgerStatus>()
         .register::<TaskLedgerRecord>()
@@ -408,6 +472,10 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "SpeakerStats",
     "ContentStats",
     "DashboardSnapshotDomainModel",
+    "ExportFormat",
+    "ExportMode",
+    "ExportTranscriptFileRequest",
+    "ExportTranscriptFileResult",
     "TaskLedgerKind",
     "TaskLedgerStatus",
     "TaskLedgerRecord",
@@ -579,6 +647,10 @@ mod tests {
             "SpeakerStats",
             "ContentStats",
             "DashboardSnapshotDomainModel",
+            "ExportFormat",
+            "ExportMode",
+            "ExportTranscriptFileRequest",
+            "ExportTranscriptFileResult",
             "TaskLedgerKind",
             "TaskLedgerStatus",
             "TaskLedgerRecord",
@@ -763,6 +835,36 @@ mod tests {
     }
 
     #[test]
+    fn export_transport_validation_rejects_unsafe_sizes_and_non_finite_timing() {
+        let result = sona_core::export::ExportTranscriptFileResult {
+            output_path: "C:/exports/transcript.vtt".to_string(),
+            bytes_written: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+        };
+        let error = validate_export_transcript_result_for_typescript(&result).unwrap_err();
+        assert!(error.contains("$.bytesWritten"), "{error}");
+
+        let mut request: sona_core::export::ExportTranscriptFileRequest =
+            serde_json::from_value(serde_json::json!({
+                "segments": [{
+                    "id": "segment-1",
+                    "text": "Hello",
+                    "start": 0.0,
+                    "end": 1.25,
+                    "isFinal": true
+                }],
+                "format": "vtt",
+                "mode": "original",
+                "outputPath": "C:/exports/transcript.vtt"
+            }))
+            .unwrap();
+        request.segments[0].start = f64::INFINITY;
+
+        let error = validate_export_transcript_request_for_typescript(&request).unwrap_err();
+        assert!(error.contains("$.segments[0].start"), "{error}");
+        assert!(error.contains("is not finite"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -808,6 +910,10 @@ mod tests {
         assert_specta_type::<SpeakerStats>();
         assert_specta_type::<ContentStats>();
         assert_specta_type::<DashboardSnapshotDomainModel>();
+        assert_specta_type::<sona_core::export::ExportFormat>();
+        assert_specta_type::<sona_core::export::ExportMode>();
+        assert_specta_type::<sona_core::export::ExportTranscriptFileRequest>();
+        assert_specta_type::<sona_core::export::ExportTranscriptFileResult>();
         assert_specta_type::<TaskLedgerKind>();
         assert_specta_type::<TaskLedgerStatus>();
         assert_specta_type::<TaskLedgerRecord>();

@@ -12,6 +12,8 @@ import type {
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
   AutomationRuntimeRuleConfig,
+  ExportTranscriptFileRequest_Serialize,
+  ExportTranscriptFileResult,
   HistoryAudioCleanupReport,
   HistoryAudioCleanupRequest_Serialize,
   HistoryCompleteLiveDraftRequest_Serialize,
@@ -196,18 +198,6 @@ type OnlineAsrRequest = AsrTranscriptionRequestBase & {
 };
 
 type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
-
-type ExportTranscriptFileArgs = {
-  segments: TranscriptSegment[];
-  format: "srt" | "json" | "txt" | "vtt" | "md";
-  mode: "original" | "translation" | "bilingual";
-  outputPath: string;
-};
-
-type ExportTranscriptFileResult = {
-  outputPath: string;
-  bytesWritten: number;
-};
 
 type ProjectListArgs = {
   fallbackEnabledPolishKeywordSetIds?: string[];
@@ -515,7 +505,7 @@ export type TauriCommandContractMap = {
     result: DashboardSnapshot;
   };
   [TauriCommand.export.transcriptFile]: {
-    args: ExportTranscriptFileArgs;
+    args: ExportTranscriptFileRequest_Serialize;
     result: ExportTranscriptFileResult;
   };
   [TauriCommand.project.list]: {

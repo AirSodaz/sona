@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use sona_core::export::{
     ExportError, ExportFormat, ExportMode, ExportService, ExportTranscriptFileRequest,
-    TranscriptExportRepository, export_segments, export_segments_with_mode,
+    ExportTranscriptFileResult, TranscriptExportRepository, export_segments,
+    export_segments_with_mode,
 };
 use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
@@ -173,4 +174,34 @@ fn export_service_preserves_repository_failures() {
             reason: "disk full".to_string(),
         }
     );
+}
+
+#[test]
+fn export_file_contracts_round_trip_camel_case_json() {
+    let request = ExportTranscriptFileRequest {
+        segments: sample_segments(),
+        format: ExportFormat::Vtt,
+        mode: ExportMode::Bilingual,
+        output_path: "C:/exports/transcript.vtt".to_string(),
+    };
+
+    let request_json = serde_json::to_value(&request).unwrap();
+    assert_eq!(request_json["format"], "vtt");
+    assert_eq!(request_json["mode"], "bilingual");
+    assert_eq!(request_json["outputPath"], "C:/exports/transcript.vtt");
+
+    let decoded_request: ExportTranscriptFileRequest =
+        serde_json::from_value(request_json).unwrap();
+    assert_eq!(decoded_request.segments, request.segments);
+    assert_eq!(decoded_request.format, request.format);
+    assert_eq!(decoded_request.mode, request.mode);
+    assert_eq!(decoded_request.output_path, request.output_path);
+
+    let result: ExportTranscriptFileResult = serde_json::from_value(serde_json::json!({
+        "outputPath": "C:/exports/transcript.vtt",
+        "bytesWritten": 42
+    }))
+    .unwrap();
+    assert_eq!(result.output_path, "C:/exports/transcript.vtt");
+    assert_eq!(result.bytes_written, 42);
 }

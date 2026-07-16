@@ -29,6 +29,7 @@ mod tests {
     use super::export_transcript_file_json;
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
+    use sona_core::export::ExportTranscriptFileResult;
     use std::fs;
 
     fn request_json(output_path: &std::path::Path) -> String {
@@ -56,12 +57,13 @@ mod tests {
         let output = export_transcript_file_json(request_json(&output_path))
             .await
             .unwrap();
-        let result: Value = serde_json::from_str(&output).unwrap();
+        let result: ExportTranscriptFileResult = serde_json::from_str(&output).unwrap();
+        let canonical: Value = serde_json::from_str(&output).unwrap();
         let content = fs::read_to_string(&output_path).unwrap();
 
-        assert_eq!(serde_json::to_string(&result).unwrap(), output);
-        assert_eq!(result["outputPath"], output_path.to_string_lossy().as_ref());
-        assert_eq!(result["bytesWritten"], content.len() as u64);
+        assert_eq!(serde_json::to_string(&canonical).unwrap(), output);
+        assert_eq!(result.output_path, output_path.to_string_lossy().as_ref());
+        assert_eq!(result.bytes_written, content.len() as u64);
         assert!(content.starts_with("WEBVTT"));
         assert!(content.contains("Bonjour\nHello"));
     }

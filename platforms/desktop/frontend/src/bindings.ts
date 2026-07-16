@@ -281,6 +281,33 @@ export type DashboardUsageBucket = {
 	totalTokensDisplay: string,
 };
 
+/**  Supported transcript export formats for every Sona frontend. */
+export type ExportFormat = "json" | "txt" | "srt" | "vtt" | "md";
+
+/**  Selects which transcript text fields are included in an export. */
+export type ExportMode = "original" | "translation" | "bilingual";
+
+export type ExportTranscriptFileRequest = ExportTranscriptFileRequest_Serialize | ExportTranscriptFileRequest_Deserialize;
+
+export type ExportTranscriptFileRequest_Deserialize = {
+	segments: TranscriptSegment_Deserialize[],
+	format: ExportFormat,
+	mode: ExportMode,
+	outputPath: string,
+};
+
+export type ExportTranscriptFileRequest_Serialize = {
+	segments: TranscriptSegment_Serialize[],
+	format: ExportFormat,
+	mode: ExportMode,
+	outputPath: string,
+};
+
+export type ExportTranscriptFileResult = {
+	outputPath: string,
+	bytesWritten: number,
+};
+
 export type HistoryAudioCleanupReport = {
 	eligibleCount: number,
 	removedCount: number,

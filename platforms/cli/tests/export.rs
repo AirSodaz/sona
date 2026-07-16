@@ -1,6 +1,6 @@
 use std::fs;
 
-use serde_json::Value;
+use sona_core::export::ExportTranscriptFileResult;
 
 fn write_segments(path: &std::path::Path) {
     fs::write(
@@ -41,11 +41,11 @@ fn export_transcript_writes_requested_format_and_returns_json_result() {
     ])
     .unwrap();
 
-    let report: Value = serde_json::from_str(&result.stdout).unwrap();
+    let report: ExportTranscriptFileResult = serde_json::from_str(&result.stdout).unwrap();
     let content = fs::read_to_string(&output).unwrap();
     assert_eq!(result.stderr, "");
-    assert_eq!(report["outputPath"], output.to_string_lossy().as_ref());
-    assert_eq!(report["bytesWritten"], content.len() as u64);
+    assert_eq!(report.output_path, output.to_string_lossy().as_ref());
+    assert_eq!(report.bytes_written, content.len() as u64);
     assert!(content.starts_with("WEBVTT"));
     assert!(content.contains("Bonjour\nHello"));
 }

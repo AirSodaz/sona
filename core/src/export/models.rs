@@ -4,7 +4,8 @@ use crate::transcription::transcript::TranscriptSegment;
 
 use super::{ExportFormat, ExportMode};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ExportTranscriptFileRequest {
     pub segments: Vec<TranscriptSegment>,
@@ -13,9 +14,11 @@ pub struct ExportTranscriptFileRequest {
     pub output_path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ExportTranscriptFileResult {
     pub output_path: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub bytes_written: u64,
 }

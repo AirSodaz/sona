@@ -1,6 +1,6 @@
-export type ExportMode = 'original' | 'translation' | 'bilingual';
+import type { ExportFormat } from '../bindings';
 
-export type ExportFormat = 'srt' | 'json' | 'txt' | 'vtt' | 'md';
+export type { ExportFormat, ExportMode } from '../bindings';
 
 /**
  * Formats seconds to display format (MM:SS.m).
