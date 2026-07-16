@@ -220,15 +220,109 @@ describe('tauri boundary wrappers', () => {
   it('app wrappers expose the model catalog snapshot', async () => {
     const snapshot = {
       modelsDir: 'C:/models',
-      models: [],
+      models: [
+        {
+          id: 'live-model',
+          name: 'Live Model',
+          description: 'Streaming ASR model',
+          url: 'https://example.com/live-model.tar.bz2',
+          type: 'zipformer',
+          modes: null,
+          language: 'zh',
+          size: '100 MB',
+          isArchive: true,
+          engine: 'sherpa-onnx',
+          rules: {
+            requiresVad: true,
+            requiresPunctuation: false,
+            timestampSupportHint: null,
+          },
+          installPath: 'C:/models/live-model',
+          downloadPath: 'C:/models/live-model.tar.bz2',
+          isInstalled: false,
+        },
+      ],
       sections: [],
+      selectionOptions: {
+        streaming: [],
+        batch: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+      },
+      modelPathById: {},
+      modelIdByNormalizedPath: {},
+      pathMatchTokens: [],
+      dependencyRequestsByModelId: {},
+      restoreDefaults: {
+        streamingModelPath: null,
+        batchModelPath: null,
+        vadModelPath: null,
+        punctuationModelPath: null,
+        speakerSegmentationModelPath: null,
+        speakerEmbeddingModelPath: null,
+        enableItn: true,
+        batchVadEnabled: false,
+        vadBufferSize: 0.5,
+        maxConcurrent: 2,
+      },
     };
     vi.mocked(invoke).mockResolvedValueOnce(snapshot);
 
     const result = await getModelCatalogSnapshot();
 
-    expect(result).toEqual(snapshot);
+    expect(result.models[0]).not.toHaveProperty('modes');
+    expect(result.models[0].rules).not.toHaveProperty('timestampSupportHint');
+    expect(result.restoreDefaults).toEqual({
+      enableITN: true,
+      batchVadEnabled: false,
+      vadBufferSize: 0.5,
+      maxConcurrent: 2,
+    });
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
+  });
+
+  it('rejects model catalog values outside the UI contract', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      modelsDir: 'C:/models',
+      models: [{
+        type: 'future-asr-engine',
+        modes: null,
+        engine: 'sherpa-onnx',
+      }],
+      sections: [],
+    });
+
+    await expect(getModelCatalogSnapshot()).rejects.toThrow(
+      'Unexpected model catalog type: future-asr-engine',
+    );
+  });
+
+  it('rejects an invalid model catalog VAD buffer size', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      modelsDir: 'C:/models',
+      models: [],
+      sections: [],
+      selectionOptions: {
+        streaming: [],
+        batch: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+      },
+      modelPathById: {},
+      modelIdByNormalizedPath: {},
+      pathMatchTokens: [],
+      dependencyRequestsByModelId: {},
+      restoreDefaults: {
+        enableItn: true,
+        batchVadEnabled: false,
+        vadBufferSize: null,
+        maxConcurrent: 2,
+      },
+    });
+
+    await expect(getModelCatalogSnapshot()).rejects.toThrow(
+      'Expected a finite number for model catalog vadBufferSize',
+    );
   });
 
   it('app wrappers resolve model catalog selected ids', async () => {

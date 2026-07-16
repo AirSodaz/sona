@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 
 use crate::models::config::ModelFileConfig;
 
@@ -23,6 +25,7 @@ pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
 pub enum TimestampSupportHint {
     Token,
@@ -32,6 +35,7 @@ pub enum TimestampSupportHint {
 
 /// Companion-model requirements for a preset model.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRules {
     pub requires_vad: bool,
@@ -81,6 +85,7 @@ pub fn find_preset_model(model_id: &str) -> Option<&'static PresetModel> {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSnapshot {
     pub models_dir: String,
@@ -95,6 +100,7 @@ pub struct ModelCatalogSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogModel {
     pub id: String,
@@ -126,6 +132,7 @@ pub struct ModelCatalogModel {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSection {
     #[serde(rename = "type")]
@@ -134,6 +141,7 @@ pub struct ModelCatalogSection {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogGroup {
     pub key: String,
@@ -141,6 +149,7 @@ pub struct ModelCatalogGroup {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "kebab-case")]
 pub enum ModelCatalogSectionType {
     Asr,
@@ -159,6 +168,7 @@ const MODEL_CATALOG_SECTION_TYPES: [ModelCatalogSectionType; 5] = [
 ];
 
 #[derive(Debug, Clone, Serialize, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSelectionOptions {
     pub streaming: Vec<ModelSelectionOption>,
@@ -168,6 +178,7 @@ pub struct ModelCatalogSelectionOptions {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSelectionOption {
     pub id: String,
@@ -177,6 +188,7 @@ pub struct ModelSelectionOption {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogPathMatchToken {
     pub id: String,
@@ -184,6 +196,7 @@ pub struct ModelCatalogPathMatchToken {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub enum ModelDependencyConfigKey {
     VadModelPath,
@@ -191,6 +204,7 @@ pub enum ModelDependencyConfigKey {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelDependencyRequest {
     pub model_id: String,
@@ -200,6 +214,7 @@ pub struct ModelDependencyRequest {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogRestoreDefaults {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,6 +233,7 @@ pub struct ModelCatalogRestoreDefaults {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSelectionPaths {
     pub streaming_model_path: String,
@@ -227,6 +243,7 @@ pub struct ModelSelectionPaths {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogSelectedIds {
     pub streaming: Option<String>,

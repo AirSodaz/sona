@@ -5,10 +5,23 @@ import type {
 } from '../../types/runtime';
 import type { AppConfig, AppLogLevel } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
-import type { ModelCatalogSnapshot } from '../modelService';
+import type {
+  ModelCatalogModel,
+  ModelCatalogRestoreDefaults,
+  ModelCatalogSectionType,
+  ModelCatalogSelectedIds as UiModelCatalogSelectedIds,
+  ModelCatalogSnapshot as UiModelCatalogSnapshot,
+  ModelInfo,
+  ModelRules,
+  TimestampSupportHint,
+} from '../modelService';
 import type {
   DiagnosticsCoreInput as CoreDiagnosticsInput,
   DiagnosticsCoreSnapshot as CoreDiagnosticsSnapshot,
+  ModelCatalogModel as CoreModelCatalogModel,
+  ModelCatalogRestoreDefaults as CoreModelCatalogRestoreDefaults,
+  ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
+  ModelCatalogSnapshot as CoreModelCatalogSnapshot,
 } from '../../bindings';
 import type {
   DiagnosticsCoreInput,
@@ -29,9 +42,7 @@ export type ModelSelectionPaths = TauriCommandArgs<
   typeof TauriCommand.app.resolveModelCatalogSelectedIds
 >['paths'];
 
-export type ModelCatalogSelectedIds = TauriCommandResult<
-  typeof TauriCommand.app.resolveModelCatalogSelectedIds
->;
+export type ModelCatalogSelectedIds = UiModelCatalogSelectedIds;
 
 export type AppConfigMigrationResult = TauriCommandResult<
   typeof TauriCommand.app.migrateAppConfig
@@ -107,6 +118,187 @@ function normalizeDiagnosticsSnapshot(
   };
 }
 
+function optionalString(value: string | null | undefined): string | undefined {
+  return value ?? undefined;
+}
+
+function requireFiniteNumber(value: number | null, fieldName: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Expected a finite number for model catalog ${fieldName}`);
+  }
+  return value;
+}
+
+function normalizeModelType(value: string): ModelInfo['type'] {
+  switch (value) {
+    case 'zipformer':
+    case 'sensevoice':
+    case 'paraformer':
+    case 'punctuation':
+    case 'vad':
+    case 'itn':
+    case 'whisper':
+    case 'funasr-nano':
+    case 'fire-red-asr':
+    case 'dolphin':
+    case 'qwen3-asr':
+    case 'speaker-segmentation':
+    case 'speaker-embedding':
+      return value;
+    default:
+      throw new Error(`Unexpected model catalog type: ${value}`);
+  }
+}
+
+function normalizeModelModes(
+  modes: string[] | null | undefined,
+): ModelInfo['modes'] {
+  if (!modes) {
+    return undefined;
+  }
+
+  return modes.map((mode) => {
+    switch (mode) {
+      case 'streaming':
+      case 'batch':
+        return mode;
+      default:
+        throw new Error(`Unexpected model catalog mode: ${mode}`);
+    }
+  });
+}
+
+function normalizeTimestampSupportHint(
+  value: string | null | undefined,
+): TimestampSupportHint | undefined {
+  switch (value) {
+    case 'token':
+    case 'segment':
+    case 'unknown':
+      return value;
+    case null:
+    case undefined:
+      return undefined;
+    default:
+      throw new Error(`Unexpected model timestamp support hint: ${value}`);
+  }
+}
+
+function normalizeCatalogSectionType(value: string): ModelCatalogSectionType {
+  switch (value) {
+    case 'asr':
+    case 'punctuation':
+    case 'vad':
+    case 'speaker-segmentation':
+    case 'speaker-embedding':
+      return value;
+    default:
+      throw new Error(`Unexpected model catalog section type: ${value}`);
+  }
+}
+
+function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelRules {
+  const timestampSupportHint = normalizeTimestampSupportHint(modelRules.timestampSupportHint);
+
+  return {
+    requiresVad: modelRules.requiresVad,
+    requiresPunctuation: modelRules.requiresPunctuation,
+    ...(timestampSupportHint === undefined ? {} : { timestampSupportHint }),
+  };
+}
+
+function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel {
+  const modes = normalizeModelModes(model.modes);
+  const sha256 = optionalString(model.sha256);
+  const isRecommended = model.isRecommended ?? undefined;
+  const filename = optionalString(model.filename);
+  const groupId = optionalString(model.groupId);
+  const versionLabel = optionalString(model.versionLabel);
+
+  if (model.engine !== 'sherpa-onnx') {
+    throw new Error(`Unexpected model catalog engine: ${model.engine}`);
+  }
+
+  return {
+    id: model.id,
+    name: model.name,
+    description: model.description,
+    url: model.url,
+    type: normalizeModelType(model.type),
+    ...(modes === undefined ? {} : { modes }),
+    language: model.language,
+    size: model.size,
+    ...(sha256 === undefined ? {} : { sha256 }),
+    ...(isRecommended === undefined ? {} : { isRecommended }),
+    isArchive: model.isArchive,
+    ...(filename === undefined ? {} : { filename }),
+    engine: model.engine,
+    rules: normalizeModelRules(model.rules),
+    ...(groupId === undefined ? {} : { groupId }),
+    ...(versionLabel === undefined ? {} : { versionLabel }),
+    installPath: model.installPath,
+    downloadPath: model.downloadPath,
+    isInstalled: model.isInstalled,
+  };
+}
+
+function normalizeRestoreDefaults(
+  restoreDefaults: CoreModelCatalogRestoreDefaults,
+): ModelCatalogRestoreDefaults {
+  const streamingModelPath = optionalString(restoreDefaults.streamingModelPath);
+  const batchModelPath = optionalString(restoreDefaults.batchModelPath);
+  const vadModelPath = optionalString(restoreDefaults.vadModelPath);
+  const punctuationModelPath = optionalString(restoreDefaults.punctuationModelPath);
+  const speakerSegmentationModelPath = optionalString(restoreDefaults.speakerSegmentationModelPath);
+  const speakerEmbeddingModelPath = optionalString(restoreDefaults.speakerEmbeddingModelPath);
+
+  return {
+    ...(streamingModelPath === undefined ? {} : { streamingModelPath }),
+    ...(batchModelPath === undefined ? {} : { batchModelPath }),
+    ...(vadModelPath === undefined ? {} : { vadModelPath }),
+    ...(punctuationModelPath === undefined ? {} : { punctuationModelPath }),
+    ...(speakerSegmentationModelPath === undefined ? {} : { speakerSegmentationModelPath }),
+    ...(speakerEmbeddingModelPath === undefined ? {} : { speakerEmbeddingModelPath }),
+    enableITN: restoreDefaults.enableItn,
+    batchVadEnabled: restoreDefaults.batchVadEnabled,
+    vadBufferSize: requireFiniteNumber(restoreDefaults.vadBufferSize, 'vadBufferSize'),
+    maxConcurrent: restoreDefaults.maxConcurrent,
+  };
+}
+
+function normalizeModelCatalogSnapshot(
+  snapshot: CoreModelCatalogSnapshot,
+): UiModelCatalogSnapshot {
+  return {
+    modelsDir: snapshot.modelsDir,
+    models: snapshot.models.map(normalizeCatalogModel),
+    sections: snapshot.sections.map((section) => ({
+      type: normalizeCatalogSectionType(section.type),
+      groups: section.groups.map((group) => ({
+        key: group.key,
+        models: group.models.map(normalizeCatalogModel),
+      })),
+    })),
+    selectionOptions: snapshot.selectionOptions,
+    modelPathById: snapshot.modelPathById,
+    modelIdByNormalizedPath: snapshot.modelIdByNormalizedPath,
+    pathMatchTokens: snapshot.pathMatchTokens,
+    dependencyRequestsByModelId: snapshot.dependencyRequestsByModelId,
+    restoreDefaults: normalizeRestoreDefaults(snapshot.restoreDefaults),
+  };
+}
+
+function normalizeModelCatalogSelectedIds(
+  selectedIds: CoreModelCatalogSelectedIds,
+): UiModelCatalogSelectedIds {
+  return {
+    streaming: selectedIds.streaming ?? null,
+    batch: selectedIds.batch ?? null,
+    speakerSegmentation: selectedIds.speakerSegmentation ?? null,
+    speakerEmbedding: selectedIds.speakerEmbedding ?? null,
+  };
+}
+
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
   await invokeTauri(TauriCommand.app.extractTarBz2, request);
 }
@@ -123,14 +315,16 @@ export async function openLogFolder(): Promise<void> {
   await invokeTauri(TauriCommand.app.openLogFolder);
 }
 
-export async function getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
-  return invokeTauri(TauriCommand.app.getModelCatalogSnapshot);
+export async function getModelCatalogSnapshot(): Promise<UiModelCatalogSnapshot> {
+  const snapshot = await invokeTauri(TauriCommand.app.getModelCatalogSnapshot);
+  return normalizeModelCatalogSnapshot(snapshot);
 }
 
 export async function resolveModelCatalogSelectedIds(
   paths: ModelSelectionPaths,
 ): Promise<ModelCatalogSelectedIds> {
-  return invokeTauri(TauriCommand.app.resolveModelCatalogSelectedIds, { paths });
+  const selectedIds = await invokeTauri(TauriCommand.app.resolveModelCatalogSelectedIds, { paths });
+  return normalizeModelCatalogSelectedIds(selectedIds);
 }
 
 export async function getDiagnosticsCoreSnapshot(

@@ -57,6 +57,13 @@ pub use sona_core::llm::tasks::{
 };
 pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 pub use sona_core::models::config::ModelFileConfig;
+pub use sona_core::models::preset_models::{
+    ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,
+    ModelCatalogSection, ModelCatalogSectionType, ModelCatalogSelectedIds,
+    ModelCatalogSelectionOptions, ModelCatalogSnapshot, ModelDependencyConfigKey,
+    ModelDependencyRequest, ModelRules, ModelSelectionOption, ModelSelectionPaths,
+    TimestampSupportHint,
+};
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
     OnlineAsrBatchCapability, OnlineAsrCapability, OnlineAsrLocalFileBatchMode, OnlineAsrProvider,
@@ -444,6 +451,21 @@ pub fn desktop_types() -> specta::Types {
         .register::<ExportMode>()
         .register::<ExportTranscriptFileRequest>()
         .register::<ExportTranscriptFileResult>()
+        .register::<TimestampSupportHint>()
+        .register::<ModelRules>()
+        .register::<ModelCatalogSnapshot>()
+        .register::<ModelCatalogModel>()
+        .register::<ModelCatalogSection>()
+        .register::<ModelCatalogGroup>()
+        .register::<ModelCatalogSectionType>()
+        .register::<ModelCatalogSelectionOptions>()
+        .register::<ModelSelectionOption>()
+        .register::<ModelCatalogPathMatchToken>()
+        .register::<ModelDependencyConfigKey>()
+        .register::<ModelDependencyRequest>()
+        .register::<ModelCatalogRestoreDefaults>()
+        .register::<ModelSelectionPaths>()
+        .register::<ModelCatalogSelectedIds>()
         .register::<DiagnosticsCoreInput>()
         .register::<DiagnosticsConfigInput>()
         .register::<SelectedModelsInput>()
@@ -593,6 +615,21 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ExportMode",
     "ExportTranscriptFileRequest",
     "ExportTranscriptFileResult",
+    "TimestampSupportHint",
+    "ModelRules",
+    "ModelCatalogSnapshot",
+    "ModelCatalogModel",
+    "ModelCatalogSection",
+    "ModelCatalogGroup",
+    "ModelCatalogSectionType",
+    "ModelCatalogSelectionOptions",
+    "ModelSelectionOption",
+    "ModelCatalogPathMatchToken",
+    "ModelDependencyConfigKey",
+    "ModelDependencyRequest",
+    "ModelCatalogRestoreDefaults",
+    "ModelSelectionPaths",
+    "ModelCatalogSelectedIds",
     "DiagnosticsCoreInput",
     "DiagnosticsConfigInput",
     "SelectedModelsInput",
@@ -791,6 +828,21 @@ mod tests {
             "ExportMode",
             "ExportTranscriptFileRequest",
             "ExportTranscriptFileResult",
+            "TimestampSupportHint",
+            "ModelRules",
+            "ModelCatalogSnapshot",
+            "ModelCatalogModel",
+            "ModelCatalogSection",
+            "ModelCatalogGroup",
+            "ModelCatalogSectionType",
+            "ModelCatalogSelectionOptions",
+            "ModelSelectionOption",
+            "ModelCatalogPathMatchToken",
+            "ModelDependencyConfigKey",
+            "ModelDependencyRequest",
+            "ModelCatalogRestoreDefaults",
+            "ModelSelectionPaths",
+            "ModelCatalogSelectedIds",
             "DiagnosticsCoreInput",
             "DiagnosticsConfigInput",
             "SelectedModelsInput",
@@ -1124,6 +1176,27 @@ mod tests {
             "{error}"
         );
         assert!(error.contains("is not finite"), "{error}");
+    }
+
+    #[test]
+    fn model_catalog_types_are_specta_exportable_through_ts_bindings() {
+        fn assert_specta_type<T: specta::Type>() {}
+
+        assert_specta_type::<sona_core::models::preset_models::TimestampSupportHint>();
+        assert_specta_type::<sona_core::models::preset_models::ModelRules>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogSnapshot>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogModel>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogSection>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogGroup>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogSectionType>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogSelectionOptions>();
+        assert_specta_type::<sona_core::models::preset_models::ModelSelectionOption>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogPathMatchToken>();
+        assert_specta_type::<sona_core::models::preset_models::ModelDependencyConfigKey>();
+        assert_specta_type::<sona_core::models::preset_models::ModelDependencyRequest>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogRestoreDefaults>();
+        assert_specta_type::<sona_core::models::preset_models::ModelSelectionPaths>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogSelectedIds>();
     }
 
     #[test]

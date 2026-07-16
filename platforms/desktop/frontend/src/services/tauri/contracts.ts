@@ -33,6 +33,9 @@ import type {
   HistoryWorkspaceQueryRequest,
   HistoryWorkspaceQueryResult,
   LiveRecordingDraftResult,
+  ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
+  ModelCatalogSnapshot as CoreModelCatalogSnapshot,
+  ModelSelectionPaths as CoreModelSelectionPaths,
   RecoveryItemInput_Serialize,
   RecoverySnapshot_Serialize,
   StorageUsageSnapshot_Serialize,
@@ -105,7 +108,6 @@ import type {
   TranslateSegmentsRequest,
 } from "../llmTaskTypes";
 import type { ModelFileConfig } from "../../types/model";
-import type { ModelCatalogSnapshot } from "../modelService";
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
@@ -225,19 +227,9 @@ type ListLlmModelsRequest = {
   apiKey: string;
 };
 
-export type ModelSelectionPaths = {
-  streamingModelPath: string;
-  batchModelPath: string;
-  speakerSegmentationModelPath: string;
-  speakerEmbeddingModelPath: string;
-};
+export type ModelSelectionPaths = CoreModelSelectionPaths;
 
-export type ModelCatalogSelectedIds = {
-  streaming: string | null;
-  batch: string | null;
-  speakerSegmentation: string | null;
-  speakerEmbedding: string | null;
-};
+export type ModelCatalogSelectedIds = CoreModelCatalogSelectedIds;
 
 export type TauriCommandContractMap = {
   [TauriCommand.app.extractTarBz2]: {
@@ -258,11 +250,11 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.app.getModelCatalogSnapshot]: {
     args: undefined;
-    result: ModelCatalogSnapshot;
+    result: CoreModelCatalogSnapshot;
   };
   [TauriCommand.app.resolveModelCatalogSelectedIds]: {
-    args: { paths: ModelSelectionPaths };
-    result: ModelCatalogSelectedIds;
+    args: { paths: CoreModelSelectionPaths };
+    result: CoreModelCatalogSelectedIds;
   };
   [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
     args: { input: DiagnosticsCoreInput };

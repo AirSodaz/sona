@@ -748,14 +748,189 @@ export type LlmUsageDashboardStats_Serialize = {
 	recentDaily: UsageTrendPoint[],
 };
 
+export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
+
+export type ModelCatalogGroup_Deserialize = {
+	key: string,
+	models: ModelCatalogModel_Deserialize[],
+};
+
+export type ModelCatalogGroup_Serialize = {
+	key: string,
+	models: ModelCatalogModel_Serialize[],
+};
+
+export type ModelCatalogModel = ModelCatalogModel_Serialize | ModelCatalogModel_Deserialize;
+
+export type ModelCatalogModel_Deserialize = {
+	id: string,
+	name: string,
+	description: string,
+	url: string,
+	type: string,
+	modes: string[] | null,
+	language: string,
+	size: string,
+	sha256: string | null,
+	isRecommended: boolean | null,
+	isArchive: boolean,
+	filename: string | null,
+	engine: string,
+	rules: ModelRules,
+	groupId: string | null,
+	versionLabel: string | null,
+	installPath: string,
+	downloadPath: string,
+	isInstalled: boolean,
+};
+
+export type ModelCatalogModel_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	url: string,
+	type: string,
+	modes?: string[] | null,
+	language: string,
+	size: string,
+	sha256?: string | null,
+	isRecommended?: boolean | null,
+	isArchive: boolean,
+	filename?: string | null,
+	engine: string,
+	rules: ModelRules,
+	groupId?: string | null,
+	versionLabel?: string | null,
+	installPath: string,
+	downloadPath: string,
+	isInstalled: boolean,
+};
+
+export type ModelCatalogPathMatchToken = {
+	id: string,
+	token: string,
+};
+
+export type ModelCatalogRestoreDefaults = ModelCatalogRestoreDefaults_Serialize | ModelCatalogRestoreDefaults_Deserialize;
+
+export type ModelCatalogRestoreDefaults_Deserialize = {
+	streamingModelPath: string | null,
+	batchModelPath: string | null,
+	vadModelPath: string | null,
+	punctuationModelPath: string | null,
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	enableItn: boolean,
+	batchVadEnabled: boolean,
+	vadBufferSize: number | null,
+	maxConcurrent: number,
+};
+
+export type ModelCatalogRestoreDefaults_Serialize = {
+	streamingModelPath?: string | null,
+	batchModelPath?: string | null,
+	vadModelPath?: string | null,
+	punctuationModelPath: string | null,
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	enableItn: boolean,
+	batchVadEnabled: boolean,
+	vadBufferSize: number | null,
+	maxConcurrent: number,
+};
+
+export type ModelCatalogSection = ModelCatalogSection_Serialize | ModelCatalogSection_Deserialize;
+
+export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding";
+
+export type ModelCatalogSection_Deserialize = {
+	type: ModelCatalogSectionType,
+	groups: ModelCatalogGroup_Deserialize[],
+};
+
+export type ModelCatalogSection_Serialize = {
+	type: ModelCatalogSectionType,
+	groups: ModelCatalogGroup_Serialize[],
+};
+
+export type ModelCatalogSelectedIds = {
+	streaming: string | null,
+	batch: string | null,
+	speakerSegmentation: string | null,
+	speakerEmbedding: string | null,
+};
+
+export type ModelCatalogSelectionOptions = {
+	streaming: ModelSelectionOption[],
+	batch: ModelSelectionOption[],
+	speakerSegmentation: ModelSelectionOption[],
+	speakerEmbedding: ModelSelectionOption[],
+};
+
+export type ModelCatalogSnapshot = ModelCatalogSnapshot_Serialize | ModelCatalogSnapshot_Deserialize;
+
+export type ModelCatalogSnapshot_Deserialize = {
+	modelsDir: string,
+	models: ModelCatalogModel_Deserialize[],
+	sections: ModelCatalogSection_Deserialize[],
+	selectionOptions: ModelCatalogSelectionOptions,
+	modelPathById: { [key in string]: string },
+	modelIdByNormalizedPath: { [key in string]: string },
+	pathMatchTokens: ModelCatalogPathMatchToken[],
+	dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] },
+	restoreDefaults: ModelCatalogRestoreDefaults_Deserialize,
+};
+
+export type ModelCatalogSnapshot_Serialize = {
+	modelsDir: string,
+	models: ModelCatalogModel_Serialize[],
+	sections: ModelCatalogSection_Serialize[],
+	selectionOptions: ModelCatalogSelectionOptions,
+	modelPathById: { [key in string]: string },
+	modelIdByNormalizedPath: { [key in string]: string },
+	pathMatchTokens: ModelCatalogPathMatchToken[],
+	dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] },
+	restoreDefaults: ModelCatalogRestoreDefaults_Serialize,
+};
+
+export type ModelDependencyConfigKey = "vadModelPath" | "punctuationModelPath";
+
+export type ModelDependencyRequest = {
+	modelId: string,
+	configKey: ModelDependencyConfigKey,
+	installPath: string,
+	isInstalled: boolean,
+};
+
 export type ModelRuleInput = {
 	requiresVad: boolean,
 	requiresPunctuation: boolean,
 };
 
+/**  Companion-model requirements for a preset model. */
+export type ModelRules = {
+	requiresVad: boolean,
+	requiresPunctuation: boolean,
+	timestampSupportHint: TimestampSupportHint | null,
+};
+
 export type ModelRulesInput = {
 	live: ModelRuleInput | null,
 	batch: ModelRuleInput | null,
+};
+
+export type ModelSelectionOption = {
+	id: string,
+	label: string,
+	installPath: string,
+	isInstalled: boolean,
+};
+
+export type ModelSelectionPaths = {
+	streamingModelPath: string,
+	batchModelPath: string,
+	speakerSegmentationModelPath: string,
+	speakerEmbeddingModelPath: string,
 };
 
 export type ModelSummaryInput = {
@@ -1377,6 +1552,8 @@ export type TaskLedgerSnapshot_Serialize = {
 };
 
 export type TaskLedgerStatus = "pending" | "running" | "cancelRequested" | "failed" | "recoverable" | "interrupted" | "cancelled" | "succeeded";
+
+export type TimestampSupportHint = "token" | "segment" | "unknown";
 
 export type TranscriptDiffResult = TranscriptDiffResult_Serialize | TranscriptDiffResult_Deserialize;
 

@@ -117,7 +117,7 @@ describe('ModelService', () => {
                     punctuationModelPath: '',
                     speakerSegmentationModelPath: '',
                     speakerEmbeddingModelPath: '',
-                    enableITN: true,
+                    enableItn: true,
                     vadBufferSize: 5,
                     maxConcurrent: 2,
                 },
@@ -202,7 +202,7 @@ describe('ModelService', () => {
                     punctuationModelPath: '',
                     speakerSegmentationModelPath: '',
                     speakerEmbeddingModelPath: '',
-                    enableITN: true,
+                    enableItn: true,
                     vadBufferSize: 5,
                     maxConcurrent: 2,
                 },
@@ -318,7 +318,7 @@ describe('ModelService', () => {
                     punctuationModelPath: '',
                     speakerSegmentationModelPath: '',
                     speakerEmbeddingModelPath: '',
-                    enableITN: true,
+                    enableItn: true,
                     vadBufferSize: 5,
                     maxConcurrent: 2,
                 },
@@ -340,6 +340,32 @@ describe('ModelService', () => {
 
             // Mock download_file invoke
             (invoke as any).mockImplementation((cmd: string) => {
+                if (cmd === 'get_model_catalog_snapshot') {
+                    return Promise.resolve({
+                        modelsDir: '/app/data/models',
+                        models: [],
+                        sections: [],
+                        selectionOptions: {
+                            streaming: [],
+                            batch: [],
+                            speakerSegmentation: [],
+                            speakerEmbedding: [],
+                        },
+                        modelPathById: {},
+                        modelIdByNormalizedPath: {},
+                        pathMatchTokens: [],
+                        dependencyRequestsByModelId: {},
+                        restoreDefaults: {
+                            punctuationModelPath: null,
+                            speakerSegmentationModelPath: null,
+                            speakerEmbeddingModelPath: null,
+                            enableItn: true,
+                            batchVadEnabled: false,
+                            vadBufferSize: 5,
+                            maxConcurrent: 2,
+                        },
+                    });
+                }
                 if (cmd === 'download_file') return Promise.resolve();
                 return Promise.resolve();
             });
@@ -397,7 +423,7 @@ describe('ModelService', () => {
                             punctuationModelPath: '',
                             speakerSegmentationModelPath: '',
                             speakerEmbeddingModelPath: '',
-                            enableITN: true,
+                            enableItn: true,
                             vadBufferSize: 5,
                             maxConcurrent: 2,
                         },
