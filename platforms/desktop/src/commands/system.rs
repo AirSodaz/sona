@@ -41,7 +41,7 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<crate::app::dashboard::AppDashboardService>>,
     request: crate::app::dashboard::DashboardSnapshotRequest,
-) -> Result<Value, String> {
+) -> Result<sona_core::dashboard::models::DashboardSnapshotDomainModel, String> {
     crate::app::dashboard::get_dashboard_snapshot(service, request).await
 }
 

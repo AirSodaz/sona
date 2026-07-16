@@ -24,6 +24,9 @@ fn adapter_owned_implementation_crates_stay_out_of_desktop_runtime_dependencies(
         "rig-core",
         "rusqlite",
         "sha2",
+        "specta",
+        "specta-typescript",
+        "tauri-specta",
         "tower-http",
     ] {
         assert!(

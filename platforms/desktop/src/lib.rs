@@ -17,37 +17,21 @@ pub fn run() {
 }
 
 #[cfg(debug_assertions)]
-fn export_typescript_bindings() -> Result<(), specta_typescript::Error> {
+fn export_typescript_bindings() -> Result<(), sona_ts_bind::TypescriptExportError> {
     let bindings_path = typescript_bindings_path();
-    let temporary_path = std::env::temp_dir().join(format!(
-        "sona-tauri-specta-bindings-{}.ts",
-        std::process::id()
-    ));
-    export_typescript_bindings_to(&bindings_path, &temporary_path)?;
+    export_typescript_bindings_to(&bindings_path)?;
     Ok(())
+}
+
+pub fn export_typescript_bindings_to(
+    bindings_path: &std::path::Path,
+) -> Result<bool, sona_ts_bind::TypescriptExportError> {
+    let generated_bindings = sona_ts_bind::render_desktop_typescript_bindings()?;
+    write_bindings_if_changed(bindings_path, generated_bindings.as_bytes()).map_err(Into::into)
 }
 
 fn typescript_bindings_path() -> std::path::PathBuf {
     sona_ts_bind::desktop_bindings_output("frontend")
-}
-
-fn export_typescript_bindings_to(
-    bindings_path: &std::path::Path,
-    temporary_path: &std::path::Path,
-) -> Result<bool, specta_typescript::Error> {
-    let core_types = sona_ts_bind::desktop_types();
-    let export_result = tauri_specta::Builder::<tauri::Wry>::new()
-        .types(&core_types)
-        .export(specta_typescript::Typescript::default(), &temporary_path);
-
-    if let Err(error) = export_result {
-        let _ = std::fs::remove_file(&temporary_path);
-        return Err(error);
-    }
-
-    let generated_bindings = std::fs::read(&temporary_path);
-    let _ = std::fs::remove_file(&temporary_path);
-    write_bindings_if_changed(bindings_path, &generated_bindings?).map_err(Into::into)
 }
 
 fn write_bindings_if_changed(
@@ -167,7 +151,9 @@ pub fn run_app() -> Result<(), tauri::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{typescript_bindings_path, write_bindings_if_changed};
+    use super::{
+        export_typescript_bindings_to, typescript_bindings_path, write_bindings_if_changed,
+    };
     use std::fs;
 
     #[test]
@@ -189,5 +175,16 @@ mod tests {
 
         assert!(write_bindings_if_changed(&bindings_path, b"updated bindings").unwrap());
         assert_eq!(fs::read(&bindings_path).unwrap(), b"updated bindings");
+    }
+
+    #[test]
+    fn exports_registered_core_types_to_a_requested_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let bindings_path = directory.path().join("bindings.ts");
+
+        assert!(export_typescript_bindings_to(&bindings_path).unwrap());
+
+        let bindings = fs::read_to_string(bindings_path).unwrap();
+        assert!(bindings.contains("export type DashboardSnapshotDomainModel"));
     }
 }

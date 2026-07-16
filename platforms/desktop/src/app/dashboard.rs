@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_json::Value;
+use sona_core::dashboard::models::DashboardSnapshotDomainModel;
 use std::sync::Arc;
 use tauri::State;
 
@@ -14,12 +14,12 @@ pub struct DashboardSnapshotRequest {
 pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<AppDashboardService>>,
     request: DashboardSnapshotRequest,
-) -> Result<Value, String> {
+) -> Result<DashboardSnapshotDomainModel, String> {
     let time = sona_runtime_fs::dashboard_snapshot_time_now();
     let snapshot = service
         .build_snapshot_at(request.deep, time)
         .await
         .map_err(|error| error.to_string())?;
-
-    serde_json::to_value(snapshot).map_err(|error| error.to_string())
+    sona_ts_bind::validate_dashboard_snapshot_for_typescript(&snapshot)?;
+    Ok(snapshot)
 }

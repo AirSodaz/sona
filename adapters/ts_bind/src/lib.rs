@@ -1,10 +1,14 @@
 //! TypeScript-facing metadata for Sona core bindings.
 //!
-//! The desktop Tauri host owns the concrete tauri-specta builder while consuming
-//! the core type re-exports and output path metadata from this adapter. Future
-//! non-Tauri consumers can use the same pure Rust types without reaching into the
-//! desktop crate.
+//! This adapter owns the transport-neutral core type registry, TypeScript rendering,
+//! numeric transport validation, and desktop output-path metadata. The Tauri host
+//! only writes the generated output and invokes validation at its IPC boundary.
 
+pub use sona_core::dashboard::models::{
+    ContentStats, ContentTrendPoint, DashboardSnapshotDomainModel, DashboardUsageBucket,
+    LlmUsageDashboardStats, OverviewStats, SpeakerLeader, SpeakerStats, UsageBreakdown,
+    UsageTrendPoint,
+};
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
 pub use sona_core::llm::provider_protocol::{
     LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
@@ -39,9 +43,140 @@ pub use sona_core::transcription::transcript::{
 };
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
+pub const TYPESCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+pub use specta_typescript::Error as TypescriptExportError;
 
 pub fn desktop_bindings_output(frontend_root: impl AsRef<std::path::Path>) -> std::path::PathBuf {
     frontend_root.as_ref().join(DESKTOP_BINDINGS_OUTPUT)
+}
+
+pub fn render_desktop_typescript_bindings() -> Result<String, TypescriptExportError> {
+    specta_typescript::Typescript::default().export(&desktop_types(), specta_serde::PhasesFormat)
+}
+
+pub fn validate_typescript_safe_integers<T>(value: &T) -> Result<(), String>
+where
+    T: serde::Serialize + ?Sized,
+{
+    let value = serde_json::to_value(value)
+        .map_err(|error| format!("Failed to inspect TypeScript transport value: {error}"))?;
+    validate_json_safe_integers(&value, "$")
+}
+
+pub fn validate_dashboard_snapshot_for_typescript(
+    snapshot: &DashboardSnapshotDomainModel,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(snapshot)?;
+
+    let overview = &snapshot.content.overview;
+    validate_finite_typescript_number(
+        "$.content.overview.totalDurationSeconds",
+        overview.total_duration_seconds,
+    )?;
+    for (index, point) in overview.recent_daily_items.iter().enumerate() {
+        validate_finite_typescript_number(
+            &format!("$.content.overview.recentDailyItems[{index}].durationSeconds"),
+            point.duration_seconds,
+        )?;
+    }
+
+    if let Some(speakers) = snapshot.content.speakers.as_ref() {
+        for (path, value) in [
+            (
+                "$.content.speakers.speakerAttributedDuration",
+                speakers.speaker_attributed_duration,
+            ),
+            (
+                "$.content.speakers.totalSegmentDuration",
+                speakers.total_segment_duration,
+            ),
+            (
+                "$.content.speakers.identifiedDuration",
+                speakers.identified_duration,
+            ),
+            (
+                "$.content.speakers.anonymousDuration",
+                speakers.anonymous_duration,
+            ),
+            (
+                "$.content.speakers.segmentCoverageRatio",
+                speakers.segment_coverage_ratio,
+            ),
+            (
+                "$.content.speakers.durationCoverageRatio",
+                speakers.duration_coverage_ratio,
+            ),
+            (
+                "$.content.speakers.topIdentifiedSpeakerMaxValue",
+                speakers.top_identified_speaker_max_value,
+            ),
+        ] {
+            validate_finite_typescript_number(path, value)?;
+        }
+        validate_speaker_leaders(
+            "$.content.speakers.topIdentifiedSpeakers",
+            &speakers.top_identified_speakers,
+        )?;
+        validate_speaker_leaders(
+            "$.content.speakers.topIdentifiedSpeakerRows",
+            &speakers.top_identified_speaker_rows,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_speaker_leaders(path: &str, speakers: &[SpeakerLeader]) -> Result<(), String> {
+    for (index, speaker) in speakers.iter().enumerate() {
+        validate_finite_typescript_number(
+            &format!("{path}[{index}].durationSeconds"),
+            speaker.duration_seconds,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_finite_typescript_number(path: &str, value: f64) -> Result<(), String> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Number at {path} is not finite and cannot cross the TypeScript transport: {value}"
+        ))
+    }
+}
+
+fn validate_json_safe_integers(value: &serde_json::Value, path: &str) -> Result<(), String> {
+    match value {
+        serde_json::Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                validate_json_safe_integers(value, &format!("{path}[{index}]"))?;
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for (key, value) in values {
+                validate_json_safe_integers(value, &format!("{path}.{key}"))?;
+            }
+        }
+        serde_json::Value::Number(number) => {
+            let is_unsafe = number
+                .as_u64()
+                .is_some_and(|value| value > TYPESCRIPT_MAX_SAFE_INTEGER)
+                || number
+                    .as_i64()
+                    .is_some_and(|value| value.unsigned_abs() > TYPESCRIPT_MAX_SAFE_INTEGER)
+                || number.as_f64().is_some_and(|value| {
+                    value.fract() == 0.0 && value.abs() > TYPESCRIPT_MAX_SAFE_INTEGER as f64
+                });
+            if is_unsafe {
+                return Err(format!(
+                    "Integer at {path} exceeds TypeScript's safe range: {number}"
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Core-owned types currently emitted into the desktop TypeScript bindings.
@@ -62,6 +197,16 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmTaskProgressPayload>()
         .register::<LlmTaskChunkPayload<PolishedSegment>>()
         .register::<LlmTaskTextPayload>()
+        .register::<DashboardUsageBucket>()
+        .register::<UsageBreakdown>()
+        .register::<UsageTrendPoint>()
+        .register::<LlmUsageDashboardStats>()
+        .register::<ContentTrendPoint>()
+        .register::<OverviewStats>()
+        .register::<SpeakerLeader>()
+        .register::<SpeakerStats>()
+        .register::<ContentStats>()
+        .register::<DashboardSnapshotDomainModel>()
 }
 
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
@@ -94,6 +239,16 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmTaskProgressPayload",
     "LlmTaskChunkPayload",
     "LlmTaskTextPayload",
+    "DashboardUsageBucket",
+    "UsageBreakdown",
+    "UsageTrendPoint",
+    "LlmUsageDashboardStats",
+    "ContentTrendPoint",
+    "OverviewStats",
+    "SpeakerLeader",
+    "SpeakerStats",
+    "ContentStats",
+    "DashboardSnapshotDomainModel",
     "LlmGenerateSource",
     "LlmUsageCategory",
     "TokenUsage",
@@ -177,6 +332,16 @@ mod tests {
             "LlmTaskProgressPayload",
             "LlmTaskChunkPayload",
             "LlmTaskTextPayload",
+            "DashboardUsageBucket",
+            "UsageBreakdown",
+            "UsageTrendPoint",
+            "LlmUsageDashboardStats",
+            "ContentTrendPoint",
+            "OverviewStats",
+            "SpeakerLeader",
+            "SpeakerStats",
+            "ContentStats",
+            "DashboardSnapshotDomainModel",
         ] {
             assert!(names.contains(&expected), "missing {expected}");
         }
@@ -184,9 +349,49 @@ mod tests {
 
     #[test]
     fn desktop_type_registry_is_typescript_exportable() {
-        specta_typescript::Typescript::default()
-            .export(&desktop_types(), specta_serde::PhasesFormat)
-            .unwrap();
+        render_desktop_typescript_bindings().unwrap();
+    }
+
+    #[test]
+    fn committed_desktop_bindings_match_the_type_registry() {
+        let frontend_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("platforms/desktop/frontend");
+        let bindings_path = desktop_bindings_output(frontend_root);
+        let committed = std::fs::read_to_string(&bindings_path).unwrap_or_else(|error| {
+            panic!(
+                "failed to read committed desktop bindings at {}: {error}",
+                bindings_path.display()
+            )
+        });
+        let generated = render_desktop_typescript_bindings().unwrap();
+
+        assert_eq!(
+            committed, generated,
+            "desktop bindings are stale; run `pnpm run generate:desktop-bindings`"
+        );
+    }
+
+    #[test]
+    fn typescript_integer_validation_rejects_nested_unsafe_values() {
+        let safe = serde_json::json!({"value": TYPESCRIPT_MAX_SAFE_INTEGER});
+        validate_typescript_safe_integers(&safe).unwrap();
+
+        let unsafe_value = serde_json::json!({
+            "nested": [TYPESCRIPT_MAX_SAFE_INTEGER + 1]
+        });
+        let error = validate_typescript_safe_integers(&unsafe_value).unwrap_err();
+
+        assert!(error.contains("$.nested[0]"), "{error}");
+        assert!(error.contains("exceeds TypeScript's safe range"), "{error}");
+    }
+
+    #[test]
+    fn typescript_number_validation_rejects_non_finite_values() {
+        let error = validate_finite_typescript_number("$.duration", f64::NAN).unwrap_err();
+
+        assert!(error.contains("$.duration"), "{error}");
+        assert!(error.contains("is not finite"), "{error}");
     }
 
     #[test]
@@ -225,6 +430,16 @@ mod tests {
         assert_specta_type::<LlmTaskProgressPayload>();
         assert_specta_type::<LlmTaskChunkPayload<PolishedSegment>>();
         assert_specta_type::<LlmTaskTextPayload>();
+        assert_specta_type::<DashboardUsageBucket>();
+        assert_specta_type::<UsageBreakdown>();
+        assert_specta_type::<UsageTrendPoint>();
+        assert_specta_type::<LlmUsageDashboardStats>();
+        assert_specta_type::<ContentTrendPoint>();
+        assert_specta_type::<OverviewStats>();
+        assert_specta_type::<SpeakerLeader>();
+        assert_specta_type::<SpeakerStats>();
+        assert_specta_type::<ContentStats>();
+        assert_specta_type::<DashboardSnapshotDomainModel>();
         assert_specta_type::<LlmGenerateSource>();
         assert_specta_type::<LlmUsageCategory>();
         assert_specta_type::<TokenUsage>();
