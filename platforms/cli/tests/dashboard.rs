@@ -49,13 +49,14 @@ fn seed(app_data_dir: &Path, transcript_text: &str) -> Arc<Database> {
     .unwrap();
     history
         .save_recording(HistorySaveRecordingRequest {
-            segments: json!([{
+            segments: serde_json::from_value(json!([{
                 "id": "segment-dashboard",
                 "text": transcript_text,
                 "start": 0.0,
                 "end": 2.5,
                 "isFinal": true
-            }]),
+            }]))
+            .unwrap(),
             duration: 2.5,
             project_id: Some("project-dashboard".to_string()),
             audio_bytes: Some(vec![1, 2, 3]),

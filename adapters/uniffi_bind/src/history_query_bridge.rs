@@ -152,13 +152,15 @@ mod tests {
         let database = Arc::new(Database::open(app_data_dir).unwrap());
         let store = SqliteHistoryStore::new(app_data_dir.to_path_buf(), database);
         store.ensure_ready().unwrap();
-        let segments = json!([{
+        let segments: Vec<sona_core::transcription::transcript::TranscriptSegment> =
+            serde_json::from_value(json!([{
             "id": "segment-1",
             "text": "Hello mobile history",
             "start": 0.0,
             "end": 1.5,
             "isFinal": true
-        }]);
+            }]))
+            .unwrap();
         let item = store
             .save_recording(HistorySaveRecordingRequest {
                 segments: segments.clone(),

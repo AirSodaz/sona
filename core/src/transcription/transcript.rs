@@ -25,7 +25,9 @@ pub enum TranscriptTimingSource {
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptTimingUnit {
     pub text: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub start: f64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub end: f64,
 }
 
@@ -45,6 +47,11 @@ pub struct SpeakerTag {
     pub id: String,
     pub label: String,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub score: Option<f32>,
 }
 
@@ -54,7 +61,9 @@ pub struct SpeakerTag {
 pub struct SpeakerCandidate {
     pub profile_id: String,
     pub profile_name: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub score: f32,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub rank: usize,
 }
 
@@ -76,7 +85,9 @@ pub struct SpeakerAttribution {
 pub struct TranscriptSegment {
     pub id: String,
     pub text: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub start: f64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub end: f64,
     pub is_final: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,8 +97,16 @@ pub struct TranscriptSegment {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tokens: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<Vec<specta_typescript::Number>>)
+    )]
     pub timestamps: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<Vec<specta_typescript::Number>>)
+    )]
     pub durations: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub translation: Option<String>,

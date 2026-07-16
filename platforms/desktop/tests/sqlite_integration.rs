@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationRepository,
     HistoryUpdateTranscriptRequest,
@@ -429,12 +430,18 @@ fn test_migration_and_crud() {
     assert_eq!(transcript[0].id, "seg-1");
 
     let summary = store.load_summary("hist-1").unwrap().unwrap();
-    assert_eq!(summary["activeTemplateId"], "general");
+    assert_eq!(summary.active_template_id, "general");
 
     // Save a new recording
     let recording = store
         .save_recording(HistorySaveRecordingRequest {
-            segments: json!([segment_value("seg-new", "New recording test", 0.0, 2.0)]),
+            segments: serde_json::from_value(json!([segment_value(
+                "seg-new",
+                "New recording test",
+                0.0,
+                2.0
+            )]))
+            .unwrap(),
             duration: 2.0,
             project_id: Some("proj-1".to_string()),
             audio_bytes: Some(vec![1, 2, 3]),
@@ -452,24 +459,42 @@ fn test_migration_and_crud() {
     let updated = store
         .update_transcript(HistoryUpdateTranscriptRequest {
             history_id: recording.id.clone(),
-            segments: json!([segment_value("seg-new", "Updated text", 0.0, 3.0)]),
+            segments: serde_json::from_value(json!([segment_value(
+                "seg-new",
+                "Updated text",
+                0.0,
+                3.0
+            )]))
+            .unwrap(),
         })
         .unwrap();
     assert_eq!(updated.preview_text, "Updated text...");
 
     // Save summary
     store
-        .save_summary(&recording.id, json!({"activeTemplateId": "summary-1"}))
+        .save_summary(
+            &recording.id,
+            HistorySummaryPayload {
+                active_template_id: "summary-1".to_string(),
+                record: None,
+            },
+        )
         .unwrap();
     let loaded_summary = store.load_summary(&recording.id).unwrap().unwrap();
-    assert_eq!(loaded_summary["activeTemplateId"], "summary-1");
+    assert_eq!(loaded_summary.active_template_id, "summary-1");
 
     // Create snapshot
     let snapshot = store
         .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
             history_id: recording.id.clone(),
             reason: TranscriptSnapshotReason::Polish,
-            segments: json!([segment_value("seg-new", "Snapshot text", 0.0, 1.0)]),
+            segments: serde_json::from_value(json!([segment_value(
+                "seg-new",
+                "Snapshot text",
+                0.0,
+                1.0
+            )]))
+            .unwrap(),
         })
         .unwrap();
     assert_eq!(snapshot.reason, TranscriptSnapshotReason::Polish);

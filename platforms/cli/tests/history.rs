@@ -21,13 +21,15 @@ fn create_history_fixture(app_data_dir: &Path) -> HistoryFixture {
     let db = Arc::new(Database::open(app_data_dir).unwrap());
     let store = SqliteHistoryStore::new(app_data_dir.to_path_buf(), db);
     store.ensure_ready().unwrap();
-    let segments = json!([{
+    let segments: Vec<sona_core::transcription::transcript::TranscriptSegment> =
+        serde_json::from_value(json!([{
         "id": "segment-1",
         "text": "Hello history",
         "start": 0.0,
         "end": 1.25,
         "isFinal": true
-    }]);
+        }]))
+        .unwrap();
     let item = store
         .save_recording(HistorySaveRecordingRequest {
             segments: segments.clone(),
@@ -320,10 +322,7 @@ fn history_mutation_commands_share_policy_and_persist_files() {
     ]);
 
     let updated_segments = dir.path().join("updated-segments.json");
-    write_json(
-        &updated_segments,
-        json!([{"id": "segment-1", "text": "Updated CLI", "start": 0.0, "end": 2.0, "isFinal": true}]),
-    );
+    write_json(&updated_segments, json!([{"text": "Updated CLI"}]));
     let updated = run_owned(vec![
         "sona-cli".into(),
         "history".into(),

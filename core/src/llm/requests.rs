@@ -1,4 +1,5 @@
 use crate::domain::LlmProvider;
+pub use crate::history::{HistorySummaryPayload, TranscriptSummaryRecordPayload};
 use crate::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
 };
@@ -206,23 +207,4 @@ pub struct TranscriptLlmJobRequest {
     pub template: Option<SummaryTemplateConfig>,
     pub chunk_size: Option<usize>,
     pub chunk_char_budget: Option<usize>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "specta", derive(Type))]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptSummaryRecordPayload {
-    pub template_id: String,
-    pub content: String,
-    pub generated_at: String,
-    pub source_fingerprint: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "specta", derive(Type))]
-#[serde(rename_all = "camelCase")]
-pub struct HistorySummaryPayload {
-    pub active_template_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub record: Option<TranscriptSummaryRecordPayload>,
 }

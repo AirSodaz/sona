@@ -8,7 +8,30 @@ import type {
   DashboardSnapshot,
   LlmGenerateCommandRequest,
 } from "../../types/dashboard";
-import type { HistoryAudioCleanupReport, HistoryItem } from "../../types/history";
+import type {
+  HistoryAudioCleanupReport,
+  HistoryAudioCleanupRequest_Serialize,
+  HistoryCompleteLiveDraftRequest_Serialize,
+  HistoryCreateLiveDraftRequest,
+  HistoryCreateTranscriptSnapshotRequest_Serialize,
+  HistoryDeleteItemsRequest,
+  HistoryItemRecord,
+  HistoryReassignProjectRequest,
+  HistorySaveImportedFileRequest_Serialize,
+  HistorySaveRecordingRequest_Serialize,
+  HistorySummaryPayload_Serialize,
+  HistoryUpdateItemMetaRequest_Serialize,
+  HistoryUpdateProjectAssignmentsRequest,
+  HistoryUpdateTranscriptRequest_Serialize,
+  HistoryWorkspaceQueryRequest,
+  HistoryWorkspaceQueryResult,
+  LiveRecordingDraftResult,
+  TranscriptDiffResult_Serialize,
+  TranscriptDiffRow_Serialize,
+  TranscriptSegment_Serialize,
+  TranscriptSnapshotMetadata,
+  TranscriptSnapshotRecord_Serialize,
+} from "../../bindings";
 import type {
   AsrRuntimeMetricsSnapshot,
   RuntimeEnvironmentStatus,
@@ -37,22 +60,13 @@ import type {
   StorageUsageSnapshot,
   WebviewBrowsingDataClearResult,
 } from "../../types/storage";
-import type {
-  HistorySummaryPayload,
-  TranscriptSegment,
-} from "../../types/transcript";
+import type { TranscriptSegment } from "../../types/transcript";
 import type {
   LlmCompletionRequest,
   LlmCompletionResponse,
   LlmConfig,
   LlmDiscoveredModelSummary,
 } from "../../types/llm";
-import type {
-  TranscriptDiffRow,
-  TranscriptSnapshotMetadata,
-  TranscriptSnapshotReason,
-  TranscriptSnapshotRecord,
-} from "../../types/transcriptSnapshot";
 import type { BatchQueueItem } from "../../types/batchQueue";
 import type {
   RecoveredQueueItem,
@@ -127,15 +141,7 @@ type SetCapturePausedArgs = {
   paused: boolean;
 };
 
-type HistoryDraftTransportHandle = {
-  item: HistoryItem;
-  audioAbsolutePath: string;
-};
-
-type TranscriptDiffResult = {
-  rows: TranscriptDiffRow[];
-  changedCount: number;
-};
+type HistoryDraftTransportHandle = LiveRecordingDraftResult;
 
 type TranscriptPostprocessOptions = {
   textReplacementSets?: TextReplacementRuleSet[];
@@ -176,60 +182,6 @@ type OnlineAsrRequest = AsrTranscriptionRequestBase & {
 };
 
 type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
-
-type WorkspaceQueryScope =
-  { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string };
-
-type WorkspaceQueryArgs = {
-  scope: WorkspaceQueryScope;
-  query: string;
-  filterType: "all" | "recording" | "batch";
-  dateFilter: "all" | "today" | "week" | "month";
-  sortOrder:
-    "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
-  limit: number;
-  offset: number;
-};
-
-type WorkspaceSearchRange = {
-  start: number;
-  end: number;
-};
-
-type WorkspaceSearchSnippet = {
-  text: string;
-  highlightStart: number;
-  highlightEnd: number;
-};
-
-type WorkspaceItemSearchMatch = {
-  matchedField: "title" | "previewText" | "searchContent";
-  titleMatch: WorkspaceSearchRange | null;
-  displaySnippet: WorkspaceSearchSnippet;
-};
-
-type WorkspaceQueryResult = {
-  filteredItems: HistoryItem[];
-  searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
-  filteredItemCount: number;
-  hasMore: boolean;
-  summary: {
-    totalItems: number;
-    totalDuration: number;
-    latestTimestamp: number | null;
-    recordingCount: number;
-    batchCount: number;
-  };
-  itemCounts: {
-    inbox: number;
-    byProjectId: Record<string, number>;
-  };
-};
-
-type HistoryAudioCleanupArgs = {
-  retentionDays: number | null;
-  excludeHistoryId: string | null;
-};
 
 type ExportTranscriptFileArgs = {
   segments: TranscriptSegment[];
@@ -433,68 +385,38 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.history.listItems]: {
     args: { limit?: number | null; offset?: number | null } | undefined;
-    result: Partial<HistoryItem>[];
+    result: HistoryItemRecord[];
   };
   [TauriCommand.history.createLiveDraft]: {
-    args: {
-      id?: string | null;
-      audioExtension: string;
-      projectId: string | null;
-      icon: string | null;
-    };
+    args: HistoryCreateLiveDraftRequest;
     result: HistoryDraftTransportHandle;
   };
   [TauriCommand.history.completeLiveDraft]: {
-    args: {
-      historyId: string;
-      segments: TranscriptSegment[];
-      duration: number;
-    };
-    result: Partial<HistoryItem>;
+    args: HistoryCompleteLiveDraftRequest_Serialize;
+    result: HistoryItemRecord;
   };
   [TauriCommand.history.saveRecording]: {
-    args: {
-      segments: TranscriptSegment[];
-      duration: number;
-      projectId: string | null;
-      nativeAudioPath?: string;
-      audioBytes?: number[];
-      audioExtension?: string;
-    };
-    result: Partial<HistoryItem>;
+    args: HistorySaveRecordingRequest_Serialize;
+    result: HistoryItemRecord;
   };
   [TauriCommand.history.saveImportedFile]: {
-    args: {
-      sourcePath: string;
-      segments: TranscriptSegment[];
-      duration: number;
-      projectId: string | null;
-      convertedSourcePath?: string;
-      id?: string | null;
-    };
-    result: Partial<HistoryItem>;
+    args: HistorySaveImportedFileRequest_Serialize;
+    result: HistoryItemRecord;
   };
   [TauriCommand.history.deleteItems]: {
-    args: { ids: string[] };
+    args: HistoryDeleteItemsRequest;
     result: void;
   };
   [TauriCommand.history.loadTranscript]: {
     args: { historyId: string };
-    result: TranscriptSegment[] | null;
+    result: TranscriptSegment_Serialize[] | null;
   };
   [TauriCommand.history.updateTranscript]: {
-    args: {
-      historyId: string;
-      segments: TranscriptSegment[];
-    };
-    result: Partial<HistoryItem>;
+    args: HistoryUpdateTranscriptRequest_Serialize;
+    result: HistoryItemRecord;
   };
   [TauriCommand.history.createTranscriptSnapshot]: {
-    args: {
-      historyId: string;
-      reason: TranscriptSnapshotReason;
-      segments: TranscriptSegment[];
-    };
+    args: HistoryCreateTranscriptSnapshotRequest_Serialize;
     result: TranscriptSnapshotMetadata;
   };
   [TauriCommand.history.listTranscriptSnapshots]: {
@@ -508,51 +430,42 @@ export type TauriCommandContractMap = {
       historyId: string;
       snapshotId: string;
     };
-    result: TranscriptSnapshotRecord | null;
+    result: TranscriptSnapshotRecord_Serialize | null;
   };
   [TauriCommand.history.buildTranscriptDiff]: {
     args: {
-      snapshotSegments: TranscriptSegment[];
-      currentSegments: TranscriptSegment[];
+      snapshotSegments: TranscriptSegment_Serialize[];
+      currentSegments: TranscriptSegment_Serialize[];
     };
-    result: TranscriptDiffResult;
+    result: TranscriptDiffResult_Serialize;
   };
   [TauriCommand.history.restoreTranscriptDiffRows]: {
     args: {
-      rows: TranscriptDiffRow[];
+      rows: TranscriptDiffRow_Serialize[];
       selectedRowIds: string[];
     };
-    result: TranscriptSegment[];
+    result: TranscriptSegment_Serialize[];
   };
   [TauriCommand.history.updateItemMeta]: {
-    args: {
-      historyId: string;
-      updates: Partial<HistoryItem>;
-    };
+    args: HistoryUpdateItemMetaRequest_Serialize;
     result: void;
   };
   [TauriCommand.history.updateProjectAssignments]: {
-    args: {
-      ids: string[];
-      projectId: string | null;
-    };
+    args: HistoryUpdateProjectAssignmentsRequest;
     result: void;
   };
   [TauriCommand.history.reassignProject]: {
-    args: {
-      currentProjectId: string;
-      nextProjectId: string | null;
-    };
+    args: HistoryReassignProjectRequest;
     result: void;
   };
   [TauriCommand.history.loadSummary]: {
     args: { historyId: string };
-    result: HistorySummaryPayload | null;
+    result: HistorySummaryPayload_Serialize | null;
   };
   [TauriCommand.history.saveSummary]: {
     args: {
       historyId: string;
-      summaryPayload: HistorySummaryPayload;
+      summaryPayload: HistorySummaryPayload_Serialize;
     };
     result: void;
   };
@@ -565,16 +478,16 @@ export type TauriCommandContractMap = {
     result: string | null;
   };
   [TauriCommand.history.previewAudioCleanup]: {
-    args: HistoryAudioCleanupArgs;
+    args: HistoryAudioCleanupRequest_Serialize;
     result: HistoryAudioCleanupReport;
   };
   [TauriCommand.history.cleanupAudio]: {
-    args: HistoryAudioCleanupArgs;
+    args: HistoryAudioCleanupRequest_Serialize;
     result: HistoryAudioCleanupReport;
   };
   [TauriCommand.history.queryWorkspace]: {
-    args: WorkspaceQueryArgs;
-    result: WorkspaceQueryResult;
+    args: HistoryWorkspaceQueryRequest;
+    result: HistoryWorkspaceQueryResult;
   };
   [TauriCommand.history.openFolder]: {
     args: undefined;

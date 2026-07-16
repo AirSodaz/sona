@@ -16,28 +16,33 @@ pub fn normalize_history_transcript_segments(
     let parsed_segments = segments
         .as_array()
         .ok_or_else(|| "History transcript segments must be an array.".to_string())?;
-    let mut parsed_segments: Vec<TranscriptSegment> = parsed_segments
+    let parsed_segments: Vec<TranscriptSegment> = parsed_segments
         .iter()
         .enumerate()
         .map(|(index, segment)| parse_history_transcript_segment(segment, index))
         .collect::<Result<Vec<_>, _>>()?;
 
-    for segment in &mut parsed_segments {
+    Ok(canonicalize_history_transcript_segments(parsed_segments))
+}
+
+pub fn canonicalize_history_transcript_segments(
+    mut segments: Vec<TranscriptSegment>,
+) -> NormalizedHistoryTranscript {
+    for segment in &mut segments {
         ensure_transcript_segment_timing(segment);
     }
 
-    let search_content = parsed_segments
+    let search_content = segments
         .iter()
         .map(|segment| strip_html_tags(&segment.text))
         .collect::<Vec<_>>()
         .join(" ");
-    let preview_text =
-        preview_text_from_search_content(&search_content, !parsed_segments.is_empty());
-    Ok(NormalizedHistoryTranscript {
-        segments: parsed_segments,
+    let preview_text = preview_text_from_search_content(&search_content, !segments.is_empty());
+    NormalizedHistoryTranscript {
+        segments,
         preview_text,
         search_content,
-    })
+    }
 }
 
 fn parse_history_transcript_segment(

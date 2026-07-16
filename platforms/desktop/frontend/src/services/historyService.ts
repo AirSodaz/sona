@@ -1,4 +1,8 @@
-import { HistoryAudioCleanupReport, HistoryItem } from '../types/history';
+import {
+    HistoryAudioCleanupReport,
+    HistoryItem,
+    normalizeHistoryItemRecord as normalizeHistoryItem,
+} from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import {
     TranscriptDiffResult,
@@ -38,27 +42,6 @@ import { convertManagedAudioFileSrc } from './tauri/platform/assets';
 export interface LiveRecordingDraftHandle {
     item: HistoryItem;
     audioAbsolutePath: string;
-}
-
-function normalizeHistoryItem(item: Partial<HistoryItem> | null | undefined): HistoryItem {
-    return {
-        id: item?.id || '',
-        timestamp: item?.timestamp || 0,
-        duration: item?.duration || 0,
-        audioPath: item?.audioPath || '',
-        audioStatus: ['available', 'missing', 'removed'].includes(item?.audioStatus || '')
-            ? item?.audioStatus
-            : 'available',
-        transcriptPath: item?.transcriptPath || '',
-        title: item?.title || '',
-        previewText: item?.previewText || '',
-        icon: typeof item?.icon === 'string' ? item.icon : undefined,
-        type: item?.type === 'batch' ? 'batch' : 'recording',
-        searchContent: item?.searchContent || '',
-        projectId: typeof item?.projectId === 'string' ? item.projectId : null,
-        status: item?.status === 'draft' ? 'draft' : 'complete',
-        draftSource: item?.draftSource === 'live_record' ? 'live_record' : undefined,
-    };
 }
 
 function inferAudioExtensionFromPath(filePath: string, fallback: string): string {

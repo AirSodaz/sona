@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde_json::{Value, to_value};
 use tauri::{AppHandle, Runtime};
 
 use super::{
@@ -10,6 +9,7 @@ use super::{
 };
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::paths::PathProvider;
+use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryMutationError, HistoryUpdateTranscriptRequest,
 };
@@ -73,12 +73,11 @@ pub(crate) fn create_llm_transcript_snapshot_record(
         return Ok(None);
     }
 
-    let segments_value = to_value(segments)?;
     mutation_service
         .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
             history_id: history_id.to_string(),
             reason,
-            segments: segments_value,
+            segments,
         })
         .map(Some)
 }
@@ -92,11 +91,10 @@ pub(crate) fn update_llm_transcript_segments_record(
         return Ok(None);
     }
 
-    let segments_value = to_value(segments)?;
     mutation_service
         .update_transcript(HistoryUpdateTranscriptRequest {
             history_id: history_id.to_string(),
-            segments: segments_value,
+            segments,
         })
         .map(Some)
 }
@@ -113,7 +111,7 @@ fn history_query_error_to_mutation(error: HistoryStoreError) -> HistoryMutationE
 pub(crate) fn save_llm_summary_payload(
     repository: &impl HistoryStore,
     history_id: &str,
-    summary_payload: Value,
+    summary_payload: HistorySummaryPayload,
 ) -> Result<(), HistoryStoreError> {
     if history_id.trim().is_empty() || history_id == "current" {
         return Ok(());
@@ -128,7 +126,7 @@ mod tests {
     use crate::platform::history_repository::{
         HISTORY_DIR_NAME, HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest,
     };
-    use serde_json::json;
+    use sona_core::history::TranscriptSummaryRecordPayload;
     use sona_core::history::mutation_repository::HistoryMutationRepository;
     use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_sqlite::Database;
@@ -169,7 +167,7 @@ mod tests {
 
         let item = repository
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([{"id": "seg-1", "text": "before", "start": 0.0, "end": 1.0, "isFinal": true}]),
+                segments: vec![segment("seg-1", "before")],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![]),
@@ -235,7 +233,10 @@ mod tests {
         save_llm_summary_payload(
             repository.as_ref(),
             "current",
-            json!({ "activeTemplateId": "general" }),
+            HistorySummaryPayload {
+                active_template_id: "general".to_string(),
+                record: None,
+            },
         )
         .unwrap();
 
@@ -308,7 +309,7 @@ mod tests {
 
         let item = repository
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([{"id": "seg-1", "text": "test", "start": 0.0, "end": 1.0, "isFinal": true}]),
+                segments: vec![segment("seg-1", "test")],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![]),
@@ -320,29 +321,29 @@ mod tests {
         save_llm_summary_payload(
             repository.as_ref(),
             &item.id,
-            json!({
-                "activeTemplateId": "meeting",
-                "record": {
-                    "templateId": "meeting",
-                    "content": "Summary",
-                    "generatedAt": "2026-05-04T00:00:00.000Z",
-                    "sourceFingerprint": "fingerprint"
-                }
-            }),
+            HistorySummaryPayload {
+                active_template_id: "meeting".to_string(),
+                record: Some(TranscriptSummaryRecordPayload {
+                    template_id: "meeting".to_string(),
+                    content: "Summary".to_string(),
+                    generated_at: "2026-05-04T00:00:00.000Z".to_string(),
+                    source_fingerprint: "fingerprint".to_string(),
+                }),
+            },
         )
         .unwrap();
 
         assert_eq!(
             repository.load_summary(&item.id).unwrap(),
-            Some(json!({
-                "activeTemplateId": "meeting",
-                "record": {
-                    "templateId": "meeting",
-                    "content": "Summary",
-                    "generatedAt": "2026-05-04T00:00:00.000Z",
-                    "sourceFingerprint": "fingerprint"
-                }
-            }))
+            Some(HistorySummaryPayload {
+                active_template_id: "meeting".to_string(),
+                record: Some(TranscriptSummaryRecordPayload {
+                    template_id: "meeting".to_string(),
+                    content: "Summary".to_string(),
+                    generated_at: "2026-05-04T00:00:00.000Z".to_string(),
+                    source_fingerprint: "fingerprint".to_string(),
+                }),
+            })
         );
     }
 }

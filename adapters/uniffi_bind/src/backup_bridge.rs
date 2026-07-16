@@ -140,8 +140,10 @@ mod tests {
     };
     use sona_core::config::service::app_config_stored_state_from_value;
     use sona_core::config::{AppConfigStore, CURRENT_CONFIG_VERSION};
-    use sona_core::history::HistorySaveRecordingRequest;
     use sona_core::history::mutation_repository::HistoryMutationRepository;
+    use sona_core::history::{
+        HistorySaveRecordingRequest, HistorySummaryPayload, TranscriptSummaryRecordPayload,
+    };
     use sona_core::history_store::HistoryStore;
     use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
     use sona_sqlite::{
@@ -274,13 +276,14 @@ mod tests {
         history_store.ensure_ready().unwrap();
         let history_item = history_store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([{
+                segments: serde_json::from_value(json!([{
                     "id": "backup-segment",
                     "text": "Five scope backup",
                     "start": 0.0,
                     "end": 1.0,
                     "isFinal": true
-                }]),
+                }]))
+                .unwrap(),
                 duration: 1.0,
                 project_id: Some("backup-project".to_string()),
                 audio_bytes: Some(vec![1, 2, 3]),
@@ -289,7 +292,18 @@ mod tests {
             })
             .unwrap();
         history_store
-            .save_summary(&history_item.id, json!({"summary": "Backup summary"}))
+            .save_summary(
+                &history_item.id,
+                HistorySummaryPayload {
+                    active_template_id: "general".to_string(),
+                    record: Some(TranscriptSummaryRecordPayload {
+                        template_id: "general".to_string(),
+                        content: "Backup summary".to_string(),
+                        generated_at: "2026-07-14T00:00:00.000Z".to_string(),
+                        source_fingerprint: "backup-source".to_string(),
+                    }),
+                },
+            )
             .unwrap();
 
         SqliteAutomationRepository::new(Arc::clone(&database))

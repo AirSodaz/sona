@@ -10,13 +10,30 @@ pub use sona_core::dashboard::models::{
     UsageTrendPoint,
 };
 pub use sona_core::domain::{LlmProvider, PolishPresetId, SummaryTemplateId};
+pub use sona_core::history::mutation_repository::{
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReassignProjectRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
+};
+pub use sona_core::history::{
+    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
+    HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
+    HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+    HistorySummaryPayload, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+    HistoryWorkspaceItemCounts, HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSearchRange,
+    HistoryWorkspaceSearchSnippet, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
+    LiveRecordingDraftResult, TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    TranscriptSummaryRecordPayload,
+};
 pub use sona_core::llm::provider_protocol::{
     LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
 };
 pub use sona_core::llm::requests::{
-    HistorySummaryPayload, LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload,
-    PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
-    TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
+    LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload, PolishSegmentsRequest,
+    SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranslateSegmentsRequest,
 };
 pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
@@ -264,6 +281,44 @@ pub fn desktop_types() -> specta::Types {
         .register::<ProjectUpdateInput>()
         .register::<ProjectRecord>()
         .register::<ProjectRepositorySnapshot>()
+        .register::<HistoryAudioStatus>()
+        .register::<HistoryItemKind>()
+        .register::<HistoryItemStatus>()
+        .register::<HistoryDraftSource>()
+        .register::<HistoryItemRecord>()
+        .register::<HistoryWorkspaceScope>()
+        .register::<HistoryWorkspaceFilterType>()
+        .register::<HistoryWorkspaceDateFilter>()
+        .register::<HistoryWorkspaceSortOrder>()
+        .register::<HistoryWorkspaceQueryRequest>()
+        .register::<HistoryWorkspaceSearchRange>()
+        .register::<HistoryWorkspaceSearchSnippet>()
+        .register::<HistoryWorkspaceItemSearchMatch>()
+        .register::<HistoryWorkspaceSummary>()
+        .register::<HistoryWorkspaceItemCounts>()
+        .register::<HistoryWorkspaceQueryResult>()
+        .register::<LiveRecordingDraftResult>()
+        .register::<HistoryCreateLiveDraftRequest>()
+        .register::<HistoryCompleteLiveDraftRequest>()
+        .register::<HistorySaveRecordingRequest>()
+        .register::<HistorySaveImportedFileRequest>()
+        .register::<HistoryDeleteItemsRequest>()
+        .register::<HistoryUpdateTranscriptRequest>()
+        .register::<HistoryCreateTranscriptSnapshotRequest>()
+        .register::<HistoryItemMetaPatch>()
+        .register::<HistoryUpdateItemMetaRequest>()
+        .register::<HistoryUpdateProjectAssignmentsRequest>()
+        .register::<HistoryReassignProjectRequest>()
+        .register::<HistoryAudioCleanupRequest>()
+        .register::<HistoryAudioCleanupReport>()
+        .register::<TranscriptSnapshotReason>()
+        .register::<TranscriptSnapshotMetadata>()
+        .register::<TranscriptSnapshotRecord>()
+        .register::<TranscriptDiffStatus>()
+        .register::<TranscriptDiffRow>()
+        .register::<TranscriptDiffResult>()
+        .register::<TranscriptSummaryRecordPayload>()
+        .register::<HistorySummaryPayload>()
 }
 
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
@@ -318,6 +373,42 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ProjectUpdateInput",
     "ProjectRecord",
     "ProjectRepositorySnapshot",
+    "HistoryAudioStatus",
+    "HistoryItemKind",
+    "HistoryItemStatus",
+    "HistoryDraftSource",
+    "HistoryItemRecord",
+    "HistoryWorkspaceScope",
+    "HistoryWorkspaceFilterType",
+    "HistoryWorkspaceDateFilter",
+    "HistoryWorkspaceSortOrder",
+    "HistoryWorkspaceQueryRequest",
+    "HistoryWorkspaceSearchRange",
+    "HistoryWorkspaceSearchSnippet",
+    "HistoryWorkspaceItemSearchMatch",
+    "HistoryWorkspaceSummary",
+    "HistoryWorkspaceItemCounts",
+    "HistoryWorkspaceQueryResult",
+    "LiveRecordingDraftResult",
+    "HistoryCreateLiveDraftRequest",
+    "HistoryCompleteLiveDraftRequest",
+    "HistorySaveRecordingRequest",
+    "HistorySaveImportedFileRequest",
+    "HistoryDeleteItemsRequest",
+    "HistoryUpdateTranscriptRequest",
+    "HistoryCreateTranscriptSnapshotRequest",
+    "HistoryItemMetaPatch",
+    "HistoryUpdateItemMetaRequest",
+    "HistoryUpdateProjectAssignmentsRequest",
+    "HistoryReassignProjectRequest",
+    "HistoryAudioCleanupRequest",
+    "HistoryAudioCleanupReport",
+    "TranscriptSnapshotReason",
+    "TranscriptSnapshotMetadata",
+    "TranscriptSnapshotRecord",
+    "TranscriptDiffStatus",
+    "TranscriptDiffRow",
+    "TranscriptDiffResult",
     "LlmGenerateSource",
     "LlmUsageCategory",
     "TokenUsage",
@@ -423,6 +514,18 @@ mod tests {
             "ProjectUpdateInput",
             "ProjectRecord",
             "ProjectRepositorySnapshot",
+            "HistoryItemRecord",
+            "HistoryWorkspaceQueryRequest",
+            "HistoryWorkspaceQueryResult",
+            "HistoryCompleteLiveDraftRequest",
+            "HistorySaveRecordingRequest",
+            "HistorySaveImportedFileRequest",
+            "HistoryUpdateTranscriptRequest",
+            "HistoryCreateTranscriptSnapshotRequest",
+            "HistoryItemMetaPatch",
+            "HistorySummaryPayload",
+            "TranscriptSnapshotRecord",
+            "TranscriptDiffResult",
         ] {
             assert!(names.contains(&expected), "missing {expected}");
         }
@@ -522,6 +625,29 @@ mod tests {
     }
 
     #[test]
+    fn history_transport_validation_rejects_unsafe_timestamps() {
+        let item = HistoryItemRecord {
+            id: "history-1".to_string(),
+            timestamp: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+            duration: 1.0,
+            audio_path: "history-1.wav".to_string(),
+            audio_status: HistoryAudioStatus::Available,
+            transcript_path: "history-1.json".to_string(),
+            title: "History".to_string(),
+            preview_text: "hello".to_string(),
+            icon: None,
+            kind: HistoryItemKind::Recording,
+            search_content: "hello".to_string(),
+            project_id: None,
+            status: HistoryItemStatus::Complete,
+            draft_source: None,
+        };
+
+        let error = validate_typescript_safe_integers(&item).unwrap_err();
+        assert!(error.contains("$.timestamp"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -579,6 +705,42 @@ mod tests {
         assert_specta_type::<ProjectUpdateInput>();
         assert_specta_type::<ProjectRecord>();
         assert_specta_type::<ProjectRepositorySnapshot>();
+        assert_specta_type::<HistoryAudioStatus>();
+        assert_specta_type::<HistoryItemKind>();
+        assert_specta_type::<HistoryItemStatus>();
+        assert_specta_type::<HistoryDraftSource>();
+        assert_specta_type::<HistoryItemRecord>();
+        assert_specta_type::<HistoryWorkspaceScope>();
+        assert_specta_type::<HistoryWorkspaceFilterType>();
+        assert_specta_type::<HistoryWorkspaceDateFilter>();
+        assert_specta_type::<HistoryWorkspaceSortOrder>();
+        assert_specta_type::<HistoryWorkspaceQueryRequest>();
+        assert_specta_type::<HistoryWorkspaceSearchRange>();
+        assert_specta_type::<HistoryWorkspaceSearchSnippet>();
+        assert_specta_type::<HistoryWorkspaceItemSearchMatch>();
+        assert_specta_type::<HistoryWorkspaceSummary>();
+        assert_specta_type::<HistoryWorkspaceItemCounts>();
+        assert_specta_type::<HistoryWorkspaceQueryResult>();
+        assert_specta_type::<LiveRecordingDraftResult>();
+        assert_specta_type::<HistoryCreateLiveDraftRequest>();
+        assert_specta_type::<HistoryCompleteLiveDraftRequest>();
+        assert_specta_type::<HistorySaveRecordingRequest>();
+        assert_specta_type::<HistorySaveImportedFileRequest>();
+        assert_specta_type::<HistoryDeleteItemsRequest>();
+        assert_specta_type::<HistoryUpdateTranscriptRequest>();
+        assert_specta_type::<HistoryCreateTranscriptSnapshotRequest>();
+        assert_specta_type::<HistoryItemMetaPatch>();
+        assert_specta_type::<HistoryUpdateItemMetaRequest>();
+        assert_specta_type::<HistoryUpdateProjectAssignmentsRequest>();
+        assert_specta_type::<HistoryReassignProjectRequest>();
+        assert_specta_type::<HistoryAudioCleanupRequest>();
+        assert_specta_type::<HistoryAudioCleanupReport>();
+        assert_specta_type::<TranscriptSnapshotReason>();
+        assert_specta_type::<TranscriptSnapshotMetadata>();
+        assert_specta_type::<TranscriptSnapshotRecord>();
+        assert_specta_type::<TranscriptDiffStatus>();
+        assert_specta_type::<TranscriptDiffRow>();
+        assert_specta_type::<TranscriptDiffResult>();
         assert_specta_type::<LlmGenerateSource>();
         assert_specta_type::<LlmUsageCategory>();
         assert_specta_type::<TokenUsage>();

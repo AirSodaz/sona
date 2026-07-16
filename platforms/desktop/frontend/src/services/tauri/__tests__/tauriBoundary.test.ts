@@ -26,6 +26,7 @@ import {
   historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
+  historyLoadTranscript,
   historyLoadTranscriptSnapshot,
   historyPreviewAudioCleanup,
   historyQueryWorkspace,
@@ -528,7 +529,56 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
+  it('history transcript reads normalize nullable wire fields for the editor model', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce([{
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      timing: null,
+      tokens: null,
+      timestamps: null,
+      durations: null,
+      translation: null,
+      speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: null },
+      speakerAttribution: null,
+    }]);
+
+    const result = await historyLoadTranscript('history-1');
+
+    expect(result).toEqual([{
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      timing: undefined,
+      tokens: undefined,
+      timestamps: undefined,
+      durations: undefined,
+      translation: undefined,
+      speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: undefined },
+      speakerAttribution: undefined,
+    }]);
+  });
+
   it('history workspace query wrapper forwards flat query args', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      filteredItems: [],
+      searchMatchByItemId: {},
+      filteredItemCount: 0,
+      hasMore: false,
+      summary: {
+        totalItems: 0,
+        totalDuration: 0,
+        latestTimestamp: null,
+        recordingCount: 0,
+        batchCount: 0,
+      },
+      itemCounts: { inbox: 0, byProjectId: {} },
+    });
+
     await historyQueryWorkspace({
       scope: { kind: 'project', projectId: 'project-1' },
       query: 'roadmap',

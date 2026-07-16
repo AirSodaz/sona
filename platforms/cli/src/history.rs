@@ -7,13 +7,14 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryReassignProjectRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
-    HistoryUpdateTranscriptRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
+    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::query_service::HistoryQueryService;
+use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryItemRecord, HistoryListOptions,
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceQueryRequest,
@@ -298,6 +299,17 @@ struct HistorySaveRecordingInput {
     audio_extension: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistorySaveImportedFileInput {
+    id: Option<String>,
+    source_path: String,
+    segments: Value,
+    duration: f64,
+    project_id: Option<String>,
+    converted_source_path: Option<String>,
+}
+
 pub fn run_history(args: HistoryArgs) -> CliResult<CliOutput> {
     match args.command {
         HistoryCommands::List(args) => run_list(args),
@@ -408,7 +420,7 @@ fn run_create_live_draft(args: HistoryCreateLiveDraftArgs) -> CliResult<CliOutpu
 }
 
 fn run_complete_live_draft(args: HistoryCompleteLiveDraftArgs) -> CliResult<CliOutput> {
-    let segments = read_json(&args.segments, "history transcript segments")?;
+    let segments = read_legacy_segments(&args.segments, "history transcript segments")?;
     let service = open_mutation_service(args.location.app_data_dir)?;
     let item = service
         .complete_live_draft(HistoryCompleteLiveDraftRequest {
@@ -426,7 +438,7 @@ fn run_save_recording(args: HistorySaveRecordingArgs) -> CliResult<CliOutput> {
     let service = open_mutation_service(args.location.app_data_dir)?;
     let item = service
         .save_recording(HistorySaveRecordingRequest {
-            segments: input.segments,
+            segments: normalize_legacy_segments(input.segments)?,
             duration: input.duration,
             project_id: input.project_id,
             audio_bytes: None,
@@ -438,8 +450,15 @@ fn run_save_recording(args: HistorySaveRecordingArgs) -> CliResult<CliOutput> {
 }
 
 fn run_import_file(args: HistoryJsonInputArgs) -> CliResult<CliOutput> {
-    let mut request: HistorySaveImportedFileRequest =
-        read_json(&args.input, "history import input")?;
+    let input: HistorySaveImportedFileInput = read_json(&args.input, "history import input")?;
+    let mut request = HistorySaveImportedFileRequest {
+        id: input.id,
+        source_path: input.source_path,
+        segments: normalize_legacy_segments(input.segments)?,
+        duration: input.duration,
+        project_id: input.project_id,
+        converted_source_path: input.converted_source_path,
+    };
     let source_path = absolute_path(PathBuf::from(&request.source_path))?;
     request.source_path = utf8_path(&source_path, "import source")?;
     if let Some(path) = request.converted_source_path.take() {
@@ -466,7 +485,7 @@ fn run_delete(args: HistoryItemsMutationArgs) -> CliResult<CliOutput> {
 }
 
 fn run_update_transcript(args: HistoryTranscriptMutationArgs) -> CliResult<CliOutput> {
-    let segments = read_json(&args.segments, "history transcript segments")?;
+    let segments = read_legacy_segments(&args.segments, "history transcript segments")?;
     let service = open_mutation_service(args.location.app_data_dir)?;
     let item = service
         .update_transcript(HistoryUpdateTranscriptRequest {
@@ -478,7 +497,7 @@ fn run_update_transcript(args: HistoryTranscriptMutationArgs) -> CliResult<CliOu
 }
 
 fn run_create_snapshot(args: HistoryCreateSnapshotArgs) -> CliResult<CliOutput> {
-    let segments = read_json(&args.segments, "history snapshot segments")?;
+    let segments = read_legacy_segments(&args.segments, "history snapshot segments")?;
     let service = open_mutation_service(args.location.app_data_dir)?;
     let snapshot = service
         .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
@@ -495,7 +514,7 @@ fn run_create_snapshot(args: HistoryCreateSnapshotArgs) -> CliResult<CliOutput> 
 }
 
 fn run_update_meta(args: HistoryMetadataMutationArgs) -> CliResult<CliOutput> {
-    let updates = read_json(&args.updates, "history metadata updates")?;
+    let updates: HistoryItemMetaPatch = read_json(&args.updates, "history metadata updates")?;
     let service = open_mutation_service(args.location.app_data_dir)?;
     service
         .update_item_meta(HistoryUpdateItemMetaRequest {
@@ -504,6 +523,17 @@ fn run_update_meta(args: HistoryMetadataMutationArgs) -> CliResult<CliOutput> {
         })
         .map_err(map_history_mutation_error)?;
     Ok(CliOutput::default())
+}
+
+fn read_legacy_segments(path: &PathBuf, label: &str) -> CliResult<Vec<TranscriptSegment>> {
+    let segments: Value = read_json(path, label)?;
+    normalize_legacy_segments(segments)
+}
+
+fn normalize_legacy_segments(segments: Value) -> CliResult<Vec<TranscriptSegment>> {
+    normalize_history_transcript_segments(segments)
+        .map(|normalized| normalized.segments)
+        .map_err(CliError::Validation)
 }
 
 fn run_assign_project(args: HistoryAssignProjectArgs) -> CliResult<CliOutput> {

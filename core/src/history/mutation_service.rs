@@ -1,15 +1,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use serde_json::{Value, to_value};
-
 use crate::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
+    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
     HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
-use crate::history::transcript_payload::normalize_history_transcript_segments;
+use crate::history::transcript_payload::canonicalize_history_transcript_segments;
 use crate::history::{
     HistoryCreateLiveDraftRequest, HistoryItemRecord, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
@@ -157,10 +155,70 @@ impl HistoryMutationService {
     }
 }
 
-fn canonical_transcript(segments: Value) -> Result<Value, HistoryMutationError> {
-    let normalized = normalize_history_transcript_segments(segments)
-        .map_err(HistoryMutationError::InvalidRequest)?;
-    Ok(to_value(normalized.segments)?)
+fn canonical_transcript(
+    segments: Vec<crate::transcription::transcript::TranscriptSegment>,
+) -> Result<Vec<crate::transcription::transcript::TranscriptSegment>, HistoryMutationError> {
+    validate_transcript_numbers(&segments)?;
+    Ok(canonicalize_history_transcript_segments(segments).segments)
+}
+
+fn validate_transcript_numbers(
+    segments: &[crate::transcription::transcript::TranscriptSegment],
+) -> Result<(), HistoryMutationError> {
+    for (segment_index, segment) in segments.iter().enumerate() {
+        validate_finite_number(&format!("segments[{segment_index}].start"), segment.start)?;
+        validate_finite_number(&format!("segments[{segment_index}].end"), segment.end)?;
+        if let Some(timing) = segment.timing.as_ref() {
+            for (unit_index, unit) in timing.units.iter().enumerate() {
+                validate_finite_number(
+                    &format!("segments[{segment_index}].timing.units[{unit_index}].start"),
+                    unit.start,
+                )?;
+                validate_finite_number(
+                    &format!("segments[{segment_index}].timing.units[{unit_index}].end"),
+                    unit.end,
+                )?;
+            }
+        }
+        for (field, values) in [
+            ("timestamps", segment.timestamps.as_deref()),
+            ("durations", segment.durations.as_deref()),
+        ] {
+            if let Some(values) = values {
+                for (value_index, value) in values.iter().enumerate() {
+                    validate_finite_number(
+                        &format!("segments[{segment_index}].{field}[{value_index}]"),
+                        f64::from(*value),
+                    )?;
+                }
+            }
+        }
+        if let Some(score) = segment.speaker.as_ref().and_then(|speaker| speaker.score) {
+            validate_finite_number(
+                &format!("segments[{segment_index}].speaker.score"),
+                f64::from(score),
+            )?;
+        }
+        if let Some(attribution) = segment.speaker_attribution.as_ref() {
+            for (candidate_index, candidate) in attribution.candidates.iter().enumerate() {
+                validate_finite_number(
+                    &format!(
+                        "segments[{segment_index}].speakerAttribution.candidates[{candidate_index}].score"
+                    ),
+                    f64::from(candidate.score),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_finite_number(label: &str, value: f64) -> Result<(), HistoryMutationError> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        invalid(format!("{label} must be a finite number"))
+    }
 }
 
 fn validate_duration(duration: f64) -> Result<(), HistoryMutationError> {
@@ -243,45 +301,24 @@ fn validate_import_audio_extension(path: &str) -> Result<(), HistoryMutationErro
     }
 }
 
-fn validate_metadata_updates(updates: &Value) -> Result<(), HistoryMutationError> {
-    let updates = updates.as_object().ok_or_else(|| {
-        HistoryMutationError::InvalidRequest("history item updates must be an object".to_string())
-    })?;
-    for (key, value) in updates {
-        validate_metadata_update(key, value)?;
+fn validate_metadata_updates(updates: &HistoryItemMetaPatch) -> Result<(), HistoryMutationError> {
+    if let Some(duration) = updates.duration {
+        validate_duration(duration)?;
+    }
+    if let Some(audio_path) = updates.audio_path.as_deref() {
+        validate_managed_file_name("audioPath", audio_path, MAX_MANAGED_FILE_NAME_UTF16_UNITS)?;
+    }
+    if let Some(transcript_path) = updates.transcript_path.as_deref() {
+        validate_managed_file_name(
+            "transcriptPath",
+            transcript_path,
+            MAX_MANAGED_FILE_NAME_UTF16_UNITS,
+        )?;
+    }
+    if let Some(Some(project_id)) = updates.project_id.as_ref() {
+        validate_nonempty("projectId", project_id)?;
     }
     Ok(())
-}
-
-fn validate_metadata_update(key: &str, value: &Value) -> Result<(), HistoryMutationError> {
-    let valid = match key {
-        "timestamp" => value.as_u64().is_some(),
-        "duration" => value
-            .as_f64()
-            .is_some_and(|value| value.is_finite() && value >= 0.0),
-        "audioPath" | "transcriptPath" => value.as_str().is_some_and(|value| {
-            validate_managed_file_name(key, value, MAX_MANAGED_FILE_NAME_UTF16_UNITS).is_ok()
-        }),
-        "audioStatus" => matches!(value.as_str(), Some("available" | "missing" | "removed")),
-        "title" | "previewText" | "searchContent" => value.is_string(),
-        "icon" => value.is_null() || value.is_string(),
-        "type" => matches!(value.as_str(), Some("batch" | "recording")),
-        "projectId" => optional_nonempty_string(value),
-        "status" => matches!(value.as_str(), Some("draft" | "complete")),
-        "draftSource" => value.is_null() || value.as_str() == Some("live_record"),
-        _ => false,
-    };
-    if valid {
-        Ok(())
-    } else {
-        invalid(format!(
-            "history item update `{key}` has an unsupported value"
-        ))
-    }
-}
-
-fn optional_nonempty_string(value: &Value) -> bool {
-    value.is_null() || value.as_str().is_some_and(|value| !value.trim().is_empty())
 }
 
 fn validate_managed_file_name(

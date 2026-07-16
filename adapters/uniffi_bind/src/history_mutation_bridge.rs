@@ -2,9 +2,15 @@ use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use sona_core::history::HistorySaveRecordingRequest;
-use sona_core::history::mutation_repository::HistoryMutationError;
+use sona_core::history::mutation_repository::{
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryMutationError,
+    HistoryUpdateTranscriptRequest,
+};
 use sona_core::history::mutation_service::HistoryMutationService;
+use sona_core::history::transcript_payload::normalize_history_transcript_segments;
+use sona_core::history::{
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, TranscriptSnapshotReason,
+};
 use sona_sqlite::LazySqliteHistoryMutationRepository;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -16,6 +22,40 @@ struct HistorySaveRecordingMetadata {
     duration: f64,
     project_id: Option<String>,
     audio_extension: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistoryCompleteLiveDraftJsonRequest {
+    history_id: String,
+    segments: Value,
+    duration: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistorySaveImportedFileJsonRequest {
+    id: Option<String>,
+    source_path: String,
+    segments: Value,
+    duration: f64,
+    project_id: Option<String>,
+    converted_source_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistoryUpdateTranscriptJsonRequest {
+    history_id: String,
+    segments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistoryCreateTranscriptSnapshotJsonRequest {
+    history_id: String,
+    reason: TranscriptSnapshotReason,
+    segments: Value,
 }
 
 pub(crate) async fn create_history_live_draft_json(
@@ -33,7 +73,12 @@ pub(crate) async fn complete_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: HistoryCompleteLiveDraftJsonRequest = parse_request(&request_json)?;
+    let request = HistoryCompleteLiveDraftRequest {
+        history_id: request.history_id,
+        segments: parse_legacy_segments(request.segments)?,
+        duration: request.duration,
+    };
     run_mutation(app_data_dir, move |service| {
         service.complete_live_draft(request)
     })
@@ -48,7 +93,7 @@ pub(crate) async fn save_history_recording_json(
 ) -> SonaCoreBindingResult<String> {
     let metadata: HistorySaveRecordingMetadata = parse_request(&request_json)?;
     let request = HistorySaveRecordingRequest {
-        segments: metadata.segments,
+        segments: parse_legacy_segments(metadata.segments)?,
         duration: metadata.duration,
         project_id: metadata.project_id,
         audio_bytes,
@@ -62,7 +107,15 @@ pub(crate) async fn save_history_imported_file_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: HistorySaveImportedFileJsonRequest = parse_request(&request_json)?;
+    let request = HistorySaveImportedFileRequest {
+        id: request.id,
+        source_path: request.source_path,
+        segments: parse_legacy_segments(request.segments)?,
+        duration: request.duration,
+        project_id: request.project_id,
+        converted_source_path: request.converted_source_path,
+    };
     run_mutation(app_data_dir, move |service| {
         service.save_imported_file(request)
     })
@@ -81,7 +134,11 @@ pub(crate) async fn update_history_transcript_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: HistoryUpdateTranscriptJsonRequest = parse_request(&request_json)?;
+    let request = HistoryUpdateTranscriptRequest {
+        history_id: request.history_id,
+        segments: parse_legacy_segments(request.segments)?,
+    };
     run_mutation(app_data_dir, move |service| {
         service.update_transcript(request)
     })
@@ -92,7 +149,12 @@ pub(crate) async fn create_history_transcript_snapshot_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: HistoryCreateTranscriptSnapshotJsonRequest = parse_request(&request_json)?;
+    let request = HistoryCreateTranscriptSnapshotRequest {
+        history_id: request.history_id,
+        reason: request.reason,
+        segments: parse_legacy_segments(request.segments)?,
+    };
     run_mutation(app_data_dir, move |service| {
         service.create_transcript_snapshot(request)
     })
@@ -135,6 +197,15 @@ pub(crate) async fn reassign_history_project_json(
 fn parse_request<T: DeserializeOwned>(request_json: &str) -> SonaCoreBindingResult<T> {
     serde_json::from_str(request_json)
         .map_err(HistoryMutationError::Serialization)
+        .map_err(history_mutation_error)
+}
+
+fn parse_legacy_segments(
+    segments: Value,
+) -> SonaCoreBindingResult<Vec<sona_core::transcription::transcript::TranscriptSegment>> {
+    normalize_history_transcript_segments(segments)
+        .map(|normalized| normalized.segments)
+        .map_err(HistoryMutationError::InvalidRequest)
         .map_err(history_mutation_error)
 }
 
@@ -192,6 +263,7 @@ mod tests {
         update_history_project_assignments_json, update_history_transcript_json,
     };
     use crate::SonaCoreBindingError;
+    use crate::history_query_bridge::load_history_transcript_json;
     use serde_json::{Value, json};
 
     fn app_data_dir(dir: &tempfile::TempDir) -> String {
@@ -308,6 +380,45 @@ mod tests {
                 .starts_with("Invalid history mutation: import source file")
         );
         assert!(!dir.path().join("sona.db").exists());
+    }
+
+    #[tokio::test]
+    async fn legacy_json_segments_are_normalized_at_the_uniffi_boundary() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data = app_data_dir(&dir);
+
+        create_history_live_draft_json(
+            app_data.clone(),
+            json!({
+                "id": "legacy-live",
+                "audioExtension": "wav",
+                "projectId": null,
+                "icon": null
+            })
+            .to_string(),
+        )
+        .await
+        .unwrap();
+        complete_history_live_draft_json(
+            app_data.clone(),
+            json!({
+                "historyId": "legacy-live",
+                "segments": [{"text": "legacy transcript"}],
+                "duration": 1.0
+            })
+            .to_string(),
+        )
+        .await
+        .unwrap();
+
+        let transcript = canonical(
+            load_history_transcript_json(app_data, "legacy-live".to_string())
+                .await
+                .unwrap(),
+        );
+        assert_eq!(transcript[0]["id"], "segment-0");
+        assert_eq!(transcript[0]["isFinal"], true);
+        assert_eq!(transcript[0]["timing"]["source"], "derived");
     }
 
     #[tokio::test]

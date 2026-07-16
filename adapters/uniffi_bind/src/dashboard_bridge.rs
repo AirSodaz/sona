@@ -121,13 +121,14 @@ mod tests {
         let text = "你好 UniFFI 🌍";
         history
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([{
+                segments: serde_json::from_value(json!([{
                     "id": "segment-unicode",
                     "text": text,
                     "start": 0.0,
                     "end": 2.0,
                     "isFinal": true
-                }]),
+                }]))
+                .unwrap(),
                 duration: 2.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),

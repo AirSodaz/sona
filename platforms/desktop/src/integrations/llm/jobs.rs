@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use serde_json::to_value;
 use sona_core::llm::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments, normalized_job_history_id,
@@ -243,9 +242,9 @@ async fn run_summary_job(
     };
 
     if let Some(hid) = history_id.clone() {
-        let summary_value = to_value(&summary).map_err(|error| error.to_string())?;
+        let persisted_summary = summary.clone();
         llm_helpers::run_llm_db_task_with_app(&app, move |store| {
-            llm_helpers::save_llm_summary_payload(&store, &hid, summary_value)
+            llm_helpers::save_llm_summary_payload(&store, &hid, persisted_summary)
         })
         .await?;
     }

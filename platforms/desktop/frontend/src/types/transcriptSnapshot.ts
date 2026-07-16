@@ -1,21 +1,16 @@
+import type {
+  TranscriptDiffStatus,
+  TranscriptSnapshotMetadata,
+  TranscriptSnapshotReason,
+} from '../bindings';
 import type { TranscriptSegment } from './transcript';
 
-export type TranscriptSnapshotReason = 'polish' | 'translate' | 'retranscribe' | 'restore';
-
-export interface TranscriptSnapshotMetadata {
-  id: string;
-  historyId: string;
-  reason: TranscriptSnapshotReason;
-  createdAt: number;
-  segmentCount: number;
-}
+export type { TranscriptDiffStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason };
 
 export interface TranscriptSnapshotRecord {
   metadata: TranscriptSnapshotMetadata;
   segments: TranscriptSegment[];
 }
-
-export type TranscriptDiffStatus = 'unchanged' | 'modified' | 'added' | 'removed';
 
 export interface TranscriptDiffRow {
   id: string;

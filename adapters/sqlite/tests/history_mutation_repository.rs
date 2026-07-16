@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use serde_json::json;
 use sona_core::history::mutation_repository::{HistoryMutationError, HistoryMutationRepository};
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::{
@@ -47,7 +46,7 @@ fn missing_native_copy_source_is_rejected_before_database_open() {
     let missing = dir.path().join("missing-recording.wav");
     let error = service(dir.path())
         .save_recording(HistorySaveRecordingRequest {
-            segments: json!([]),
+            segments: Vec::new(),
             duration: 1.0,
             project_id: None,
             audio_bytes: None,
@@ -73,7 +72,7 @@ fn missing_import_copy_source_is_rejected_before_database_open() {
         .save_imported_file(HistorySaveImportedFileRequest {
             id: None,
             source_path: missing.to_string_lossy().into_owned(),
-            segments: json!([]),
+            segments: Vec::new(),
             duration: 1.0,
             project_id: None,
             converted_source_path: None,

@@ -59,6 +59,273 @@ export type DashboardUsageBucket = {
 	totalTokensDisplay: string,
 };
 
+export type HistoryAudioCleanupReport = {
+	eligibleCount: number,
+	removedCount: number,
+	removedBytes: number,
+	missingMarkedCount: number,
+	failedCount: number,
+	skippedActiveCount: number,
+};
+
+export type HistoryAudioCleanupRequest = HistoryAudioCleanupRequest_Serialize | HistoryAudioCleanupRequest_Deserialize;
+
+export type HistoryAudioCleanupRequest_Deserialize = {
+	retentionDays?: number | null,
+	excludeHistoryId?: string | null,
+};
+
+export type HistoryAudioCleanupRequest_Serialize = {
+	retentionDays?: number | null,
+	excludeHistoryId?: string | null,
+};
+
+export type HistoryAudioStatus = "available" | "missing" | "removed";
+
+export type HistoryCompleteLiveDraftRequest = HistoryCompleteLiveDraftRequest_Serialize | HistoryCompleteLiveDraftRequest_Deserialize;
+
+export type HistoryCompleteLiveDraftRequest_Deserialize = {
+	historyId: string,
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
+};
+
+export type HistoryCompleteLiveDraftRequest_Serialize = {
+	historyId: string,
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
+};
+
+export type HistoryCreateLiveDraftRequest = {
+	id: string | null,
+	audioExtension: string,
+	projectId: string | null,
+	icon: string | null,
+};
+
+export type HistoryCreateTranscriptSnapshotRequest = HistoryCreateTranscriptSnapshotRequest_Serialize | HistoryCreateTranscriptSnapshotRequest_Deserialize;
+
+export type HistoryCreateTranscriptSnapshotRequest_Deserialize = {
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	segments: TranscriptSegment_Deserialize[],
+};
+
+export type HistoryCreateTranscriptSnapshotRequest_Serialize = {
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	segments: TranscriptSegment_Serialize[],
+};
+
+export type HistoryDeleteItemsRequest = {
+	ids: string[],
+};
+
+export type HistoryDraftSource = "live_record";
+
+export type HistoryItemKind = "batch" | "recording";
+
+export type HistoryItemMetaPatch = HistoryItemMetaPatch_Serialize | HistoryItemMetaPatch_Deserialize;
+
+export type HistoryItemMetaPatch_Deserialize = {
+	timestamp?: number | null,
+	duration?: number | null,
+	audioPath?: string | null,
+	audioStatus?: HistoryAudioStatus | null,
+	transcriptPath?: string | null,
+	title?: string | null,
+	previewText?: string | null,
+	icon?: string | null,
+	type?: HistoryItemKind | null,
+	searchContent?: string | null,
+	projectId?: string | null,
+	status?: HistoryItemStatus | null,
+	draftSource?: HistoryDraftSource | null,
+};
+
+export type HistoryItemMetaPatch_Serialize = {
+	timestamp?: number | null,
+	duration?: number | null,
+	audioPath?: string | null,
+	audioStatus?: HistoryAudioStatus | null,
+	transcriptPath?: string | null,
+	title?: string | null,
+	previewText?: string | null,
+	icon?: string | null,
+	type?: HistoryItemKind | null,
+	searchContent?: string | null,
+	projectId?: string | null,
+	status?: HistoryItemStatus | null,
+	draftSource?: HistoryDraftSource | null,
+};
+
+export type HistoryItemRecord = {
+	id: string,
+	timestamp: number,
+	duration: number,
+	audioPath: string,
+	audioStatus: HistoryAudioStatus,
+	transcriptPath: string,
+	title: string,
+	previewText: string,
+	icon: string | null,
+	type: HistoryItemKind,
+	searchContent: string,
+	projectId: string | null,
+	status: HistoryItemStatus,
+	draftSource: HistoryDraftSource | null,
+};
+
+export type HistoryItemStatus = "draft" | "complete";
+
+export type HistoryReassignProjectRequest = {
+	currentProjectId: string,
+	nextProjectId: string | null,
+};
+
+export type HistorySaveImportedFileRequest = HistorySaveImportedFileRequest_Serialize | HistorySaveImportedFileRequest_Deserialize;
+
+export type HistorySaveImportedFileRequest_Deserialize = {
+	id?: string | null,
+	sourcePath: string,
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
+	projectId?: string | null,
+	convertedSourcePath?: string | null,
+};
+
+export type HistorySaveImportedFileRequest_Serialize = {
+	id?: string | null,
+	sourcePath: string,
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
+	projectId?: string | null,
+	convertedSourcePath?: string | null,
+};
+
+export type HistorySaveRecordingRequest = HistorySaveRecordingRequest_Serialize | HistorySaveRecordingRequest_Deserialize;
+
+export type HistorySaveRecordingRequest_Deserialize = {
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
+	projectId?: string | null,
+	audioBytes?: number[] | null,
+	nativeAudioPath?: string | null,
+	audioExtension?: string | null,
+};
+
+export type HistorySaveRecordingRequest_Serialize = {
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
+	projectId?: string | null,
+	audioBytes?: number[] | null,
+	nativeAudioPath?: string | null,
+	audioExtension?: string | null,
+};
+
+export type HistorySummaryPayload = HistorySummaryPayload_Serialize | HistorySummaryPayload_Deserialize;
+
+export type HistorySummaryPayload_Deserialize = {
+	activeTemplateId: string,
+	record: TranscriptSummaryRecordPayload | null,
+};
+
+export type HistorySummaryPayload_Serialize = {
+	activeTemplateId: string,
+	record?: TranscriptSummaryRecordPayload | null,
+};
+
+export type HistoryUpdateItemMetaRequest = HistoryUpdateItemMetaRequest_Serialize | HistoryUpdateItemMetaRequest_Deserialize;
+
+export type HistoryUpdateItemMetaRequest_Deserialize = {
+	historyId: string,
+	updates: HistoryItemMetaPatch_Deserialize,
+};
+
+export type HistoryUpdateItemMetaRequest_Serialize = {
+	historyId: string,
+	updates: HistoryItemMetaPatch_Serialize,
+};
+
+export type HistoryUpdateProjectAssignmentsRequest = {
+	ids: string[],
+	projectId: string | null,
+};
+
+export type HistoryUpdateTranscriptRequest = HistoryUpdateTranscriptRequest_Serialize | HistoryUpdateTranscriptRequest_Deserialize;
+
+export type HistoryUpdateTranscriptRequest_Deserialize = {
+	historyId: string,
+	segments: TranscriptSegment_Deserialize[],
+};
+
+export type HistoryUpdateTranscriptRequest_Serialize = {
+	historyId: string,
+	segments: TranscriptSegment_Serialize[],
+};
+
+export type HistoryWorkspaceDateFilter = "all" | "today" | "week" | "month";
+
+export type HistoryWorkspaceFilterType = "all" | "recording" | "batch";
+
+export type HistoryWorkspaceItemCounts = {
+	inbox: number,
+	byProjectId: { [key in string]: number },
+};
+
+export type HistoryWorkspaceItemSearchMatch = {
+	matchedField: string,
+	titleMatch: HistoryWorkspaceSearchRange | null,
+	displaySnippet: HistoryWorkspaceSearchSnippet,
+};
+
+export type HistoryWorkspaceQueryRequest = {
+	scope: HistoryWorkspaceScope,
+	query: string,
+	filterType: HistoryWorkspaceFilterType,
+	dateFilter: HistoryWorkspaceDateFilter,
+	sortOrder: HistoryWorkspaceSortOrder,
+	limit: number,
+	offset: number,
+};
+
+export type HistoryWorkspaceQueryResult = {
+	filteredItems: HistoryItemRecord[],
+	searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch | null },
+	filteredItemCount: number,
+	hasMore: boolean,
+	summary: HistoryWorkspaceSummary,
+	itemCounts: HistoryWorkspaceItemCounts,
+};
+
+export type HistoryWorkspaceScope = { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string };
+
+export type HistoryWorkspaceSearchRange = {
+	start: number,
+	end: number,
+};
+
+export type HistoryWorkspaceSearchSnippet = {
+	text: string,
+	highlightStart: number,
+	highlightEnd: number,
+};
+
+export type HistoryWorkspaceSortOrder = "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
+
+export type HistoryWorkspaceSummary = {
+	totalItems: number,
+	totalDuration: number,
+	latestTimestamp: number | null,
+	recordingCount: number,
+	batchCount: number,
+};
+
+export type LiveRecordingDraftResult = {
+	item: HistoryItemRecord,
+	audioAbsolutePath: string,
+};
+
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
 
 export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
@@ -281,6 +548,22 @@ export type ProjectUpdateInput = {
 	defaults?: ProjectDefaultsPatch | null,
 };
 
+export type SpeakerAttribution = {
+	groupId: string,
+	anonymousLabel: string,
+	state: string,
+	source: string,
+	confidence: string,
+	candidates: SpeakerCandidate[],
+};
+
+export type SpeakerCandidate = {
+	profileId: string,
+	profileName: string,
+	score: number,
+	rank: number,
+};
+
 export type SpeakerLeader = {
 	speakerId: string,
 	label: string,
@@ -319,6 +602,22 @@ export type SpeakerStats = {
 	topIdentifiedSpeakerRows: SpeakerLeader[],
 	topIdentifiedSpeakerMaxValue: number,
 	isDeepLoaded: boolean,
+};
+
+export type SpeakerTag = SpeakerTag_Serialize | SpeakerTag_Deserialize;
+
+export type SpeakerTag_Deserialize = {
+	id: string,
+	label: string,
+	kind: string,
+	score?: number | null,
+};
+
+export type SpeakerTag_Serialize = {
+	id: string,
+	label: string,
+	kind: string,
+	score?: number | null,
 };
 
 export type SummarySegmentInput = {
@@ -439,9 +738,120 @@ export type TaskLedgerSnapshot_Serialize = {
 
 export type TaskLedgerStatus = "pending" | "running" | "cancelRequested" | "failed" | "recoverable" | "interrupted" | "cancelled" | "succeeded";
 
+export type TranscriptDiffResult = TranscriptDiffResult_Serialize | TranscriptDiffResult_Deserialize;
+
+export type TranscriptDiffResult_Deserialize = {
+	rows: TranscriptDiffRow_Deserialize[],
+	changedCount: number,
+};
+
+export type TranscriptDiffResult_Serialize = {
+	rows: TranscriptDiffRow_Serialize[],
+	changedCount: number,
+};
+
+export type TranscriptDiffRow = TranscriptDiffRow_Serialize | TranscriptDiffRow_Deserialize;
+
+export type TranscriptDiffRow_Deserialize = {
+	id: string,
+	status: TranscriptDiffStatus,
+	snapshotSegment: TranscriptSegment_Deserialize | null,
+	currentSegment: TranscriptSegment_Deserialize | null,
+	snapshotIndex: number | null,
+	currentIndex: number | null,
+};
+
+export type TranscriptDiffRow_Serialize = {
+	id: string,
+	status: TranscriptDiffStatus,
+	snapshotSegment?: TranscriptSegment_Serialize | null,
+	currentSegment?: TranscriptSegment_Serialize | null,
+	snapshotIndex: number | null,
+	currentIndex: number | null,
+};
+
+export type TranscriptDiffStatus = "unchanged" | "modified" | "added" | "removed";
+
+export type TranscriptSegment = TranscriptSegment_Serialize | TranscriptSegment_Deserialize;
+
+export type TranscriptSegment_Deserialize = {
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing: TranscriptTiming | null,
+	tokens: string[] | null,
+	timestamps: number[] | null,
+	durations: number[] | null,
+	translation: string | null,
+	speaker: SpeakerTag_Deserialize | null,
+	speakerAttribution: SpeakerAttribution | null,
+};
+
+export type TranscriptSegment_Serialize = {
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing?: TranscriptTiming | null,
+	tokens?: string[] | null,
+	timestamps?: number[] | null,
+	durations?: number[] | null,
+	translation?: string | null,
+	speaker?: SpeakerTag_Serialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
+};
+
+export type TranscriptSnapshotMetadata = {
+	id: string,
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	createdAt: number,
+	segmentCount: number,
+};
+
+export type TranscriptSnapshotReason = "polish" | "translate" | "retranscribe" | "restore";
+
+export type TranscriptSnapshotRecord = TranscriptSnapshotRecord_Serialize | TranscriptSnapshotRecord_Deserialize;
+
+export type TranscriptSnapshotRecord_Deserialize = {
+	metadata: TranscriptSnapshotMetadata,
+	segments: TranscriptSegment_Deserialize[],
+};
+
+export type TranscriptSnapshotRecord_Serialize = {
+	metadata: TranscriptSnapshotMetadata,
+	segments: TranscriptSegment_Serialize[],
+};
+
+export type TranscriptSummaryRecordPayload = {
+	templateId: string,
+	content: string,
+	generatedAt: string,
+	sourceFingerprint: string,
+};
+
 export type TranscriptSummaryResult = {
 	templateId: string,
 	content: string,
+};
+
+export type TranscriptTiming = {
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: TranscriptTimingUnit[],
+};
+
+export type TranscriptTimingLevel = "token" | "segment";
+
+export type TranscriptTimingSource = "model" | "derived";
+
+export type TranscriptTimingUnit = {
+	text: string,
+	start: number,
+	end: number,
 };
 
 export type TranslatedSegment = {

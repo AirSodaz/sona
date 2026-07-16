@@ -4,17 +4,19 @@ use crate::history_fs_utils::{
     remove_path_if_exists,
 };
 use crate::ports::Database as DatabasePort;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
+    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
     HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
-use sona_core::history::transcript_payload::normalize_history_transcript_segments;
+use sona_core::history::transcript_payload::{
+    canonicalize_history_transcript_segments, normalize_history_transcript_segments,
+};
 use sona_core::history::workspace_query::{
     HistoryWorkspaceDateFilterThresholds, normalize_workspace_search_text,
     validate_workspace_query_request, workspace_item_search_match,
@@ -23,11 +25,11 @@ use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
     HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
-    HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, HistoryWorkspaceSummary,
-    LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    HistorySaveRecordingRequest, HistorySummaryPayload, HistoryWorkspaceDateFilter,
+    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    HistoryWorkspaceSummary, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -1160,51 +1162,45 @@ fn invalid_history_column(
     )
 }
 
-fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String, Value>) {
-    if let Some(id) = updates.get("id").and_then(Value::as_str) {
-        item.id = id.to_string();
-    }
-    if let Some(timestamp) = updates.get("timestamp").and_then(Value::as_u64) {
+fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &HistoryItemMetaPatch) {
+    if let Some(timestamp) = updates.timestamp {
         item.timestamp = timestamp;
     }
-    if let Some(duration) = updates.get("duration").and_then(Value::as_f64) {
+    if let Some(duration) = updates.duration {
         item.duration = duration.max(0.0);
     }
-    if let Some(audio_path) = updates.get("audioPath").and_then(Value::as_str) {
-        item.audio_path = audio_path.to_string();
+    if let Some(audio_path) = updates.audio_path.as_ref() {
+        item.audio_path.clone_from(audio_path);
     }
-    if let Some(audio_status) = updates.get("audioStatus").and_then(Value::as_str) {
-        item.audio_status =
-            HistoryAudioStatus::from_str(audio_status).unwrap_or(HistoryAudioStatus::Available);
+    if let Some(audio_status) = updates.audio_status {
+        item.audio_status = audio_status;
     }
-    if let Some(transcript_path) = updates.get("transcriptPath").and_then(Value::as_str) {
-        item.transcript_path = transcript_path.to_string();
+    if let Some(transcript_path) = updates.transcript_path.as_ref() {
+        item.transcript_path.clone_from(transcript_path);
     }
-    if let Some(title) = updates.get("title").and_then(Value::as_str) {
-        item.title = title.to_string();
+    if let Some(title) = updates.title.as_ref() {
+        item.title.clone_from(title);
     }
-    if let Some(preview_text) = updates.get("previewText").and_then(Value::as_str) {
-        item.preview_text = preview_text.to_string();
+    if let Some(preview_text) = updates.preview_text.as_ref() {
+        item.preview_text.clone_from(preview_text);
     }
-    if let Some(icon) = updates.get("icon") {
-        item.icon = icon.as_str().map(ToString::to_string);
+    if let Some(icon) = updates.icon.as_ref() {
+        item.icon.clone_from(icon);
     }
-    if let Some(kind) = updates.get("type").and_then(Value::as_str) {
-        item.kind = HistoryItemKind::from_str(kind).unwrap_or(HistoryItemKind::Recording);
+    if let Some(kind) = updates.kind {
+        item.kind = kind;
     }
-    if let Some(search_content) = updates.get("searchContent").and_then(Value::as_str) {
-        item.search_content = search_content.to_string();
+    if let Some(search_content) = updates.search_content.as_ref() {
+        item.search_content.clone_from(search_content);
     }
-    if let Some(project_id) = updates.get("projectId") {
-        item.project_id = project_id.as_str().map(ToString::to_string);
+    if let Some(project_id) = updates.project_id.as_ref() {
+        item.project_id.clone_from(project_id);
     }
-    if let Some(status) = updates.get("status").and_then(Value::as_str) {
-        item.status = HistoryItemStatus::from_str(status).unwrap_or(HistoryItemStatus::Complete);
+    if let Some(status) = updates.status {
+        item.status = status;
     }
-    if let Some(draft_source) = updates.get("draftSource") {
-        item.draft_source = draft_source
-            .as_str()
-            .and_then(|s| HistoryDraftSource::from_str(s).ok());
+    if let Some(draft_source) = updates.draft_source.as_ref() {
+        item.draft_source = *draft_source;
     }
 }
 
@@ -1465,11 +1461,10 @@ where
     fn complete_live_draft(
         &self,
         history_id: &str,
-        segments: Value,
+        segments: Vec<TranscriptSegment>,
         duration: f64,
     ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        let normalized_transcript =
-            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
@@ -1518,8 +1513,7 @@ where
             audio_extension,
         } = request;
 
-        let normalized_transcript =
-            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
         let mut item = sona_core::history::item_factory::create_recording_item(
             generated,
@@ -1592,8 +1586,7 @@ where
             converted_source_path,
         } = request;
 
-        let normalized_transcript =
-            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
         let imported = sona_core::history::item_factory::create_imported_file_item(
             id,
@@ -1721,10 +1714,9 @@ where
     fn update_transcript(
         &self,
         history_id: &str,
-        segments: Value,
+        segments: Vec<TranscriptSegment>,
     ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        let normalized_transcript =
-            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
@@ -1762,11 +1754,10 @@ where
         &self,
         history_id: &str,
         reason: TranscriptSnapshotReason,
-        segments: Value,
+        segments: Vec<TranscriptSegment>,
     ) -> Result<TranscriptSnapshotMetadata, HistoryMutationError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
-        let normalized_transcript =
-            normalize_history_transcript_segments(segments).map_err(DatabaseError::Internal)?;
+        let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let parsed_segments = normalized_transcript.segments;
 
         let created_at = current_time_millis().map_err(DatabaseError::Internal)?;
@@ -1923,12 +1914,8 @@ where
     fn update_item_meta(
         &self,
         history_id: &str,
-        updates: Value,
+        updates: HistoryItemMetaPatch,
     ) -> Result<(), HistoryMutationError> {
-        let updates = updates.as_object().ok_or_else(|| {
-            DatabaseError::Internal("History item updates must be an object.".to_string())
-        })?;
-
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
@@ -1944,7 +1931,7 @@ where
                 Err(error) => return Err(DatabaseError::QueryError(error)),
             };
 
-            apply_history_item_updates(&mut item, updates);
+            apply_history_item_updates(&mut item, &updates);
 
             let kind_str = item.kind.to_string();
             let status_str = item.status.to_string();
@@ -2016,7 +2003,10 @@ where
         })?)
     }
 
-    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, HistoryStoreError> {
+    fn load_summary(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<HistorySummaryPayload>, HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
         Ok(self.get_db()?.with_connection(|conn| {
@@ -2025,8 +2015,8 @@ where
             let mut rows = stmt.query([history_id])?;
             if let Some(row) = rows.next()? {
                 let payload_str: String = row.get(0)?;
-                let val: Value = serde_json::from_str(&payload_str)?;
-                Ok(Some(val))
+                let payload = serde_json::from_str(&payload_str)?;
+                Ok(Some(payload))
             } else {
                 Ok(None)
             }
@@ -2036,16 +2026,9 @@ where
     fn save_summary(
         &self,
         history_id: &str,
-        summary_payload: Value,
+        summary_payload: HistorySummaryPayload,
     ) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
-
-        let summary_payload = crate::history_fs_utils::ensure_json_object_value(
-            summary_payload,
-            "History summary payload",
-        )
-        .map_err(DatabaseError::Internal)?;
-
         let payload_str = serde_json::to_string(&summary_payload)?;
 
         Ok(self.get_db()?.with_write_connection(|conn| {
@@ -2483,14 +2466,17 @@ where
         SqliteHistoryStore::ensure_ready(self)
     }
 
-    fn load_summary(&self, history_id: &str) -> Result<Option<Value>, HistoryStoreError> {
+    fn load_summary(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<HistorySummaryPayload>, HistoryStoreError> {
         SqliteHistoryStore::load_summary(self, history_id)
     }
 
     fn save_summary(
         &self,
         history_id: &str,
-        summary_payload: Value,
+        summary_payload: HistorySummaryPayload,
     ) -> Result<(), HistoryStoreError> {
         SqliteHistoryStore::save_summary(self, history_id, summary_payload)
     }
@@ -2546,14 +2532,15 @@ mod tests {
     use std::sync::Arc;
     use tempfile::tempdir;
 
-    fn segment_value(id: &str, text: &str, start: f64, end: f64) -> Value {
-        json!({
+    fn segment_value(id: &str, text: &str, start: f64, end: f64) -> TranscriptSegment {
+        serde_json::from_value(json!({
             "id": id,
             "text": text,
             "start": start,
             "end": end,
             "isFinal": true
-        })
+        }))
+        .unwrap()
     }
 
     fn set_history_timestamp(store: &SqliteHistoryStore, history_id: &str, timestamp: u64) {
@@ -2727,12 +2714,12 @@ mod tests {
 
         let old_item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value(
+                segments: vec![segment_value(
                     "seg-old",
                     "Keep the old transcript",
                     0.0,
-                    1.0
-                )]),
+                    1.0,
+                )],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3, 4]),
@@ -2742,7 +2729,7 @@ mod tests {
             .unwrap();
         let recent_item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-new", "Keep recent audio", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-new", "Keep recent audio", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![5, 6]),
@@ -2796,7 +2783,7 @@ mod tests {
 
         let active = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-active", "Active transcript", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-active", "Active transcript", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -2858,12 +2845,12 @@ mod tests {
 
         let missing = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value(
+                segments: vec![segment_value(
                     "seg-missing",
                     "Text survives missing audio",
                     0.0,
-                    1.0
-                )]),
+                    1.0,
+                )],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -2910,12 +2897,12 @@ mod tests {
 
         let item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value(
+                segments: vec![segment_value(
                     "seg-fail",
                     "Text survives delete failure",
                     0.0,
-                    1.0
-                )]),
+                    1.0,
+                )],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),
@@ -2966,7 +2953,7 @@ mod tests {
 
         let item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-keep", "Keep forever", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-keep", "Keep forever", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2]),
@@ -3007,7 +2994,7 @@ mod tests {
             id: Some("promote-fail".to_string()),
             source_path: source_path.to_string_lossy().to_string(),
             converted_source_path: None,
-            segments: json!([segment_value("seg-promote", "Promote failure", 0.0, 1.0)]),
+            segments: vec![segment_value("seg-promote", "Promote failure", 0.0, 1.0)],
             duration: 1.0,
             project_id: None,
         });
@@ -3126,7 +3113,7 @@ mod tests {
         // 1. Save recording
         let recording = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-1", "Hello world", 0.0, 2.0)]),
+                segments: vec![segment_value("seg-1", "Hello world", 0.0, 2.0)],
                 duration: 2.0,
                 project_id: Some("project-1".to_string()),
                 audio_bytes: Some(vec![1, 2, 3]),
@@ -3149,26 +3136,43 @@ mod tests {
         let updated = store
             .update_transcript(
                 &recording.id,
-                json!([segment_value("seg-1", "Hello updated", 0.0, 3.0)]),
+                vec![segment_value("seg-1", "Hello updated", 0.0, 3.0)],
             )
             .unwrap();
         assert_eq!(updated.preview_text, "Hello updated...");
 
         // 4. Update item metadata
         store
-            .update_item_meta(&recording.id, json!({ "title": "New Title" }))
+            .update_item_meta(
+                &recording.id,
+                HistoryItemMetaPatch {
+                    title: Some("New Title".to_string()),
+                    project_id: Some(None),
+                    ..HistoryItemMetaPatch::default()
+                },
+            )
             .unwrap();
         let items = store.list_items().unwrap();
         assert_eq!(items[0].title, "New Title");
+        assert_eq!(items[0].project_id, None);
 
         // 5. Load summary & save summary
         assert_eq!(store.load_summary(&recording.id).unwrap(), None);
         store
-            .save_summary(&recording.id, json!({ "activeTemplateId": "summary-1" }))
+            .save_summary(
+                &recording.id,
+                HistorySummaryPayload {
+                    active_template_id: "summary-1".to_string(),
+                    record: None,
+                },
+            )
             .unwrap();
         assert_eq!(
             store.load_summary(&recording.id).unwrap(),
-            Some(json!({ "activeTemplateId": "summary-1" }))
+            Some(HistorySummaryPayload {
+                active_template_id: "summary-1".to_string(),
+                record: None,
+            })
         );
 
         // 6. Delete item
@@ -3189,7 +3193,7 @@ mod tests {
         assert_mutation_not_found(
             store.update_transcript(
                 "missing-history",
-                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+                vec![segment_value("seg-1", "Missing", 0.0, 1.0)],
             ),
             "missing-history",
         );
@@ -3205,7 +3209,7 @@ mod tests {
         assert_mutation_not_found(
             store.complete_live_draft(
                 "missing-history",
-                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+                vec![segment_value("seg-1", "Missing", 0.0, 1.0)],
                 1.0,
             ),
             "missing-history",
@@ -3220,7 +3224,13 @@ mod tests {
         store.ensure_ready().unwrap();
 
         assert_mutation_not_found(
-            store.update_item_meta("missing-history", json!({ "title": "Missing" })),
+            store.update_item_meta(
+                "missing-history",
+                HistoryItemMetaPatch {
+                    title: Some("Missing".to_string()),
+                    ..HistoryItemMetaPatch::default()
+                },
+            ),
             "missing-history",
         );
     }
@@ -3236,7 +3246,7 @@ mod tests {
             store.create_transcript_snapshot(
                 "missing-history",
                 TranscriptSnapshotReason::Polish,
-                json!([segment_value("seg-1", "Missing", 0.0, 1.0)]),
+                vec![segment_value("seg-1", "Missing", 0.0, 1.0)],
             ),
             "missing-history",
         );
@@ -3258,7 +3268,7 @@ mod tests {
             .save_imported_file(HistorySaveImportedFileRequest {
                 id: Some("import-1".to_string()),
                 source_path: first_source.to_string_lossy().to_string(),
-                segments: json!([segment_value("seg-1", "Original import", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-1", "Original import", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 converted_source_path: None,
@@ -3270,7 +3280,7 @@ mod tests {
         let duplicate = store.save_imported_file(HistorySaveImportedFileRequest {
             id: Some("import-1".to_string()),
             source_path: second_source.to_string_lossy().to_string(),
-            segments: json!([segment_value("seg-2", "Duplicate import", 0.0, 1.0)]),
+            segments: vec![segment_value("seg-2", "Duplicate import", 0.0, 1.0)],
             duration: 1.0,
             project_id: None,
             converted_source_path: None,
@@ -3290,7 +3300,7 @@ mod tests {
 
         let recording = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-1", "Keep text", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-1", "Keep text", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -3322,7 +3332,7 @@ mod tests {
 
         let recording = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-1", "Removed audio text", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-1", "Removed audio text", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -3331,7 +3341,13 @@ mod tests {
             })
             .unwrap();
         store
-            .update_item_meta(&recording.id, json!({ "audioStatus": "removed" }))
+            .update_item_meta(
+                &recording.id,
+                HistoryItemMetaPatch {
+                    audio_status: Some(HistoryAudioStatus::Removed),
+                    ..HistoryItemMetaPatch::default()
+                },
+            )
             .unwrap();
         std::fs::remove_file(root.path().join("history").join(&recording.audio_path)).unwrap();
 
@@ -3373,7 +3389,7 @@ mod tests {
 
         let recording = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value("seg-1", "Hello", 0.0, 1.0)]),
+                segments: vec![segment_value("seg-1", "Hello", 0.0, 1.0)],
                 duration: 1.0,
                 project_id: None,
                 audio_bytes: Some(vec![1]),
@@ -3383,10 +3399,18 @@ mod tests {
             .unwrap();
 
         // Save summary
-        store.save_summary(&recording.id, json!({})).unwrap();
+        store
+            .save_summary(
+                &recording.id,
+                HistorySummaryPayload {
+                    active_template_id: "general".to_string(),
+                    record: None,
+                },
+            )
+            .unwrap();
         // Create transcript snapshot
         store
-            .create_transcript_snapshot(&recording.id, TranscriptSnapshotReason::Polish, json!([]))
+            .create_transcript_snapshot(&recording.id, TranscriptSnapshotReason::Polish, Vec::new())
             .unwrap();
 
         // Verify they exist in DB
@@ -3478,12 +3502,12 @@ mod tests {
         // Create alpha item
         let _alpha = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: json!([segment_value(
+                segments: vec![segment_value(
                     "seg-1",
                     "Alpha roadmap discussion",
                     0.0,
-                    10.0
-                )]),
+                    10.0,
+                )],
                 duration: 10.0,
                 project_id: Some("project-1".to_string()),
                 audio_bytes: Some(vec![1]),
@@ -3499,7 +3523,7 @@ mod tests {
             .save_imported_file(HistorySaveImportedFileRequest {
                 id: None,
                 source_path: source_file.to_string_lossy().to_string(),
-                segments: json!([segment_value("seg-2", "Beta notes", 0.0, 20.0)]),
+                segments: vec![segment_value("seg-2", "Beta notes", 0.0, 20.0)],
                 duration: 20.0,
                 project_id: Some("project-1".to_string()),
                 converted_source_path: None,
@@ -3878,10 +3902,10 @@ mod tests {
         // Save test item with Chinese and English text
         let item = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: serde_json::json!([
+                segments: vec![
                     segment_value("seg-1", "你好世界，这是一个测试", 0.0, 2.0),
-                    segment_value("seg-2", "Fuzzy matching should be fast", 2.0, 4.0)
-                ]),
+                    segment_value("seg-2", "Fuzzy matching should be fast", 2.0, 4.0),
+                ],
                 duration: 4.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),
@@ -3893,12 +3917,7 @@ mod tests {
         // Save second test item with full-width Chinese punctuation for punctuation matching
         let item_punc = store
             .save_recording(HistorySaveRecordingRequest {
-                segments: serde_json::json!([segment_value(
-                    "seg-3",
-                    "你好，世界，这是一个测试",
-                    0.0,
-                    2.0
-                )]),
+                segments: vec![segment_value("seg-3", "你好，世界，这是一个测试", 0.0, 2.0)],
                 duration: 2.0,
                 project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),

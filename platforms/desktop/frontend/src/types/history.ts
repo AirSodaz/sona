@@ -1,15 +1,12 @@
-export type HistoryItemStatus = 'draft' | 'complete';
-export type HistoryAudioStatus = 'available' | 'missing' | 'removed';
-export type HistoryDraftSource = 'live_record';
+export type {
+    HistoryAudioCleanupReport,
+    HistoryAudioStatus,
+    HistoryDraftSource,
+    HistoryItemStatus,
+} from '../bindings';
 
-export interface HistoryAudioCleanupReport {
-    eligibleCount: number;
-    removedCount: number;
-    removedBytes: number;
-    missingMarkedCount: number;
-    failedCount: number;
-    skippedActiveCount: number;
-}
+import type { HistoryAudioStatus, HistoryDraftSource, HistoryItemStatus } from '../bindings';
+import type { HistoryItemRecord } from '../bindings';
 
 export interface HistoryItem {
     id: string;
@@ -26,6 +23,29 @@ export interface HistoryItem {
     projectId: string | null;
     status?: HistoryItemStatus;
     draftSource?: HistoryDraftSource;
+}
+
+export function normalizeHistoryItemRecord(
+    item: Partial<HistoryItemRecord> | null | undefined,
+): HistoryItem {
+    return {
+        id: item?.id || '',
+        timestamp: item?.timestamp || 0,
+        duration: item?.duration || 0,
+        audioPath: item?.audioPath || '',
+        audioStatus: ['available', 'missing', 'removed'].includes(item?.audioStatus || '')
+            ? item?.audioStatus
+            : 'available',
+        transcriptPath: item?.transcriptPath || '',
+        title: item?.title || '',
+        previewText: item?.previewText || '',
+        icon: typeof item?.icon === 'string' ? item.icon : undefined,
+        type: item?.type === 'batch' ? 'batch' : 'recording',
+        searchContent: item?.searchContent || '',
+        projectId: typeof item?.projectId === 'string' ? item.projectId : null,
+        status: item?.status === 'draft' ? 'draft' : 'complete',
+        draftSource: item?.draftSource === 'live_record' ? 'live_record' : undefined,
+    };
 }
 
 export function getHistoryItemStatus(item: Pick<HistoryItem, 'status'>): HistoryItemStatus {

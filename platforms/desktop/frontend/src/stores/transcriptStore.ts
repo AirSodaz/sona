@@ -509,7 +509,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   hydrateSummaryState: (payload: HistorySummaryPayload, historyId) => {
     // Basic hydrate implementation to satisfy the type.
     const activeTemplateId = payload.activeTemplateId || 'default';
-    get().setSummaryState({ activeTemplateId, record: payload.record, streamingContent: undefined, isGenerating: false, generationProgress: 0 }, historyId);
+    get().setSummaryState({ activeTemplateId, record: payload.record ?? undefined, streamingContent: undefined, isGenerating: false, generationProgress: 0 }, historyId);
   },
   clearSummaryState: (historyId) => set((state) => {
     const id = resolveHistoryKey(historyId, get);

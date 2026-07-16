@@ -121,7 +121,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let unicode_text = "你好, dashboard 🌍";
     history
         .save_recording(HistorySaveRecordingRequest {
-            segments: json!([{
+            segments: serde_json::from_value(json!([{
                 "id": "segment-identified",
                 "text": unicode_text,
                 "start": 0.0,
@@ -133,7 +133,8 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
                     "kind": "identified",
                     "score": 0.95
                 }
-            }]),
+            }]))
+            .unwrap(),
             duration: 2.5,
             project_id: Some("project-dashboard".to_string()),
             audio_bytes: Some(vec![1, 2, 3]),
@@ -143,7 +144,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
         .unwrap();
     history
         .save_recording(HistorySaveRecordingRequest {
-            segments: json!([{
+            segments: serde_json::from_value(json!([{
                 "id": "segment-anonymous",
                 "text": "plain",
                 "start": 0.0,
@@ -155,7 +156,8 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
                     "kind": "anonymous",
                     "score": null
                 }
-            }]),
+            }]))
+            .unwrap(),
             duration: 1.5,
             project_id: None,
             audio_bytes: Some(vec![4, 5]),

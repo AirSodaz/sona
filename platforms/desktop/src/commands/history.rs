@@ -1,4 +1,3 @@
-use serde_json::Value;
 use tauri::{AppHandle, Runtime, State};
 
 use crate::integrations::asr::TranscriptSegment;
@@ -12,12 +11,18 @@ use crate::platform::history_repository::{
     PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReassignProjectRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history_store::HistoryStore;
+
+fn validate_history_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), String> {
+    sona_ts_bind::validate_typescript_safe_integers(value)
+}
 
 #[tauri::command]
 pub async fn history_list_items<R: Runtime>(
@@ -26,6 +31,7 @@ pub async fn history_list_items<R: Runtime>(
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
+    validate_history_input(&(limit, offset))?;
     let opts = HistoryListOptions { limit, offset };
     crate::platform::history_repository::run_history_query_file_task(
         &app,
@@ -56,6 +62,7 @@ pub async fn history_query_workspace<R: Runtime>(
         limit,
         offset,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_query_file_task(
         &app,
         state.inner(),
@@ -79,6 +86,7 @@ pub async fn history_create_live_draft<R: Runtime>(
         project_id,
         icon,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
@@ -91,7 +99,7 @@ pub async fn history_create_live_draft<R: Runtime>(
 pub async fn history_complete_live_draft<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
-    segments: Value,
+    segments: Vec<TranscriptSegment>,
     duration: f64,
 ) -> Result<HistoryItemRecord, String> {
     let request = HistoryCompleteLiveDraftRequest {
@@ -99,6 +107,7 @@ pub async fn history_complete_live_draft<R: Runtime>(
         segments,
         duration,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
         service.complete_live_draft(request)
     })
@@ -110,7 +119,7 @@ pub async fn history_complete_live_draft<R: Runtime>(
 pub async fn history_save_recording<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    segments: Value,
+    segments: Vec<TranscriptSegment>,
     duration: f64,
     project_id: Option<String>,
     audio_bytes: Option<Vec<u8>>,
@@ -125,6 +134,7 @@ pub async fn history_save_recording<R: Runtime>(
         native_audio_path,
         audio_extension,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
@@ -140,7 +150,7 @@ pub async fn history_save_imported_file<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     id: Option<String>,
     source_path: String,
-    segments: Value,
+    segments: Vec<TranscriptSegment>,
     duration: f64,
     project_id: Option<String>,
     converted_source_path: Option<String>,
@@ -153,6 +163,7 @@ pub async fn history_save_imported_file<R: Runtime>(
         project_id,
         converted_source_path,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
@@ -191,12 +202,13 @@ pub async fn history_load_transcript<R: Runtime>(
 pub async fn history_update_transcript<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
-    segments: Value,
+    segments: Vec<TranscriptSegment>,
 ) -> Result<HistoryItemRecord, String> {
     let request = HistoryUpdateTranscriptRequest {
         history_id,
         segments,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
         service.update_transcript(request)
     })
@@ -208,13 +220,14 @@ pub async fn history_create_transcript_snapshot<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
     reason: TranscriptSnapshotReason,
-    segments: Value,
+    segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptSnapshotMetadata, String> {
     let request = HistoryCreateTranscriptSnapshotRequest {
         history_id,
         reason,
         segments,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
         service.create_transcript_snapshot(request)
     })
@@ -249,10 +262,14 @@ pub fn history_build_transcript_diff(
     snapshot_segments: Vec<TranscriptSegment>,
     current_segments: Vec<TranscriptSegment>,
 ) -> Result<TranscriptDiffResult, String> {
-    Ok(crate::platform::history_repository::build_transcript_diff(
+    validate_history_input(&snapshot_segments)?;
+    validate_history_input(&current_segments)?;
+    let result = crate::platform::history_repository::build_transcript_diff(
         snapshot_segments,
         current_segments,
-    ))
+    );
+    validate_history_input(&result)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -260,19 +277,24 @@ pub fn history_restore_transcript_diff_rows(
     rows: Vec<TranscriptDiffRow>,
     selected_row_ids: Vec<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    Ok(crate::platform::history_repository::restore_transcript_diff_rows(rows, selected_row_ids))
+    validate_history_input(&rows)?;
+    let result =
+        crate::platform::history_repository::restore_transcript_diff_rows(rows, selected_row_ids);
+    validate_history_input(&result)?;
+    Ok(result)
 }
 
 #[tauri::command]
 pub async fn history_update_item_meta<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
-    updates: Value,
+    updates: HistoryItemMetaPatch,
 ) -> Result<(), String> {
     let request = HistoryUpdateItemMetaRequest {
         history_id,
         updates,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
         service.update_item_meta(request)
     })
@@ -312,7 +334,7 @@ pub async fn history_reassign_project<R: Runtime>(
 pub async fn history_load_summary<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
-) -> Result<Option<Value>, String> {
+) -> Result<Option<HistorySummaryPayload>, String> {
     crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.load_summary(&history_id)
     })
@@ -323,7 +345,7 @@ pub async fn history_load_summary<R: Runtime>(
 pub async fn history_save_summary<R: Runtime>(
     app: AppHandle<R>,
     history_id: String,
-    summary_payload: Value,
+    summary_payload: HistorySummaryPayload,
 ) -> Result<(), String> {
     crate::platform::history_repository::run_history_db_task(&app, move |repository| {
         repository.save_summary(&history_id, summary_payload)
@@ -367,6 +389,7 @@ pub async fn history_preview_audio_cleanup<R: Runtime>(
         retention_days,
         exclude_history_id,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_file_task(
         &app,
         state.inner(),
@@ -386,6 +409,7 @@ pub async fn history_cleanup_audio<R: Runtime>(
         retention_days,
         exclude_history_id,
     };
+    validate_history_input(&request)?;
     crate::platform::history_repository::run_history_file_task(
         &app,
         state.inner(),

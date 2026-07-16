@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use serde_json::{Value, json};
+use serde_json::json;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
+    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
     HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
@@ -13,11 +13,12 @@ use sona_core::history::{
     HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
     LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
+use sona_core::transcription::transcript::{TranscriptSegment, TranscriptTimingLevel};
 
 #[derive(Default)]
 struct RecordingHistoryMutationRepository {
     calls: Mutex<Vec<&'static str>>,
-    forwarded_segments: Mutex<Vec<Value>>,
+    forwarded_segments: Mutex<Vec<Vec<TranscriptSegment>>>,
     forwarded_details: Mutex<Vec<String>>,
 }
 
@@ -145,10 +146,11 @@ impl HistoryMutationRepository for RecordingHistoryMutationRepository {
         request: HistoryUpdateItemMetaRequest,
     ) -> Result<(), HistoryMutationError> {
         self.record("update_item_meta");
-        self.forwarded_details
-            .lock()
-            .unwrap()
-            .push(format!("meta:{}:{}", request.history_id, request.updates));
+        self.forwarded_details.lock().unwrap().push(format!(
+            "meta:{}:{}",
+            request.history_id,
+            serde_json::to_string(&request.updates).unwrap()
+        ));
         Ok(())
     }
 
@@ -196,14 +198,21 @@ fn history_item(id: &str) -> HistoryItemRecord {
     }
 }
 
-fn segments() -> Value {
-    json!([{
-        "id": "segment-1",
-        "text": "hello",
-        "start": 0.0,
-        "end": 1.0,
-        "isFinal": true
-    }])
+fn segments() -> Vec<TranscriptSegment> {
+    vec![TranscriptSegment {
+        id: "segment-1".to_string(),
+        text: "hello".to_string(),
+        start: 0.0,
+        end: 1.0,
+        is_final: true,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    }]
 }
 
 fn recording_request() -> HistorySaveRecordingRequest {
@@ -271,7 +280,11 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
     service
         .update_item_meta(HistoryUpdateItemMetaRequest {
             history_id: "history-1".to_string(),
-            updates: json!({"title": "Renamed", "icon": null}),
+            updates: HistoryItemMetaPatch {
+                title: Some("Renamed".to_string()),
+                icon: Some(None),
+                ..HistoryItemMetaPatch::default()
+            },
         })
         .unwrap();
     service
@@ -313,7 +326,7 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             "delete:[\"history-1\"]",
             "update-transcript:history-1",
             "snapshot:history-1:Polish",
-            "meta:history-1:{\"icon\":null,\"title\":\"Renamed\"}",
+            "meta:history-1:{\"title\":\"Renamed\",\"icon\":null}",
             "assign:[\"history-1\"]:Some(\"project-2\")",
             "reassign:project-2:None",
         ]
@@ -328,24 +341,16 @@ fn service_forwards_a_canonical_transcript_to_the_repository() {
     service
         .update_transcript(HistoryUpdateTranscriptRequest {
             history_id: "history-1".to_string(),
-            segments: json!([{"text": "hello"}]),
+            segments: segments(),
         })
         .unwrap();
 
+    let forwarded = repository.forwarded_segments.lock().unwrap();
+    assert_eq!(forwarded.len(), 1);
+    assert_eq!(forwarded[0][0].id, "segment-1");
     assert_eq!(
-        *repository.forwarded_segments.lock().unwrap(),
-        [json!([{
-            "id": "segment-0",
-            "text": "hello",
-            "start": 0.0,
-            "end": 0.0,
-            "isFinal": true,
-            "timing": {
-                "level": "segment",
-                "source": "derived",
-                "units": [{"text": "hello", "start": 0.0, "end": 0.0}]
-            }
-        }])]
+        forwarded[0][0].timing.as_ref().unwrap().level,
+        TranscriptTimingLevel::Segment
     );
 }
 
@@ -438,7 +443,10 @@ fn project_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
     service
         .update_item_meta(HistoryUpdateItemMetaRequest {
             history_id: "draft-1".to_string(),
-            updates: json!({"audioPath": "meeting..draft.wav"}),
+            updates: HistoryItemMetaPatch {
+                audio_path: Some("meeting..draft.wav".to_string()),
+                ..HistoryItemMetaPatch::default()
+            },
         })
         .unwrap();
 
@@ -477,8 +485,6 @@ fn service_rejects_invalid_durations_transcripts_and_recording_sources() {
     empty_native_path.native_audio_path = Some("  ".to_string());
     let mut invalid_extension = recording_request();
     invalid_extension.audio_extension = Some("../wav".to_string());
-    let mut invalid_import = imported_file_request();
-    invalid_import.segments = json!({"text": "not an array"});
     let mut empty_import_source = imported_file_request();
     empty_import_source.source_path = " ".to_string();
     let mut empty_converted_source = imported_file_request();
@@ -488,6 +494,8 @@ fn service_rejects_invalid_durations_transcripts_and_recording_sources() {
     let mut oversized_import_file_name = imported_file_request();
     oversized_import_file_name.id = Some("a".repeat(238));
     oversized_import_file_name.source_path = "input.abcdefghijklmnopq".to_string();
+    let mut invalid_transcript_numbers = segments();
+    invalid_transcript_numbers[0].start = f64::NAN;
 
     let errors = [
         service.save_recording(negative_duration).unwrap_err(),
@@ -496,7 +504,6 @@ fn service_rejects_invalid_durations_transcripts_and_recording_sources() {
         service.save_recording(empty_bytes).unwrap_err(),
         service.save_recording(empty_native_path).unwrap_err(),
         service.save_recording(invalid_extension).unwrap_err(),
-        service.save_imported_file(invalid_import).unwrap_err(),
         service.save_imported_file(empty_import_source).unwrap_err(),
         service
             .save_imported_file(empty_converted_source)
@@ -517,14 +524,7 @@ fn service_rejects_invalid_durations_transcripts_and_recording_sources() {
         service
             .update_transcript(HistoryUpdateTranscriptRequest {
                 history_id: "history-1".to_string(),
-                segments: json!(null),
-            })
-            .unwrap_err(),
-        service
-            .create_transcript_snapshot(HistoryCreateTranscriptSnapshotRequest {
-                history_id: "history-1".to_string(),
-                reason: TranscriptSnapshotReason::Polish,
-                segments: json!({}),
+                segments: invalid_transcript_numbers,
             })
             .unwrap_err(),
     ];
@@ -538,20 +538,31 @@ fn service_rejects_invalid_durations_transcripts_and_recording_sources() {
 }
 
 #[test]
-fn service_validates_metadata_shape_keys_and_value_types() {
+fn service_validates_typed_metadata_values() {
     let repository = Arc::new(RecordingHistoryMutationRepository::default());
     let service = HistoryMutationService::new(repository.clone());
 
     for updates in [
-        json!([]),
-        json!({"unknown": true}),
-        json!({"id": "renamed-history"}),
-        json!({"title": 42}),
-        json!({"projectId": ""}),
-        json!({"duration": "one"}),
-        json!({"audioPath": "../../outside.wav"}),
-        json!({"transcriptPath": "C:\\outside.json"}),
-        json!({"audioPath": "NUL"}),
+        HistoryItemMetaPatch {
+            project_id: Some(Some(String::new())),
+            ..HistoryItemMetaPatch::default()
+        },
+        HistoryItemMetaPatch {
+            duration: Some(-1.0),
+            ..HistoryItemMetaPatch::default()
+        },
+        HistoryItemMetaPatch {
+            audio_path: Some("../../outside.wav".to_string()),
+            ..HistoryItemMetaPatch::default()
+        },
+        HistoryItemMetaPatch {
+            transcript_path: Some("C:\\outside.json".to_string()),
+            ..HistoryItemMetaPatch::default()
+        },
+        HistoryItemMetaPatch {
+            audio_path: Some("NUL".to_string()),
+            ..HistoryItemMetaPatch::default()
+        },
     ] {
         assert!(matches!(
             service
@@ -565,6 +576,23 @@ fn service_validates_metadata_shape_keys_and_value_types() {
     }
 
     assert!(repository.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn metadata_patch_preserves_explicit_null_for_clearable_fields() {
+    let request: HistoryUpdateItemMetaRequest = serde_json::from_value(json!({
+        "historyId": "history-1",
+        "updates": {
+            "icon": null,
+            "projectId": null,
+            "draftSource": null
+        }
+    }))
+    .unwrap();
+
+    assert_eq!(request.updates.icon, Some(None));
+    assert_eq!(request.updates.project_id, Some(None));
+    assert_eq!(request.updates.draft_source, Some(None));
 }
 
 #[test]
