@@ -87,6 +87,8 @@ describe('automationSessionState', () => {
         {
           filePath: 'C:\\watch\\missing.wav',
           outcome: 'missing',
+          candidate: null,
+          error: null,
         },
       ],
     );
@@ -186,7 +188,7 @@ describe('automationSessionState', () => {
         notifications: [],
       },
       [
-        { ruleId: firstRule.id, started: true },
+        { ruleId: firstRule.id, started: true, error: null },
         { ruleId: secondRule.id, started: false, error: 'Watcher failed to start.' },
       ],
     );

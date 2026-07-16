@@ -1,22 +1,27 @@
+import type {
+  AutomationRuntimePathCollectionResult,
+  AutomationRuntimeReplaceResult,
+  AutomationRuntimeRuleConfig,
+} from '../../bindings';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
-export async function replaceAutomationRuntimeRules<TResult = unknown>(
-  rules: unknown[],
-): Promise<TResult> {
-  return invokeTauri(TauriCommand.automation.replaceRuntimeRules, { rules }) as Promise<TResult>;
+export async function replaceAutomationRuntimeRules(
+  rules: AutomationRuntimeRuleConfig[],
+): Promise<AutomationRuntimeReplaceResult[]> {
+  return invokeTauri(TauriCommand.automation.replaceRuntimeRules, { rules });
 }
 
-export async function scanAutomationRuntimeRule(rule: unknown): Promise<void> {
+export async function scanAutomationRuntimeRule(rule: AutomationRuntimeRuleConfig): Promise<void> {
   await invokeTauri(TauriCommand.automation.scanRuntimeRule, { rule });
 }
 
-export async function collectAutomationRuntimeRulePaths<TResult = unknown>(
-  rule: unknown,
+export async function collectAutomationRuntimeRulePaths(
+  rule: AutomationRuntimeRuleConfig,
   filePaths: string[],
-): Promise<TResult> {
+): Promise<AutomationRuntimePathCollectionResult[]> {
   return invokeTauri(TauriCommand.automation.collectRuntimeRulePaths, {
     rule,
     filePaths,
-  }) as Promise<TResult>;
+  });
 }

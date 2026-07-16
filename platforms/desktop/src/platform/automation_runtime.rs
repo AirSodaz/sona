@@ -41,6 +41,7 @@ struct TauriAutomationRuntimeEventSink<R: Runtime> {
 
 impl<R: Runtime> AutomationRuntimeEventSink for TauriAutomationRuntimeEventSink<R> {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String> {
+        sona_ts_bind::validate_typescript_safe_integers(&payload)?;
         self.app
             .emit(AUTOMATION_RUNTIME_CANDIDATE_EVENT, payload)
             .map_err(|error| error.to_string())

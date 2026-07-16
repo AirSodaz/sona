@@ -9,6 +9,14 @@ import type {
   LlmGenerateCommandRequest,
 } from "../../types/dashboard";
 import type {
+  AutomationProcessedInput_Serialize,
+  AutomationRepositoryState_Serialize,
+  AutomationRule,
+  AutomationRuleInput_Serialize,
+  AutomationRuleValidationResult_Serialize,
+  AutomationRuntimePathCollectionResult,
+  AutomationRuntimeReplaceResult,
+  AutomationRuntimeRuleConfig,
   HistoryAudioCleanupReport,
   HistoryAudioCleanupRequest_Serialize,
   HistoryCompleteLiveDraftRequest_Serialize,
@@ -42,11 +50,6 @@ import type {
   AppLogLevel,
   TextReplacementRuleSet,
 } from "../../types/config";
-import type {
-  AutomationProcessedEntry,
-  AutomationRule,
-  AutomationRuleValidationResult,
-} from "../../types/automation";
 import type {
   ProjectCreateInput,
   ProjectRecord,
@@ -205,11 +208,6 @@ type ProjectCreateArgs = ProjectCreateInput;
 type ProjectUpdateArgs = {
   projectId: string;
   updates: ProjectUpdateInput;
-};
-
-type AutomationRepositoryState = {
-  rules: AutomationRule[];
-  processedEntries: AutomationProcessedEntry[];
 };
 
 type AutomationValidateActivationArgs = {
@@ -543,23 +541,26 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.automationRepository.loadState]: {
     args: undefined;
-    result: AutomationRepositoryState;
+    result: AutomationRepositoryState_Serialize;
   };
   [TauriCommand.automationRepository.persistRules]: {
-    args: { rules: AutomationRule[] };
+    args: { rules: AutomationRuleInput_Serialize[] };
     result: void;
   };
   [TauriCommand.automationRepository.persistProcessedEntries]: {
-    args: { processedEntries: AutomationProcessedEntry[] };
+    args: { processedEntries: AutomationProcessedInput_Serialize[] };
     result: void;
   };
   [TauriCommand.automationRepository.persistState]: {
-    args: AutomationRepositoryState;
+    args: {
+      rules: AutomationRuleInput_Serialize[];
+      processedEntries: AutomationProcessedInput_Serialize[];
+    };
     result: void;
   };
   [TauriCommand.automationRepository.validateActivation]: {
     args: AutomationValidateActivationArgs;
-    result: AutomationRuleValidationResult;
+    result: AutomationRuleValidationResult_Serialize;
   };
   [TauriCommand.llmUsage.ensureStorage]: {
     args: undefined;
@@ -674,19 +675,19 @@ export type TauriCommandContractMap = {
     result: TaskLedgerSnapshot;
   };
   [TauriCommand.automation.replaceRuntimeRules]: {
-    args: { rules: unknown[] };
-    result: unknown;
+    args: { rules: AutomationRuntimeRuleConfig[] };
+    result: AutomationRuntimeReplaceResult[];
   };
   [TauriCommand.automation.scanRuntimeRule]: {
-    args: { rule: unknown };
+    args: { rule: AutomationRuntimeRuleConfig };
     result: void;
   };
   [TauriCommand.automation.collectRuntimeRulePaths]: {
     args: {
-      rule: unknown;
+      rule: AutomationRuntimeRuleConfig;
       filePaths: string[];
     };
-    result: unknown;
+    result: AutomationRuntimePathCollectionResult[];
   };
   [TauriCommand.backup.exportArchive]: {
     args: { request: ExportBackupArchiveRequest };

@@ -1,4 +1,8 @@
+use serde::Serialize;
 use serde_json::Value;
+use sona_core::automation::repository::{
+    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
+};
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
 use sona_sqlite::SqliteAutomationAdapter;
@@ -6,6 +10,11 @@ use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
 pub use sona_sqlite::automation::AutomationRepositoryState;
+
+fn validate_automation_transport<T: Serialize>(value: T) -> Result<T, String> {
+    sona_ts_bind::validate_typescript_safe_integers(&value)?;
+    Ok(value)
+}
 
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
@@ -30,16 +39,17 @@ pub async fn validate_rule_activation(
 async fn run_automation_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
-    T: Send + 'static,
+    T: Send + Serialize + 'static,
     F: FnOnce(&SqliteAutomationAdapter) -> Result<T, String> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let adapter = SqliteAutomationAdapter::new(db, Arc::new(UuidGenerator));
         task(&adapter)
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+    validate_automation_transport(result)
 }
 
 pub async fn load_repository_state<R: Runtime>(
@@ -50,28 +60,24 @@ pub async fn load_repository_state<R: Runtime>(
 
 pub async fn persist_rules<R: Runtime>(
     app: &AppHandle<R>,
-    rules: Vec<Value>,
+    rules: Vec<AutomationRuleInput>,
 ) -> Result<(), String> {
-    run_automation_adapter_task(app, move |adapter| adapter.replace_rules_json(rules)).await
+    run_automation_adapter_task(app, move |adapter| adapter.replace_rules(rules)).await
 }
 
 pub async fn persist_processed_entries<R: Runtime>(
     app: &AppHandle<R>,
-    processed_entries: Vec<Value>,
+    processed_entries: Vec<AutomationProcessedInput>,
 ) -> Result<(), String> {
     run_automation_adapter_task(app, move |adapter| {
-        adapter.replace_processed_entries_json(processed_entries)
+        adapter.replace_processed_entries(processed_entries)
     })
     .await
 }
 
 pub async fn persist_repository_state<R: Runtime>(
     app: &AppHandle<R>,
-    rules: Vec<Value>,
-    processed_entries: Vec<Value>,
+    input: AutomationRepositoryInput,
 ) -> Result<(), String> {
-    run_automation_adapter_task(app, move |adapter| {
-        adapter.replace_state_json(rules, processed_entries)
-    })
-    .await
+    run_automation_adapter_task(app, move |adapter| adapter.replace_state(input)).await
 }

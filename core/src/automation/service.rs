@@ -1,7 +1,6 @@
-use serde_json::Value;
-
 use super::repository::{
-    AutomationProcessedRecord, AutomationRepositoryState, AutomationRuleRecord,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRepositoryState, AutomationRuleInput, AutomationRuleRecord,
     AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
 };
 use super::{
@@ -9,6 +8,7 @@ use super::{
     is_virtual_automation_project, normalize_automation_path, resolve_batch_model_path,
     validate_rule_activation,
 };
+use serde_json::Value;
 
 pub trait AutomationIdGenerator: Send + Sync {
     fn generate_id(&self) -> String;
@@ -33,34 +33,35 @@ impl<'a> AutomationRepositoryService<'a> {
         self.store.load_state()
     }
 
-    pub fn replace_rules_json(&self, rules: Vec<Value>) -> Result<(), String> {
+    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), String> {
         let rules = rules
             .into_iter()
-            .map(|rule| normalize_rule_record(&rule, self.ids))
+            .map(|rule| normalize_rule_record(rule, self.ids))
             .collect::<Vec<_>>();
         self.store.replace_rules(&rules)
     }
 
-    pub fn replace_processed_entries_json(&self, entries: Vec<Value>) -> Result<(), String> {
+    pub fn replace_processed_entries(
+        &self,
+        entries: Vec<AutomationProcessedInput>,
+    ) -> Result<(), String> {
         let entries = entries
             .into_iter()
-            .map(|entry| normalize_processed_record(&entry, self.ids))
+            .map(|entry| normalize_processed_record(entry, self.ids))
             .collect::<Vec<_>>();
         self.store.replace_processed_entries(&entries)
     }
 
-    pub fn replace_state_json(
-        &self,
-        rules: Vec<Value>,
-        processed_entries: Vec<Value>,
-    ) -> Result<(), String> {
-        let rules = rules
+    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), String> {
+        let rules = input
+            .rules
             .into_iter()
-            .map(|rule| normalize_rule_record(&rule, self.ids))
+            .map(|rule| normalize_rule_record(rule, self.ids))
             .collect();
-        let processed_entries = processed_entries
+        let processed_entries = input
+            .processed_entries
             .into_iter()
-            .map(|entry| normalize_processed_record(&entry, self.ids))
+            .map(|entry| normalize_processed_record(entry, self.ids))
             .collect();
         self.store.replace_state(&AutomationRepositoryState {
             rules,
@@ -115,83 +116,53 @@ impl<'a> AutomationValidationService<'a> {
     }
 }
 
-fn normalize_rule_record(value: &Value, ids: &dyn AutomationIdGenerator) -> AutomationRuleRecord {
-    let stage = value.get("stageConfig").unwrap_or(&Value::Null);
-    let export = value.get("exportConfig").unwrap_or(&Value::Null);
+fn normalize_rule_record(
+    input: AutomationRuleInput,
+    ids: &dyn AutomationIdGenerator,
+) -> AutomationRuleRecord {
     AutomationRuleRecord {
-        id: value
-            .get("id")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(|| ids.generate_id()),
-        name: string_field(value, "name", ""),
-        project_id: string_field(value, "projectId", ""),
-        preset_id: string_field(value, "presetId", "custom"),
-        watch_directory: string_field(value, "watchDirectory", ""),
-        recursive: bool_field(value, "recursive"),
-        enabled: bool_field(value, "enabled"),
+        id: input.id.unwrap_or_else(|| ids.generate_id()),
+        name: input.name,
+        project_id: input.project_id,
+        preset_id: input.preset_id,
+        watch_directory: input.watch_directory,
+        recursive: input.recursive,
+        enabled: input.enabled,
         stage_config: AutomationRuleRecordStageConfig {
-            auto_polish: bool_field(stage, "autoPolish"),
-            polish_preset_id: string_field(stage, "polishPresetId", "general"),
-            auto_translate: bool_field(stage, "autoTranslate"),
-            translation_language: string_field(stage, "translationLanguage", "en"),
-            export_enabled: bool_field(stage, "exportEnabled"),
+            auto_polish: input.stage_config.auto_polish,
+            polish_preset_id: input.stage_config.polish_preset_id,
+            auto_translate: input.stage_config.auto_translate,
+            translation_language: input.stage_config.translation_language,
+            export_enabled: input.stage_config.export_enabled,
         },
         export_config: AutomationRuleRecordExportConfig {
-            directory: string_field(export, "directory", ""),
-            format: string_field(export, "format", "txt"),
-            mode: string_field(export, "mode", "original"),
-            prefix: string_field(export, "prefix", ""),
+            directory: input.export_config.directory,
+            format: input.export_config.format,
+            mode: input.export_config.mode,
+            prefix: input.export_config.prefix,
         },
-        created_at: integer_field(value, "createdAt"),
-        updated_at: integer_field(value, "updatedAt"),
+        created_at: input.created_at,
+        updated_at: input.updated_at,
     }
 }
 
 fn normalize_processed_record(
-    value: &Value,
+    input: AutomationProcessedInput,
     ids: &dyn AutomationIdGenerator,
 ) -> AutomationProcessedRecord {
     AutomationProcessedRecord {
-        id: value
-            .get("id")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(|| ids.generate_id()),
-        rule_id: string_field(value, "ruleId", ""),
-        file_path: string_field(value, "filePath", ""),
-        source_fingerprint: string_field(value, "sourceFingerprint", ""),
-        size: integer_field(value, "size"),
-        mtime_ms: integer_field(value, "mtimeMs"),
-        status: string_field(value, "status", "complete"),
-        processed_at: integer_field(value, "processedAt"),
-        history_id: optional_string_field(value, "historyId"),
-        export_path: optional_string_field(value, "exportPath"),
-        error_message: optional_string_field(value, "errorMessage"),
+        id: input.id.unwrap_or_else(|| ids.generate_id()),
+        rule_id: input.rule_id,
+        file_path: input.file_path,
+        source_fingerprint: input.source_fingerprint,
+        size: input.size,
+        mtime_ms: input.mtime_ms,
+        status: input.status,
+        processed_at: input.processed_at,
+        history_id: input.history_id,
+        export_path: input.export_path,
+        error_message: input.error_message,
     }
-}
-
-fn string_field(value: &Value, key: &str, default: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or(default)
-        .to_string()
-}
-
-fn bool_field(value: &Value, key: &str) -> bool {
-    value.get(key).and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn integer_field(value: &Value, key: &str) -> i64 {
-    value.get(key).and_then(Value::as_i64).unwrap_or(0)
-}
-
-fn optional_string_field(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
 }
 
 fn should_prepare_export_directory(

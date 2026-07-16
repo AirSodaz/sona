@@ -1,4 +1,5 @@
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
+export type { AutomationRuleValidationResult } from '../bindings';
 
 export type AutomationPresetId = 'meeting_notes' | 'lecture_notes' | 'bilingual_subtitles' | 'custom';
 
@@ -58,6 +59,7 @@ export interface AutomationRuntimeState {
 }
 
 export interface AutomationProcessedEntry {
+  id?: string;
   ruleId: string;
   filePath: string;
   sourceFingerprint: string;
@@ -78,10 +80,4 @@ export interface AutomationPresetDefinition {
   defaultDescription: string;
   stageConfig: AutomationStageConfig;
   exportConfig: Pick<AutomationExportConfig, 'format' | 'mode'>;
-}
-
-export interface AutomationRuleValidationResult {
-  valid: boolean;
-  code?: string;
-  message?: string;
 }

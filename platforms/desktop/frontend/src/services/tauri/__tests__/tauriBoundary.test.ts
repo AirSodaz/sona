@@ -843,10 +843,20 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('automation wrappers centralize runtime rule calls', async () => {
-    await replaceAutomationRuntimeRules([{ ruleId: 'rule-1' }]);
+    const rule = {
+      ruleId: 'rule-1',
+      watchDirectory: 'C:/watch',
+      recursive: true,
+      excludeDirectory: 'C:/exports',
+      debounceMs: 250,
+      stableWindowMs: 5000,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce([]);
+
+    await replaceAutomationRuntimeRules([rule]);
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.automation.replaceRuntimeRules, {
-      rules: [{ ruleId: 'rule-1' }],
+      rules: [rule],
     });
   });
 
@@ -926,6 +936,7 @@ describe('tauri boundary wrappers', () => {
       updatedAt: 2,
     };
     const processedEntry = {
+      id: 'entry-1',
       ruleId: 'rule-1',
       filePath: 'C:/watch/meeting.wav',
       sourceFingerprint: 'fingerprint',
@@ -934,12 +945,38 @@ describe('tauri boundary wrappers', () => {
       status: 'complete',
       processedAt: 30,
     };
+    vi.mocked(invoke).mockResolvedValueOnce({
+      rules: [{
+        ...rule,
+        stageConfig: {
+          ...rule.stageConfig,
+          polishPresetId: '',
+          translationLanguage: '',
+        },
+        exportConfig: { ...rule.exportConfig, prefix: '' },
+      }],
+      processedEntries: [{
+        ...processedEntry,
+        historyId: null,
+        exportPath: null,
+        errorMessage: null,
+      }],
+    });
 
-    await automationLoadRepositoryState();
+    const state = await automationLoadRepositoryState();
     await automationPersistRules([rule as any]);
     await automationPersistProcessedEntries([processedEntry as any]);
     await automationPersistRepositoryState([rule as any], [processedEntry as any]);
     await automationValidateRuleActivation(rule as any, {} as any, null);
+
+    expect(state).toEqual({
+      rules: [{
+        ...rule,
+        stageConfig: rule.stageConfig,
+        exportConfig: rule.exportConfig,
+      }],
+      processedEntries: [processedEntry],
+    });
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.automationRepository.loadState);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.automationRepository.persistRules, {

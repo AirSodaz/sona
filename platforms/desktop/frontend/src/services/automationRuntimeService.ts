@@ -1,4 +1,17 @@
 import type { AutomationRule } from '../types/automation';
+import type {
+  AutomationRuntimeCandidatePayload,
+  AutomationRuntimePathCollectionResult,
+  AutomationRuntimeReplaceResult,
+  AutomationRuntimeRuleConfig,
+} from '../bindings';
+export type {
+  AutomationRuntimeCandidatePayload,
+  AutomationRuntimePathCollectionOutcome,
+  AutomationRuntimePathCollectionResult,
+  AutomationRuntimeReplaceResult,
+  AutomationRuntimeRuleConfig,
+} from '../bindings';
 import {
   collectAutomationRuntimeRulePaths as collectAutomationRuntimeRulePathsTauri,
   replaceAutomationRuntimeRules as replaceAutomationRuntimeRulesTauri,
@@ -10,44 +23,6 @@ import { listen, type UnlistenFn } from './tauri/platform/events';
 export const AUTOMATION_RUNTIME_CANDIDATE_EVENT = TauriEvent.automation.runtimeCandidate;
 export const DEFAULT_AUTOMATION_CANDIDATE_DEBOUNCE_MS = 250;
 export const DEFAULT_AUTOMATION_STABLE_WINDOW_MS = 5000;
-
-export interface AutomationRuntimeRuleConfig {
-  ruleId: string;
-  watchDirectory: string;
-  recursive: boolean;
-  excludeDirectory: string;
-  debounceMs: number;
-  stableWindowMs: number;
-}
-
-export interface AutomationRuntimeReplaceResult {
-  ruleId: string;
-  started: boolean;
-  error?: string | null;
-}
-
-export interface AutomationRuntimeCandidatePayload {
-  ruleId: string;
-  filePath: string;
-  sourceFingerprint: string;
-  size: number;
-  mtimeMs: number;
-}
-
-export type AutomationRuntimePathCollectionOutcome =
-  | 'candidate'
-  | 'missing'
-  | 'unsupported'
-  | 'excluded'
-  | 'not_file'
-  | 'error';
-
-export interface AutomationRuntimePathCollectionResult {
-  filePath: string;
-  outcome: AutomationRuntimePathCollectionOutcome;
-  candidate?: AutomationRuntimeCandidatePayload | null;
-  error?: string | null;
-}
 
 export function toAutomationRuntimeRuleConfig(
   rule: Pick<AutomationRule, 'id' | 'watchDirectory' | 'recursive' | 'exportConfig'>,
@@ -65,7 +40,7 @@ export function toAutomationRuntimeRuleConfig(
 export async function replaceAutomationRuntimeRules(
   rules: AutomationRuntimeRuleConfig[],
 ): Promise<AutomationRuntimeReplaceResult[]> {
-  return replaceAutomationRuntimeRulesTauri<AutomationRuntimeReplaceResult[]>(rules);
+  return replaceAutomationRuntimeRulesTauri(rules);
 }
 
 export async function scanAutomationRuntimeRule(
@@ -78,10 +53,7 @@ export async function collectAutomationRuntimeRulePaths(
   rule: AutomationRuntimeRuleConfig,
   filePaths: string[],
 ): Promise<AutomationRuntimePathCollectionResult[]> {
-  return collectAutomationRuntimeRulePathsTauri<AutomationRuntimePathCollectionResult[]>(
-    rule,
-    filePaths,
-  );
+  return collectAutomationRuntimeRulePathsTauri(rule, filePaths);
 }
 
 export async function listenToAutomationRuntimeCandidates(

@@ -1,6 +1,10 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 use sona_core::automation::AutomationRule;
+use sona_core::automation::repository::{
+    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
+    AutomationRuleInputExportConfig, AutomationRuleInputStageConfig,
+};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
 use sona_sqlite::{Database, SqliteAutomationAdapter};
 use std::path::Path;
@@ -17,9 +21,9 @@ pub(crate) fn replace_automation_rules_json(
     app_data_dir: String,
     rules_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let rules = parse_json_array("automation rules", &rules_json)?;
+    let rules = parse_legacy_rules(&rules_json)?;
     with_automation_adapter(&app_data_dir, |adapter| {
-        adapter.replace_rules_json(rules)?;
+        adapter.replace_rules(rules)?;
         adapter.load_state()
     })
     .and_then(serialize_automation)
@@ -29,9 +33,9 @@ pub(crate) fn replace_automation_processed_entries_json(
     app_data_dir: String,
     entries_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let entries = parse_json_array("automation processed entries", &entries_json)?;
+    let entries = parse_legacy_processed_entries(&entries_json)?;
     with_automation_adapter(&app_data_dir, |adapter| {
-        adapter.replace_processed_entries_json(entries)?;
+        adapter.replace_processed_entries(entries)?;
         adapter.load_state()
     })
     .and_then(serialize_automation)
@@ -41,9 +45,9 @@ pub(crate) fn replace_automation_repository_state_json(
     app_data_dir: String,
     state_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let (rules, processed_entries) = parse_repository_state(&state_json)?;
+    let input = parse_repository_state(&state_json)?;
     with_automation_adapter(&app_data_dir, |adapter| {
-        adapter.replace_state_json(rules, processed_entries)?;
+        adapter.replace_state(input)?;
         adapter.load_state()
     })
     .and_then(serialize_automation)
@@ -82,11 +86,33 @@ fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value
         .ok_or_else(|| invalid_input(format!("Invalid {label} JSON: expected an array")))
 }
 
-fn parse_repository_state(input: &str) -> SonaCoreBindingResult<(Vec<Value>, Vec<Value>)> {
+fn parse_repository_state(input: &str) -> SonaCoreBindingResult<AutomationRepositoryInput> {
     let value = parse_json_object("automation repository state", input)?;
     let rules = parse_state_array(&value, "rules")?;
     let processed_entries = parse_state_array(&value, "processedEntries")?;
-    Ok((rules, processed_entries))
+    Ok(AutomationRepositoryInput {
+        rules: rules.iter().map(legacy_rule_input).collect(),
+        processed_entries: processed_entries
+            .iter()
+            .map(legacy_processed_input)
+            .collect(),
+    })
+}
+
+fn parse_legacy_rules(input: &str) -> SonaCoreBindingResult<Vec<AutomationRuleInput>> {
+    Ok(parse_json_array("automation rules", input)?
+        .iter()
+        .map(legacy_rule_input)
+        .collect())
+}
+
+fn parse_legacy_processed_entries(
+    input: &str,
+) -> SonaCoreBindingResult<Vec<AutomationProcessedInput>> {
+    Ok(parse_json_array("automation processed entries", input)?
+        .iter()
+        .map(legacy_processed_input)
+        .collect())
 }
 
 fn parse_state_array(state: &Value, field: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -97,6 +123,74 @@ fn parse_state_array(state: &Value, field: &str) -> SonaCoreBindingResult<Vec<Va
             "Invalid automation repository state JSON: {field} must be an array"
         ))),
     }
+}
+
+fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
+    let stage = value.get("stageConfig").unwrap_or(&Value::Null);
+    let export = value.get("exportConfig").unwrap_or(&Value::Null);
+    AutomationRuleInput {
+        id: optional_string_field(value, "id"),
+        name: string_field(value, "name", ""),
+        project_id: string_field(value, "projectId", ""),
+        preset_id: string_field(value, "presetId", "custom"),
+        watch_directory: string_field(value, "watchDirectory", ""),
+        recursive: bool_field(value, "recursive"),
+        enabled: bool_field(value, "enabled"),
+        stage_config: AutomationRuleInputStageConfig {
+            auto_polish: bool_field(stage, "autoPolish"),
+            polish_preset_id: string_field(stage, "polishPresetId", "general"),
+            auto_translate: bool_field(stage, "autoTranslate"),
+            translation_language: string_field(stage, "translationLanguage", "en"),
+            export_enabled: bool_field(stage, "exportEnabled"),
+        },
+        export_config: AutomationRuleInputExportConfig {
+            directory: string_field(export, "directory", ""),
+            format: string_field(export, "format", "txt"),
+            mode: string_field(export, "mode", "original"),
+            prefix: string_field(export, "prefix", ""),
+        },
+        created_at: integer_field(value, "createdAt"),
+        updated_at: integer_field(value, "updatedAt"),
+    }
+}
+
+fn legacy_processed_input(value: &Value) -> AutomationProcessedInput {
+    AutomationProcessedInput {
+        id: optional_string_field(value, "id"),
+        rule_id: string_field(value, "ruleId", ""),
+        file_path: string_field(value, "filePath", ""),
+        source_fingerprint: string_field(value, "sourceFingerprint", ""),
+        size: integer_field(value, "size"),
+        mtime_ms: integer_field(value, "mtimeMs"),
+        status: string_field(value, "status", "complete"),
+        processed_at: integer_field(value, "processedAt"),
+        history_id: optional_string_field(value, "historyId"),
+        export_path: optional_string_field(value, "exportPath"),
+        error_message: optional_string_field(value, "errorMessage"),
+    }
+}
+
+fn string_field(value: &Value, key: &str, default: &str) -> String {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or(default)
+        .to_string()
+}
+
+fn optional_string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn bool_field(value: &Value, key: &str) -> bool {
+    value.get(key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn integer_field(value: &Value, key: &str) -> i64 {
+    value.get(key).and_then(Value::as_i64).unwrap_or(0)
 }
 
 fn parse_json_object(label: &str, input: &str) -> SonaCoreBindingResult<Value> {
@@ -187,7 +281,7 @@ mod tests {
         let output = replace_automation_repository_state_json(
             dir.app_data_dir(),
             json!({
-                "rules": [{"name":"Rule"}],
+                "rules": [{"id":7,"name":"Rule"}],
                 "processedEntries": [{"filePath":"C:\\audio.wav"}]
             })
             .to_string(),

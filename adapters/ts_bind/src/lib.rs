@@ -4,6 +4,18 @@
 //! numeric transport validation, and desktop output-path metadata. The Tauri host
 //! only writes the generated output and invokes validation at its IPC boundary.
 
+pub use sona_core::automation::repository::{
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRepositoryState, AutomationRuleInput, AutomationRuleInputExportConfig,
+    AutomationRuleInputStageConfig, AutomationRuleRecord, AutomationRuleRecordExportConfig,
+    AutomationRuleRecordStageConfig,
+};
+pub use sona_core::automation::{
+    AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
+    AutomationRuleValidationResult, AutomationRuntimeCandidatePayload,
+    AutomationRuntimePathCollectionOutcome, AutomationRuntimePathCollectionResult,
+    AutomationRuntimeReplaceResult, AutomationRuntimeRuleConfig,
+};
 pub use sona_core::dashboard::models::{
     ContentStats, ContentTrendPoint, DashboardSnapshotDomainModel, DashboardUsageBucket,
     LlmUsageDashboardStats, OverviewStats, SpeakerLeader, SpeakerStats, UsageBreakdown,
@@ -281,6 +293,25 @@ pub fn desktop_types() -> specta::Types {
         .register::<ProjectUpdateInput>()
         .register::<ProjectRecord>()
         .register::<ProjectRepositorySnapshot>()
+        .register::<AutomationRuleInputStageConfig>()
+        .register::<AutomationRuleInputExportConfig>()
+        .register::<AutomationRuleInput>()
+        .register::<AutomationProcessedInput>()
+        .register::<AutomationRepositoryInput>()
+        .register::<AutomationRuleRecordStageConfig>()
+        .register::<AutomationRuleRecordExportConfig>()
+        .register::<AutomationRuleRecord>()
+        .register::<AutomationProcessedRecord>()
+        .register::<AutomationRepositoryState>()
+        .register::<AutomationRuleStageConfig>()
+        .register::<AutomationRuleExportConfig>()
+        .register::<AutomationRule>()
+        .register::<AutomationRuleValidationResult>()
+        .register::<AutomationRuntimeRuleConfig>()
+        .register::<AutomationRuntimeReplaceResult>()
+        .register::<AutomationRuntimeCandidatePayload>()
+        .register::<AutomationRuntimePathCollectionOutcome>()
+        .register::<AutomationRuntimePathCollectionResult>()
         .register::<HistoryAudioStatus>()
         .register::<HistoryItemKind>()
         .register::<HistoryItemStatus>()
@@ -373,6 +404,25 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ProjectUpdateInput",
     "ProjectRecord",
     "ProjectRepositorySnapshot",
+    "AutomationRuleInputStageConfig",
+    "AutomationRuleInputExportConfig",
+    "AutomationRuleInput",
+    "AutomationProcessedInput",
+    "AutomationRepositoryInput",
+    "AutomationRuleRecordStageConfig",
+    "AutomationRuleRecordExportConfig",
+    "AutomationRuleRecord",
+    "AutomationProcessedRecord",
+    "AutomationRepositoryState",
+    "AutomationRuleStageConfig",
+    "AutomationRuleExportConfig",
+    "AutomationRule",
+    "AutomationRuleValidationResult",
+    "AutomationRuntimeRuleConfig",
+    "AutomationRuntimeReplaceResult",
+    "AutomationRuntimeCandidatePayload",
+    "AutomationRuntimePathCollectionOutcome",
+    "AutomationRuntimePathCollectionResult",
     "HistoryAudioStatus",
     "HistoryItemKind",
     "HistoryItemStatus",
@@ -514,6 +564,13 @@ mod tests {
             "ProjectUpdateInput",
             "ProjectRecord",
             "ProjectRepositorySnapshot",
+            "AutomationRuleInput",
+            "AutomationProcessedInput",
+            "AutomationRepositoryState",
+            "AutomationRuleValidationResult",
+            "AutomationRuntimeRuleConfig",
+            "AutomationRuntimeReplaceResult",
+            "AutomationRuntimePathCollectionResult",
             "HistoryItemRecord",
             "HistoryWorkspaceQueryRequest",
             "HistoryWorkspaceQueryResult",
@@ -648,6 +705,20 @@ mod tests {
     }
 
     #[test]
+    fn automation_transport_validation_rejects_unsafe_file_metadata() {
+        let candidate = AutomationRuntimeCandidatePayload {
+            rule_id: "rule-1".to_string(),
+            file_path: "C:\\watch\\audio.wav".to_string(),
+            source_fingerprint: "fingerprint".to_string(),
+            size: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+            mtime_ms: 1,
+        };
+
+        let error = validate_typescript_safe_integers(&candidate).unwrap_err();
+        assert!(error.contains("$.size"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -705,6 +776,25 @@ mod tests {
         assert_specta_type::<ProjectUpdateInput>();
         assert_specta_type::<ProjectRecord>();
         assert_specta_type::<ProjectRepositorySnapshot>();
+        assert_specta_type::<AutomationRuleInputStageConfig>();
+        assert_specta_type::<AutomationRuleInputExportConfig>();
+        assert_specta_type::<AutomationRuleInput>();
+        assert_specta_type::<AutomationProcessedInput>();
+        assert_specta_type::<AutomationRepositoryInput>();
+        assert_specta_type::<AutomationRuleRecordStageConfig>();
+        assert_specta_type::<AutomationRuleRecordExportConfig>();
+        assert_specta_type::<AutomationRuleRecord>();
+        assert_specta_type::<AutomationProcessedRecord>();
+        assert_specta_type::<AutomationRepositoryState>();
+        assert_specta_type::<AutomationRuleStageConfig>();
+        assert_specta_type::<AutomationRuleExportConfig>();
+        assert_specta_type::<AutomationRule>();
+        assert_specta_type::<AutomationRuleValidationResult>();
+        assert_specta_type::<AutomationRuntimeRuleConfig>();
+        assert_specta_type::<AutomationRuntimeReplaceResult>();
+        assert_specta_type::<AutomationRuntimeCandidatePayload>();
+        assert_specta_type::<AutomationRuntimePathCollectionOutcome>();
+        assert_specta_type::<AutomationRuntimePathCollectionResult>();
         assert_specta_type::<HistoryAudioStatus>();
         assert_specta_type::<HistoryItemKind>();
         assert_specta_type::<HistoryItemStatus>();

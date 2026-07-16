@@ -9,7 +9,7 @@ use crate::ports::asr::{
 pub mod repository;
 pub mod service;
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRule {
@@ -25,7 +25,7 @@ pub struct AutomationRule {
     pub export_config: AutomationRuleExportConfig,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRuleStageConfig {
@@ -35,7 +35,7 @@ pub struct AutomationRuleStageConfig {
     pub auto_translate: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRuleExportConfig {
@@ -80,7 +80,9 @@ pub struct AutomationRuntimeRuleConfig {
     pub watch_directory: String,
     pub recursive: bool,
     pub exclude_directory: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub debounce_ms: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub stable_window_ms: u64,
 }
 
@@ -100,7 +102,9 @@ pub struct AutomationRuntimeCandidatePayload {
     pub rule_id: String,
     pub file_path: String,
     pub source_fingerprint: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub size: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub mtime_ms: u64,
 }
 

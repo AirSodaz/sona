@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 use sona_core::automation::repository::{
-    AutomationProcessedRecord, AutomationRepositoryState, AutomationRuleRecord, AutomationStore,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRepositoryState, AutomationRuleInput, AutomationRuleRecord, AutomationStore,
 };
 use sona_core::automation::service::{
     AutomationFileSystem, AutomationIdGenerator, AutomationRepositoryService,
@@ -91,10 +92,14 @@ fn replace_state_normalizes_defaults_and_generates_only_missing_ids() {
     let service = AutomationRepositoryService::new(&store, &ids);
 
     service
-        .replace_state_json(
-            vec![json!({"id":"kept", "name":"Rule", "createdAt":-5})],
-            vec![json!({"filePath":"C:\\audio.wav", "size":-1})],
-        )
+        .replace_state(AutomationRepositoryInput {
+            rules: vec![rule_input(
+                json!({"id":"kept", "name":"Rule", "createdAt":-5}),
+            )],
+            processed_entries: vec![processed_input(
+                json!({"filePath":"C:\\audio.wav", "size":-1}),
+            )],
+        })
         .unwrap();
 
     let state = store.state.lock().unwrap().clone();
@@ -109,19 +114,18 @@ fn replace_state_normalizes_defaults_and_generates_only_missing_ids() {
 }
 
 #[test]
-fn rule_ids_generate_only_for_missing_and_non_string_values() {
+fn rule_ids_generate_only_for_missing_values() {
     let store = MemoryStore::default();
-    let ids = SequenceIds(Mutex::new(vec!["missing".into(), "non-string".into()]));
+    let ids = SequenceIds(Mutex::new(vec!["missing".into()]));
     let service = AutomationRepositoryService::new(&store, &ids);
 
     service
-        .replace_rules_json(vec![json!({}), json!({"id": 7}), json!({"id": ""})])
+        .replace_rules(vec![rule_input(json!({})), rule_input(json!({"id": ""}))])
         .unwrap();
 
     let state = store.state.lock().unwrap();
     assert_eq!(state.rules[0].id, "missing");
-    assert_eq!(state.rules[1].id, "non-string");
-    assert_eq!(state.rules[2].id, "");
+    assert_eq!(state.rules[1].id, "");
 }
 
 #[test]
@@ -130,7 +134,7 @@ fn processed_ids_generate_when_missing() {
     let ids = SequenceIds(Mutex::new(vec!["entry-generated".into()]));
 
     AutomationRepositoryService::new(&store, &ids)
-        .replace_processed_entries_json(vec![json!({"filePath": "C:\\audio.wav"})])
+        .replace_processed_entries(vec![processed_input(json!({"filePath": "C:\\audio.wav"}))])
         .unwrap();
 
     assert_eq!(
@@ -145,7 +149,10 @@ fn normalization_uses_all_designed_defaults() {
     let ids = SequenceIds(Mutex::new(vec!["rule-1".into(), "entry-1".into()]));
 
     AutomationRepositoryService::new(&store, &ids)
-        .replace_state_json(vec![json!({})], vec![json!({})])
+        .replace_state(AutomationRepositoryInput {
+            rules: vec![rule_input(json!({}))],
+            processed_entries: vec![processed_input(json!({}))],
+        })
         .unwrap();
 
     let state = store.state.lock().unwrap();
@@ -176,7 +183,7 @@ fn optional_processed_fields_are_omitted_when_none() {
     let store = MemoryStore::default();
     let ids = SequenceIds(Mutex::new(vec![]));
     AutomationRepositoryService::new(&store, &ids)
-        .replace_processed_entries_json(vec![json!({"id": "entry-1"})])
+        .replace_processed_entries(vec![processed_input(json!({"id": "entry-1"}))])
         .unwrap();
 
     let value = serde_json::to_value(&store.state.lock().unwrap().processed_entries[0]).unwrap();
@@ -186,24 +193,24 @@ fn optional_processed_fields_are_omitted_when_none() {
 }
 
 #[test]
-fn replace_rules_json_calls_only_replace_rules() {
+fn replace_rules_calls_only_replace_rules() {
     let store = MemoryStore::default();
     let ids = SequenceIds(Mutex::new(vec![]));
 
     AutomationRepositoryService::new(&store, &ids)
-        .replace_rules_json(vec![json!({"id": "rule-1"})])
+        .replace_rules(vec![rule_input(json!({"id": "rule-1"}))])
         .unwrap();
 
     assert_eq!(store.calls.lock().unwrap().as_slice(), ["replace_rules"]);
 }
 
 #[test]
-fn replace_processed_entries_json_calls_only_replace_processed_entries() {
+fn replace_processed_entries_calls_only_replace_processed_entries() {
     let store = MemoryStore::default();
     let ids = SequenceIds(Mutex::new(vec![]));
 
     AutomationRepositoryService::new(&store, &ids)
-        .replace_processed_entries_json(vec![json!({"id": "entry-1"})])
+        .replace_processed_entries(vec![processed_input(json!({"id": "entry-1"}))])
         .unwrap();
 
     assert_eq!(
@@ -253,8 +260,12 @@ fn full_state_normalizes_both_collections_before_calling_store() {
     let ids = SequenceIds(Mutex::new(vec!["rule-1".into()]));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = AutomationRepositoryService::new(&store, &ids)
-            .replace_state_json(vec![json!({})], vec![json!({})]);
+        let _ = AutomationRepositoryService::new(&store, &ids).replace_state(
+            AutomationRepositoryInput {
+                rules: vec![rule_input(json!({}))],
+                processed_entries: vec![processed_input(json!({}))],
+            },
+        );
     }));
 
     assert!(result.is_err());
@@ -497,6 +508,14 @@ fn assert_precondition_invalid(
 
     assert_invalid(&result, code, message);
     assert!(fs.created.lock().unwrap().is_empty());
+}
+
+fn rule_input(value: Value) -> AutomationRuleInput {
+    serde_json::from_value(value).unwrap()
+}
+
+fn processed_input(value: Value) -> AutomationProcessedInput {
+    serde_json::from_value(value).unwrap()
 }
 
 fn rule_record_with(overrides: impl FnOnce(&mut AutomationRuleRecord)) -> AutomationRuleRecord {

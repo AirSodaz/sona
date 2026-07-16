@@ -1,9 +1,9 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
-use serde_json::Value;
 pub use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::automation::repository::{
-    AutomationProcessedRecord, AutomationRuleRecord, AutomationRuleRecordExportConfig,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
+    AutomationRuleInput, AutomationRuleRecord, AutomationRuleRecordExportConfig,
     AutomationRuleRecordStageConfig, AutomationStore,
 };
 use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
@@ -42,20 +42,19 @@ where
         self.service().load_state()
     }
 
-    pub fn replace_rules_json(&self, rules: Vec<Value>) -> Result<(), String> {
-        self.service().replace_rules_json(rules)
+    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), String> {
+        self.service().replace_rules(rules)
     }
 
-    pub fn replace_processed_entries_json(&self, entries: Vec<Value>) -> Result<(), String> {
-        self.service().replace_processed_entries_json(entries)
-    }
-
-    pub fn replace_state_json(
+    pub fn replace_processed_entries(
         &self,
-        rules: Vec<Value>,
-        processed_entries: Vec<Value>,
+        entries: Vec<AutomationProcessedInput>,
     ) -> Result<(), String> {
-        self.service().replace_state_json(rules, processed_entries)
+        self.service().replace_processed_entries(entries)
+    }
+
+    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), String> {
+        self.service().replace_state(input)
     }
 
     fn service(&self) -> AutomationRepositoryService<'_> {
@@ -528,7 +527,10 @@ mod tests {
         let adapter = SqliteAutomationAdapter::new(db, Arc::new(ids));
 
         adapter
-            .replace_state_json(vec![object(&[])], vec![object(&[])])
+            .replace_state(AutomationRepositoryInput {
+                rules: vec![object(&[])],
+                processed_entries: vec![object(&[])],
+            })
             .unwrap();
 
         let state = adapter.load_state().unwrap();
@@ -582,9 +584,19 @@ mod tests {
         .unwrap();
         let ids = SequenceIds(Mutex::new(Vec::new()));
 
-        let result = AutomationRepositoryService::new(&repo, &ids).replace_state_json(
-            vec![object(&[("id", "rule-new"), ("name", "New")])],
-            vec![object(&[("id", "entry-new"), ("ruleId", "rule-new")])],
+        let result = AutomationRepositoryService::new(&repo, &ids).replace_state(
+            AutomationRepositoryInput {
+                rules: vec![AutomationRuleInput {
+                    id: Some("rule-new".into()),
+                    name: "New".into(),
+                    ..AutomationRuleInput::default()
+                }],
+                processed_entries: vec![AutomationProcessedInput {
+                    id: Some("entry-new".into()),
+                    rule_id: "rule-new".into(),
+                    ..AutomationProcessedInput::default()
+                }],
+            },
         );
 
         assert!(result.is_err());

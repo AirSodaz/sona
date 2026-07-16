@@ -1,6 +1,6 @@
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sona_core::automation::repository::AutomationRepositoryState;
+use sona_core::automation::repository::{AutomationRepositoryInput, AutomationRepositoryState};
 use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
 use sona_sqlite::{Database, SqliteAutomationRepository};
 use std::path::Path;
@@ -15,12 +15,9 @@ impl AutomationIdGenerator for SequenceIds {
     }
 }
 
-fn state_json(
-    rule_name: &str,
-    watch_directory: &str,
-) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
-    (
-        vec![json!({
+fn state_json(rule_name: &str, watch_directory: &str) -> AutomationRepositoryInput {
+    serde_json::from_value(json!({
+        "rules": [{
             "name": rule_name,
             "projectId": "project-1",
             "presetId": "preset-1",
@@ -42,8 +39,8 @@ fn state_json(
             },
             "createdAt": 100,
             "updatedAt": 200
-        })],
-        vec![json!({
+        }],
+        "processedEntries": [{
             "ruleId": "rule-1",
             "filePath": "C:\\watch\\audio.wav",
             "sourceFingerprint": "fingerprint",
@@ -53,17 +50,17 @@ fn state_json(
             "processedAt": 400,
             "historyId": "history-1",
             "exportPath": "C:\\export\\audio.srt"
-        })],
-    )
+        }]
+    }))
+    .unwrap()
 }
 
 fn seed(app_data_dir: &Path, rule_name: &str, watch_directory: &str) -> Arc<Database> {
     let database = Arc::new(Database::open(app_data_dir).unwrap());
     let repository = SqliteAutomationRepository::new(Arc::clone(&database));
     let ids = SequenceIds(Mutex::new(vec!["rule-1".into(), "entry-1".into()]));
-    let (rules, entries) = state_json(rule_name, watch_directory);
     AutomationRepositoryService::new(&repository, &ids)
-        .replace_state_json(rules, entries)
+        .replace_state(state_json(rule_name, watch_directory))
         .unwrap();
     database
 }
@@ -73,7 +70,7 @@ fn seed_empty(app_data_dir: &Path) {
     let repository = SqliteAutomationRepository::new(database);
     let ids = SequenceIds(Mutex::new(Vec::new()));
     AutomationRepositoryService::new(&repository, &ids)
-        .replace_state_json(Vec::new(), Vec::new())
+        .replace_state(AutomationRepositoryInput::default())
         .unwrap();
 }
 
@@ -209,14 +206,10 @@ fn automation_table_aligns_unicode_names_by_display_width() {
     let database = seed(dir.path(), "会议规则", "C:\\watch-one");
     let repository = SqliteAutomationRepository::new(Arc::clone(&database));
     let ids = SequenceIds(Mutex::new(vec!["rule-2".into(), "entry-2".into()]));
-    let (rules, _) = state_json("meeting1", "C:\\watch-two");
+    let rules = state_json("meeting1", "C:\\watch-two").rules;
     AutomationRepositoryService::new(&repository, &ids)
-        .replace_rules_json(vec![
-            state_json("会议规则", "C:\\watch-one")
-                .0
-                .into_iter()
-                .next()
-                .unwrap(),
+        .replace_rules(vec![
+            state_json("会议规则", "C:\\watch-one").rules.remove(0),
             rules.into_iter().next().unwrap(),
         ])
         .unwrap();
