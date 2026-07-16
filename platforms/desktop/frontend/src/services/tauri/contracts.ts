@@ -33,11 +33,13 @@ import type {
   LiveRecordingDraftResult,
   RecoveryItemInput_Serialize,
   RecoverySnapshot_Serialize,
+  StorageUsageSnapshot_Serialize,
   TranscriptDiffResult_Serialize,
   TranscriptDiffRow_Serialize,
   TranscriptSegment_Serialize,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotRecord_Serialize,
+  WebviewBrowsingDataClearResult,
 } from "../../bindings";
 import type {
   AsrRuntimeMetricsSnapshot,
@@ -58,10 +60,6 @@ import type {
   SpeakerProfileSample,
   SpeakerProcessingConfig,
 } from "../../types/speaker";
-import type {
-  StorageUsageSnapshot,
-  WebviewBrowsingDataClearResult,
-} from "../../types/storage";
 import type { TranscriptSegment } from "../../types/transcript";
 import type {
   LlmCompletionRequest,
@@ -494,7 +492,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.storage.getUsageSnapshot]: {
     args: undefined;
-    result: StorageUsageSnapshot;
+    result: StorageUsageSnapshot_Serialize;
   };
   [TauriCommand.storage.clearWebviewBrowsingData]: {
     args: undefined;

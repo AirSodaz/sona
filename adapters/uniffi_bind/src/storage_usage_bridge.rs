@@ -34,6 +34,7 @@ mod tests {
     use crate::SonaCoreBindingError;
     use serde_json::Value;
     use sha2::{Digest, Sha256};
+    use sona_core::storage_usage::StorageUsageSnapshot;
     use sona_sqlite::Database;
     use std::collections::BTreeMap;
     use std::fs;
@@ -96,33 +97,28 @@ mod tests {
         let output = load_storage_usage_snapshot_json(dir.path().to_string_lossy().into_owned())
             .await
             .unwrap();
-        let snapshot: Value = serde_json::from_str(&output).unwrap();
+        let snapshot: StorageUsageSnapshot = serde_json::from_str(&output).unwrap();
+        let canonical: Value = serde_json::from_str(&output).unwrap();
 
-        assert_eq!(serde_json::to_string(&snapshot).unwrap(), output);
-        assert_eq!(snapshot["categories"]["audio"]["historyAudioBytes"], 9);
-        assert_eq!(
-            snapshot["categories"]["database"]["sqlite"]["dbstatAvailable"],
-            true
-        );
+        assert_eq!(serde_json::to_string(&canonical).unwrap(), output);
+        assert_eq!(snapshot.categories.audio.history_audio_bytes, 9);
+        assert!(snapshot.categories.database.sqlite.dbstat_available);
+        assert!(snapshot.categories.database.sqlite.index_bytes > 0);
         assert!(
-            snapshot["categories"]["database"]["sqlite"]["indexBytes"]
-                .as_u64()
-                .unwrap()
-                > 0
-        );
-        assert!(
-            snapshot["categories"]["database"]["sqlite"]["indexEntries"]
-                .as_array()
-                .unwrap()
+            snapshot
+                .categories
+                .database
+                .sqlite
+                .index_entries
                 .iter()
                 .any(|entry| {
-                    entry["schema"] == "analytics"
-                        && entry["name"] == "idx_storage_probe_analytics_value"
-                        && entry["bytes"].as_u64().unwrap() > 0
+                    entry.schema == "analytics"
+                        && entry.name == "idx_storage_probe_analytics_value"
+                        && entry.bytes > 0
                 })
         );
-        assert!(snapshot["generatedAt"].as_str().unwrap().contains('T'));
-        assert!(snapshot["totalBytes"].as_u64().unwrap() >= 9);
+        assert!(snapshot.generated_at.contains('T'));
+        assert!(snapshot.total_bytes >= 9);
         assert_eq!(file_hashes(dir.path()), before);
         drop(writer);
     }

@@ -75,6 +75,11 @@ pub use sona_core::recovery::types::{
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
 };
+pub use sona_core::storage_usage::{
+    AudioUsageCategory, DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry,
+    SQLiteUsageSummary, StorageUsageCategories, StorageUsageSnapshot,
+    WebviewBrowsingDataClearResult, WebviewCacheUsageCategory,
+};
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
@@ -181,6 +186,18 @@ pub fn validate_export_transcript_request_for_typescript(
 
 pub fn validate_export_transcript_result_for_typescript(
     result: &ExportTranscriptFileResult,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(result)
+}
+
+pub fn validate_storage_usage_snapshot_for_typescript(
+    snapshot: &StorageUsageSnapshot,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(snapshot)
+}
+
+pub fn validate_webview_browsing_data_clear_result_for_typescript(
+    result: &WebviewBrowsingDataClearResult,
 ) -> Result<(), String> {
     validate_typescript_safe_integers(result)
 }
@@ -350,6 +367,15 @@ pub fn desktop_types() -> specta::Types {
         .register::<ExportMode>()
         .register::<ExportTranscriptFileRequest>()
         .register::<ExportTranscriptFileResult>()
+        .register::<StorageUsageSnapshot>()
+        .register::<StorageUsageCategories>()
+        .register::<AudioUsageCategory>()
+        .register::<DatabaseUsageCategory>()
+        .register::<FileUsageCategory>()
+        .register::<WebviewCacheUsageCategory>()
+        .register::<SQLiteUsageSummary>()
+        .register::<SQLiteIndexUsageEntry>()
+        .register::<WebviewBrowsingDataClearResult>()
         .register::<TaskLedgerKind>()
         .register::<TaskLedgerStatus>()
         .register::<TaskLedgerRecord>()
@@ -476,6 +502,15 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ExportMode",
     "ExportTranscriptFileRequest",
     "ExportTranscriptFileResult",
+    "StorageUsageSnapshot",
+    "StorageUsageCategories",
+    "AudioUsageCategory",
+    "DatabaseUsageCategory",
+    "FileUsageCategory",
+    "WebviewCacheUsageCategory",
+    "SQLiteUsageSummary",
+    "SQLiteIndexUsageEntry",
+    "WebviewBrowsingDataClearResult",
     "TaskLedgerKind",
     "TaskLedgerStatus",
     "TaskLedgerRecord",
@@ -651,6 +686,15 @@ mod tests {
             "ExportMode",
             "ExportTranscriptFileRequest",
             "ExportTranscriptFileResult",
+            "StorageUsageSnapshot",
+            "StorageUsageCategories",
+            "AudioUsageCategory",
+            "DatabaseUsageCategory",
+            "FileUsageCategory",
+            "WebviewCacheUsageCategory",
+            "SQLiteUsageSummary",
+            "SQLiteIndexUsageEntry",
+            "WebviewBrowsingDataClearResult",
             "TaskLedgerKind",
             "TaskLedgerStatus",
             "TaskLedgerRecord",
@@ -865,6 +909,32 @@ mod tests {
     }
 
     #[test]
+    fn storage_usage_transport_validation_rejects_unsafe_byte_counts() {
+        let mut snapshot = sona_core::storage_usage::StorageUsageSnapshot::default();
+        snapshot.categories.database.sqlite.index_entries =
+            vec![sona_core::storage_usage::SQLiteIndexUsageEntry {
+                schema: "main".to_string(),
+                name: "idx_history".to_string(),
+                bytes: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+            }];
+
+        let error = validate_storage_usage_snapshot_for_typescript(&snapshot).unwrap_err();
+        assert!(
+            error.contains("$.categories.database.sqlite.indexEntries[0].bytes"),
+            "{error}"
+        );
+
+        let clear_result = sona_core::storage_usage::WebviewBrowsingDataClearResult {
+            before_bytes: Some(TYPESCRIPT_MAX_SAFE_INTEGER + 1),
+            after_bytes: None,
+            clear_requested: false,
+        };
+        let error =
+            validate_webview_browsing_data_clear_result_for_typescript(&clear_result).unwrap_err();
+        assert!(error.contains("$.beforeBytes"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -914,6 +984,15 @@ mod tests {
         assert_specta_type::<sona_core::export::ExportMode>();
         assert_specta_type::<sona_core::export::ExportTranscriptFileRequest>();
         assert_specta_type::<sona_core::export::ExportTranscriptFileResult>();
+        assert_specta_type::<sona_core::storage_usage::StorageUsageSnapshot>();
+        assert_specta_type::<sona_core::storage_usage::StorageUsageCategories>();
+        assert_specta_type::<sona_core::storage_usage::AudioUsageCategory>();
+        assert_specta_type::<sona_core::storage_usage::DatabaseUsageCategory>();
+        assert_specta_type::<sona_core::storage_usage::FileUsageCategory>();
+        assert_specta_type::<sona_core::storage_usage::WebviewCacheUsageCategory>();
+        assert_specta_type::<sona_core::storage_usage::SQLiteUsageSummary>();
+        assert_specta_type::<sona_core::storage_usage::SQLiteIndexUsageEntry>();
+        assert_specta_type::<sona_core::storage_usage::WebviewBrowsingDataClearResult>();
         assert_specta_type::<TaskLedgerKind>();
         assert_specta_type::<TaskLedgerStatus>();
         assert_specta_type::<TaskLedgerRecord>();

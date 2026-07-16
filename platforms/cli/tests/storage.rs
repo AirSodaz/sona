@@ -1,5 +1,5 @@
-use serde_json::Value;
 use sha2::{Digest, Sha256};
+use sona_core::storage_usage::StorageUsageSnapshot;
 use sona_sqlite::Database;
 use std::collections::BTreeMap;
 use std::fs;
@@ -123,17 +123,14 @@ fn storage_usage_outputs_complete_pretty_json() {
     let _writer = seed(dir.path());
 
     let output = run_usage(dir.path().to_string_lossy().as_ref(), true);
-    let snapshot: Value = serde_json::from_str(&output.stdout).unwrap();
+    let snapshot: StorageUsageSnapshot = serde_json::from_str(&output.stdout).unwrap();
 
     assert!(output.stdout.starts_with("{\n"));
     assert!(output.stdout.contains("\n  \"generatedAt\""));
     assert!(output.stdout.contains("\n  \"categories\""));
-    assert_eq!(snapshot["categories"]["audio"]["historyAudioBytes"], 9);
-    assert_eq!(
-        snapshot["categories"]["database"]["sqlite"]["dbstatAvailable"],
-        true
-    );
-    assert!(snapshot["totalBytes"].as_u64().unwrap() >= 9);
+    assert_eq!(snapshot.categories.audio.history_audio_bytes, 9);
+    assert!(snapshot.categories.database.sqlite.dbstat_available);
+    assert!(snapshot.total_bytes >= 9);
 }
 
 #[test]
@@ -146,15 +143,10 @@ fn storage_usage_accepts_relative_unicode_path_and_does_not_modify_active_wal() 
     let before = file_hashes(&app_data_dir);
 
     let output = run_usage(relative.to_string_lossy().as_ref(), true);
-    let snapshot: Value = serde_json::from_str(&output.stdout).unwrap();
+    let snapshot: StorageUsageSnapshot = serde_json::from_str(&output.stdout).unwrap();
 
-    assert_eq!(snapshot["categories"]["audio"]["historyAudioBytes"], 9);
-    assert!(
-        snapshot["categories"]["database"]["sqlite"]["indexBytes"]
-            .as_u64()
-            .unwrap()
-            > 0
-    );
+    assert_eq!(snapshot.categories.audio.history_audio_bytes, 9);
+    assert!(snapshot.categories.database.sqlite.index_bytes > 0);
     assert_eq!(file_hashes(&app_data_dir), before);
 }
 

@@ -10,7 +10,7 @@ pub async fn get_usage_snapshot<R: Runtime>(
         TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
     let db = crate::platform::database::sqlite_database(app);
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let snapshot = tauri::async_runtime::spawn_blocking(move || {
         sona_sqlite::load_storage_usage_snapshot_with_database(
             app_local_data_dir,
             db,
@@ -19,7 +19,9 @@ pub async fn get_usage_snapshot<R: Runtime>(
         .map_err(|error| error.to_string())
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+    sona_ts_bind::validate_storage_usage_snapshot_for_typescript(&snapshot)?;
+    Ok(snapshot)
 }
 
 pub async fn clear_webview_browsing_data<R: Runtime>(
@@ -37,10 +39,9 @@ pub async fn clear_webview_browsing_data<R: Runtime>(
         .map_err(|error| error.to_string())?;
 
     let after_bytes = observable_webview_cache_bytes(app_local_data_dir).await?;
-    Ok(sona_core::storage_usage::build_webview_clear_result(
-        before_bytes,
-        after_bytes,
-    ))
+    let result = sona_core::storage_usage::build_webview_clear_result(before_bytes, after_bytes);
+    sona_ts_bind::validate_webview_browsing_data_clear_result_for_typescript(&result)?;
+    Ok(result)
 }
 
 async fn observable_webview_cache_bytes(

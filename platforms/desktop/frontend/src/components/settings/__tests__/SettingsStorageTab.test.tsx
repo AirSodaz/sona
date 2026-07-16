@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { StorageUsageSnapshot, WebviewBrowsingDataClearResult } from '../../../types/storage';
 import { SettingsStorageTab } from '../SettingsStorageTab';
 
 const mocks = vi.hoisted(() => {
@@ -161,6 +162,19 @@ describe('SettingsStorageTab', () => {
     mocks.previewAudioCleanup.mockResolvedValue(report());
     mocks.refreshHistory.mockResolvedValue(undefined);
     mocks.showError.mockResolvedValue(undefined);
+  });
+
+  it('accepts disabled storage capabilities from the core contract', () => {
+    const snapshot: StorageUsageSnapshot = usageSnapshot();
+    snapshot.categories.database.sqlite.dbstatAvailable = false;
+    const clearResult: WebviewBrowsingDataClearResult = {
+      beforeBytes: null,
+      afterBytes: null,
+      clearRequested: false,
+    };
+
+    expect(snapshot.categories.database.sqlite.dbstatAvailable).toBe(false);
+    expect(clearResult.clearRequested).toBe(false);
   });
 
   it('renders the data usage overview from the storage snapshot', async () => {
