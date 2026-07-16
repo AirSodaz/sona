@@ -12,6 +12,8 @@ import type {
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
   AutomationRuntimeRuleConfig,
+  DiagnosticsCoreInput,
+  DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
   ExportTranscriptFileResult,
   HistoryAudioCleanupReport,
@@ -104,10 +106,6 @@ import type {
 } from "../llmTaskTypes";
 import type { ModelFileConfig } from "../../types/model";
 import type { ModelCatalogSnapshot } from "../modelService";
-import type {
-  DiagnosticsCoreInput,
-  DiagnosticsCoreFactsSnapshot,
-} from "../diagnosticsSnapshotBuilders";
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
@@ -268,7 +266,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
     args: { input: DiagnosticsCoreInput };
-    result: DiagnosticsCoreFactsSnapshot;
+    result: DiagnosticsCoreSnapshot;
   };
   [TauriCommand.app.loadAppConfig]: {
     args: undefined;

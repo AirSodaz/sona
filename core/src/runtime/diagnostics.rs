@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::sync::Arc;
 
 use crate::models::preset_models::{
@@ -11,6 +13,7 @@ pub use crate::runtime::environment::{
 use crate::transcription::asr_metrics::AsrRuntimeMetricsSnapshot;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsCoreInput {
     pub config: DiagnosticsConfigInput,
@@ -35,6 +38,7 @@ pub struct DiagnosticsCoreInput {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsConfigInput {
     pub streaming_model_path: String,
@@ -48,6 +52,7 @@ pub struct DiagnosticsConfigInput {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SelectedModelsInput {
     pub live: Option<ModelSummaryInput>,
@@ -55,6 +60,7 @@ pub struct SelectedModelsInput {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelSummaryInput {
     pub id: String,
@@ -62,6 +68,7 @@ pub struct ModelSummaryInput {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRulesInput {
     pub live: Option<ModelRuleInput>,
@@ -69,6 +76,7 @@ pub struct ModelRulesInput {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRuleInput {
     pub requires_vad: bool,
@@ -76,6 +84,7 @@ pub struct ModelRuleInput {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PathStatusesInput {
     pub live_model: Option<RuntimePathStatus>,
@@ -85,6 +94,7 @@ pub struct PathStatusesInput {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceProbeInput {
     pub options: Vec<DeviceOptionInput>,
@@ -93,12 +103,14 @@ pub struct DeviceProbeInput {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 pub struct DeviceOptionInput {
     pub label: String,
     pub value: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceTypingReadinessInput {
     pub state: String,
@@ -106,6 +118,7 @@ pub struct VoiceTypingReadinessInput {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsCoreSnapshot {
     pub scanned_at: String,

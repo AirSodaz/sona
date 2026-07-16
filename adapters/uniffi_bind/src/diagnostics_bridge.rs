@@ -39,6 +39,7 @@ mod tests {
     use serde_json::{Value, json};
     use sha2::{Digest, Sha256};
     use sona_core::models::preset_models::find_preset_model;
+    use sona_core::runtime::diagnostics::DiagnosticsCoreSnapshot;
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -130,7 +131,8 @@ mod tests {
         )
         .await
         .unwrap();
-        let snapshot: Value = serde_json::from_str(&output).unwrap();
+        let typed: DiagnosticsCoreSnapshot = serde_json::from_str(&output).unwrap();
+        let snapshot = serde_json::to_value(typed).unwrap();
 
         assert_eq!(serde_json::to_string(&snapshot).unwrap(), output);
         assert_eq!(snapshot["selectedModels"]["live"]["id"], LIVE_MODEL_ID);

@@ -151,7 +151,7 @@ describe('diagnosticsService', () => {
     setInvokeMock();
   });
 
-  it('collects browser-owned facts before calling the Rust diagnostics core', async () => {
+  it('projects browser-owned facts into the Rust diagnostics contract', async () => {
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
@@ -179,10 +179,13 @@ describe('diagnosticsService', () => {
           systemAudioProbe: expect.objectContaining({ available: true }),
           voiceTypingReadiness: expect.objectContaining({
             state: expect.any(String),
-            liveModelConfigured: true,
+            lastErrorMessage: null,
           }),
         }),
       }),
+    );
+    expect(JSON.stringify(mocks.invoke.mock.calls[0]?.[1])).not.toContain(
+      'liveModelConfigured',
     );
   });
 

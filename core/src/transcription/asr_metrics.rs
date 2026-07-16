@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AsrRuntimeMetricsSnapshot {
     pub model_load: Option<AsrModelLoadMetric>,
@@ -10,8 +13,10 @@ pub struct AsrRuntimeMetricsSnapshot {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AsrModelLoadMetric {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub occurred_at_ms: u64,
     pub instance_id: String,
     pub model_path: String,
@@ -19,29 +24,75 @@ pub struct AsrModelLoadMetric {
     pub recognizer_kind: String,
     pub num_threads: i32,
     pub reused_from_pool: bool,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub load_ms: f64,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub rss_before_mb: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub rss_after_mb: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub rss_delta_mb: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub process_rss_mb: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AsrInferenceMetric {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub occurred_at_ms: u64,
     pub source: String,
     pub instance_id: Option<String>,
     pub stage: String,
     pub is_final: bool,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub audio_duration_ms: f64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub buffered_samples: usize,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub audio_extract_ms: Option<f64>,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub decode_ms: f64,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub emit_latency_ms: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub total_ms: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub rtf: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub segment_count: Option<usize>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub process_rss_mb: Option<f64>,
 }
 

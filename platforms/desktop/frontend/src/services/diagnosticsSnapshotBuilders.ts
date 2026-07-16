@@ -11,9 +11,19 @@ import type {
   AsrInferenceMetric,
   AsrModelLoadMetric,
   AsrRuntimeMetricsSnapshot,
-  RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../types/runtime';
+import type {
+  DeviceProbeInput,
+  DiagnosticsConfigInput,
+  DiagnosticsCoreSnapshot,
+  ModelRuleInput,
+  ModelRulesInput,
+  ModelSummaryInput,
+  PathStatusesInput,
+  SelectedModelsInput,
+  VoiceTypingReadinessInput,
+} from '../bindings';
 import type {
   DeviceProbeResult,
   MicrophonePermissionState,
@@ -22,51 +32,23 @@ import type { VoiceTypingReadinessSnapshot } from '../hooks/useVoiceTypingReadin
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-export interface DiagnosticsConfigFacts {
-  streamingModelPath: string;
-  batchModelPath: string;
-  vadModelPath: string;
-  punctuationModelPath: string;
-  microphoneId: string;
-}
+export type DiagnosticsConfigFacts = Required<DiagnosticsConfigInput>;
 
-export interface ModelSummaryFacts {
-  id: string;
-  name: string;
-}
+export type ModelSummaryFacts = ModelSummaryInput;
 
-export interface ModelRuleFacts {
-  requiresVad: boolean;
-  requiresPunctuation: boolean;
-}
+export type ModelRuleFacts = ModelRuleInput;
 
-export interface DiagnosticsSelectedModelsFacts {
-  live: ModelSummaryFacts | null;
-  batch: ModelSummaryFacts | null;
-}
+export type DiagnosticsSelectedModelsFacts = SelectedModelsInput;
 
-export interface DiagnosticsModelRulesFacts {
-  live: ModelRuleFacts | null;
-  batch: ModelRuleFacts | null;
-}
+export type DiagnosticsModelRulesFacts = ModelRulesInput;
 
-export interface DiagnosticsPathStatusesFacts {
-  liveModel: RuntimePathStatus | null;
-  batchModel: RuntimePathStatus | null;
-  vad: RuntimePathStatus | null;
-  punctuation: RuntimePathStatus | null;
-}
+export type DiagnosticsPathStatusesFacts = PathStatusesInput;
 
-export interface DeviceProbeFacts {
-  options: DeviceProbeResult['options'];
-  available: boolean;
-  errorMessage?: string | null;
-}
+export type DeviceProbeFacts = DeviceProbeInput;
 
-export interface VoiceTypingReadinessFacts {
+export type VoiceTypingReadinessFacts = Omit<VoiceTypingReadinessInput, 'state'> & {
   state: VoiceTypingReadinessSnapshot['state'];
-  lastErrorMessage: string | null;
-}
+};
 
 export interface DiagnosticsCoreInput {
   config: DiagnosticsConfigFacts;
@@ -76,21 +58,14 @@ export interface DiagnosticsCoreInput {
   voiceTypingReadiness: VoiceTypingReadinessSnapshot;
 }
 
-export interface DiagnosticsCoreFactsSnapshot {
-  scannedAt: string;
+export type DiagnosticsCoreFactsSnapshot = Omit<
+  DiagnosticsCoreSnapshot,
+  'config' | 'permissionState' | 'voiceTypingReadiness'
+> & {
   config: DiagnosticsConfigFacts;
-  selectedModels: DiagnosticsSelectedModelsFacts;
-  modelRules: DiagnosticsModelRulesFacts;
-  pathStatuses: DiagnosticsPathStatusesFacts;
   permissionState: MicrophonePermissionState;
-  microphoneProbe: DeviceProbeFacts;
-  systemAudioProbe: DeviceProbeFacts;
   voiceTypingReadiness: VoiceTypingReadinessFacts;
-  runtimeEnvironment: RuntimeEnvironmentStatus;
-  asrRuntimeMetrics: AsrRuntimeMetricsSnapshot;
-  onboardingReady: boolean;
-  punctuationRequired: boolean;
-}
+};
 
 interface BuiltChecks {
   model: {

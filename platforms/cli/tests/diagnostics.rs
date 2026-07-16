@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sona_core::models::preset_models::find_preset_model;
+use sona_core::runtime::diagnostics::DiagnosticsCoreSnapshot;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -246,7 +247,8 @@ fn diagnostics_snapshot_outputs_complete_pretty_json() {
         input.to_string_lossy().as_ref(),
         true,
     );
-    let snapshot: Value = serde_json::from_str(&output.stdout).unwrap();
+    let typed: DiagnosticsCoreSnapshot = serde_json::from_str(&output.stdout).unwrap();
+    let snapshot = serde_json::to_value(typed).unwrap();
 
     assert!(output.stdout.starts_with("{\n"));
     assert!(output.stdout.contains("\n  \"selectedModels\""));

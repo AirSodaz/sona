@@ -345,8 +345,33 @@ describe('tauri boundary wrappers', () => {
     expect(result).not.toHaveProperty('overview');
     expect(result).not.toHaveProperty('sections');
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getDiagnosticsCoreSnapshot, {
-      input,
+      input: {
+        config: input.config,
+        permissionState: 'prompt',
+        microphoneProbe: {
+          options: [],
+          available: false,
+          errorMessage: null,
+        },
+        systemAudioProbe: {
+          options: [],
+          available: false,
+          errorMessage: null,
+        },
+        voiceTypingReadiness: {
+          state: 'off',
+          lastErrorMessage: null,
+        },
+      },
     });
+
+    vi.mocked(invoke).mockResolvedValueOnce({
+      ...coreSnapshot,
+      permissionState: 'unexpected',
+    });
+    await expect(getDiagnosticsCoreSnapshot(input)).rejects.toThrow(
+      'Unexpected diagnostics permission state: unexpected',
+    );
   });
 
   it('app wrappers delegate config migration and effective config resolution to Rust', async () => {

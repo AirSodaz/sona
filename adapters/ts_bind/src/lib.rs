@@ -72,6 +72,11 @@ pub use sona_core::recovery::types::{
     RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoveryItemInput, RecoveryItemStage,
     RecoveryResolution, RecoverySnapshot, RecoverySnapshotInput, RecoverySource,
 };
+pub use sona_core::runtime::diagnostics::{
+    DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
+    DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
+    SelectedModelsInput, VoiceTypingReadinessInput,
+};
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
 };
@@ -82,6 +87,9 @@ pub use sona_core::storage_usage::{
 };
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+};
+pub use sona_core::transcription::asr_metrics::{
+    AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 pub use sona_core::transcription::speaker::{
     SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
@@ -190,6 +198,27 @@ pub fn validate_export_transcript_result_for_typescript(
     validate_typescript_safe_integers(result)
 }
 
+pub fn validate_diagnostics_input_for_typescript(
+    input: &DiagnosticsCoreInput,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(input)?;
+    validate_asr_runtime_metric_numbers("$.asrRuntimeMetrics", &input.asr_runtime_metrics)
+}
+
+pub fn validate_diagnostics_snapshot_for_typescript(
+    snapshot: &DiagnosticsCoreSnapshot,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(snapshot)?;
+    validate_asr_runtime_metric_numbers("$.asrRuntimeMetrics", &snapshot.asr_runtime_metrics)
+}
+
+pub fn validate_asr_runtime_metrics_for_typescript(
+    metrics: &AsrRuntimeMetricsSnapshot,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(metrics)?;
+    validate_asr_runtime_metric_numbers("$", metrics)
+}
+
 pub fn validate_storage_usage_snapshot_for_typescript(
     snapshot: &StorageUsageSnapshot,
 ) -> Result<(), String> {
@@ -238,6 +267,54 @@ fn validate_task_ledger_record_numbers(
     record: &TaskLedgerRecord,
 ) -> Result<(), String> {
     validate_finite_typescript_number(&format!("{path}.progress"), record.progress)
+}
+
+fn validate_asr_runtime_metric_numbers(
+    path: &str,
+    metrics: &AsrRuntimeMetricsSnapshot,
+) -> Result<(), String> {
+    if let Some(metric) = metrics.model_load.as_ref() {
+        let metric_path = format!("{path}.modelLoad");
+        validate_finite_typescript_number(&format!("{metric_path}.loadMs"), metric.load_ms)?;
+        for (field, value) in [
+            ("rssBeforeMb", metric.rss_before_mb),
+            ("rssAfterMb", metric.rss_after_mb),
+            ("rssDeltaMb", metric.rss_delta_mb),
+            ("processRssMb", metric.process_rss_mb),
+        ] {
+            if let Some(value) = value {
+                validate_finite_typescript_number(&format!("{metric_path}.{field}"), value)?;
+            }
+        }
+    }
+
+    for (field, metric) in [
+        ("liveInference", metrics.live_inference.as_ref()),
+        ("batchInference", metrics.batch_inference.as_ref()),
+    ] {
+        let Some(metric) = metric else {
+            continue;
+        };
+        let metric_path = format!("{path}.{field}");
+        validate_finite_typescript_number(
+            &format!("{metric_path}.audioDurationMs"),
+            metric.audio_duration_ms,
+        )?;
+        validate_finite_typescript_number(&format!("{metric_path}.decodeMs"), metric.decode_ms)?;
+        for (field, value) in [
+            ("audioExtractMs", metric.audio_extract_ms),
+            ("emitLatencyMs", metric.emit_latency_ms),
+            ("totalMs", metric.total_ms),
+            ("rtf", metric.rtf),
+            ("processRssMb", metric.process_rss_mb),
+        ] {
+            if let Some(value) = value {
+                validate_finite_typescript_number(&format!("{metric_path}.{field}"), value)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_transcript_segment_numbers(
@@ -367,6 +444,20 @@ pub fn desktop_types() -> specta::Types {
         .register::<ExportMode>()
         .register::<ExportTranscriptFileRequest>()
         .register::<ExportTranscriptFileResult>()
+        .register::<DiagnosticsCoreInput>()
+        .register::<DiagnosticsConfigInput>()
+        .register::<SelectedModelsInput>()
+        .register::<ModelSummaryInput>()
+        .register::<ModelRulesInput>()
+        .register::<ModelRuleInput>()
+        .register::<PathStatusesInput>()
+        .register::<DeviceProbeInput>()
+        .register::<DeviceOptionInput>()
+        .register::<VoiceTypingReadinessInput>()
+        .register::<DiagnosticsCoreSnapshot>()
+        .register::<AsrRuntimeMetricsSnapshot>()
+        .register::<AsrModelLoadMetric>()
+        .register::<AsrInferenceMetric>()
         .register::<StorageUsageSnapshot>()
         .register::<StorageUsageCategories>()
         .register::<AudioUsageCategory>()
@@ -502,6 +593,20 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ExportMode",
     "ExportTranscriptFileRequest",
     "ExportTranscriptFileResult",
+    "DiagnosticsCoreInput",
+    "DiagnosticsConfigInput",
+    "SelectedModelsInput",
+    "ModelSummaryInput",
+    "ModelRulesInput",
+    "ModelRuleInput",
+    "PathStatusesInput",
+    "DeviceProbeInput",
+    "DeviceOptionInput",
+    "VoiceTypingReadinessInput",
+    "DiagnosticsCoreSnapshot",
+    "AsrRuntimeMetricsSnapshot",
+    "AsrModelLoadMetric",
+    "AsrInferenceMetric",
     "StorageUsageSnapshot",
     "StorageUsageCategories",
     "AudioUsageCategory",
@@ -686,6 +791,20 @@ mod tests {
             "ExportMode",
             "ExportTranscriptFileRequest",
             "ExportTranscriptFileResult",
+            "DiagnosticsCoreInput",
+            "DiagnosticsConfigInput",
+            "SelectedModelsInput",
+            "ModelSummaryInput",
+            "ModelRulesInput",
+            "ModelRuleInput",
+            "PathStatusesInput",
+            "DeviceProbeInput",
+            "DeviceOptionInput",
+            "VoiceTypingReadinessInput",
+            "DiagnosticsCoreSnapshot",
+            "AsrRuntimeMetricsSnapshot",
+            "AsrModelLoadMetric",
+            "AsrInferenceMetric",
             "StorageUsageSnapshot",
             "StorageUsageCategories",
             "AudioUsageCategory",
@@ -935,12 +1054,99 @@ mod tests {
     }
 
     #[test]
+    fn diagnostics_transport_validation_rejects_unsafe_and_non_finite_metrics() {
+        let mut input: sona_core::runtime::diagnostics::DiagnosticsCoreInput =
+            serde_json::from_value(serde_json::json!({
+                "config": {
+                    "streamingModelPath": "",
+                    "batchModelPath": ""
+                },
+                "permissionState": "prompt",
+                "microphoneProbe": {
+                    "options": [],
+                    "available": false,
+                    "errorMessage": null
+                },
+                "systemAudioProbe": {
+                    "options": [],
+                    "available": false,
+                    "errorMessage": null
+                },
+                "voiceTypingReadiness": {
+                    "state": "off",
+                    "lastErrorMessage": null
+                }
+            }))
+            .unwrap();
+        input.asr_runtime_metrics.model_load =
+            Some(sona_core::transcription::asr_metrics::AsrModelLoadMetric {
+                occurred_at_ms: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+                instance_id: "instance-1".to_string(),
+                model_path: "model.onnx".to_string(),
+                model_type: "streaming".to_string(),
+                recognizer_kind: "online".to_string(),
+                num_threads: 4,
+                reused_from_pool: false,
+                load_ms: 1.0,
+                rss_before_mb: None,
+                rss_after_mb: None,
+                rss_delta_mb: None,
+                process_rss_mb: None,
+            });
+
+        let error = validate_diagnostics_input_for_typescript(&input).unwrap_err();
+        assert!(
+            error.contains("$.asrRuntimeMetrics.modelLoad.occurredAtMs"),
+            "{error}"
+        );
+        let metrics_error =
+            validate_asr_runtime_metrics_for_typescript(&input.asr_runtime_metrics).unwrap_err();
+        assert!(
+            metrics_error.contains("$.modelLoad.occurredAtMs"),
+            "{metrics_error}"
+        );
+
+        input
+            .asr_runtime_metrics
+            .model_load
+            .as_mut()
+            .unwrap()
+            .occurred_at_ms = 1;
+        input
+            .asr_runtime_metrics
+            .model_load
+            .as_mut()
+            .unwrap()
+            .load_ms = f64::NAN;
+        let error = validate_diagnostics_input_for_typescript(&input).unwrap_err();
+        assert!(
+            error.contains("$.asrRuntimeMetrics.modelLoad.loadMs"),
+            "{error}"
+        );
+        assert!(error.contains("is not finite"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
         assert_specta_type::<sona_core::runtime::environment::RuntimeEnvironmentStatus>();
         assert_specta_type::<sona_core::runtime::environment::RuntimePathKind>();
         assert_specta_type::<sona_core::runtime::environment::RuntimePathStatus>();
+        assert_specta_type::<sona_core::runtime::diagnostics::DiagnosticsCoreInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::DiagnosticsConfigInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::SelectedModelsInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::ModelSummaryInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::ModelRulesInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::ModelRuleInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::PathStatusesInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::DeviceProbeInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::DeviceOptionInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::VoiceTypingReadinessInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::DiagnosticsCoreSnapshot>();
+        assert_specta_type::<sona_core::transcription::asr_metrics::AsrRuntimeMetricsSnapshot>();
+        assert_specta_type::<sona_core::transcription::asr_metrics::AsrModelLoadMetric>();
+        assert_specta_type::<sona_core::transcription::asr_metrics::AsrInferenceMetric>();
         assert_specta_type::<sona_core::ports::asr::AsrEngine>();
         assert_specta_type::<sona_core::ports::asr::AsrMode>();
         assert_specta_type::<sona_core::ports::asr::BatchSegmentationMode>();

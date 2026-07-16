@@ -120,5 +120,7 @@ pub async fn process_batch_file(
 pub async fn get_asr_runtime_metrics(
     state: State<'_, AsrState>,
 ) -> Result<AsrRuntimeMetricsSnapshot, String> {
-    Ok(state.metrics_snapshot().await)
+    let metrics = state.metrics_snapshot().await;
+    sona_ts_bind::validate_asr_runtime_metrics_for_typescript(&metrics)?;
+    Ok(metrics)
 }

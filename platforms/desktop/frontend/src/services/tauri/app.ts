@@ -7,6 +7,10 @@ import type { AppConfig, AppLogLevel } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {
+  DiagnosticsCoreInput as CoreDiagnosticsInput,
+  DiagnosticsCoreSnapshot as CoreDiagnosticsSnapshot,
+} from '../../bindings';
+import type {
   DiagnosticsCoreInput,
   DiagnosticsCoreFactsSnapshot,
 } from '../diagnosticsSnapshotBuilders';
@@ -32,6 +36,76 @@ export type ModelCatalogSelectedIds = TauriCommandResult<
 export type AppConfigMigrationResult = TauriCommandResult<
   typeof TauriCommand.app.migrateAppConfig
 >;
+
+function buildDiagnosticsTransportInput(input: DiagnosticsCoreInput): CoreDiagnosticsInput {
+  const normalizeProbe = (probe: DiagnosticsCoreInput['microphoneProbe']) => ({
+    options: probe.options.map(({ label, value }) => ({ label, value })),
+    available: probe.available,
+    errorMessage: probe.errorMessage ?? null,
+  });
+
+  return {
+    config: input.config,
+    permissionState: input.permissionState,
+    microphoneProbe: normalizeProbe(input.microphoneProbe),
+    systemAudioProbe: normalizeProbe(input.systemAudioProbe),
+    voiceTypingReadiness: {
+      state: input.voiceTypingReadiness.state,
+      lastErrorMessage: input.voiceTypingReadiness.lastErrorMessage,
+    },
+  };
+}
+
+function normalizePermissionState(
+  value: string,
+): DiagnosticsCoreFactsSnapshot['permissionState'] {
+  switch (value) {
+    case 'denied':
+    case 'granted':
+    case 'prompt':
+    case 'unsupported':
+      return value;
+    default:
+      throw new Error(`Unexpected diagnostics permission state: ${value}`);
+  }
+}
+
+function normalizeVoiceTypingState(
+  value: string,
+): DiagnosticsCoreFactsSnapshot['voiceTypingReadiness']['state'] {
+  switch (value) {
+    case 'off':
+    case 'needs_shortcut':
+    case 'needs_live_model':
+    case 'needs_vad':
+    case 'failed':
+    case 'preparing':
+    case 'ready':
+      return value;
+    default:
+      throw new Error(`Unexpected diagnostics voice typing state: ${value}`);
+  }
+}
+
+function normalizeDiagnosticsSnapshot(
+  snapshot: CoreDiagnosticsSnapshot,
+): DiagnosticsCoreFactsSnapshot {
+  return {
+    ...snapshot,
+    config: {
+      streamingModelPath: snapshot.config.streamingModelPath,
+      batchModelPath: snapshot.config.batchModelPath,
+      vadModelPath: snapshot.config.vadModelPath ?? '',
+      punctuationModelPath: snapshot.config.punctuationModelPath ?? '',
+      microphoneId: snapshot.config.microphoneId ?? 'default',
+    },
+    permissionState: normalizePermissionState(snapshot.permissionState),
+    voiceTypingReadiness: {
+      state: normalizeVoiceTypingState(snapshot.voiceTypingReadiness.state),
+      lastErrorMessage: snapshot.voiceTypingReadiness.lastErrorMessage,
+    },
+  };
+}
 
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
   await invokeTauri(TauriCommand.app.extractTarBz2, request);
@@ -62,7 +136,10 @@ export async function resolveModelCatalogSelectedIds(
 export async function getDiagnosticsCoreSnapshot(
   input: DiagnosticsCoreInput,
 ): Promise<DiagnosticsCoreFactsSnapshot> {
-  return invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, { input });
+  const snapshot = await invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, {
+    input: buildDiagnosticsTransportInput(input),
+  });
+  return normalizeDiagnosticsSnapshot(snapshot);
 }
 
 export async function loadAppConfig(): Promise<AppConfig | null> {
