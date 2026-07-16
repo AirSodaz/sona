@@ -228,6 +228,114 @@ export type SummarySegmentInput = {
 
 export type SummaryTemplateId = ({ Builtin: BuiltinSummaryTemplateId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
+export type TaskLedgerKind = "batchImport" | "automation" | "llmPolish" | "llmTranslate" | "llmSummary" | "recovery" | "update";
+
+export type TaskLedgerPatch = TaskLedgerPatch_Serialize | TaskLedgerPatch_Deserialize;
+
+export type TaskLedgerPatch_Deserialize = {
+	kind?: TaskLedgerKind | null,
+	status?: TaskLedgerStatus | null,
+	title?: string | null,
+	progress?: number | null,
+	createdAt?: number | null,
+	updatedAt?: number | null,
+	retryable?: boolean | null,
+	cancelable?: boolean | null,
+	recoverable?: boolean | null,
+	stage?: string | null,
+	historyId?: string | null,
+	projectId?: string | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
+};
+
+export type TaskLedgerPatch_Serialize = {
+	kind?: TaskLedgerKind | null,
+	status?: TaskLedgerStatus | null,
+	title?: string | null,
+	progress?: number | null,
+	createdAt?: number | null,
+	updatedAt?: number | null,
+	retryable?: boolean | null,
+	cancelable?: boolean | null,
+	recoverable?: boolean | null,
+	stage?: string | null,
+	historyId?: string | null,
+	projectId?: string | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
+};
+
+export type TaskLedgerRecord = TaskLedgerRecord_Serialize | TaskLedgerRecord_Deserialize;
+
+export type TaskLedgerRecord_Deserialize = {
+	id: string,
+	kind: TaskLedgerKind,
+	status: TaskLedgerStatus,
+	title: string,
+	progress: number,
+	createdAt: number,
+	updatedAt: number,
+	retryable: boolean,
+	cancelable: boolean,
+	recoverable: boolean,
+	stage: string | null,
+	historyId: string | null,
+	projectId: string | null,
+	filePath: string | null,
+	automationRuleId: string | null,
+	sourceFingerprint: string | null,
+	errorMessage: string | null,
+	templateId: string | null,
+	targetLanguage: string | null,
+};
+
+export type TaskLedgerRecord_Serialize = {
+	id: string,
+	kind: TaskLedgerKind,
+	status: TaskLedgerStatus,
+	title: string,
+	progress: number,
+	createdAt: number,
+	updatedAt: number,
+	retryable: boolean,
+	cancelable: boolean,
+	recoverable: boolean,
+	stage?: string | null,
+	historyId?: string | null,
+	projectId?: string | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
+};
+
+export type TaskLedgerSnapshot = TaskLedgerSnapshot_Serialize | TaskLedgerSnapshot_Deserialize;
+
+export type TaskLedgerSnapshot_Deserialize = {
+	version: number,
+	updatedAt: number | null,
+	tasks: TaskLedgerRecord_Deserialize[],
+};
+
+export type TaskLedgerSnapshot_Serialize = {
+	version: number,
+	updatedAt: number | null,
+	tasks: TaskLedgerRecord_Serialize[],
+};
+
+export type TaskLedgerStatus = "pending" | "running" | "cancelRequested" | "failed" | "recoverable" | "interrupted" | "cancelled" | "succeeded";
+
 export type TranscriptSummaryResult = {
 	templateId: string,
 	content: string,

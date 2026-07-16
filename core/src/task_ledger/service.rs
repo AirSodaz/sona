@@ -3,7 +3,9 @@ use serde_json::Value;
 use crate::ports::time::UnixMillisClock;
 
 use super::repository::TaskLedgerStore;
-use super::types::{TASK_LEDGER_VERSION, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus};
+use super::types::{
+    TASK_LEDGER_VERSION, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+};
 
 const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
 
@@ -43,16 +45,35 @@ impl<'a> TaskLedgerService<'a> {
     pub fn patch_task_at(
         &self,
         id: &str,
-        patch: Value,
+        patch: TaskLedgerPatch,
         now_ms: u64,
     ) -> Result<TaskLedgerSnapshot, String> {
-        let mut update = |record| merge_patch_at(record, id, &patch, now_ms);
+        let mut update = |record| Ok(apply_typed_patch_at(record, id, &patch, now_ms));
         self.store.update_record(id, &mut update)?;
         self.load_snapshot_at(now_ms)
     }
 
-    pub fn patch_task(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+    pub fn patch_task(
+        &self,
+        id: &str,
+        patch: TaskLedgerPatch,
+    ) -> Result<TaskLedgerSnapshot, String> {
         self.patch_task_at(id, patch, self.clock.now_ms()?)
+    }
+
+    pub fn patch_task_json_at(
+        &self,
+        id: &str,
+        patch: Value,
+        now_ms: u64,
+    ) -> Result<TaskLedgerSnapshot, String> {
+        let mut update = |record| merge_json_patch_at(record, id, &patch, now_ms);
+        self.store.update_record(id, &mut update)?;
+        self.load_snapshot_at(now_ms)
+    }
+
+    pub fn patch_task_json(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+        self.patch_task_json_at(id, patch, self.clock.now_ms()?)
     }
 
     pub fn remove_task_at(&self, id: &str, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
@@ -75,7 +96,70 @@ impl<'a> TaskLedgerService<'a> {
     }
 }
 
-fn merge_patch_at(
+fn apply_typed_patch_at(
+    mut record: TaskLedgerRecord,
+    id: &str,
+    patch: &TaskLedgerPatch,
+    now_ms: u64,
+) -> TaskLedgerRecord {
+    if let Some(value) = &patch.kind {
+        record.kind = value.clone();
+    }
+    if let Some(value) = &patch.status {
+        record.status = value.clone();
+    }
+    if let Some(value) = &patch.title {
+        record.title.clone_from(value);
+    }
+    if let Some(value) = patch.progress {
+        record.progress = value;
+    }
+    if let Some(value) = patch.created_at {
+        record.created_at = value;
+    }
+    if let Some(value) = patch.retryable {
+        record.retryable = value;
+    }
+    if let Some(value) = patch.cancelable {
+        record.cancelable = value;
+    }
+    if let Some(value) = patch.recoverable {
+        record.recoverable = value;
+    }
+    if let Some(value) = &patch.stage {
+        record.stage.clone_from(value);
+    }
+    if let Some(value) = &patch.history_id {
+        record.history_id.clone_from(value);
+    }
+    if let Some(value) = &patch.project_id {
+        record.project_id.clone_from(value);
+    }
+    if let Some(value) = &patch.file_path {
+        record.file_path.clone_from(value);
+    }
+    if let Some(value) = &patch.automation_rule_id {
+        record.automation_rule_id.clone_from(value);
+    }
+    if let Some(value) = &patch.source_fingerprint {
+        record.source_fingerprint.clone_from(value);
+    }
+    if let Some(value) = &patch.error_message {
+        record.error_message.clone_from(value);
+    }
+    if let Some(value) = &patch.template_id {
+        record.template_id.clone_from(value);
+    }
+    if let Some(value) = &patch.target_language {
+        record.target_language.clone_from(value);
+    }
+
+    record.id = id.to_string();
+    record.updated_at = now_ms;
+    normalize_record_at(record, now_ms)
+}
+
+fn merge_json_patch_at(
     mut record: TaskLedgerRecord,
     id: &str,
     patch: &Value,

@@ -6,7 +6,8 @@ use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
-    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot,
+    TaskLedgerStatus,
 };
 use std::sync::Arc;
 
@@ -56,8 +57,16 @@ where
         self.service().upsert_task(record)
     }
 
-    pub fn patch_task(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+    pub fn patch_task(
+        &self,
+        id: &str,
+        patch: TaskLedgerPatch,
+    ) -> Result<TaskLedgerSnapshot, String> {
         self.service().patch_task(id, patch)
+    }
+
+    pub fn patch_task_json(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+        self.service().patch_task_json(id, patch)
     }
 
     pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, String> {
@@ -347,7 +356,7 @@ mod tests {
         TaskLedgerStore::upsert_record(&repo, &task).unwrap();
 
         let snapshot = service(&repo)
-            .patch_task_at("  legacy-id  ", json!({"progress": 75.0}), 2_000)
+            .patch_task_json_at("  legacy-id  ", json!({"progress": 75.0}), 2_000)
             .unwrap();
 
         let records = TaskLedgerStore::load_records(&repo).unwrap();
@@ -413,7 +422,14 @@ mod tests {
         let record = make_record("task-2", TaskLedgerStatus::Pending);
         service.upsert_task_at(record, 2_000).unwrap();
         let snapshot = service
-            .patch_task_at("task-2", json!({"progress": 75.0}), 3_000)
+            .patch_task_at(
+                "task-2",
+                TaskLedgerPatch {
+                    progress: Some(75.0),
+                    ..Default::default()
+                },
+                3_000,
+            )
             .unwrap();
         assert_eq!(snapshot.tasks.len(), 1);
         assert_eq!(snapshot.tasks[0].progress, 75.0);

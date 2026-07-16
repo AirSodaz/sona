@@ -1,53 +1,27 @@
-export type TaskLedgerKind =
-  | 'batchImport'
-  | 'automation'
-  | 'llmPolish'
-  | 'llmTranslate'
-  | 'llmSummary'
-  | 'recovery'
-  | 'update';
+import type {
+  TaskLedgerKind as GeneratedTaskLedgerKind,
+  TaskLedgerPatch_Deserialize as GeneratedTaskLedgerPatch,
+  TaskLedgerRecord_Serialize as GeneratedTaskLedgerRecord,
+  TaskLedgerSnapshot_Serialize as GeneratedTaskLedgerSnapshot,
+  TaskLedgerStatus as GeneratedTaskLedgerStatus,
+} from '../bindings';
 
-export type TaskLedgerStatus =
-  | 'pending'
-  | 'running'
-  | 'cancelRequested'
-  | 'failed'
-  | 'recoverable'
-  | 'interrupted'
-  | 'cancelled'
-  | 'succeeded';
+type WithoutNull<T> = { [K in keyof T]: Exclude<T[K], null> };
+type NormalizedTaskLedgerRecord = WithoutNull<GeneratedTaskLedgerRecord>;
+type NormalizedTaskLedgerPatch = WithoutNull<GeneratedTaskLedgerPatch>;
 
-export interface TaskLedgerRecord {
-  id: string;
-  kind: TaskLedgerKind;
-  status: TaskLedgerStatus;
-  title: string;
-  progress: number;
-  createdAt: number;
-  updatedAt: number;
-  retryable: boolean;
-  cancelable: boolean;
-  recoverable: boolean;
-  stage?: string;
-  historyId?: string;
-  projectId?: string | null;
-  filePath?: string;
-  automationRuleId?: string;
-  sourceFingerprint?: string;
-  errorMessage?: string;
-  templateId?: string;
-  targetLanguage?: string;
-}
-
-export interface TaskLedgerSnapshot {
-  version: number;
-  updatedAt: number | null;
+export type TaskLedgerKind = GeneratedTaskLedgerKind;
+export type TaskLedgerStatus = GeneratedTaskLedgerStatus;
+export type TaskLedgerRecord = Omit<NormalizedTaskLedgerRecord, 'projectId'> &
+  Pick<GeneratedTaskLedgerRecord, 'projectId'>;
+export type TaskLedgerSnapshot = Omit<GeneratedTaskLedgerSnapshot, 'tasks'> & {
   tasks: TaskLedgerRecord[];
-}
-
-export type TaskLedgerPatch = Partial<Omit<TaskLedgerRecord, 'id' | 'errorMessage'>> & {
-  errorMessage?: string | null;
 };
+export type TaskLedgerPatch = Omit<
+  NormalizedTaskLedgerPatch,
+  'errorMessage' | 'projectId'
+> &
+  Pick<GeneratedTaskLedgerPatch, 'errorMessage' | 'projectId'>;
 
 export function isTaskLedgerActiveStatus(status: TaskLedgerStatus): boolean {
   return status === 'pending' || status === 'running' || status === 'cancelRequested';

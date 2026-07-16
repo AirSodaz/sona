@@ -5,7 +5,7 @@ use tauri::{AppHandle, Runtime, State};
 use crate::platform::webdav::{RemoteBackupEntry, WebDavConfigPayload, WebDavConnectionResult};
 
 use sona_core::recovery::types::RecoverySnapshot;
-use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
+use sona_core::task_ledger::types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot};
 
 // Command wrappers & implementations
 
@@ -203,7 +203,7 @@ pub async fn task_ledger_upsert_task(
 pub async fn task_ledger_patch_task(
     app: AppHandle,
     id: String,
-    patch: Value,
+    patch: TaskLedgerPatch,
 ) -> Result<TaskLedgerSnapshot, String> {
     crate::platform::task_ledger_repository::patch_task(&app, id, patch).await
 }

@@ -2,7 +2,9 @@ use serde_json::json;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
-use sona_core::task_ledger::types::{TaskLedgerKind, TaskLedgerRecord, TaskLedgerStatus};
+use sona_core::task_ledger::types::{
+    TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerStatus,
+};
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -228,11 +230,54 @@ fn load_filters_resolved_tasks_and_sorts_retained_ids() {
 }
 
 #[test]
-fn patch_merges_object_forces_id_and_supplies_update_time() {
+fn typed_patch_updates_fields_clears_nullable_values_and_supplies_update_time() {
+    let mut task = record("task-2", TaskLedgerStatus::Pending);
+    task.error_message = Some("previous failure".into());
+    let store = MemoryStore::with_records([task]);
+
+    let snapshot = service(&store)
+        .patch_task_at(
+            "task-2",
+            TaskLedgerPatch {
+                status: Some(TaskLedgerStatus::Running),
+                progress: Some(75.0),
+                updated_at: Some(123),
+                error_message: Some(None),
+                ..Default::default()
+            },
+            7_000,
+        )
+        .unwrap();
+
+    assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
+    assert_eq!(snapshot.tasks[0].progress, 75.0);
+    assert_eq!(
+        snapshot.tasks[0].error_message.as_deref(),
+        Some("Task was interrupted before it finished.")
+    );
+    assert_eq!(snapshot.tasks[0].updated_at, 7_000);
+    assert_eq!(store.records()[0].status, TaskLedgerStatus::Running);
+    assert_eq!(store.records()[0].error_message, None);
+}
+
+#[test]
+fn typed_patch_deserialization_distinguishes_missing_null_and_string_fields() {
+    let missing: TaskLedgerPatch = serde_json::from_value(json!({})).unwrap();
+    let cleared: TaskLedgerPatch = serde_json::from_value(json!({"errorMessage": null})).unwrap();
+    let replaced: TaskLedgerPatch =
+        serde_json::from_value(json!({"errorMessage": "retry failed"})).unwrap();
+
+    assert_eq!(missing.error_message, None);
+    assert_eq!(cleared.error_message, Some(None));
+    assert_eq!(replaced.error_message, Some(Some("retry failed".into())));
+}
+
+#[test]
+fn json_patch_compatibility_merges_object_forces_id_and_supplies_update_time() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
     let snapshot = service(&store)
-        .patch_task_at("task-2", json!({"id":"changed","progress":75.0}), 7_000)
+        .patch_task_json_at("task-2", json!({"id":"changed","progress":75.0}), 7_000)
         .unwrap();
 
     assert_eq!(snapshot.tasks[0].id, "task-2");
@@ -245,7 +290,7 @@ fn nonobject_patch_still_updates_timestamp() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
     let snapshot = service(&store)
-        .patch_task_at("task-2", json!(null), 7_000)
+        .patch_task_json_at("task-2", json!(null), 7_000)
         .unwrap();
 
     assert_eq!(snapshot.tasks[0].progress, 50.0);
@@ -257,7 +302,7 @@ fn invalid_patch_returns_serialization_error() {
     let store = MemoryStore::with_records([record("task-2", TaskLedgerStatus::Pending)]);
 
     let error = service(&store)
-        .patch_task_at("task-2", json!({"status":"not-a-status"}), 7_000)
+        .patch_task_json_at("task-2", json!({"status":"not-a-status"}), 7_000)
         .unwrap_err();
 
     assert!(error.starts_with("Serialization error: "));
@@ -268,7 +313,14 @@ fn patch_missing_record_is_noop() {
     let store = MemoryStore::default();
 
     let snapshot = service(&store)
-        .patch_task_at("missing", json!({"progress":75.0}), 7_000)
+        .patch_task_at(
+            "missing",
+            TaskLedgerPatch {
+                progress: Some(75.0),
+                ..Default::default()
+            },
+            7_000,
+        )
         .unwrap();
 
     assert!(snapshot.tasks.is_empty());
@@ -335,7 +387,9 @@ fn store_errors_are_returned_unchanged() {
         "store failure"
     );
     assert_eq!(
-        service.patch_task_at("task", json!({}), 9_000).unwrap_err(),
+        service
+            .patch_task_at("task", TaskLedgerPatch::default(), 9_000)
+            .unwrap_err(),
         "store failure"
     );
     assert_eq!(
@@ -359,7 +413,13 @@ fn task_ledger_runtime_methods_use_the_injected_clock() {
 
     let upserted = service.upsert_task(pending).unwrap();
     let patched = service
-        .patch_task("runtime", json!({"progress": 75.0}))
+        .patch_task(
+            "runtime",
+            TaskLedgerPatch {
+                progress: Some(75.0),
+                ..Default::default()
+            },
+        )
         .unwrap();
     let loaded = service.load_snapshot().unwrap();
     let removed = service.remove_task("runtime").unwrap();

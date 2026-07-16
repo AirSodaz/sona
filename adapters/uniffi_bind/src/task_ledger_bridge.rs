@@ -75,7 +75,7 @@ fn patch_task_ledger_record_json_with_clock(
         }
     })?;
     with_task_ledger_adapter(&app_data_dir, clock, |adapter| {
-        adapter.patch_task(&id, patch)
+        adapter.patch_task_json(&id, patch)
     })
     .and_then(serialize_snapshot)
 }

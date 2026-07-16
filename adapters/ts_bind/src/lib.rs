@@ -34,6 +34,9 @@ pub use sona_core::ports::asr::{
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
 };
+pub use sona_core::task_ledger::types::{
+    TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
+};
 pub use sona_core::transcription::speaker::{
     SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
 };
@@ -126,6 +129,36 @@ pub fn validate_dashboard_snapshot_for_typescript(
     Ok(())
 }
 
+pub fn validate_task_ledger_record_for_typescript(record: &TaskLedgerRecord) -> Result<(), String> {
+    validate_typescript_safe_integers(record)?;
+    validate_task_ledger_record_numbers("$", record)
+}
+
+pub fn validate_task_ledger_patch_for_typescript(patch: &TaskLedgerPatch) -> Result<(), String> {
+    validate_typescript_safe_integers(patch)?;
+    if let Some(progress) = patch.progress {
+        validate_finite_typescript_number("$.progress", progress)?;
+    }
+    Ok(())
+}
+
+pub fn validate_task_ledger_snapshot_for_typescript(
+    snapshot: &TaskLedgerSnapshot,
+) -> Result<(), String> {
+    validate_typescript_safe_integers(snapshot)?;
+    for (index, record) in snapshot.tasks.iter().enumerate() {
+        validate_task_ledger_record_numbers(&format!("$.tasks[{index}]"), record)?;
+    }
+    Ok(())
+}
+
+fn validate_task_ledger_record_numbers(
+    path: &str,
+    record: &TaskLedgerRecord,
+) -> Result<(), String> {
+    validate_finite_typescript_number(&format!("{path}.progress"), record.progress)
+}
+
 fn validate_speaker_leaders(path: &str, speakers: &[SpeakerLeader]) -> Result<(), String> {
     for (index, speaker) in speakers.iter().enumerate() {
         validate_finite_typescript_number(
@@ -207,6 +240,11 @@ pub fn desktop_types() -> specta::Types {
         .register::<SpeakerStats>()
         .register::<ContentStats>()
         .register::<DashboardSnapshotDomainModel>()
+        .register::<TaskLedgerKind>()
+        .register::<TaskLedgerStatus>()
+        .register::<TaskLedgerRecord>()
+        .register::<TaskLedgerPatch>()
+        .register::<TaskLedgerSnapshot>()
 }
 
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
@@ -249,6 +287,11 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "SpeakerStats",
     "ContentStats",
     "DashboardSnapshotDomainModel",
+    "TaskLedgerKind",
+    "TaskLedgerStatus",
+    "TaskLedgerRecord",
+    "TaskLedgerPatch",
+    "TaskLedgerSnapshot",
     "LlmGenerateSource",
     "LlmUsageCategory",
     "TokenUsage",
@@ -342,6 +385,11 @@ mod tests {
             "SpeakerStats",
             "ContentStats",
             "DashboardSnapshotDomainModel",
+            "TaskLedgerKind",
+            "TaskLedgerStatus",
+            "TaskLedgerRecord",
+            "TaskLedgerPatch",
+            "TaskLedgerSnapshot",
         ] {
             assert!(names.contains(&expected), "missing {expected}");
         }
@@ -395,6 +443,25 @@ mod tests {
     }
 
     #[test]
+    fn task_ledger_validation_rejects_unsafe_timestamps_and_non_finite_progress() {
+        let snapshot = TaskLedgerSnapshot {
+            version: 1,
+            updated_at: Some(TYPESCRIPT_MAX_SAFE_INTEGER + 1),
+            tasks: Vec::new(),
+        };
+        let timestamp_error = validate_task_ledger_snapshot_for_typescript(&snapshot).unwrap_err();
+        assert!(timestamp_error.contains("$.updatedAt"), "{timestamp_error}");
+
+        let patch = TaskLedgerPatch {
+            progress: Some(f64::INFINITY),
+            ..Default::default()
+        };
+        let progress_error = validate_task_ledger_patch_for_typescript(&patch).unwrap_err();
+        assert!(progress_error.contains("$.progress"), "{progress_error}");
+        assert!(progress_error.contains("is not finite"), "{progress_error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -440,6 +507,11 @@ mod tests {
         assert_specta_type::<SpeakerStats>();
         assert_specta_type::<ContentStats>();
         assert_specta_type::<DashboardSnapshotDomainModel>();
+        assert_specta_type::<TaskLedgerKind>();
+        assert_specta_type::<TaskLedgerStatus>();
+        assert_specta_type::<TaskLedgerRecord>();
+        assert_specta_type::<TaskLedgerPatch>();
+        assert_specta_type::<TaskLedgerSnapshot>();
         assert_specta_type::<LlmGenerateSource>();
         assert_specta_type::<LlmUsageCategory>();
         assert_specta_type::<TokenUsage>();
