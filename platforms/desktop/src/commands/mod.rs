@@ -8,6 +8,7 @@ pub mod history;
 pub mod llm;
 pub mod project;
 pub mod storage;
+pub mod sync;
 pub mod system;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
@@ -60,10 +61,25 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::apply_prepared_history_import,
         crate::commands::history::dispose_prepared_backup_import,
         crate::commands::downloads::download_file,
-        crate::commands::system::webdav_test_connection,
-        crate::commands::system::webdav_list_backups,
-        crate::commands::system::webdav_upload_backup,
-        crate::commands::system::webdav_download_backup,
+        crate::commands::sync::sync_get_status,
+        crate::commands::sync::sync_test_webdav_provider,
+        crate::commands::sync::sync_list_legacy_backups,
+        crate::commands::sync::sync_prepare_legacy_backup_import,
+        crate::commands::sync::sync_create_vault,
+        crate::commands::sync::sync_preview_join,
+        crate::commands::sync::sync_join_vault,
+        crate::commands::sync::sync_unlock,
+        crate::commands::sync::sync_unlock_with_recovery,
+        crate::commands::sync::sync_lock,
+        crate::commands::sync::sync_set_paused,
+        crate::commands::sync::sync_disconnect,
+        crate::commands::sync::sync_run_now,
+        crate::commands::sync::sync_change_preset,
+        crate::commands::sync::sync_change_master_password,
+        crate::commands::sync::sync_generate_recovery_key,
+        crate::commands::sync::sync_list_conflicts,
+        crate::commands::sync::sync_get_conflict,
+        crate::commands::sync::sync_resolve_conflict,
         crate::commands::downloads::cancel_download,
         crate::commands::system::get_model_catalog_snapshot,
         crate::commands::system::resolve_model_catalog_selected_ids_command,

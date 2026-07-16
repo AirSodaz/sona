@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger';
 import { healthCheckService } from '../healthCheckService';
 import { runHistoryAudioCleanupForCurrentConfig } from '../historyAudioCleanupService';
 import { voiceTypingService } from '../voiceTypingService';
+import { syncRuntimeService } from '../syncRuntimeService';
 
 async function runStartupStep(label: string, action: () => Promise<void>): Promise<void> {
   try {
@@ -29,6 +30,10 @@ export async function startAppRuntimeServices(): Promise<void> {
 
   await runStartupStep('initialize voice typing service', async () => {
     voiceTypingService.init();
+  });
+
+  await runStartupStep('initialize sync runtime', async () => {
+    syncRuntimeService.init();
   });
 
   await runStartupStep('run health check', () => (

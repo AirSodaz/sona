@@ -11,7 +11,12 @@ use sona_core::project::{
     ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
     ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
+use sona_core::sync::SyncEntityKind;
 use std::sync::Arc;
+
+use crate::sync_repository::{
+    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+};
 
 #[derive(Clone)]
 pub struct SqliteProjectRepository<D = crate::Database>
@@ -324,6 +329,7 @@ where
                 db.with_transaction(|tx| {
                     write_project_row(tx, &project_insert_sql(), &project, 0)?;
                     replace_project_default_links(tx, &project.id, &project.defaults)?;
+                    record_project_sync_fields(tx, &project, None)?;
                     Ok(())
                 })
             })
@@ -385,6 +391,7 @@ where
                             &project.defaults.enabled_speaker_profile_ids,
                         )?;
                     }
+                    record_project_sync_fields(tx, &project, None)?;
                     Ok(Some(project))
                 })
             })
@@ -396,6 +403,12 @@ where
             .and_then(|db| {
                 db.with_transaction(|tx| {
                     tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
+                    record_local_delete_in_transaction(
+                        tx,
+                        SyncEntityKind::Project,
+                        project_id,
+                        sync_now_ms(),
+                    )?;
                     Ok(())
                 })
             })
@@ -404,7 +417,30 @@ where
 
     fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
         self.get_db()
-            .and_then(|db| db.with_transaction(|tx| replace_projects_in_transaction(tx, &projects)))
+            .and_then(|db| {
+                db.with_transaction(|tx| {
+                    let existing_ids = load_projects(tx)?
+                        .into_iter()
+                        .map(|project| project.id)
+                        .collect::<Vec<_>>();
+                    replace_projects_in_transaction(tx, &projects)?;
+                    let now_ms = sync_now_ms();
+                    for existing_id in existing_ids.iter().filter(|existing_id| {
+                        !projects.iter().any(|project| project.id == **existing_id)
+                    }) {
+                        record_local_delete_in_transaction(
+                            tx,
+                            SyncEntityKind::Project,
+                            existing_id,
+                            now_ms,
+                        )?;
+                    }
+                    for (sort_order, project) in projects.iter().enumerate() {
+                        record_project_sync_fields(tx, project, Some(sort_order))?;
+                    }
+                    Ok(())
+                })
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -418,7 +454,19 @@ where
                         stmt.execute(rusqlite::params![sort_order as i64, id])?;
                     }
                     drop(stmt);
-                    Self::list_projects(tx)
+                    let projects = Self::list_projects(tx)?;
+                    let now_ms = sync_now_ms();
+                    for (sort_order, project) in projects.iter().enumerate() {
+                        record_local_field_change_in_transaction(
+                            tx,
+                            SyncEntityKind::Project,
+                            &project.id,
+                            "sortOrder",
+                            serde_json::json!(sort_order),
+                            now_ms,
+                        )?;
+                    }
+                    Ok(projects)
                 })
             })
             .map_err(|error| error.to_string())
@@ -438,6 +486,75 @@ where
             })
             .map_err(|error| error.to_string())
     }
+}
+
+pub(crate) fn record_project_sync_fields(
+    tx: &rusqlite::Transaction<'_>,
+    project: &ProjectRecord,
+    sort_order: Option<usize>,
+) -> Result<(), DatabaseError> {
+    let now_ms = project.updated_at.max(project.created_at);
+    let mut fields = vec![
+        ("name", serde_json::json!(project.name)),
+        ("description", serde_json::json!(project.description)),
+        ("icon", serde_json::json!(project.icon)),
+        ("createdAt", serde_json::json!(project.created_at)),
+        ("updatedAt", serde_json::json!(project.updated_at)),
+        (
+            "summaryTemplateId",
+            serde_json::json!(project.defaults.summary_template_id),
+        ),
+        (
+            "translationLanguage",
+            serde_json::json!(project.defaults.translation_language),
+        ),
+        (
+            "polishPresetId",
+            serde_json::json!(project.defaults.polish_preset_id),
+        ),
+        (
+            "polishScenario",
+            serde_json::json!(project.defaults.polish_scenario),
+        ),
+        (
+            "polishContext",
+            serde_json::json!(project.defaults.polish_context),
+        ),
+        (
+            "exportFileNamePrefix",
+            serde_json::json!(project.defaults.export_file_name_prefix),
+        ),
+        (
+            "enabledTextReplacementSetIds",
+            serde_json::json!(project.defaults.enabled_text_replacement_set_ids),
+        ),
+        (
+            "enabledHotwordSetIds",
+            serde_json::json!(project.defaults.enabled_hotword_set_ids),
+        ),
+        (
+            "enabledPolishKeywordSetIds",
+            serde_json::json!(project.defaults.enabled_polish_keyword_set_ids),
+        ),
+        (
+            "enabledSpeakerProfileIds",
+            serde_json::json!(project.defaults.enabled_speaker_profile_ids),
+        ),
+    ];
+    if let Some(sort_order) = sort_order {
+        fields.push(("sortOrder", serde_json::json!(sort_order)));
+    }
+    for (field, value) in fields {
+        record_local_field_change_in_transaction(
+            tx,
+            SyncEntityKind::Project,
+            &project.id,
+            field,
+            value,
+            now_ms,
+        )?;
+    }
+    Ok(())
 }
 
 fn write_project_row(

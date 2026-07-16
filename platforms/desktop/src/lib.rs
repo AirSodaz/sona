@@ -134,6 +134,7 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .manage(crate::platform::automation_runtime::AutomationRuntimeState::default())
         .manage(crate::platform::history_repository::HistoryRepositoryState::default())
         .manage(crate::platform::history_repository::PreparedBackupImportState::default())
+        .manage(crate::platform::sync::DesktopSyncManager::default())
         .manage(crate::integrations::audio::AudioState::new())
         .manage(crate::integrations::asr::AsrState::new())
         .plugin(tauri_plugin_opener::init())

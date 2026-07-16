@@ -20,6 +20,7 @@ mod project_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
 mod storage_usage_bridge;
+mod sync_bridge;
 mod task_ledger_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
@@ -85,6 +86,8 @@ pub enum SonaCoreBindingError {
     HistoryMutation { reason: String },
     #[error("{reason}")]
     Backup { reason: String },
+    #[error("{reason}")]
+    Sync { reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -306,6 +309,123 @@ pub async fn import_backup_archive_json(
         confirm_replace,
     )
     .await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_test_provider_json(config_json: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::test_provider_json(config_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_get_status_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::get_status_json(app_data_dir).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_create_vault_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::create_vault_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_preview_join_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::preview_join_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_join_vault_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::join_vault_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_unlock_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::unlock_json(app_data_dir, request_json, false).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_unlock_with_recovery_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::unlock_json(app_data_dir, request_json, true).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_lock(app_data_dir: String) -> SonaCoreBindingResult<()> {
+    sync_bridge::lock(app_data_dir).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_set_paused_json(
+    app_data_dir: String,
+    paused: bool,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::set_paused_json(app_data_dir, paused).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_disconnect_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::disconnect_json(app_data_dir).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_run_now_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::run_now_json(app_data_dir).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_change_preset_json(
+    app_data_dir: String,
+    preset_json: String,
+    confirm_shrink: bool,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::change_preset_json(app_data_dir, preset_json, confirm_shrink).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_change_master_password_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<()> {
+    sync_bridge::change_master_password_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_generate_recovery_key(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::generate_recovery_key(app_data_dir).await
+}
+
+#[uniffi::export]
+pub fn sync_list_conflicts_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::list_conflicts_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn sync_get_conflict_json(
+    app_data_dir: String,
+    conflict_id: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::get_conflict_json(app_data_dir, conflict_id)
+}
+
+#[uniffi::export]
+pub fn sync_resolve_conflict_json(
+    app_data_dir: String,
+    conflict_id: String,
+    resolution_json: String,
+) -> SonaCoreBindingResult<()> {
+    sync_bridge::resolve_conflict_json(app_data_dir, conflict_id, resolution_json)
 }
 
 #[uniffi::export(async_runtime = "tokio")]

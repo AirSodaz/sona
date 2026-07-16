@@ -7,7 +7,13 @@ use sona_core::automation::repository::{
     AutomationRuleRecordStageConfig, AutomationStore,
 };
 use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
+use sona_core::sync::SyncEntityKind;
+use std::collections::BTreeSet;
 use std::sync::Arc;
+
+use crate::sync_repository::{
+    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+};
 
 #[derive(Clone)]
 pub struct SqliteAutomationRepository<D = crate::Database>
@@ -147,8 +153,10 @@ where
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
+                    let previous = load_rules(tx)?;
                     tx.execute("DELETE FROM automation_rules", [])?;
                     insert_rules(tx, rules)?;
+                    record_automation_rules_sync(tx, &previous, rules)?;
                     Ok(())
                 })
             })
@@ -172,9 +180,91 @@ where
 
     fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String> {
         self.get_db()
-            .and_then(|db| db.with_transaction(|tx| replace_automation_in_transaction(tx, state)))
+            .and_then(|db| {
+                db.with_transaction(|tx| {
+                    let previous = load_rules(tx)?;
+                    replace_automation_in_transaction(tx, state)?;
+                    record_automation_rules_sync(tx, &previous, &state.rules)
+                })
+            })
             .map_err(|error| error.to_string())
     }
+}
+
+fn record_automation_rules_sync(
+    tx: &rusqlite::Transaction<'_>,
+    previous: &[AutomationRuleRecord],
+    current: &[AutomationRuleRecord],
+) -> Result<(), DatabaseError> {
+    let current_ids = current
+        .iter()
+        .map(|rule| rule.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let fallback_now_ms = sync_now_ms();
+    for removed in previous
+        .iter()
+        .filter(|rule| !current_ids.contains(rule.id.as_str()))
+    {
+        record_local_delete_in_transaction(
+            tx,
+            SyncEntityKind::AutomationRule,
+            &removed.id,
+            fallback_now_ms,
+        )?;
+    }
+    for rule in current {
+        let now_ms = u64::try_from(rule.updated_at)
+            .or_else(|_| u64::try_from(rule.created_at))
+            .unwrap_or(fallback_now_ms);
+        for (field, value) in [
+            ("name", serde_json::json!(rule.name)),
+            ("projectId", serde_json::json!(rule.project_id)),
+            ("presetId", serde_json::json!(rule.preset_id)),
+            ("recursive", serde_json::json!(rule.recursive)),
+            (
+                "stageAutoPolish",
+                serde_json::json!(rule.stage_config.auto_polish),
+            ),
+            (
+                "stagePolishPresetId",
+                serde_json::json!(rule.stage_config.polish_preset_id),
+            ),
+            (
+                "stageAutoTranslate",
+                serde_json::json!(rule.stage_config.auto_translate),
+            ),
+            (
+                "stageTranslationLanguage",
+                serde_json::json!(rule.stage_config.translation_language),
+            ),
+            (
+                "stageExportEnabled",
+                serde_json::json!(rule.stage_config.export_enabled),
+            ),
+            ("exportFormat", serde_json::json!(rule.export_config.format)),
+            ("exportMode", serde_json::json!(rule.export_config.mode)),
+            ("exportPrefix", serde_json::json!(rule.export_config.prefix)),
+            ("createdAt", serde_json::json!(rule.created_at)),
+            ("updatedAt", serde_json::json!(rule.updated_at)),
+        ] {
+            record_local_field_change_in_transaction(
+                tx,
+                SyncEntityKind::AutomationRule,
+                &rule.id,
+                field,
+                value,
+                now_ms,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn seed_sync_automation_baseline_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+) -> Result<(), DatabaseError> {
+    let rules = load_rules(tx)?;
+    record_automation_rules_sync(tx, &[], &rules)
 }
 
 fn insert_rules(

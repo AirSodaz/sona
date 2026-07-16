@@ -32,8 +32,9 @@ sona-online-asr = { path = "../../adapters/online_asr" }
 sona-recovery-fs = { path = "../../adapters/recovery_fs" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-sqlite = { path = "../../adapters/sqlite" }
+sona-sync = { path = "../../adapters/sync" }
+sona-sync-webdav = { path = "../../adapters/sync_webdav" }
 sona-ts-bind = { path = "../../adapters/ts_bind" }
-sona-webdav = { path = "../../adapters/webdav" }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
@@ -67,6 +68,7 @@ sysinfo = { version = "0.38.4", default-features = false, features = ["system"] 
 unicode-normalization = "0.1"
 thiserror = "2.0.18"
 axum = { version = "0.8", features = ["multipart", "macros", "ws"] }
+keyring = "4.1.5"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

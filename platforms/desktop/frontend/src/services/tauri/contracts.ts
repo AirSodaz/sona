@@ -1,9 +1,4 @@
-import type {
-  BackupManifestV1,
-  BackupWebDavConfig,
-  BackupWebDavTestResult,
-  RemoteBackupEntry,
-} from "../../types/backup";
+import type { BackupManifestV1, PreparedBackupImport } from "../../types/backup";
 import type {
   DashboardSnapshot,
   LlmGenerateCommandRequest,
@@ -81,6 +76,25 @@ import type {
   TaskLedgerSnapshot,
 } from "../../types/taskLedger";
 import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
+import type {
+  SyncChangePasswordRequest,
+  SyncConflictDetail,
+  SyncConflictResolution,
+  SyncConflictSummary,
+  SyncCreateRequest,
+  SyncCreateResult,
+  SyncJoinPreview,
+  SyncJoinRequest,
+  SyncPresetV1,
+  SyncPreviewJoinRequest,
+  SyncProviderDescriptor,
+  SyncRunResult,
+  SyncStatusSnapshot,
+  SyncUnlockRecoveryRequest,
+  SyncUnlockRequest,
+  WebDavObjectStoreConfig,
+  LegacyRemoteBackupListResult,
+} from "../../types/sync";
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -705,27 +719,80 @@ export type TauriCommandContractMap = {
     args: { importId: string };
     result: void;
   };
-  [TauriCommand.backup.webdavTestConnection]: {
-    args: { config: BackupWebDavConfig };
-    result: BackupWebDavTestResult;
+  [TauriCommand.sync.getStatus]: {
+    args: undefined;
+    result: SyncStatusSnapshot;
   };
-  [TauriCommand.backup.webdavListBackups]: {
-    args: { config: BackupWebDavConfig };
-    result: RemoteBackupEntry[];
+  [TauriCommand.sync.testWebDavProvider]: {
+    args: { config: WebDavObjectStoreConfig };
+    result: SyncProviderDescriptor;
   };
-  [TauriCommand.backup.webdavUploadBackup]: {
-    args: {
-      config: BackupWebDavConfig;
-      localArchivePath: string;
-    };
+  [TauriCommand.sync.listLegacyBackups]: {
+    args: { config: WebDavObjectStoreConfig };
+    result: LegacyRemoteBackupListResult;
+  };
+  [TauriCommand.sync.prepareLegacyBackupImport]: {
+    args: { config: WebDavObjectStoreConfig; key: string };
+    result: PreparedBackupImport;
+  };
+  [TauriCommand.sync.createVault]: {
+    args: { request: SyncCreateRequest };
+    result: SyncCreateResult;
+  };
+  [TauriCommand.sync.previewJoin]: {
+    args: { request: SyncPreviewJoinRequest };
+    result: SyncJoinPreview;
+  };
+  [TauriCommand.sync.joinVault]: {
+    args: { request: SyncJoinRequest };
+    result: SyncRunResult;
+  };
+  [TauriCommand.sync.unlock]: {
+    args: { request: SyncUnlockRequest };
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.unlockWithRecovery]: {
+    args: { request: SyncUnlockRecoveryRequest };
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.lock]: {
+    args: undefined;
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.setPaused]: {
+    args: { paused: boolean };
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.disconnect]: {
+    args: undefined;
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.runNow]: {
+    args: undefined;
+    result: SyncRunResult;
+  };
+  [TauriCommand.sync.changePreset]: {
+    args: { preset: SyncPresetV1; confirmShrink: boolean };
+    result: SyncStatusSnapshot;
+  };
+  [TauriCommand.sync.changeMasterPassword]: {
+    args: { request: SyncChangePasswordRequest };
     result: void;
   };
-  [TauriCommand.backup.webdavDownloadBackup]: {
-    args: {
-      config: BackupWebDavConfig;
-      href: string;
-      outputPath: string;
-    };
+  [TauriCommand.sync.generateRecoveryKey]: {
+    args: undefined;
+    result: string;
+  };
+  [TauriCommand.sync.listConflicts]: {
+    args: undefined;
+    result: SyncConflictSummary[];
+  };
+  [TauriCommand.sync.getConflict]: {
+    args: { conflictId: string };
+    result: SyncConflictDetail | null;
+  };
+  [TauriCommand.sync.resolveConflict]: {
+    args: { conflictId: string; resolution: SyncConflictResolution };
     result: void;
   };
   [TauriCommand.speaker.annotateSegmentsFromFile]: {

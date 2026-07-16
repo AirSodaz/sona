@@ -5,6 +5,7 @@ const mockLoadRecovery = vi.fn();
 const mockLoadTasks = vi.fn();
 const mockLoadAndStart = vi.fn();
 const mockVoiceTypingInit = vi.fn();
+const mockSyncRuntimeInit = vi.fn();
 const mockRunHealthCheck = vi.fn();
 const mockRunHistoryAudioCleanup = vi.fn();
 const mockLoggerError = vi.fn();
@@ -39,6 +40,12 @@ vi.mock('../../voiceTypingService', () => ({
   },
 }));
 
+vi.mock('../../syncRuntimeService', () => ({
+  syncRuntimeService: {
+    init: (...args: unknown[]) => mockSyncRuntimeInit(...args),
+  },
+}));
+
 vi.mock('../../healthCheckService', () => ({
   healthCheckService: {
     runHealthCheck: (...args: unknown[]) => mockRunHealthCheck(...args),
@@ -62,6 +69,7 @@ describe('startAppRuntimeServices', () => {
     mockLoadRecovery.mockResolvedValue(undefined);
     mockLoadAndStart.mockResolvedValue(undefined);
     mockVoiceTypingInit.mockReturnValue(undefined);
+    mockSyncRuntimeInit.mockReturnValue(undefined);
     mockRunHealthCheck.mockResolvedValue(undefined);
     mockRunHistoryAudioCleanup.mockResolvedValue(undefined);
   });
@@ -75,6 +83,7 @@ describe('startAppRuntimeServices', () => {
     expect(mockLoadRecovery).toHaveBeenCalledTimes(1);
     expect(mockLoadAndStart).toHaveBeenCalledTimes(1);
     expect(mockVoiceTypingInit).toHaveBeenCalledTimes(1);
+    expect(mockSyncRuntimeInit).toHaveBeenCalledTimes(1);
     expect(mockRunHealthCheck).toHaveBeenCalledTimes(1);
     expect(mockRunHistoryAudioCleanup).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith(

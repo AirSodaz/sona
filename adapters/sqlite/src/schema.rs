@@ -1,11 +1,12 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 2;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 3;
 type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
 const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
     (1, "Initial complete SQLite schema", migrate_v1),
     (2, "Preserve detailed LLM token usage", migrate_v2),
+    (3, "Add provider-neutral sync state", migrate_v3),
 ];
 
 /// Runs pending schema migrations in version order.
@@ -370,6 +371,66 @@ fn migrate_v2(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     )
 }
 
+fn migrate_v3(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "CREATE TABLE sync_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            vault_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            preset TEXT NOT NULL,
+            next_sequence INTEGER NOT NULL DEFAULT 1,
+            previous_cipher_hash TEXT,
+            operations_since_checkpoint INTEGER NOT NULL DEFAULT 0,
+            bytes_since_checkpoint INTEGER NOT NULL DEFAULT 0,
+            checkpoint_required INTEGER NOT NULL DEFAULT 1,
+            paused INTEGER NOT NULL DEFAULT 0,
+            last_checkpoint_sequence INTEGER,
+            last_checkpoint_hash TEXT,
+            last_checkpoint_created_at INTEGER,
+            hlc_physical INTEGER NOT NULL DEFAULT 0,
+            hlc_logical INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE sync_device_cursors (
+            device_id TEXT PRIMARY KEY,
+            sequence INTEGER NOT NULL,
+            cipher_hash TEXT NOT NULL
+        );
+
+        CREATE TABLE sync_outbox (
+            operation_id TEXT PRIMARY KEY,
+            entity_kind TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            operation_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_sync_outbox_created_at
+            ON sync_outbox(created_at, operation_id);
+
+        CREATE TABLE sync_entity_versions (
+            entity_kind TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            operation_json TEXT NOT NULL,
+            PRIMARY KEY (entity_kind, entity_id, field_name)
+        );
+
+        CREATE TABLE sync_conflicts (
+            conflict_id TEXT PRIMARY KEY,
+            entity_kind TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            conflict_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            resolved_at INTEGER
+        );
+        CREATE INDEX idx_sync_conflicts_unresolved
+            ON sync_conflicts(resolved_at, created_at);
+        ",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,14 +506,14 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![1, 2]);
+        assert_eq!(schema_versions(&db), vec![1, 2, 3]);
     }
 
     #[test]
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (3)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (4)", [])?;
             Ok(())
         })
         .unwrap();
@@ -461,11 +522,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 3,
-                current: 2
+                found: 4,
+                current: 3
             }
         ));
-        assert_eq!(schema_versions(&db), vec![1, 2, 3]);
+        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4]);
     }
 
     #[test]
@@ -479,7 +540,7 @@ mod tests {
 
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![0, 1, 2]);
+        assert_eq!(schema_versions(&db), vec![0, 1, 2, 3]);
     }
 
     #[test]

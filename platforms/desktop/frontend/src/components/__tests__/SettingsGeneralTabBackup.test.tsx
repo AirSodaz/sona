@@ -1,153 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SettingsGeneralTab } from '../settings/SettingsGeneralTab';
-import packageJson from '../../../package.json';
-import type { PreparedBackupImport } from '../../types/backup';
-import { APP_LANGUAGE_OPTIONS } from '../../constants/appLanguages';
-
-const BACKUP_SECTION_LOAD_TIMEOUT_MS = 6000;
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { BackupSettingsSection } from '../settings/backup/BackupSettingsSection';
+import { useSyncStatusStore } from '../../stores/syncStatusStore';
+import { DISABLED_SYNC_STATUS, type SyncStatusSnapshot } from '../../types/sync';
 
 const testContext = vi.hoisted(() => ({
-  alertMock: vi.fn().mockResolvedValue(undefined),
-  applyImportBackupMock: vi.fn().mockResolvedValue(undefined),
-  batchQueueState: {
-    queueItems: [] as Array<{ status: string }>,
-  },
-  confirmMock: vi.fn().mockResolvedValue(false),
-  disposePreparedImportMock: vi.fn().mockResolvedValue(undefined),
-  exportBackupMock: vi.fn().mockResolvedValue(null),
-  listBackupsMock: vi.fn().mockResolvedValue([]),
-  loadWebDavConfigMock: vi.fn().mockResolvedValue({
-    serverUrl: '',
-    remoteDir: '',
-    username: '',
-    password: '',
-  }),
-  prepareImportFromRemoteMock: vi.fn().mockResolvedValue(null),
-  prepareImportBackupMock: vi.fn().mockResolvedValue(null),
-  saveWebDavConfigMock: vi.fn().mockResolvedValue(undefined),
-  showErrorMock: vi.fn().mockResolvedValue(undefined),
-  testWebDavConnectionMock: vi.fn().mockResolvedValue({
-    status: 'success',
-    message: 'ready',
-  }),
-  transcriptState: {
-    isRecording: false,
-  },
-  updateConfigMock: vi.fn(),
-  uiConfig: {
-    appLanguage: 'auto',
-    theme: 'auto',
-    font: 'system',
-    minimizeToTrayOnExit: true,
-    autoCheckUpdates: true,
-  },
-  uploadWebDavBackupMock: vi.fn(),
+  alert: vi.fn().mockResolvedValue(undefined),
+  confirm: vi.fn().mockResolvedValue(true),
+  showError: vi.fn().mockResolvedValue(undefined),
+  createVault: vi.fn(),
+  previewJoin: vi.fn(),
+  joinVault: vi.fn(),
+  listLegacy: vi.fn(),
+  unlock: vi.fn(),
+  unlockRecovery: vi.fn(),
+  getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
+  refreshStatus: vi.fn().mockResolvedValue(null),
+  transcriptState: { isRecording: false },
+  batchState: { queueItems: [], isQueueProcessing: false },
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
-      const template = (options?.defaultValue as string | undefined) ?? key;
-      return template.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => String(options?.[token] ?? `{{${token}}}`));
+      const value = String(options?.defaultValue ?? key);
+      return value.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? ''));
     },
   }),
-  initReactI18next: {
-    type: '3rdParty',
-    init: () => undefined,
-  },
-}));
-
-vi.mock('../Icons', () => ({
-  GeneralIcon: () => <div />,
 }));
 
 vi.mock('../Dropdown', () => ({
-  Dropdown: ({ id, value, onChange, options, style }: any) => (
-    <select id={id} value={value} onChange={(event) => onChange?.(event.target.value)} style={style}>
-      {options?.map((option: any) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
+  Dropdown: ({ id, value, onChange, options, disabled }: any) => (
+    <select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
+      {options.map((option: any) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select>
   ),
 }));
 
-vi.mock('../Switch', () => ({
-  Switch: ({ checked, onChange }: any) => (
-    <button type="button" onClick={() => onChange?.(!checked)}>
-      {checked ? 'on' : 'off'}
-    </button>
-  ),
-}));
-
-vi.mock('../settings/SettingsLayout', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../settings/SettingsLayout')>();
-
-  return {
-    ...actual,
-    SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
-    SettingsSection: ({ children, title, description }: any) => (
-      <section>
-        {title ? <div>{title}</div> : null}
-        {description ? <div>{description}</div> : null}
-        {children}
-      </section>
-    ),
-    SettingsItem: ({ children, title, hint }: any) => (
-      <div>
-        {title ? <div>{title}</div> : null}
-        {hint ? <div>{hint}</div> : null}
-        {children}
-      </div>
-    ),
-    SettingsPageHeader: ({ title, description }: any) => (
-      <header>
-        <div>{title}</div>
-        <div>{description}</div>
-      </header>
-    ),
-  };
-});
-
-vi.mock('../../services/backupService', () => ({
-  applyImportBackup: testContext.applyImportBackupMock,
-  backupService: {
-    applyImportBackup: testContext.applyImportBackupMock,
-    disposePreparedImport: testContext.disposePreparedImportMock,
-    exportBackup: testContext.exportBackupMock,
-    getBackupOperationBlocker: vi.fn(),
-    prepareImportBackup: testContext.prepareImportBackupMock,
-  },
-  disposePreparedImport: testContext.disposePreparedImportMock,
-}));
-
-vi.mock('../../services/backupWebDavService', () => ({
-  backupWebDavService: {
-    listBackups: testContext.listBackupsMock,
-    loadConfig: testContext.loadWebDavConfigMock,
-    prepareImportFromRemote: testContext.prepareImportFromRemoteMock,
-    saveConfig: testContext.saveWebDavConfigMock,
-    testConnection: testContext.testWebDavConnectionMock,
-    uploadBackup: testContext.uploadWebDavBackupMock,
-  },
-}));
-
-vi.mock('../../stores/batchQueueStore', () => ({
-  useBatchQueueStore: (selector: any) => selector(testContext.batchQueueState),
-}));
-
-vi.mock('../../stores/configStore', () => ({
-  useSetConfig: () => testContext.updateConfigMock,
-  useUIConfig: () => testContext.uiConfig,
-}));
-
 vi.mock('../../stores/dialogStore', () => ({
   useDialogStore: (selector: any) => selector({
-    alert: testContext.alertMock,
-    confirm: testContext.confirmMock,
-    showError: testContext.showErrorMock,
+    alert: testContext.alert,
+    confirm: testContext.confirm,
+    showError: testContext.showError,
   }),
 }));
 
@@ -155,330 +50,209 @@ vi.mock('../../stores/transcriptRuntimeStore', () => ({
   useTranscriptRuntimeStore: (selector: any) => selector(testContext.transcriptState),
 }));
 
-function buildPreparedImport(importId: string): PreparedBackupImport {
+vi.mock('../../stores/batchQueueStore', () => ({
+  useBatchQueueStore: (selector: any) => selector(testContext.batchState),
+}));
+
+vi.mock('../../services/storageService', () => ({
+  STORE_KEY_BACKUP_WEBDAV: 'sona-backup-webdav',
+  settingsStore: {
+    get: (...args: unknown[]) => testContext.getSetting(...args),
+    set: (...args: unknown[]) => testContext.setSetting(...args),
+    save: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('../../services/syncRuntimeService', () => ({
+  syncRuntimeService: {
+    refreshStatus: (...args: unknown[]) => testContext.refreshStatus(...args),
+    requestSync: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/tauri/platform/dialog', () => ({
+  saveDialog: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../services/tauri/platform/fs', () => ({
+  writeFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../services/backupService', () => ({
+  applyImportBackup: vi.fn().mockResolvedValue(undefined),
+  disposePreparedImport: vi.fn().mockResolvedValue(undefined),
+  backupService: {
+    exportBackup: vi.fn().mockResolvedValue(null),
+    prepareImportBackup: vi.fn().mockResolvedValue(null),
+  },
+}));
+
+vi.mock('../../services/transcriptSnapshotService', () => ({
+  transcriptSnapshotService: {
+    buildDiff: vi.fn().mockResolvedValue({ rows: [], changedCount: 0 }),
+  },
+}));
+
+vi.mock('../../services/tauri/sync', () => ({
+  changeSyncMasterPassword: vi.fn().mockResolvedValue(undefined),
+  changeSyncPreset: vi.fn(),
+  createSyncVault: (...args: unknown[]) => testContext.createVault(...args),
+  disconnectSyncVault: vi.fn(),
+  generateSyncRecoveryKey: vi.fn().mockResolvedValue('recovery-key'),
+  getSyncConflict: vi.fn(),
+  joinSyncVault: (...args: unknown[]) => testContext.joinVault(...args),
+  listLegacyRemoteBackups: (...args: unknown[]) => testContext.listLegacy(...args),
+  listSyncConflicts: vi.fn().mockResolvedValue([]),
+  lockSyncVault: vi.fn(),
+  prepareLegacyRemoteBackupImport: vi.fn(),
+  previewSyncJoin: (...args: unknown[]) => testContext.previewJoin(...args),
+  resolveSyncConflict: vi.fn(),
+  runSyncNow: vi.fn(),
+  setSyncPaused: vi.fn(),
+  testWebDavSyncProvider: vi.fn().mockResolvedValue({ id: 'webdav', displayName: 'WebDAV' }),
+  unlockSyncVault: (...args: unknown[]) => testContext.unlock(...args),
+  unlockSyncVaultWithRecovery: (...args: unknown[]) => testContext.unlockRecovery(...args),
+}));
+
+function status(patch: Partial<SyncStatusSnapshot>): SyncStatusSnapshot {
   return {
-    importId,
-    archivePath: 'C:\\backups\\sona-backup.tar.bz2',
-    manifest: {
-      schemaVersion: 1,
-      createdAt: '2026-04-29T00:00:00.000Z',
-      appVersion: packageJson.version,
-      historyMode: 'light',
-      scopes: {
-        config: true,
-        workspace: true,
-        history: true,
-        automation: true,
-        analytics: true,
-      },
-      counts: {
-        projects: 2,
-        historyItems: 5,
-        transcriptFiles: 5,
-        summaryFiles: 3,
-        automationRules: 1,
-        automationProcessedEntries: 7,
-        analyticsFiles: 1,
-      },
-    },
-    config: {} as PreparedBackupImport['config'],
-    projects: [],
-    automationRules: [],
-    automationProcessedEntries: [],
-    analyticsContent: '{}',
+    ...DISABLED_SYNC_STATUS,
+    state: 'idle',
+    providerId: 'webdav',
+    vaultId: 'vault-1',
+    preset: 'standard',
+    ...patch,
   };
 }
 
-describe('SettingsGeneralTab backup entry', () => {
-  const openWebDavAccordion = async () => {
-    const accordionToggle = await screen.findByRole(
-      'button',
-      { name: /WebDAV Cloud Sync/i },
-      { timeout: BACKUP_SECTION_LOAD_TIMEOUT_MS },
-    );
-    fireEvent.click(accordionToggle);
+function setStatus(snapshot: SyncStatusSnapshot): void {
+  useSyncStatusStore.setState({
+    snapshot,
+    isLoaded: true,
+    lastRunResult: null,
+  });
+}
 
-    await waitFor(() => {
-      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(screen.getByLabelText('Server URL')).toBeDefined();
-    });
-
-    return accordionToggle;
-  };
-
+describe('Sync & Recovery settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testContext.confirm.mockResolvedValue(true);
+    testContext.getSetting.mockResolvedValue(null);
+    testContext.listLegacy.mockResolvedValue({ entries: [], credentialsMigrated: false });
     testContext.transcriptState.isRecording = false;
-    testContext.batchQueueState.queueItems = [];
-    testContext.loadWebDavConfigMock.mockResolvedValue({
-      serverUrl: '',
-      remoteDir: '',
-      username: '',
-      password: '',
-    });
-    testContext.listBackupsMock.mockResolvedValue([]);
-    testContext.prepareImportFromRemoteMock.mockResolvedValue(null);
-    testContext.prepareImportBackupMock.mockResolvedValue(null);
-    testContext.confirmMock.mockResolvedValue(false);
+    testContext.batchState.queueItems = [];
+    setStatus(DISABLED_SYNC_STATUS);
   });
 
-  it('keeps the WebDAV controls collapsed until the accordion is expanded', async () => {
-    render(<SettingsGeneralTab />);
+  it('replaces the archive upload UI with create and join flows', () => {
+    render(<BackupSettingsSection />);
 
-    expect(screen.getByText('settings.general_title')).toBeDefined();
-    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
-
-    const accordionToggle = await screen.findByRole(
-      'button',
-      { name: /WebDAV Cloud Sync/i },
-      { timeout: BACKUP_SECTION_LOAD_TIMEOUT_MS },
-    );
-    expect(await screen.findByRole('button', { name: 'Export Backup' })).toBeDefined();
-    expect(await screen.findByRole('button', { name: 'Import Backup' })).toBeDefined();
-    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
-
-    expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByLabelText('Server URL')).toBeNull();
+    expect(screen.getByText('Sync & Recovery')).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Create vault' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Join vault' })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh Cloud Backups' })).toBeNull();
-    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
-
-    fireEvent.click(accordionToggle);
-
-    await waitFor(() => {
-      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(screen.getByLabelText('Server URL')).toBeDefined();
-    });
-    expect(accordionToggle.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Upload Backup' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Refresh Cloud Backups' })).toBeDefined();
-
-    fireEvent.click(accordionToggle);
-
-    await waitFor(() => {
-      expect(screen.queryByLabelText('Server URL')).toBeNull();
-    });
-    expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
-    expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows every supported interface language and saves new language choices', () => {
-    render(<SettingsGeneralTab />);
-
-    const languageSelect = document.querySelector('#settings-language') as HTMLSelectElement | null;
-    expect(languageSelect).not.toBeNull();
-    expect(Array.from(languageSelect?.options ?? []).map((option) => option.value)).toEqual(
-      APP_LANGUAGE_OPTIONS.map((option) => option.value),
-    );
-    expect(Array.from(languageSelect?.options ?? []).map((option) => option.textContent)).toEqual(
-      APP_LANGUAGE_OPTIONS.map((option) => option.defaultLabel),
-    );
-
-    fireEvent.change(languageSelect as HTMLSelectElement, { target: { value: 'zh-TW' } });
-    expect(testContext.updateConfigMock).toHaveBeenLastCalledWith({ appLanguage: 'zh-TW' });
-
-    fireEvent.change(languageSelect as HTMLSelectElement, { target: { value: 'ja' } });
-    expect(testContext.updateConfigMock).toHaveBeenLastCalledWith({ appLanguage: 'ja' });
-  });
-
-  it('disables local backup and WebDAV transfer actions while live recording is active', async () => {
-    testContext.transcriptState.isRecording = true;
-
-    render(<SettingsGeneralTab />);
-
-    await openWebDavAccordion();
-
-    expect((screen.getByRole('button', { name: 'Export Backup' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Import Backup' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Upload Backup' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Stop Live Record before exporting or importing backups.')).toBeDefined();
-  });
-
-  it('shows an HTTPS-required warning for WebDAV endpoints that are not encrypted', async () => {
-    testContext.loadWebDavConfigMock.mockResolvedValue({
-      serverUrl: 'http://nas.local/dav',
-      remoteDir: 'backups',
-      username: 'demo',
-      password: 'secret',
+  it('shows a read-only join preview before applying the remote vault', async () => {
+    testContext.previewJoin.mockResolvedValue({
+      localOperationCount: 7,
+      remoteOperationCount: 12,
+      projectedConflictCount: 2,
     });
-
-    render(<SettingsGeneralTab />);
-
-    await openWebDavAccordion();
-
-    await waitFor(() => {
-      expect(screen.getByText('WebDAV cloud sync requires HTTPS to protect credentials and backup archives in transit.')).toBeDefined();
+    testContext.joinVault.mockResolvedValue({
+      pulledSegmentCount: 1,
+      pulledCheckpointCount: 0,
+      pushedSegmentCount: 1,
+      appliedOperationCount: 12,
+      publishedOperationCount: 7,
+      conflictCount: 2,
+      checkpointPublished: false,
     });
+    render(<BackupSettingsSection />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Join vault' }));
+    fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'https://dav.example.com' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'sona' } });
+    fireEvent.change(screen.getByLabelText('WebDAV password'), { target: { value: 'provider-secret' } });
+    fireEvent.change(screen.getByLabelText('Vault ID'), { target: { value: 'vault-remote' } });
+    fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview join' }));
+
+    await waitFor(() => expect(testContext.previewJoin).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('12')).toBeDefined();
+    expect(screen.getByText('2')).toBeDefined();
+    expect(testContext.joinVault).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm join' }));
+    await waitFor(() => expect(testContext.joinVault).toHaveBeenCalledTimes(1));
   });
 
-  it('uses the standardized error dialog when backup export fails', async () => {
-    const failure = {
-      code: 'E_BACKUP_EXPORT',
-      error: {
-        message: 'Disk is full.',
-      },
+  it('shows only unlock controls while the vault is locked', async () => {
+    testContext.unlock.mockResolvedValue(status({ state: 'idle' }));
+    setStatus(status({ state: 'locked' }));
+    render(<BackupSettingsSection />);
+
+    expect(screen.getByText('Sync vault locked')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('WebDAV password'), { target: { value: 'provider-secret' } });
+    fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+
+    await waitFor(() => expect(testContext.unlock).toHaveBeenCalledWith({
+      providerPassword: 'provider-secret',
+      masterPassword: 'x',
+    }));
+  });
+
+  it('renders sync status and keeps complete archives under advanced recovery', () => {
+    setStatus(status({
+      pendingOperationCount: 4,
+      conflictCount: 2,
+      lastSuccessAtMs: 1_750_000_000_000,
+    }));
+    render(<BackupSettingsSection />);
+
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDefined();
+    expect(screen.getByText('Pending upload')).toBeDefined();
+    expect(screen.getByText('4')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /Advanced recovery/ }));
+    expect(screen.getByRole('button', { name: 'Export Backup' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Import Backup' })).toBeDefined();
+    expect(screen.getByText('Legacy WebDAV archives')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
+  });
+
+  it('clears a legacy plaintext password only after secure credential migration succeeds', async () => {
+    const legacy = {
+      serverUrl: 'https://dav.example.com',
+      remoteDir: 'backups/sona',
+      username: 'sona',
+      password: 'legacy-secret',
     };
-    testContext.exportBackupMock.mockRejectedValueOnce(failure);
-
-    render(<SettingsGeneralTab />);
-    const exportButton = await screen.findByRole('button', { name: 'Export Backup' });
-
-    await act(async () => {
-      fireEvent.click(exportButton);
+    testContext.getSetting.mockResolvedValue(legacy);
+    testContext.listLegacy.mockResolvedValue({
+      entries: [],
+      credentialsMigrated: true,
     });
+    setStatus(status({}));
+    render(<BackupSettingsSection />);
 
-    await waitFor(() => {
-      expect(testContext.showErrorMock).toHaveBeenCalledWith({
-        code: 'backup.export_failed',
-        messageKey: 'errors.backup.export_failed',
-        cause: failure,
-        titleKey: 'settings.backup.error_title',
-      });
+    fireEvent.click(screen.getByRole('button', { name: /Advanced recovery/ }));
+    await waitFor(() => expect(screen.getByDisplayValue('https://dav.example.com')).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'List archives' }));
+
+    await waitFor(() => expect(testContext.listLegacy).toHaveBeenCalledWith({
+      serverUrl: legacy.serverUrl,
+      remoteRoot: legacy.remoteDir,
+      username: legacy.username,
+      password: legacy.password,
+    }));
+    expect(testContext.setSetting).toHaveBeenCalledWith('sona-backup-webdav', {
+      ...legacy,
+      password: '',
     });
-    expect(testContext.alertMock).not.toHaveBeenCalled();
-  });
-
-  it('shows destructive import summary copy and disposes the prepared archive when the user cancels', async () => {
-    const prepared = buildPreparedImport('import-local');
-    testContext.prepareImportBackupMock.mockResolvedValue(prepared);
-    testContext.confirmMock.mockResolvedValue(false);
-
-    render(<SettingsGeneralTab />);
-    const importButton = await screen.findByRole('button', { name: 'Import Backup' });
-
-    await act(async () => {
-      fireEvent.click(importButton);
-    });
-
-    await waitFor(() => {
-      expect(testContext.confirmMock).toHaveBeenCalledWith(
-        'Import this backup and replace the current local data?',
-        expect.objectContaining({
-          title: 'Replace current data',
-          details: expect.stringContaining('Projects: 2'),
-        }),
-      );
-    });
-    expect(testContext.confirmMock.mock.calls[0]?.[1]?.details).toContain('restored items may reopen without playback');
-    expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
-    expect(testContext.applyImportBackupMock).not.toHaveBeenCalled();
-  });
-
-  it('applies a local backup and shows the success alert when confirmed', async () => {
-    const prepared = buildPreparedImport('import-local-success');
-    testContext.prepareImportBackupMock.mockResolvedValue(prepared);
-    testContext.confirmMock.mockResolvedValue(true);
-
-    render(<SettingsGeneralTab />);
-    const importButton = await screen.findByRole('button', { name: 'Import Backup' });
-
-    await act(async () => {
-      fireEvent.click(importButton);
-    });
-
-    await waitFor(() => {
-      expect(testContext.applyImportBackupMock).toHaveBeenCalledWith(prepared);
-    });
-    expect(testContext.alertMock).toHaveBeenCalledWith(
-      'Backup archive imported successfully.',
-      expect.objectContaining({
-        variant: 'success',
-      }),
-    );
-    expect(testContext.disposePreparedImportMock).not.toHaveBeenCalled();
-    expect(testContext.showErrorMock).not.toHaveBeenCalled();
-  });
-
-  it('restores a remote snapshot through the existing destructive confirm flow and disposes it when cancelled', async () => {
-    const remoteEntry = {
-      href: 'https://dav.example.com/backups/sona-backup-2026-04-29_00-00-00.tar.bz2',
-      fileName: 'sona-backup-2026-04-29_00-00-00.tar.bz2',
-      size: 2048,
-      modifiedAt: '2026-04-29T00:00:00.000Z',
-    };
-    const prepared = buildPreparedImport('import-remote');
-    testContext.listBackupsMock.mockResolvedValue([remoteEntry]);
-    testContext.prepareImportFromRemoteMock.mockResolvedValue(prepared);
-    testContext.confirmMock.mockResolvedValue(false);
-
-    render(<SettingsGeneralTab />);
-
-    await openWebDavAccordion();
-
-    expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(false);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh Cloud Backups' }));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('sona-backup-2026-04-29_00-00-00.tar.bz2')).toBeDefined();
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    });
-
-    await waitFor(() => {
-      expect(testContext.prepareImportFromRemoteMock).toHaveBeenCalledWith(remoteEntry, {
-        serverUrl: '',
-        remoteDir: '',
-        username: '',
-        password: '',
-      });
-    });
-    expect(testContext.confirmMock.mock.calls[0]?.[1]?.details).toContain('restored items may reopen without playback');
-    expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
-    expect(testContext.applyImportBackupMock).not.toHaveBeenCalled();
-  });
-
-  it('disposes a prepared remote snapshot and shows the standardized restore error when apply fails', async () => {
-    const remoteEntry = {
-      href: 'https://dav.example.com/backups/sona-backup-2026-04-29_00-00-00.tar.bz2',
-      fileName: 'sona-backup-2026-04-29_00-00-00.tar.bz2',
-      size: 2048,
-      modifiedAt: '2026-04-29T00:00:00.000Z',
-    };
-    const prepared = buildPreparedImport('import-remote-failure');
-    const failure = new Error('apply failed');
-    testContext.listBackupsMock.mockResolvedValue([remoteEntry]);
-    testContext.prepareImportFromRemoteMock.mockResolvedValue(prepared);
-    testContext.confirmMock.mockResolvedValue(true);
-    testContext.applyImportBackupMock.mockRejectedValueOnce(failure);
-
-    render(<SettingsGeneralTab />);
-
-    await openWebDavAccordion();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh Cloud Backups' }));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(remoteEntry.fileName)).toBeDefined();
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    });
-
-    await waitFor(() => {
-      expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
-    });
-    expect(testContext.showErrorMock).toHaveBeenCalledWith({
-      code: 'backup.webdav_restore_failed',
-      messageKey: 'errors.backup.webdav_restore_failed',
-      cause: failure,
-      titleKey: 'settings.backup.error_title',
-    });
-    expect(testContext.alertMock).not.toHaveBeenCalledWith(
-      'Backup archive imported successfully.',
-      expect.anything(),
-    );
   });
 });

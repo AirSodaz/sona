@@ -32,6 +32,7 @@ use sona_core::history::{
     TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_core::sync::SyncEntityKind;
 use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -48,6 +49,10 @@ use rusqlite::types::{ToSql, Type};
 use uuid::Uuid;
 
 use fs3::FileExt;
+
+use crate::sync_repository::{
+    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+};
 
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
 const MILLIS_PER_DAY: u64 = 86_400_000;
@@ -951,6 +956,51 @@ where
         Ok(())
     }
 
+    fn record_history_item_sync(
+        tx: &rusqlite::Transaction<'_>,
+        item: &HistoryItemRecord,
+        now_ms: u64,
+    ) -> Result<(), DatabaseError> {
+        if item.status != HistoryItemStatus::Complete {
+            return Ok(());
+        }
+        for (field, value) in [
+            ("timestamp", serde_json::json!(item.timestamp)),
+            ("duration", serde_json::json!(item.duration)),
+            ("title", serde_json::json!(item.title)),
+            ("previewText", serde_json::json!(item.preview_text)),
+            ("icon", serde_json::json!(item.icon)),
+            ("kind", serde_json::json!(item.kind.to_string())),
+            ("projectId", serde_json::json!(item.project_id)),
+        ] {
+            record_local_field_change_in_transaction(
+                tx,
+                SyncEntityKind::HistoryItem,
+                &item.id,
+                field,
+                value,
+                now_ms,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn record_transcript_sync(
+        tx: &rusqlite::Transaction<'_>,
+        history_id: &str,
+        segments: &Value,
+        now_ms: u64,
+    ) -> Result<(), DatabaseError> {
+        record_local_field_change_in_transaction(
+            tx,
+            SyncEntityKind::HistoryTranscript,
+            history_id,
+            "document",
+            segments.clone(),
+            now_ms,
+        )
+    }
+
     fn reconcile_live_drafts(&self) -> Result<(), DatabaseError> {
         let history_dir = self.history_dir();
         #[allow(clippy::type_complexity)]
@@ -1495,6 +1545,14 @@ where
                 "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
+            let now_ms = sync_now_ms();
+            Self::record_history_item_sync(tx, &item, now_ms)?;
+            Self::record_transcript_sync(
+                tx,
+                history_id,
+                &serde_json::to_value(&normalized_transcript.segments)?,
+                now_ms,
+            )?;
             Ok(item)
         })?)
     }
@@ -1555,6 +1613,13 @@ where
         // the final audio path is visible before the DB row commits.
         let save_result: Result<(), DatabaseError> = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
+            Self::record_history_item_sync(tx, &item, item.timestamp)?;
+            Self::record_transcript_sync(
+                tx,
+                &item.id,
+                &serde_json::to_value(&normalized_transcript.segments)?,
+                item.timestamp,
+            )?;
             staged_audio.promote()?;
             promoted.set(true);
             Ok(())
@@ -1620,6 +1685,13 @@ where
         // the final audio path is visible before the DB row commits.
         let save_result: Result<(), DatabaseError> = self.get_db()?.with_transaction(|tx| {
             Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
+            Self::record_history_item_sync(tx, &item, item.timestamp)?;
+            Self::record_transcript_sync(
+                tx,
+                &item.id,
+                &serde_json::to_value(&normalized_transcript.segments)?,
+                item.timestamp,
+            )?;
             staged_audio.promote()?;
             promoted.set(true);
             Ok(())
@@ -1644,19 +1716,54 @@ where
 
         let audio_paths = self.get_db()?.with_rw_transaction(|tx| {
             let mut audio_paths = Vec::new();
-            let mut stmt =
-                tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
-            for id in ids {
-                let mut rows = stmt.query([id])?;
-                if let Some(row) = rows.next()? {
-                    let audio_path: String = row.get(0)?;
-                    audio_paths.push(audio_path);
+            let mut existing_ids = Vec::new();
+            let mut snapshot_entity_ids = Vec::new();
+            {
+                let mut stmt =
+                    tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
+                for id in ids {
+                    let mut rows = stmt.query([id])?;
+                    if let Some(row) = rows.next()? {
+                        let audio_path: String = row.get(0)?;
+                        audio_paths.push(audio_path);
+                        existing_ids.push(id.clone());
+                    }
                 }
             }
-
-            let mut stmt = tx.prepare_cached("DELETE FROM history_items WHERE id = ?1")?;
-            for id in ids {
-                stmt.execute([id])?;
+            {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT id FROM transcript_snapshots WHERE history_id = ?1 ORDER BY id",
+                )?;
+                for history_id in &existing_ids {
+                    let rows = stmt.query_map([history_id], |row| row.get::<_, String>(0))?;
+                    for snapshot_id in rows {
+                        snapshot_entity_ids.push(format!("{history_id}::{}", snapshot_id?));
+                    }
+                }
+            }
+            {
+                let mut stmt = tx.prepare_cached("DELETE FROM history_items WHERE id = ?1")?;
+                for id in &existing_ids {
+                    stmt.execute([id])?;
+                }
+            }
+            let now_ms = sync_now_ms();
+            for id in &existing_ids {
+                for kind in [
+                    SyncEntityKind::HistoryItem,
+                    SyncEntityKind::HistoryTranscript,
+                    SyncEntityKind::HistorySummary,
+                ] {
+                    record_local_delete_in_transaction(tx, kind, id, now_ms)?;
+                }
+            }
+            for entity_id in snapshot_entity_ids {
+                record_local_delete_in_transaction(
+                    tx,
+                    SyncEntityKind::TranscriptSnapshot,
+                    &entity_id,
+                    now_ms,
+                )?;
             }
             Ok(audio_paths)
         })?;
@@ -1746,6 +1853,14 @@ where
                 "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
+            let now_ms = sync_now_ms();
+            Self::record_history_item_sync(tx, &item, now_ms)?;
+            Self::record_transcript_sync(
+                tx,
+                history_id,
+                &serde_json::to_value(&normalized_transcript.segments)?,
+                now_ms,
+            )?;
             Ok(item)
         })?)
     }
@@ -1779,6 +1894,14 @@ where
         let segments_str = serde_json::to_string(&parsed_segments)?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
+            let previous_ids = {
+                let mut statement = tx.prepare_cached(
+                    "SELECT id FROM transcript_snapshots WHERE history_id = ?1 ORDER BY id",
+                )?;
+                statement
+                    .query_map([history_id], |row| row.get::<_, String>(0))?
+                    .collect::<Result<HashSet<_>, _>>()?
+            };
             let rows_affected = tx.execute(
                 "INSERT INTO transcript_snapshots (id, history_id, reason, created_at, segment_count, segments)
                  SELECT ?1, ?2, ?3, ?4, ?5, ?6
@@ -1812,6 +1935,38 @@ where
                 ],
             )?;
 
+            let current_ids = {
+                let mut statement = tx.prepare_cached(
+                    "SELECT id FROM transcript_snapshots WHERE history_id = ?1 ORDER BY id",
+                )?;
+                statement
+                    .query_map([history_id], |row| row.get::<_, String>(0))?
+                    .collect::<Result<HashSet<_>, _>>()?
+            };
+            for removed_id in previous_ids.difference(&current_ids) {
+                record_local_delete_in_transaction(
+                    tx,
+                    SyncEntityKind::TranscriptSnapshot,
+                    &format!("{history_id}::{removed_id}"),
+                    created_at,
+                )?;
+            }
+            let entity_id = format!("{history_id}::{}", metadata.id);
+            for (field, value) in [
+                ("document", serde_json::to_value(&parsed_segments)?),
+                ("reason", serde_json::json!(reason_str)),
+                ("createdAt", serde_json::json!(metadata.created_at)),
+                ("segmentCount", serde_json::json!(metadata.segment_count)),
+            ] {
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::TranscriptSnapshot,
+                    &entity_id,
+                    field,
+                    value,
+                    created_at,
+                )?;
+            }
             Ok(metadata.clone())
         })?)
     }
@@ -1966,6 +2121,7 @@ where
                 )));
             }
 
+            Self::record_history_item_sync(tx, &item, sync_now_ms())?;
             Ok(())
         })?)
     }
@@ -1985,6 +2141,18 @@ where
             for id in ids {
                 stmt.execute(rusqlite::params![project_id, id])?;
             }
+            drop(stmt);
+            let now_ms = sync_now_ms();
+            for id in ids {
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::HistoryItem,
+                    id,
+                    "projectId",
+                    serde_json::json!(project_id),
+                    now_ms,
+                )?;
+            }
             Ok(())
         })?)
     }
@@ -1994,11 +2162,28 @@ where
         current_project_id: String,
         next_project_id: Option<String>,
     ) -> Result<(), HistoryMutationError> {
-        Ok(self.get_db()?.with_write_connection(|conn| {
-            conn.execute(
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
+            let mut statement = tx
+                .prepare_cached("SELECT id FROM history_items WHERE project_id = ?1 ORDER BY id")?;
+            let ids = statement
+                .query_map([&current_project_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            drop(statement);
+            tx.execute(
                 "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
                 rusqlite::params![next_project_id, current_project_id],
             )?;
+            let now_ms = sync_now_ms();
+            for id in ids {
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::HistoryItem,
+                    &id,
+                    "projectId",
+                    serde_json::json!(next_project_id),
+                    now_ms,
+                )?;
+            }
             Ok(())
         })?)
     }
@@ -2031,10 +2216,18 @@ where
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         let payload_str = serde_json::to_string(&summary_payload)?;
 
-        Ok(self.get_db()?.with_write_connection(|conn| {
-            conn.execute(
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
+            tx.execute(
                 "INSERT OR REPLACE INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
                 rusqlite::params![history_id, payload_str],
+            )?;
+            record_local_field_change_in_transaction(
+                tx,
+                SyncEntityKind::HistorySummary,
+                history_id,
+                "document",
+                serde_json::to_value(summary_payload)?,
+                sync_now_ms(),
             )?;
             Ok(())
         })?)
@@ -2043,10 +2236,16 @@ where
     fn delete_summary(&self, history_id: &str) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
 
-        Ok(self.get_db()?.with_write_connection(|conn| {
-            conn.execute(
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
+            tx.execute(
                 "DELETE FROM history_summaries WHERE history_id = ?1",
                 [history_id],
+            )?;
+            record_local_delete_in_transaction(
+                tx,
+                SyncEntityKind::HistorySummary,
+                history_id,
+                sync_now_ms(),
             )?;
             Ok(())
         })?)

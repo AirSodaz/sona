@@ -13,5 +13,6 @@ pub mod project;
 pub mod recovery;
 pub mod runtime;
 pub mod storage_usage;
+pub mod sync;
 pub mod task_ledger;
 pub mod transcription;

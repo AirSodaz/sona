@@ -17,6 +17,7 @@ pub mod project;
 pub mod schema;
 pub mod storage_usage;
 pub mod storage_usage_repository;
+pub mod sync_repository;
 pub mod task_ledger;
 
 pub use automation::{
@@ -38,6 +39,7 @@ pub use storage_usage_repository::{
     LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
     load_storage_usage_snapshot_with_database,
 };
+pub use sync_repository::{SqliteSyncRepository, record_sync_operation_in_transaction};
 pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 
 use rusqlite::functions::FunctionFlags;
