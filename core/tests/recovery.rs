@@ -1,12 +1,14 @@
 use serde_json::json;
 use sona_core::recovery::normalization::{
-    SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_value_with_source_paths,
-    snapshot_from_items_with_timestamp, snapshot_from_value_with_source_paths_at,
+    SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_input_with_source_paths,
+    snapshot_from_input_with_source_paths_at, snapshot_from_items_with_timestamp,
 };
 use sona_core::recovery::types::{
     RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveryFileStat,
-    RecoverySnapshot,
+    RecoveryItemInput, RecoveryItemStage, RecoveryResolution, RecoverySnapshot,
+    RecoverySnapshotInput, RecoverySource,
 };
+use sona_core::transcription::transcript::TranscriptTimingLevel;
 
 struct DirectorySourcePaths;
 
@@ -25,8 +27,8 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
             id: "recovery-1".to_string(),
             filename: "audio.wav".to_string(),
             file_path: "C:/audio.wav".to_string(),
-            source: "batch_import".to_string(),
-            resolution: "pending".to_string(),
+            source: RecoverySource::BatchImport,
+            resolution: RecoveryResolution::Pending,
             progress: 12.0,
             segments: vec![RecoveredTranscriptSegment {
                 id: "seg-1".to_string(),
@@ -45,7 +47,7 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
             project_id: Some("project-1".to_string()),
             history_id: Some("history-1".to_string()),
             history_title: Some("History".to_string()),
-            last_known_stage: "transcribing".to_string(),
+            last_known_stage: RecoveryItemStage::Transcribing,
             updated_at: 3000,
             has_source_file: true,
             can_resume: true,
@@ -75,43 +77,43 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
 
 #[test]
 fn recovery_queue_normalization_uses_injected_source_path_status() {
-    let item = recovered_item_from_queue_value_with_source_paths(
-        json!({
-            "id": "queue-1",
-            "status": "processing",
-            "filename": "folder",
-            "filePath": "C:/not-a-file",
-            "segments": [{"text": "hello", "start": -1.0, "end": 0.5}]
-        }),
-        4000,
-        &DirectorySourcePaths,
-    )
+    let input: RecoveryItemInput = serde_json::from_value(json!({
+        "id": "queue-1",
+        "status": "processing",
+        "filename": "folder",
+        "filePath": "C:/not-a-file",
+        "segments": [{"text": "hello", "start": -1.0, "end": 0.5}]
+    }))
     .unwrap();
+    let item =
+        recovered_item_from_queue_input_with_source_paths(input, 4000, &DirectorySourcePaths)
+            .unwrap();
 
     assert_eq!(item.id, "queue-1");
     assert!(!item.has_source_file);
     assert!(!item.can_resume);
     assert_eq!(item.segments[0].start, 0.0);
-    assert_eq!(item.segments[0].timing.as_ref().unwrap().level, "segment");
+    assert_eq!(
+        item.segments[0].timing.as_ref().unwrap().level,
+        TranscriptTimingLevel::Segment
+    );
 }
 
 #[test]
 fn recovery_snapshot_normalization_uses_supplied_timestamps() {
-    let loaded = snapshot_from_value_with_source_paths_at(
-        json!({
-            "version": RECOVERY_VERSION,
-            "items": [{
-                "id": "recovery-1",
-                "filename": "audio.wav",
-                "filePath": "C:/audio.wav",
-                "resolution": "pending",
-                "segments": []
-            }]
-        }),
-        false,
-        &DirectorySourcePaths,
-        5000,
-    );
+    let input: RecoverySnapshotInput = serde_json::from_value(json!({
+        "version": RECOVERY_VERSION,
+        "items": [{
+            "id": "recovery-1",
+            "filename": "audio.wav",
+            "filePath": "C:/audio.wav",
+            "resolution": "pending",
+            "segments": []
+        }]
+    }))
+    .unwrap();
+    let loaded =
+        snapshot_from_input_with_source_paths_at(input, false, &DirectorySourcePaths, 5000);
 
     assert_eq!(loaded.items[0].updated_at, 5000);
 

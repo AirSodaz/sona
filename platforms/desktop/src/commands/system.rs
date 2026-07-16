@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime, State};
 
-use sona_core::recovery::types::RecoverySnapshot;
+use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
 use sona_core::task_ledger::types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot};
 
 // Command wrappers & implementations
@@ -198,7 +198,7 @@ pub async fn recovery_load_snapshot(app: AppHandle) -> Result<RecoverySnapshot, 
 #[tauri::command]
 pub async fn recovery_save_snapshot(
     app: AppHandle,
-    items: Vec<Value>,
+    items: Vec<RecoveryItemInput>,
 ) -> Result<RecoverySnapshot, String> {
     crate::platform::recovery_repository::save_snapshot_for_app(&app, items).await
 }
@@ -206,7 +206,7 @@ pub async fn recovery_save_snapshot(
 #[tauri::command]
 pub async fn recovery_persist_queue_snapshot(
     app: AppHandle,
-    queue_items: Vec<Value>,
+    queue_items: Vec<RecoveryItemInput>,
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
     crate::platform::recovery_repository::persist_queue_snapshot_for_app(

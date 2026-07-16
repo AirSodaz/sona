@@ -29,6 +29,8 @@ import type {
   HistoryWorkspaceQueryRequest,
   HistoryWorkspaceQueryResult,
   LiveRecordingDraftResult,
+  RecoveryItemInput_Serialize,
+  RecoverySnapshot_Serialize,
   TranscriptDiffResult_Serialize,
   TranscriptDiffRow_Serialize,
   TranscriptSegment_Serialize,
@@ -65,11 +67,6 @@ import type {
   LlmConfig,
   LlmDiscoveredModelSummary,
 } from "../../types/llm";
-import type { BatchQueueItem } from "../../types/batchQueue";
-import type {
-  RecoveredQueueItem,
-  RecoverySnapshot,
-} from "../../types/recovery";
 import type {
   TaskLedgerPatch,
   TaskLedgerRecord,
@@ -658,14 +655,14 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.recovery.loadSnapshot]: {
     args: undefined;
-    result: RecoverySnapshot;
+    result: RecoverySnapshot_Serialize;
   };
   [TauriCommand.recovery.saveSnapshot]: {
-    args: { items: RecoveredQueueItem[] };
-    result: RecoverySnapshot;
+    args: { items: RecoveryItemInput_Serialize[] };
+    result: RecoverySnapshot_Serialize;
   };
   [TauriCommand.recovery.persistQueueSnapshot]: {
-    args: { queueItems: BatchQueueItem[]; resolvedIds?: string[] };
+    args: { queueItems: RecoveryItemInput_Serialize[]; resolvedIds?: string[] };
     result: void;
   };
   [TauriCommand.taskLedger.loadSnapshot]: {

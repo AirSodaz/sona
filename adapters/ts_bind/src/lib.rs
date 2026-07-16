@@ -64,6 +64,11 @@ pub use sona_core::project::{
     ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput, ProjectDefaultsPatch, ProjectRecord,
     ProjectRepositorySnapshot, ProjectUpdateInput,
 };
+pub use sona_core::recovery::types::{
+    RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
+    RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoveryItemInput, RecoveryItemStage,
+    RecoveryResolution, RecoverySnapshot, RecoverySnapshotInput, RecoverySource,
+};
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
 };
@@ -342,6 +347,17 @@ pub fn desktop_types() -> specta::Types {
         .register::<HistoryReassignProjectRequest>()
         .register::<HistoryAudioCleanupRequest>()
         .register::<HistoryAudioCleanupReport>()
+        .register::<RecoverySource>()
+        .register::<RecoveryResolution>()
+        .register::<RecoveryItemStage>()
+        .register::<RecoverySnapshotInput>()
+        .register::<RecoveryItemInput>()
+        .register::<RecoverySnapshot>()
+        .register::<RecoveredQueueItem>()
+        .register::<RecoveryFileStat>()
+        .register::<RecoveredTranscriptSegment>()
+        .register::<RecoveredTranscriptTiming>()
+        .register::<RecoveredTranscriptTimingUnit>()
         .register::<TranscriptSnapshotReason>()
         .register::<TranscriptSnapshotMetadata>()
         .register::<TranscriptSnapshotRecord>()
@@ -453,6 +469,17 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "HistoryReassignProjectRequest",
     "HistoryAudioCleanupRequest",
     "HistoryAudioCleanupReport",
+    "RecoverySource",
+    "RecoveryResolution",
+    "RecoveryItemStage",
+    "RecoverySnapshotInput",
+    "RecoveryItemInput",
+    "RecoverySnapshot",
+    "RecoveredQueueItem",
+    "RecoveryFileStat",
+    "RecoveredTranscriptSegment",
+    "RecoveredTranscriptTiming",
+    "RecoveredTranscriptTimingUnit",
     "TranscriptSnapshotReason",
     "TranscriptSnapshotMetadata",
     "TranscriptSnapshotRecord",
@@ -719,6 +746,23 @@ mod tests {
     }
 
     #[test]
+    fn recovery_transport_validation_rejects_unsafe_timestamps_and_file_stats() {
+        let input = RecoverySnapshotInput {
+            updated_at: Some(TYPESCRIPT_MAX_SAFE_INTEGER + 1),
+            items: Vec::new(),
+        };
+        let error = validate_typescript_safe_integers(&input).unwrap_err();
+        assert!(error.contains("$.updatedAt"), "{error}");
+
+        let file_stat = RecoveryFileStat {
+            size: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
+            mtime_ms: 1,
+        };
+        let error = validate_typescript_safe_integers(&file_stat).unwrap_err();
+        assert!(error.contains("$.size"), "{error}");
+    }
+
+    #[test]
     fn runtime_types_are_specta_exportable_through_ts_bindings() {
         fn assert_specta_type<T: specta::Type>() {}
 
@@ -825,6 +869,17 @@ mod tests {
         assert_specta_type::<HistoryReassignProjectRequest>();
         assert_specta_type::<HistoryAudioCleanupRequest>();
         assert_specta_type::<HistoryAudioCleanupReport>();
+        assert_specta_type::<RecoverySource>();
+        assert_specta_type::<RecoveryResolution>();
+        assert_specta_type::<RecoveryItemStage>();
+        assert_specta_type::<RecoverySnapshotInput>();
+        assert_specta_type::<RecoveryItemInput>();
+        assert_specta_type::<RecoverySnapshot>();
+        assert_specta_type::<RecoveredQueueItem>();
+        assert_specta_type::<RecoveryFileStat>();
+        assert_specta_type::<RecoveredTranscriptSegment>();
+        assert_specta_type::<RecoveredTranscriptTiming>();
+        assert_specta_type::<RecoveredTranscriptTimingUnit>();
         assert_specta_type::<TranscriptSnapshotReason>();
         assert_specta_type::<TranscriptSnapshotMetadata>();
         assert_specta_type::<TranscriptSnapshotRecord>();

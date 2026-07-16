@@ -1,6 +1,6 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
-use sona_core::recovery::types::RecoverySnapshot;
+use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
 use sona_recovery_fs::FsRecoveryAdapter;
 use std::path::PathBuf;
 
@@ -34,18 +34,22 @@ pub(crate) fn persist_recovery_queue_snapshot_json(
     serialize_snapshot(&snapshot)
 }
 
-fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
+fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<RecoveryItemInput>> {
     let value = serde_json::from_str::<Value>(input).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
             reason: format!("Invalid {label} JSON: {error}"),
         }
     })?;
-    value
+    let values = value
         .as_array()
         .cloned()
         .ok_or_else(|| SonaCoreBindingError::InvalidInput {
             reason: format!("{label} JSON must be an array"),
-        })
+        })?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| serde_json::from_value(value).ok())
+        .collect())
 }
 
 fn serialize_snapshot(snapshot: &RecoverySnapshot) -> SonaCoreBindingResult<String> {
@@ -158,7 +162,7 @@ mod tests {
                 "filename": "recording.wav",
                 "filePath": source_path,
                 "resolution": "pending",
-                "segments": []
+                "segments": {"legacy": true}
             }]
         }));
 
@@ -172,6 +176,7 @@ mod tests {
         assert_eq!(value["items"][0]["updatedAt"], 5_000);
         assert_eq!(value["items"][0]["hasSourceFile"], true);
         assert_eq!(value["items"][0]["canResume"], true);
+        assert_eq!(value["items"][0]["segments"], json!([]));
     }
 
     #[test]
@@ -214,6 +219,44 @@ mod tests {
         assert_eq!(output_value["items"][0]["updatedAt"], 6_500);
         assert!(output_value.get("updated_at").is_none());
         assert!(output_value["items"][0].get("file_path").is_none());
+    }
+
+    #[test]
+    fn save_keeps_valid_items_when_legacy_json_contains_invalid_siblings() {
+        let dir = TestDir::new();
+        let items = json!([
+            {
+                "id": "first",
+                "filename": "first.wav",
+                "filePath": "",
+                "resolution": "pending",
+                "segments": []
+            },
+            "locally-corrupt-item",
+            {
+                "id": "second",
+                "filename": "second.wav",
+                "filePath": "",
+                "resolution": "pending",
+                "segments": []
+            }
+        ]);
+
+        let output = save_recovery_snapshot_json_at(
+            dir.app_data_dir(),
+            serde_json::to_string(&items).unwrap(),
+            6_550,
+        )
+        .unwrap();
+        let output: Value = serde_json::from_str(&output).unwrap();
+        let ids = output["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ids, vec!["first", "second"]);
     }
 
     #[test]

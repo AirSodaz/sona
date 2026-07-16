@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
+import type {
+  RecoveredQueueItem_Serialize,
+  RecoveryItemInput_Serialize,
+} from '../../../bindings';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
@@ -997,7 +1001,7 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('recovery wrappers forward repository commands', async () => {
-    const item = {
+    const item: RecoveredQueueItem_Serialize = {
       id: 'recovery-1',
       filename: 'meeting.wav',
       filePath: 'C:/watch/meeting.wav',
@@ -1010,8 +1014,10 @@ describe('tauri boundary wrappers', () => {
       updatedAt: 100,
       hasSourceFile: true,
       canResume: true,
+      exportConfig: null,
+      stageConfig: null,
     };
-    const queueItem = {
+    const queueItem: RecoveryItemInput_Serialize = {
       id: 'queue-1',
       filename: 'meeting.wav',
       filePath: 'C:/watch/meeting.wav',
@@ -1023,8 +1029,8 @@ describe('tauri boundary wrappers', () => {
     vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
 
     const snapshot = await recoveryLoadSnapshot();
-    await recoverySaveSnapshot([item as any]);
-    await recoveryPersistQueueSnapshot([queueItem as any]);
+    await recoverySaveSnapshot([item]);
+    await recoveryPersistQueueSnapshot([queueItem]);
 
     expect(snapshot).toEqual({ version: 1, updatedAt: 100, items: [item] });
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.recovery.loadSnapshot);

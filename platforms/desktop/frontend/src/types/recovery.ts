@@ -1,33 +1,30 @@
 import type { AppConfig } from './config';
 import type { AutomationExportConfig, AutomationStageConfig } from './automation';
 import type { TranscriptSegment } from './transcript';
+import type {
+    RecoveredQueueItem_Serialize as CoreRecoveredQueueItem,
+    RecoverySnapshot_Serialize as CoreRecoverySnapshot,
+} from '../bindings';
 
-export type RecoveryItemStage =
-    | 'queued'
-    | 'transcribing'
-    | 'polishing'
-    | 'translating'
-    | 'exporting';
+export type { RecoveryItemStage, RecoveryResolution, RecoverySource } from '../bindings';
 
-export type RecoverySource = 'batch_import' | 'automation';
-
-export type RecoveryResolution = 'pending' | 'resumed' | 'discarded';
-
-export interface RecoveredQueueItem {
-    id: string;
-    filename: string;
-    filePath: string;
-    source: RecoverySource;
-    resolution: RecoveryResolution;
-    progress: number;
+export interface RecoveredQueueItem extends Omit<
+    CoreRecoveredQueueItem,
+    | 'segments'
+    | 'historyId'
+    | 'historyTitle'
+    | 'automationRuleId'
+    | 'automationRuleName'
+    | 'resolvedConfigSnapshot'
+    | 'exportConfig'
+    | 'stageConfig'
+    | 'sourceFingerprint'
+    | 'fileStat'
+    | 'exportFileNamePrefix'
+> {
     segments: TranscriptSegment[];
-    projectId: string | null;
     historyId?: string;
     historyTitle?: string;
-    lastKnownStage: RecoveryItemStage;
-    updatedAt: number;
-    hasSourceFile: boolean;
-    canResume: boolean;
     automationRuleId?: string;
     automationRuleName?: string;
     resolvedConfigSnapshot?: AppConfig;
@@ -41,8 +38,6 @@ export interface RecoveredQueueItem {
     exportFileNamePrefix?: string;
 }
 
-export interface RecoverySnapshot {
-    version: number;
-    updatedAt: number | null;
+export interface RecoverySnapshot extends Omit<CoreRecoverySnapshot, 'items'> {
     items: RecoveredQueueItem[];
 }

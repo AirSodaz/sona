@@ -1,5 +1,6 @@
 use serde_json::json;
 use sona_core::ports::path::{PathKind, PathProvider};
+use sona_core::recovery::types::RecoveryItemInput;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,6 +12,10 @@ use tempfile::tempdir;
 struct RecordingPathProvider {
     app_local_data_dir: PathBuf,
     resolved_kinds: Mutex<Vec<PathKind>>,
+}
+
+fn recovery_item(value: serde_json::Value) -> RecoveryItemInput {
+    serde_json::from_value(value).unwrap()
 }
 
 impl RecordingPathProvider {
@@ -63,13 +68,13 @@ async fn save_snapshot_composes_the_service_and_filesystem_adapters() {
 
     let snapshot = save_snapshot(
         &provider,
-        vec![json!({
+        vec![recovery_item(json!({
             "id": "saved-1",
             "filename": "recording.wav",
             "filePath": source_file,
             "resolution": "pending",
             "segments": []
-        })],
+        }))],
     )
     .await
     .unwrap();
@@ -93,13 +98,13 @@ async fn persist_queue_snapshot_defaults_missing_resolved_ids_to_empty() {
     let provider = RecordingPathProvider::new(dir.path().to_path_buf());
     save_snapshot(
         &provider,
-        vec![json!({
+        vec![recovery_item(json!({
             "id": "retained",
             "filename": "retained.wav",
             "filePath": source_file,
             "resolution": "pending",
             "segments": []
-        })],
+        }))],
     )
     .await
     .unwrap();
@@ -117,4 +122,51 @@ async fn persist_queue_snapshot_defaults_missing_resolved_ids_to_empty() {
     )
     .unwrap();
     assert_eq!(stored["items"][0]["id"], "retained");
+}
+
+#[tokio::test]
+async fn save_snapshot_rejects_unsafe_typescript_integer_input() {
+    let dir = tempdir().unwrap();
+    let provider = RecordingPathProvider::new(dir.path().to_path_buf());
+    let item = recovery_item(json!({
+        "id": "unsafe-input",
+        "filename": "unsafe.wav",
+        "filePath": "",
+        "resolution": "pending",
+        "updatedAt": 9_007_199_254_740_992_u64,
+        "segments": []
+    }));
+
+    let error = save_snapshot(&provider, vec![item]).await.unwrap_err();
+
+    assert!(error.contains("exceeds TypeScript's safe range"), "{error}");
+    assert!(provider.resolved_kinds().is_empty());
+}
+
+#[tokio::test]
+async fn load_snapshot_rejects_unsafe_typescript_integer_output() {
+    let dir = tempdir().unwrap();
+    let recovery_dir = dir.path().join("recovery");
+    fs::create_dir_all(&recovery_dir).unwrap();
+    fs::write(
+        recovery_dir.join("queue-recovery.json"),
+        serde_json::to_vec(&json!({
+            "version": 1,
+            "updatedAt": 9_007_199_254_740_992_u64,
+            "items": [{
+                "id": "unsafe-output",
+                "filename": "unsafe.wav",
+                "filePath": "",
+                "resolution": "pending",
+                "segments": []
+            }]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let provider = RecordingPathProvider::new(dir.path().to_path_buf());
+
+    let error = load_snapshot(&provider).await.unwrap_err();
+
+    assert!(error.contains("exceeds TypeScript's safe range"), "{error}");
 }

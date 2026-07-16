@@ -770,6 +770,197 @@ export type ProjectUpdateInput = {
 	defaults?: ProjectDefaultsPatch | null,
 };
 
+export type RecoveredQueueItem = RecoveredQueueItem_Serialize | RecoveredQueueItem_Deserialize;
+
+export type RecoveredQueueItem_Deserialize = {
+	id: string,
+	filename: string,
+	filePath: string,
+	source: RecoverySource,
+	resolution: RecoveryResolution,
+	progress: number,
+	segments: RecoveredTranscriptSegment_Deserialize[],
+	projectId: string | null,
+	historyId: string | null,
+	historyTitle: string | null,
+	lastKnownStage: RecoveryItemStage,
+	updatedAt: number,
+	hasSourceFile: boolean,
+	canResume: boolean,
+	automationRuleId: string | null,
+	automationRuleName: string | null,
+	resolvedConfigSnapshot: unknown | null,
+	exportConfig: unknown,
+	stageConfig: unknown,
+	sourceFingerprint: string | null,
+	fileStat: RecoveryFileStat | null,
+	exportFileNamePrefix: string | null,
+};
+
+export type RecoveredQueueItem_Serialize = {
+	id: string,
+	filename: string,
+	filePath: string,
+	source: RecoverySource,
+	resolution: RecoveryResolution,
+	progress: number,
+	segments: RecoveredTranscriptSegment_Serialize[],
+	projectId: string | null,
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage: RecoveryItemStage,
+	updatedAt: number,
+	hasSourceFile: boolean,
+	canResume: boolean,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	exportConfig: unknown,
+	stageConfig: unknown,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+};
+
+export type RecoveredTranscriptSegment = RecoveredTranscriptSegment_Serialize | RecoveredTranscriptSegment_Deserialize;
+
+export type RecoveredTranscriptSegment_Deserialize = {
+	id?: string,
+	text?: string,
+	start?: number,
+	end?: number,
+	isFinal?: boolean,
+	timing?: RecoveredTranscriptTiming | null,
+	tokens: string[] | null,
+	timestamps: number[] | null,
+	durations: number[] | null,
+	translation: string | null,
+	speaker?: SpeakerTag_Deserialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
+};
+
+export type RecoveredTranscriptSegment_Serialize = {
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing?: RecoveredTranscriptTiming | null,
+	tokens?: string[] | null,
+	timestamps?: number[] | null,
+	durations?: number[] | null,
+	translation?: string | null,
+	speaker?: SpeakerTag_Serialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
+};
+
+export type RecoveredTranscriptTiming = {
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: RecoveredTranscriptTimingUnit[],
+};
+
+export type RecoveredTranscriptTimingUnit = {
+	text?: string,
+	start?: number,
+	end?: number,
+};
+
+export type RecoveryFileStat = {
+	size: number,
+	mtimeMs: number,
+};
+
+export type RecoveryItemInput = RecoveryItemInput_Serialize | RecoveryItemInput_Deserialize;
+
+export type RecoveryItemInput_Deserialize = {
+	id?: string | null,
+	recoveryId?: string | null,
+	filename?: string | null,
+	filePath?: string | null,
+	source?: string | null,
+	origin?: string | null,
+	resolution?: string | null,
+	status?: string | null,
+	progress?: number | null,
+	segments?: RecoveredTranscriptSegment_Deserialize[],
+	projectId?: string | null,
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage?: string | null,
+	updatedAt?: number | null,
+	hasSourceFile?: boolean | null,
+	canResume?: boolean | null,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	exportConfig?: unknown | null,
+	stageConfig?: unknown | null,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+};
+
+export type RecoveryItemInput_Serialize = {
+	id?: string | null,
+	recoveryId?: string | null,
+	filename?: string | null,
+	filePath?: string | null,
+	source?: string | null,
+	origin?: string | null,
+	resolution?: string | null,
+	status?: string | null,
+	progress?: number | null,
+	segments: RecoveredTranscriptSegment_Serialize[],
+	projectId?: string | null,
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage?: string | null,
+	updatedAt?: number | null,
+	hasSourceFile?: boolean | null,
+	canResume?: boolean | null,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	exportConfig?: unknown | null,
+	stageConfig?: unknown | null,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+};
+
+export type RecoveryItemStage = "queued" | "transcribing" | "polishing" | "translating" | "exporting";
+
+export type RecoveryResolution = "pending" | "resumed" | "discarded";
+
+export type RecoverySnapshot = RecoverySnapshot_Serialize | RecoverySnapshot_Deserialize;
+
+export type RecoverySnapshotInput = RecoverySnapshotInput_Serialize | RecoverySnapshotInput_Deserialize;
+
+export type RecoverySnapshotInput_Deserialize = {
+	updatedAt?: number | null,
+	items?: RecoveryItemInput_Deserialize[],
+};
+
+export type RecoverySnapshotInput_Serialize = {
+	updatedAt: number | null,
+	items: RecoveryItemInput_Serialize[],
+};
+
+export type RecoverySnapshot_Deserialize = {
+	version: number,
+	updatedAt: number | null,
+	items: RecoveredQueueItem_Deserialize[],
+};
+
+export type RecoverySnapshot_Serialize = {
+	version: number,
+	updatedAt: number | null,
+	items: RecoveredQueueItem_Serialize[],
+};
+
+export type RecoverySource = "batch_import" | "automation";
+
 export type SpeakerAttribution = {
 	groupId: string,
 	anonymousLabel: string,

@@ -1,5 +1,15 @@
 import type { BatchQueueItem } from '../types/batchQueue';
 import type { RecoverySnapshot, RecoveredQueueItem } from '../types/recovery';
+import type {
+    RecoveredQueueItem_Serialize as CoreRecoveredQueueItem,
+    RecoveredTranscriptSegment_Serialize,
+    RecoveryItemInput_Serialize,
+    RecoverySnapshot_Serialize as CoreRecoverySnapshot,
+} from '../bindings';
+import type { AppConfig } from '../types/config';
+import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
+import type { TranscriptSegment } from '../types/transcript';
+import { normalizeSpeakerAttribution, normalizeSpeakerTag } from '../types/speaker';
 import { logger } from '../utils/logger';
 import {
     recoveryLoadSnapshot,
@@ -17,6 +27,156 @@ let pendingQueueSnapshotWrite: BatchQueueItem[] | null = null;
 const pendingResolvedRecoveryIds = new Set<string>();
 let snapshotWriteTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshotWriteChain = Promise.resolve();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeRecoveredSegment(
+    segment: RecoveredTranscriptSegment_Serialize,
+): TranscriptSegment {
+    const speaker = normalizeSpeakerTag(segment.speaker);
+    const speakerAttribution = normalizeSpeakerAttribution(segment.speakerAttribution);
+
+    return {
+        id: segment.id,
+        text: segment.text,
+        start: segment.start,
+        end: segment.end,
+        isFinal: segment.isFinal,
+        ...(segment.timing
+            ? {
+                timing: {
+                    ...segment.timing,
+                    units: segment.timing.units.map((unit) => ({
+                        text: unit.text ?? '',
+                        start: unit.start ?? segment.start,
+                        end: unit.end ?? segment.end,
+                    })),
+                },
+            }
+            : {}),
+        ...(segment.tokens ? { tokens: [...segment.tokens] } : {}),
+        ...(segment.timestamps ? { timestamps: [...segment.timestamps] } : {}),
+        ...(segment.durations ? { durations: [...segment.durations] } : {}),
+        ...(segment.translation != null ? { translation: segment.translation } : {}),
+        ...(speaker != null ? { speaker } : {}),
+        ...(speakerAttribution != null ? { speakerAttribution } : {}),
+    };
+}
+
+function normalizeRecoveredItem(item: CoreRecoveredQueueItem): RecoveredQueueItem {
+    return {
+        id: item.id,
+        filename: item.filename,
+        filePath: item.filePath,
+        source: item.source,
+        resolution: item.resolution,
+        progress: item.progress,
+        segments: item.segments.map(normalizeRecoveredSegment),
+        projectId: item.projectId,
+        ...(item.historyId != null ? { historyId: item.historyId } : {}),
+        ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
+        lastKnownStage: item.lastKnownStage,
+        updatedAt: item.updatedAt,
+        hasSourceFile: item.hasSourceFile,
+        canResume: item.canResume,
+        ...(item.automationRuleId != null ? { automationRuleId: item.automationRuleId } : {}),
+        ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
+        ...(isRecord(item.resolvedConfigSnapshot)
+            ? {
+                resolvedConfigSnapshot: {
+                    ...item.resolvedConfigSnapshot,
+                } as unknown as AppConfig,
+            }
+            : {}),
+        exportConfig: isRecord(item.exportConfig)
+            ? { ...item.exportConfig } as unknown as AutomationExportConfig
+            : null,
+        stageConfig: isRecord(item.stageConfig)
+            ? { ...item.stageConfig } as unknown as AutomationStageConfig
+            : null,
+        ...(item.sourceFingerprint != null
+            ? { sourceFingerprint: item.sourceFingerprint }
+            : {}),
+        ...(item.fileStat != null ? { fileStat: { ...item.fileStat } } : {}),
+        ...(item.exportFileNamePrefix != null
+            ? { exportFileNamePrefix: item.exportFileNamePrefix }
+            : {}),
+    };
+}
+
+function normalizeRecoverySnapshot(snapshot: CoreRecoverySnapshot): RecoverySnapshot {
+    return {
+        version: snapshot.version,
+        updatedAt: snapshot.updatedAt,
+        items: snapshot.items.map(normalizeRecoveredItem),
+    };
+}
+
+function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Serialize {
+    return {
+        id: item.id,
+        filename: item.filename,
+        filePath: item.filePath,
+        source: item.source,
+        resolution: item.resolution,
+        progress: item.progress,
+        segments: item.segments.map((segment) => ({ ...segment })),
+        projectId: item.projectId,
+        ...(item.historyId != null ? { historyId: item.historyId } : {}),
+        ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
+        lastKnownStage: item.lastKnownStage,
+        updatedAt: item.updatedAt,
+        hasSourceFile: item.hasSourceFile,
+        canResume: item.canResume,
+        ...(item.automationRuleId != null ? { automationRuleId: item.automationRuleId } : {}),
+        ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
+        ...(item.resolvedConfigSnapshot != null
+            ? { resolvedConfigSnapshot: item.resolvedConfigSnapshot }
+            : {}),
+        exportConfig: item.exportConfig ?? null,
+        stageConfig: item.stageConfig ?? null,
+        ...(item.sourceFingerprint != null
+            ? { sourceFingerprint: item.sourceFingerprint }
+            : {}),
+        ...(item.fileStat != null ? { fileStat: { ...item.fileStat } } : {}),
+        ...(item.exportFileNamePrefix != null
+            ? { exportFileNamePrefix: item.exportFileNamePrefix }
+            : {}),
+    };
+}
+
+function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
+    return {
+        id: item.id,
+        ...(item.recoveryId != null ? { recoveryId: item.recoveryId } : {}),
+        filename: item.filename,
+        filePath: item.filePath,
+        ...(item.origin != null ? { origin: item.origin } : {}),
+        status: item.status,
+        progress: item.progress,
+        segments: item.segments.map((segment) => ({ ...segment })),
+        projectId: item.projectId,
+        ...(item.historyId != null ? { historyId: item.historyId } : {}),
+        ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
+        ...(item.lastKnownStage != null ? { lastKnownStage: item.lastKnownStage } : {}),
+        ...(item.automationRuleId != null ? { automationRuleId: item.automationRuleId } : {}),
+        ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
+        ...(item.resolvedConfigSnapshot != null
+            ? { resolvedConfigSnapshot: item.resolvedConfigSnapshot }
+            : {}),
+        ...(item.exportConfig !== undefined ? { exportConfig: item.exportConfig } : {}),
+        ...(item.stageConfig !== undefined ? { stageConfig: item.stageConfig } : {}),
+        ...(item.sourceFingerprint != null
+            ? { sourceFingerprint: item.sourceFingerprint }
+            : {}),
+        ...(item.fileStat != null ? { fileStat: { ...item.fileStat } } : {}),
+        ...(item.exportFileNamePrefix != null
+            ? { exportFileNamePrefix: item.exportFileNamePrefix }
+            : {}),
+    };
+}
 
 function buildAutomationRecoveryGuardKey(ruleId: string, sourceFingerprint: string): string {
     return `${ruleId}::${sourceFingerprint}`;
@@ -62,7 +222,7 @@ async function flushPendingSnapshotWrite(): Promise<void> {
 
     snapshotWriteChain = snapshotWriteChain
         .catch(() => undefined)
-        .then(() => recoveryPersistQueueSnapshot(queueItems, resolvedIds));
+        .then(() => recoveryPersistQueueSnapshot(queueItems.map(queueItemInput), resolvedIds));
 
     await snapshotWriteChain;
 
@@ -167,7 +327,7 @@ export function isAutomationRecoveryBlocked(ruleId: string, sourceFingerprint: s
 
 export async function loadRecoverySnapshot(): Promise<RecoverySnapshot> {
     try {
-        const snapshot = await recoveryLoadSnapshot();
+        const snapshot = normalizeRecoverySnapshot(await recoveryLoadSnapshot());
         syncPendingAutomationRecoveryGuard(snapshot.items);
         return snapshot;
     } catch (error) {
@@ -179,7 +339,9 @@ export async function loadRecoverySnapshot(): Promise<RecoverySnapshot> {
 
 export async function saveRecoveredItems(items: RecoveredQueueItem[]): Promise<void> {
     await flushPendingSnapshotWrite();
-    const snapshot = await recoverySaveSnapshot(items);
+    const snapshot = normalizeRecoverySnapshot(
+        await recoverySaveSnapshot(items.map(recoveredItemInput)),
+    );
     syncPendingAutomationRecoveryGuard(snapshot.items);
 }
 

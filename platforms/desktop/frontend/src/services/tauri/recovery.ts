@@ -1,20 +1,22 @@
-import type { BatchQueueItem } from '../../types/batchQueue';
-import type { RecoveredQueueItem, RecoverySnapshot } from '../../types/recovery';
+import type {
+  RecoveryItemInput_Serialize,
+  RecoverySnapshot_Serialize,
+} from '../../bindings';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
-export async function recoveryLoadSnapshot(): Promise<RecoverySnapshot> {
+export async function recoveryLoadSnapshot(): Promise<RecoverySnapshot_Serialize> {
   return invokeTauri(TauriCommand.recovery.loadSnapshot);
 }
 
 export async function recoverySaveSnapshot(
-  items: RecoveredQueueItem[],
-): Promise<RecoverySnapshot> {
+  items: RecoveryItemInput_Serialize[],
+): Promise<RecoverySnapshot_Serialize> {
   return invokeTauri(TauriCommand.recovery.saveSnapshot, { items });
 }
 
 export async function recoveryPersistQueueSnapshot(
-  queueItems: BatchQueueItem[],
+  queueItems: RecoveryItemInput_Serialize[],
   resolvedIds?: string[],
 ): Promise<void> {
   await invokeTauri(TauriCommand.recovery.persistQueueSnapshot, {

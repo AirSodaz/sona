@@ -3,18 +3,18 @@ use sona_core::ports::time::UnixMillisClock;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::service::RecoveryService;
-use sona_core::recovery::types::RecoverySnapshot;
+use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot, RecoverySnapshotInput};
 use std::sync::Mutex;
 
 struct MemoryRecoveryStore {
-    value: Mutex<Value>,
+    input: Mutex<RecoverySnapshotInput>,
     saved: Mutex<Option<RecoverySnapshot>>,
 }
 
 impl MemoryRecoveryStore {
     fn new(value: Value) -> Self {
         Self {
-            value: Mutex::new(value),
+            input: Mutex::new(serde_json::from_value(value).unwrap_or_default()),
             saved: Mutex::new(None),
         }
     }
@@ -29,14 +29,16 @@ impl MemoryRecoveryStore {
 }
 
 impl RecoverySnapshotStore for MemoryRecoveryStore {
-    fn load_snapshot_value(&self) -> Result<Value, String> {
-        Ok(self.value.lock().unwrap().clone())
+    fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, String> {
+        Ok(self.input.lock().unwrap().clone())
     }
 
     fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), String> {
         *self.saved.lock().unwrap() = Some(snapshot.clone());
-        *self.value.lock().unwrap() =
-            serde_json::to_value(snapshot).map_err(|error| error.to_string())?;
+        *self.input.lock().unwrap() = serde_json::from_value(
+            serde_json::to_value(snapshot).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
         Ok(())
     }
 }
@@ -79,24 +81,32 @@ fn service<'a>(store: &'a MemoryRecoveryStore, paths: &'a FixedSourcePaths) -> R
     RecoveryService::new(store, paths, &DEFAULT_CLOCK)
 }
 
-fn pending_saved_item() -> Value {
-    json!({
+fn input_item(value: Value) -> RecoveryItemInput {
+    serde_json::from_value(value).unwrap()
+}
+
+fn input_items(value: Value) -> Vec<RecoveryItemInput> {
+    serde_json::from_value(value).unwrap()
+}
+
+fn pending_saved_item() -> RecoveryItemInput {
+    input_item(json!({
         "id": "pending",
         "filename": "pending.wav",
         "filePath": "C:/pending.wav",
         "resolution": "pending",
         "segments": []
-    })
+    }))
 }
 
-fn resolved_saved_item() -> Value {
-    json!({
+fn resolved_saved_item() -> RecoveryItemInput {
+    input_item(json!({
         "id": "resolved",
         "filename": "resolved.wav",
         "filePath": "C:/resolved.wav",
         "resolution": "discarded",
         "segments": []
-    })
+    }))
 }
 
 fn existing_snapshot_with_ids(ids: &[&str]) -> Value {
@@ -112,7 +122,7 @@ fn existing_snapshot_with_ids(ids: &[&str]) -> Value {
     })
 }
 
-fn queue_item(id: &str, recovery_id: Option<&str>) -> Value {
+fn queue_item(id: &str, recovery_id: Option<&str>) -> RecoveryItemInput {
     let mut value = json!({
         "id": id,
         "status": "processing",
@@ -123,7 +133,7 @@ fn queue_item(id: &str, recovery_id: Option<&str>) -> Value {
     if let Some(recovery_id) = recovery_id {
         value["recoveryId"] = json!(recovery_id);
     }
-    value
+    input_item(value)
 }
 
 #[test]
@@ -238,11 +248,23 @@ fn persist_keeps_valid_queue_items_when_a_sibling_is_corrupt() {
 
     let snapshot = service
         .persist_queue_snapshot_at(
-            vec![
-                queue_item("first", None),
-                json!({"id": 42, "status": ["processing"]}),
-                queue_item("second", None),
-            ],
+            input_items(json!([
+                {
+                    "id": "first",
+                    "status": "processing",
+                    "filename": "first.wav",
+                    "filePath": "C:/first.wav",
+                    "segments": []
+                },
+                {"id": 42, "status": ["processing"]},
+                {
+                    "id": "second",
+                    "status": "processing",
+                    "filename": "second.wav",
+                    "filePath": "C:/second.wav",
+                    "segments": []
+                }
+            ])),
             Vec::new(),
             9_000,
         )
@@ -263,7 +285,7 @@ fn save_keeps_valid_segments_when_a_sibling_segment_is_corrupt() {
     let store = MemoryRecoveryStore::empty();
     let paths = FixedSourcePaths::file();
     let service = service(&store, &paths);
-    let item = json!({
+    let item = input_item(json!({
         "id": "recording",
         "filename": "recording.wav",
         "filePath": "C:/recording.wav",
@@ -273,7 +295,7 @@ fn save_keeps_valid_segments_when_a_sibling_segment_is_corrupt() {
             "locally-corrupt-segment",
             {"id": "segment-2", "text": "World", "start": 0.5, "end": 1.0}
         ]
-    });
+    }));
 
     let snapshot = service.save_snapshot_at(vec![item], 10_000).unwrap();
 
@@ -286,6 +308,62 @@ fn save_keeps_valid_segments_when_a_sibling_segment_is_corrupt() {
         vec!["segment-1", "segment-2"]
     );
     assert_eq!(store.saved_snapshot().unwrap(), snapshot);
+}
+
+#[test]
+fn save_keeps_segment_when_legacy_nested_metadata_is_invalid() {
+    let store = MemoryRecoveryStore::empty();
+    let paths = FixedSourcePaths::file();
+    let service = service(&store, &paths);
+    let item = input_item(json!({
+        "id": "recording",
+        "filename": "recording.wav",
+        "filePath": "C:/recording.wav",
+        "resolution": "pending",
+        "segments": [{
+            "id": "segment-1",
+            "text": "Hello",
+            "start": 0.0,
+            "end": 1.0,
+            "timing": {
+                "level": "word",
+                "source": "legacy",
+                "units": []
+            },
+            "speaker": "legacy-speaker",
+            "speakerAttribution": {"state": "legacy"}
+        }]
+    }));
+
+    let snapshot = service.save_snapshot_at(vec![item], 10_500).unwrap();
+    let segment = &snapshot.items[0].segments[0];
+
+    assert_eq!(segment.id, "segment-1");
+    assert_eq!(
+        segment.timing.as_ref().unwrap().level,
+        sona_core::transcription::transcript::TranscriptTimingLevel::Segment
+    );
+    assert!(segment.speaker.is_none());
+    assert!(segment.speaker_attribution.is_none());
+}
+
+#[test]
+fn save_keeps_item_when_legacy_segments_field_is_not_an_array() {
+    let store = MemoryRecoveryStore::empty();
+    let paths = FixedSourcePaths::file();
+    let service = service(&store, &paths);
+    let item = input_item(json!({
+        "id": "recording",
+        "filename": "recording.wav",
+        "filePath": "C:/recording.wav",
+        "resolution": "pending",
+        "segments": {"legacy": true}
+    }));
+
+    let snapshot = service.save_snapshot_at(vec![item], 10_600).unwrap();
+
+    assert_eq!(snapshot.items[0].id, "recording");
+    assert!(snapshot.items[0].segments.is_empty());
 }
 
 #[test]

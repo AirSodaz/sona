@@ -1,11 +1,11 @@
-use serde::Deserialize;
 use serde_json::Value;
-use serde_with::{DefaultOnError, serde_as};
 
 use crate::recovery::types::{
     RECOVERY_VERSION, RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
-    RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoverySnapshot,
+    RecoveredTranscriptTimingUnit, RecoveryItemInput, RecoveryItemStage, RecoveryResolution,
+    RecoverySnapshot, RecoverySnapshotInput, RecoverySource,
 };
+use crate::transcription::transcript::{TranscriptTimingLevel, TranscriptTimingSource};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourcePathStatus {
@@ -28,100 +28,7 @@ impl SourcePathStatusProvider for UnknownSourcePathStatusProvider {
     }
 }
 
-#[serde_as]
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RawRecoverySnapshot {
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    updated_at: Option<u64>,
-    #[serde(default)]
-    items: Vec<Value>,
-}
-
-#[serde_as]
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RawRecoveredQueueItem {
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    id: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    recovery_id: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    filename: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    file_path: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    source: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    origin: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    resolution: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    status: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    progress: Option<f64>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    segments: Vec<Value>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    project_id: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    history_id: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    history_title: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    last_known_stage: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    updated_at: Option<u64>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    has_source_file: Option<bool>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    can_resume: Option<bool>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    automation_rule_id: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    automation_rule_name: Option<String>,
-    #[serde(default)]
-    resolved_config_snapshot: Option<Value>,
-    #[serde(default)]
-    export_config: Option<Value>,
-    #[serde(default)]
-    stage_config: Option<Value>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    source_fingerprint: Option<String>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    file_stat: Option<RecoveryFileStat>,
-    #[serde_as(as = "DefaultOnError")]
-    #[serde(default)]
-    export_file_name_prefix: Option<String>,
-}
-
-impl RawRecoveredQueueItem {
-    fn from_value(value: Value) -> Option<Self> {
-        serde_json::from_value(value).ok()
-    }
-
+impl RecoveryItemInput {
     fn normalize_recovered(
         self,
         now: u64,
@@ -134,10 +41,10 @@ impl RawRecoveredQueueItem {
         let saved_has_source_file = self.has_source_file.unwrap_or(true);
         let saved_can_resume = self
             .can_resume
-            .unwrap_or(saved_has_source_file && resolution == "pending");
+            .unwrap_or(saved_has_source_file && resolution == RecoveryResolution::Pending);
         let (has_source_file, can_resume) = resolve_source_flags(
             &file_path,
-            &resolution,
+            resolution,
             saved_has_source_file,
             saved_can_resume,
             source_paths,
@@ -185,14 +92,13 @@ impl RawRecoveredQueueItem {
         let file_path = self.file_path.unwrap_or_default();
         let source =
             if self.origin.as_deref() == Some("automation") || self.automation_rule_id.is_some() {
-                "automation"
+                RecoverySource::Automation
             } else {
-                "batch_import"
-            }
-            .to_string();
-        let resolution = "pending".to_string();
+                RecoverySource::BatchImport
+            };
+        let resolution = RecoveryResolution::Pending;
         let (has_source_file, can_resume) =
-            resolve_source_flags(&file_path, &resolution, true, true, source_paths);
+            resolve_source_flags(&file_path, resolution, true, true, source_paths);
 
         Some(RecoveredQueueItem {
             id,
@@ -245,85 +151,90 @@ pub fn snapshot_from_items_with_timestamp(
     }
 }
 
-pub fn snapshot_from_value(value: Value, include_only_pending: bool) -> RecoverySnapshot {
-    snapshot_from_value_at(value, include_only_pending, 0)
+pub fn snapshot_from_input(
+    input: RecoverySnapshotInput,
+    include_only_pending: bool,
+) -> RecoverySnapshot {
+    snapshot_from_input_at(input, include_only_pending, 0)
 }
 
-pub fn snapshot_from_value_at(
-    value: Value,
+pub fn snapshot_from_input_at(
+    input: RecoverySnapshotInput,
     include_only_pending: bool,
     timestamp: u64,
 ) -> RecoverySnapshot {
-    snapshot_from_value_with_source_paths_at(
-        value,
+    snapshot_from_input_with_source_paths_at(
+        input,
         include_only_pending,
         &UnknownSourcePathStatusProvider,
         timestamp,
     )
 }
 
-pub fn snapshot_from_value_with_source_paths(
-    value: Value,
+pub fn snapshot_from_input_with_source_paths(
+    input: RecoverySnapshotInput,
     include_only_pending: bool,
     source_paths: &impl SourcePathStatusProvider,
 ) -> RecoverySnapshot {
-    snapshot_from_value_with_source_paths_at(value, include_only_pending, source_paths, 0)
+    snapshot_from_input_with_source_paths_at(input, include_only_pending, source_paths, 0)
 }
 
-pub fn snapshot_from_value_with_source_paths_at(
-    value: Value,
+pub fn snapshot_from_input_with_source_paths_at(
+    input: RecoverySnapshotInput,
     include_only_pending: bool,
     source_paths: &impl SourcePathStatusProvider,
     timestamp: u64,
 ) -> RecoverySnapshot {
-    let raw = serde_json::from_value::<RawRecoverySnapshot>(value).unwrap_or_default();
-    let items = raw
+    let items = input
         .items
         .into_iter()
-        .filter_map(RawRecoveredQueueItem::from_value)
         .filter_map(|item| item.normalize_recovered(timestamp, source_paths))
-        .filter(|item| !include_only_pending || item.resolution == "pending")
+        .filter(|item| !include_only_pending || item.resolution == RecoveryResolution::Pending)
         .collect::<Vec<_>>();
 
     RecoverySnapshot {
         version: RECOVERY_VERSION,
-        updated_at: raw.updated_at.filter(|_| !items.is_empty()),
+        updated_at: input.updated_at.filter(|_| !items.is_empty()),
         items,
     }
 }
 
-pub fn recovered_item_from_queue_value(value: Value, now: u64) -> Option<RecoveredQueueItem> {
-    recovered_item_from_queue_value_with_source_paths(value, now, &UnknownSourcePathStatusProvider)
+pub fn recovered_item_from_queue_input(
+    input: RecoveryItemInput,
+    now: u64,
+) -> Option<RecoveredQueueItem> {
+    recovered_item_from_queue_input_with_source_paths(input, now, &UnknownSourcePathStatusProvider)
 }
 
-pub fn recovered_item_from_queue_value_with_source_paths(
-    value: Value,
+pub fn recovered_item_from_queue_input_with_source_paths(
+    input: RecoveryItemInput,
     now: u64,
     source_paths: &impl SourcePathStatusProvider,
 ) -> Option<RecoveredQueueItem> {
-    RawRecoveredQueueItem::from_value(value)?.normalize_queue(now, source_paths)
+    input.normalize_queue(now, source_paths)
 }
 
-pub fn recovered_item_from_saved_value(value: Value, now: u64) -> Option<RecoveredQueueItem> {
-    recovered_item_from_saved_value_with_source_paths(value, now, &UnknownSourcePathStatusProvider)
+pub fn recovered_item_from_saved_input(
+    input: RecoveryItemInput,
+    now: u64,
+) -> Option<RecoveredQueueItem> {
+    recovered_item_from_saved_input_with_source_paths(input, now, &UnknownSourcePathStatusProvider)
 }
 
-pub fn recovered_item_from_saved_value_with_source_paths(
-    value: Value,
+pub fn recovered_item_from_saved_input_with_source_paths(
+    input: RecoveryItemInput,
     now: u64,
     source_paths: &impl SourcePathStatusProvider,
 ) -> Option<RecoveredQueueItem> {
-    RawRecoveredQueueItem::from_value(value)?.normalize_recovered(now, source_paths)
+    input.normalize_recovered(now, source_paths)
 }
 
-fn normalize_segments(segments: Vec<Value>) -> Vec<RecoveredTranscriptSegment> {
+fn normalize_segments(
+    segments: Vec<RecoveredTranscriptSegment>,
+) -> Vec<RecoveredTranscriptSegment> {
     segments
         .into_iter()
-        .filter_map(|segment| {
-            serde_json::from_value::<RecoveredTranscriptSegment>(segment)
-                .ok()
-                .map(normalize_transcript_segment)
-        })
+        .map(normalize_transcript_segment)
         .collect()
 }
 
@@ -334,7 +245,12 @@ fn normalize_transcript_segment(
     segment.end = segment.end.max(segment.start);
     segment.timing = normalize_existing_timing(&segment)
         .or_else(|| build_token_timing_from_legacy(&segment))
-        .or_else(|| Some(build_segment_timing(&segment, "derived")));
+        .or_else(|| {
+            Some(build_segment_timing(
+                &segment,
+                TranscriptTimingSource::Derived,
+            ))
+        });
     segment
 }
 
@@ -342,22 +258,14 @@ fn normalize_existing_timing(
     segment: &RecoveredTranscriptSegment,
 ) -> Option<RecoveredTranscriptTiming> {
     let timing = segment.timing.as_ref()?;
-    if !is_valid_timing_source(&timing.source) {
-        return None;
-    }
-
-    if timing.level == "segment" {
-        return Some(build_segment_timing(segment, &timing.source));
-    }
-
-    if timing.level != "token" {
-        return None;
+    if timing.level == TranscriptTimingLevel::Segment {
+        return Some(build_segment_timing(segment, timing.source));
     }
 
     let units = normalize_timing_units(timing.units.clone(), segment.start, segment.end);
     (!units.is_empty()).then(|| RecoveredTranscriptTiming {
-        level: "token".to_string(),
-        source: timing.source.clone(),
+        level: TranscriptTimingLevel::Token,
+        source: timing.source,
         units,
     })
 }
@@ -398,19 +306,19 @@ fn build_token_timing_from_legacy(
     let units = normalize_timing_units(units, segment.start, segment.end);
 
     (!units.is_empty()).then(|| RecoveredTranscriptTiming {
-        level: "token".to_string(),
-        source: "model".to_string(),
+        level: TranscriptTimingLevel::Token,
+        source: TranscriptTimingSource::Model,
         units,
     })
 }
 
 fn build_segment_timing(
     segment: &RecoveredTranscriptSegment,
-    source: &str,
+    source: TranscriptTimingSource,
 ) -> RecoveredTranscriptTiming {
     RecoveredTranscriptTiming {
-        level: "segment".to_string(),
-        source: source.to_string(),
+        level: TranscriptTimingLevel::Segment,
+        source,
         units: vec![RecoveredTranscriptTimingUnit {
             text: segment.text.clone(),
             start: segment.start,
@@ -434,40 +342,39 @@ fn normalize_timing_units(
         .collect()
 }
 
-fn is_valid_timing_source(source: &str) -> bool {
-    source == "model" || source == "derived"
-}
-
-fn normalize_source(raw_source: Option<&str>, automation_rule_id: Option<&String>) -> String {
+fn normalize_source(
+    raw_source: Option<&str>,
+    automation_rule_id: Option<&String>,
+) -> RecoverySource {
     match raw_source {
-        Some("automation") => "automation".to_string(),
-        Some("batch_import") => "batch_import".to_string(),
-        _ if automation_rule_id.is_some() => "automation".to_string(),
-        _ => "batch_import".to_string(),
+        Some("automation") => RecoverySource::Automation,
+        Some("batch_import") => RecoverySource::BatchImport,
+        _ if automation_rule_id.is_some() => RecoverySource::Automation,
+        _ => RecoverySource::BatchImport,
     }
 }
 
-fn normalize_resolution(raw_resolution: Option<&str>) -> String {
+fn normalize_resolution(raw_resolution: Option<&str>) -> RecoveryResolution {
     match raw_resolution {
-        Some("resumed") => "resumed".to_string(),
-        Some("discarded") => "discarded".to_string(),
-        _ => "pending".to_string(),
+        Some("resumed") => RecoveryResolution::Resumed,
+        Some("discarded") => RecoveryResolution::Discarded,
+        _ => RecoveryResolution::Pending,
     }
 }
 
-fn normalize_stage(raw_stage: Option<&str>) -> String {
+fn normalize_stage(raw_stage: Option<&str>) -> RecoveryItemStage {
     match raw_stage {
-        Some("transcribing") => "transcribing".to_string(),
-        Some("polishing") => "polishing".to_string(),
-        Some("translating") => "translating".to_string(),
-        Some("exporting") => "exporting".to_string(),
-        _ => "queued".to_string(),
+        Some("transcribing") => RecoveryItemStage::Transcribing,
+        Some("polishing") => RecoveryItemStage::Polishing,
+        Some("translating") => RecoveryItemStage::Translating,
+        Some("exporting") => RecoveryItemStage::Exporting,
+        _ => RecoveryItemStage::Queued,
     }
 }
 
 fn resolve_source_flags(
     file_path: &str,
-    resolution: &str,
+    resolution: RecoveryResolution,
     default_has_source_file: bool,
     default_can_resume: bool,
     source_paths: &impl SourcePathStatusProvider,
@@ -479,7 +386,7 @@ fn resolve_source_flags(
     };
 
     match status {
-        SourcePathStatus::File => (true, resolution == "pending"),
+        SourcePathStatus::File => (true, resolution == RecoveryResolution::Pending),
         SourcePathStatus::Directory | SourcePathStatus::Missing => (false, false),
         SourcePathStatus::Unknown => (default_has_source_file, default_can_resume),
     }

@@ -56,7 +56,7 @@ fn render_recovery_table(snapshot: &RecoverySnapshot) -> String {
             let values = [
                 item.id.clone(),
                 item.filename.clone(),
-                item.last_known_stage.clone(),
+                item.last_known_stage.to_string(),
                 format!("{:.0}%", item.progress.clamp(0.0, 100.0)),
                 if item.can_resume { "yes" } else { "no" }.to_string(),
             ];
