@@ -66,8 +66,11 @@ vi.mock('../../services/historyService', () => ({
     updateTranscript: vi.fn().mockResolvedValue(undefined),
     updateItemMeta: vi.fn().mockResolvedValue(undefined),
     updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
+    updateTagAssignments: vi.fn().mockResolvedValue(undefined),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteRecordings: vi.fn().mockResolvedValue(undefined),
+    restoreRecordings: vi.fn().mockResolvedValue(undefined),
+    purgeRecordings: vi.fn().mockResolvedValue(undefined),
     openHistoryFolder: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -101,21 +104,34 @@ vi.mock('../../services/tauri/history', () => {
       }
 
       const scopedItems = items.filter((item: any) => {
+        const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+        const isDeleted = item.deletedAt != null;
         if (scope.kind === 'all') {
-          return true;
+          return !isDeleted;
         }
-        if (scope.kind === 'inbox') {
-          return !item.projectId;
+        if (scope.kind === 'untagged') {
+          return !isDeleted && tagIds.length === 0;
         }
-        return item.projectId === scope.projectId;
+        if (scope.kind === 'trash') {
+          return isDeleted;
+        }
+        return !isDeleted && tagIds.includes(scope.tagId);
       });
-      const byProjectId: Record<string, number> = {};
-      let inbox = 0;
+      const byTagId: Record<string, number> = {};
+      let untagged = 0;
+      let trash = 0;
       items.forEach((item: any) => {
-        if (item.projectId) {
-          byProjectId[item.projectId] = (byProjectId[item.projectId] || 0) + 1;
+        if (item.deletedAt != null) {
+          trash += 1;
+          return;
+        }
+        const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+        if (tagIds.length > 0) {
+          tagIds.forEach((tagId: string) => {
+            byTagId[tagId] = (byTagId[tagId] || 0) + 1;
+          });
         } else {
-          inbox += 1;
+          untagged += 1;
         }
       });
 
@@ -126,8 +142,9 @@ vi.mock('../../services/tauri/history', () => {
         hasMore: false,
         summary: summarize(scopedItems),
         itemCounts: {
-          inbox,
-          byProjectId,
+          untagged,
+          trash,
+          byTagId,
         },
       };
     }),
@@ -369,13 +386,21 @@ describe('ProjectsView', () => {
     searchMatchByItemId?: Record<string, any>;
     allItems?: any[];
   }) => {
-    const byProjectId: Record<string, number> = {};
-    let inbox = 0;
+    const byTagId: Record<string, number> = {};
+    let untagged = 0;
+    let trash = 0;
     allItems.forEach((item) => {
-      if (item.projectId) {
-        byProjectId[item.projectId] = (byProjectId[item.projectId] || 0) + 1;
+      if (item.deletedAt != null) {
+        trash += 1;
+        return;
+      }
+      const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+      if (tagIds.length > 0) {
+        tagIds.forEach((tagId: string) => {
+          byTagId[tagId] = (byTagId[tagId] || 0) + 1;
+        });
       } else {
-        inbox += 1;
+        untagged += 1;
       }
     });
 
@@ -388,8 +413,9 @@ describe('ProjectsView', () => {
       hasMore: false,
       summary: summarizeWorkspaceItems(scopedItems),
       itemCounts: {
-        inbox,
-        byProjectId,
+        untagged,
+        trash,
+        byTagId,
       },
     };
   };
@@ -486,8 +512,8 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     expect(getButtonByContent('All Items')).toBeDefined();
-    expect(getButtonByContent('Inbox')).toBeDefined();
-    expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
+    expect(getButtonByContent('Untagged')).toBeDefined();
+    expect(screen.getAllByRole('button', { name: 'New Tag' })).toHaveLength(1);
   });
 
   it('loads the AI rename service only when the AI rename action is used', async () => {
@@ -595,13 +621,13 @@ describe('ProjectsView', () => {
 
     expect(screen.getByRole('menu', { name: 'Actions for Alpha' })).toBeDefined();
     expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Project Settings' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Tag Settings' })).toBeDefined();
 
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Project Settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
 
     await waitFor(() => {
       expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
-      expect(screen.getByText('Edit Project Defaults')).toBeDefined();
+      expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
     });
   });
 
@@ -786,7 +812,7 @@ describe('ProjectsView', () => {
     fireEvent.keyDown(projectButton, { key: 'F10', shiftKey: true });
 
     expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'Project Settings' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('disables other project actions during an active live draft', async () => {
@@ -819,7 +845,7 @@ describe('ProjectsView', () => {
 
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
     expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'Project Settings' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('locks only the current live draft actions when older live drafts remain', async () => {
@@ -1050,7 +1076,7 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     const allItemsButton = getButtonByContent('All Items');
-    const inboxButton = getButtonByContent('Inbox');
+    const inboxButton = getButtonByContent('Untagged');
     const projectButton = getButtonByContent('Alpha');
 
     expect(getRailItemIcon(allItemsButton)).not.toBeNull();
@@ -1066,7 +1092,7 @@ describe('ProjectsView', () => {
 
     await clickAsync(inboxButton);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Inbox' })).toBeDefined();
+      expect(screen.getByRole('heading', { name: 'Untagged' })).toBeDefined();
       expect(getMainTitleIcon()).not.toBeNull();
     });
 
@@ -1084,7 +1110,7 @@ describe('ProjectsView', () => {
 
     expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
     expect(screen.queryByTestId('projects-fab')).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Search Inbox...' })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Search Untagged...' })).toBeDefined();
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
     expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
@@ -1101,11 +1127,11 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Project' }));
-    fireEvent.change(screen.getByPlaceholderText('Project name'), {
+    fireEvent.click(screen.getByRole('button', { name: 'New Tag' }));
+    fireEvent.change(screen.getByPlaceholderText('Tag name'), {
       target: { value: 'New Workspace' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Tag' }));
 
     await waitFor(() => {
       expect(projectService.create).toHaveBeenCalled();
@@ -1120,7 +1146,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.change(await screen.findByDisplayValue('Alpha'), {
@@ -1135,7 +1161,7 @@ describe('ProjectsView', () => {
       );
     });
 
-    expect(screen.queryByText('Edit Project Defaults')).toBeNull();
+    expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
   });
 
   it('lets project settings override enabled polish keyword sets', async () => {
@@ -1145,7 +1171,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Brand Terms' }));
@@ -1176,25 +1202,25 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
     fireEvent.click(await screen.findByRole('button', { name: '📄' }));
 
-    fireEvent.click(getButtonByContent('Inbox'));
+    fireEvent.click(getButtonByContent('Untagged'));
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
-    expect(screen.getByText('Edit Project Defaults')).toBeDefined();
+    expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
 
-    fireEvent.click(getButtonByContent('Inbox'));
+    fireEvent.click(getButtonByContent('Untagged'));
     await waitFor(() => {
       expect(useProjectStore.getState().activeProjectId).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText('Edit Project Defaults')).toBeNull();
+    expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
   });
 
   it('guards closing project settings when icon-only edits are dirty', async () => {
@@ -1210,7 +1236,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
@@ -1220,11 +1246,11 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText('Edit Project Defaults')).toBeDefined();
+    expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => {
-      expect(screen.queryByText('Edit Project Defaults')).toBeNull();
+      expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
   });
@@ -1275,7 +1301,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
@@ -1287,7 +1313,7 @@ describe('ProjectsView', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
     expect(await screen.findByRole('button', { name: '🎯' })).toBeDefined();
@@ -1340,7 +1366,7 @@ describe('ProjectsView', () => {
     expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
     expect(screen.getByTestId('projects-summary-type-split').textContent).toBe('1 recordings / 1 imports');
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Project Settings' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tag Settings' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Start Live Record' })).toBeNull();
   });
 
@@ -1377,7 +1403,7 @@ describe('ProjectsView', () => {
     });
 
     expect(allItemsButton.className).toContain('active');
-    expect(screen.queryByRole('button', { name: 'Project Settings' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tag Settings' })).toBeNull();
   });
 
   it('opens a project item in the detail pane and closes it when switching out of scope', async () => {
@@ -1407,7 +1433,7 @@ describe('ProjectsView', () => {
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-1');
     });
 
-    await clickAsync(getButtonByContent('Inbox'));
+    await clickAsync(getButtonByContent('Untagged'));
 
     await waitFor(() => {
       expect(getDetailPlaceholder()).toBeNull();
@@ -1458,7 +1484,7 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('moves selected items from the active project back to Inbox', async () => {
+  it('removes a tag from selected items without replacing other assignments', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     useHistoryStore.setState({
       items: [
@@ -1482,10 +1508,101 @@ describe('ProjectsView', () => {
     await screen.findByText('Project Item');
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Move Selected' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Tags' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(['hist-1'], null);
+      expect(historyService.updateTagAssignments).toHaveBeenCalledWith(
+        ['hist-1'],
+        [],
+        ['project-1'],
+      );
+    });
+  });
+
+  it('keeps Trash items read-only and supports restore and permanent deletion', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-trash',
+          title: 'Discarded Item',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio.wav',
+          transcriptPath: 'hist-trash.json',
+          previewText: 'Preview',
+          tagIds: ['project-1'],
+          deletedAt: Date.now(),
+        },
+      ],
+    } as any);
+    const { historyService } = await import('../../services/historyService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+    await clickAsync(getButtonByContent('Trash'));
+
+    const historyItem = await screen.findByTestId('history-item-hist-trash');
+    expect(historyItem.dataset.loadDisabled).toBe('true');
+    expect(historyItem.dataset.renameDisabled).toBe('true');
+
+    fireEvent.contextMenu(historyItem, { clientX: 160, clientY: 220 });
+    expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Delete Permanently' })).toBeDefined();
+    expect(screen.queryByRole('menuitem', { name: 'Open' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
+    await waitFor(() => {
+      expect(historyService.restoreRecordings).toHaveBeenCalledWith(['hist-trash']);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-trash'), { clientX: 160, clientY: 220 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete Permanently' }));
+    await waitFor(() => {
+      expect(historyService.purgeRecordings).toHaveBeenCalledWith(['hist-trash']);
+    });
+  });
+
+  it('empties every item currently in Trash', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-trash-a',
+          title: 'Discarded A',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio-a.wav',
+          transcriptPath: 'hist-trash-a.json',
+          previewText: 'Preview',
+          deletedAt: Date.now(),
+        },
+        {
+          id: 'hist-trash-b',
+          title: 'Discarded B',
+          timestamp: Date.now() - 1,
+          duration: 12,
+          audioPath: 'audio-b.wav',
+          transcriptPath: 'hist-trash-b.json',
+          previewText: 'Preview',
+          deletedAt: Date.now(),
+        },
+      ],
+    } as any);
+    const { historyService } = await import('../../services/historyService');
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+    await clickAsync(getButtonByContent('Trash'));
+
+    await screen.findByTestId('history-item-hist-trash-a');
+    fireEvent.click(screen.getByRole('button', { name: 'Empty Trash' }));
+
+    await waitFor(() => {
+      expect(historyService.purgeRecordings).toHaveBeenCalledWith(['hist-trash-a', 'hist-trash-b']);
     });
   });
 
@@ -1730,7 +1847,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    const input = screen.getByRole('textbox', { name: 'Search Inbox...' });
+    const input = screen.getByRole('textbox', { name: 'Search Untagged...' });
     fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
 
     expect(document.activeElement).toBe(input);
@@ -2012,7 +2129,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(screen.getByText('No matching items')).toBeDefined();
       expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Move Selected' }).hasAttribute('disabled')).toBe(true);
+      expect(screen.getByRole('button', { name: 'Edit Tags' }).hasAttribute('disabled')).toBe(true);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));

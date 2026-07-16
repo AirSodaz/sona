@@ -15,6 +15,7 @@ use sona_core::runtime::diagnostics::{
     DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
 };
 use sona_core::runtime::environment::RuntimePathKind;
+use sona_core::tag::TagIdGenerator;
 use sona_core::transcription::runtime::{BatchInputSource, LiveTranscribeOptions};
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
@@ -68,7 +69,8 @@ fn native_automation_validation_entrypoint_probes_paths_and_prepares_export_dire
     std::fs::write(&model_path, b"model").unwrap();
     let rule: AutomationRule = serde_json::from_value(serde_json::json!({
         "name": "Rule",
-        "projectId": "inbox",
+        "saveHistory": true,
+        "tagIds": [],
         "watchDirectory": watch_directory,
         "stageConfig": {},
         "exportConfig": {
@@ -81,7 +83,7 @@ fn native_automation_validation_entrypoint_probes_paths_and_prepares_export_dire
     let result = validate_native_automation_rule_activation(
         &rule,
         &serde_json::json!({"offlineModelPath": model_path}),
-        None,
+        &[],
     );
 
     assert!(result.valid, "unexpected validation result: {result:?}");
@@ -111,6 +113,12 @@ fn uuid_generator_returns_distinct_uuid_v4_strings() {
 #[test]
 fn uuid_generator_implements_project_id_port() {
     let id = ProjectIdGenerator::generate_id(&UuidGenerator);
+    assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+}
+
+#[test]
+fn uuid_generator_implements_tag_id_port() {
+    let id = TagIdGenerator::generate_id(&UuidGenerator);
     assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
 }
 

@@ -114,8 +114,8 @@ pub struct OverviewStats {
     pub item_count: u64,
     pub item_count_display: String,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub project_count: u64,
-    pub project_count_display: String,
+    pub tag_count: u64,
+    pub tag_count_display: String,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub total_duration_seconds: f64,
     pub total_duration_display: String,
@@ -134,11 +134,11 @@ pub struct OverviewStats {
     pub batch_count: u64,
     pub batch_count_display: String,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub inbox_count: u64,
-    pub inbox_count_display: String,
+    pub untagged_count: u64,
+    pub untagged_count_display: String,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub project_assigned_count: u64,
-    pub project_assigned_count_display: String,
+    pub tagged_count: u64,
+    pub tagged_count_display: String,
     pub recent_daily_items: Vec<ContentTrendPoint>,
     pub is_deep_loaded: bool,
 }

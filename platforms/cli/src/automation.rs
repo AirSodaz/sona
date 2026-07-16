@@ -54,7 +54,7 @@ fn run_automation_list(args: AutomationListArgs) -> CliResult<CliOutput> {
 
 fn render_automation_table(state: &AutomationRepositoryState) -> String {
     let rows = state.rules.iter().map(rule_row).collect::<Vec<_>>();
-    let headers = ["ID", "NAME", "PROJECT", "ENABLED", "WATCH"];
+    let headers = ["ID", "NAME", "TAGS", "ENABLED", "WATCH"];
     let widths = column_widths(&headers, &rows);
 
     let mut output = String::new();
@@ -81,7 +81,7 @@ fn rule_row(rule: &AutomationRuleRecord) -> [String; 5] {
     [
         sanitize_table_cell(&rule.id),
         sanitize_table_cell(&rule.name),
-        sanitize_table_cell(&rule.project_id),
+        sanitize_table_cell(&rule.tag_ids.join(",")),
         rule.enabled.to_string(),
         sanitize_table_cell(&rule.watch_directory),
     ]

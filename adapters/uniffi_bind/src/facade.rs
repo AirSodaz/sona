@@ -11,7 +11,7 @@ use crate::{
     backup_bridge, config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge,
     history_mutation_bridge, history_query_bridge, llm_bridge, llm_runtime_bridge, llm_task_bridge,
     model_bridge, project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge,
-    task_ledger_bridge,
+    tag_bridge, task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -63,6 +63,47 @@ impl SonaCoreFacade {
         project_id: Option<String>,
     ) -> SonaCoreBindingResult<()> {
         project_bridge::set_active_project_id(app_data_dir, project_id)
+    }
+
+    pub fn load_tag_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+        tag_bridge::load_tag_repository_state_json(app_data_dir)
+    }
+
+    pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
+        tag_bridge::replace_tags_json(app_data_dir, tags_json)
+    }
+
+    pub fn create_tag_json(
+        app_data_dir: String,
+        input_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        tag_bridge::create_tag_json(app_data_dir, input_json)
+    }
+
+    pub fn update_tag_json(
+        app_data_dir: String,
+        tag_id: String,
+        updates_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        tag_bridge::update_tag_json(app_data_dir, tag_id, updates_json)
+    }
+
+    pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
+        tag_bridge::delete_tag(app_data_dir, tag_id)
+    }
+
+    pub fn reorder_tags_json(
+        app_data_dir: String,
+        tag_ids_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        tag_bridge::reorder_tags_json(app_data_dir, tag_ids_json)
+    }
+
+    pub fn set_active_tag_id(
+        app_data_dir: String,
+        tag_id: Option<String>,
+    ) -> SonaCoreBindingResult<()> {
+        tag_bridge::set_active_tag_id(app_data_dir, tag_id)
     }
 
     pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
@@ -281,6 +322,27 @@ impl SonaCoreFacade {
         history_mutation_bridge::delete_history_items_json(app_data_dir, request_json).await
     }
 
+    pub async fn trash_history_items_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::trash_history_items_json(app_data_dir, request_json).await
+    }
+
+    pub async fn restore_history_items_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::restore_history_items_json(app_data_dir, request_json).await
+    }
+
+    pub async fn purge_history_items_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::purge_history_items_json(app_data_dir, request_json).await
+    }
+
     pub async fn update_history_transcript_json(
         app_data_dir: String,
         request_json: String,
@@ -308,6 +370,22 @@ impl SonaCoreFacade {
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::update_history_project_assignments_json(app_data_dir, request_json)
+            .await
+    }
+
+    pub async fn update_history_tag_assignments_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::update_history_tag_assignments_json(app_data_dir, request_json)
+            .await
+    }
+
+    pub async fn replace_history_tag_assignments_json(
+        app_data_dir: String,
+        request_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        history_mutation_bridge::replace_history_tag_assignments_json(app_data_dir, request_json)
             .await
     }
 

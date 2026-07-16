@@ -120,7 +120,7 @@ impl<'a> BackupService<'a> {
         } = session;
         let BackupDataset {
             config,
-            projects,
+            tags,
             history,
             automation,
             analytics_content,
@@ -133,7 +133,7 @@ impl<'a> BackupService<'a> {
             import_id,
             manifest,
             config_state,
-            projects,
+            tags,
             history,
             automation,
             analytics_content,
@@ -171,7 +171,7 @@ fn manifest_for_dataset(
     build_backup_manifest(
         created_at_ms,
         app_version,
-        dataset.projects.len(),
+        dataset.tags.len(),
         dataset.history.items.len(),
         dataset.history.transcript_files.len(),
         dataset.history.summary_files.len(),
@@ -205,11 +205,7 @@ fn validate_preview(preview: &PreparedBackupImport) -> Result<(), BackupError> {
     validate_backup_manifest(&preview.manifest)?;
     ensure_config_object(&preview.config)?;
     ensure_analytics_json(&preview.analytics_content)?;
-    ensure_count(
-        preview.manifest.counts.projects,
-        preview.projects.len(),
-        "project",
-    )?;
+    ensure_count(preview.manifest.counts.tags, preview.tags.len(), "tag")?;
     ensure_count(
         preview.manifest.counts.automation_rules,
         preview.automation_rules.len(),
@@ -232,7 +228,7 @@ fn validate_manifest_counts(
     manifest: &BackupManifest,
     dataset: &BackupDataset,
 ) -> Result<(), BackupError> {
-    ensure_count(manifest.counts.projects, dataset.projects.len(), "project")?;
+    ensure_count(manifest.counts.tags, dataset.tags.len(), "tag")?;
     ensure_count(
         manifest.counts.history_items,
         dataset.history.items.len(),

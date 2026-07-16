@@ -64,8 +64,8 @@ pub(crate) fn validate_automation_rule_activation_json(
         .as_deref()
         .map(|json| parse_json_object("project", json))
         .transpose()?;
-    let result =
-        validate_native_automation_rule_activation(&rule, &global_config, project.as_ref());
+    let tags = project.into_iter().collect::<Vec<_>>();
+    let result = validate_native_automation_rule_activation(&rule, &global_config, &tags);
     serialize_automation(result)
 }
 
@@ -128,10 +128,21 @@ fn parse_state_array(state: &Value, field: &str) -> SonaCoreBindingResult<Vec<Va
 fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
     let stage = value.get("stageConfig").unwrap_or(&Value::Null);
     let export = value.get("exportConfig").unwrap_or(&Value::Null);
+    let legacy_project_id = string_field(value, "projectId", "");
     AutomationRuleInput {
         id: optional_string_field(value, "id"),
         name: string_field(value, "name", ""),
-        project_id: string_field(value, "projectId", ""),
+        save_history: value
+            .get("saveHistory")
+            .and_then(Value::as_bool)
+            .unwrap_or(legacy_project_id != "none"),
+        tag_ids: string_array_field(value, "tagIds").unwrap_or_else(|| {
+            if matches!(legacy_project_id.as_str(), "" | "inbox" | "none") {
+                Vec::new()
+            } else {
+                vec![legacy_project_id]
+            }
+        }),
         preset_id: string_field(value, "presetId", "custom"),
         watch_directory: string_field(value, "watchDirectory", ""),
         recursive: bool_field(value, "recursive"),
@@ -183,6 +194,16 @@ fn optional_string_field(value: &Value, key: &str) -> Option<String> {
         .get(key)
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
+}
+
+fn string_array_field(value: &Value, key: &str) -> Option<Vec<String>> {
+    value.get(key)?.as_array().map(|values| {
+        values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect()
+    })
 }
 
 fn bool_field(value: &Value, key: &str) -> bool {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sona_core::dashboard::models::{DashboardUsageBucket, LlmUsageDashboardStats};
-use sona_core::dashboard::ports::{AnalyticsRepository, HistoryRepository, ProjectRepository};
+use sona_core::dashboard::ports::{AnalyticsRepository, HistoryRepository, TagRepository};
 use sona_core::dashboard::{DashboardService, DashboardServiceError, DashboardSnapshotTime};
 use sona_core::history::{
     HistoryAudioStatus, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
@@ -32,11 +32,11 @@ impl HistoryRepository for TestHistoryRepository {
     }
 }
 
-struct TestProjectRepository;
+struct TestTagRepository;
 
 #[async_trait]
-impl ProjectRepository for TestProjectRepository {
-    async fn count_projects(&self) -> Result<u64, DashboardServiceError> {
+impl TagRepository for TestTagRepository {
+    async fn count_tags(&self) -> Result<u64, DashboardServiceError> {
         Ok(3)
     }
 }
@@ -84,7 +84,7 @@ fn snapshot_time() -> DashboardSnapshotTime {
     }
 }
 
-fn history_item(id: &str, kind: HistoryItemKind, project_id: Option<&str>) -> HistoryItemRecord {
+fn history_item(id: &str, kind: HistoryItemKind, tag_id: Option<&str>) -> HistoryItemRecord {
     HistoryItemRecord {
         id: id.to_string(),
         timestamp: 1_783_441_800_000,
@@ -97,7 +97,8 @@ fn history_item(id: &str, kind: HistoryItemKind, project_id: Option<&str>) -> Hi
         icon: None,
         kind,
         search_content: String::new(),
-        project_id: project_id.map(str::to_string),
+        tag_ids: tag_id.map(str::to_string).into_iter().collect(),
+        deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
     }
@@ -109,11 +110,11 @@ async fn dashboard_service_uses_core_ports_for_shallow_snapshot() {
         Arc::new(TestHistoryRepository {
             items: vec![
                 history_item("recording", HistoryItemKind::Recording, None),
-                history_item("batch", HistoryItemKind::Batch, Some("project-1")),
+                history_item("batch", HistoryItemKind::Batch, Some("tag-1")),
             ],
             transcripts: vec![],
         }),
-        Arc::new(TestProjectRepository),
+        Arc::new(TestTagRepository),
         Arc::new(TestAnalyticsRepository),
     );
 
@@ -125,9 +126,9 @@ async fn dashboard_service_uses_core_ports_for_shallow_snapshot() {
     assert_eq!(snapshot.content.overview.item_count, 2);
     assert_eq!(snapshot.content.overview.recording_count, 1);
     assert_eq!(snapshot.content.overview.batch_count, 1);
-    assert_eq!(snapshot.content.overview.project_count, 3);
-    assert_eq!(snapshot.content.overview.inbox_count, 1);
-    assert_eq!(snapshot.content.overview.project_assigned_count, 1);
+    assert_eq!(snapshot.content.overview.tag_count, 3);
+    assert_eq!(snapshot.content.overview.untagged_count, 1);
+    assert_eq!(snapshot.content.overview.tagged_count, 1);
     assert_eq!(snapshot.llm_usage.totals.total_tokens, 30);
     assert!(snapshot.content.speakers.is_none());
     assert_eq!(
@@ -149,7 +150,7 @@ async fn dashboard_service_uses_supplied_snapshot_time() {
             items: vec![],
             transcripts: vec![],
         }),
-        Arc::new(TestProjectRepository),
+        Arc::new(TestTagRepository),
         Arc::new(TestAnalyticsRepository),
     );
 
@@ -222,7 +223,7 @@ async fn dashboard_service_aggregates_deep_transcript_speaker_stats_from_core_po
                 ],
             )],
         }),
-        Arc::new(TestProjectRepository),
+        Arc::new(TestTagRepository),
         Arc::new(TestAnalyticsRepository),
     );
 

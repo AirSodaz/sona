@@ -594,7 +594,7 @@ describe('tauri boundary wrappers', () => {
     await historySaveRecording({
       segments: [],
       duration: 3,
-      projectId: 'project-1',
+      tagIds: ['project-1'],
       audioBytes: [1, 2, 3],
       audioExtension: 'webm',
     });
@@ -609,13 +609,13 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.createLiveDraft, {
       id: null,
       audioExtension: 'webm',
-      projectId: 'project-1',
+      tagIds: ['project-1'],
       icon: 'system:mic',
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.saveRecording, {
       segments: [],
       duration: 3,
-      projectId: 'project-1',
+      tagIds: ['project-1'],
       audioBytes: [1, 2, 3],
       audioExtension: 'webm',
     });
@@ -623,7 +623,7 @@ describe('tauri boundary wrappers', () => {
       sourcePath: 'D:/audio/meeting.mp3',
       segments: [],
       duration: 4,
-      projectId: null,
+      tagIds: [],
       convertedSourcePath: 'C:/Temp/meeting.wav',
     });
   });
@@ -1040,7 +1040,8 @@ describe('tauri boundary wrappers', () => {
     const rule = {
       id: 'rule-1',
       name: 'Inbox',
-      projectId: 'project-1',
+      saveHistory: true,
+      tagIds: ['project-1'],
       presetId: 'custom',
       watchDirectory: 'C:/watch',
       recursive: true,
@@ -1115,7 +1116,7 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.automationRepository.validateActivation, {
       rule,
       globalConfig: {},
-      project: null,
+      tags: [],
     });
   });
 
@@ -1128,7 +1129,7 @@ describe('tauri boundary wrappers', () => {
       resolution: 'pending',
       progress: 10,
       segments: [],
-      projectId: null,
+      tagIds: [],
       lastKnownStage: 'queued',
       updatedAt: 100,
       hasSourceFile: true,

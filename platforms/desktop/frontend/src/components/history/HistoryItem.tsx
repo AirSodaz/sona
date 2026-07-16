@@ -146,12 +146,36 @@ function HistoryItemComponent({
 }: HistoryItemProps): React.JSX.Element {
     const { t, i18n } = useTranslation();
     const contentButtonRef = React.useRef<HTMLButtonElement>(null);
-    const projectName = useProjectStore((state) => {
-        if (!item.projectId) {
-            return t('projects.inbox', { defaultValue: 'Inbox' });
-        }
-        return state.projects.find((project) => project.id === item.projectId)?.name || t('projects.unknown_project', { defaultValue: 'Unknown Project' });
-    });
+    const projects = useProjectStore((state) => state.projects);
+    const itemTags = React.useMemo(() => {
+        const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+        return itemTagIds
+            .map((tagId) => projects.find((tag) => tag.id === tagId))
+            .filter((tag): tag is NonNullable<typeof tag> => !!tag);
+    }, [item.projectId, item.tagIds, projects]);
+    const visibleTags = itemTags.slice(0, 2);
+    const hiddenTagCount = Math.max(0, itemTags.length - visibleTags.length);
+    const tagChips = (
+        <span className="history-item-tag-chips">
+            {visibleTags.length === 0 && (
+                <span className="history-item-project-badge">
+                    {t('projects.untagged', { defaultValue: 'Untagged' })}
+                </span>
+            )}
+            {visibleTags.map((tag) => (
+                <span
+                    key={tag.id}
+                    className="history-item-project-badge"
+                    style={{ borderColor: tag.color, color: tag.color }}
+                >
+                    {tag.name}
+                </span>
+            ))}
+            {hiddenTagCount > 0 && (
+                <span className="history-item-project-badge">+{hiddenTagCount}</span>
+            )}
+        </span>
+    );
     const itemTypeLabel = item.type === 'batch'
         ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
         : t('projects.filter_recordings', { defaultValue: 'Recordings' });
@@ -257,15 +281,13 @@ function HistoryItemComponent({
                     )}
 
                     {layout !== 'table' && showProjectBadge && (
-                        <span className="history-item-project-badge">
-                            {projectName}
-                        </span>
+                        tagChips
                     )}
                 </div>
 
                 {layout === 'table' && showProjectBadge && (
                     <div className="history-item-table-cell history-item-table-project" role="cell">
-                        <span className="history-item-project-badge">{projectName}</span>
+                        {tagChips}
                     </div>
                 )}
 

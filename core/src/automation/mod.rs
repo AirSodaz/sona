@@ -15,8 +15,10 @@ pub mod service;
 pub struct AutomationRule {
     #[serde(default)]
     pub name: String,
+    #[serde(default = "default_save_history")]
+    pub save_history: bool,
     #[serde(default)]
-    pub project_id: String,
+    pub tag_ids: Vec<String>,
     #[serde(default)]
     pub watch_directory: String,
     #[serde(default)]
@@ -145,15 +147,18 @@ const SUPPORTED_MEDIA_EXTENSIONS: &[&str] = &[
 pub fn validate_rule_activation(
     rule: &AutomationRule,
     global_config: &Value,
-    project: Option<&Value>,
+    tags: &[Value],
     environment: AutomationRuleActivationEnvironment,
 ) -> AutomationRuleValidationResult {
     if rule.name.trim().is_empty() {
         return invalid_validation("automation.name_required", "Rule name is required.");
     }
 
-    if project.is_none() && !is_virtual_automation_project(&rule.project_id) {
-        return invalid_validation("automation.project_missing", "Select a target project.");
+    if rule.save_history && !automation_tags_exist(&rule.tag_ids, tags) {
+        return invalid_validation(
+            "automation.tag_missing",
+            "One or more selected tags are missing.",
+        );
     }
 
     let watch_directory = rule.watch_directory.trim();
@@ -235,8 +240,15 @@ pub fn normalize_automation_path(path: &str) -> String {
         .to_lowercase()
 }
 
-pub fn is_virtual_automation_project(project_id: &str) -> bool {
-    matches!(project_id, "inbox" | "none")
+fn default_save_history() -> bool {
+    true
+}
+
+fn automation_tags_exist(tag_ids: &[String], tags: &[Value]) -> bool {
+    tag_ids.iter().all(|tag_id| {
+        tags.iter()
+            .any(|tag| tag.get("id").and_then(Value::as_str) == Some(tag_id.as_str()))
+    })
 }
 
 pub fn resolve_batch_model_path(global_config: &Value) -> Option<String> {

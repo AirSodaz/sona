@@ -159,7 +159,7 @@ fn normalization_uses_all_designed_defaults() {
     assert_eq!(
         serde_json::to_value(&state.rules[0]).unwrap(),
         json!({
-            "id": "rule-1", "name": "", "projectId": "", "presetId": "custom",
+            "id": "rule-1", "name": "", "saveHistory": true, "tagIds": [], "presetId": "custom",
             "watchDirectory": "", "recursive": false, "enabled": false,
             "stageConfig": {
                 "autoPolish": false, "polishPresetId": "general", "autoTranslate": false,
@@ -285,7 +285,7 @@ fn validation_prepares_export_directory_only_after_safe_preconditions() {
     let result = service.validate_rule_activation(
         &rule,
         &json!({"offlineModelPath":"C:\\models\\batch"}),
-        Some(&json!({"id":"project-1"})),
+        &[json!({"id":"tag-1"})],
     );
     assert!(result.valid);
     assert_eq!(fs.created.lock().unwrap().as_slice(), ["C:\\exports"]);
@@ -302,12 +302,12 @@ fn invalid_name_does_not_create_export_directory() {
 }
 
 #[test]
-fn missing_project_does_not_create_export_directory() {
+fn missing_tag_does_not_create_export_directory() {
     assert_precondition_invalid(
         |_| {},
         None,
-        "automation.project_missing",
-        "Select a target project.",
+        "automation.tag_missing",
+        "One or more selected tags are missing.",
     );
 }
 
@@ -315,7 +315,7 @@ fn missing_project_does_not_create_export_directory() {
 fn empty_watch_path_does_not_create_export_directory() {
     assert_precondition_invalid(
         |rule| rule.watch_directory.clear(),
-        Some(json!({})),
+        Some(json!({"id": "tag-1"})),
         "automation.watch_directory_required",
         "Choose a watch directory.",
     );
@@ -325,7 +325,7 @@ fn empty_watch_path_does_not_create_export_directory() {
 fn empty_export_path_does_not_create_export_directory() {
     assert_precondition_invalid(
         |rule| rule.export_config.directory.clear(),
-        Some(json!({})),
+        Some(json!({"id": "tag-1"})),
         "automation.output_directory_required",
         "Choose an output directory.",
     );
@@ -338,7 +338,7 @@ fn equal_normalized_paths_do_not_create_export_directory() {
             rule.watch_directory = " C:/WATCH/ ".into();
             rule.export_config.directory = "c:\\watch".into();
         },
-        Some(json!({})),
+        Some(json!({"id": "tag-1"})),
         "automation.same_directory",
         "Watch and output directories must be different.",
     );
@@ -353,7 +353,7 @@ fn missing_watch_directory_does_not_create_export_directory() {
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &sample_rule("C:\\missing", "C:\\exports"),
         &online_config(),
-        Some(&json!({})),
+        &[json!({"id":"tag-1"})],
     );
 
     assert_invalid(
@@ -374,7 +374,7 @@ fn export_directory_creation_failure_preserves_validation_result() {
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &sample_rule("C:\\watch", "C:\\exports"),
         &online_config(),
-        Some(&json!({})),
+        &[json!({"id":"tag-1"})],
     );
 
     assert_invalid(
@@ -395,7 +395,7 @@ fn existing_export_path_still_requires_successful_directory_creation() {
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &sample_rule("C:\\watch", "C:\\exports"),
         &online_config(),
-        Some(&json!({})),
+        &[json!({"id":"tag-1"})],
     );
 
     assert_invalid(
@@ -416,7 +416,7 @@ fn local_batch_model_path_existence_is_queried() {
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &sample_rule("C:\\watch", "C:\\exports"),
         &json!({"offlineModelPath": " C:\\models\\missing "}),
-        Some(&json!({})),
+        &[json!({"id":"tag-1"})],
     );
 
     assert_invalid(
@@ -442,7 +442,7 @@ fn online_asr_does_not_require_a_local_model() {
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &sample_rule("C:\\watch", "C:\\exports"),
         &online_config(),
-        Some(&json!({})),
+        &[json!({"id":"tag-1"})],
     );
 
     assert!(result.valid, "{result:?}");
@@ -458,7 +458,8 @@ fn online_asr_does_not_require_a_local_model() {
 fn sample_rule(watch_directory: &str, export_directory: &str) -> AutomationRule {
     AutomationRule {
         name: "Rule".into(),
-        project_id: "project-1".into(),
+        save_history: true,
+        tag_ids: vec!["tag-1".into()],
         watch_directory: watch_directory.into(),
         stage_config: AutomationRuleStageConfig {
             auto_polish: false,
@@ -492,7 +493,7 @@ fn assert_invalid(
 
 fn assert_precondition_invalid(
     mutate: impl FnOnce(&mut AutomationRule),
-    project: Option<Value>,
+    tag: Option<Value>,
     code: &str,
     message: &str,
 ) {
@@ -500,10 +501,11 @@ fn assert_precondition_invalid(
     let mut rule = sample_rule("C:\\watch", "C:\\exports");
     mutate(&mut rule);
 
+    let tags = tag.into_iter().collect::<Vec<_>>();
     let result = AutomationValidationService::new(&fs).validate_rule_activation(
         &rule,
         &online_config(),
-        project.as_ref(),
+        &tags,
     );
 
     assert_invalid(&result, code, message);
@@ -520,7 +522,7 @@ fn processed_input(value: Value) -> AutomationProcessedInput {
 
 fn rule_record_with(overrides: impl FnOnce(&mut AutomationRuleRecord)) -> AutomationRuleRecord {
     let mut rule: AutomationRuleRecord = serde_json::from_value(json!({
-        "id": "rule-1", "name": "Rule", "projectId": "project-1", "presetId": "custom",
+        "id": "rule-1", "name": "Rule", "saveHistory": true, "tagIds": ["tag-1"], "presetId": "custom",
         "watchDirectory": "C:\\watch", "recursive": false, "enabled": false,
         "stageConfig": {
             "autoPolish": false, "polishPresetId": "general", "autoTranslate": false,

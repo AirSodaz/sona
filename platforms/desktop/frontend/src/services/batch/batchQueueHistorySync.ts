@@ -7,6 +7,7 @@ export interface SavedBatchHistoryMeta {
   title: string;
   icon: string | null;
   projectId: string | null;
+  tagIds?: string[];
   audioUrl?: string | null;
 }
 
@@ -37,6 +38,8 @@ export async function resolveSavedBatchHistoryMeta({
     title: historyItem.title,
     icon: historyItem.icon || null,
     projectId: historyItem.projectId ?? fallbackProjectId ?? null,
+    tagIds: historyItem.tagIds
+      ?? (historyItem.projectId ? [historyItem.projectId] : fallbackProjectId ? [fallbackProjectId] : []),
     audioUrl: historyAudioUrl || null,
   };
 }
@@ -54,6 +57,7 @@ export function applySavedBatchHistoryToQueue(
         historyTitle: meta.title,
         audioUrl: meta.audioUrl ?? queueItem.audioUrl,
         projectId: meta.projectId ?? queueItem.projectId,
+        tagIds: meta.tagIds ?? queueItem.tagIds ?? [],
       }
       : queueItem
   ));

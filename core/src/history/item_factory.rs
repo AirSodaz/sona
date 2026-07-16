@@ -27,7 +27,7 @@ pub fn create_live_draft_item(
         &audio_extension,
         recording_title,
         HistoryItemKind::Recording,
-        request.project_id,
+        request.tag_ids,
         request.icon,
     );
     item.status = HistoryItemStatus::Draft;
@@ -38,7 +38,7 @@ pub fn create_live_draft_item(
 pub fn create_recording_item(
     generated: HistoryItemGeneratedValues,
     duration: f64,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     audio_extension: Option<&str>,
     native_audio_path: Option<&str>,
 ) -> Result<HistoryItemRecord, String> {
@@ -57,7 +57,7 @@ pub fn create_recording_item(
         &audio_extension,
         recording_title,
         HistoryItemKind::Recording,
-        project_id,
+        tag_ids,
         None,
     ))
 }
@@ -72,7 +72,7 @@ pub fn create_imported_file_item(
     source_path: String,
     converted_source_path: Option<String>,
     duration: f64,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     generated: HistoryItemGeneratedValues,
 ) -> Result<ImportedFileItem, String> {
     let timestamp = generated.timestamp;
@@ -87,7 +87,7 @@ pub fn create_imported_file_item(
         &audio_extension,
         format!("Batch {title_file_name}"),
         HistoryItemKind::Batch,
-        project_id,
+        tag_ids,
         None,
     );
     Ok(ImportedFileItem {
@@ -135,7 +135,7 @@ fn build_history_item_record(
     audio_extension: &str,
     title: String,
     kind: HistoryItemKind,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     icon: Option<String>,
 ) -> HistoryItemRecord {
     HistoryItemRecord {
@@ -150,7 +150,8 @@ fn build_history_item_record(
         icon,
         kind,
         search_content: String::new(),
-        project_id,
+        tag_ids,
+        deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
     }

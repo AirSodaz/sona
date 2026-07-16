@@ -43,6 +43,18 @@ pub struct HistoryDeleteItemsRequest {
     pub ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTrashItemsRequest {
+    pub ids: Vec<String>,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub deleted_at: u64,
+}
+
+pub type HistoryRestoreItemsRequest = HistoryDeleteItemsRequest;
+pub type HistoryPurgeItemsRequest = HistoryDeleteItemsRequest;
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -97,13 +109,6 @@ pub struct HistoryItemMetaPatch {
     pub kind: Option<HistoryItemKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub search_content: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
-    pub project_id: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<HistoryItemStatus>,
     #[serde(
@@ -129,17 +134,18 @@ pub struct HistoryUpdateItemMetaRequest {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
-pub struct HistoryUpdateProjectAssignmentsRequest {
+pub struct HistoryUpdateTagAssignmentsRequest {
     pub ids: Vec<String>,
-    pub project_id: Option<String>,
+    pub add_tag_ids: Vec<String>,
+    pub remove_tag_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
-pub struct HistoryReassignProjectRequest {
-    pub current_project_id: String,
-    pub next_project_id: Option<String>,
+pub struct HistoryReplaceTagAssignmentsRequest {
+    pub ids: Vec<String>,
+    pub tag_ids: Vec<String>,
 }
 
 pub trait HistoryMutationRepository: Send + Sync {
@@ -163,7 +169,14 @@ pub trait HistoryMutationRepository: Send + Sync {
         request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, HistoryMutationError>;
 
-    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError>;
+    fn trash_items(&self, request: HistoryTrashItemsRequest) -> Result<(), HistoryMutationError>;
+
+    fn restore_items(
+        &self,
+        request: HistoryRestoreItemsRequest,
+    ) -> Result<(), HistoryMutationError>;
+
+    fn purge_items(&self, request: HistoryPurgeItemsRequest) -> Result<(), HistoryMutationError>;
 
     fn update_transcript(
         &self,
@@ -180,13 +193,13 @@ pub trait HistoryMutationRepository: Send + Sync {
         request: HistoryUpdateItemMetaRequest,
     ) -> Result<(), HistoryMutationError>;
 
-    fn update_project_assignments(
+    fn update_tag_assignments(
         &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
+        request: HistoryUpdateTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError>;
 
-    fn reassign_project(
+    fn replace_tag_assignments(
         &self,
-        request: HistoryReassignProjectRequest,
+        request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError>;
 }

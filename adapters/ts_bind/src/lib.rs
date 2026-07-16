@@ -27,8 +27,8 @@ pub use sona_core::export::{
 };
 pub use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReassignProjectRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
+    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
 pub use sona_core::history::{
@@ -91,6 +91,10 @@ pub use sona_core::storage_usage::{
     AudioUsageCategory, DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry,
     SQLiteUsageSummary, StorageUsageCategories, StorageUsageSnapshot,
     WebviewBrowsingDataClearResult, WebviewCacheUsageCategory,
+};
+pub use sona_core::tag::{
+    TagCreateInput, TagDefaults, TagDefaultsInput, TagDefaultsPatch, TagRecord,
+    TagRepositorySnapshot, TagUpdateInput,
 };
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
@@ -248,6 +252,14 @@ pub fn validate_project_record_for_typescript(record: &ProjectRecord) -> Result<
 }
 
 pub fn validate_project_records_for_typescript(records: &[ProjectRecord]) -> Result<(), String> {
+    validate_typescript_safe_integers(records)
+}
+
+pub fn validate_tag_record_for_typescript(record: &TagRecord) -> Result<(), String> {
+    validate_typescript_safe_integers(record)
+}
+
+pub fn validate_tag_records_for_typescript(records: &[TagRecord]) -> Result<(), String> {
     validate_typescript_safe_integers(records)
 }
 
@@ -501,6 +513,13 @@ pub fn desktop_types() -> specta::Types {
         .register::<ProjectUpdateInput>()
         .register::<ProjectRecord>()
         .register::<ProjectRepositorySnapshot>()
+        .register::<TagDefaultsInput>()
+        .register::<TagCreateInput>()
+        .register::<TagDefaults>()
+        .register::<TagDefaultsPatch>()
+        .register::<TagUpdateInput>()
+        .register::<TagRecord>()
+        .register::<TagRepositorySnapshot>()
         .register::<AutomationRuleInputStageConfig>()
         .register::<AutomationRuleInputExportConfig>()
         .register::<AutomationRuleInput>()
@@ -546,8 +565,9 @@ pub fn desktop_types() -> specta::Types {
         .register::<HistoryCreateTranscriptSnapshotRequest>()
         .register::<HistoryItemMetaPatch>()
         .register::<HistoryUpdateItemMetaRequest>()
-        .register::<HistoryUpdateProjectAssignmentsRequest>()
-        .register::<HistoryReassignProjectRequest>()
+        .register::<HistoryTrashItemsRequest>()
+        .register::<HistoryUpdateTagAssignmentsRequest>()
+        .register::<HistoryReplaceTagAssignmentsRequest>()
         .register::<HistoryAudioCleanupRequest>()
         .register::<HistoryAudioCleanupReport>()
         .register::<RecoverySource>()
@@ -665,6 +685,13 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ProjectUpdateInput",
     "ProjectRecord",
     "ProjectRepositorySnapshot",
+    "TagDefaultsInput",
+    "TagCreateInput",
+    "TagDefaults",
+    "TagDefaultsPatch",
+    "TagUpdateInput",
+    "TagRecord",
+    "TagRepositorySnapshot",
     "AutomationRuleInputStageConfig",
     "AutomationRuleInputExportConfig",
     "AutomationRuleInput",
@@ -710,8 +737,9 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "HistoryCreateTranscriptSnapshotRequest",
     "HistoryItemMetaPatch",
     "HistoryUpdateItemMetaRequest",
-    "HistoryUpdateProjectAssignmentsRequest",
-    "HistoryReassignProjectRequest",
+    "HistoryTrashItemsRequest",
+    "HistoryUpdateTagAssignmentsRequest",
+    "HistoryReplaceTagAssignmentsRequest",
     "HistoryAudioCleanupRequest",
     "HistoryAudioCleanupReport",
     "RecoverySource",
@@ -1009,7 +1037,8 @@ mod tests {
             icon: None,
             kind: HistoryItemKind::Recording,
             search_content: "hello".to_string(),
-            project_id: None,
+            tag_ids: Vec::new(),
+            deleted_at: None,
             status: HistoryItemStatus::Complete,
             draft_source: None,
         };
@@ -1284,6 +1313,13 @@ mod tests {
         assert_specta_type::<ProjectUpdateInput>();
         assert_specta_type::<ProjectRecord>();
         assert_specta_type::<ProjectRepositorySnapshot>();
+        assert_specta_type::<TagDefaultsInput>();
+        assert_specta_type::<TagCreateInput>();
+        assert_specta_type::<TagDefaults>();
+        assert_specta_type::<TagDefaultsPatch>();
+        assert_specta_type::<TagUpdateInput>();
+        assert_specta_type::<TagRecord>();
+        assert_specta_type::<TagRepositorySnapshot>();
         assert_specta_type::<AutomationRuleInputStageConfig>();
         assert_specta_type::<AutomationRuleInputExportConfig>();
         assert_specta_type::<AutomationRuleInput>();
@@ -1329,8 +1365,9 @@ mod tests {
         assert_specta_type::<HistoryCreateTranscriptSnapshotRequest>();
         assert_specta_type::<HistoryItemMetaPatch>();
         assert_specta_type::<HistoryUpdateItemMetaRequest>();
-        assert_specta_type::<HistoryUpdateProjectAssignmentsRequest>();
-        assert_specta_type::<HistoryReassignProjectRequest>();
+        assert_specta_type::<HistoryTrashItemsRequest>();
+        assert_specta_type::<HistoryUpdateTagAssignmentsRequest>();
+        assert_specta_type::<HistoryReplaceTagAssignmentsRequest>();
         assert_specta_type::<HistoryAudioCleanupRequest>();
         assert_specta_type::<HistoryAudioCleanupReport>();
         assert_specta_type::<RecoverySource>();

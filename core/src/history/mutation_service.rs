@@ -2,10 +2,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
-    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
+    HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
+    HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use crate::history::transcript_payload::canonicalize_history_transcript_segments;
 use crate::history::{
@@ -31,7 +32,7 @@ impl HistoryMutationService {
     ) -> Result<LiveRecordingDraftResult, HistoryMutationError> {
         validate_optional_history_id("history ID", request.id.as_deref())?;
         validate_audio_extension("audio extension", &request.audio_extension)?;
-        validate_optional_opaque_id("project ID", request.project_id.as_deref())?;
+        validate_tag_ids(&request.tag_ids)?;
         self.repository.create_live_draft(request)
     }
 
@@ -50,7 +51,7 @@ impl HistoryMutationService {
         mut request: HistorySaveRecordingRequest,
     ) -> Result<HistoryItemRecord, HistoryMutationError> {
         validate_duration(request.duration)?;
-        validate_optional_opaque_id("project ID", request.project_id.as_deref())?;
+        validate_tag_ids(&request.tag_ids)?;
         if let Some(extension) = request.audio_extension.as_deref() {
             validate_audio_extension("audio extension", extension)?;
         }
@@ -90,20 +91,45 @@ impl HistoryMutationService {
                 .unwrap_or(&request.source_path),
         )?;
         validate_duration(request.duration)?;
-        validate_optional_opaque_id("project ID", request.project_id.as_deref())?;
+        validate_tag_ids(&request.tag_ids)?;
         request.segments = canonical_transcript(request.segments)?;
         self.repository.save_imported_file(request)
     }
 
-    pub fn delete_items(
+    pub fn trash_items(
         &self,
-        request: HistoryDeleteItemsRequest,
+        request: HistoryTrashItemsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        validate_ids(&request.ids)?;
+        if request.deleted_at == 0 {
+            return invalid("deletedAt must be positive");
+        }
+        if request.ids.is_empty() {
+            return Ok(());
+        }
+        self.repository.trash_items(request)
+    }
+
+    pub fn restore_items(
+        &self,
+        request: HistoryRestoreItemsRequest,
     ) -> Result<(), HistoryMutationError> {
         validate_ids(&request.ids)?;
         if request.ids.is_empty() {
             return Ok(());
         }
-        self.repository.delete_items(request)
+        self.repository.restore_items(request)
+    }
+
+    pub fn purge_items(
+        &self,
+        request: HistoryPurgeItemsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        validate_ids(&request.ids)?;
+        if request.ids.is_empty() {
+            return Ok(());
+        }
+        self.repository.purge_items(request)
     }
 
     pub fn update_transcript(
@@ -133,25 +159,29 @@ impl HistoryMutationService {
         self.repository.update_item_meta(request)
     }
 
-    pub fn update_project_assignments(
+    pub fn update_tag_assignments(
         &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
+        request: HistoryUpdateTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
         validate_ids(&request.ids)?;
-        validate_optional_opaque_id("project ID", request.project_id.as_deref())?;
+        validate_tag_ids(&request.add_tag_ids)?;
+        validate_tag_ids(&request.remove_tag_ids)?;
         if request.ids.is_empty() {
             return Ok(());
         }
-        self.repository.update_project_assignments(request)
+        self.repository.update_tag_assignments(request)
     }
 
-    pub fn reassign_project(
+    pub fn replace_tag_assignments(
         &self,
-        request: HistoryReassignProjectRequest,
+        request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        validate_nonempty("current project ID", &request.current_project_id)?;
-        validate_optional_opaque_id("next project ID", request.next_project_id.as_deref())?;
-        self.repository.reassign_project(request)
+        validate_ids(&request.ids)?;
+        validate_tag_ids(&request.tag_ids)?;
+        if request.ids.is_empty() {
+            return Ok(());
+        }
+        self.repository.replace_tag_assignments(request)
     }
 }
 
@@ -246,16 +276,6 @@ fn validate_optional_history_id(
     Ok(())
 }
 
-fn validate_optional_opaque_id(
-    label: &str,
-    value: Option<&str>,
-) -> Result<(), HistoryMutationError> {
-    if let Some(value) = value {
-        validate_nonempty(label, value)?;
-    }
-    Ok(())
-}
-
 fn validate_history_id(label: &str, value: &str) -> Result<(), HistoryMutationError> {
     validate_managed_file_name(label, value, MAX_HISTORY_ID_UTF16_UNITS)
 }
@@ -315,8 +335,16 @@ fn validate_metadata_updates(updates: &HistoryItemMetaPatch) -> Result<(), Histo
             MAX_MANAGED_FILE_NAME_UTF16_UNITS,
         )?;
     }
-    if let Some(Some(project_id)) = updates.project_id.as_ref() {
-        validate_nonempty("projectId", project_id)?;
+    Ok(())
+}
+
+fn validate_tag_ids(tag_ids: &[String]) -> Result<(), HistoryMutationError> {
+    let mut seen = std::collections::HashSet::new();
+    for tag_id in tag_ids {
+        validate_nonempty("tag ID", tag_id)?;
+        if !seen.insert(tag_id) {
+            return invalid(format!("duplicate tag ID: {tag_id}"));
+        }
     }
     Ok(())
 }

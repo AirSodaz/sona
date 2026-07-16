@@ -31,7 +31,8 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     return {
         id: 'rule-1',
         name: 'Meeting Inbox',
-        projectId: 'project-1',
+        saveHistory: true,
+        tagIds: ['project-1'],
         presetId: 'meeting_notes',
         watchDirectory: 'C:\\watch',
         recursive: true,
@@ -195,7 +196,8 @@ describe('SettingsAutomationTab', () => {
         expect(screen.getByRole('button', { name: 'Polish Preset' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Format' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Mode' })).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Target' })).toBeDefined();
+        expect(screen.getByRole('switch', { name: 'Save to History' })).toBeDefined();
+        expect(screen.getByRole('checkbox', { name: 'Team Sync' })).toBeDefined();
         expect(screen.getByRole('switch', { name: 'Watch Subfolders' })).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Target Language' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Apply Template' })).toBeNull();
@@ -379,7 +381,7 @@ describe('SettingsAutomationTab', () => {
             target: { value: 'C:\\exports\\subs' },
         });
 
-        chooseDropdownOption('Target', 'Team Sync');
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Team Sync' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Auto-Translate' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Auto-Export' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Watch Subfolders' }));
@@ -399,7 +401,8 @@ describe('SettingsAutomationTab', () => {
         await waitFor(() => {
             expect(saveRuleMock).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Subtitle Inbox',
-                projectId: 'project-1',
+                saveHistory: true,
+                tagIds: ['project-1'],
                 presetId: 'custom',
                 watchDirectory: 'C:\\watch\\subs',
                 recursive: true,
@@ -418,7 +421,7 @@ describe('SettingsAutomationTab', () => {
         });
     });
 
-    it('allows creating an Inbox automation rule before any project exists', async () => {
+    it('allows creating an untagged automation rule before any tag exists', async () => {
         useProjectStore.setState({
             ...useProjectStore.getState(),
             projects: [],
@@ -437,11 +440,12 @@ describe('SettingsAutomationTab', () => {
 
         const newRuleButton = screen.getByRole('button', { name: 'New Rule' }) as HTMLButtonElement;
         expect(newRuleButton.disabled).toBe(false);
-        expect(screen.queryByText('Create a project first before adding automation rules.')).toBeNull();
+        expect(screen.queryByText('Create a tag first before adding automation rules.')).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
 
-        expect(screen.getByRole('button', { name: 'Target' }).textContent).toContain('Inbox');
+        expect(screen.getByRole('switch', { name: 'Save to History' }).getAttribute('aria-checked')).toBe('true');
+        expect(screen.queryByRole('checkbox')).toBeNull();
 
         fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), {
             target: { value: 'Inbox Automation' },
@@ -458,7 +462,8 @@ describe('SettingsAutomationTab', () => {
         await waitFor(() => {
             expect(saveRuleMock).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Inbox Automation',
-                projectId: 'inbox',
+                saveHistory: true,
+                tagIds: [],
                 watchDirectory: 'C:\\watch\\inbox',
                 exportConfig: expect.objectContaining({
                     directory: 'C:\\exports\\inbox',
@@ -475,7 +480,7 @@ describe('SettingsAutomationTab', () => {
 
         await waitFor(() => {
             expect(alertMock).toHaveBeenCalledWith(
-                'Complete the name, target, watch directory, and output directory before saving.',
+                'Complete the name, watch directory, and output directory before saving.',
                 { variant: 'warning' },
             );
         });

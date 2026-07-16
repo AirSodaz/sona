@@ -37,12 +37,20 @@ import { invokeTauri } from "./invoke";
 type HistoryDraftTransportHandle = TauriCommandResult<
   typeof TauriCommand.history.createLiveDraft
 >;
-type HistorySaveRecordingRequest = TauriCommandArgs<
+type CoreHistorySaveRecordingRequest = TauriCommandArgs<
   typeof TauriCommand.history.saveRecording
 >;
-type HistorySaveImportedFileRequest = TauriCommandArgs<
+type CoreHistorySaveImportedFileRequest = TauriCommandArgs<
   typeof TauriCommand.history.saveImportedFile
 >;
+type HistorySaveRecordingRequest = CoreHistorySaveRecordingRequest & {
+  /** @deprecated */
+  projectId?: string | null;
+};
+type HistorySaveImportedFileRequest = CoreHistorySaveImportedFileRequest & {
+  /** @deprecated */
+  projectId?: string | null;
+};
 type HistoryAudioCleanupRequest = TauriCommandArgs<
   typeof TauriCommand.history.cleanupAudio
 >;
@@ -84,14 +92,26 @@ export interface HistoryDraftHandle<TItem = HistoryItemRecord> extends Omit<
   item: TItem;
 }
 
-export type HistoryWorkspaceQueryScope = HistoryWorkspaceScope;
-export type HistoryWorkspaceQueryRequest = CoreHistoryWorkspaceQueryRequest;
+export type HistoryWorkspaceQueryScope = HistoryWorkspaceScope
+  | { kind: 'inbox' }
+  | { kind: 'project'; projectId: string };
+export type HistoryWorkspaceQueryRequest = Omit<CoreHistoryWorkspaceQueryRequest, 'scope'> & {
+  scope: HistoryWorkspaceQueryScope;
+};
 export type HistoryWorkspaceQueryResult = Omit<
   CoreHistoryWorkspaceQueryResult,
-  "filteredItems" | "searchMatchByItemId"
+  "filteredItems" | "searchMatchByItemId" | "itemCounts"
 > & {
   filteredItems: HistoryItem[];
   searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
+  itemCounts: {
+    untagged?: number;
+    trash?: number;
+    byTagId?: Record<string, number>;
+    /** @deprecated Compatibility fields for old tests and cached payloads. */
+    inbox?: number;
+    byProjectId?: Record<string, number>;
+  };
 };
 
 export async function historyListItems(opts?: {
@@ -104,13 +124,13 @@ export async function historyListItems(opts?: {
 export async function historyCreateLiveDraft(
   id: string | null,
   audioExtension: string,
-  projectId: string | null,
+  tagIds: string[] | string | null,
   icon: string | null,
 ): Promise<HistoryDraftHandle> {
   return invokeTauri(TauriCommand.history.createLiveDraft, {
     id,
     audioExtension,
-    projectId,
+    tagIds: Array.isArray(tagIds) ? tagIds : tagIds ? [tagIds] : [],
     icon,
   });
 }
@@ -130,17 +150,37 @@ export async function historyCompleteLiveDraft(
 export async function historySaveRecording(
   request: HistorySaveRecordingRequest,
 ): Promise<HistoryItemRecord> {
-  return invokeTauri(TauriCommand.history.saveRecording, request);
+  const { projectId, ...rest } = request;
+  return invokeTauri(TauriCommand.history.saveRecording, {
+    ...rest,
+    tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
+  });
 }
 
 export async function historySaveImportedFile(
   request: HistorySaveImportedFileRequest,
 ): Promise<HistoryItemRecord> {
-  return invokeTauri(TauriCommand.history.saveImportedFile, request);
+  const { projectId, ...rest } = request;
+  return invokeTauri(TauriCommand.history.saveImportedFile, {
+    ...rest,
+    tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
+  });
 }
 
 export async function historyDeleteItems(ids: string[]): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteItems, { ids });
+}
+
+export async function historyTrashItems(ids: string[], deletedAt = Date.now()): Promise<void> {
+  await invokeTauri(TauriCommand.history.trashItems, { ids, deletedAt });
+}
+
+export async function historyRestoreItems(ids: string[]): Promise<void> {
+  await invokeTauri(TauriCommand.history.restoreItems, { ids });
+}
+
+export async function historyPurgeItems(ids: string[]): Promise<void> {
+  await invokeTauri(TauriCommand.history.purgeItems, { ids });
 }
 
 export async function historyLoadTranscript(
@@ -238,6 +278,25 @@ export async function historyUpdateProjectAssignments(
   });
 }
 
+export async function historyUpdateTagAssignments(
+  ids: string[],
+  addTagIds: string[],
+  removeTagIds: string[],
+): Promise<void> {
+  await invokeTauri(TauriCommand.history.updateTagAssignments, {
+    ids,
+    addTagIds,
+    removeTagIds,
+  });
+}
+
+export async function historyReplaceTagAssignments(
+  ids: string[],
+  tagIds: string[],
+): Promise<void> {
+  await invokeTauri(TauriCommand.history.replaceTagAssignments, { ids, tagIds });
+}
+
 export async function historyReassignProject(
   currentProjectId: string,
   nextProjectId: string | null,
@@ -289,7 +348,10 @@ export async function historyCleanupAudio(
 export async function historyQueryWorkspace(
   request: HistoryWorkspaceQueryRequest,
 ): Promise<HistoryWorkspaceQueryResult> {
-  const result = await invokeTauri(TauriCommand.history.queryWorkspace, request);
+  const result = await invokeTauri(
+    TauriCommand.history.queryWorkspace,
+    request as CoreHistoryWorkspaceQueryRequest,
+  );
   const searchMatchByItemId = Object.fromEntries(
     Object.entries(result.searchMatchByItemId).map(([itemId, match]) => {
       if (!match) return [itemId, null];
@@ -304,6 +366,12 @@ export async function historyQueryWorkspace(
     ...result,
     filteredItems: result.filteredItems.map(normalizeHistoryItemRecord),
     searchMatchByItemId,
+    itemCounts: {
+      ...result.itemCounts,
+      untagged: result.itemCounts.untagged,
+      trash: result.itemCounts.trash,
+      byTagId: result.itemCounts.byTagId,
+    },
   };
 }
 

@@ -6,10 +6,10 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
+    HistoryMutationError, HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryError;
@@ -295,6 +295,9 @@ struct HistoryReassignProjectArgs {
 struct HistorySaveRecordingInput {
     segments: Value,
     duration: f64,
+    #[serde(default)]
+    tag_ids: Vec<String>,
+    #[serde(default)]
     project_id: Option<String>,
     audio_extension: Option<String>,
 }
@@ -306,6 +309,9 @@ struct HistorySaveImportedFileInput {
     source_path: String,
     segments: Value,
     duration: f64,
+    #[serde(default)]
+    tag_ids: Vec<String>,
+    #[serde(default)]
     project_id: Option<String>,
     converted_source_path: Option<String>,
 }
@@ -412,7 +418,7 @@ fn run_create_live_draft(args: HistoryCreateLiveDraftArgs) -> CliResult<CliOutpu
         .create_live_draft(HistoryCreateLiveDraftRequest {
             id: args.id,
             audio_extension: args.audio_extension,
-            project_id: args.project_id,
+            tag_ids: args.project_id.into_iter().collect(),
             icon: args.icon,
         })
         .map_err(map_history_mutation_error)?;
@@ -440,7 +446,7 @@ fn run_save_recording(args: HistorySaveRecordingArgs) -> CliResult<CliOutput> {
         .save_recording(HistorySaveRecordingRequest {
             segments: normalize_legacy_segments(input.segments)?,
             duration: input.duration,
-            project_id: input.project_id,
+            tag_ids: normalized_tag_ids(input.tag_ids, input.project_id),
             audio_bytes: None,
             native_audio_path: Some(utf8_path(&audio_path, "recording audio")?),
             audio_extension: input.audio_extension,
@@ -456,7 +462,7 @@ fn run_import_file(args: HistoryJsonInputArgs) -> CliResult<CliOutput> {
         source_path: input.source_path,
         segments: normalize_legacy_segments(input.segments)?,
         duration: input.duration,
-        project_id: input.project_id,
+        tag_ids: normalized_tag_ids(input.tag_ids, input.project_id),
         converted_source_path: input.converted_source_path,
     };
     let source_path = absolute_path(PathBuf::from(&request.source_path))?;
@@ -477,8 +483,9 @@ fn run_import_file(args: HistoryJsonInputArgs) -> CliResult<CliOutput> {
 fn run_delete(args: HistoryItemsMutationArgs) -> CliResult<CliOutput> {
     let service = open_mutation_service(args.location.app_data_dir)?;
     service
-        .delete_items(HistoryDeleteItemsRequest {
+        .trash_items(HistoryTrashItemsRequest {
             ids: args.history_ids,
+            deleted_at: unix_millis_now()?,
         })
         .map_err(map_history_mutation_error)?;
     Ok(CliOutput::default())
@@ -539,23 +546,53 @@ fn normalize_legacy_segments(segments: Value) -> CliResult<Vec<TranscriptSegment
 fn run_assign_project(args: HistoryAssignProjectArgs) -> CliResult<CliOutput> {
     let service = open_mutation_service(args.location.app_data_dir)?;
     service
-        .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
+        .replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
             ids: args.history_ids,
-            project_id: args.project_id,
+            tag_ids: args.project_id.into_iter().collect(),
         })
         .map_err(map_history_mutation_error)?;
     Ok(CliOutput::default())
 }
 
 fn run_reassign_project(args: HistoryReassignProjectArgs) -> CliResult<CliOutput> {
+    let query = open_service(args.location.app_data_dir.clone())?;
+    let ids = query
+        .list_items(HistoryListOptions {
+            limit: None,
+            offset: None,
+        })
+        .map_err(map_history_error)?
+        .into_iter()
+        .filter(|item| item.tag_ids.contains(&args.current_project_id))
+        .map(|item| item.id)
+        .collect();
     let service = open_mutation_service(args.location.app_data_dir)?;
     service
-        .reassign_project(HistoryReassignProjectRequest {
-            current_project_id: args.current_project_id,
-            next_project_id: args.next_project_id,
+        .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
+            ids,
+            add_tag_ids: args.next_project_id.into_iter().collect(),
+            remove_tag_ids: vec![args.current_project_id],
         })
         .map_err(map_history_mutation_error)?;
     Ok(CliOutput::default())
+}
+
+fn normalized_tag_ids(tag_ids: Vec<String>, project_id: Option<String>) -> Vec<String> {
+    if tag_ids.is_empty() {
+        project_id.into_iter().collect()
+    } else {
+        tag_ids
+    }
+}
+
+fn unix_millis_now() -> CliResult<u64> {
+    u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| CliError::Io(error.to_string()))?
+            .as_millis(),
+    )
+    .map_err(|error| CliError::Io(error.to_string()))
 }
 
 fn open_service(app_data_dir: PathBuf) -> CliResult<HistoryQueryService> {
@@ -678,7 +715,11 @@ fn render_history_items_table(items: &[HistoryItemRecord]) -> String {
                 item.kind.to_string(),
                 item.status.to_string(),
                 format!("{:.3}", item.duration),
-                sanitize_table_cell(item.project_id.as_deref().unwrap_or("-")),
+                sanitize_table_cell(&if item.tag_ids.is_empty() {
+                    "-".to_string()
+                } else {
+                    item.tag_ids.join(",")
+                }),
             ]
         })
         .collect::<Vec<_>>();

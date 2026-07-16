@@ -5,4 +5,7 @@ export const DEFAULT_DATE_FILTER = 'all';
 export const DEFAULT_SORT_ORDER = 'newest';
 
 export const ALL_ITEMS_SCOPE = 'all';
-export const INBOX_SCOPE = 'inbox';
+export const UNTAGGED_SCOPE = 'untagged';
+export const TRASH_SCOPE = 'trash';
+/** @deprecated Use UNTAGGED_SCOPE. */
+export const INBOX_SCOPE = UNTAGGED_SCOPE;

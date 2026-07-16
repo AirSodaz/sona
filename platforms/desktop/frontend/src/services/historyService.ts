@@ -17,6 +17,9 @@ import {
     historyCreateLiveDraft,
     historyCleanupAudio,
     historyDeleteItems,
+    historyPurgeItems,
+    historyRestoreItems,
+    historyTrashItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
     historyBuildTranscriptDiff,
@@ -35,6 +38,8 @@ import {
     historySaveSummary,
     historyUpdateItemMeta,
     historyUpdateProjectAssignments,
+    historyReplaceTagAssignments,
+    historyUpdateTagAssignments,
     historyUpdateTranscript,
 } from './tauri/history';
 import { convertManagedAudioFileSrc } from './tauri/platform/assets';
@@ -60,12 +65,22 @@ function inferAudioExtensionFromBlob(blob: Blob): string {
     return 'webm';
 }
 
+function normalizeTagIds(value: string[] | string | null | undefined): string[] {
+    if (Array.isArray(value)) {
+        return Array.from(new Set(value.filter((tagId) => typeof tagId === 'string' && tagId.trim())));
+    }
+    return typeof value === 'string' && value.trim() ? [value] : [];
+}
+
 export interface HistoryServicePorts {
     historyListItems: typeof historyListItems;
     historyCreateLiveDraft: typeof historyCreateLiveDraft;
     historyCompleteLiveDraft: typeof historyCompleteLiveDraft;
     historyCleanupAudio: typeof historyCleanupAudio;
     historyDeleteItems: typeof historyDeleteItems;
+    historyPurgeItems: typeof historyPurgeItems;
+    historyRestoreItems: typeof historyRestoreItems;
+    historyTrashItems: typeof historyTrashItems;
     historyDeleteSummary: typeof historyDeleteSummary;
     historyCreateTranscriptSnapshot: typeof historyCreateTranscriptSnapshot;
     historyBuildTranscriptDiff: typeof historyBuildTranscriptDiff;
@@ -83,6 +98,8 @@ export interface HistoryServicePorts {
     historySaveSummary: typeof historySaveSummary;
     historyUpdateItemMeta: typeof historyUpdateItemMeta;
     historyUpdateProjectAssignments: typeof historyUpdateProjectAssignments;
+    historyReplaceTagAssignments: typeof historyReplaceTagAssignments;
+    historyUpdateTagAssignments: typeof historyUpdateTagAssignments;
     historyUpdateTranscript: typeof historyUpdateTranscript;
     convertManagedAudioFileSrc: typeof convertManagedAudioFileSrc;
 }
@@ -97,11 +114,16 @@ export class HistoryService {
 
     async createLiveRecordingDraft(
         audioExtension: string,
-        projectId: string | null = null,
+        tagIds: string[] | string | null = [],
         icon: string | null = 'system:mic',
         id?: string,
     ): Promise<LiveRecordingDraftHandle> {
-        const result = await this.ports.historyCreateLiveDraft(id ?? null, audioExtension, projectId, icon);
+        const result = await this.ports.historyCreateLiveDraft(
+            id ?? null,
+            audioExtension,
+            normalizeTagIds(tagIds),
+            icon,
+        );
 
         return {
             item: normalizeHistoryItem(result?.item),
@@ -124,14 +146,14 @@ export class HistoryService {
     }
 
     async discardLiveRecordingDraft(historyId: string): Promise<void> {
-        await this.deleteRecording(historyId);
+        await this.ports.historyPurgeItems([historyId]);
     }
 
     async saveNativeRecording(
         absoluteWavPath: string,
         segments: TranscriptSegment[],
         duration: number,
-        projectId: string | null = null,
+        tagIds: string[] | string | null = [],
     ): Promise<HistoryItem | null> {
         logger.info('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
 
@@ -143,7 +165,7 @@ export class HistoryService {
         const item = await this.ports.historySaveRecording({
             segments,
             duration,
-            projectId,
+            tagIds: normalizeTagIds(tagIds),
             nativeAudioPath: absoluteWavPath,
             audioExtension: inferAudioExtensionFromPath(absoluteWavPath, 'wav'),
         });
@@ -155,7 +177,7 @@ export class HistoryService {
         audioBlob: Blob,
         segments: TranscriptSegment[],
         duration: number,
-        projectId: string | null = null,
+        tagIds: string[] | string | null = [],
     ): Promise<HistoryItem | null> {
         logger.info('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
 
@@ -169,7 +191,7 @@ export class HistoryService {
         const item = await this.ports.historySaveRecording({
             segments,
             duration,
-            projectId,
+            tagIds: normalizeTagIds(tagIds),
             audioBytes,
             audioExtension: inferAudioExtensionFromBlob(audioBlob),
         });
@@ -182,7 +204,7 @@ export class HistoryService {
         segments: TranscriptSegment[],
         duration: number = 0,
         convertedFilePath?: string,
-        projectId: string | null = null,
+        tagIds: string[] | string | null = [],
         id?: string,
     ): Promise<HistoryItem | null> {
         logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
@@ -196,7 +218,7 @@ export class HistoryService {
             sourcePath: filePath,
             segments,
             duration,
-            projectId,
+            tagIds: normalizeTagIds(tagIds),
             convertedSourcePath: convertedFilePath,
             id: id ?? null,
         });
@@ -214,6 +236,24 @@ export class HistoryService {
         } catch (error) {
             logger.error('Failed to delete recordings:', error);
             throw error;
+        }
+    }
+
+    async trashRecordings(ids: string[]): Promise<void> {
+        if (ids.length > 0) {
+            await this.ports.historyTrashItems(ids);
+        }
+    }
+
+    async restoreRecordings(ids: string[]): Promise<void> {
+        if (ids.length > 0) {
+            await this.ports.historyRestoreItems(ids);
+        }
+    }
+
+    async purgeRecordings(ids: string[]): Promise<void> {
+        if (ids.length > 0) {
+            await this.ports.historyPurgeItems(ids);
         }
     }
 
@@ -274,6 +314,22 @@ export class HistoryService {
         }
 
         await this.ports.historyUpdateProjectAssignments(ids, projectId);
+    }
+
+    async updateTagAssignments(
+        ids: string[],
+        addTagIds: string[],
+        removeTagIds: string[],
+    ): Promise<void> {
+        if (ids.length > 0) {
+            await this.ports.historyUpdateTagAssignments(ids, addTagIds, removeTagIds);
+        }
+    }
+
+    async replaceTagAssignments(ids: string[], tagIds: string[]): Promise<void> {
+        if (ids.length > 0) {
+            await this.ports.historyReplaceTagAssignments(ids, tagIds);
+        }
     }
 
     async updateProjectAssignmentsByCurrentProject(
@@ -338,6 +394,9 @@ export const historyService = createHistoryService({
     historyCompleteLiveDraft,
     historyCleanupAudio,
     historyDeleteItems,
+    historyPurgeItems,
+    historyRestoreItems,
+    historyTrashItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
     historyBuildTranscriptDiff,
@@ -355,6 +414,8 @@ export const historyService = createHistoryService({
     historySaveSummary,
     historyUpdateItemMeta,
     historyUpdateProjectAssignments,
+    historyReplaceTagAssignments,
+    historyUpdateTagAssignments,
     historyUpdateTranscript,
     convertManagedAudioFileSrc,
 });

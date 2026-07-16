@@ -285,7 +285,7 @@ describe('automationStore', () => {
                 origin: 'automation',
                 automationRuleId: 'rule-1',
                 automationRuleName: 'Meeting Inbox',
-                projectId: projectRecord.id,
+                tagIds: [projectRecord.id],
                 sourceFingerprint: 'fp-1',
             }),
         );

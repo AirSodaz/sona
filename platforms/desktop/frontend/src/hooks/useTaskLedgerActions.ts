@@ -47,6 +47,8 @@ export interface TaskCenterUpdateActionInput {
 type TaskCenterTranslate = (key: string, options?: Record<string, unknown>) => string;
 
 interface BatchAddOptions {
+  tagIds?: string[];
+  /** @deprecated */
   projectId?: string | null;
 }
 
@@ -209,7 +211,9 @@ export function createTaskCenterActionRegistry(
             label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
             variant: 'primary',
             run: async () => {
-              deps.addBatchFiles([task.filePath as string], { projectId: task.projectId ?? null });
+              deps.addBatchFiles([task.filePath as string], {
+                tagIds: task.tagIds ?? (task.projectId ? [task.projectId] : []),
+              });
               await deps.removeTask(task.id);
             },
           });

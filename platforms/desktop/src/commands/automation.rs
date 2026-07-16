@@ -57,9 +57,9 @@ pub async fn automation_persist_repository_state<R: Runtime>(
 pub async fn automation_validate_rule_activation(
     rule: AutomationRule,
     global_config: Value,
-    project: Option<Value>,
+    tags: Vec<Value>,
 ) -> Result<AutomationRuleValidationResult, String> {
-    crate::platform::automation_repository::validate_rule_activation(rule, global_config, project)
+    crate::platform::automation_repository::validate_rule_activation(rule, global_config, tags)
         .await
 }
 

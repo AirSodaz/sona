@@ -1,16 +1,13 @@
 import React from 'react';
-import { ArrowRight, ListChecks, Trash2, X } from 'lucide-react';
-import { Dropdown } from '../Dropdown';
+import { ListChecks, RotateCcw, Tags, Trash2, X } from 'lucide-react';
 import type { TranslationFn } from './types';
 
 interface ProjectsSelectionBarProps {
-  currentScopeMoveTarget: string | null;
-  moveOptions: Array<{ value: string; label: string }>;
-  moveTarget: string;
+  isTrashScope: boolean;
   onCancel: () => void;
   onDeleteSelected: () => void;
-  onMoveSelected: () => void;
-  onMoveTargetChange: (value: string) => void;
+  onEditTags: () => void;
+  onRestoreSelected: () => void;
   onToggleSelectAll: () => void;
   selectedIds: string[];
   totalVisibleItems: number;
@@ -18,13 +15,11 @@ interface ProjectsSelectionBarProps {
 }
 
 export function ProjectsSelectionBar({
-  currentScopeMoveTarget,
-  moveOptions,
-  moveTarget,
+  isTrashScope,
   onCancel,
   onDeleteSelected,
-  onMoveSelected,
-  onMoveTargetChange,
+  onEditTags,
+  onRestoreSelected,
   onToggleSelectAll,
   selectedIds,
   totalVisibleItems,
@@ -50,23 +45,20 @@ export function ProjectsSelectionBar({
           <ListChecks size={16} />
         </button>
         <div className="projects-toolbar-divider" />
-        <Dropdown
-          value={moveTarget}
-          onChange={onMoveTargetChange}
-          options={moveOptions}
-          style={{ width: '200px' }}
-          aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
-        />
         <button
           type="button"
           className="btn btn-icon projects-toolbar-icon"
-          onClick={onMoveSelected}
-          disabled={selectedIds.length === 0 || (currentScopeMoveTarget !== null && moveTarget === currentScopeMoveTarget)}
-          aria-label={t('projects.move_selected', { defaultValue: 'Move Selected' })}
-          data-tooltip={t('projects.move_selected', { defaultValue: 'Move Selected' })}
+          onClick={isTrashScope ? onRestoreSelected : onEditTags}
+          disabled={selectedIds.length === 0}
+          aria-label={isTrashScope
+            ? t('history.restore', { defaultValue: 'Restore' })
+            : t('projects.edit_tags', { defaultValue: 'Edit Tags' })}
+          data-tooltip={isTrashScope
+            ? t('history.restore', { defaultValue: 'Restore' })
+            : t('projects.edit_tags', { defaultValue: 'Edit Tags' })}
           data-tooltip-pos="top"
         >
-          <ArrowRight size={16} />
+          {isTrashScope ? <RotateCcw size={16} /> : <Tags size={16} />}
         </button>
         <button
           type="button"

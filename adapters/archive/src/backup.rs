@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use sona_core::automation::repository::AutomationRepositoryState;
+use sona_core::automation::repository::{AutomationRepositoryState, AutomationRuleRecord};
 use sona_core::backup::{
     BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort, BackupDataset,
     BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest, BackupManifest,
@@ -19,7 +19,7 @@ use sona_core::history::{
     TranscriptSnapshotRecord,
 };
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::ProjectRecord;
+use sona_core::tag::{TagListOptions, TagRecord, normalize_tag_value};
 use uuid::Uuid;
 
 pub const MAX_BACKUP_ENTRIES: usize = 100_000;
@@ -31,7 +31,8 @@ const MAX_JSON_STRUCTURAL_TOKENS: u64 = 1_000_000;
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CONFIG_PATH: &str = "config/sona-config.json";
-const PROJECTS_PATH: &str = "projects/index.json";
+const TAGS_PATH: &str = "tags/index.json";
+const LEGACY_PROJECTS_PATH: &str = "projects/index.json";
 const HISTORY_INDEX_PATH: &str = "history/index.json";
 const AUTOMATION_RULES_PATH: &str = "automation/rules.json";
 const AUTOMATION_PROCESSED_PATH: &str = "automation/processed.json";
@@ -41,10 +42,9 @@ const TAR_SIZE_RANGE: std::ops::Range<usize> = 124..136;
 const TAR_CHECKSUM_RANGE: std::ops::Range<usize> = 148..156;
 const TAR_TYPEFLAG_OFFSET: usize = 156;
 
-const FIXED_PATHS: [&str; 7] = [
+const FIXED_PATHS: [&str; 6] = [
     MANIFEST_PATH,
     CONFIG_PATH,
-    PROJECTS_PATH,
     HISTORY_INDEX_PATH,
     AUTOMATION_RULES_PATH,
     AUTOMATION_PROCESSED_PATH,
@@ -656,13 +656,23 @@ fn parse_prepared_session(
 
     let manifest: BackupManifest = read_json(root, MANIFEST_PATH)?;
     validate_backup_manifest(&manifest)?;
+    let workspace_path = if manifest.schema_version == 1 {
+        LEGACY_PROJECTS_PATH
+    } else {
+        TAGS_PATH
+    };
+    if !paths.contains(workspace_path) {
+        return Err(invalid_backup(format!(
+            "Backup is missing required entry: {workspace_path}"
+        )));
+    }
     let config: Value = read_json(root, CONFIG_PATH)?;
     if !config.is_object() {
         return Err(invalid_backup("Backup config must be an object."));
     }
-    let projects: Vec<ProjectRecord> = read_json(root, PROJECTS_PATH)?;
-    let history_items: Vec<HistoryItemRecord> = read_json(root, HISTORY_INDEX_PATH)?;
-    let automation_rules = read_json(root, AUTOMATION_RULES_PATH)?;
+    let tags = read_backup_tags(root, &manifest)?;
+    let history_items = read_backup_history_items(root, &manifest)?;
+    let automation_rules = read_backup_automation_rules(root, &manifest)?;
     let automation_processed_entries = read_json(root, AUTOMATION_PROCESSED_PATH)?;
     let analytics_content = fs::read_to_string(root.join(ANALYTICS_PATH)).map_err(archive_error)?;
     validate_analytics(&analytics_content)?;
@@ -671,6 +681,7 @@ fn parse_prepared_session(
         .into_iter()
         .map(ToOwned::to_owned)
         .collect::<HashSet<_>>();
+    expected_paths.insert(workspace_path.to_string());
     let history = parse_history(root, paths, &mut expected_paths, history_items)?;
     if &expected_paths != paths {
         let unexpected = paths
@@ -689,7 +700,7 @@ fn parse_prepared_session(
     };
     let dataset = BackupDataset {
         config,
-        projects,
+        tags,
         history,
         automation,
         analytics_content,
@@ -714,7 +725,7 @@ fn session_into_preview(
     } = session;
     let BackupDataset {
         config,
-        projects,
+        tags,
         history: _,
         automation,
         analytics_content,
@@ -727,11 +738,85 @@ fn session_into_preview(
         archive_path,
         manifest,
         config,
-        projects: to_values(&projects)?,
+        tags: to_values(&tags)?,
         automation_rules,
         automation_processed_entries,
         analytics_content,
     })
+}
+
+fn read_backup_tags(root: &Path, manifest: &BackupManifest) -> Result<Vec<TagRecord>, BackupError> {
+    if manifest.schema_version != 1 {
+        return read_json(root, TAGS_PATH);
+    }
+    let projects: Vec<Value> = read_json(root, LEGACY_PROJECTS_PATH)?;
+    Ok(projects
+        .iter()
+        .enumerate()
+        .map(|(sort_order, project)| {
+            let mut tag = normalize_tag_value(project, &TagListOptions::default());
+            tag.sort_order = sort_order;
+            tag
+        })
+        .collect())
+}
+
+fn read_backup_history_items(
+    root: &Path,
+    manifest: &BackupManifest,
+) -> Result<Vec<HistoryItemRecord>, BackupError> {
+    if manifest.schema_version != 1 {
+        return read_json(root, HISTORY_INDEX_PATH);
+    }
+    let mut items: Vec<Value> = read_json(root, HISTORY_INDEX_PATH)?;
+    for item in &mut items {
+        let Some(object) = item.as_object_mut() else {
+            continue;
+        };
+        let project_id = object.remove("projectId").and_then(|value| {
+            value
+                .as_str()
+                .filter(|id| !matches!(*id, "" | "inbox" | "none"))
+                .map(ToOwned::to_owned)
+        });
+        object.insert(
+            "tagIds".to_string(),
+            serde_json::json!(project_id.into_iter().collect::<Vec<_>>()),
+        );
+        object.insert("deletedAt".to_string(), Value::Null);
+    }
+    serde_json::from_value(Value::Array(items))
+        .map_err(|error| invalid_backup(format!("Backup history index is invalid: {error}")))
+}
+
+fn read_backup_automation_rules(
+    root: &Path,
+    manifest: &BackupManifest,
+) -> Result<Vec<AutomationRuleRecord>, BackupError> {
+    if manifest.schema_version != 1 {
+        return read_json(root, AUTOMATION_RULES_PATH);
+    }
+    let mut rules: Vec<Value> = read_json(root, AUTOMATION_RULES_PATH)?;
+    for rule in &mut rules {
+        let Some(object) = rule.as_object_mut() else {
+            continue;
+        };
+        let project_id = object
+            .remove("projectId")
+            .and_then(|value| value.as_str().map(ToOwned::to_owned))
+            .unwrap_or_default();
+        object.insert("saveHistory".to_string(), Value::Bool(project_id != "none"));
+        object.insert(
+            "tagIds".to_string(),
+            serde_json::json!(if matches!(project_id.as_str(), "" | "inbox" | "none") {
+                Vec::<String>::new()
+            } else {
+                vec![project_id]
+            }),
+        );
+    }
+    serde_json::from_value(Value::Array(rules))
+        .map_err(|error| invalid_backup(format!("Backup automation rules are invalid: {error}")))
 }
 
 fn parse_history(
@@ -913,7 +998,7 @@ fn build_archive_entries(
     let mut entries = vec![
         json_bytes(MANIFEST_PATH, manifest)?,
         json_bytes(CONFIG_PATH, &dataset.config)?,
-        json_bytes(PROJECTS_PATH, &dataset.projects)?,
+        json_bytes(TAGS_PATH, &dataset.tags)?,
         json_bytes(HISTORY_INDEX_PATH, &dataset.history.items)?,
         json_bytes(AUTOMATION_RULES_PATH, &dataset.automation.rules)?,
         json_bytes(
@@ -1109,7 +1194,7 @@ fn publish(staging: &Path, output: &Path) -> Result<(), BackupError> {
 }
 
 fn validate_counts(manifest: &BackupManifest, dataset: &BackupDataset) -> Result<(), BackupError> {
-    ensure_count(manifest.counts.projects, dataset.projects.len(), "project")?;
+    ensure_count(manifest.counts.tags, dataset.tags.len(), "tag")?;
     ensure_count(
         manifest.counts.history_items,
         dataset.history.items.len(),

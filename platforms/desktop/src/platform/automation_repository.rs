@@ -19,18 +19,18 @@ fn validate_automation_transport<T: Serialize>(value: T) -> Result<T, String> {
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
     global_config: &Value,
-    project: Option<&Value>,
+    tags: &[Value],
 ) -> AutomationRuleValidationResult {
-    validate_native_automation_rule_activation(rule, global_config, project)
+    validate_native_automation_rule_activation(rule, global_config, tags)
 }
 
 pub async fn validate_rule_activation(
     rule: AutomationRule,
     global_config: Value,
-    project: Option<Value>,
+    tags: Vec<Value>,
 ) -> Result<AutomationRuleValidationResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        validate_rule_activation_inner(&rule, &global_config, project.as_ref())
+        validate_rule_activation_inner(&rule, &global_config, &tags)
     })
     .await
     .map_err(|error| error.to_string())

@@ -34,12 +34,16 @@ export async function persistAutomationRepositoryState(
 }
 
 export async function validateAutomationRuleActivation(rule: AutomationRule): Promise<void> {
-  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
-  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
+  const tagIds = rule.tagIds ?? (
+    rule.projectId && rule.projectId !== 'inbox' && rule.projectId !== 'none' ? [rule.projectId] : []
+  );
+  const tags = tagIds
+    .map((tagId) => useProjectStore.getState().getProjectById(tagId))
+    .filter((tag): tag is NonNullable<typeof tag> => !!tag);
   const validation = await validateAutomationRuleForActivation(
     rule,
     useConfigStore.getState().config,
-    project,
+    tags,
   );
 
   if (!validation.valid) {

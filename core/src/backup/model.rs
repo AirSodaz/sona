@@ -5,17 +5,17 @@ use serde_json::Value;
 use crate::automation::repository::AutomationRepositoryState;
 use crate::config::AppConfigStoredState;
 use crate::history::HistoryBackupSnapshot;
-use crate::project::ProjectRecord;
+use crate::tag::TagRecord;
 
 use super::BackupError;
 
-pub const BACKUP_SCHEMA_VERSION: u64 = 1;
+pub const BACKUP_SCHEMA_VERSION: u64 = 2;
 pub const BACKUP_HISTORY_MODE: &str = "light";
 
 #[derive(Clone, Debug)]
 pub struct BackupDataset {
     pub config: Value,
-    pub projects: Vec<ProjectRecord>,
+    pub tags: Vec<TagRecord>,
     pub history: HistoryBackupSnapshot,
     pub automation: AutomationRepositoryState,
     pub analytics_content: String,
@@ -33,7 +33,7 @@ pub struct BackupRestoreDataset {
     pub import_id: String,
     pub manifest: BackupManifest,
     pub config_state: AppConfigStoredState,
-    pub projects: Vec<ProjectRecord>,
+    pub tags: Vec<TagRecord>,
     pub history: HistoryBackupSnapshot,
     pub automation: AutomationRepositoryState,
     pub analytics_content: String,
@@ -104,7 +104,8 @@ pub struct BackupManifestScopes {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupManifestCounts {
-    pub projects: u64,
+    #[serde(alias = "projects")]
+    pub tags: u64,
     pub history_items: u64,
     pub transcript_files: u64,
     pub summary_files: u64,
@@ -120,7 +121,8 @@ pub struct PreparedBackupImport {
     pub archive_path: String,
     pub manifest: BackupManifest,
     pub config: Value,
-    pub projects: Vec<Value>,
+    #[serde(alias = "projects")]
+    pub tags: Vec<Value>,
     pub automation_rules: Vec<Value>,
     pub automation_processed_entries: Vec<Value>,
     pub analytics_content: String,
@@ -129,7 +131,7 @@ pub struct PreparedBackupImport {
 pub fn build_backup_manifest(
     created_at_ms: i64,
     app_version: String,
-    project_count: usize,
+    tag_count: usize,
     history_item_count: usize,
     transcript_file_count: usize,
     summary_file_count: usize,
@@ -152,7 +154,7 @@ pub fn build_backup_manifest(
             analytics: true,
         },
         counts: BackupManifestCounts {
-            projects: project_count as u64,
+            tags: tag_count as u64,
             history_items: history_item_count as u64,
             transcript_files: transcript_file_count as u64,
             summary_files: summary_file_count as u64,
@@ -164,7 +166,7 @@ pub fn build_backup_manifest(
 }
 
 pub fn validate_backup_manifest(manifest: &BackupManifest) -> Result<(), BackupError> {
-    if manifest.schema_version != BACKUP_SCHEMA_VERSION {
+    if !matches!(manifest.schema_version, 1 | BACKUP_SCHEMA_VERSION) {
         return Err(BackupError::InvalidBackup(format!(
             "Unsupported backup schema version: {}",
             manifest.schema_version

@@ -165,7 +165,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: segments.clone(),
                 duration: 1.5,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),

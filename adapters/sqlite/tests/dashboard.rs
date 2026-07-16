@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use sona_core::dashboard::{DashboardServiceError, DashboardSnapshotTime};
 use sona_core::history::HistorySaveRecordingRequest;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
+use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
 use sona_core::project::{
@@ -136,7 +137,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
             }]))
             .unwrap(),
             duration: 2.5,
-            project_id: Some("project-dashboard".to_string()),
+            tag_ids: vec!["project-dashboard".to_string()],
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -159,7 +160,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
             }]))
             .unwrap(),
             duration: 1.5,
-            project_id: None,
+            tag_ids: Vec::new(),
             audio_bytes: Some(vec![4, 5]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -181,6 +182,15 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     )
     .unwrap();
 
+    let writer_items = HistoryQueryRepository::list_items(&history).unwrap();
+    assert_eq!(
+        writer_items
+            .iter()
+            .filter(|item| !item.tag_ids.is_empty())
+            .count(),
+        1
+    );
+
     assert!(dir.path().join("sona.db-wal").is_file());
     assert!(dir.path().join("sona.db-shm").is_file());
     assert!(dir.path().join("sona-analytics.db-wal").is_file());
@@ -188,6 +198,16 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let before = file_hashes(dir.path());
 
     let read_only = Arc::new(Database::open_read_only_with_analytics(dir.path()).unwrap());
+    let read_only_history =
+        SqliteHistoryStore::new(dir.path().to_path_buf(), Arc::clone(&read_only));
+    let read_only_items = HistoryQueryRepository::list_items(&read_only_history).unwrap();
+    assert_eq!(
+        read_only_items
+            .iter()
+            .filter(|item| !item.tag_ids.is_empty())
+            .count(),
+        1
+    );
     let service = create_dashboard_service(dir.path().to_path_buf(), read_only);
     let runtime = runtime();
     let shallow = runtime
@@ -203,9 +223,10 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
 
     assert_eq!(shallow.generated_at, "2026-07-13T08:00:00.000Z");
     assert_eq!(shallow.content.overview.item_count, 2);
-    assert_eq!(shallow.content.overview.project_count, 1);
+    assert_eq!(shallow.content.overview.tag_count, 1);
     assert_eq!(shallow.content.overview.total_duration_seconds, 4.0);
-    assert_eq!(shallow.content.overview.inbox_count, 1);
+    assert_eq!(shallow.content.overview.untagged_count, 1);
+    assert_eq!(shallow.content.overview.tagged_count, 1);
     assert_eq!(shallow.llm_usage.totals.total_tokens, 25);
     assert!(!shallow.content.overview.is_deep_loaded);
     assert!(shallow.content.speakers.is_none());

@@ -22,7 +22,8 @@ fn history_item_transport_shape_lives_in_core() {
         icon: Some("Mic".to_string()),
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
-        project_id: Some("project-1".to_string()),
+        tag_ids: vec!["tag-1".to_string()],
+        deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
     };
@@ -77,7 +78,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
             recording_title: "Recording From Adapter".to_string(),
         },
         12.5,
-        Some("project-1".to_string()),
+        vec!["tag-1".to_string()],
         Some(".WEBM!"),
         None,
     )
@@ -88,7 +89,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
     assert_eq!(item.audio_path, "recording-1.webm");
     assert_eq!(item.transcript_path, "recording-1.json");
     assert_eq!(item.title, "Recording From Adapter");
-    assert_eq!(item.project_id.as_deref(), Some("project-1"));
+    assert_eq!(item.tag_ids, vec!["tag-1"]);
     assert_eq!(item.kind, HistoryItemKind::Recording);
 }
 
@@ -98,7 +99,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
         sona_core::history::HistoryCreateLiveDraftRequest {
             id: Some("draft-request-id".to_string()),
             audio_extension: "wav".to_string(),
-            project_id: None,
+            tag_ids: Vec::new(),
             icon: Some("Mic".to_string()),
         },
         HistoryItemGeneratedValues {
@@ -121,7 +122,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
         "C:/audio/Meeting.MP3".to_string(),
         None,
         7.0,
-        None,
+        Vec::new(),
         HistoryItemGeneratedValues {
             fallback_id: "unused-import-fallback".to_string(),
             timestamp: 43,

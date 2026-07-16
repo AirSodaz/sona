@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FolderIcon } from '../../Icons';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
+import { Checkbox } from '../../Checkbox';
 import { SettingsItem } from '../SettingsLayout';
 import type { ExportFormat, ExportMode } from '../../../utils/exportFormats';
 import type { AutomationDraftUpdate, AutomationRuleDraft } from './automationRuleDraft';
@@ -180,15 +181,35 @@ export function AutomationRuleEditor({
                     />
                 </SettingsItem>
 
-                <SettingsItem title={t('automation.target_project', { defaultValue: 'Target' })} layout="vertical">
-                    <Dropdown
-                        value={draft.projectId}
-                        onChange={(value) => onUpdateDraft(setDraftField('projectId', value))}
-                        options={projectOptions}
-                        style={{ width: '100%' }}
-                        aria-label={t('automation.target_project', { defaultValue: 'Target' })}
+                <SettingsItem title={t('automation.save_history', { defaultValue: 'Save to History' })}>
+                    <Switch
+                        checked={draft.saveHistory}
+                        onChange={(value) => onUpdateDraft(setDraftField('saveHistory', value))}
+                        aria-label={t('automation.save_history', { defaultValue: 'Save to History' })}
                     />
                 </SettingsItem>
+
+                {draft.saveHistory && (
+                    <SettingsItem title={t('automation.target_tags', { defaultValue: 'Tags' })} layout="vertical">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                            {projectOptions
+                                .filter((option) => option.value !== 'none' && option.value !== 'inbox')
+                                .map((option) => (
+                                    <Checkbox
+                                        key={option.value}
+                                        checked={draft.tagIds.includes(option.value)}
+                                        label={option.label}
+                                        onChange={(checked) => onUpdateDraft(setDraftField(
+                                            'tagIds',
+                                            checked
+                                                ? Array.from(new Set([...draft.tagIds, option.value]))
+                                                : draft.tagIds.filter((tagId) => tagId !== option.value),
+                                        ))}
+                                    />
+                                ))}
+                        </div>
+                    </SettingsItem>
+                )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>

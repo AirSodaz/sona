@@ -43,7 +43,7 @@ class UniffiRecordingHistoryAdapter internal constructor(
         val requestJson = buildJsonObject {
             put("id", request.recordingId)
             put("audioExtension", request.audioExtension)
-            put("projectId", JsonNull)
+            put("tagIds", JsonArray(emptyList()))
             put("icon", JsonNull)
         }.toString()
         val response = parseJsonObject(
@@ -90,7 +90,7 @@ class UniffiRecordingHistoryAdapter internal constructor(
     }
 
     override suspend fun deleteDraft(historyId: String) {
-        bindings.deleteItems(
+        bindings.purgeItems(
             appDataDir,
             buildJsonObject {
                 put("ids", JsonArray(listOf(kotlinx.serialization.json.JsonPrimitive(historyId))))
@@ -167,6 +167,10 @@ private fun parseLibraryItem(element: JsonElement): RecordingLibraryItem {
         durationMillis = (durationSeconds * 1_000.0).roundToLong(),
         previewText = item.requiredContent("previewText", "UniFFI history item"),
         status = status,
+        tagIds = item.requiredArray("tagIds", "UniFFI history item").map { value ->
+            value.requiredPrimitiveContent("UniFFI history tag ID")
+        },
+        deletedAtEpochMillis = item.optionalLong("deletedAt"),
     )
 }
 
@@ -298,6 +302,12 @@ private fun JsonObject.optionalString(key: String): String? = when (val value = 
 private fun JsonObject.optionalNumber(key: String): Double? = when (val value = this[key]) {
     null, JsonNull -> null
     is JsonPrimitive -> value.contentOrNull?.toDoubleOrNull() ?: invalidHistoryResponse()
+    else -> invalidHistoryResponse()
+}
+
+private fun JsonObject.optionalLong(key: String): Long? = when (val value = this[key]) {
+    null, JsonNull -> null
+    is JsonPrimitive -> value.contentOrNull?.toLongOrNull() ?: invalidHistoryResponse()
     else -> invalidHistoryResponse()
 }
 

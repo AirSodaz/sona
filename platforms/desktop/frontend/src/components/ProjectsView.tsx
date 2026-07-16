@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Pencil, Settings as SettingsIcon, Trash2 } from 'lucide-react';
+import { FolderOpen, Pencil, RotateCcw, Settings as SettingsIcon, Tags, Trash2 } from 'lucide-react';
 import { RenameModal } from './RenameModal';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
@@ -9,11 +9,13 @@ import { ProjectsRail } from './projects/ProjectsRail';
 import { ProjectsResults } from './projects/ProjectsResults';
 import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
 import { ProjectsToolbar } from './projects/ProjectsToolbar';
+import { TagAssignmentModal } from './projects/TagAssignmentModal';
 import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
 import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseState';
 import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
 import type { RenameTarget } from './projects/types';
 import { historyService } from '../services/historyService';
+import { historyQueryWorkspace } from '../services/tauri/history';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -59,6 +61,10 @@ function getLiveDraftLockState(): LiveDraftLockState {
   };
 }
 
+function getPrimaryTagId(item: HistoryItemType): string | null {
+  return item.tagIds?.[0] ?? item.projectId ?? null;
+}
+
 function createWorkspaceMenuRevision(
   contextId: string,
   browseScope: string,
@@ -100,7 +106,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const updateProject = useProjectStore((state) => state.updateProject);
   const deleteProject = useProjectStore((state) => state.deleteProject);
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
-  const assignHistoryItems = useProjectStore((state) => state.assignHistoryItems);
   const reorderProjects = useProjectStore((state) => state.reorderProjects);
 
   const historyItems = useHistoryStore((state) => state.items);
@@ -124,9 +129,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState('#64748b');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [tagAssignmentIds, setTagAssignmentIds] = useState<string[]>([]);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
@@ -147,6 +154,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, []);
 
   const handleOpenItem = useCallback(async (item: HistoryItemType) => {
+    if (item.deletedAt != null) {
+      return;
+    }
     const initialItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
     const initialLockState = getLiveDraftLockState();
     if (!initialItem || (initialLockState.isLocked && item.id !== initialLockState.sourceHistoryId)) {
@@ -193,7 +203,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         audioUrl: url,
       });
       setSelectedHistoryId(item.id);
-      await useProjectStore.getState().setActiveProjectId(latestItem.projectId);
+      await useProjectStore.getState().setActiveProjectId(getPrimaryTagId(latestItem));
     } catch (error) {
       await showError({
         code: 'history.load_failed',
@@ -279,14 +289,26 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, [browseState.filteredAndSortedItems, isActive, syncVisibleItems]);
 
   const itemMatchesBrowseScope = useCallback((item: HistoryItemType) => {
+    if (browseState.isTrashScope) {
+      return item.deletedAt != null;
+    }
+    if (item.deletedAt != null) {
+      return false;
+    }
     if (browseState.isAllItemsScope) {
       return true;
     }
     if (browseState.isInboxScope) {
-      return !item.projectId;
+      return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).length === 0;
     }
-    return item.projectId === browseState.browseProjectId;
-  }, [browseState.browseProjectId, browseState.isAllItemsScope, browseState.isInboxScope]);
+    return (item.tagIds ?? (item.projectId ? [item.projectId] : []))
+      .includes(browseState.browseProjectId || '');
+  }, [
+    browseState.browseProjectId,
+    browseState.isAllItemsScope,
+    browseState.isInboxScope,
+    browseState.isTrashScope,
+  ]);
 
   const scopedSourceHistoryId = useMemo(() => {
     if (!sourceHistoryId) {
@@ -331,6 +353,14 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
     [effectiveSelectedHistoryId, historyItems],
   );
+  const tagAssignmentItems = useMemo(() => {
+    const candidates = new Map<string, HistoryItemType>();
+    historyItems.forEach((item) => candidates.set(item.id, item));
+    browseState.filteredAndSortedItems.forEach((item) => candidates.set(item.id, item));
+    return tagAssignmentIds
+      .map((id) => candidates.get(id))
+      .filter((item): item is HistoryItemType => !!item && item.deletedAt == null);
+  }, [browseState.filteredAndSortedItems, historyItems, tagAssignmentIds]);
 
   useEffect(() => {
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
@@ -361,7 +391,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, [clearSelection, isLiveDraftSessionLocked, workspaceSelectionMode]);
 
   const handleSwitchBrowseScope = async (nextScope: string): Promise<boolean> => {
-    const isProjectScope = nextScope !== 'all' && nextScope !== 'inbox';
+    const isProjectScope = nextScope !== 'all' && nextScope !== 'untagged' && nextScope !== 'trash';
     const initialLockState = getLiveDraftLockState();
     if (
       initialLockState.isLocked
@@ -398,7 +428,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return true;
     }
 
-    await useProjectStore.getState().setActiveProjectId(nextScope === 'inbox' ? null : nextScope);
+    if (nextScope !== 'trash') {
+      await useProjectStore.getState().setActiveProjectId(nextScope === 'untagged' ? null : nextScope);
+    }
     return true;
   };
 
@@ -470,7 +502,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         },
         {
           id: 'settings',
-          label: t('projects.project_settings', { defaultValue: 'Project Settings' }),
+          label: t('projects.tag_settings', { defaultValue: 'Tag Settings' }),
           icon: <SettingsIcon size={16} />,
           disabled: isOtherProjectLocked,
           onSelect: () => {
@@ -483,15 +515,24 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleDeleteHistoryItem = async (id: string) => {
-    const initialItem = useHistoryStore.getState().items.find((item) => item.id === id);
+    const initialItem = useHistoryStore.getState().items.find((item) => item.id === id)
+      ?? browseState.filteredAndSortedItems.find((item) => item.id === id);
     const initialLockState = getLiveDraftLockState();
     if (!initialItem || (initialLockState.isLocked && id === initialLockState.sourceHistoryId)) {
       return;
     }
 
-    const confirmed = await confirm(t('history.delete_confirm'), {
-      title: t('history.delete_title', { defaultValue: 'Delete History' }),
-      confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+    const isTrashItem = initialItem.deletedAt != null;
+    const confirmed = await confirm(
+      isTrashItem
+        ? t('history.purge_confirm', { defaultValue: 'Permanently delete this item? This cannot be undone.' })
+        : t('history.trash_confirm', { defaultValue: 'Move this item to Trash?' }), {
+      title: isTrashItem
+        ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
+        : t('history.trash_title', { defaultValue: 'Move to Trash' }),
+      confirmLabel: isTrashItem
+        ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
+        : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
       variant: 'error',
     });
 
@@ -499,18 +540,30 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    const latestItem = useHistoryStore.getState().items.find((item) => item.id === id);
+    const latestItem = useHistoryStore.getState().items.find((item) => item.id === id)
+      ?? browseState.filteredAndSortedItems.find((item) => item.id === id);
     const latestLockState = getLiveDraftLockState();
     if (!latestItem || (latestLockState.isLocked && id === latestLockState.sourceHistoryId)) {
       return;
     }
 
-    await useHistoryStore.getState().deleteItem(id);
+    if (isTrashItem) {
+      await historyService.purgeRecordings([id]);
+    } else {
+      await useHistoryStore.getState().deleteItem(id);
+    }
     await useHistoryStore.getState().refresh();
   };
 
+  const handleRestoreHistoryItems = async (ids: string[]) => {
+    await historyService.restoreRecordings(ids);
+    await refreshHistory();
+    selectionState.clearSelection();
+  };
+
   const handleRenameHistoryItem = async (id: string) => {
-    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
+    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id)
+      ?? browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id);
     const lockState = getLiveDraftLockState();
     if (!item || (lockState.isLocked && id === lockState.sourceHistoryId)) {
       return;
@@ -550,7 +603,35 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         item: item.title,
         defaultValue: 'Actions for {{item}}',
       }),
-      actions: [
+      actions: item.deletedAt != null ? [
+        {
+          id: 'restore',
+          label: t('history.restore', { defaultValue: 'Restore' }),
+          icon: <RotateCcw size={16} />,
+          onSelect: () => {
+            void handleRestoreHistoryItems([id]);
+          },
+        },
+        {
+          id: 'purge',
+          label: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
+          icon: <Trash2 size={16} />,
+          tone: 'danger',
+          dividerBefore: true,
+          onSelect: () => {
+            void handleDeleteHistoryItem(id);
+          },
+        },
+      ] : [
+        {
+          id: 'tags',
+          label: t('projects.edit_tags', { defaultValue: 'Edit Tags' }),
+          icon: <Tags size={16} />,
+          disabled: isLockedLiveDraft,
+          onSelect: () => {
+            setTagAssignmentIds([id]);
+          },
+        },
         {
           id: 'open',
           label: t('common.open', { defaultValue: 'Open' }),
@@ -622,6 +703,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       {
         name: newProjectName.trim(),
         description: newProjectDescription.trim(),
+        color: newProjectColor,
       },
       globalConfig,
     );
@@ -632,6 +714,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     setNewProjectName('');
     setNewProjectDescription('');
+    setNewProjectColor('#64748b');
     setIsCreateModalOpen(false);
     browseState.setBrowseScope(project.id);
     await setActiveProjectId(project.id);
@@ -646,6 +729,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       name: projectSettingsDraft.draftName.trim() || browseState.browseProject.name,
       description: projectSettingsDraft.draftDescription,
       icon: projectSettingsDraft.draftIcon,
+      color: projectSettingsDraft.draftColor,
       defaults: projectSettingsDraft.draftDefaults,
     });
     projectSettingsDraft.setIsSettingsOpen(false);
@@ -666,11 +750,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     const confirmed = await confirm(
-      t('projects.delete_confirm', {
-        defaultValue: `Delete ${browseState.browseProject.name} and move its items back to Inbox?`,
+      t('projects.delete_tag_confirm', {
+        tag: browseState.browseProject.name,
+        defaultValue: `Delete ${browseState.browseProject.name}? Items keep their other tags.`,
       }),
       {
-        title: t('projects.delete_title', { defaultValue: 'Delete Project' }),
+        title: t('projects.delete_tag_title', { defaultValue: 'Delete Tag' }),
         confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
         variant: 'error',
       },
@@ -681,7 +766,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     clearOpenedItem();
-    browseState.setBrowseScope('inbox');
+    browseState.setBrowseScope('untagged');
     await deleteProject(browseState.browseProject.id);
     await refreshHistory();
   };
@@ -694,36 +779,29 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     selectionState.toggleSelectionMode();
   };
 
-  const handleMoveSelected = async () => {
-    if (selectionState.selectedIds.length === 0) {
-      return;
-    }
-
-    const targetProjectId = selectionState.moveTarget === 'inbox' ? null : selectionState.moveTarget;
-    await assignHistoryItems(selectionState.selectedIds, targetProjectId);
-    await refreshHistory();
-
-    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId;
-    if (currentHistoryId && selectionState.selectedIds.includes(currentHistoryId)) {
-      await setActiveProjectId(targetProjectId);
-    }
-
-    selectionState.clearSelection();
-  };
-
   const handleDeleteSelected = async () => {
     if (selectionState.selectedIds.length === 0) {
       return;
     }
 
+    const isTrashScope = browseState.isTrashScope;
     const confirmed = await confirm(
-      t('history.delete_bulk_confirm', {
+      isTrashScope
+        ? t('history.purge_bulk_confirm', {
+          count: selectionState.selectedIds.length,
+          defaultValue: `Permanently delete ${selectionState.selectedIds.length} items? This cannot be undone.`,
+        })
+        : t('history.trash_bulk_confirm', {
         count: selectionState.selectedIds.length,
-        defaultValue: `Are you sure you want to delete ${selectionState.selectedIds.length} items?`,
+        defaultValue: `Move ${selectionState.selectedIds.length} items to Trash?`,
       }),
       {
-        title: t('history.delete_title', { defaultValue: 'Delete History' }),
-        confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+        title: isTrashScope
+          ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
+          : t('history.trash_title', { defaultValue: 'Move to Trash' }),
+        confirmLabel: isTrashScope
+          ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
+          : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
         variant: 'error',
       },
     );
@@ -732,9 +810,50 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    await deleteHistoryItems(selectionState.selectedIds);
+    if (isTrashScope) {
+      await historyService.purgeRecordings(selectionState.selectedIds);
+    } else {
+      await deleteHistoryItems(selectionState.selectedIds);
+    }
     await refreshHistory();
     selectionState.clearSelection();
+  };
+
+  const handleEmptyTrash = async () => {
+    const trashCount = browseState.itemCounts.get('trash') || 0;
+    if (trashCount === 0) return;
+    const confirmed = await confirm(
+      t('history.empty_trash_confirm', {
+        count: trashCount,
+        defaultValue: `Permanently delete all ${trashCount} items in Trash? This cannot be undone.`,
+      }),
+      {
+        title: t('history.empty_trash', { defaultValue: 'Empty Trash' }),
+        confirmLabel: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
+        variant: 'error',
+      },
+    );
+    if (!confirmed) return;
+
+    const ids: string[] = [];
+    let offset = 0;
+    const limit = 200;
+    while (true) {
+      const page = await historyQueryWorkspace({
+        scope: { kind: 'trash' },
+        query: '',
+        filterType: 'all',
+        dateFilter: 'all',
+        sortOrder: 'newest',
+        limit,
+        offset,
+      });
+      ids.push(...page.filteredItems.map((item) => item.id));
+      if (!page.hasMore || page.filteredItems.length === 0) break;
+      offset += page.filteredItems.length;
+    }
+    await historyService.purgeRecordings(ids);
+    await refreshHistory();
   };
 
   if (!isActive) {
@@ -757,6 +876,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         inboxCount={browseState.itemCounts.get(null) || 0}
         isAllItemsScope={browseState.isAllItemsScope}
         isInboxScope={browseState.isInboxScope}
+        isTrashScope={browseState.isTrashScope}
+        trashCount={browseState.itemCounts.get('trash') || 0}
         itemCounts={browseState.itemCounts}
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onReorderProjects={reorderProjects}
@@ -778,6 +899,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             onOpenProjectSettings={() => projectSettingsDraft.setIsSettingsOpen(true)}
             onStartLiveRecord={() => setMode('live')}
             showWorkflowActions={browseState.showWorkflowActions}
+            isTrashScope={browseState.isTrashScope}
+            onEmptyTrash={() => void handleEmptyTrash()}
+            trashItemCount={browseState.itemCounts.get('trash') || 0}
             summaryChips={browseState.summaryChips}
             t={t}
           />
@@ -819,13 +943,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
           {selectionState.isSelectionMode && (
             <ProjectsSelectionBar
-              currentScopeMoveTarget={selectionState.currentScopeMoveTarget}
-              moveOptions={browseState.moveOptions}
-              moveTarget={selectionState.moveTarget}
+              isTrashScope={browseState.isTrashScope}
               onCancel={handleToggleSelectionMode}
               onDeleteSelected={() => void handleDeleteSelected()}
-              onMoveSelected={() => void handleMoveSelected()}
-              onMoveTargetChange={selectionState.setMoveTarget}
+              onEditTags={() => setTagAssignmentIds(selectionState.selectedIds)}
+              onRestoreSelected={() => void handleRestoreHistoryItems(selectionState.selectedIds)}
               onToggleSelectAll={selectionState.handleToggleSelectAll}
               selectedIds={selectionState.selectedIds}
               totalVisibleItems={browseState.filteredAndSortedItems.length}
@@ -845,6 +967,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             isInitialLoading={browseState.isInitialLoading}
             isLoadingMore={browseState.isLoadingMore}
             isSelectionMode={selectionState.isSelectionMode}
+            isTrashScope={browseState.isTrashScope}
             loadMoreError={browseState.loadMoreError}
             lockedHistoryId={isLiveDraftSessionLocked ? sourceHistoryId : null}
             onDeleteHistoryItem={handleDeleteHistoryItem}
@@ -879,8 +1002,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         isOpen={isCreateModalOpen}
         name={newProjectName}
         description={newProjectDescription}
+        color={newProjectColor}
         onNameChange={setNewProjectName}
         onDescriptionChange={setNewProjectDescription}
+        onColorChange={setNewProjectColor}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateProject}
       />
@@ -891,6 +1016,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         draftName={projectSettingsDraft.draftName}
         draftDescription={projectSettingsDraft.draftDescription}
         draftIcon={projectSettingsDraft.draftIcon}
+        draftColor={projectSettingsDraft.draftColor}
         draftDefaults={projectSettingsDraft.draftDefaults}
         globalConfig={globalConfig}
         onClose={projectSettingsDraft.handleRequestCloseProjectSettings}
@@ -899,6 +1025,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         onNameChange={projectSettingsDraft.setDraftName}
         onDescriptionChange={projectSettingsDraft.setDraftDescription}
         onIconChange={projectSettingsDraft.setDraftIcon}
+        onColorChange={projectSettingsDraft.setDraftColor}
         onDefaultsChange={projectSettingsDraft.setDraftDefaults}
       />
 
@@ -919,6 +1046,18 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           }
           const { generateAiTitleForHistoryItem } = await import('../services/aiRenameService');
           return await generateAiTitleForHistoryItem(item.id);
+        }}
+      />
+
+      <TagAssignmentModal
+        isOpen={tagAssignmentIds.length > 0}
+        items={tagAssignmentItems}
+        tags={projects}
+        onClose={() => setTagAssignmentIds([])}
+        onApply={async (addTagIds, removeTagIds) => {
+          await historyService.updateTagAssignments(tagAssignmentIds, addTagIds, removeTagIds);
+          await refreshHistory();
+          selectionState.clearSelection();
         }}
       />
     </div>

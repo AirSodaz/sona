@@ -21,8 +21,12 @@ export interface RecoveredQueueItem extends Omit<
     | 'sourceFingerprint'
     | 'fileStat'
     | 'exportFileNamePrefix'
+    | 'tagIds'
 > {
     segments: TranscriptSegment[];
+    tagIds?: string[];
+    /** @deprecated Single-tag compatibility alias. */
+    projectId?: string | null;
     historyId?: string;
     historyTitle?: string;
     automationRuleId?: string;

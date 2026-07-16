@@ -60,7 +60,10 @@ import {
 interface SaveRuleInput {
   id?: string;
   name: string;
-  projectId: string;
+  saveHistory?: boolean;
+  tagIds?: string[];
+  /** @deprecated */
+  projectId?: string;
   presetId: AutomationRule['presetId'];
   watchDirectory: string;
   recursive: boolean;
@@ -238,7 +241,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRule: AutomationRule = {
       id: existing?.id || uuidv4(),
       name: input.name.trim(),
-      projectId: input.projectId,
+      saveHistory: input.saveHistory ?? input.projectId !== 'none',
+      tagIds: input.tagIds ?? (
+        input.projectId && input.projectId !== 'inbox' && input.projectId !== 'none'
+          ? [input.projectId]
+          : []
+      ),
       presetId: input.presetId,
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,

@@ -29,5 +29,6 @@ pub mod sync;
 pub mod sync_secret_store;
 pub mod system;
 pub mod system_audio;
+pub mod tag_repository;
 pub mod task_ledger_repository;
 pub mod time;

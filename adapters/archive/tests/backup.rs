@@ -22,7 +22,7 @@ use sona_core::history::{
     HistoryItemStatus,
 };
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::{ProjectDefaults, ProjectRecord};
+use sona_core::tag::{TagDefaults, TagRecord};
 use tar::{EntryType, Header};
 use uuid::Uuid;
 
@@ -35,15 +35,17 @@ struct TestEntry {
     entry_type: EntryType,
 }
 
-fn project() -> ProjectRecord {
-    ProjectRecord {
-        id: "project-1".to_string(),
-        name: "Project One".to_string(),
-        description: "Test project".to_string(),
+fn tag() -> TagRecord {
+    TagRecord {
+        id: "tag-1".to_string(),
+        name: "Tag One".to_string(),
+        description: "Test tag".to_string(),
         icon: "folder".to_string(),
+        color: "#2563eb".to_string(),
+        sort_order: 0,
         created_at: 1,
         updated_at: 2,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: "general".to_string(),
             translation_language: "en".to_string(),
             polish_preset_id: "general".to_string(),
@@ -71,7 +73,8 @@ fn history_item() -> HistoryItemRecord {
         icon: None,
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
-        project_id: Some("project-1".to_string()),
+        tag_ids: vec!["tag-1".to_string()],
+        deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
     }
@@ -82,7 +85,8 @@ fn automation() -> AutomationRepositoryState {
         rules: vec![AutomationRuleRecord {
             id: "rule-1".to_string(),
             name: "Rule One".to_string(),
-            project_id: "project-1".to_string(),
+            save_history: true,
+            tag_ids: vec!["tag-1".to_string()],
             preset_id: "general".to_string(),
             watch_directory: "C:/watch".to_string(),
             recursive: true,
@@ -122,7 +126,7 @@ fn automation() -> AutomationRepositoryState {
 fn dataset() -> BackupDataset {
     BackupDataset {
         config: json!({"language": "en"}),
-        projects: vec![project()],
+        tags: vec![tag()],
         history: HistoryBackupSnapshot {
             items: vec![history_item()],
             transcript_files: vec![("history-1.json".to_string(), json!([]))],
@@ -160,7 +164,7 @@ fn dataset() -> BackupDataset {
 
 fn manifest() -> BackupManifest {
     BackupManifest {
-        schema_version: 1,
+        schema_version: 2,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
         app_version: "0.8.0".to_string(),
         history_mode: "light".to_string(),
@@ -172,7 +176,7 @@ fn manifest() -> BackupManifest {
             analytics: true,
         },
         counts: BackupManifestCounts {
-            projects: 1,
+            tags: 1,
             history_items: 1,
             transcript_files: 1,
             summary_files: 1,
@@ -248,7 +252,7 @@ fn valid_entries() -> Vec<TestEntry> {
     vec![
         json_entry(MANIFEST_PATH, &manifest()),
         json_entry("config/sona-config.json", &dataset.config),
-        json_entry("projects/index.json", &dataset.projects),
+        json_entry("tags/index.json", &dataset.tags),
         json_entry("history/index.json", &dataset.history.items),
         json_entry("history/history-1.json", &json!([])),
         json_entry(
@@ -467,7 +471,7 @@ fn filesystem_backup_adapter_composes_archive_state_and_clock() {
         .unwrap();
 
     assert_eq!(preview.manifest.app_version, "0.8.0");
-    assert_eq!(preview.manifest.counts.projects, 1);
+    assert_eq!(preview.manifest.counts.tags, 1);
 }
 
 #[test]
@@ -478,7 +482,7 @@ fn exposes_documented_archive_limits() {
 }
 
 #[test]
-fn writes_prepares_loads_and_disposes_v1_archive_with_exact_layout() {
+fn writes_prepares_loads_and_disposes_v2_archive_with_exact_layout() {
     let temp = tempfile::tempdir().unwrap();
     let archive_path = temp.path().join("roundtrip.sona-backup");
     let repository = FsBackupArchiveRepository::new();
@@ -501,7 +505,7 @@ fn writes_prepares_loads_and_disposes_v1_archive_with_exact_layout() {
             "history/versions/history-1/index.json",
             "history/versions/history-1/snapshot-1.json",
             "manifest.json",
-            "projects/index.json",
+            "tags/index.json",
         ]
     );
 
@@ -510,10 +514,7 @@ fn writes_prepares_loads_and_disposes_v1_archive_with_exact_layout() {
         .unwrap();
     assert_eq!(preview.manifest, manifest());
     assert_eq!(preview.config, source.config);
-    assert_eq!(
-        preview.projects,
-        vec![serde_json::to_value(project()).unwrap()]
-    );
+    assert_eq!(preview.tags, vec![serde_json::to_value(tag()).unwrap()]);
     assert_eq!(
         preview.automation_rules,
         vec![serde_json::to_value(&source.automation.rules[0]).unwrap()]
@@ -524,7 +525,7 @@ fn writes_prepares_loads_and_disposes_v1_archive_with_exact_layout() {
     let session = repository.load_prepared(&preview.import_id).unwrap();
     assert_eq!(session.import_id, preview.import_id);
     assert_eq!(session.manifest, preview.manifest);
-    assert_eq!(session.dataset.projects, vec![project()]);
+    assert_eq!(session.dataset.tags, vec![tag()]);
     assert_eq!(session.dataset.history.items, vec![history_item()]);
     assert_eq!(session.dataset.history.transcript_files.len(), 1);
     assert_eq!(session.dataset.history.summary_files.len(), 1);
@@ -534,6 +535,76 @@ fn writes_prepares_loads_and_disposes_v1_archive_with_exact_layout() {
     assert!(repository.load_prepared(&preview.import_id).is_err());
 
     repository.dispose_prepared(&preview.import_id).unwrap();
+}
+
+#[test]
+fn imports_v1_projects_and_single_assignments_as_tags() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("legacy-v1.sona-backup");
+    let mut entries = valid_entries();
+    entries.retain(|entry| {
+        !matches!(
+            entry.path.as_str(),
+            "manifest.json" | "tags/index.json" | "history/index.json" | "automation/rules.json"
+        )
+    });
+    entries.extend([
+        json_entry(
+            "manifest.json",
+            &json!({
+                "schemaVersion": 1,
+                "createdAt": "2026-07-13T00:00:00.000Z",
+                "appVersion": "0.8.0",
+                "historyMode": "light",
+                "scopes": {"config": true, "workspace": true, "history": true, "automation": true, "analytics": true},
+                "counts": {"projects": 1, "historyItems": 1, "transcriptFiles": 1, "summaryFiles": 1, "automationRules": 1, "automationProcessedEntries": 1, "analyticsFiles": 1}
+            }),
+        ),
+        json_entry(
+            "projects/index.json",
+            &json!([{
+                "id": "tag-1", "name": "Tag One", "description": "Test tag",
+                "icon": "folder", "color": "#2563eb", "createdAt": 1, "updatedAt": 2,
+                "defaults": serde_json::to_value(tag().defaults).unwrap()
+            }]),
+        ),
+        json_entry(
+            "history/index.json",
+            &json!([{
+                "id": "history-1", "timestamp": 10, "duration": 2.5,
+                "audioPath": "", "audioStatus": "removed",
+                "transcriptPath": "history/history-1.json", "title": "History One",
+                "previewText": "hello", "icon": null, "type": "recording",
+                "searchContent": "hello", "projectId": "tag-1",
+                "status": "complete", "draftSource": null
+            }]),
+        ),
+        json_entry(
+            "automation/rules.json",
+            &json!([{
+                "id": "rule-1", "name": "Rule One", "projectId": "tag-1",
+                "presetId": "general", "watchDirectory": "C:/watch",
+                "recursive": true, "enabled": true,
+                "stageConfig": serde_json::to_value(&automation().rules[0].stage_config).unwrap(),
+                "exportConfig": serde_json::to_value(&automation().rules[0].export_config).unwrap(),
+                "createdAt": 1, "updatedAt": 2
+            }]),
+        ),
+    ]);
+    write_entries(&archive_path, &entries);
+
+    let repository = FsBackupArchiveRepository::new();
+    let preview = repository
+        .prepare_import(archive_path.to_str().unwrap())
+        .unwrap();
+    let session = repository.load_prepared(&preview.import_id).unwrap();
+
+    assert_eq!(session.manifest.schema_version, 1);
+    assert_eq!(session.dataset.tags, vec![tag()]);
+    assert_eq!(session.dataset.history.items[0].tag_ids, vec!["tag-1"]);
+    assert!(session.dataset.history.items[0].deleted_at.is_none());
+    assert!(session.dataset.automation.rules[0].save_history);
+    assert_eq!(session.dataset.automation.rules[0].tag_ids, vec!["tag-1"]);
 }
 
 #[test]
@@ -723,7 +794,7 @@ fn rejects_malformed_json_and_cleans_extraction() {
     for invalid_path in [
         "manifest.json",
         "config/sona-config.json",
-        "projects/index.json",
+        "tags/index.json",
         "history/index.json",
         "automation/rules.json",
         "automation/processed.json",
@@ -750,7 +821,7 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
     let mut invalid_manifests = Vec::new();
 
     let mut unsupported_schema = manifest();
-    unsupported_schema.schema_version = 2;
+    unsupported_schema.schema_version = 3;
     invalid_manifests.push(unsupported_schema);
     let mut unsupported_mode = manifest();
     unsupported_mode.history_mode = "full".to_string();
@@ -769,7 +840,7 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
     for count in 0..7 {
         let mut mismatched = manifest();
         match count {
-            0 => mismatched.counts.projects += 1,
+            0 => mismatched.counts.tags += 1,
             1 => mismatched.counts.history_items += 1,
             2 => mismatched.counts.transcript_files += 1,
             3 => mismatched.counts.summary_files += 1,
@@ -902,20 +973,14 @@ fn rejects_every_unsupported_tar_entry_type() {
 fn accepts_safe_directory_entries_without_treating_them_as_dataset_files() {
     let temp = tempfile::tempdir().unwrap();
     let archive_path = temp.path().join("directories.sona");
-    let mut entries = [
-        "config/",
-        "projects/",
-        "history/",
-        "automation/",
-        "analytics/",
-    ]
-    .into_iter()
-    .map(|path| TestEntry {
-        path: path.to_string(),
-        data: vec![],
-        entry_type: EntryType::Directory,
-    })
-    .collect::<Vec<_>>();
+    let mut entries = ["config/", "tags/", "history/", "automation/", "analytics/"]
+        .into_iter()
+        .map(|path| TestEntry {
+            path: path.to_string(),
+            data: vec![],
+            entry_type: EntryType::Directory,
+        })
+        .collect::<Vec<_>>();
     entries.extend(valid_entries());
     write_entries(&archive_path, &entries);
     let repository = FsBackupArchiveRepository::new();

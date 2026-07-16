@@ -5,7 +5,7 @@ use chrono::{Duration, FixedOffset, NaiveDate, TimeZone};
 
 use super::error::DashboardServiceError;
 use super::models::*;
-use super::ports::{AnalyticsRepository, HistoryRepository, ProjectRepository};
+use super::ports::{AnalyticsRepository, HistoryRepository, TagRepository};
 use crate::history::{HistoryItemKind, HistoryItemRecord};
 
 const RECENT_DAILY_WINDOW: i64 = 30;
@@ -20,24 +20,24 @@ pub struct DashboardSnapshotTime {
 pub struct DashboardService<H, P, A>
 where
     H: HistoryRepository,
-    P: ProjectRepository,
+    P: TagRepository,
     A: AnalyticsRepository,
 {
     history_repo: Arc<H>,
-    project_repo: Arc<P>,
+    tag_repo: Arc<P>,
     analytics_repo: Arc<A>,
 }
 
 impl<H, P, A> DashboardService<H, P, A>
 where
     H: HistoryRepository,
-    P: ProjectRepository,
+    P: TagRepository,
     A: AnalyticsRepository,
 {
-    pub fn new(history_repo: Arc<H>, project_repo: Arc<P>, analytics_repo: Arc<A>) -> Self {
+    pub fn new(history_repo: Arc<H>, tag_repo: Arc<P>, analytics_repo: Arc<A>) -> Self {
         Self {
             history_repo,
-            project_repo,
+            tag_repo,
             analytics_repo,
         }
     }
@@ -48,12 +48,12 @@ where
         time: DashboardSnapshotTime,
     ) -> Result<DashboardSnapshotDomainModel, DashboardServiceError> {
         let history_items = self.history_repo.list_items().await?;
-        let project_count = self.project_repo.count_projects().await?;
+        let tag_count = self.tag_repo.count_tags().await?;
         let llm_usage = self.analytics_repo.read_dashboard_stats().await?;
 
         let mut overview = create_overview(
             &history_items,
-            project_count,
+            tag_count,
             deep,
             time.today,
             time.local_utc_offset_seconds,
@@ -172,7 +172,7 @@ where
 
 fn create_overview(
     history_items: &[HistoryItemRecord],
-    project_count: u64,
+    tag_count: u64,
     is_deep_loaded: bool,
     today: NaiveDate,
     local_utc_offset_seconds: i32,
@@ -182,20 +182,20 @@ fn create_overview(
         .filter(|item| item.kind != HistoryItemKind::Batch)
         .count() as u64;
     let item_count = history_items.len() as u64;
-    let inbox_count = history_items
+    let untagged_count = history_items
         .iter()
-        .filter(|item| item.project_id.is_none())
+        .filter(|item| item.deleted_at.is_none() && item.tag_ids.is_empty())
         .count() as u64;
 
     let total_duration_seconds = history_items.iter().map(|item| item.duration).sum();
     let batch_count = item_count.saturating_sub(recording_count);
-    let project_assigned_count = item_count.saturating_sub(inbox_count);
+    let tagged_count = item_count.saturating_sub(untagged_count);
 
     OverviewStats {
         item_count,
         item_count_display: format_number(item_count),
-        project_count,
-        project_count_display: format_number(project_count),
+        tag_count,
+        tag_count_display: format_number(tag_count),
         total_duration_seconds,
         total_duration_display: format_duration(total_duration_seconds),
         transcript_character_count: None,
@@ -204,10 +204,10 @@ fn create_overview(
         recording_count_display: format_number(recording_count),
         batch_count,
         batch_count_display: format_number(batch_count),
-        inbox_count,
-        inbox_count_display: format_number(inbox_count),
-        project_assigned_count,
-        project_assigned_count_display: format_number(project_assigned_count),
+        untagged_count,
+        untagged_count_display: format_number(untagged_count),
+        tagged_count,
+        tagged_count_display: format_number(tagged_count),
         recent_daily_items: create_recent_daily_trend(
             history_items,
             today,

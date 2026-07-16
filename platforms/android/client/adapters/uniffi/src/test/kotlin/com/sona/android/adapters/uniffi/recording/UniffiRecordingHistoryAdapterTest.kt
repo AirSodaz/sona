@@ -45,6 +45,8 @@ class UniffiRecordingHistoryAdapterTest {
                         durationMillis = 2_500,
                         previewText = "Hello mobile history",
                         status = RecordingLibraryItemStatus.DRAFT,
+                        tagIds = listOf("tag-1"),
+                        deletedAtEpochMillis = null,
                     ),
                 ),
                 hasMore = true,
@@ -88,7 +90,7 @@ class UniffiRecordingHistoryAdapterTest {
         val delete = parseJsonObject(checkNotNull(bindings.deleteRequestJson), "delete")
         assertEquals(
             mapOf(
-                "create" to listOf("C:/app-data", "recording-1", "wav", JsonNull, JsonNull),
+                "create" to listOf("C:/app-data", "recording-1", "wav", emptyList<String>(), JsonNull),
                 "checkpoint" to listOf(
                     "history-1",
                     "segment-1",
@@ -106,7 +108,7 @@ class UniffiRecordingHistoryAdapterTest {
                     bindings.createAppDataDir,
                     create.getValue("id").jsonPrimitive.content,
                     create.getValue("audioExtension").jsonPrimitive.content,
-                    create.getValue("projectId"),
+                    create.getValue("tagIds").jsonArray.map { it.jsonPrimitive.content },
                     create.getValue("icon"),
                 ),
                 "checkpoint" to listOf(
@@ -237,7 +239,7 @@ class UniffiRecordingHistoryAdapterTest {
             "{\"item\":{\"id\":\"history-1\"}," +
                 "\"audioAbsolutePath\":\"C:/app-data/history/history-1.wav\"}"
         var queryResponse =
-            """{"filteredItems":[{"id":"history-1","timestamp":1725000000000,"duration":2.5,"audioPath":"history-1.wav","audioStatus":"available","transcriptPath":"history-1.json","title":"Recording 1","previewText":"Hello mobile history","icon":null,"type":"recording","searchContent":"","projectId":null,"status":"draft","draftSource":"live_record"}],"searchMatchByItemId":{},"filteredItemCount":1,"hasMore":true,"summary":{"totalItems":1,"totalDuration":2.5,"latestTimestamp":1725000000000,"recordingCount":1,"batchCount":0},"itemCounts":{"inbox":1,"byProjectId":{}}}"""
+            """{"filteredItems":[{"id":"history-1","timestamp":1725000000000,"duration":2.5,"audioPath":"history-1.wav","audioStatus":"available","transcriptPath":"history-1.json","title":"Recording 1","previewText":"Hello mobile history","icon":null,"type":"recording","searchContent":"","tagIds":["tag-1"],"deletedAt":null,"status":"draft","draftSource":"live_record"}],"searchMatchByItemId":{},"filteredItemCount":1,"hasMore":true,"summary":{"totalItems":1,"totalDuration":2.5,"latestTimestamp":1725000000000,"recordingCount":1,"batchCount":0},"itemCounts":{"untagged":0,"trash":0,"byTagId":{"tag-1":1}}}"""
         var transcriptResponse =
             """[{"id":"segment-1","text":"hello","start":1.25,"end":2.5,"isFinal":true,"timing":{"level":"token","source":"model","units":[{"text":"he","start":1.25,"end":1.5}]},"tokens":["he","llo"],"timestamps":[1.25,1.75],"durations":[0.5,0.75],"translation":"你好","speaker":{"id":"speaker-1","label":"Speaker 1","kind":"known","score":0.8},"speakerAttribution":{"groupId":"group-1","anonymousLabel":"Speaker 1","state":"matched","source":"embedding","confidence":"high","candidates":[{"profileId":"profile-1","profileName":"Alice","score":0.9,"rank":1}]}}]"""
 
@@ -257,7 +259,7 @@ class UniffiRecordingHistoryAdapterTest {
             return "{\"id\":\"history-1\"}"
         }
 
-        override suspend fun deleteItems(appDataDir: String, requestJson: String): String {
+        override suspend fun purgeItems(appDataDir: String, requestJson: String): String {
             deleteRequestJson = requestJson
             return "null"
         }

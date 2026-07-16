@@ -121,20 +121,20 @@ export function ContentOverviewSection({
             : undefined}
         />
         <KpiCard
-          label={t('settings.dashboard.projects', { defaultValue: 'Projects' })}
-          value={overview.projectCountDisplay}
+          label={t('settings.dashboard.tags', { defaultValue: 'Tags' })}
+          value={overview.tagCountDisplay}
           detail={(
             <div className="settings-dashboard-pill-row">
               <StatPill>
-                {t('settings.dashboard.inbox_pill', {
-                  defaultValue: '{{count}} in Inbox',
-                  count: overview.inboxCountDisplay,
+                {t('settings.dashboard.untagged_pill', {
+                  defaultValue: '{{count}} untagged',
+                  count: overview.untaggedCountDisplay,
                 })}
               </StatPill>
               <StatPill>
-                {t('settings.dashboard.project_pill', {
-                  defaultValue: '{{count}} in projects',
-                  count: overview.projectAssignedCountDisplay,
+                {t('settings.dashboard.tagged_pill', {
+                  defaultValue: '{{count}} tagged',
+                  count: overview.taggedCountDisplay,
                 })}
               </StatPill>
             </div>

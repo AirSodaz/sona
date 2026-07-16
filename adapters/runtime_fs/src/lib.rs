@@ -28,6 +28,7 @@ use sona_core::runtime::config::{
     ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection,
 };
 use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
+use sona_core::tag::TagIdGenerator;
 use sona_core::transcription::runtime::{
     BatchInputSource, BatchOutputPlan, BatchTranscribeOptions, BatchTranscribePlan,
     LiveTranscribeOptions, LiveTranscribePlan,
@@ -62,12 +63,12 @@ impl AutomationFileSystem for NativeAutomationFileSystem {
 pub fn validate_native_automation_rule_activation(
     rule: &AutomationRule,
     global_config: &serde_json::Value,
-    project: Option<&serde_json::Value>,
+    tags: &[serde_json::Value],
 ) -> AutomationRuleValidationResult {
     AutomationValidationService::new(&NativeAutomationFileSystem).validate_rule_activation(
         rule,
         global_config,
-        project,
+        tags,
     )
 }
 
@@ -78,6 +79,12 @@ impl AutomationIdGenerator for UuidGenerator {
 }
 
 impl ProjectIdGenerator for UuidGenerator {
+    fn generate_id(&self) -> String {
+        Uuid::new_v4().to_string()
+    }
+}
+
+impl TagIdGenerator for UuidGenerator {
     fn generate_id(&self) -> String {
         Uuid::new_v4().to_string()
     }

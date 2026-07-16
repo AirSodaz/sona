@@ -6,8 +6,10 @@ interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
   description: string;
+  color: string;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onColorChange: (value: string) => void;
   onClose: () => void;
   onCreate: () => void;
 }
@@ -16,8 +18,10 @@ export function ProjectCreateModal({
   isOpen,
   name,
   description,
+  color,
   onNameChange,
   onDescriptionChange,
+  onColorChange,
   onClose,
   onCreate,
 }: ProjectCreateModalProps): React.JSX.Element | null {
@@ -47,7 +51,7 @@ export function ProjectCreateModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t('projects.new_project_title', { defaultValue: 'New Project' })}
+      title={t('projects.new_tag_title', { defaultValue: 'New Tag' })}
       size="md"
       footer={
         <>
@@ -60,7 +64,7 @@ export function ProjectCreateModal({
             onClick={() => void onCreate()}
             disabled={!name.trim()}
           >
-            {t('projects.create_action', { defaultValue: 'Create Project' })}
+            {t('projects.create_tag_action', { defaultValue: 'Create Tag' })}
           </button>
         </>
       }
@@ -74,7 +78,7 @@ export function ProjectCreateModal({
       >
         <div className="projects-field">
           <label htmlFor="project-create-name">
-            {t('projects.project_name', { defaultValue: 'Project Name' })}
+            {t('projects.tag_name', { defaultValue: 'Tag Name' })}
           </label>
           <input
             id="project-create-name"
@@ -82,8 +86,21 @@ export function ProjectCreateModal({
             className="settings-input"
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+            placeholder={t('projects.new_tag_name', { defaultValue: 'Tag name' })}
             autoFocus
+          />
+        </div>
+
+        <div className="projects-field">
+          <label htmlFor="project-create-color">
+            {t('projects.tag_color', { defaultValue: 'Color' })}
+          </label>
+          <input
+            id="project-create-color"
+            type="color"
+            value={color}
+            onChange={(event) => onColorChange(event.target.value)}
+            aria-label={t('projects.tag_color', { defaultValue: 'Color' })}
           />
         </div>
 

@@ -137,11 +137,12 @@ fn query_workspace_items_impl(
 
 fn matches_scope(item: &HistoryItemRecord, scope: &HistoryWorkspaceScope) -> bool {
     match scope {
-        HistoryWorkspaceScope::All => true,
-        HistoryWorkspaceScope::Inbox => item.project_id.is_none(),
-        HistoryWorkspaceScope::Project { project_id } => {
-            item.project_id.as_deref() == Some(project_id)
+        HistoryWorkspaceScope::All => item.deleted_at.is_none(),
+        HistoryWorkspaceScope::Untagged => item.deleted_at.is_none() && item.tag_ids.is_empty(),
+        HistoryWorkspaceScope::Tag { tag_id } => {
+            item.deleted_at.is_none() && item.tag_ids.iter().any(|candidate| candidate == tag_id)
         }
+        HistoryWorkspaceScope::Trash => item.deleted_at.is_some(),
     }
 }
 
@@ -216,21 +217,27 @@ fn summarize_items(items: &[HistoryItemRecord]) -> HistoryWorkspaceSummary {
 }
 
 fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
-    let mut inbox = 0;
-    let mut by_project_id = BTreeMap::new();
+    let mut untagged = 0;
+    let mut trash = 0;
+    let mut by_tag_id = BTreeMap::new();
 
     for item in items {
-        match &item.project_id {
-            Some(project_id) => {
-                *by_project_id.entry(project_id.clone()).or_insert(0) += 1;
-            }
-            None => inbox += 1,
+        if item.deleted_at.is_some() {
+            trash += 1;
+            continue;
+        }
+        if item.tag_ids.is_empty() {
+            untagged += 1;
+        }
+        for tag_id in &item.tag_ids {
+            *by_tag_id.entry(tag_id.clone()).or_insert(0) += 1;
         }
     }
 
     HistoryWorkspaceItemCounts {
-        inbox,
-        by_project_id,
+        untagged,
+        trash,
+        by_tag_id,
     }
 }
 
@@ -514,7 +521,8 @@ mod tests {
             icon: None,
             kind: HistoryItemKind::Recording,
             search_content: String::new(),
-            project_id: None,
+            tag_ids: Vec::new(),
+            deleted_at: None,
             status,
             draft_source: if status == HistoryItemStatus::Draft {
                 Some(HistoryDraftSource::LiveRecord)

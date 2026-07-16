@@ -4,7 +4,8 @@ import {
   ALL_ITEMS_SCOPE,
   DEFAULT_DATE_FILTER,
   DEFAULT_FILTER_TYPE,
-  INBOX_SCOPE,
+  TRASH_SCOPE,
+  UNTAGGED_SCOPE,
 } from '../constants';
 import type {
   ProjectBrowseScope,
@@ -61,13 +62,14 @@ export function buildWorkspaceViewModel({
 }: WorkspaceViewModelParams): WorkspaceViewModel {
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const itemCounts = new Map<string | null, number>();
-  itemCounts.set(null, queryResult.itemCounts.inbox);
-  Object.entries(queryResult.itemCounts.byProjectId).forEach(([projectId, count]) => {
-    itemCounts.set(projectId, count);
+  itemCounts.set(null, queryResult.itemCounts.untagged ?? queryResult.itemCounts.inbox ?? 0);
+  itemCounts.set(TRASH_SCOPE, queryResult.itemCounts.trash ?? 0);
+  Object.entries(queryResult.itemCounts.byTagId ?? queryResult.itemCounts.byProjectId ?? {}).forEach(([tagId, count]) => {
+    itemCounts.set(tagId, count);
   });
 
   const moveOptions = [
-    { value: INBOX_SCOPE, label: t('projects.inbox', { defaultValue: 'Inbox' }) },
+    { value: UNTAGGED_SCOPE, label: t('projects.untagged', { defaultValue: 'Untagged' }) },
     ...projects.map((project) => ({ value: project.id, label: project.name })),
   ];
 
@@ -117,26 +119,34 @@ export function buildWorkspaceViewModel({
 
   const headerTitle = isAllItemsScope
     ? t('projects.all_items', { defaultValue: 'All Items' })
-    : browseProject?.name || t('projects.inbox', { defaultValue: 'Inbox' });
+    : browseScope === TRASH_SCOPE
+    ? t('projects.trash', { defaultValue: 'Trash' })
+    : browseProject?.name || t('projects.untagged', { defaultValue: 'Untagged' });
   const headerDescription = isAllItemsScope
     ? t('projects.all_items_description', {
       defaultValue: 'Browse everything across Inbox and your projects.',
     })
+    : browseScope === TRASH_SCOPE
+    ? t('projects.trash_description', {
+      defaultValue: 'Restore items or delete them permanently.',
+    })
     : browseProject
     ? browseProject.description
-    : t('projects.inbox_description', {
-      defaultValue: 'Inbox collects unassigned recordings and imports.',
+    : t('projects.untagged_description', {
+      defaultValue: 'Untagged collects recordings and imports without a tag.',
     });
-  const showWorkflowActions = !isAllItemsScope;
+  const showWorkflowActions = !isAllItemsScope && browseScope !== TRASH_SCOPE;
   const headerIcon = renderScopeIcon(browseScope, browseProject);
   const searchInputLabel = isAllItemsScope
     ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
+    : browseScope === TRASH_SCOPE
+    ? t('projects.search_placeholder_trash', { defaultValue: 'Search Trash...' })
     : browseProject
     ? t('projects.search_placeholder_project', {
       project: browseProject.name,
       defaultValue: 'Search in {{project}}...',
     })
-    : t('projects.search_placeholder_inbox', { defaultValue: 'Search Inbox...' });
+    : t('projects.search_placeholder_untagged', { defaultValue: 'Search Untagged...' });
   const summaryChips: ProjectSummaryChip[] = [
     {
       key: 'items',

@@ -132,8 +132,8 @@ fn apply_typed_patch_at(
     if let Some(value) = &patch.history_id {
         record.history_id.clone_from(value);
     }
-    if let Some(value) = &patch.project_id {
-        record.project_id.clone_from(value);
+    if let Some(value) = &patch.tag_ids {
+        record.tag_ids.clone_from(value);
     }
     if let Some(value) = &patch.file_path {
         record.file_path.clone_from(value);

@@ -27,7 +27,7 @@ fn core_validation_precedes_lazy_database_open() {
         .create_live_draft(HistoryCreateLiveDraftRequest {
             id: None,
             audio_extension: "../wav".to_string(),
-            project_id: None,
+            tag_ids: Vec::new(),
             icon: None,
         })
         .unwrap_err();
@@ -48,7 +48,7 @@ fn missing_native_copy_source_is_rejected_before_database_open() {
         .save_recording(HistorySaveRecordingRequest {
             segments: Vec::new(),
             duration: 1.0,
-            project_id: None,
+            tag_ids: Vec::new(),
             audio_bytes: None,
             native_audio_path: Some(missing.to_string_lossy().into_owned()),
             audio_extension: Some("wav".to_string()),
@@ -74,7 +74,7 @@ fn missing_import_copy_source_is_rejected_before_database_open() {
             source_path: missing.to_string_lossy().into_owned(),
             segments: Vec::new(),
             duration: 1.0,
-            project_id: None,
+            tag_ids: Vec::new(),
             converted_source_path: None,
         })
         .unwrap_err();
@@ -95,7 +95,7 @@ fn valid_mutation_opens_sqlite_and_persists_the_result() {
         .create_live_draft(HistoryCreateLiveDraftRequest {
             id: Some("shared-adapter-draft".to_string()),
             audio_extension: "wav".to_string(),
-            project_id: None,
+            tag_ids: Vec::new(),
             icon: None,
         })
         .unwrap();

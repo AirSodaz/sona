@@ -39,7 +39,7 @@ function recoveryItem(overrides: Partial<RecoveredQueueItem> = {}): RecoveredQue
         resolution: 'pending',
         progress: 30,
         segments: [],
-        projectId: null,
+        tagIds: [],
         lastKnownStage: 'transcribing',
         updatedAt: 100,
         hasSourceFile: true,
@@ -58,10 +58,17 @@ function queueItem(overrides: Partial<BatchQueueItem> = {}): BatchQueueItem {
         status: 'pending',
         progress: 0,
         segments: [],
+        tagIds: [],
         projectId: null,
         lastKnownStage: 'queued',
         ...overrides,
     };
+}
+
+function queuePayloadItem(item: BatchQueueItem): Omit<BatchQueueItem, 'projectId'> {
+    const { projectId, ...payload } = item;
+    void projectId;
+    return payload;
 }
 
 describe('recoveryService', () => {
@@ -93,7 +100,7 @@ describe('recoveryService', () => {
 
         expect(testContext.invokeMock).toHaveBeenCalledWith(
             TauriCommand.recovery.persistQueueSnapshot,
-            { queueItems },
+            { queueItems: queueItems.map(queuePayloadItem) },
         );
     });
 
@@ -109,7 +116,7 @@ describe('recoveryService', () => {
         expect(testContext.invokeMock).toHaveBeenCalledWith(
             TauriCommand.recovery.persistQueueSnapshot,
             {
-                queueItems,
+                queueItems: queueItems.map(queuePayloadItem),
                 resolvedIds: ['recovery-cleared'],
             },
         );
@@ -124,7 +131,7 @@ describe('recoveryService', () => {
         expect(testContext.invokeMock).toHaveBeenNthCalledWith(
             1,
             TauriCommand.recovery.persistQueueSnapshot,
-            { queueItems },
+            { queueItems: queueItems.map(queuePayloadItem) },
         );
         expect(testContext.invokeMock).toHaveBeenNthCalledWith(
             2,
@@ -137,6 +144,7 @@ describe('recoveryService', () => {
         const automationItem = recoveryItem({
             id: 'recovery-automation-1',
             source: 'automation',
+            projectId: null,
             automationRuleId: 'rule-1',
             sourceFingerprint: 'fp-automation-1',
         });

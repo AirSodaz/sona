@@ -5,7 +5,7 @@ import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
-import uniffi.sona_uniffi_bind.deleteHistoryItemsJson
+import uniffi.sona_uniffi_bind.purgeHistoryItemsJson
 import uniffi.sona_uniffi_bind.loadHistoryTranscriptJson
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
 import uniffi.sona_uniffi_bind.findOnlineAsrProvider
@@ -121,7 +121,7 @@ internal interface UniffiHistoryBindings {
     suspend fun createLiveDraft(appDataDir: String, requestJson: String): String
     suspend fun updateTranscript(appDataDir: String, requestJson: String): String
     suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String
-    suspend fun deleteItems(appDataDir: String, requestJson: String): String
+    suspend fun purgeItems(appDataDir: String, requestJson: String): String
     suspend fun queryWorkspace(appDataDir: String, requestJson: String): String
     suspend fun loadTranscript(appDataDir: String, historyId: String): String
 }
@@ -136,8 +136,8 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
     override suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String =
         completeHistoryLiveDraftJson(appDataDir, requestJson)
 
-    override suspend fun deleteItems(appDataDir: String, requestJson: String): String =
-        deleteHistoryItemsJson(appDataDir, requestJson)
+    override suspend fun purgeItems(appDataDir: String, requestJson: String): String =
+        purgeHistoryItemsJson(appDataDir, requestJson)
 
     override suspend fun queryWorkspace(appDataDir: String, requestJson: String): String =
         queryHistoryWorkspaceJson(appDataDir, requestJson)

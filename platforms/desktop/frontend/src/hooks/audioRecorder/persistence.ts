@@ -72,7 +72,7 @@ export function createRecordingPersistence({
             upsertHistoryItem(newItem);
         }
         syncMeta(newItem.title, newItem.id, newItem.icon);
-        void setActiveProjectId(newItem.projectId);
+        void setActiveProjectId(newItem.tagIds?.[0] ?? newItem.projectId ?? null);
         await persistSummary(newItem.id);
     }
 

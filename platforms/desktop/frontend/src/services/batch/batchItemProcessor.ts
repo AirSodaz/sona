@@ -90,7 +90,7 @@ export class BatchItemProcessor {
         currentSegments,
         this.calculateDuration(currentSegments),
         batchAsr.engine === 'local-sherpa' ? tempWavPath : undefined,
-        item.projectId,
+        item.tagIds ?? (item.projectId ? [item.projectId] : []),
         item.id,
       );
 

@@ -3,15 +3,14 @@ use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
 use serde_json::Value;
-use sona_core::dashboard::error::DashboardServiceError;
-use sona_core::dashboard::ports::ProjectRepository;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
-    ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaults,
-    ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
+    ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectIdGenerator,
+    ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
     ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
 use sona_core::sync::SyncEntityKind;
+use sona_core::tag::ACTIVE_TAG_SETTINGS_KEY;
 use std::sync::Arc;
 
 use crate::sync_repository::{
@@ -163,7 +162,7 @@ fn project_select_columns() -> String {
 
 fn project_insert_sql() -> String {
     format!(
-        "INSERT INTO projects ({}) VALUES ({})",
+        "INSERT INTO tags ({}) VALUES ({})",
         project_column_list(&PROJECT_COLUMNS),
         project_named_param_list(&PROJECT_COLUMNS)
     )
@@ -177,7 +176,7 @@ fn project_upsert_sql() -> String {
         .collect::<Vec<_>>()
         .join(", ");
     format!(
-        "INSERT INTO projects ({}) VALUES ({}) ON CONFLICT(id) DO UPDATE SET {}",
+        "INSERT INTO tags ({}) VALUES ({}) ON CONFLICT(id) DO UPDATE SET {}",
         project_column_list(&PROJECT_COLUMNS),
         project_named_param_list(&PROJECT_COLUMNS),
         update_assignments
@@ -190,19 +189,19 @@ fn project_update_sql() -> String {
         .map(|column| format!("{column} = :{column}"))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("UPDATE projects SET {assignments} WHERE id = :id")
+    format!("UPDATE tags SET {assignments} WHERE id = :id")
 }
 
 fn load_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, DatabaseError> {
     let columns = project_select_columns();
     let mut stmt = conn.prepare_cached(&format!(
-        "SELECT {columns} FROM projects ORDER BY sort_order, id"
+        "SELECT {columns} FROM tags ORDER BY sort_order, id"
     ))?;
     let rows = stmt.query_map([], map_row_to_project)?;
     let mut projects = Vec::new();
     for row in rows {
         let mut project = row?;
-        hydrate_project_default_links(conn, &mut project)?;
+        hydrate_tag_default_links(conn, &mut project)?;
         projects.push(project);
     }
     Ok(projects)
@@ -221,7 +220,7 @@ pub(crate) fn insert_projects_in_transaction(
     let sql = project_insert_sql();
     for (sort_order, project) in projects.iter().enumerate() {
         write_project_row(tx, &sql, project, sort_order as i64)?;
-        replace_project_default_links(tx, &project.id, &project.defaults)?;
+        replace_tag_default_links(tx, &project.id, &project.defaults)?;
     }
     Ok(())
 }
@@ -233,7 +232,7 @@ fn upsert_projects_in_transaction(
     let sql = project_upsert_sql();
     for (sort_order, project) in projects.iter().enumerate() {
         write_project_row(tx, &sql, project, sort_order as i64)?;
-        replace_project_default_links(tx, &project.id, &project.defaults)?;
+        replace_tag_default_links(tx, &project.id, &project.defaults)?;
     }
     Ok(())
 }
@@ -241,8 +240,8 @@ fn upsert_projects_in_transaction(
 pub(crate) fn delete_projects_in_transaction(
     tx: &rusqlite::Transaction<'_>,
 ) -> Result<(), DatabaseError> {
-    tx.execute("DELETE FROM project_default_links", [])?;
-    tx.execute("DELETE FROM projects", [])?;
+    tx.execute("DELETE FROM tag_default_links", [])?;
+    tx.execute("DELETE FROM tags", [])?;
     Ok(())
 }
 
@@ -261,7 +260,7 @@ pub(crate) fn replace_projects_in_transaction(
         }
     }
     tx.execute(
-        "DELETE FROM projects WHERE id NOT IN (SELECT id FROM keep_projects)",
+        "DELETE FROM tags WHERE id NOT IN (SELECT id FROM keep_projects)",
         [],
     )?;
     tx.execute("DROP TABLE keep_projects", [])?;
@@ -281,12 +280,11 @@ where
         project_id: &str,
     ) -> Result<Option<ProjectRecord>, DatabaseError> {
         let columns = project_select_columns();
-        let mut stmt =
-            conn.prepare_cached(&format!("SELECT {columns} FROM projects WHERE id = ?1"))?;
+        let mut stmt = conn.prepare_cached(&format!("SELECT {columns} FROM tags WHERE id = ?1"))?;
         let mut rows = stmt.query([project_id])?;
         if let Some(row) = rows.next()? {
             let mut project = map_row_to_project(row)?;
-            hydrate_project_default_links(conn, &mut project)?;
+            hydrate_tag_default_links(conn, &mut project)?;
             Ok(Some(project))
         } else {
             Ok(None)
@@ -309,7 +307,7 @@ where
                     let active_project_setting_json = tx
                         .query_row(
                             "SELECT value FROM app_settings WHERE key = ?1",
-                            [ACTIVE_PROJECT_SETTINGS_KEY],
+                            [ACTIVE_TAG_SETTINGS_KEY],
                             |row| row.get(0),
                         )
                         .optional()?;
@@ -328,7 +326,7 @@ where
             .and_then(|db| {
                 db.with_transaction(|tx| {
                     write_project_row(tx, &project_insert_sql(), &project, 0)?;
-                    replace_project_default_links(tx, &project.id, &project.defaults)?;
+                    replace_tag_default_links(tx, &project.id, &project.defaults)?;
                     record_project_sync_fields(tx, &project, None)?;
                     Ok(())
                 })
@@ -402,10 +400,10 @@ where
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
-                    tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
+                    tx.execute("DELETE FROM tags WHERE id = ?1", [project_id])?;
                     record_local_delete_in_transaction(
                         tx,
-                        SyncEntityKind::Project,
+                        SyncEntityKind::Tag,
                         project_id,
                         sync_now_ms(),
                     )?;
@@ -430,7 +428,7 @@ where
                     }) {
                         record_local_delete_in_transaction(
                             tx,
-                            SyncEntityKind::Project,
+                            SyncEntityKind::Tag,
                             existing_id,
                             now_ms,
                         )?;
@@ -449,7 +447,7 @@ where
             .and_then(|db| {
                 db.with_rw_transaction(|tx| {
                     let mut stmt =
-                        tx.prepare_cached("UPDATE projects SET sort_order = ?1 WHERE id = ?2")?;
+                        tx.prepare_cached("UPDATE tags SET sort_order = ?1 WHERE id = ?2")?;
                     for (sort_order, id) in project_ids.iter().enumerate() {
                         stmt.execute(rusqlite::params![sort_order as i64, id])?;
                     }
@@ -459,7 +457,7 @@ where
                     for (sort_order, project) in projects.iter().enumerate() {
                         record_local_field_change_in_transaction(
                             tx,
-                            SyncEntityKind::Project,
+                            SyncEntityKind::Tag,
                             &project.id,
                             "sortOrder",
                             serde_json::json!(sort_order),
@@ -479,7 +477,7 @@ where
                     tx.execute(
                         "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
                          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                        rusqlite::params![ACTIVE_PROJECT_SETTINGS_KEY, setting_json],
+                        rusqlite::params![ACTIVE_TAG_SETTINGS_KEY, setting_json],
                     )?;
                     Ok(())
                 })
@@ -547,7 +545,7 @@ pub(crate) fn record_project_sync_fields(
     for (field, value) in fields {
         record_local_field_change_in_transaction(
             tx,
-            SyncEntityKind::Project,
+            SyncEntityKind::Tag,
             &project.id,
             field,
             value,
@@ -697,13 +695,13 @@ fn checked_u64_column(row: &rusqlite::Row<'_>, column: &str, value: i64) -> rusq
     })
 }
 
-fn replace_project_default_links(
+fn replace_tag_default_links(
     tx: &rusqlite::Transaction,
     project_id: &str,
     defaults: &ProjectDefaults,
 ) -> Result<(), rusqlite::Error> {
     tx.execute(
-        "DELETE FROM project_default_links WHERE project_id = ?1",
+        "DELETE FROM tag_default_links WHERE tag_id = ?1",
         [project_id],
     )?;
     insert_project_links_for_kind(
@@ -739,7 +737,7 @@ fn replace_project_links_for_kind(
     target_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     tx.execute(
-        "DELETE FROM project_default_links WHERE project_id = ?1 AND kind = ?2",
+        "DELETE FROM tag_default_links WHERE tag_id = ?1 AND kind = ?2",
         rusqlite::params![project_id, kind],
     )?;
     insert_project_links_for_kind(tx, project_id, kind, target_ids)
@@ -752,7 +750,7 @@ fn insert_project_links_for_kind(
     target_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     let mut stmt = tx.prepare_cached(
-        "INSERT OR REPLACE INTO project_default_links (project_id, kind, target_id, sort_order)
+        "INSERT OR REPLACE INTO tag_default_links (tag_id, kind, target_id, sort_order)
          VALUES (?1, ?2, ?3, ?4)",
     )?;
     for (sort_order, target_id) in target_ids.iter().enumerate() {
@@ -766,13 +764,13 @@ fn insert_project_links_for_kind(
     Ok(())
 }
 
-fn hydrate_project_default_links(
+fn hydrate_tag_default_links(
     conn: &rusqlite::Connection,
     project: &mut ProjectRecord,
 ) -> Result<(), DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT kind, target_id FROM project_default_links
-         WHERE project_id = ?1
+        "SELECT kind, target_id FROM tag_default_links
+         WHERE tag_id = ?1
          ORDER BY kind, sort_order, target_id",
     )?;
     let mut rows = stmt.query([project.id.as_str()])?;
@@ -796,18 +794,6 @@ fn hydrate_project_default_links(
         }
     }
     Ok(())
-}
-
-#[async_trait::async_trait]
-impl<D> ProjectRepository for SqliteProjectRepository<D>
-where
-    D: DatabasePort,
-{
-    async fn count_projects(&self) -> Result<u64, DashboardServiceError> {
-        let state = ProjectStore::load_state(self)
-            .map_err(|error| DashboardServiceError::ProjectRepository(error.to_string()))?;
-        Ok(state.projects.len() as u64)
-    }
 }
 
 #[cfg(test)]
@@ -848,7 +834,7 @@ mod tests {
         repo.get_db()
             .unwrap()
             .with_connection(|conn| {
-                let mut stmt = conn.prepare("SELECT id, sort_order FROM projects ORDER BY id")?;
+                let mut stmt = conn.prepare("SELECT id, sort_order FROM tags ORDER BY id")?;
                 stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(DatabaseError::QueryError)
@@ -909,13 +895,13 @@ mod tests {
         );
         repo.get_db().unwrap().with_connection(|conn| {
             let row: (String, String, i64, i64) = conn.query_row(
-                "SELECT color, summary_template_id, created_at, updated_at FROM projects WHERE id = 'project-a'",
+                "SELECT color, summary_template_id, created_at, updated_at FROM tags WHERE id = 'project-a'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )?;
             assert_eq!(row, ("".to_string(), "summary".to_string(), 100, 100));
             let mut stmt = conn.prepare(
-                "SELECT kind, target_id, sort_order FROM project_default_links WHERE project_id = 'project-a' ORDER BY kind, sort_order",
+                "SELECT kind, target_id, sort_order FROM tag_default_links WHERE tag_id = 'project-a' ORDER BY kind, sort_order",
             )?;
             let links = stmt
                 .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)))?
@@ -985,7 +971,7 @@ mod tests {
             .unwrap()
             .with_transaction(|tx| {
                 tx.execute_batch(
-                    "CREATE TRIGGER reject_existing_hotword BEFORE INSERT ON project_default_links
+                    "CREATE TRIGGER reject_existing_hotword BEFORE INSERT ON tag_default_links
                      WHEN NEW.target_id = 'hotword-a'
                      BEGIN SELECT RAISE(ABORT, 'untouched link was rewritten'); END;",
                 )?;
@@ -1021,8 +1007,10 @@ mod tests {
         )
         .unwrap();
         repo.get_db().unwrap().with_transaction(|tx| {
-            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status) VALUES ('kept-item', 1, 1.0, 'Kept', 'recording', 'kept', 'complete')", [])?;
-            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status) VALUES ('removed-item', 2, 1.0, 'Removed', 'recording', 'removed', 'complete')", [])?;
+            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, status) VALUES ('kept-item', 1, 1.0, 'Kept', 'recording', 'complete')", [])?;
+            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, status) VALUES ('removed-item', 2, 1.0, 'Removed', 'recording', 'complete')", [])?;
+            tx.execute("INSERT INTO history_item_tags (history_id, tag_id) VALUES ('kept-item', 'kept')", [])?;
+            tx.execute("INSERT INTO history_item_tags (history_id, tag_id) VALUES ('removed-item', 'removed')", [])?;
             Ok(())
         }).unwrap();
 
@@ -1048,15 +1036,17 @@ mod tests {
             .unwrap()
             .with_connection(|conn| {
                 let kept: Option<String> = conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'kept-item'",
+                    "SELECT tag_id FROM history_item_tags WHERE history_id = 'kept-item'",
                     [],
                     |row| row.get(0),
                 )?;
-                let removed: Option<String> = conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'removed-item'",
-                    [],
-                    |row| row.get(0),
-                )?;
+                let removed: Option<String> = conn
+                    .query_row(
+                        "SELECT tag_id FROM history_item_tags WHERE history_id = 'removed-item'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
                 assert_eq!(kept.as_deref(), Some("kept"));
                 assert_eq!(removed, None);
                 Ok(())
@@ -1076,8 +1066,9 @@ mod tests {
         )
         .unwrap();
         repo.get_db().unwrap().with_transaction(|tx| {
-            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status) VALUES ('item', 1, 1.0, 'Item', 'recording', 'removed', 'complete')", [])?;
-            tx.execute_batch("CREATE TRIGGER reject_project_link BEFORE INSERT ON project_default_links WHEN NEW.target_id = 'reject' BEGIN SELECT RAISE(ABORT, 'rejected link'); END;")?;
+            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, status) VALUES ('item', 1, 1.0, 'Item', 'recording', 'complete')", [])?;
+            tx.execute("INSERT INTO history_item_tags (history_id, tag_id) VALUES ('item', 'removed')", [])?;
+            tx.execute_batch("CREATE TRIGGER reject_project_link BEFORE INSERT ON tag_default_links WHEN NEW.target_id = 'reject' BEGIN SELECT RAISE(ABORT, 'rejected link'); END;")?;
             Ok(())
         }).unwrap();
         let before = ProjectStore::load_state(&repo).unwrap();
@@ -1090,7 +1081,7 @@ mod tests {
             .unwrap()
             .with_connection(|conn| {
                 let assignment: Option<String> = conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'item'",
+                    "SELECT tag_id FROM history_item_tags WHERE history_id = 'item'",
                     [],
                     |row| row.get(0),
                 )?;
@@ -1158,9 +1149,10 @@ mod tests {
             .unwrap()
             .with_transaction(|tx| {
                 tx.execute(
-                    "INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status) VALUES ('empty-item', 1, 1.0, 'Empty', 'recording', '', 'complete')",
+                    "INSERT INTO history_items (id, timestamp, duration, title, kind, status) VALUES ('empty-item', 1, 1.0, 'Empty', 'recording', 'complete')",
                     [],
                 )?;
+                tx.execute("INSERT INTO history_item_tags (history_id, tag_id) VALUES ('empty-item', '')", [])?;
                 Ok(())
             })
             .unwrap();
@@ -1173,15 +1165,15 @@ mod tests {
         repo.get_db()
             .unwrap()
             .with_connection(|conn| {
-                let assignment: Option<String> = conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'empty-item'",
-                    [],
-                    |row| row.get(0),
-                )?;
+                let assignment: Option<String> = conn
+                    .query_row(
+                        "SELECT tag_id FROM history_item_tags WHERE history_id = 'empty-item'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
                 let name: String =
-                    conn.query_row("SELECT name FROM projects WHERE id = ''", [], |row| {
-                        row.get(0)
-                    })?;
+                    conn.query_row("SELECT name FROM tags WHERE id = ''", [], |row| row.get(0))?;
                 assert_eq!(assignment, None);
                 assert_eq!(name, "After");
                 Ok(())
@@ -1212,7 +1204,8 @@ mod tests {
         ProjectStore::insert_project(&repo, record("project-a", "Alpha", 100)).unwrap();
         ProjectStore::set_active_project_setting_json(&repo, "\"project-a\"".to_string()).unwrap();
         repo.get_db().unwrap().with_transaction(|tx| {
-            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, project_id, status) VALUES ('item', 1, 1.0, 'Item', 'recording', 'project-a', 'complete')", [])?;
+            tx.execute("INSERT INTO history_items (id, timestamp, duration, title, kind, status) VALUES ('item', 1, 1.0, 'Item', 'recording', 'complete')", [])?;
+            tx.execute("INSERT INTO history_item_tags (history_id, tag_id) VALUES ('item', 'project-a')", [])?;
             Ok(())
         }).unwrap();
 
@@ -1227,11 +1220,13 @@ mod tests {
         repo.get_db()
             .unwrap()
             .with_connection(|conn| {
-                let assignment: Option<String> = conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'item'",
-                    [],
-                    |row| row.get(0),
-                )?;
+                let assignment: Option<String> = conn
+                    .query_row(
+                        "SELECT tag_id FROM history_item_tags WHERE history_id = 'item'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
                 assert_eq!(assignment, None);
                 Ok(())
             })

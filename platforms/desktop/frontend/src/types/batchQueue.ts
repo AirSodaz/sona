@@ -34,7 +34,9 @@ export interface BatchQueueItem {
     audioUrl?: string | null;
     /** ID of the saved history item for this queue item. */
     historyId?: string;
-    /** Project context captured when this queue item was created. */
+    /** Tag context captured when this queue item was created. */
+    tagIds?: string[];
+    /** @deprecated Single-tag compatibility alias. */
     projectId: string | null;
     /** How this queue item entered the pipeline. */
     origin?: BatchQueueItemOrigin;

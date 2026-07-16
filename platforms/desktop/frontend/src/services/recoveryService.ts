@@ -66,6 +66,8 @@ function normalizeRecoveredSegment(
 }
 
 function normalizeRecoveredItem(item: CoreRecoveredQueueItem): RecoveredQueueItem {
+    const legacyProjectId = (item as { projectId?: string | null }).projectId ?? null;
+    const tagIds = item.tagIds ?? (legacyProjectId ? [legacyProjectId] : []);
     return {
         id: item.id,
         filename: item.filename,
@@ -74,7 +76,8 @@ function normalizeRecoveredItem(item: CoreRecoveredQueueItem): RecoveredQueueIte
         resolution: item.resolution,
         progress: item.progress,
         segments: item.segments.map(normalizeRecoveredSegment),
-        projectId: item.projectId,
+        tagIds,
+        projectId: legacyProjectId ?? tagIds[0] ?? null,
         ...(item.historyId != null ? { historyId: item.historyId } : {}),
         ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
         lastKnownStage: item.lastKnownStage,
@@ -115,6 +118,7 @@ function normalizeRecoverySnapshot(snapshot: CoreRecoverySnapshot): RecoverySnap
 }
 
 function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Serialize {
+    const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
     return {
         id: item.id,
         filename: item.filename,
@@ -123,7 +127,7 @@ function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Seriali
         resolution: item.resolution,
         progress: item.progress,
         segments: item.segments.map((segment) => ({ ...segment })),
-        projectId: item.projectId,
+        tagIds,
         ...(item.historyId != null ? { historyId: item.historyId } : {}),
         ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
         lastKnownStage: item.lastKnownStage,
@@ -148,6 +152,7 @@ function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Seriali
 }
 
 function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
+    const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
     return {
         id: item.id,
         ...(item.recoveryId != null ? { recoveryId: item.recoveryId } : {}),
@@ -157,7 +162,7 @@ function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
         status: item.status,
         progress: item.progress,
         segments: item.segments.map((segment) => ({ ...segment })),
-        projectId: item.projectId,
+        tagIds,
         ...(item.historyId != null ? { historyId: item.historyId } : {}),
         ...(item.historyTitle != null ? { historyTitle: item.historyTitle } : {}),
         ...(item.lastKnownStage != null ? { lastKnownStage: item.lastKnownStage } : {}),
@@ -258,6 +263,7 @@ function queueSnapshotWrite(
 }
 
 export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
+    const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
     return {
         id: item.id,
         recoveryId: item.id,
@@ -269,7 +275,8 @@ export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
         audioUrl: null,
         historyId: item.historyId,
         historyTitle: item.historyTitle,
-        projectId: item.projectId,
+        projectId: item.projectId ?? tagIds[0] ?? null,
+        tagIds,
         origin: item.source === 'automation' ? 'automation' : 'manual',
         automationRuleId: item.automationRuleId,
         automationRuleName: item.automationRuleName,

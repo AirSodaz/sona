@@ -12,11 +12,11 @@ use sona_core::task_ledger::types::{
 use std::sync::Arc;
 
 const TASK_LEDGER_COLUMNS: &str = "id, kind, status, title, progress, created_at, updated_at,
-    retryable, cancelable, recoverable, stage, history_id, project_id, file_path,
+    retryable, cancelable, recoverable, stage, history_id, tag_ids, file_path,
     automation_rule_id, source_fingerprint, error_message, template_id, target_language, version";
 const UPSERT_TASK_SQL: &str = "INSERT OR REPLACE INTO task_ledger (
     id, kind, status, title, progress, created_at, updated_at,
-    retryable, cancelable, recoverable, stage, history_id, project_id, file_path,
+    retryable, cancelable, recoverable, stage, history_id, tag_ids, file_path,
     automation_rule_id, source_fingerprint, error_message, template_id, target_language, version
 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)";
 
@@ -194,7 +194,7 @@ fn map_row_to_record(row: &rusqlite::Row) -> Result<TaskLedgerRecord, DatabaseEr
         recoverable: row.get::<_, i64>("recoverable")? != 0,
         stage: row.get("stage")?,
         history_id: row.get("history_id")?,
-        project_id: row.get("project_id")?,
+        tag_ids: serde_json::from_str(&row.get::<_, String>("tag_ids")?)?,
         file_path: row.get("file_path")?,
         automation_rule_id: row.get("automation_rule_id")?,
         source_fingerprint: row.get("source_fingerprint")?,
@@ -221,7 +221,7 @@ fn execute_upsert_task(
         record.recoverable as i64,
         record.stage.as_deref(),
         record.history_id.as_deref(),
-        record.project_id.as_deref(),
+        serde_json::to_string(&record.tag_ids)?,
         record.file_path.as_deref(),
         record.automation_rule_id.as_deref(),
         record.source_fingerprint.as_deref(),
@@ -305,7 +305,7 @@ mod tests {
             recoverable: false,
             stage: None,
             history_id: None,
-            project_id: None,
+            tag_ids: Vec::new(),
             file_path: None,
             automation_rule_id: None,
             source_fingerprint: None,
@@ -486,7 +486,7 @@ mod tests {
         record.recoverable = true;
         record.stage = Some("export".to_string());
         record.history_id = Some("history-1".to_string());
-        record.project_id = Some("project-1".to_string());
+        record.tag_ids = vec!["project-1".to_string()];
         record.file_path = Some("C:\\audio.wav".to_string());
         record.automation_rule_id = Some("rule-1".to_string());
         record.source_fingerprint = Some("fingerprint-1".to_string());
@@ -502,7 +502,7 @@ mod tests {
             .with_connection(|conn| {
                 let stored = conn.query_row(
                     "SELECT kind, status, retryable, cancelable, recoverable, stage, history_id,
-                            project_id, file_path, automation_rule_id, source_fingerprint,
+                            tag_ids, file_path, automation_rule_id, source_fingerprint,
                             error_message, template_id, target_language, version
                      FROM task_ledger WHERE id = 'typed-task'",
                     [],
@@ -515,7 +515,7 @@ mod tests {
                             row.get::<_, i64>(4)?,
                             row.get::<_, Option<String>>(5)?,
                             row.get::<_, Option<String>>(6)?,
-                            row.get::<_, Option<String>>(7)?,
+                            row.get::<_, String>(7)?,
                             row.get::<_, Option<String>>(8)?,
                             row.get::<_, Option<String>>(9)?,
                             row.get::<_, Option<String>>(10)?,
@@ -534,7 +534,7 @@ mod tests {
                 assert_eq!(stored.4, 1);
                 assert_eq!(stored.5.as_deref(), Some("export"));
                 assert_eq!(stored.6.as_deref(), Some("history-1"));
-                assert_eq!(stored.7.as_deref(), Some("project-1"));
+                assert_eq!(stored.7, r#"["project-1"]"#);
                 assert_eq!(stored.8.as_deref(), Some("C:\\audio.wav"));
                 assert_eq!(stored.9.as_deref(), Some("rule-1"));
                 assert_eq!(stored.10.as_deref(), Some("fingerprint-1"));

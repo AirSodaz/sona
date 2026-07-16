@@ -103,7 +103,7 @@ pub(crate) fn insert_automation_in_transaction(
 
 fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT id, name, project_id, preset_id, watch_directory, recursive, enabled,
+        "SELECT id, name, save_history, preset_id, watch_directory, recursive, enabled,
                 stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
                 stage_translation_language, stage_export_enabled,
                 export_directory, export_format, export_mode, export_prefix,
@@ -112,8 +112,13 @@ fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, 
          ORDER BY id",
     )?;
     let rows = stmt.query_map([], map_row_to_rule_record)?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(DatabaseError::QueryError)
+    let mut rules = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(DatabaseError::QueryError)?;
+    for rule in &mut rules {
+        hydrate_rule_tags(conn, rule)?;
+    }
+    Ok(rules)
 }
 
 fn load_processed_entries(
@@ -218,7 +223,8 @@ fn record_automation_rules_sync(
             .unwrap_or(fallback_now_ms);
         for (field, value) in [
             ("name", serde_json::json!(rule.name)),
-            ("projectId", serde_json::json!(rule.project_id)),
+            ("saveHistory", serde_json::json!(rule.save_history)),
+            ("tagIds", serde_json::json!(rule.tag_ids)),
             ("presetId", serde_json::json!(rule.preset_id)),
             ("recursive", serde_json::json!(rule.recursive)),
             (
@@ -273,7 +279,7 @@ fn insert_rules(
 ) -> Result<(), DatabaseError> {
     let mut stmt = tx.prepare_cached(
         "INSERT INTO automation_rules (
-            id, name, project_id, preset_id, watch_directory, recursive, enabled,
+            id, name, save_history, preset_id, watch_directory, recursive, enabled,
             stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
             stage_translation_language, stage_export_enabled,
             export_directory, export_format, export_mode, export_prefix,
@@ -285,7 +291,7 @@ fn insert_rules(
         stmt.execute(rusqlite::params![
             &rule.id,
             &rule.name,
-            &rule.project_id,
+            rule.save_history as i64,
             &rule.preset_id,
             &rule.watch_directory,
             rule.recursive as i64,
@@ -302,6 +308,7 @@ fn insert_rules(
             rule.created_at,
             rule.updated_at,
         ])?;
+        replace_rule_tags(tx, &rule.id, &rule.tag_ids)?;
     }
     Ok(())
 }
@@ -339,7 +346,8 @@ fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRul
     Ok(AutomationRuleRecord {
         id: row.get("id")?,
         name: row.get("name")?,
-        project_id: row.get("project_id")?,
+        save_history: row.get::<_, i64>("save_history")? != 0,
+        tag_ids: Vec::new(),
         preset_id: row.get("preset_id")?,
         watch_directory: row.get("watch_directory")?,
         recursive: row.get::<_, i64>("recursive")? != 0,
@@ -360,6 +368,40 @@ fn map_row_to_rule_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationRul
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
+}
+
+fn replace_rule_tags(
+    tx: &rusqlite::Transaction<'_>,
+    rule_id: &str,
+    tag_ids: &[String],
+) -> Result<(), DatabaseError> {
+    tx.execute(
+        "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+        [rule_id],
+    )?;
+    let mut stmt =
+        tx.prepare_cached("INSERT INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)")?;
+    for tag_id in tag_ids {
+        stmt.execute(rusqlite::params![rule_id, tag_id])?;
+    }
+    Ok(())
+}
+
+fn hydrate_rule_tags(
+    conn: &rusqlite::Connection,
+    rule: &mut AutomationRuleRecord,
+) -> Result<(), DatabaseError> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT art.tag_id
+         FROM automation_rule_tags art
+         JOIN tags tag ON tag.id = art.tag_id
+         WHERE art.rule_id = ?1
+         ORDER BY tag.sort_order, tag.id",
+    )?;
+    rule.tag_ids = stmt
+        .query_map([rule.id.as_str()], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(())
 }
 
 fn map_row_to_processed_record(row: &rusqlite::Row) -> rusqlite::Result<AutomationProcessedRecord> {
@@ -413,7 +455,8 @@ mod tests {
         AutomationRuleRecord {
             id: id.into(),
             name: name.into(),
-            project_id: "project-1".into(),
+            save_history: true,
+            tag_ids: Vec::new(),
             preset_id: "preset-1".into(),
             watch_directory: "C:\\watch".into(),
             recursive: true,
@@ -629,7 +672,8 @@ mod tests {
             vec![AutomationRuleRecord {
                 id: "rule-generated".into(),
                 name: "".into(),
-                project_id: "".into(),
+                save_history: true,
+                tag_ids: Vec::new(),
                 preset_id: "custom".into(),
                 watch_directory: "".into(),
                 recursive: false,

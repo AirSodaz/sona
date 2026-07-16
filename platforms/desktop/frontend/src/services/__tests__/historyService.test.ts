@@ -36,7 +36,8 @@ describe("historyService", () => {
         icon: "system:mic",
         type: "recording",
         searchContent: "",
-        projectId: null,
+        tagIds: [],
+        deletedAt: null,
         status: "draft",
         draftSource: "live_record",
       },
@@ -54,7 +55,7 @@ describe("historyService", () => {
       {
         id: null,
         audioExtension: ".webm",
-        projectId: "project-1",
+        tagIds: ["project-1"],
         icon: "system:mic",
       },
     );
@@ -80,7 +81,8 @@ describe("historyService", () => {
       previewText: "Hello...",
       type: "recording",
       searchContent: "Hello",
-      projectId: "project-1",
+      tagIds: ["project-1"],
+      deletedAt: null,
       status: "complete",
     });
 
@@ -98,7 +100,7 @@ describe("historyService", () => {
           { id: "seg-1", text: "Hello", start: 0, end: 3, isFinal: true },
         ],
         duration: 3,
-        projectId: "project-1",
+        tagIds: ["project-1"],
         audioBytes: [1, 2, 3],
         audioExtension: "webm",
       },
@@ -123,7 +125,8 @@ describe("historyService", () => {
       previewText: "Native...",
       type: "recording",
       searchContent: "Native",
-      projectId: null,
+      tagIds: [],
+      deletedAt: null,
       status: "complete",
     });
 
@@ -140,7 +143,7 @@ describe("historyService", () => {
           { id: "seg-1", text: "Native", start: 0, end: 4, isFinal: true },
         ],
         duration: 4,
-        projectId: null,
+        tagIds: [],
         nativeAudioPath: "C:\\AppData\\history\\capture.wav",
         audioExtension: "wav",
       },
@@ -158,7 +161,8 @@ describe("historyService", () => {
       previewText: "Imported...",
       type: "batch",
       searchContent: "Imported",
-      projectId: "project-1",
+      tagIds: ["project-1"],
+      deletedAt: null,
       status: "complete",
     });
 
@@ -178,7 +182,7 @@ describe("historyService", () => {
           { id: "seg-1", text: "Imported", start: 0, end: 5, isFinal: true },
         ],
         duration: 5,
-        projectId: "project-1",
+        tagIds: ["project-1"],
         convertedSourcePath: "C:\\Temp\\meeting.wav",
         id: null,
       },

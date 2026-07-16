@@ -1,14 +1,15 @@
-import { Square, CheckSquare } from 'lucide-react';
+import { MinusSquare, Square, CheckSquare } from 'lucide-react';
 
 interface CheckboxProps {
     checked: boolean;
+    indeterminate?: boolean;
     onChange: (checked: boolean) => void;
     label?: string;
     className?: string;
     'aria-label'?: string;
 }
 
-export function Checkbox({ checked, onChange, label, className = '', 'aria-label': ariaLabel }: CheckboxProps) {
+export function Checkbox({ checked, indeterminate = false, onChange, label, className = '', 'aria-label': ariaLabel }: CheckboxProps) {
     return (
         <div
             className={`checkbox-container ${className}`}
@@ -20,19 +21,19 @@ export function Checkbox({ checked, onChange, label, className = '', 'aria-label
                 userSelect: 'none'
             }}
             role="checkbox"
-            aria-checked={checked}
+            aria-checked={indeterminate ? 'mixed' : checked}
             aria-label={ariaLabel || label}
             tabIndex={0}
             onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onChange(!checked);
+                onChange(indeterminate || !checked);
             }}
             onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     e.stopPropagation();
-                    onChange(!checked);
+                    onChange(indeterminate || !checked);
                 }
             }}
         >
@@ -46,7 +47,9 @@ export function Checkbox({ checked, onChange, label, className = '', 'aria-label
                     transition: 'color var(--transition-fast)'
                 }}
             >
-                {checked ? (
+                {indeterminate ? (
+                    <MinusSquare size={18} strokeWidth={2.5} />
+                ) : checked ? (
                     <CheckSquare size={18} strokeWidth={2.5} />
                 ) : (
                     <Square size={18} strokeWidth={2.5} />

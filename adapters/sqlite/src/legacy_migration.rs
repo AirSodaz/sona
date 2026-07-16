@@ -4,9 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Transaction;
 use serde_json::Value;
-use sona_core::project::{
-    ProjectDefaults, ProjectListOptions, normalize_project_value_with_timestamp,
-};
+use sona_core::tag::{TagDefaults, TagListOptions, normalize_tag_value_with_timestamp};
+use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
 
 use crate::{Database, DatabaseError};
 
@@ -263,12 +262,12 @@ fn migrate_history(
         }
     };
 
-    let mut existing_projects = std::collections::HashSet::new();
-    let mut projects_stmt = tx.prepare("SELECT id FROM projects")?;
-    let mut project_rows = projects_stmt.query([])?;
-    while let Some(row) = project_rows.next()? {
+    let mut existing_tags = std::collections::HashSet::new();
+    let mut tags_stmt = tx.prepare("SELECT id FROM tags")?;
+    let mut tag_rows = tags_stmt.query([])?;
+    while let Some(row) = tag_rows.next()? {
         let p_id: String = row.get(0)?;
-        existing_projects.insert(p_id);
+        existing_tags.insert(p_id);
     }
 
     for item_val in items {
@@ -285,8 +284,8 @@ fn migrate_history(
         };
 
         if let Err(e) = tx.execute(
-            "INSERT OR IGNORE INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, project_id, status, draft_source)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT OR IGNORE INTO history_items (id, timestamp, duration, audio_path, transcript_path, title, preview_text, icon, kind, search_content, status, draft_source)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 &id,
                 u64_field(&item_val, "timestamp") as i64,
@@ -301,18 +300,6 @@ fn migrate_history(
                     _ => "recording",
                 },
                 string_field(&item_val, "searchContent").unwrap_or_default(),
-                {
-                    let pid = string_field(&item_val, "projectId");
-                    if let Some(ref p_id) = pid {
-                        if existing_projects.contains(p_id) {
-                            Some(p_id.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                },
                 match string_field(&item_val, "status").as_deref() {
                     Some("draft") => "draft",
                     _ => "complete",
@@ -325,6 +312,16 @@ fn migrate_history(
         ) {
             errors.push(format!("Failed to insert history item {id}: {e}"));
             continue;
+        }
+
+        if let Some(tag_id) =
+            string_field(&item_val, "projectId").filter(|tag_id| existing_tags.contains(tag_id))
+            && let Err(error) = tx.execute(
+                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
+                rusqlite::params![&id, tag_id],
+            )
+        {
+            errors.push(format!("Failed to assign history tag {id}: {error}"));
         }
 
         // Migrate transcript
@@ -506,9 +503,9 @@ fn migrate_projects(
     let fallback_timestamp = current_time_millis().unwrap_or(0);
 
     for (i, project_val) in projects.iter().enumerate() {
-        let mut project = normalize_project_value_with_timestamp(
+        let mut project = normalize_tag_value_with_timestamp(
             project_val,
-            &ProjectListOptions::default(),
+            &TagListOptions::default(),
             fallback_timestamp,
         );
         if project.id.is_empty() {
@@ -525,7 +522,7 @@ fn migrate_projects(
         let id = project.id.clone();
 
         if let Err(e) = tx.execute(
-            "INSERT OR IGNORE INTO projects (
+            "INSERT OR IGNORE INTO tags (
                 id, name, description, icon, color, sort_order, created_at, updated_at,
                 summary_template_id, translation_language, polish_preset_id,
                 polish_scenario, polish_context, export_file_name_prefix
@@ -537,7 +534,7 @@ fn migrate_projects(
                 &project.description,
                 &project.icon,
                 string_field(project_val, "color").unwrap_or_default(),
-                u64_field(project_val, "sortOrder") as i64,
+                i as i64,
                 project.created_at as i64,
                 project.updated_at as i64,
                 &project.defaults.summary_template_id,
@@ -565,7 +562,7 @@ fn migrate_projects(
 fn insert_project_default_links(
     tx: &Transaction,
     project_id: &str,
-    defaults: &ProjectDefaults,
+    defaults: &TagDefaults,
 ) -> Result<(), rusqlite::Error> {
     insert_project_default_link_kind(
         tx,
@@ -595,7 +592,7 @@ fn insert_project_default_link_kind(
     target_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     let mut stmt = tx.prepare_cached(
-        "INSERT OR IGNORE INTO project_default_links (project_id, kind, target_id, sort_order)
+        "INSERT OR IGNORE INTO tag_default_links (tag_id, kind, target_id, sort_order)
          VALUES (?1, ?2, ?3, ?4)",
     )?;
     for (sort_order, target_id) in target_ids.iter().enumerate() {
@@ -635,9 +632,10 @@ fn migrate_automation(
                 } else {
                     id
                 };
+                let project_id = string_field(&rule, "projectId").unwrap_or_default();
                 if let Err(e) = tx.execute(
                     "INSERT OR IGNORE INTO automation_rules (
-                        id, name, project_id, preset_id, watch_directory, recursive, enabled,
+                        id, name, save_history, preset_id, watch_directory, recursive, enabled,
                         stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
                         stage_translation_language, stage_export_enabled,
                         export_directory, export_format, export_mode, export_prefix,
@@ -647,7 +645,7 @@ fn migrate_automation(
                     rusqlite::params![
                         &id,
                         string_field(&rule, "name").unwrap_or_default(),
-                        string_field(&rule, "projectId").unwrap_or_default(),
+                        (project_id != "none") as i64,
                         string_field(&rule, "presetId").unwrap_or_else(|| "custom".to_string()),
                         string_field(&rule, "watchDirectory").unwrap_or_default(),
                         bool_field(&rule, "recursive") as i64,
@@ -666,6 +664,16 @@ fn migrate_automation(
                     ],
                 ) {
                     errors.push(format!("Failed to insert automation rule: {e}"));
+                    continue;
+                }
+                if !matches!(project_id.as_str(), "" | "inbox" | "none")
+                    && let Err(error) = tx.execute(
+                        "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id)
+                         SELECT ?1, id FROM tags WHERE id = ?2",
+                        rusqlite::params![&id, &project_id],
+                    )
+                {
+                    errors.push(format!("Failed to assign automation tag: {error}"));
                     continue;
                 }
                 *rule_count += 1;
@@ -753,11 +761,6 @@ fn migrate_task_ledger(
         }
     };
 
-    let version = snapshot_obj
-        .get("version")
-        .and_then(Value::as_u64)
-        .unwrap_or(1) as i64;
-
     let tasks = match snapshot_obj.get("tasks").and_then(Value::as_array) {
         Some(arr) => arr,
         None => return Ok(()),
@@ -765,11 +768,28 @@ fn migrate_task_ledger(
 
     for task in tasks {
         let id = string_field(task, "id").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let tag_ids = task
+            .get("tagIds")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| {
+                optional_string_field(task, "projectId")
+                    .filter(|id| !matches!(id.as_str(), "" | "inbox" | "none"))
+                    .into_iter()
+                    .collect()
+            });
+        let tag_ids_json = serde_json::to_string(&tag_ids).unwrap_or_else(|_| "[]".to_string());
 
         if let Err(e) = tx.execute(
             "INSERT OR IGNORE INTO task_ledger (
                 id, kind, status, title, progress, created_at, updated_at,
-                retryable, cancelable, recoverable, stage, history_id, project_id,
+                retryable, cancelable, recoverable, stage, history_id, tag_ids,
                 file_path, automation_rule_id, source_fingerprint, error_message,
                 template_id, target_language, version
             )
@@ -787,14 +807,14 @@ fn migrate_task_ledger(
                 bool_field(task, "recoverable") as i64,
                 optional_string_field(task, "stage"),
                 optional_string_field(task, "historyId"),
-                optional_string_field(task, "projectId"),
+                tag_ids_json,
                 optional_string_field(task, "filePath"),
                 optional_string_field(task, "automationRuleId"),
                 optional_string_field(task, "sourceFingerprint"),
                 optional_string_field(task, "errorMessage"),
                 optional_string_field(task, "templateId"),
                 optional_string_field(task, "targetLanguage"),
-                version,
+                TASK_LEDGER_VERSION as i64,
             ],
         ) {
             errors.push(format!("Failed to insert task {id}: {e}"));
@@ -984,7 +1004,7 @@ fn verify_counts(
     };
 
     verify("history_items", history_count, "history_items");
-    verify("projects", project_count, "projects");
+    verify("tags", project_count, "tags");
     verify(
         "automation_rules",
         automation_rule_count,
@@ -1148,15 +1168,14 @@ mod tests {
                 .unwrap();
             assert_eq!(snap_count, 1);
 
-            // Verify hist-1 has project_id = NULL
-            let pid: Option<String> = conn
+            let tag_id: Option<String> = conn
                 .query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'hist-2'",
+                    "SELECT tag_id FROM history_item_tags WHERE history_id = 'hist-2'",
                     [],
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(pid, Some("proj-1".to_string()));
+            assert_eq!(tag_id, Some("proj-1".to_string()));
 
             Ok(())
         })
@@ -1217,7 +1236,7 @@ mod tests {
 
         db.with_connection(|conn| {
             let count: i64 = conn
-                .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
+                .query_row("SELECT COUNT(*) FROM tags", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(count, 2);
 
@@ -1226,7 +1245,7 @@ mod tests {
                     "SELECT description, summary_template_id, translation_language,
                             polish_preset_id, polish_scenario, polish_context,
                             export_file_name_prefix
-                     FROM projects WHERE id = 'proj-1'",
+                     FROM tags WHERE id = 'proj-1'",
                     [],
                     |r| {
                         Ok((
@@ -1251,8 +1270,8 @@ mod tests {
 
             let links: Vec<(String, String)> = conn
                 .prepare(
-                    "SELECT kind, target_id FROM project_default_links
-                     WHERE project_id = 'proj-1'
+                    "SELECT kind, target_id FROM tag_default_links
+                     WHERE tag_id = 'proj-1'
                      ORDER BY kind, sort_order",
                 )
                 .unwrap()
@@ -1274,7 +1293,7 @@ mod tests {
             // Check proj-2 defaults
             let tmpl: String = conn
                 .query_row(
-                    "SELECT summary_template_id FROM projects WHERE id = 'proj-2'",
+                    "SELECT summary_template_id FROM tags WHERE id = 'proj-2'",
                     [],
                     |r| r.get(0),
                 )
@@ -1362,7 +1381,7 @@ mod tests {
 
             let rule = conn
                 .query_row(
-                    "SELECT name, project_id, preset_id, watch_directory, recursive, enabled,
+                    "SELECT name, save_history, preset_id, watch_directory, recursive, enabled,
                             stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
                             stage_translation_language, stage_export_enabled,
                             export_directory, export_format, export_mode, export_prefix,
@@ -1372,7 +1391,7 @@ mod tests {
                     |r| {
                         Ok((
                             r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
+                            r.get::<_, i64>(1)?,
                             r.get::<_, String>(2)?,
                             r.get::<_, String>(3)?,
                             r.get::<_, i64>(4)?,
@@ -1393,7 +1412,7 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(rule.0, "Watch Docs");
-            assert_eq!(rule.1, "proj-1");
+            assert_eq!(rule.1, 1);
             assert_eq!(rule.2, "preset-1");
             assert_eq!(rule.3, "/docs");
             assert_eq!(rule.4, 1);
@@ -1481,7 +1500,7 @@ mod tests {
             let task = conn
                 .query_row(
                     "SELECT kind, status, title, progress, created_at, updated_at,
-                            retryable, cancelable, recoverable, stage, history_id, project_id,
+                            retryable, cancelable, recoverable, stage, history_id, tag_ids,
                             file_path, automation_rule_id, source_fingerprint, error_message,
                             template_id, target_language, version
                      FROM task_ledger WHERE id = 'task-1'",
@@ -1499,7 +1518,7 @@ mod tests {
                             r.get::<_, i64>(8)?,
                             r.get::<_, Option<String>>(9)?,
                             r.get::<_, Option<String>>(10)?,
-                            r.get::<_, Option<String>>(11)?,
+                            r.get::<_, String>(11)?,
                             r.get::<_, Option<String>>(12)?,
                             r.get::<_, Option<String>>(13)?,
                             r.get::<_, Option<String>>(14)?,
@@ -1522,14 +1541,14 @@ mod tests {
             assert_eq!(task.8, 0);
             assert_eq!(task.9.as_deref(), Some("polish"));
             assert_eq!(task.10.as_deref(), Some("hist-1"));
-            assert_eq!(task.11.as_deref(), Some("proj-1"));
+            assert_eq!(task.11, r#"["proj-1"]"#);
             assert_eq!(task.12.as_deref(), Some("/docs/file.txt"));
             assert_eq!(task.13.as_deref(), Some("rule-1"));
             assert_eq!(task.14.as_deref(), Some("fp-1"));
             assert_eq!(task.15.as_deref(), Some("retryable"));
             assert_eq!(task.16.as_deref(), Some("tmpl-1"));
             assert_eq!(task.17.as_deref(), Some("ja"));
-            assert_eq!(task.18, 1);
+            assert_eq!(task.18, TASK_LEDGER_VERSION as i64);
 
             Ok(())
         })
@@ -1646,7 +1665,7 @@ mod tests {
                 0
             );
             assert_eq!(
-                conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get::<_, i64>(0))
+                conn.query_row("SELECT COUNT(*) FROM tags", [], |r| r.get::<_, i64>(0))
                     .unwrap(),
                 1
             );
@@ -1739,7 +1758,7 @@ mod tests {
                 1
             );
             assert_eq!(
-                conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get::<_, i64>(0))
+                conn.query_row("SELECT COUNT(*) FROM tags", [], |r| r.get::<_, i64>(0))
                     .unwrap(),
                 1
             );
@@ -1824,7 +1843,7 @@ mod tests {
                 1
             );
             assert_eq!(
-                conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get::<_, i64>(0))
+                conn.query_row("SELECT COUNT(*) FROM tags", [], |r| r.get::<_, i64>(0))
                     .unwrap(),
                 1
             );

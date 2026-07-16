@@ -23,12 +23,13 @@ import type {
   HistoryCreateTranscriptSnapshotRequest_Serialize,
   HistoryDeleteItemsRequest,
   HistoryItemRecord,
-  HistoryReassignProjectRequest,
+  HistoryReplaceTagAssignmentsRequest,
   HistorySaveImportedFileRequest_Serialize,
   HistorySaveRecordingRequest_Serialize,
   HistorySummaryPayload_Serialize,
+  HistoryTrashItemsRequest,
   HistoryUpdateItemMetaRequest_Serialize,
-  HistoryUpdateProjectAssignmentsRequest,
+  HistoryUpdateTagAssignmentsRequest,
   HistoryUpdateTranscriptRequest_Serialize,
   HistoryWorkspaceQueryRequest,
   HistoryWorkspaceQueryResult,
@@ -61,6 +62,11 @@ import type {
   ProjectRecord,
   ProjectUpdateInput,
 } from "../../types/project";
+import type {
+  TagCreateInput,
+  TagRecord,
+  TagUpdateInput,
+} from "../../types/tag";
 import type {
   SpeakerProfileSample,
   SpeakerProcessingConfig,
@@ -202,6 +208,8 @@ type ProjectListArgs = {
   fallbackEnabledSpeakerProfileIds?: string[];
 };
 
+type TagListArgs = ProjectListArgs;
+
 type ProjectCreateArgs = ProjectCreateInput;
 
 type ProjectUpdateArgs = {
@@ -209,10 +217,20 @@ type ProjectUpdateArgs = {
   updates: ProjectUpdateInput;
 };
 
+type HistoryUpdateProjectAssignmentsRequest = {
+  ids: string[];
+  projectId: string | null;
+};
+
+type HistoryReassignProjectRequest = {
+  currentProjectId: string;
+  nextProjectId: string | null;
+};
+
 type AutomationValidateActivationArgs = {
   rule: AutomationRule;
   globalConfig: AppConfig;
-  project: ProjectRecord | null;
+  tags: TagRecord[];
 };
 
 type ExportBackupArchiveRequest = {
@@ -394,6 +412,18 @@ export type TauriCommandContractMap = {
     args: HistoryDeleteItemsRequest;
     result: void;
   };
+  [TauriCommand.history.trashItems]: {
+    args: HistoryTrashItemsRequest;
+    result: void;
+  };
+  [TauriCommand.history.restoreItems]: {
+    args: HistoryDeleteItemsRequest;
+    result: void;
+  };
+  [TauriCommand.history.purgeItems]: {
+    args: HistoryDeleteItemsRequest;
+    result: void;
+  };
   [TauriCommand.history.loadTranscript]: {
     args: { historyId: string };
     result: TranscriptSegment_Serialize[] | null;
@@ -443,6 +473,14 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.history.reassignProject]: {
     args: HistoryReassignProjectRequest;
+    result: void;
+  };
+  [TauriCommand.history.updateTagAssignments]: {
+    args: HistoryUpdateTagAssignmentsRequest;
+    result: void;
+  };
+  [TauriCommand.history.replaceTagAssignments]: {
+    args: HistoryReplaceTagAssignmentsRequest;
     result: void;
   };
   [TauriCommand.history.loadSummary]: {
@@ -526,6 +564,38 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.project.setActiveId]: {
     args: { projectId: string | null };
+    result: void;
+  };
+  [TauriCommand.tag.list]: {
+    args: TagListArgs;
+    result: TagRecord[];
+  };
+  [TauriCommand.tag.saveAll]: {
+    args: { tags: TagRecord[] };
+    result: void;
+  };
+  [TauriCommand.tag.create]: {
+    args: TagCreateInput;
+    result: TagRecord;
+  };
+  [TauriCommand.tag.update]: {
+    args: { tagId: string; updates: TagUpdateInput };
+    result: TagRecord | null;
+  };
+  [TauriCommand.tag.delete]: {
+    args: { tagId: string };
+    result: void;
+  };
+  [TauriCommand.tag.reorder]: {
+    args: { tagIds: string[] };
+    result: TagRecord[];
+  };
+  [TauriCommand.tag.getActiveId]: {
+    args: undefined;
+    result: string | null;
+  };
+  [TauriCommand.tag.setActiveId]: {
+    args: { tagId: string | null };
     result: void;
   };
   [TauriCommand.automationRepository.loadState]: {

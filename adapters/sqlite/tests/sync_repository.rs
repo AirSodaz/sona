@@ -156,7 +156,8 @@ fn local_operation_and_outbox_publish_are_atomic() {
         SyncPresetV1::Standard,
     )
     .unwrap();
-    let pending = operation("op-a", "device-a", "local");
+    let mut pending = operation("op-a", "device-a", "local");
+    pending.entity.kind = SyncEntityKind::Tag;
 
     repository.record_local_operation(&pending).unwrap();
     assert_eq!(
@@ -265,7 +266,7 @@ fn remote_project_winner_is_projected_without_creating_an_outbox_echo() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO projects (id, name, created_at, updated_at)
+            "INSERT INTO tags (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -298,7 +299,7 @@ fn remote_project_winner_is_projected_without_creating_an_outbox_echo() {
         .with_connection(|connection| {
             Ok((
                 connection.query_row(
-                    "SELECT name FROM projects WHERE id = 'project-1'",
+                    "SELECT name FROM tags WHERE id = 'project-1'",
                     [],
                     |row| row.get::<_, String>(0),
                 )?,
@@ -378,7 +379,7 @@ fn excluded_remote_field_rolls_back_the_entire_batch_and_cursor() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO projects (id, name, created_at, updated_at)
+            "INSERT INTO tags (id, name, created_at, updated_at)
              VALUES ('project-1', 'Before', 1, 1)",
             [],
         )?;
@@ -422,7 +423,7 @@ fn excluded_remote_field_rolls_back_the_entire_batch_and_cursor() {
         .with_connection(|connection| {
             Ok((
                 connection.query_row(
-                    "SELECT name FROM projects WHERE id = 'project-1'",
+                    "SELECT name FROM tags WHERE id = 'project-1'",
                     [],
                     |row| row.get::<_, String>(0),
                 )?,
@@ -547,7 +548,7 @@ fn project_repository_writes_business_row_and_outbox_in_one_transaction() {
             )
     }));
     assert!(pending.iter().all(|operation| {
-        operation.entity.kind == SyncEntityKind::Project && operation.entity.id == project.id
+        operation.entity.kind == SyncEntityKind::Tag && operation.entity.id == project.id
     }));
 }
 
@@ -707,7 +708,8 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
     let rule = AutomationRuleRecord {
         id: "rule-1".to_string(),
         name: "Portable rule".to_string(),
-        project_id: "project-1".to_string(),
+        save_history: true,
+        tag_ids: Vec::new(),
         preset_id: "custom".to_string(),
         watch_directory: "C:\\private\\watch".to_string(),
         recursive: true,
@@ -739,6 +741,8 @@ fn automation_capture_excludes_paths_enabled_state_and_execution_history() {
         .filter_map(|operation| operation.kind.field())
         .collect::<Vec<_>>();
     assert!(fields.contains(&"name"));
+    assert!(fields.contains(&"saveHistory"));
+    assert!(fields.contains(&"tagIds"));
     assert!(fields.contains(&"stageAutoTranslate"));
     assert!(fields.contains(&"exportFormat"));
     assert!(!fields.contains(&"watchDirectory"));
@@ -825,7 +829,7 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO projects (id, name, created_at, updated_at)
+            "INSERT INTO tags (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -873,7 +877,7 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
         .with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM projects WHERE id = 'project-1')",
+                    "SELECT EXISTS(SELECT 1 FROM tags WHERE id = 'project-1')",
                     [],
                     |row| row.get::<_, bool>(0),
                 )
@@ -906,11 +910,9 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
     let restored_name = db
         .with_connection(|connection| {
             connection
-                .query_row(
-                    "SELECT name FROM projects WHERE id = 'project-1'",
-                    [],
-                    |row| row.get::<_, String>(0),
-                )
+                .query_row("SELECT name FROM tags WHERE id = 'project-1'", [], |row| {
+                    row.get::<_, String>(0)
+                })
                 .map_err(DatabaseError::QueryError)
         })
         .unwrap();
@@ -929,7 +931,7 @@ fn conflict_can_be_listed_viewed_and_resolved_with_the_conflicting_value() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO projects (id, name, created_at, updated_at)
+            "INSERT INTO tags (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -977,11 +979,9 @@ fn conflict_can_be_listed_viewed_and_resolved_with_the_conflicting_value() {
     let name = db
         .with_connection(|connection| {
             connection
-                .query_row(
-                    "SELECT name FROM projects WHERE id = 'project-1'",
-                    [],
-                    |row| row.get::<_, String>(0),
-                )
+                .query_row("SELECT name FROM tags WHERE id = 'project-1'", [], |row| {
+                    row.get::<_, String>(0)
+                })
                 .map_err(DatabaseError::QueryError)
         })
         .unwrap();
@@ -1000,7 +1000,7 @@ fn initializing_sync_seeds_existing_domain_state_and_requires_an_initial_checkpo
     let db = Arc::new(Database::open_in_memory().unwrap());
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO projects (id, name, icon, color, created_at, updated_at)
+            "INSERT INTO tags (id, name, icon, color, created_at, updated_at)
              VALUES ('existing-project', 'Existing', '', '', 10, 20)",
             [],
         )?;

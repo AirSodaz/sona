@@ -352,6 +352,14 @@
   text-overflow: ellipsis;
 }
 
+.history-item-tag-chips {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
 .history-item-meta {
   display: flex;
   flex-wrap: wrap;

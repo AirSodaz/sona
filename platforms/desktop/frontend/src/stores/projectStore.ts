@@ -14,6 +14,7 @@ interface CreateProjectInput {
   name: string;
   description?: string;
   icon?: string;
+  color?: string;
   defaults?: ProjectDefaults;
 }
 
@@ -87,6 +88,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       name: input.name,
       description: input.description || '',
       icon: input.icon || '',
+      color: input.color || '#64748b',
       defaults,
     });
 

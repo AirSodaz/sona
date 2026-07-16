@@ -121,7 +121,7 @@ fn record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
         recoverable: false,
         stage: None,
         history_id: None,
-        project_id: None,
+        tag_ids: Vec::new(),
         file_path: None,
         automation_rule_id: None,
         source_fingerprint: None,
@@ -367,7 +367,7 @@ fn empty_snapshot_has_no_update_time() {
         .load_snapshot_at(9_000)
         .unwrap();
 
-    assert_eq!(snapshot.version, 1);
+    assert_eq!(snapshot.version, 2);
     assert_eq!(snapshot.updated_at, None);
     assert!(snapshot.tasks.is_empty());
 }

@@ -106,7 +106,7 @@ mod tests {
 
         assert_eq!(serde_json::to_string(&snapshot).unwrap(), output);
         assert_eq!(snapshot["content"]["overview"]["itemCount"], 0);
-        assert_eq!(snapshot["content"]["overview"]["projectCount"], 0);
+        assert_eq!(snapshot["content"]["overview"]["tagCount"], 0);
         assert_eq!(snapshot["content"]["overview"]["isDeepLoaded"], false);
         assert!(snapshot["content"].get("speakers").unwrap().is_null());
         assert!(!output.contains('\n'));
@@ -130,7 +130,7 @@ mod tests {
                 }]))
                 .unwrap(),
                 duration: 2.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),

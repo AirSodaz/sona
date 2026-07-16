@@ -17,16 +17,16 @@ use sona_core::backup::{
 use sona_core::config::service::app_config_stored_state_from_value;
 use sona_core::config::{AppConfigStore, AppConfigStoredState};
 use sona_core::history::{HistoryBackupSnapshot, HistoryItemStatus};
-use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
+use sona_core::tag::{TagDefaults, TagRecord, TagStore};
 use sona_sqlite::ports::Database as DatabasePort;
 use sona_sqlite::{
     Database, DatabaseError, LazySqliteBackupStateRepository, SqliteAutomationRepository,
-    SqliteBackupStateRepository, SqliteConfigStore, SqliteProjectRepository, llm_usage,
+    SqliteBackupStateRepository, SqliteConfigStore, SqliteTagRepository, llm_usage,
     validate_backup_restore_dataset,
 };
 use tempfile::TempDir;
 
-const ACTIVE_PROJECT_KEY: &str = "sona-active-project-id";
+const ACTIVE_TAG_KEY: &str = "sona-active-tag-id";
 
 struct Fixture {
     root: TempDir,
@@ -127,9 +127,9 @@ impl Fixture {
             })
             .unwrap();
 
-        let projects = projects(label);
-        let project_store = SqliteProjectRepository::new(Arc::clone(&self.db));
-        project_store.replace_projects(projects).unwrap();
+        let tags = tags(label);
+        let tag_store = SqliteTagRepository::new(Arc::clone(&self.db));
+        tag_store.replace_tags(tags).unwrap();
         seed_history(self.db.as_ref(), label);
 
         let automation_store = SqliteAutomationRepository::new(Arc::clone(&self.db));
@@ -139,8 +139,8 @@ impl Fixture {
         llm_usage::replace_raw(self.db.as_ref(), &analytics_content(label)).unwrap();
         config_store
             .set_setting_json(
-                ACTIVE_PROJECT_KEY,
-                serde_json::to_string(&format!("{label}-project-b")).unwrap(),
+                ACTIVE_TAG_KEY,
+                serde_json::to_string(&format!("{label}-tag-b")).unwrap(),
             )
             .unwrap();
         config
@@ -196,15 +196,17 @@ fn stored_config(config: &Value, updated_at: i64) -> AppConfigStoredState {
     app_config_stored_state_from_value(config, updated_at).unwrap()
 }
 
-fn project(label: &str, suffix: &str) -> ProjectRecord {
-    ProjectRecord {
-        id: format!("{label}-project-{suffix}"),
-        name: format!("Project {label} {suffix}"),
+fn tag(label: &str, suffix: &str) -> TagRecord {
+    TagRecord {
+        id: format!("{label}-tag-{suffix}"),
+        name: format!("Tag {label} {suffix}"),
         description: format!("Description {suffix}"),
         icon: format!("icon-{suffix}"),
+        color: if suffix == "a" { "#2563eb" } else { "#dc2626" }.to_string(),
+        sort_order: usize::from(suffix != "a"),
         created_at: timestamp(label) as u64,
         updated_at: timestamp(label) as u64 + 1,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: format!("{label}-summary-{suffix}"),
             translation_language: if suffix == "a" { "en" } else { "zh" }.to_string(),
             polish_preset_id: format!("{label}-polish"),
@@ -225,8 +227,8 @@ fn project(label: &str, suffix: &str) -> ProjectRecord {
     }
 }
 
-fn projects(label: &str) -> Vec<ProjectRecord> {
-    vec![project(label, "b"), project(label, "a")]
+fn tags(label: &str) -> Vec<TagRecord> {
+    vec![tag(label, "b"), tag(label, "a")]
 }
 
 fn segment(label: &str, suffix: &str) -> Value {
@@ -246,8 +248,8 @@ fn seed_history(db: &Database, label: &str) {
             tx.execute(
                 "INSERT INTO history_items (
                     id, timestamp, duration, audio_path, audio_status, transcript_path,
-                    title, preview_text, icon, kind, search_content, project_id, status, draft_source
-                 ) VALUES (?1, 500, ?2, ?3, 'removed', ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'complete', NULL)",
+                    title, preview_text, icon, kind, search_content, status, draft_source
+                 ) VALUES (?1, 500, ?2, ?3, 'removed', ?4, ?5, ?6, ?7, ?8, ?9, 'complete', NULL)",
                 rusqlite::params![
                     id,
                     if suffix == "a" { 1.5 } else { 2.5 },
@@ -258,8 +260,11 @@ fn seed_history(db: &Database, label: &str) {
                     Some(format!("icon-{suffix}")),
                     if suffix == "a" { "recording" } else { "batch" },
                     format!("Search {label} {suffix}"),
-                    format!("{label}-project-{suffix}"),
                 ],
+            )?;
+            tx.execute(
+                "INSERT INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
+                rusqlite::params![id, format!("{label}-tag-{suffix}")],
             )?;
             tx.execute(
                 "INSERT INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
@@ -267,7 +272,10 @@ fn seed_history(db: &Database, label: &str) {
             )?;
             tx.execute(
                 "INSERT INTO history_summaries (history_id, payload) VALUES (?1, ?2)",
-                rusqlite::params![id, json!({"summary": format!("{label}-{suffix}")}).to_string()],
+                rusqlite::params![
+                    id,
+                    json!({"summary": format!("{label}-{suffix}")}).to_string()
+                ],
             )?;
         }
 
@@ -280,7 +288,11 @@ fn seed_history(db: &Database, label: &str) {
                 rusqlite::params![
                     format!("{label}-snapshot-{snapshot_suffix}"),
                     history_id,
-                    if snapshot_suffix == "a" { "polish" } else { "translate" },
+                    if snapshot_suffix == "a" {
+                        "polish"
+                    } else {
+                        "translate"
+                    },
                     serde_json::to_string(&segment(label, snapshot_suffix))?,
                 ],
             )?;
@@ -304,7 +316,8 @@ fn automation_rule(label: &str, suffix: &str) -> AutomationRuleRecord {
     AutomationRuleRecord {
         id: format!("{label}-rule-{suffix}"),
         name: format!("Rule {suffix}"),
-        project_id: format!("{label}-project-{suffix}"),
+        save_history: true,
+        tag_ids: vec![format!("{label}-tag-{suffix}")],
         preset_id: format!("preset-{suffix}"),
         watch_directory: format!("C:/{label}/{suffix}"),
         recursive: suffix == "a",
@@ -369,7 +382,7 @@ fn manifest_for(dataset: &BackupDataset) -> sona_core::backup::BackupManifest {
     build_backup_manifest(
         0,
         "test".to_string(),
-        dataset.projects.len(),
+        dataset.tags.len(),
         dataset.history.items.len(),
         dataset.history.transcript_files.len(),
         dataset.history.summary_files.len(),
@@ -385,7 +398,7 @@ fn restore_dataset(dataset: BackupDataset, import_id: &str) -> BackupRestoreData
         import_id: import_id.to_string(),
         manifest,
         config_state: stored_config(&dataset.config, 999),
-        projects: dataset.projects,
+        tags: dataset.tags,
         history: dataset.history,
         automation: dataset.automation,
         analytics_content: dataset.analytics_content,
@@ -406,19 +419,16 @@ fn target_independent_restore_preflight_rejects_relationship_and_sql_constraints
     fixture.seed("before");
     let source = fixture.repository.snapshot().unwrap();
 
-    let mut duplicate_projects = source.clone();
-    duplicate_projects.projects.push(source.projects[0].clone());
+    let mut duplicate_tags = source.clone();
+    duplicate_tags.tags.push(source.tags[0].clone());
     assert_invalid_preflight(
-        restore_dataset(duplicate_projects, "duplicate-projects"),
-        "duplicate project IDs",
+        restore_dataset(duplicate_tags, "duplicate-tags"),
+        "duplicate tag IDs",
     );
 
-    let mut unknown_project = source.clone();
-    unknown_project.history.items[0].project_id = Some("missing-project".to_string());
-    assert_invalid_preflight(
-        restore_dataset(unknown_project, "unknown-project"),
-        "unknown project",
-    );
+    let mut unknown_tag = source.clone();
+    unknown_tag.history.items[0].tag_ids = vec!["missing-tag".to_string()];
+    assert_invalid_preflight(restore_dataset(unknown_tag, "unknown-tag"), "unknown tag");
 
     let mut duplicate_automation = source;
     duplicate_automation
@@ -459,11 +469,9 @@ fn lazy_repository_snapshot_requires_an_existing_directory_without_creating_it()
 fn lazy_repository_validates_restore_before_checking_the_target_directory() {
     let fixture = Fixture::new();
     fixture.seed("before");
-    let mut duplicate_projects = fixture.repository.snapshot().unwrap();
-    duplicate_projects
-        .projects
-        .push(duplicate_projects.projects[0].clone());
-    let restore = restore_dataset(duplicate_projects, "duplicate-projects");
+    let mut duplicate_tags = fixture.repository.snapshot().unwrap();
+    duplicate_tags.tags.push(duplicate_tags.tags[0].clone());
+    let restore = restore_dataset(duplicate_tags, "duplicate-tags");
 
     let parent = tempfile::tempdir().unwrap();
     let app_data_dir = parent.path().join("missing-app-data");
@@ -472,7 +480,7 @@ fn lazy_repository_validates_restore_before_checking_the_target_directory() {
     let error = repository.replace_all(restore).unwrap_err();
 
     assert!(
-        matches!(error, BackupError::InvalidBackup(ref reason) if reason.contains("duplicate project IDs")),
+        matches!(error, BackupError::InvalidBackup(ref reason) if reason.contains("duplicate tag IDs")),
         "unexpected repository error: {error:?}"
     );
     assert!(!app_data_dir.exists());
@@ -503,7 +511,7 @@ fn lazy_repository_rejects_a_valid_restore_when_the_target_directory_is_missing(
 fn dataset_value(dataset: &BackupDataset) -> Value {
     json!({
         "config": dataset.config,
-        "projects": dataset.projects,
+        "tags": dataset.tags,
         "history": {
             "items": dataset.history.items,
             "transcriptFiles": dataset.history.transcript_files,
@@ -523,22 +531,22 @@ fn fresh_snapshot(root: &Path) -> BackupDataset {
 }
 
 #[test]
-fn snapshot_and_replace_restore_all_scopes_and_clear_active_project() {
+fn snapshot_and_replace_restore_all_scopes_and_clear_active_tag() {
     let fixture = Fixture::new();
     fixture.seed("before");
     let before = fixture.repository.snapshot().unwrap();
 
     assert_eq!(
         before
-            .projects
+            .tags
             .iter()
-            .map(|project| project.id.as_str())
+            .map(|tag| tag.id.as_str())
             .collect::<Vec<_>>(),
-        ["before-project-b", "before-project-a"]
+        ["before-tag-a", "before-tag-b"]
     );
     assert_eq!(
-        before.projects[0].defaults.enabled_text_replacement_set_ids,
-        ["before-replace-b-2", "before-replace-b-1"]
+        before.tags[0].defaults.enabled_text_replacement_set_ids,
+        ["before-replace-a-2", "before-replace-a-1"]
     );
     assert_eq!(
         before
@@ -564,7 +572,7 @@ fn snapshot_and_replace_restore_all_scopes_and_clear_active_project() {
     assert_eq!(result.manifest, expected_manifest);
     let config_store = SqliteConfigStore::new(Arc::clone(&fixture.db));
     assert_eq!(
-        config_store.load_setting_json(ACTIVE_PROJECT_KEY).unwrap(),
+        config_store.load_setting_json(ACTIVE_TAG_KEY).unwrap(),
         None
     );
     assert_eq!(
@@ -582,9 +590,9 @@ fn every_replacement_phase_rolls_back_the_complete_pre_import_state() {
             "DROP TRIGGER fail_config;",
         ),
         (
-            "projects",
-            "CREATE TRIGGER fail_projects BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'forced projects failure'); END;",
-            "DROP TRIGGER fail_projects;",
+            "tags",
+            "CREATE TRIGGER fail_tags BEFORE INSERT ON tags BEGIN SELECT RAISE(ABORT, 'forced tags failure'); END;",
+            "DROP TRIGGER fail_tags;",
         ),
         (
             "history",
@@ -609,7 +617,7 @@ fn every_replacement_phase_rolls_back_the_complete_pre_import_state() {
         let replacement = fixture.repository.snapshot().unwrap();
         fixture.seed("before");
         let before = dataset_value(&fixture.repository.snapshot().unwrap());
-        let before_active_project = fresh_active_project_setting(fixture.root.path());
+        let before_active_tag = fresh_active_tag_setting(fixture.root.path());
         fixture
             .db
             .with_write_connection(|connection| {
@@ -640,9 +648,9 @@ fn every_replacement_phase_rolls_back_the_complete_pre_import_state() {
             "phase {phase} was not fully rolled back"
         );
         assert_eq!(
-            fresh_active_project_setting(fixture.root.path()),
-            before_active_project,
-            "phase {phase} did not roll back the active-project setting"
+            fresh_active_tag_setting(fixture.root.path()),
+            before_active_tag,
+            "phase {phase} did not roll back the active-tag setting"
         );
     }
 }
@@ -682,10 +690,10 @@ fn malformed_analytics_rows_are_rejected_before_any_replacement() {
 }
 
 #[test]
-fn snapshot_rejects_corrupt_project_and_history_storage() {
+fn snapshot_rejects_corrupt_tag_and_history_storage() {
     let cases = [
-        "UPDATE projects SET created_at = -1 WHERE id = 'before-project-b'",
-        "UPDATE projects SET updated_at = -1 WHERE id = 'before-project-b'",
+        "UPDATE tags SET created_at = -1 WHERE id = 'before-tag-b'",
+        "UPDATE tags SET updated_at = -1 WHERE id = 'before-tag-b'",
         "UPDATE history_items SET timestamp = -1 WHERE id = 'before-history-b'",
         "UPDATE history_items SET duration = -1 WHERE id = 'before-history-b'",
         "UPDATE history_items SET kind = 'unknown' WHERE id = 'before-history-b'",
@@ -942,10 +950,10 @@ fn independent_history_lock(root: &Path) -> std::fs::File {
     lock_file
 }
 
-fn fresh_active_project_setting(root: &Path) -> Option<String> {
+fn fresh_active_tag_setting(root: &Path) -> Option<String> {
     let db = Arc::new(Database::open(root).unwrap());
     SqliteConfigStore::new(db)
-        .load_setting_json(ACTIVE_PROJECT_KEY)
+        .load_setting_json(ACTIVE_TAG_KEY)
         .unwrap()
 }
 

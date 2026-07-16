@@ -27,6 +27,7 @@ interface ProjectsResultsProps {
   isInitialLoading: boolean;
   isLoadingMore: boolean;
   isSelectionMode: boolean;
+  isTrashScope?: boolean;
   loadMoreError: boolean;
   lockedHistoryId: string | null;
   onDeleteHistoryItem: (id: string) => Promise<void>;
@@ -152,7 +153,7 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
         </div>
         {showProjectBadge && (
           <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
-            {t('projects.table_header_project', { defaultValue: 'Project' })}
+            {t('projects.table_header_tags', { defaultValue: 'Tags' })}
           </div>
         )}
         <div className="projects-table-header-meta">
@@ -206,6 +207,7 @@ export function ProjectsResults({
   isInitialLoading,
   isLoadingMore,
   isSelectionMode,
+  isTrashScope = false,
   loadMoreError,
   lockedHistoryId,
   onDeleteHistoryItem,
@@ -281,8 +283,8 @@ export function ProjectsResults({
         onRename={onRenameHistoryItem}
         onOpenContextMenu={onOpenHistoryContextMenu}
         isContextMenuOpen={activeContextId === `workspace:history:${item.id}`}
-        isLoadDisabled={lockedHistoryId != null && !isLockedHistoryItem}
-        isRenameDisabled={isLockedHistoryItem}
+        isLoadDisabled={isTrashScope || (lockedHistoryId != null && !isLockedHistoryItem)}
+        isRenameDisabled={isTrashScope || isLockedHistoryItem}
         isDeleteDisabled={isLockedHistoryItem}
         searchQuery={searchQuery}
         searchTitleMatch={searchMatch?.titleMatch ?? null}
@@ -299,6 +301,7 @@ export function ProjectsResults({
     activeSearchResultId,
     handleOpenItem,
     isSelectionMode,
+    isTrashScope,
     lockedHistoryId,
     onDeleteHistoryItem,
     onRenameHistoryItem,

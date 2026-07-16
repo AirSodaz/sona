@@ -10,7 +10,7 @@ use crate::transcription::transcript::{
 #[cfg(feature = "specta")]
 use specta::Type;
 
-pub const RECOVERY_VERSION: u32 = 1;
+pub const RECOVERY_VERSION: u32 = 2;
 pub const RECOVERY_DIR_NAME: &str = "recovery";
 pub const QUEUE_RECOVERY_FILE_NAME: &str = "queue-recovery.json";
 
@@ -112,6 +112,10 @@ pub struct RecoveryItemInput {
         specta(type = Vec<RecoveredTranscriptSegment>)
     )]
     pub segments: Vec<RecoveredTranscriptSegment>,
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "specta", specta(type = Vec<String>))]
+    pub tag_ids: Vec<String>,
     #[serde_as(as = "DefaultOnError")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(type = Option<String>))]
@@ -222,7 +226,8 @@ pub struct RecoveredQueueItem {
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub progress: f64,
     pub segments: Vec<RecoveredTranscriptSegment>,
-    pub project_id: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

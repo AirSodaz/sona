@@ -8,10 +8,11 @@ use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
-    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
+    HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
+    HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::transcript_payload::{
@@ -104,7 +105,7 @@ fn build_recording_title(timestamp: u64) -> String {
     format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
 }
 
-pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
+pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 15] = [
     "id",
     "timestamp",
     "duration",
@@ -116,7 +117,25 @@ pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 14] = [
     "icon",
     "kind",
     "search_content",
-    "project_id",
+    "tag_ids",
+    "deleted_at",
+    "status",
+    "draft_source",
+];
+
+const HISTORY_ITEM_ROW_COLUMNS: [&str; 14] = [
+    "id",
+    "timestamp",
+    "duration",
+    "audio_path",
+    "audio_status",
+    "transcript_path",
+    "title",
+    "preview_text",
+    "icon",
+    "kind",
+    "search_content",
+    "deleted_at",
     "status",
     "draft_source",
 ];
@@ -144,6 +163,15 @@ fn history_select_columns(alias: Option<&str>, overrides: &[(&str, &str)]) -> St
                 return format!("{expression} AS {column}");
             }
 
+            if *column == "tag_ids" {
+                let history_id = alias.map_or("history_items.id".to_string(), |alias| {
+                    format!("{alias}.id")
+                });
+                return format!(
+                    "COALESCE((SELECT json_group_array(tag_id) FROM (SELECT hit.tag_id FROM history_item_tags hit JOIN tags t ON t.id = hit.tag_id WHERE hit.history_id = {history_id} ORDER BY t.sort_order, t.id)), '[]') AS tag_ids"
+                );
+            }
+
             match alias {
                 Some(alias) => format!("{alias}.{column} AS {column}"),
                 None => (*column).to_string(),
@@ -156,8 +184,8 @@ fn history_select_columns(alias: Option<&str>, overrides: &[(&str, &str)]) -> St
 fn history_insert_sql() -> String {
     format!(
         "INSERT INTO history_items ({}) VALUES ({})",
-        column_list(&HISTORY_ITEM_COLUMNS),
-        named_param_list(&HISTORY_ITEM_COLUMNS)
+        column_list(&HISTORY_ITEM_ROW_COLUMNS),
+        named_param_list(&HISTORY_ITEM_ROW_COLUMNS)
     )
 }
 
@@ -170,6 +198,13 @@ pub(crate) fn insert_history_item_row(
     let status_str = item.status.to_string();
     let audio_status_str = item.audio_status.to_string();
     let draft_source_str = item.draft_source.map(|s| s.to_string());
+    let deleted_at = item
+        .deleted_at
+        .map(i64::try_from)
+        .transpose()
+        .map_err(|_| {
+            DatabaseError::Internal("History deleted timestamp exceeds SQLite range.".into())
+        })?;
     let timestamp = i64::try_from(item.timestamp)
         .map_err(|_| DatabaseError::Internal("History timestamp exceeds SQLite range.".into()))?;
 
@@ -187,13 +222,43 @@ pub(crate) fn insert_history_item_row(
             ":icon": item.icon.as_deref(),
             ":kind": kind_str,
             ":search_content": &item.search_content,
-            ":project_id": item.project_id.as_deref(),
+            ":deleted_at": deleted_at,
             ":status": status_str,
             ":draft_source": draft_source_str.as_deref(),
         },
     )?;
 
+    replace_history_item_tags(tx, &item.id, &item.tag_ids)
+}
+
+fn replace_history_item_tags(
+    tx: &rusqlite::Transaction<'_>,
+    history_id: &str,
+    tag_ids: &[String],
+) -> Result<(), DatabaseError> {
+    tx.execute(
+        "DELETE FROM history_item_tags WHERE history_id = ?1",
+        [history_id],
+    )?;
+    let mut insert =
+        tx.prepare_cached("INSERT INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)")?;
+    for tag_id in tag_ids {
+        insert.execute(rusqlite::params![history_id, tag_id])?;
+    }
     Ok(())
+}
+
+fn load_tag_ids(
+    conn: &rusqlite::Connection,
+    history_id: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut statement = conn.prepare_cached(
+        "SELECT hit.tag_id FROM history_item_tags hit JOIN tags t ON t.id = hit.tag_id WHERE hit.history_id = ?1 ORDER BY t.sort_order, t.id",
+    )?;
+    statement
+        .query_map([history_id], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(DatabaseError::QueryError)
 }
 
 pub(crate) struct PreparedHistoryRestore {
@@ -544,14 +609,15 @@ fn add_workspace_query_conditions(
     params: &mut Vec<Box<dyn ToSql>>,
 ) {
     match &request.scope {
-        HistoryWorkspaceScope::All => {}
-        HistoryWorkspaceScope::Inbox => {
-            clauses.push("h.project_id IS NULL".to_string());
+        HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
+        HistoryWorkspaceScope::Untagged => clauses.push(
+            "h.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)".to_string(),
+        ),
+        HistoryWorkspaceScope::Tag { tag_id } => {
+            clauses.push("h.deleted_at IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id AND hit.tag_id = ?)".to_string());
+            params.push(Box::new(tag_id.clone()));
         }
-        HistoryWorkspaceScope::Project { project_id } => {
-            clauses.push("h.project_id = ?".to_string());
-            params.push(Box::new(project_id.clone()));
-        }
+        HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }
     match request.filter_type {
         HistoryWorkspaceFilterType::All => {}
@@ -575,12 +641,15 @@ fn add_workspace_scope_condition(
     params: &mut Vec<Box<dyn ToSql>>,
 ) {
     match scope {
-        HistoryWorkspaceScope::All => {}
-        HistoryWorkspaceScope::Inbox => clauses.push("h.project_id IS NULL".to_string()),
-        HistoryWorkspaceScope::Project { project_id } => {
-            clauses.push("h.project_id = ?".to_string());
-            params.push(Box::new(project_id.clone()));
+        HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
+        HistoryWorkspaceScope::Untagged => clauses.push(
+            "h.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)".to_string(),
+        ),
+        HistoryWorkspaceScope::Tag { tag_id } => {
+            clauses.push("h.deleted_at IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id AND hit.tag_id = ?)".to_string());
+            params.push(Box::new(tag_id.clone()));
         }
+        HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }
 }
 
@@ -971,7 +1040,8 @@ where
             ("previewText", serde_json::json!(item.preview_text)),
             ("icon", serde_json::json!(item.icon)),
             ("kind", serde_json::json!(item.kind.to_string())),
-            ("projectId", serde_json::json!(item.project_id)),
+            ("tagIds", serde_json::json!(item.tag_ids)),
+            ("deletedAt", serde_json::json!(item.deleted_at)),
         ] {
             record_local_field_change_in_transaction(
                 tx,
@@ -1116,7 +1186,8 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
     let icon: Option<String> = row.get("icon")?;
     let kind_str: String = row.get("kind")?;
     let search_content: String = row.get("search_content")?;
-    let project_id: Option<String> = row.get("project_id")?;
+    let tag_ids_json: String = row.get("tag_ids")?;
+    let deleted_at_value: Option<i64> = row.get("deleted_at")?;
     let status_str: String = row.get("status")?;
     let draft_source_str: Option<String> = row.get("draft_source")?;
 
@@ -1166,6 +1237,12 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
         })
         .transpose()?;
 
+    let tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
+        .map_err(|error| invalid_history_column(row, "tag_ids", Type::Text, error.to_string()))?;
+    let deleted_at = deleted_at_value
+        .map(|value| checked_history_u64_column(row, "deleted_at", value))
+        .transpose()?;
+
     Ok(HistoryItemRecord {
         id,
         timestamp,
@@ -1178,7 +1255,8 @@ fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryItemRecord> {
         icon,
         kind,
         search_content,
-        project_id,
+        tag_ids,
+        deleted_at,
         status,
         draft_source,
     })
@@ -1243,9 +1321,6 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &HistoryIte
     if let Some(search_content) = updates.search_content.as_ref() {
         item.search_content.clone_from(search_content);
     }
-    if let Some(project_id) = updates.project_id.as_ref() {
-        item.project_id.clone_from(project_id);
-    }
     if let Some(status) = updates.status {
         item.status = status;
     }
@@ -1276,7 +1351,7 @@ where
         Ok(self.get_db()?.with_connection(|conn| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
+                "SELECT {columns} FROM history_items WHERE deleted_at IS NULL ORDER BY timestamp DESC"
             ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1294,7 +1369,7 @@ where
         Ok(self.get_db()?.with_connection(|conn| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT {columns} FROM history_items ORDER BY timestamp DESC"
+                "SELECT {columns} FROM history_items WHERE deleted_at IS NULL ORDER BY timestamp DESC"
             ))?;
             let rows = stmt.query_map([], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1314,7 +1389,7 @@ where
             let offset = opts.offset.map(|o| o as i64).unwrap_or(0);
             let columns = history_select_columns(None, &[]);
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT {columns} FROM history_items ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2"
+                "SELECT {columns} FROM history_items WHERE deleted_at IS NULL ORDER BY timestamp DESC LIMIT ?1 OFFSET ?2"
             ))?;
             let rows = stmt.query_map(rusqlite::params![limit, offset], map_row_to_item)?;
             let mut items = Vec::new();
@@ -1351,28 +1426,37 @@ where
         Ok(self.get_db()?.with_connection(|conn| {
             let tx = conn.unchecked_transaction()?;
             let item_counts = {
+                let untagged = tx.query_row(
+                    "SELECT COUNT(*) FROM history_items h
+                     WHERE h.deleted_at IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )? as usize;
+                let trash = tx.query_row(
+                    "SELECT COUNT(*) FROM history_items WHERE deleted_at IS NOT NULL",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )? as usize;
                 let mut stmt = tx.prepare_cached(
-                    "SELECT project_id, COUNT(*) FROM history_items GROUP BY project_id",
+                    "SELECT hit.tag_id, COUNT(*)
+                     FROM history_item_tags hit
+                     JOIN history_items h ON h.id = hit.history_id
+                     WHERE h.deleted_at IS NULL
+                     GROUP BY hit.tag_id",
                 )?;
-                let mut inbox = 0usize;
-                let mut by_project_id = BTreeMap::new();
+                let mut by_tag_id = BTreeMap::new();
                 let rows = stmt.query_map([], |row| {
-                    let pid: Option<String> = row.get(0)?;
-                    let cnt: i64 = row.get(1)?;
-                    Ok((pid, cnt as usize))
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
                 })?;
                 for row in rows {
-                    let (pid, cnt) = row?;
-                    match pid {
-                        None => inbox = cnt,
-                        Some(id) => {
-                            by_project_id.insert(id, cnt);
-                        }
-                    }
+                    let (tag_id, count) = row?;
+                    by_tag_id.insert(tag_id, count);
                 }
                 HistoryWorkspaceItemCounts {
-                    inbox,
-                    by_project_id,
+                    untagged,
+                    trash,
+                    by_tag_id,
                 }
             };
 
@@ -1565,7 +1649,7 @@ where
         let HistorySaveRecordingRequest {
             segments,
             duration,
-            project_id,
+            tag_ids,
             audio_bytes,
             native_audio_path,
             audio_extension,
@@ -1576,7 +1660,7 @@ where
         let mut item = sona_core::history::item_factory::create_recording_item(
             generated,
             duration,
-            project_id,
+            tag_ids,
             audio_extension.as_deref(),
             native_audio_path.as_deref(),
         )
@@ -1647,7 +1731,7 @@ where
             source_path,
             segments,
             duration,
-            project_id,
+            tag_ids,
             converted_source_path,
         } = request;
 
@@ -1658,7 +1742,7 @@ where
             source_path,
             converted_source_path,
             duration,
-            project_id,
+            tag_ids,
             generated,
         )
         .map_err(DatabaseError::Internal)?;
@@ -1709,7 +1793,60 @@ where
         Ok(item)
     }
 
-    fn delete_items(&self, ids: &[String]) -> Result<(), HistoryMutationError> {
+    fn trash_items(&self, ids: &[String], deleted_at: u64) -> Result<(), HistoryMutationError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let deleted_at = i64::try_from(deleted_at).map_err(|_| {
+            HistoryMutationError::InvalidRequest("deletedAt exceeds SQLite range".to_string())
+        })?;
+        Ok(self.get_db()?.with_transaction(|tx| {
+            let mut statement = tx.prepare_cached(
+                "UPDATE history_items SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+            )?;
+            let now_ms = sync_now_ms();
+            for id in ids {
+                if statement.execute(rusqlite::params![deleted_at, id])? > 0 {
+                    record_local_field_change_in_transaction(
+                        tx,
+                        SyncEntityKind::HistoryItem,
+                        id,
+                        "deletedAt",
+                        serde_json::json!(deleted_at),
+                        now_ms,
+                    )?;
+                }
+            }
+            Ok(())
+        })?)
+    }
+
+    fn restore_items(&self, ids: &[String]) -> Result<(), HistoryMutationError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        Ok(self.get_db()?.with_transaction(|tx| {
+            let mut statement = tx.prepare_cached(
+                "UPDATE history_items SET deleted_at = NULL WHERE id = ?1 AND deleted_at IS NOT NULL",
+            )?;
+            let now_ms = sync_now_ms();
+            for id in ids {
+                if statement.execute([id])? > 0 {
+                    record_local_field_change_in_transaction(
+                        tx,
+                        SyncEntityKind::HistoryItem,
+                        id,
+                        "deletedAt",
+                        serde_json::Value::Null,
+                        now_ms,
+                    )?;
+                }
+            }
+            Ok(())
+        })?)
+    }
+
+    fn purge_items(&self, ids: &[String]) -> Result<(), HistoryMutationError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -1719,8 +1856,11 @@ where
             let mut existing_ids = Vec::new();
             let mut snapshot_entity_ids = Vec::new();
             {
-                let mut stmt =
-                    tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
+                let mut stmt = tx.prepare_cached(
+                    "SELECT audio_path FROM history_items
+                     WHERE id = ?1
+                       AND (deleted_at IS NOT NULL OR (status = 'draft' AND draft_source = 'live_record'))",
+                )?;
                 for id in ids {
                     let mut rows = stmt.query([id])?;
                     if let Some(row) = rows.next()? {
@@ -1773,7 +1913,7 @@ where
                 && let Err(error) = remove_path_if_exists(&path)
             {
                 log::warn!(
-                    "Failed to remove history audio after deleting DB row {}: {}",
+                    "Failed to remove history audio after permanently deleting DB row {}: {}",
                     path.display(),
                     error
                 );
@@ -2092,10 +2232,13 @@ where
             let status_str = item.status.to_string();
             let audio_status_str = item.audio_status.to_string();
             let draft_source_str = item.draft_source.map(|s| s.to_string());
+            let deleted_at = item.deleted_at.map(i64::try_from).transpose().map_err(|_| {
+                DatabaseError::Internal("History deleted timestamp exceeds SQLite range.".into())
+            })?;
 
             let rows_affected = tx.execute(
                 "UPDATE history_items
-                 SET id = ?1, timestamp = ?2, duration = ?3, audio_path = ?4, audio_status = ?5, transcript_path = ?6, title = ?7, preview_text = ?8, icon = ?9, kind = ?10, search_content = ?11, project_id = ?12, status = ?13, draft_source = ?14
+                 SET id = ?1, timestamp = ?2, duration = ?3, audio_path = ?4, audio_status = ?5, transcript_path = ?6, title = ?7, preview_text = ?8, icon = ?9, kind = ?10, search_content = ?11, deleted_at = ?12, status = ?13, draft_source = ?14
                  WHERE id = ?15",
                 rusqlite::params![
                     item.id,
@@ -2109,7 +2252,7 @@ where
                     item.icon,
                     kind_str,
                     item.search_content,
-                    item.project_id,
+                    deleted_at,
                     status_str,
                     draft_source_str,
                     history_id,
@@ -2126,30 +2269,42 @@ where
         })?)
     }
 
-    fn update_project_assignments(
+    fn update_tag_assignments(
         &self,
         ids: &[String],
-        project_id: Option<String>,
+        add_tag_ids: &[String],
+        remove_tag_ids: &[String],
     ) -> Result<(), HistoryMutationError> {
         if ids.is_empty() {
             return Ok(());
         }
 
         Ok(self.get_db()?.with_transaction(|tx| {
-            let mut stmt =
-                tx.prepare_cached("UPDATE history_items SET project_id = ?1 WHERE id = ?2")?;
+            let mut add = tx.prepare_cached(
+                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
+            )?;
+            let mut remove = tx.prepare_cached(
+                "DELETE FROM history_item_tags WHERE history_id = ?1 AND tag_id = ?2",
+            )?;
             for id in ids {
-                stmt.execute(rusqlite::params![project_id, id])?;
+                for tag_id in add_tag_ids {
+                    add.execute(rusqlite::params![id, tag_id])?;
+                }
+                for tag_id in remove_tag_ids {
+                    remove.execute(rusqlite::params![id, tag_id])?;
+                }
             }
-            drop(stmt);
+            drop(add);
+            drop(remove);
             let now_ms = sync_now_ms();
             for id in ids {
+                let tag_ids = load_tag_ids(tx, id)?;
                 record_local_field_change_in_transaction(
                     tx,
                     SyncEntityKind::HistoryItem,
                     id,
-                    "projectId",
-                    serde_json::json!(project_id),
+                    "tagIds",
+                    serde_json::json!(tag_ids),
                     now_ms,
                 )?;
             }
@@ -2157,30 +2312,21 @@ where
         })?)
     }
 
-    fn reassign_project(
+    fn replace_tag_assignments(
         &self,
-        current_project_id: String,
-        next_project_id: Option<String>,
+        ids: &[String],
+        tag_ids: &[String],
     ) -> Result<(), HistoryMutationError> {
-        Ok(self.get_db()?.with_rw_transaction(|tx| {
-            let mut statement = tx
-                .prepare_cached("SELECT id FROM history_items WHERE project_id = ?1 ORDER BY id")?;
-            let ids = statement
-                .query_map([&current_project_id], |row| row.get::<_, String>(0))?
-                .collect::<Result<Vec<_>, _>>()?;
-            drop(statement);
-            tx.execute(
-                "UPDATE history_items SET project_id = ?1 WHERE project_id = ?2",
-                rusqlite::params![next_project_id, current_project_id],
-            )?;
+        Ok(self.get_db()?.with_transaction(|tx| {
             let now_ms = sync_now_ms();
             for id in ids {
+                replace_history_item_tags(tx, id, tag_ids)?;
                 record_local_field_change_in_transaction(
                     tx,
                     SyncEntityKind::HistoryItem,
-                    &id,
-                    "projectId",
-                    serde_json::json!(next_project_id),
+                    id,
+                    "tagIds",
+                    serde_json::json!(tag_ids),
                     now_ms,
                 )?;
             }
@@ -2608,8 +2754,19 @@ where
         self.with_history_file_lock(|| SqliteHistoryStore::save_imported_file(self, request))
     }
 
-    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
-        self.with_history_file_lock(|| SqliteHistoryStore::delete_items(self, &request.ids))
+    fn trash_items(&self, request: HistoryTrashItemsRequest) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::trash_items(self, &request.ids, request.deleted_at)
+    }
+
+    fn restore_items(
+        &self,
+        request: HistoryRestoreItemsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::restore_items(self, &request.ids)
+    }
+
+    fn purge_items(&self, request: HistoryPurgeItemsRequest) -> Result<(), HistoryMutationError> {
+        self.with_history_file_lock(|| SqliteHistoryStore::purge_items(self, &request.ids))
     }
 
     fn update_transcript(
@@ -2638,22 +2795,23 @@ where
         SqliteHistoryStore::update_item_meta(self, &request.history_id, request.updates)
     }
 
-    fn update_project_assignments(
+    fn update_tag_assignments(
         &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
+        request: HistoryUpdateTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        SqliteHistoryStore::update_project_assignments(self, &request.ids, request.project_id)
+        SqliteHistoryStore::update_tag_assignments(
+            self,
+            &request.ids,
+            &request.add_tag_ids,
+            &request.remove_tag_ids,
+        )
     }
 
-    fn reassign_project(
+    fn replace_tag_assignments(
         &self,
-        request: HistoryReassignProjectRequest,
+        request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        SqliteHistoryStore::reassign_project(
-            self,
-            request.current_project_id,
-            request.next_project_id,
-        )
+        SqliteHistoryStore::replace_tag_assignments(self, &request.ids, &request.tag_ids)
     }
 }
 
@@ -2816,13 +2974,16 @@ mod tests {
     fn history_column_shape_matches_schema() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            let mut expected: Vec<String> = HISTORY_ITEM_COLUMNS
+            let mut expected: Vec<String> = HISTORY_ITEM_ROW_COLUMNS
                 .iter()
                 .map(|column| (*column).to_string())
                 .collect();
             expected.push("created_at".to_string());
+            expected.sort();
+            let mut actual = table_columns(conn, "history_items");
+            actual.sort();
 
-            assert_eq!(table_columns(conn, "history_items"), expected);
+            assert_eq!(actual, expected);
             Ok(())
         })
         .unwrap();
@@ -2833,20 +2994,24 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
             conn.execute(
-                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
-                 VALUES ('project-name-map', 'Mapped Project', 'folder', '', 0, 1000, 1000)",
+                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
+                 VALUES ('project-name-map', 'Mapped Tag', 'folder', '', 0, 1000, 1000)",
                 [],
             )?;
             conn.execute(
                 "INSERT INTO history_items (
                     id, timestamp, duration, audio_path, audio_status, transcript_path,
-                    title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                    title, preview_text, icon, kind, search_content, deleted_at, status, draft_source
                 )
                 VALUES (
                     'history-name-map', 1234, 42.5, 'audio.wav', 'removed', 'history-name-map.json',
                     'Mapped title', 'Mapped preview', 'sparkles', 'batch', 'Mapped search',
-                    'project-name-map', 'draft', 'live_record'
+                    NULL, 'draft', 'live_record'
                 )",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO history_item_tags (history_id, tag_id) VALUES ('history-name-map', 'project-name-map')",
                 [],
             )?;
 
@@ -2854,7 +3019,8 @@ mod tests {
                 "SELECT
                     draft_source AS draft_source,
                     status AS status,
-                    project_id AS project_id,
+                    deleted_at AS deleted_at,
+                    '[\"project-name-map\"]' AS tag_ids,
                     search_content AS search_content,
                     kind AS kind,
                     icon AS icon,
@@ -2882,7 +3048,7 @@ mod tests {
             assert_eq!(item.icon.as_deref(), Some("sparkles"));
             assert_eq!(item.kind, HistoryItemKind::Batch);
             assert_eq!(item.search_content, "Mapped search");
-            assert_eq!(item.project_id.as_deref(), Some("project-name-map"));
+            assert_eq!(item.tag_ids, vec!["project-name-map"]);
             assert_eq!(item.status, HistoryItemStatus::Draft);
             assert_eq!(item.draft_source, Some(HistoryDraftSource::LiveRecord));
             Ok(())
@@ -2895,13 +3061,13 @@ mod tests {
         let sql = history_insert_sql();
 
         assert!(!sql.contains('?'));
-        for column in HISTORY_ITEM_COLUMNS {
+        for column in HISTORY_ITEM_ROW_COLUMNS {
             assert!(
                 sql.contains(&format!(":{column}")),
                 "missing named param for {column} in {sql}"
             );
         }
-        assert_eq!(sql.matches(':').count(), HISTORY_ITEM_COLUMNS.len());
+        assert_eq!(sql.matches(':').count(), HISTORY_ITEM_ROW_COLUMNS.len());
     }
 
     #[test]
@@ -2920,7 +3086,7 @@ mod tests {
                     1.0,
                 )],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3, 4]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -2930,7 +3096,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-new", "Keep recent audio", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![5, 6]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -2984,7 +3150,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-active", "Active transcript", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -2994,7 +3160,7 @@ mod tests {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: None,
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap()
@@ -3051,7 +3217,7 @@ mod tests {
                     1.0,
                 )],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3103,7 +3269,7 @@ mod tests {
                     1.0,
                 )],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3154,7 +3320,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-keep", "Keep forever", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3195,7 +3361,7 @@ mod tests {
             converted_source_path: None,
             segments: vec![segment_value("seg-promote", "Promote failure", 0.0, 1.0)],
             duration: 1.0,
-            project_id: None,
+            tag_ids: Vec::new(),
         });
 
         assert!(
@@ -3227,7 +3393,7 @@ mod tests {
         let result = store.create_live_draft(HistoryCreateLiveDraftRequest {
             id: Some("draft-1".to_string()),
             audio_extension: "wav".to_string(),
-            project_id: None,
+            tag_ids: Vec::new(),
             icon: None,
         });
 
@@ -3301,7 +3467,7 @@ mod tests {
             .unwrap()
             .with_connection(|conn| {
                 conn.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                    "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                     [],
                 )?;
@@ -3314,7 +3480,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-1", "Hello world", 0.0, 2.0)],
                 duration: 2.0,
-                project_id: Some("project-1".to_string()),
+                tag_ids: vec!["project-1".to_string()],
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3323,7 +3489,7 @@ mod tests {
 
         assert_eq!(recording.preview_text, "Hello world...");
         assert_eq!(recording.search_content, "Hello world");
-        assert_eq!(recording.project_id.as_deref(), Some("project-1"));
+        assert_eq!(recording.tag_ids, vec!["project-1"]);
         assert_eq!(recording.audio_status, HistoryAudioStatus::Available);
 
         // 2. Load transcript
@@ -3346,14 +3512,16 @@ mod tests {
                 &recording.id,
                 HistoryItemMetaPatch {
                     title: Some("New Title".to_string()),
-                    project_id: Some(None),
                     ..HistoryItemMetaPatch::default()
                 },
             )
             .unwrap();
+        store
+            .replace_tag_assignments(std::slice::from_ref(&recording.id), &[])
+            .unwrap();
         let items = store.list_items().unwrap();
         assert_eq!(items[0].title, "New Title");
-        assert_eq!(items[0].project_id, None);
+        assert!(items[0].tag_ids.is_empty());
 
         // 5. Load summary & save summary
         assert_eq!(store.load_summary(&recording.id).unwrap(), None);
@@ -3376,7 +3544,7 @@ mod tests {
 
         // 6. Delete item
         store
-            .delete_items(std::slice::from_ref(&recording.id))
+            .trash_items(std::slice::from_ref(&recording.id), 10_000)
             .unwrap();
         let items = store.list_items().unwrap();
         assert!(items.is_empty());
@@ -3469,7 +3637,7 @@ mod tests {
                 source_path: first_source.to_string_lossy().to_string(),
                 segments: vec![segment_value("seg-1", "Original import", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 converted_source_path: None,
             })
             .unwrap();
@@ -3481,7 +3649,7 @@ mod tests {
             source_path: second_source.to_string_lossy().to_string(),
             segments: vec![segment_value("seg-2", "Duplicate import", 0.0, 1.0)],
             duration: 1.0,
-            project_id: None,
+            tag_ids: Vec::new(),
             converted_source_path: None,
         });
 
@@ -3501,7 +3669,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-1", "Keep text", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3533,7 +3701,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-1", "Removed audio text", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3590,7 +3758,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-1", "Hello", 0.0, 1.0)],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3641,7 +3809,27 @@ mod tests {
 
         // Delete parent item
         store
-            .delete_items(std::slice::from_ref(&recording.id))
+            .trash_items(std::slice::from_ref(&recording.id), 10_000)
+            .unwrap();
+
+        // Soft deletion keeps child records until the item is explicitly purged.
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|conn| {
+                let child_count: i64 = conn.query_row(
+                    "SELECT (SELECT COUNT(*) FROM history_transcripts WHERE history_id = ?1)
+                          + (SELECT COUNT(*) FROM history_summaries WHERE history_id = ?1)
+                          + (SELECT COUNT(*) FROM transcript_snapshots WHERE history_id = ?1)",
+                    [&recording.id],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(child_count, 3);
+                Ok(())
+            })
+            .unwrap();
+        store
+            .purge_items(std::slice::from_ref(&recording.id))
             .unwrap();
 
         // Verify child tables are automatically pruned by ON DELETE CASCADE
@@ -3690,7 +3878,7 @@ mod tests {
             .unwrap()
             .with_connection(|conn| {
                 conn.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                    "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                     [],
                 )?;
@@ -3708,7 +3896,7 @@ mod tests {
                     10.0,
                 )],
                 duration: 10.0,
-                project_id: Some("project-1".to_string()),
+                tag_ids: vec!["project-1".to_string()],
                 audio_bytes: Some(vec![1]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -3724,7 +3912,7 @@ mod tests {
                 source_path: source_file.to_string_lossy().to_string(),
                 segments: vec![segment_value("seg-2", "Beta notes", 0.0, 20.0)],
                 duration: 20.0,
-                project_id: Some("project-1".to_string()),
+                tag_ids: vec!["project-1".to_string()],
                 converted_source_path: None,
             })
             .unwrap();
@@ -3732,8 +3920,8 @@ mod tests {
         // Query workspace
         let result = store
             .query_workspace(HistoryWorkspaceQueryRequest {
-                scope: HistoryWorkspaceScope::Project {
-                    project_id: "project-1".to_string(),
+                scope: HistoryWorkspaceScope::Tag {
+                    tag_id: "project-1".to_string(),
                 },
                 query: "roadmap".to_string(),
                 filter_type: HistoryWorkspaceFilterType::Recording,
@@ -3979,7 +4167,7 @@ mod tests {
         assert_eq!(result.filtered_items.len(), 1);
         assert_eq!(result.filtered_items[0].id, "existing");
         assert_eq!(result.summary.total_items, 1);
-        assert_eq!(result.item_counts.inbox, 1);
+        assert_eq!(result.item_counts.untagged, 1);
     }
 
     #[test]
@@ -4000,7 +4188,7 @@ mod tests {
             .unwrap()
             .with_connection(|conn| {
                 conn.execute(
-                    "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
+                    "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                     [],
                 )?;
@@ -4013,7 +4201,7 @@ mod tests {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: None,
                 audio_extension: "wav".to_string(),
-                project_id: Some("project-1".to_string()),
+                tag_ids: vec!["project-1".to_string()],
                 icon: None,
             })
             .unwrap();
@@ -4106,7 +4294,7 @@ mod tests {
                     segment_value("seg-2", "Fuzzy matching should be fast", 2.0, 4.0),
                 ],
                 duration: 4.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),
@@ -4118,7 +4306,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment_value("seg-3", "你好，世界，这是一个测试", 0.0, 2.0)],
                 duration: 2.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),

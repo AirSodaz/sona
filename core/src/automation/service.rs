@@ -5,8 +5,7 @@ use super::repository::{
 };
 use super::{
     AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleValidationResult,
-    is_virtual_automation_project, normalize_automation_path, resolve_batch_model_path,
-    validate_rule_activation,
+    normalize_automation_path, resolve_batch_model_path, validate_rule_activation,
 };
 use serde_json::Value;
 
@@ -83,13 +82,13 @@ impl<'a> AutomationValidationService<'a> {
         &self,
         rule: &AutomationRule,
         global_config: &Value,
-        project: Option<&Value>,
+        tags: &[Value],
     ) -> AutomationRuleValidationResult {
-        let safe_preconditions = has_safe_path_preconditions(rule, project);
+        let safe_preconditions = has_safe_path_preconditions(rule, tags);
         let watch_directory = rule.watch_directory.trim();
         let watch_directory_exists = safe_preconditions && self.fs.path_exists(watch_directory);
         let export_directory_ready =
-            if should_prepare_export_directory(rule, project, watch_directory_exists) {
+            if should_prepare_export_directory(rule, tags, watch_directory_exists) {
                 let directory = rule.export_config.directory.trim();
                 self.fs.create_dir_all(directory)
             } else {
@@ -106,7 +105,7 @@ impl<'a> AutomationValidationService<'a> {
         validate_rule_activation(
             rule,
             global_config,
-            project,
+            tags,
             AutomationRuleActivationEnvironment {
                 watch_directory_exists,
                 export_directory_ready,
@@ -123,7 +122,8 @@ fn normalize_rule_record(
     AutomationRuleRecord {
         id: input.id.unwrap_or_else(|| ids.generate_id()),
         name: input.name,
-        project_id: input.project_id,
+        save_history: input.save_history,
+        tag_ids: input.tag_ids,
         preset_id: input.preset_id,
         watch_directory: input.watch_directory,
         recursive: input.recursive,
@@ -167,17 +167,21 @@ fn normalize_processed_record(
 
 fn should_prepare_export_directory(
     rule: &AutomationRule,
-    project: Option<&Value>,
+    tags: &[Value],
     watch_directory_exists: bool,
 ) -> bool {
-    has_safe_path_preconditions(rule, project) && watch_directory_exists
+    has_safe_path_preconditions(rule, tags) && watch_directory_exists
 }
 
-fn has_safe_path_preconditions(rule: &AutomationRule, project: Option<&Value>) -> bool {
+fn has_safe_path_preconditions(rule: &AutomationRule, tags: &[Value]) -> bool {
     let watch_directory = rule.watch_directory.trim();
     let export_directory = rule.export_config.directory.trim();
     !rule.name.trim().is_empty()
-        && (project.is_some() || is_virtual_automation_project(&rule.project_id))
+        && (!rule.save_history
+            || rule.tag_ids.iter().all(|tag_id| {
+                tags.iter()
+                    .any(|tag| tag.get("id").and_then(Value::as_str) == Some(tag_id.as_str()))
+            }))
         && !watch_directory.is_empty()
         && !export_directory.is_empty()
         && normalize_automation_path(watch_directory) != normalize_automation_path(export_directory)

@@ -17,6 +17,7 @@ export function patchTaskRecord(record: TaskLedgerRecord, patch: TaskLedgerPatch
     ...record,
     ...patch,
     errorMessage: patch.errorMessage === null ? undefined : patch.errorMessage ?? record.errorMessage,
+    tagIds: patch.tagIds === null ? [] : patch.tagIds ?? record.tagIds,
   };
 }
 

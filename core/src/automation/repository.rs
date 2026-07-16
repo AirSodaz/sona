@@ -27,6 +27,10 @@ fn default_processed_status() -> String {
     "complete".to_string()
 }
 
+fn default_save_history() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -88,8 +92,10 @@ pub struct AutomationRuleInput {
     pub id: Option<String>,
     #[serde(default)]
     pub name: String,
+    #[serde(default = "default_save_history")]
+    pub save_history: bool,
     #[serde(default)]
-    pub project_id: String,
+    pub tag_ids: Vec<String>,
     #[serde(default = "default_preset_id")]
     pub preset_id: String,
     #[serde(default)]
@@ -115,7 +121,8 @@ impl Default for AutomationRuleInput {
         Self {
             id: None,
             name: String::new(),
-            project_id: String::new(),
+            save_history: true,
+            tag_ids: Vec::new(),
             preset_id: default_preset_id(),
             watch_directory: String::new(),
             recursive: false,
@@ -214,7 +221,8 @@ pub struct AutomationRuleRecordExportConfig {
 pub struct AutomationRuleRecord {
     pub id: String,
     pub name: String,
-    pub project_id: String,
+    pub save_history: bool,
+    pub tag_ids: Vec<String>,
     pub preset_id: String,
     pub watch_directory: String,
     pub recursive: bool,

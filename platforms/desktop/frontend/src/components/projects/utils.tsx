@@ -3,8 +3,8 @@
 import React from 'react';
 import type { ProjectDefaults, ProjectRecord } from '../../types/project';
 import { renderIcon } from '../IconPicker';
-import { FolderIcon, InboxIcon, SummaryIcon } from '../Icons';
-import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
+import { FolderIcon, InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
+import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type {
   ProjectBrowseScope,
   TranslationFn,
@@ -45,12 +45,14 @@ export function buildComparableProjectSettingsSnapshot(input: {
   name: string;
   description: string;
   icon?: string;
+  color?: string;
   defaults: ProjectDefaults;
 }) {
   return {
     name: input.name.trim(),
     description: input.description,
     icon: input.icon || '',
+    color: input.color || '#64748b',
     summaryTemplateId: input.defaults.summaryTemplateId,
     translationLanguage: input.defaults.translationLanguage,
     polishPresetId: input.defaults.polishPresetId,
@@ -67,8 +69,12 @@ export function renderScopeIcon(scope: ProjectBrowseScope, project?: ProjectReco
     return <SummaryIcon />;
   }
 
-  if (scope === INBOX_SCOPE) {
+  if (scope === UNTAGGED_SCOPE) {
     return <InboxIcon />;
+  }
+
+  if (scope === TRASH_SCOPE) {
+    return <TrashIcon />;
   }
 
   return renderIcon(project?.icon, <FolderIcon />);

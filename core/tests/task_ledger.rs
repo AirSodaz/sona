@@ -20,7 +20,7 @@ fn task_ledger_transport_shape_lives_in_core() {
             recoverable: true,
             stage: Some("summary".to_string()),
             history_id: Some("history-1".to_string()),
-            project_id: None,
+            tag_ids: Vec::new(),
             file_path: None,
             automation_rule_id: None,
             source_fingerprint: None,
@@ -32,7 +32,7 @@ fn task_ledger_transport_shape_lives_in_core() {
 
     let value = serde_json::to_value(snapshot).unwrap();
 
-    assert_eq!(value["version"], 1);
+    assert_eq!(value["version"], 2);
     assert_eq!(value["tasks"][0]["kind"], "llmSummary");
     assert_eq!(value["tasks"][0]["status"], "recoverable");
     assert_eq!(value["tasks"][0]["historyId"], "history-1");

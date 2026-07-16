@@ -3,12 +3,12 @@ import type {
   HistoryWorkspaceQueryResult,
   HistoryWorkspaceQueryScope,
 } from '../../services/tauri/history';
-import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
+import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 
 export type ProjectFilterType = 'all' | 'recording' | 'batch';
 export type ProjectDateFilter = 'all' | 'today' | 'week' | 'month';
 export type ProjectSortOrder = 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
-export type ProjectBrowseScope = typeof ALL_ITEMS_SCOPE | typeof INBOX_SCOPE | string;
+export type ProjectBrowseScope = typeof ALL_ITEMS_SCOPE | typeof UNTAGGED_SCOPE | typeof TRASH_SCOPE | string;
 
 export type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
 

@@ -130,7 +130,8 @@ export type AutomationRepositoryState_Serialize = {
 
 export type AutomationRule = {
 	name?: string,
-	projectId?: string,
+	saveHistory?: boolean,
+	tagIds?: string[],
 	watchDirectory?: string,
 	stageConfig?: AutomationRuleStageConfig,
 	exportConfig?: AutomationRuleExportConfig,
@@ -161,7 +162,8 @@ export type AutomationRuleInputStageConfig = {
 export type AutomationRuleInput_Deserialize = {
 	id?: string | null,
 	name?: string,
-	projectId?: string,
+	saveHistory?: boolean,
+	tagIds?: string[],
 	presetId?: string,
 	watchDirectory?: string,
 	recursive?: boolean,
@@ -175,7 +177,8 @@ export type AutomationRuleInput_Deserialize = {
 export type AutomationRuleInput_Serialize = {
 	id?: string | null,
 	name: string,
-	projectId: string,
+	saveHistory: boolean,
+	tagIds: string[],
 	presetId: string,
 	watchDirectory: string,
 	recursive: boolean,
@@ -189,7 +192,8 @@ export type AutomationRuleInput_Serialize = {
 export type AutomationRuleRecord = {
 	id: string,
 	name: string,
-	projectId: string,
+	saveHistory: boolean,
+	tagIds: string[],
 	presetId: string,
 	watchDirectory: string,
 	recursive: boolean,
@@ -453,7 +457,7 @@ export type HistoryCompleteLiveDraftRequest_Serialize = {
 export type HistoryCreateLiveDraftRequest = {
 	id: string | null,
 	audioExtension: string,
-	projectId: string | null,
+	tagIds?: string[],
 	icon: string | null,
 };
 
@@ -492,7 +496,6 @@ export type HistoryItemMetaPatch_Deserialize = {
 	icon?: string | null,
 	type?: HistoryItemKind | null,
 	searchContent?: string | null,
-	projectId?: string | null,
 	status?: HistoryItemStatus | null,
 	draftSource?: HistoryDraftSource | null,
 };
@@ -508,7 +511,6 @@ export type HistoryItemMetaPatch_Serialize = {
 	icon?: string | null,
 	type?: HistoryItemKind | null,
 	searchContent?: string | null,
-	projectId?: string | null,
 	status?: HistoryItemStatus | null,
 	draftSource?: HistoryDraftSource | null,
 };
@@ -525,16 +527,17 @@ export type HistoryItemRecord = {
 	icon: string | null,
 	type: HistoryItemKind,
 	searchContent: string,
-	projectId: string | null,
+	tagIds?: string[],
+	deletedAt?: number | null,
 	status: HistoryItemStatus,
 	draftSource: HistoryDraftSource | null,
 };
 
 export type HistoryItemStatus = "draft" | "complete";
 
-export type HistoryReassignProjectRequest = {
-	currentProjectId: string,
-	nextProjectId: string | null,
+export type HistoryReplaceTagAssignmentsRequest = {
+	ids: string[],
+	tagIds: string[],
 };
 
 export type HistorySaveImportedFileRequest = HistorySaveImportedFileRequest_Serialize | HistorySaveImportedFileRequest_Deserialize;
@@ -544,7 +547,7 @@ export type HistorySaveImportedFileRequest_Deserialize = {
 	sourcePath: string,
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
-	projectId?: string | null,
+	tagIds?: string[],
 	convertedSourcePath?: string | null,
 };
 
@@ -553,7 +556,7 @@ export type HistorySaveImportedFileRequest_Serialize = {
 	sourcePath: string,
 	segments: TranscriptSegment_Serialize[],
 	duration: number,
-	projectId?: string | null,
+	tagIds?: string[],
 	convertedSourcePath?: string | null,
 };
 
@@ -562,7 +565,7 @@ export type HistorySaveRecordingRequest = HistorySaveRecordingRequest_Serialize 
 export type HistorySaveRecordingRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
-	projectId?: string | null,
+	tagIds?: string[],
 	audioBytes?: number[] | null,
 	nativeAudioPath?: string | null,
 	audioExtension?: string | null,
@@ -571,7 +574,7 @@ export type HistorySaveRecordingRequest_Deserialize = {
 export type HistorySaveRecordingRequest_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 	duration: number,
-	projectId?: string | null,
+	tagIds?: string[],
 	audioBytes?: number[] | null,
 	nativeAudioPath?: string | null,
 	audioExtension?: string | null,
@@ -589,6 +592,11 @@ export type HistorySummaryPayload_Serialize = {
 	record?: TranscriptSummaryRecordPayload | null,
 };
 
+export type HistoryTrashItemsRequest = {
+	ids: string[],
+	deletedAt: number,
+};
+
 export type HistoryUpdateItemMetaRequest = HistoryUpdateItemMetaRequest_Serialize | HistoryUpdateItemMetaRequest_Deserialize;
 
 export type HistoryUpdateItemMetaRequest_Deserialize = {
@@ -601,9 +609,10 @@ export type HistoryUpdateItemMetaRequest_Serialize = {
 	updates: HistoryItemMetaPatch_Serialize,
 };
 
-export type HistoryUpdateProjectAssignmentsRequest = {
+export type HistoryUpdateTagAssignmentsRequest = {
 	ids: string[],
-	projectId: string | null,
+	addTagIds: string[],
+	removeTagIds: string[],
 };
 
 export type HistoryUpdateTranscriptRequest = HistoryUpdateTranscriptRequest_Serialize | HistoryUpdateTranscriptRequest_Deserialize;
@@ -623,8 +632,9 @@ export type HistoryWorkspaceDateFilter = "all" | "today" | "week" | "month";
 export type HistoryWorkspaceFilterType = "all" | "recording" | "batch";
 
 export type HistoryWorkspaceItemCounts = {
-	inbox: number,
-	byProjectId: { [key in string]: number },
+	untagged: number,
+	trash: number,
+	byTagId: { [key in string]: number },
 };
 
 export type HistoryWorkspaceItemSearchMatch = {
@@ -652,7 +662,7 @@ export type HistoryWorkspaceQueryResult = {
 	itemCounts: HistoryWorkspaceItemCounts,
 };
 
-export type HistoryWorkspaceScope = { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string };
+export type HistoryWorkspaceScope = { kind: "all" } | { kind: "untagged" } | { kind: "tag"; tagId: string } | { kind: "trash" };
 
 export type HistoryWorkspaceSearchRange = {
 	start: number,
@@ -943,8 +953,8 @@ export type OverviewStats = OverviewStats_Serialize | OverviewStats_Deserialize;
 export type OverviewStats_Deserialize = {
 	itemCount: number,
 	itemCountDisplay: string,
-	projectCount: number,
-	projectCountDisplay: string,
+	tagCount: number,
+	tagCountDisplay: string,
 	totalDurationSeconds: number,
 	totalDurationDisplay: string,
 	transcriptCharacterCount: number | null,
@@ -953,10 +963,10 @@ export type OverviewStats_Deserialize = {
 	recordingCountDisplay: string,
 	batchCount: number,
 	batchCountDisplay: string,
-	inboxCount: number,
-	inboxCountDisplay: string,
-	projectAssignedCount: number,
-	projectAssignedCountDisplay: string,
+	untaggedCount: number,
+	untaggedCountDisplay: string,
+	taggedCount: number,
+	taggedCountDisplay: string,
 	recentDailyItems: ContentTrendPoint[],
 	isDeepLoaded: boolean,
 };
@@ -964,8 +974,8 @@ export type OverviewStats_Deserialize = {
 export type OverviewStats_Serialize = {
 	itemCount: number,
 	itemCountDisplay: string,
-	projectCount: number,
-	projectCountDisplay: string,
+	tagCount: number,
+	tagCountDisplay: string,
 	totalDurationSeconds: number,
 	totalDurationDisplay: string,
 	transcriptCharacterCount?: number | null,
@@ -974,10 +984,10 @@ export type OverviewStats_Serialize = {
 	recordingCountDisplay: string,
 	batchCount: number,
 	batchCountDisplay: string,
-	inboxCount: number,
-	inboxCountDisplay: string,
-	projectAssignedCount: number,
-	projectAssignedCountDisplay: string,
+	untaggedCount: number,
+	untaggedCountDisplay: string,
+	taggedCount: number,
+	taggedCountDisplay: string,
 	recentDailyItems: ContentTrendPoint[],
 	isDeepLoaded: boolean,
 };
@@ -1109,7 +1119,7 @@ export type RecoveredQueueItem_Deserialize = {
 	resolution: RecoveryResolution,
 	progress: number,
 	segments: RecoveredTranscriptSegment_Deserialize[],
-	projectId: string | null,
+	tagIds?: string[],
 	historyId: string | null,
 	historyTitle: string | null,
 	lastKnownStage: RecoveryItemStage,
@@ -1134,7 +1144,7 @@ export type RecoveredQueueItem_Serialize = {
 	resolution: RecoveryResolution,
 	progress: number,
 	segments: RecoveredTranscriptSegment_Serialize[],
-	projectId: string | null,
+	tagIds: string[],
 	historyId?: string | null,
 	historyTitle?: string | null,
 	lastKnownStage: RecoveryItemStage,
@@ -1213,6 +1223,7 @@ export type RecoveryItemInput_Deserialize = {
 	status?: string | null,
 	progress?: number | null,
 	segments?: RecoveredTranscriptSegment_Deserialize[],
+	tagIds?: string[],
 	projectId?: string | null,
 	historyId?: string | null,
 	historyTitle?: string | null,
@@ -1241,6 +1252,7 @@ export type RecoveryItemInput_Serialize = {
 	status?: string | null,
 	progress?: number | null,
 	segments: RecoveredTranscriptSegment_Serialize[],
+	tagIds?: string[],
 	projectId?: string | null,
 	historyId?: string | null,
 	historyTitle?: string | null,
@@ -1445,6 +1457,115 @@ export type SummarySegmentInput = {
 
 export type SummaryTemplateId = ({ Builtin: BuiltinSummaryTemplateId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
+export type TagCreateInput = {
+	name: string,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	defaults?: TagDefaultsInput,
+};
+
+export type TagDefaults = TagDefaults_Serialize | TagDefaults_Deserialize;
+
+export type TagDefaultsInput = {
+	summaryTemplateId?: string | null,
+	summaryTemplate?: string | null,
+	translationLanguage?: string | null,
+	polishPresetId?: string | null,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix?: string | null,
+	enabledTextReplacementSetIds?: string[] | null,
+	enabledHotwordSetIds?: string[] | null,
+	enabledPolishKeywordSetIds?: string[] | null,
+	enabledSpeakerProfileIds?: string[] | null,
+};
+
+export type TagDefaultsPatch = {
+	summaryTemplateId?: string | null,
+	translationLanguage?: string | null,
+	polishPresetId?: string | null,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix?: string | null,
+	enabledTextReplacementSetIds?: string[] | null,
+	enabledHotwordSetIds?: string[] | null,
+	enabledPolishKeywordSetIds?: string[] | null,
+	enabledSpeakerProfileIds?: string[] | null,
+};
+
+export type TagDefaults_Deserialize = {
+	summaryTemplateId: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	polishScenario: string | null,
+	polishContext: string | null,
+	exportFileNamePrefix: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+};
+
+export type TagDefaults_Serialize = {
+	summaryTemplateId: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+};
+
+export type TagRecord = TagRecord_Serialize | TagRecord_Deserialize;
+
+export type TagRecord_Deserialize = {
+	id: string,
+	name: string,
+	description: string,
+	icon: string,
+	color: string,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	defaults: TagDefaults_Deserialize,
+};
+
+export type TagRecord_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	icon: string,
+	color: string,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	defaults: TagDefaults_Serialize,
+};
+
+export type TagRepositorySnapshot = TagRepositorySnapshot_Serialize | TagRepositorySnapshot_Deserialize;
+
+export type TagRepositorySnapshot_Deserialize = {
+	tags: TagRecord_Deserialize[],
+	activeTagId: string | null,
+};
+
+export type TagRepositorySnapshot_Serialize = {
+	tags: TagRecord_Serialize[],
+	activeTagId: string | null,
+};
+
+export type TagUpdateInput = {
+	name?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	description?: string | null,
+	defaults?: TagDefaultsPatch | null,
+};
+
 export type TaskLedgerKind = "batchImport" | "automation" | "llmPolish" | "llmTranslate" | "llmSummary" | "recovery" | "update";
 
 export type TaskLedgerPatch = TaskLedgerPatch_Serialize | TaskLedgerPatch_Deserialize;
@@ -1461,7 +1582,7 @@ export type TaskLedgerPatch_Deserialize = {
 	recoverable?: boolean | null,
 	stage?: string | null,
 	historyId?: string | null,
-	projectId?: string | null,
+	tagIds?: string[] | null,
 	filePath?: string | null,
 	automationRuleId?: string | null,
 	sourceFingerprint?: string | null,
@@ -1482,7 +1603,7 @@ export type TaskLedgerPatch_Serialize = {
 	recoverable?: boolean | null,
 	stage?: string | null,
 	historyId?: string | null,
-	projectId?: string | null,
+	tagIds?: string[] | null,
 	filePath?: string | null,
 	automationRuleId?: string | null,
 	sourceFingerprint?: string | null,
@@ -1506,7 +1627,7 @@ export type TaskLedgerRecord_Deserialize = {
 	recoverable: boolean,
 	stage: string | null,
 	historyId: string | null,
-	projectId: string | null,
+	tagIds?: string[],
 	filePath: string | null,
 	automationRuleId: string | null,
 	sourceFingerprint: string | null,
@@ -1528,7 +1649,7 @@ export type TaskLedgerRecord_Serialize = {
 	recoverable: boolean,
 	stage?: string | null,
 	historyId?: string | null,
-	projectId?: string | null,
+	tagIds?: string[],
 	filePath?: string | null,
 	automationRuleId?: string | null,
 	sourceFingerprint?: string | null,

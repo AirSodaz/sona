@@ -107,19 +107,19 @@ function createOverview(
   overrides: Partial<DashboardSnapshot['content']['overview']> = {},
 ): DashboardSnapshot['content']['overview'] {
   const itemCount = overrides.itemCount ?? 3;
-  const projectCount = overrides.projectCount ?? 2;
+  const tagCount = overrides.tagCount ?? 2;
   const totalDurationSeconds = overrides.totalDurationSeconds ?? 300;
   const transcriptCharacterCount = overrides.transcriptCharacterCount;
   const recordingCount = overrides.recordingCount ?? 2;
   const batchCount = overrides.batchCount ?? 1;
-  const inboxCount = overrides.inboxCount ?? 1;
-  const projectAssignedCount = overrides.projectAssignedCount ?? 2;
+  const untaggedCount = overrides.untaggedCount ?? 1;
+  const taggedCount = overrides.taggedCount ?? 2;
 
   return {
     itemCount,
     itemCountDisplay: overrides.itemCountDisplay ?? displayNumber(itemCount),
-    projectCount,
-    projectCountDisplay: overrides.projectCountDisplay ?? displayNumber(projectCount),
+    tagCount,
+    tagCountDisplay: overrides.tagCountDisplay ?? displayNumber(tagCount),
     totalDurationSeconds,
     totalDurationDisplay: overrides.totalDurationDisplay ?? displayDuration(totalDurationSeconds),
     transcriptCharacterCount,
@@ -129,10 +129,10 @@ function createOverview(
     recordingCountDisplay: overrides.recordingCountDisplay ?? displayNumber(recordingCount),
     batchCount,
     batchCountDisplay: overrides.batchCountDisplay ?? displayNumber(batchCount),
-    inboxCount,
-    inboxCountDisplay: overrides.inboxCountDisplay ?? displayNumber(inboxCount),
-    projectAssignedCount,
-    projectAssignedCountDisplay: overrides.projectAssignedCountDisplay ?? displayNumber(projectAssignedCount),
+    untaggedCount,
+    untaggedCountDisplay: overrides.untaggedCountDisplay ?? displayNumber(untaggedCount),
+    taggedCount,
+    taggedCountDisplay: overrides.taggedCountDisplay ?? displayNumber(taggedCount),
     recentDailyItems: overrides.recentDailyItems ?? [],
     isDeepLoaded: overrides.isDeepLoaded ?? false,
   };
@@ -590,13 +590,13 @@ describe('SettingsDashboardTab', () => {
         overview: {
           ...createOverview({
             itemCount: 0,
-            projectCount: 0,
+            tagCount: 0,
             totalDurationSeconds: 0,
             transcriptCharacterCount: undefined,
             recordingCount: 0,
             batchCount: 0,
-            inboxCount: 0,
-            projectAssignedCount: 0,
+            untaggedCount: 0,
+            taggedCount: 0,
             isDeepLoaded: false,
           }),
         },

@@ -21,6 +21,7 @@ mod recovery_bridge;
 mod runtime_bridge;
 mod storage_usage_bridge;
 mod sync_bridge;
+mod tag_bridge;
 mod task_ledger_bridge;
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
@@ -62,6 +63,8 @@ pub enum SonaCoreBindingError {
     Automation { reason: String },
     #[error("{reason}")]
     Project { reason: String },
+    #[error("{reason}")]
+    Tag { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
     #[error("{reason}")]
@@ -162,6 +165,51 @@ pub fn set_active_project_id(
     project_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
     SonaCoreFacade::set_active_project_id(app_data_dir, project_id)
+}
+
+#[uniffi::export]
+pub fn load_tag_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::load_tag_repository_state_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::replace_tags_json(app_data_dir, tags_json)
+}
+
+#[uniffi::export]
+pub fn create_tag_json(app_data_dir: String, input_json: String) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::create_tag_json(app_data_dir, input_json)
+}
+
+#[uniffi::export]
+pub fn update_tag_json(
+    app_data_dir: String,
+    tag_id: String,
+    updates_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_tag_json(app_data_dir, tag_id, updates_json)
+}
+
+#[uniffi::export]
+pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::delete_tag(app_data_dir, tag_id)
+}
+
+#[uniffi::export]
+pub fn reorder_tags_json(
+    app_data_dir: String,
+    tag_ids_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::reorder_tags_json(app_data_dir, tag_ids_json)
+}
+
+#[uniffi::export]
+pub fn set_active_tag_id(
+    app_data_dir: String,
+    tag_id: Option<String>,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::set_active_tag_id(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
@@ -520,6 +568,30 @@ pub async fn delete_history_items_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn trash_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::trash_history_items_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn restore_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::restore_history_items_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn purge_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::purge_history_items_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_transcript_json(
     app_data_dir: String,
     request_json: String,
@@ -549,6 +621,22 @@ pub async fn update_history_project_assignments_json(
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::update_history_project_assignments_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn update_history_tag_assignments_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::update_history_tag_assignments_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn replace_history_tag_assignments_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    SonaCoreFacade::replace_history_tag_assignments_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]

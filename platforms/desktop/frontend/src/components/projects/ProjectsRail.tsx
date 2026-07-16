@@ -22,7 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import type { ProjectRecord } from '../../types/project';
 import { PlusCircleIcon } from '../Icons';
-import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
+import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
 import {
@@ -38,6 +38,8 @@ interface ProjectsRailProps {
   inboxCount: number;
   isAllItemsScope: boolean;
   isInboxScope: boolean;
+  isTrashScope: boolean;
+  trashCount: number;
   itemCounts: Map<string | null, number>;
   onOpenCreateModal: () => void;
   onReorderProjects: (projectIds: string[]) => Promise<void>;
@@ -133,6 +135,8 @@ export function ProjectsRail({
   inboxCount,
   isAllItemsScope,
   isInboxScope,
+  isTrashScope,
+  trashCount,
   itemCounts,
   onOpenCreateModal,
   onReorderProjects,
@@ -193,8 +197,8 @@ export function ProjectsRail({
             type="button"
             className="btn btn-icon projects-rail-create"
             onClick={onOpenCreateModal}
-            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            aria-label={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
+            data-tooltip={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
             data-tooltip-pos="bottom"
           >
             <PlusCircleIcon width={18} height={18} />
@@ -219,14 +223,27 @@ export function ProjectsRail({
         <button
           type="button"
           className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
-          onClick={() => void onSwitchScope(INBOX_SCOPE)}
+          onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
           aria-pressed={isInboxScope}
         >
           <RailItemContent
-            icon={renderScopeIcon(INBOX_SCOPE)}
-            title={t('projects.inbox', { defaultValue: 'Inbox' })}
+            icon={renderScopeIcon(UNTAGGED_SCOPE)}
+            title={t('projects.untagged', { defaultValue: 'Untagged' })}
           />
           <span className="projects-rail-count">{inboxCount}</span>
+        </button>
+
+        <button
+          type="button"
+          className={`projects-rail-item ${isTrashScope ? 'active' : ''}`}
+          onClick={() => void onSwitchScope(TRASH_SCOPE)}
+          aria-pressed={isTrashScope}
+        >
+          <RailItemContent
+            icon={renderScopeIcon(TRASH_SCOPE)}
+            title={t('projects.trash', { defaultValue: 'Trash' })}
+          />
+          <span className="projects-rail-count">{trashCount}</span>
         </button>
       </div>
 
@@ -234,7 +251,7 @@ export function ProjectsRail({
         <div className="projects-rail-list">
           {projects.length === 0 && (
             <div className="projects-rail-empty">
-              {t('projects.no_projects', { defaultValue: 'No projects yet.' })}
+              {t('projects.no_tags', { defaultValue: 'No tags yet.' })}
             </div>
           )}
 

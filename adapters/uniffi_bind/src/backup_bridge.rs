@@ -145,10 +145,10 @@ mod tests {
         HistorySaveRecordingRequest, HistorySummaryPayload, TranscriptSummaryRecordPayload,
     };
     use sona_core::history_store::HistoryStore;
-    use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
+    use sona_core::tag::{TagDefaults, TagRecord, TagStore};
     use sona_sqlite::{
         Database, SqliteAutomationRepository, SqliteBackupStateRepository, SqliteConfigStore,
-        SqliteHistoryStore, SqliteProjectRepository, llm_usage,
+        SqliteHistoryStore, SqliteTagRepository, llm_usage,
     };
 
     use super::{
@@ -197,15 +197,17 @@ mod tests {
         assert_eq!(parsed["label"], "two  spaces");
     }
 
-    fn project() -> ProjectRecord {
-        ProjectRecord {
+    fn tag() -> TagRecord {
+        TagRecord {
             id: "backup-project".to_string(),
             name: "Backup Project".to_string(),
             description: "Roundtrip workspace".to_string(),
             icon: "folder".to_string(),
+            color: "#2563EB".to_string(),
+            sort_order: 0,
             created_at: 100,
             updated_at: 200,
-            defaults: ProjectDefaults {
+            defaults: TagDefaults {
                 summary_template_id: "general".to_string(),
                 translation_language: "en".to_string(),
                 polish_preset_id: "general".to_string(),
@@ -225,7 +227,8 @@ mod tests {
             rules: vec![AutomationRuleRecord {
                 id: "backup-rule".to_string(),
                 name: "Backup Rule".to_string(),
-                project_id: "backup-project".to_string(),
+                save_history: true,
+                tag_ids: vec!["backup-project".to_string()],
                 preset_id: "general".to_string(),
                 watch_directory: "C:/backup/watch".to_string(),
                 recursive: true,
@@ -267,8 +270,8 @@ mod tests {
         SqliteConfigStore::new(Arc::clone(&database))
             .replace_state(app_config_stored_state_from_value(&legacy_config("source"), 1).unwrap())
             .unwrap();
-        SqliteProjectRepository::new(Arc::clone(&database))
-            .replace_projects(vec![project()])
+        SqliteTagRepository::new(Arc::clone(&database))
+            .replace_tags(vec![tag()])
             .unwrap();
 
         let history_store =
@@ -285,7 +288,7 @@ mod tests {
                 }]))
                 .unwrap(),
                 duration: 1.0,
-                project_id: Some("backup-project".to_string()),
+                tag_ids: vec!["backup-project".to_string()],
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: None,
@@ -413,7 +416,7 @@ mod tests {
         .unwrap();
         let manifest: BackupManifest = canonical_output(&manifest_json);
         assert_eq!(manifest.app_version, "0.8.0");
-        assert_eq!(manifest.counts.projects, 1);
+        assert_eq!(manifest.counts.tags, 1);
         assert_eq!(manifest.counts.history_items, 1);
         assert_eq!(manifest.counts.automation_rules, 1);
         assert_eq!(manifest.counts.automation_processed_entries, 1);
@@ -430,7 +433,7 @@ mod tests {
             .unwrap();
         let preview: PreparedBackupImport = canonical_output(&preview_json);
         assert_eq!(preview.manifest, manifest);
-        assert_eq!(preview.projects.len(), 1);
+        assert_eq!(preview.tags.len(), 1);
         assert_eq!(preview.automation_rules.len(), 1);
         assert_eq!(preview.automation_processed_entries.len(), 1);
         assert_eq!(prepared_workspace_names(&archive), prepared_before);
@@ -449,7 +452,7 @@ mod tests {
         assert_eq!(prepared_workspace_names(&archive), prepared_before);
 
         let restored = snapshot(&destination_dir);
-        assert_eq!(restored.projects, source.projects);
+        assert_eq!(restored.tags, source.tags);
         assert_eq!(restored.history.items, source.history.items);
         assert_eq!(
             restored.history.transcript_files,
@@ -634,12 +637,12 @@ mod tests {
         .await
         .unwrap();
         rewrite_archive(&archive, |contents| {
-            update_json(&contents.join("projects/index.json"), |projects| {
-                let projects = projects.as_array_mut().unwrap();
-                projects.push(projects[0].clone());
+            update_json(&contents.join("tags/index.json"), |tags| {
+                let tags = tags.as_array_mut().unwrap();
+                tags.push(tags[0].clone());
             });
             update_json(&contents.join("manifest.json"), |manifest| {
-                manifest["counts"]["projects"] = json!(2);
+                manifest["counts"]["tags"] = json!(2);
             });
         });
 

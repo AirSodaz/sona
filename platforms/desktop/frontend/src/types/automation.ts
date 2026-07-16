@@ -23,7 +23,10 @@ export interface AutomationExportConfig {
 export interface AutomationRule {
   id: string;
   name: string;
-  projectId: string;
+  saveHistory?: boolean;
+  tagIds?: string[];
+  /** @deprecated Single-target compatibility alias. */
+  projectId?: string;
   presetId: AutomationPresetId;
   watchDirectory: string;
   recursive: boolean;

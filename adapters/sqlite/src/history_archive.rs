@@ -155,10 +155,26 @@ pub(crate) fn normalize_history_item_value(value: &Value) -> HistoryItemRecord {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
-        project_id: object
-            .and_then(|map| map.get("projectId"))
-            .and_then(Value::as_str)
-            .map(ToString::to_string),
+        tag_ids: object
+            .and_then(|map| map.get("tagIds"))
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(ToString::to_string)
+                    .collect()
+            })
+            .or_else(|| {
+                object
+                    .and_then(|map| map.get("projectId"))
+                    .and_then(Value::as_str)
+                    .map(|project_id| vec![project_id.to_string()])
+            })
+            .unwrap_or_default(),
+        deleted_at: object
+            .and_then(|map| map.get("deletedAt"))
+            .and_then(Value::as_u64),
         status: match object
             .and_then(|map| map.get("status"))
             .and_then(Value::as_str)

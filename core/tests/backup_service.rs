@@ -87,7 +87,7 @@ impl BackupArchivePort for RecordingArchive {
         self.calls.lock().unwrap().push(ArchiveCall::Write {
             archive_path: archive_path.to_string(),
             manifest: manifest.clone(),
-            project_count: dataset.projects.len(),
+            project_count: dataset.tags.len(),
         });
         self.write_result.lock().unwrap().take().unwrap_or(Ok(()))
     }
@@ -186,7 +186,7 @@ fn empty_history() -> HistoryBackupSnapshot {
 fn dataset(config: Value) -> BackupDataset {
     BackupDataset {
         config,
-        projects: vec![],
+        tags: vec![],
         history: empty_history(),
         automation: AutomationRepositoryState::default(),
         analytics_content: "[]".to_string(),
@@ -195,7 +195,7 @@ fn dataset(config: Value) -> BackupDataset {
 
 fn manifest() -> BackupManifest {
     BackupManifest {
-        schema_version: 1,
+        schema_version: 2,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
         app_version: "0.8.0".to_string(),
         history_mode: "light".to_string(),
@@ -207,7 +207,7 @@ fn manifest() -> BackupManifest {
             analytics: true,
         },
         counts: BackupManifestCounts {
-            projects: 0,
+            tags: 0,
             history_items: 0,
             transcript_files: 0,
             summary_files: 0,
@@ -224,7 +224,7 @@ fn preview(import_id: &str) -> PreparedBackupImport {
         archive_path: "backup.sona-backup".to_string(),
         manifest: manifest(),
         config: json!({}),
-        projects: vec![],
+        tags: vec![],
         automation_rules: vec![],
         automation_processed_entries: vec![],
         analytics_content: "[]".to_string(),
@@ -270,7 +270,7 @@ fn export_builds_manifest_from_the_typed_snapshot_and_writes_it() {
         })
         .unwrap();
 
-    assert_eq!(result.schema_version, 1);
+    assert_eq!(result.schema_version, 2);
     assert_eq!(result.created_at, "2026-07-13T00:00:00.123Z");
     assert_eq!(result.history_mode, "light");
     assert_eq!(result.counts.analytics_files, 1);
@@ -327,8 +327,8 @@ fn prepare_returns_the_validated_archive_preview_without_disposing_it() {
 #[test]
 fn apply_rejects_a_manifest_count_mismatch_before_replacing_state_and_disposes() {
     let mut prepared = preview("prepared-2");
-    prepared.manifest.counts.projects = 1;
-    prepared.projects.push(json!({"id": "preview-project"}));
+    prepared.manifest.counts.tags = 1;
+    prepared.tags.push(json!({"id": "preview-tag"}));
     let archive = RecordingArchive::default();
     archive.set_load(Ok(PreparedBackupSession {
         import_id: prepared.import_id,

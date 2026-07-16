@@ -5,8 +5,8 @@ pub enum DashboardServiceError {
     #[error("History repository error: {0}")]
     HistoryRepository(String),
 
-    #[error("Project repository error: {0}")]
-    ProjectRepository(String),
+    #[error("Tag repository error: {0}")]
+    TagRepository(String),
 
     #[error("Analytics repository error: {0}")]
     AnalyticsRepository(String),

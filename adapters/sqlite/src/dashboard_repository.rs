@@ -5,10 +5,10 @@ use sona_core::dashboard::models::DashboardSnapshotDomainModel;
 use sona_core::dashboard::{DashboardService, DashboardServiceError, DashboardSnapshotTime};
 
 use crate::analytics::SqliteAnalyticsRepository;
-use crate::{Database, SqliteHistoryStore, SqliteProjectRepository};
+use crate::{Database, SqliteHistoryStore, SqliteTagRepository};
 
 pub type SqliteDashboardService =
-    DashboardService<SqliteHistoryStore, SqliteProjectRepository, SqliteAnalyticsRepository>;
+    DashboardService<SqliteHistoryStore, SqliteTagRepository, SqliteAnalyticsRepository>;
 
 pub fn create_dashboard_service(
     app_local_data_dir: PathBuf,
@@ -19,7 +19,7 @@ pub fn create_dashboard_service(
             app_local_data_dir,
             Arc::clone(&database),
         )),
-        Arc::new(SqliteProjectRepository::new(Arc::clone(&database))),
+        Arc::new(SqliteTagRepository::new(Arc::clone(&database))),
         Arc::new(SqliteAnalyticsRepository::new(database)),
     )
 }

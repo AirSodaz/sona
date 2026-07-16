@@ -77,7 +77,14 @@ pub struct HistoryItemRecord {
     #[serde(rename = "type")]
     pub kind: HistoryItemKind,
     pub search_content: String,
-    pub project_id: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
+    #[serde(default)]
+    pub deleted_at: Option<u64>,
     pub status: HistoryItemStatus,
     pub draft_source: Option<HistoryDraftSource>,
 }
@@ -87,11 +94,12 @@ pub struct HistoryItemRecord {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum HistoryWorkspaceScope {
     All,
-    Inbox,
-    Project {
-        #[serde(rename = "projectId")]
-        project_id: String,
+    Untagged,
+    Tag {
+        #[serde(rename = "tagId")]
+        tag_id: String,
     },
+    Trash,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -201,12 +209,14 @@ pub struct HistoryWorkspaceSummary {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryWorkspaceItemCounts {
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub inbox: usize,
+    pub untagged: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub trash: usize,
     #[cfg_attr(
         feature = "specta",
         specta(type = BTreeMap<String, specta_typescript::Number>)
     )]
-    pub by_project_id: BTreeMap<String, usize>,
+    pub by_tag_id: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -236,7 +246,8 @@ pub struct LiveRecordingDraftResult {
 pub struct HistoryCreateLiveDraftRequest {
     pub id: Option<String>,
     pub audio_extension: String,
-    pub project_id: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
     pub icon: Option<String>,
 }
 
@@ -247,8 +258,8 @@ pub struct HistorySaveRecordingRequest {
     pub segments: Vec<TranscriptSegment>,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub duration: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_bytes: Option<Vec<u8>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -267,8 +278,8 @@ pub struct HistorySaveImportedFileRequest {
     pub segments: Vec<TranscriptSegment>,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub duration: f64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub converted_source_path: Option<String>,
 }

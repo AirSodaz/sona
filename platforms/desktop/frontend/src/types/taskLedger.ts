@@ -12,16 +12,23 @@ type NormalizedTaskLedgerPatch = WithoutNull<GeneratedTaskLedgerPatch>;
 
 export type TaskLedgerKind = GeneratedTaskLedgerKind;
 export type TaskLedgerStatus = GeneratedTaskLedgerStatus;
-export type TaskLedgerRecord = Omit<NormalizedTaskLedgerRecord, 'projectId'> &
-  Pick<GeneratedTaskLedgerRecord, 'projectId'>;
+export type TaskLedgerRecord = Omit<NormalizedTaskLedgerRecord, 'tagIds'> & {
+  tagIds?: string[];
+  /** @deprecated Compatibility input for persisted v1 tasks. */
+  projectId?: string | null;
+};
 export type TaskLedgerSnapshot = Omit<GeneratedTaskLedgerSnapshot, 'tasks'> & {
   tasks: TaskLedgerRecord[];
 };
 export type TaskLedgerPatch = Omit<
   NormalizedTaskLedgerPatch,
-  'errorMessage' | 'projectId'
+  'errorMessage' | 'tagIds'
 > &
-  Pick<GeneratedTaskLedgerPatch, 'errorMessage' | 'projectId'>;
+  Pick<GeneratedTaskLedgerPatch, 'errorMessage'> & {
+    tagIds?: string[] | null;
+    /** @deprecated Compatibility input for persisted v1 tasks. */
+    projectId?: string | null;
+  };
 
 export function isTaskLedgerActiveStatus(status: TaskLedgerStatus): boolean {
   return status === 'pending' || status === 'running' || status === 'cancelRequested';

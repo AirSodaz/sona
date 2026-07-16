@@ -118,6 +118,8 @@ export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord
     name: input.name?.trim() || 'Untitled Project',
     description: input.description || '',
     icon: input.icon || '',
+    color: input.color || '#64748b',
+    sortOrder: input.sortOrder || 0,
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || input.createdAt || now,
     defaults: {

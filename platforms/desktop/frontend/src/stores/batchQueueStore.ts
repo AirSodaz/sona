@@ -46,6 +46,7 @@ interface AddFilesOptions {
     stageConfig?: AutomationStageConfig | null;
     sourceFingerprint?: string;
     projectId?: string | null;
+    tagIds?: string[];
     fileStat?: {
         size: number;
         mtimeMs: number;
@@ -150,7 +151,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     addFiles: (filePaths, options) => {
         const projectStore = useProjectStore.getState();
-        const activeProjectId = options?.projectId ?? projectStore.activeProjectId;
+        const activeTagIds = options?.tagIds
+            ?? (options?.projectId ? [options.projectId] : projectStore.activeProjectId ? [projectStore.activeProjectId] : []);
+        const activeProjectId = activeTagIds[0] ?? null;
         const activeProject = activeProjectId
             ? (typeof projectStore.getProjectById === 'function' ? projectStore.getProjectById(activeProjectId) : null)
             : (typeof projectStore.getActiveProject === 'function' ? projectStore.getActiveProject() : null);
@@ -171,6 +174,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 segments: [],
                 audioUrl: null,
                 projectId: activeProjectId,
+                tagIds: activeTagIds,
                 origin: options?.origin || 'manual',
                 automationRuleId: options?.automationRuleId,
                 automationRuleName: options?.automationRuleName,
@@ -270,6 +274,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 patchQueueItemTask(item, {
                     historyId: historyItem.id,
                     projectId: historyItem.projectId ?? item.projectId,
+                    tagIds: historyItem.tagIds ?? item.tagIds ?? [],
                     title: historyItem.title,
                 });
 
@@ -290,7 +295,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 if (get().activeItemId === id) {
                     transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
                     transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
-                    void useProjectStore.getState().setActiveProjectId(savedMeta.projectId);
+                    void useProjectStore.getState().setActiveProjectId(savedMeta.tagIds?.[0] ?? savedMeta.projectId);
                 }
             },
             setItemExportPath: (id, exportPath) => {
@@ -352,7 +357,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     audioUrl: item.audioUrl || null,
                 });
             }
-            void useProjectStore.getState().setActiveProjectId(item.projectId);
+            void useProjectStore.getState().setActiveProjectId(item.tagIds?.[0] ?? item.projectId);
         } else if (id === null) {
             clearActiveTranscriptSession({ clearAudio: true, title: '' });
         }

@@ -61,18 +61,11 @@ fn run_dashboard_show(args: DashboardShowArgs) -> CliResult<CliOutput> {
 }
 
 fn render_dashboard_table(snapshot: &DashboardSnapshotDomainModel) -> String {
-    let headers = [
-        "GENERATED",
-        "ITEMS",
-        "PROJECTS",
-        "DURATION",
-        "TOKENS",
-        "DEEP",
-    ];
+    let headers = ["GENERATED", "ITEMS", "TAGS", "DURATION", "TOKENS", "DEEP"];
     let row = [
         snapshot.generated_at.clone(),
         snapshot.content.overview.item_count_display.clone(),
-        snapshot.content.overview.project_count_display.clone(),
+        snapshot.content.overview.tag_count_display.clone(),
         snapshot.content.overview.total_duration_display.clone(),
         snapshot.llm_usage.totals.total_tokens_display.clone(),
         snapshot.content.overview.is_deep_loaded.to_string(),

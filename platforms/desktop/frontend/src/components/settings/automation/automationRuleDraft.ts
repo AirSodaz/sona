@@ -7,7 +7,8 @@ export const NEW_RULE_KEY = '__new__';
 export interface AutomationRuleDraft {
     id?: string;
     name: string;
-    projectId: string;
+    saveHistory: boolean;
+    tagIds: string[];
     presetId: AutomationRule['presetId'];
     watchDirectory: string;
     recursive: boolean;
@@ -18,7 +19,7 @@ export interface AutomationRuleDraft {
 
 export type AutomationDraftUpdate = (draft: AutomationRuleDraft) => AutomationRuleDraft;
 
-type DirectDraftField = 'enabled' | 'name' | 'projectId' | 'recursive' | 'watchDirectory';
+type DirectDraftField = 'enabled' | 'name' | 'saveHistory' | 'tagIds' | 'recursive' | 'watchDirectory';
 
 export function normalizeExportMode(autoTranslate: boolean, mode: ExportMode): ExportMode {
     if (!autoTranslate && (mode === 'translation' || mode === 'bilingual')) {
@@ -62,7 +63,8 @@ export function normalizeAutomationRuleDraft(draft: AutomationRuleDraft): Automa
 export function createRuleDraft(projectId: string): AutomationRuleDraft {
     return normalizeAutomationRuleDraft({
         name: '',
-        projectId,
+        saveHistory: projectId !== 'none',
+        tagIds: projectId && projectId !== 'none' && projectId !== 'inbox' ? [projectId] : [],
         presetId: 'custom',
         watchDirectory: '',
         recursive: false,
@@ -87,7 +89,12 @@ export function createDraftFromRule(rule: AutomationRule): AutomationRuleDraft {
     return normalizeAutomationRuleDraft({
         id: rule.id,
         name: rule.name,
-        projectId: rule.projectId,
+        saveHistory: rule.saveHistory ?? rule.projectId !== 'none',
+        tagIds: rule.tagIds ?? (
+            rule.projectId && rule.projectId !== 'none' && rule.projectId !== 'inbox'
+                ? [rule.projectId]
+                : []
+        ),
         presetId: rule.presetId,
         watchDirectory: rule.watchDirectory,
         recursive: rule.recursive,

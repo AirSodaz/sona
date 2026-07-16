@@ -10,7 +10,8 @@ use sona_core::automation::{
 fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let rule = AutomationRule {
         name: "Import calls".to_string(),
-        project_id: "project-1".to_string(),
+        save_history: true,
+        tag_ids: vec!["tag-1".to_string()],
         watch_directory: "C:\\watch".to_string(),
         stage_config: AutomationRuleStageConfig {
             auto_polish: true,
@@ -65,7 +66,7 @@ fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
     let result = validate_rule_activation(
         &rule,
         &config,
-        Some(&json!({ "id": "project-1" })),
+        &[json!({ "id": "tag-1" })],
         AutomationRuleActivationEnvironment {
             watch_directory_exists: true,
             export_directory_ready: true,

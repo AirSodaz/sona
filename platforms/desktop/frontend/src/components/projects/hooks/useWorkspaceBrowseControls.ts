@@ -5,7 +5,8 @@ import {
   DEFAULT_DATE_FILTER,
   DEFAULT_FILTER_TYPE,
   DEFAULT_SORT_ORDER,
-  INBOX_SCOPE,
+  TRASH_SCOPE,
+  UNTAGGED_SCOPE,
 } from '../constants';
 import type {
   ProjectBrowseScope,
@@ -23,7 +24,7 @@ export function useWorkspaceBrowseControls({
   activeProjectId,
   projects,
 }: UseWorkspaceBrowseControlsParams) {
-  const [browseScopeState, setBrowseScopeState] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
+  const [browseScopeState, setBrowseScopeState] = useState<ProjectBrowseScope>(() => activeProjectId || UNTAGGED_SCOPE);
   const [isFilterMenuOpen, setIsFilterMenuOpenState] = useState(false);
   const [searchQuery, setSearchQueryState] = useState('');
   const [activeSearchResultIdState, setActiveSearchResultIdState] = useState<string | null>(null);
@@ -32,7 +33,11 @@ export function useWorkspaceBrowseControls({
   const [sortOrder, setSortOrderState] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
 
   const browseScope = useMemo<ProjectBrowseScope>(() => {
-    if (browseScopeState === ALL_ITEMS_SCOPE || browseScopeState === INBOX_SCOPE) {
+    if (
+      browseScopeState === ALL_ITEMS_SCOPE
+      || browseScopeState === UNTAGGED_SCOPE
+      || browseScopeState === TRASH_SCOPE
+    ) {
       return browseScopeState;
     }
 
@@ -40,12 +45,13 @@ export function useWorkspaceBrowseControls({
       return browseScopeState;
     }
 
-    return activeProjectId || INBOX_SCOPE;
+    return activeProjectId || UNTAGGED_SCOPE;
   }, [activeProjectId, browseScopeState, projects]);
 
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
-  const isInboxScope = browseScope === INBOX_SCOPE;
-  const browseProjectId = !isAllItemsScope && !isInboxScope ? browseScope : null;
+  const isInboxScope = browseScope === UNTAGGED_SCOPE;
+  const isTrashScope = browseScope === TRASH_SCOPE;
+  const browseProjectId = !isAllItemsScope && !isInboxScope && !isTrashScope ? browseScope : null;
   const browseProject = useMemo(
     () => projects.find((item) => item.id === browseProjectId) || null,
     [browseProjectId, projects],
@@ -109,6 +115,7 @@ export function useWorkspaceBrowseControls({
     isAllItemsScope,
     isFilterMenuOpen,
     isInboxScope,
+    isTrashScope,
     resetBrowseState,
     searchQuery,
     setActiveSearchResultId,

@@ -15,9 +15,9 @@ pub trait HistoryRepository: Send + Sync {
 }
 
 #[async_trait::async_trait]
-pub trait ProjectRepository: Send + Sync {
-    /// Counts the total number of projects
-    async fn count_projects(&self) -> Result<u64, DashboardServiceError>;
+pub trait TagRepository: Send + Sync {
+    /// Counts the total number of tags.
+    async fn count_tags(&self) -> Result<u64, DashboardServiceError>;
 }
 
 #[async_trait::async_trait]

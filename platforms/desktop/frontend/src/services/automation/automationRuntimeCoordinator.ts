@@ -199,9 +199,17 @@ export class AutomationRuntimeCoordinator {
       return { status: 'blocked', reason: 'already_pending' };
     }
 
-    const isInboxOrNone = latestRule.projectId === 'inbox' || latestRule.projectId === 'none';
-    const project = isInboxOrNone ? null : this.ports.useProjectStore.getState().getProjectById(latestRule.projectId);
-    if (!project && !isInboxOrNone) {
+    const tagIds = latestRule.tagIds ?? (
+      latestRule.projectId && latestRule.projectId !== 'inbox' && latestRule.projectId !== 'none'
+        ? [latestRule.projectId]
+        : []
+    );
+    const projectStore = this.ports.useProjectStore.getState();
+    const tags = tagIds
+      .map((tagId) => projectStore.getProjectById(tagId))
+      .filter((tag): tag is NonNullable<typeof tag> => !!tag);
+    const project = (projectStore.projects ?? []).find((tag) => tagIds.includes(tag.id)) ?? tags[0] ?? null;
+    if (tags.length !== tagIds.length) {
       this.ports.setState((current) => {
         if (options?.suppressFailureNotification) {
           const runtimeStatesWithError = {
@@ -213,7 +221,7 @@ export class AutomationRuntimeCoordinator {
               {
                 status: 'error',
                 lastResult: 'error',
-                lastResultMessage: 'Project not found.',
+                lastResultMessage: 'Tag not found.',
                 lastProcessedFilePath: payload.filePath,
               },
             ),
@@ -238,7 +246,7 @@ export class AutomationRuntimeCoordinator {
         const nextFailureState = this.ports.applyRuntimeFailureState(current, {
           ruleId: payload.ruleId,
           ruleName: latestRule.name,
-          message: 'Project not found.',
+          message: 'Tag not found.',
           filePath: payload.filePath,
         });
 
@@ -283,7 +291,7 @@ export class AutomationRuntimeCoordinator {
         exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
         stageConfig: latestRule.stageConfig,
         sourceFingerprint: payload.sourceFingerprint,
-        projectId: isInboxOrNone ? null : latestRule.projectId,
+        tagIds,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,
@@ -594,10 +602,12 @@ export class AutomationRuntimeCoordinator {
 
     const state = this.ports.getState();
     const rule = state.rules.find((item) => item.id === payload.ruleId);
-    if (rule?.projectId === 'none' && payload.status === 'complete' && payload.historyId) {
-      this.ports.historyService.deleteRecording(payload.historyId).catch((error) => {
+    if (rule?.saveHistory === false && payload.status === 'complete' && payload.historyId) {
+      this.ports.historyService.deleteRecording(payload.historyId)
+        .then(() => this.ports.historyService.purgeRecordings([payload.historyId as string]))
+        .catch((error) => {
         logger.error('[Automation] Failed to auto-delete record:', error);
-      });
+        });
     }
 
     const nextEntries = [

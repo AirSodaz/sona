@@ -78,9 +78,9 @@ export class AutomationService {
   validateAutomationRuleForActivation = async (
     rule: AutomationRule,
     globalConfig: AppConfig,
-    project: ProjectRecord | null,
+    tags: ProjectRecord[],
   ): Promise<AutomationRuleValidationResult> => {
-    return this.ports.automationValidateRuleActivation(rule, globalConfig, project);
+    return this.ports.automationValidateRuleActivation(rule, globalConfig, tags);
   }
 }
 

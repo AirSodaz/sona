@@ -6,7 +6,7 @@ use sona_core::backup::{
     BackupApplyResult, BackupDataset, BackupError, BackupRestoreDataset, BackupStateRepository,
 };
 use sona_core::config::app_config_value_from_stored_state;
-use sona_core::project::ACTIVE_PROJECT_SETTINGS_KEY;
+use sona_core::tag::ACTIVE_TAG_SETTINGS_KEY;
 
 use crate::automation::{
     delete_automation_in_transaction, insert_automation_in_transaction,
@@ -23,8 +23,8 @@ use crate::llm_usage::{
     PreparedLlmUsageRows, parse_raw, read_raw_in_transaction, replace_raw_in_transaction,
 };
 use crate::ports::Database as DatabasePort;
-use crate::project::{
-    delete_projects_in_transaction, insert_projects_in_transaction, load_projects_in_transaction,
+use crate::tag::{
+    delete_tags_in_transaction, insert_tags_in_transaction, load_tags_in_transaction,
 };
 use crate::{Database, DatabaseError};
 
@@ -63,13 +63,13 @@ where
                 })?;
                 let config = app_config_value_from_stored_state(config_state)
                     .map_err(DatabaseError::Internal)?;
-                let projects = load_projects_in_transaction(tx)?;
+                let tags = load_tags_in_transaction(tx)?;
                 let history = load_history_backup_in_transaction(tx)?;
                 let automation = load_automation_in_transaction(tx)?;
                 let analytics_content = read_raw_in_transaction(tx)?;
                 Ok(BackupDataset {
                     config,
-                    projects,
+                    tags,
                     history,
                     automation,
                     analytics_content,
@@ -136,49 +136,49 @@ fn apply_backup_restore(
 ) -> Result<(), DatabaseError> {
     delete_automation_in_transaction(tx)?;
     delete_history_in_transaction(tx)?;
-    delete_projects_in_transaction(tx)?;
+    delete_tags_in_transaction(tx)?;
 
     replace_state_in_transaction(tx, &dataset.config_state)?;
-    clear_setting_in_transaction(tx, ACTIVE_PROJECT_SETTINGS_KEY)?;
-    insert_projects_in_transaction(tx, &dataset.projects)?;
+    clear_setting_in_transaction(tx, ACTIVE_TAG_SETTINGS_KEY)?;
+    insert_tags_in_transaction(tx, &dataset.tags)?;
     insert_history_in_transaction(tx, &prepared.history)?;
     insert_automation_in_transaction(tx, &dataset.automation)?;
     replace_raw_in_transaction(tx, &prepared.analytics)
 }
 
 fn validate_restore_relationships(dataset: &BackupRestoreDataset) -> Result<(), BackupError> {
-    let project_ids = dataset
-        .projects
+    let tag_ids = dataset
+        .tags
         .iter()
-        .map(|project| {
-            i64::try_from(project.created_at).map_err(|_| {
+        .map(|tag| {
+            i64::try_from(tag.created_at).map_err(|_| {
                 BackupError::InvalidBackup(format!(
-                    "Project created timestamp exceeds SQLite range: {}",
-                    project.id
+                    "Tag created timestamp exceeds SQLite range: {}",
+                    tag.id
                 ))
             })?;
-            i64::try_from(project.updated_at).map_err(|_| {
+            i64::try_from(tag.updated_at).map_err(|_| {
                 BackupError::InvalidBackup(format!(
-                    "Project updated timestamp exceeds SQLite range: {}",
-                    project.id
+                    "Tag updated timestamp exceeds SQLite range: {}",
+                    tag.id
                 ))
             })?;
-            Ok(project.id.as_str())
+            Ok(tag.id.as_str())
         })
         .collect::<Result<HashSet<_>, BackupError>>()?;
-    if project_ids.len() != dataset.projects.len() {
+    if tag_ids.len() != dataset.tags.len() {
         return Err(BackupError::InvalidBackup(
-            "Backup contains duplicate project IDs.".to_string(),
+            "Backup contains duplicate tag IDs.".to_string(),
         ));
     }
     for item in &dataset.history.items {
-        if let Some(project_id) = item.project_id.as_deref()
-            && !project_ids.contains(project_id)
-        {
-            return Err(BackupError::InvalidBackup(format!(
-                "History item references an unknown project: {}",
-                item.id
-            )));
+        for tag_id in &item.tag_ids {
+            if !tag_ids.contains(tag_id.as_str()) {
+                return Err(BackupError::InvalidBackup(format!(
+                    "History item references an unknown tag: {}",
+                    item.id
+                )));
+            }
         }
     }
     Ok(())

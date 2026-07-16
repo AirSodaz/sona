@@ -20,7 +20,10 @@ export interface HistoryItem {
     icon?: string;
     type?: 'recording' | 'batch';
     searchContent?: string;
-    projectId: string | null;
+    tagIds?: string[];
+    deletedAt?: number | null;
+    /** @deprecated Compatibility input for pre-v4 frontend fixtures. */
+    projectId?: string | null;
     status?: HistoryItemStatus;
     draftSource?: HistoryDraftSource;
 }
@@ -42,7 +45,10 @@ export function normalizeHistoryItemRecord(
         icon: typeof item?.icon === 'string' ? item.icon : undefined,
         type: item?.type === 'batch' ? 'batch' : 'recording',
         searchContent: item?.searchContent || '',
-        projectId: typeof item?.projectId === 'string' ? item.projectId : null,
+        tagIds: Array.isArray(item?.tagIds)
+            ? item.tagIds.filter((tagId): tagId is string => typeof tagId === 'string')
+            : [],
+        deletedAt: typeof item?.deletedAt === 'number' ? item.deletedAt : null,
         status: item?.status === 'draft' ? 'draft' : 'complete',
         draftSource: item?.draftSource === 'live_record' ? 'live_record' : undefined,
     };

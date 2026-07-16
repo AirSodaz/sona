@@ -14,8 +14,8 @@ use crate::platform::history_repository::{
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReassignProjectRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
+    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
 use sona_core::history_store::HistoryStore;
@@ -77,13 +77,13 @@ pub async fn history_create_live_draft<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     id: Option<String>,
     audio_extension: String,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     icon: Option<String>,
 ) -> Result<LiveRecordingDraftResult, String> {
     let request = HistoryCreateLiveDraftRequest {
         id,
         audio_extension,
-        project_id,
+        tag_ids,
         icon,
     };
     validate_history_input(&request)?;
@@ -121,7 +121,7 @@ pub async fn history_save_recording<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     segments: Vec<TranscriptSegment>,
     duration: f64,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     audio_bytes: Option<Vec<u8>>,
     native_audio_path: Option<String>,
     audio_extension: Option<String>,
@@ -129,7 +129,7 @@ pub async fn history_save_recording<R: Runtime>(
     let request = HistorySaveRecordingRequest {
         segments,
         duration,
-        project_id,
+        tag_ids,
         audio_bytes,
         native_audio_path,
         audio_extension,
@@ -152,7 +152,7 @@ pub async fn history_save_imported_file<R: Runtime>(
     source_path: String,
     segments: Vec<TranscriptSegment>,
     duration: f64,
-    project_id: Option<String>,
+    tag_ids: Vec<String>,
     converted_source_path: Option<String>,
 ) -> Result<HistoryItemRecord, String> {
     let request = HistorySaveImportedFileRequest {
@@ -160,7 +160,7 @@ pub async fn history_save_imported_file<R: Runtime>(
         source_path,
         segments,
         duration,
-        project_id,
+        tag_ids,
         converted_source_path,
     };
     validate_history_input(&request)?;
@@ -178,11 +178,65 @@ pub async fn history_delete_items<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     ids: Vec<String>,
 ) -> Result<(), String> {
+    let deleted_at = u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_millis(),
+    )
+    .map_err(|error| error.to_string())?;
+    let request = HistoryTrashItemsRequest { ids, deleted_at };
+    crate::platform::history_repository::run_history_mutation_file_task(
+        &app,
+        state.inner(),
+        move |service| service.trash_items(request),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn history_trash_items<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    ids: Vec<String>,
+    deleted_at: u64,
+) -> Result<(), String> {
+    let request = HistoryTrashItemsRequest { ids, deleted_at };
+    validate_history_input(&request)?;
+    crate::platform::history_repository::run_history_mutation_file_task(
+        &app,
+        state.inner(),
+        move |service| service.trash_items(request),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn history_restore_items<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    ids: Vec<String>,
+) -> Result<(), String> {
     let request = HistoryDeleteItemsRequest { ids };
     crate::platform::history_repository::run_history_mutation_file_task(
         &app,
         state.inner(),
-        move |service| service.delete_items(request),
+        move |service| service.restore_items(request),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn history_purge_items<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let request = HistoryDeleteItemsRequest { ids };
+    crate::platform::history_repository::run_history_mutation_file_task(
+        &app,
+        state.inner(),
+        move |service| service.purge_items(request),
     )
     .await
 }
@@ -302,16 +356,43 @@ pub async fn history_update_item_meta<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn history_update_tag_assignments<R: Runtime>(
+    app: AppHandle<R>,
+    ids: Vec<String>,
+    add_tag_ids: Vec<String>,
+    remove_tag_ids: Vec<String>,
+) -> Result<(), String> {
+    let request = HistoryUpdateTagAssignmentsRequest {
+        ids,
+        add_tag_ids,
+        remove_tag_ids,
+    };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.update_tag_assignments(request)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_replace_tag_assignments<R: Runtime>(
+    app: AppHandle<R>,
+    ids: Vec<String>,
+    tag_ids: Vec<String>,
+) -> Result<(), String> {
+    let request = HistoryReplaceTagAssignmentsRequest { ids, tag_ids };
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.replace_tag_assignments(request)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn history_update_project_assignments<R: Runtime>(
     app: AppHandle<R>,
     ids: Vec<String>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    let request = HistoryUpdateProjectAssignmentsRequest { ids, project_id };
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.update_project_assignments(request)
-    })
-    .await
+    history_replace_tag_assignments(app, ids, project_id.into_iter().collect()).await
 }
 
 #[tauri::command]
@@ -320,12 +401,26 @@ pub async fn history_reassign_project<R: Runtime>(
     current_project_id: String,
     next_project_id: Option<String>,
 ) -> Result<(), String> {
-    let request = HistoryReassignProjectRequest {
-        current_project_id,
-        next_project_id,
+    let items =
+        crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+            service.list_items(HistoryListOptions {
+                limit: None,
+                offset: None,
+            })
+        })
+        .await?;
+    let ids = items
+        .into_iter()
+        .filter(|item| item.tag_ids.contains(&current_project_id))
+        .map(|item| item.id)
+        .collect();
+    let request = HistoryUpdateTagAssignmentsRequest {
+        ids,
+        add_tag_ids: next_project_id.into_iter().collect(),
+        remove_tag_ids: vec![current_project_id],
     };
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.reassign_project(request)
+        service.update_tag_assignments(request)
     })
     .await
 }

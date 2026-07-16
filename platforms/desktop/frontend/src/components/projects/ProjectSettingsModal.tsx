@@ -18,6 +18,7 @@ interface ProjectSettingsModalProps {
   draftName: string;
   draftDescription: string;
   draftIcon: string;
+  draftColor: string;
   draftDefaults: ProjectDefaults | null;
   globalConfig: AppConfig;
   onClose: () => void;
@@ -26,6 +27,7 @@ interface ProjectSettingsModalProps {
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onIconChange: (value: string) => void;
+  onColorChange: (value: string) => void;
   onDefaultsChange: (defaults: ProjectDefaults) => void;
 }
 
@@ -35,6 +37,7 @@ export function ProjectSettingsModal({
   draftName,
   draftDescription,
   draftIcon,
+  draftColor,
   draftDefaults,
   globalConfig,
   onClose,
@@ -43,6 +46,7 @@ export function ProjectSettingsModal({
   onNameChange,
   onDescriptionChange,
   onIconChange,
+  onColorChange,
   onDefaultsChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
@@ -86,11 +90,11 @@ export function ProjectSettingsModal({
       title={
         <div>
           <span style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            {t('projects.project_settings_title', { defaultValue: 'Edit Project Defaults' })}
+            {t('projects.tag_settings_title', { defaultValue: 'Edit Tag Defaults' })}
           </span>
           <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '4px 0 0 0', fontWeight: 400 }}>
             {t('projects.project_settings_hint', {
-              defaultValue: 'These defaults apply whenever you work inside this project.',
+              defaultValue: 'These defaults apply when this is the highest-priority tag on an item.',
             })}
           </p>
         </div>
@@ -99,7 +103,7 @@ export function ProjectSettingsModal({
       footer={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
-            {t('projects.delete_project', { defaultValue: 'Delete Project' })}
+            {t('projects.delete_tag', { defaultValue: 'Delete Tag' })}
           </button>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>
@@ -122,7 +126,7 @@ export function ProjectSettingsModal({
       >
         <div className="projects-field">
           <label htmlFor="project-settings-name">
-            {t('projects.project_name', { defaultValue: 'Project Name' })}
+            {t('projects.tag_name', { defaultValue: 'Tag Name' })}
           </label>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <IconPicker icon={draftIcon} onChange={onIconChange} defaultIcon={<FolderIcon />} />
@@ -133,10 +137,22 @@ export function ProjectSettingsModal({
               style={{ flex: 1 }}
               value={draftName}
               onChange={(event) => onNameChange(event.target.value)}
-              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+              placeholder={t('projects.new_tag_name', { defaultValue: 'Tag name' })}
               autoFocus
             />
           </div>
+        </div>
+
+        <div className="projects-field">
+          <label htmlFor="project-settings-color">
+            {t('projects.tag_color', { defaultValue: 'Color' })}
+          </label>
+          <input
+            id="project-settings-color"
+            type="color"
+            value={draftColor}
+            onChange={(event) => onColorChange(event.target.value)}
+          />
         </div>
 
         <div className="projects-field">

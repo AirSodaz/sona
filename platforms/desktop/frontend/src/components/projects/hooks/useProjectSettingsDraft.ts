@@ -21,6 +21,7 @@ export function useProjectSettingsDraft({
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
   const [draftIcon, setDraftIcon] = useState('');
+  const [draftColor, setDraftColor] = useState('#64748b');
   const [draftDefaults, setDraftDefaults] = useState<ProjectDefaults | null>(null);
 
   const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
@@ -28,6 +29,7 @@ export function useProjectSettingsDraft({
       setDraftName('');
       setDraftDescription('');
       setDraftIcon('');
+      setDraftColor('#64748b');
       setDraftDefaults(null);
       return;
     }
@@ -35,6 +37,7 @@ export function useProjectSettingsDraft({
     setDraftName(project.name);
     setDraftDescription(project.description);
     setDraftIcon(project.icon || '');
+    setDraftColor(project.color || '#64748b');
     setDraftDefaults(project.defaults);
   }, [browseProject]);
 
@@ -59,17 +62,19 @@ export function useProjectSettingsDraft({
       name: draftName.trim() || browseProject.name,
       description: draftDescription,
       icon: draftIcon,
+      color: draftColor,
       defaults: draftDefaults,
     });
     const savedProject = buildComparableProjectSettingsSnapshot({
       name: browseProject.name,
       description: browseProject.description,
       icon: browseProject.icon || '',
+      color: browseProject.color,
       defaults: browseProject.defaults,
     });
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
-  }, [browseProject, draftDefaults, draftDescription, draftIcon, draftName]);
+  }, [browseProject, draftColor, draftDefaults, draftDescription, draftIcon, draftName]);
 
   const confirmDiscardProjectSettingsChanges = useCallback(async () => {
     if (!isSettingsOpen || !isProjectSettingsDirty) {
@@ -118,6 +123,8 @@ export function useProjectSettingsDraft({
     setDraftDescription,
     draftIcon,
     setDraftIcon,
+    draftColor,
+    setDraftColor,
     draftDefaults,
     setDraftDefaults,
     isProjectSettingsDirty,

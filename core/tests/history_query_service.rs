@@ -106,8 +106,9 @@ fn empty_workspace_result() -> HistoryWorkspaceQueryResult {
             batch_count: 0,
         },
         item_counts: HistoryWorkspaceItemCounts {
-            inbox: 0,
-            by_project_id: BTreeMap::new(),
+            untagged: 0,
+            trash: 0,
+            by_tag_id: BTreeMap::new(),
         },
     }
 }

@@ -2,10 +2,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sona_core::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryMutationRepository,
-    HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryMutationError,
+    HistoryMutationRepository, HistoryPurgeItemsRequest, HistoryReplaceTagAssignmentsRequest,
+    HistoryRestoreItemsRequest, HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryItemRecord, HistorySaveImportedFileRequest,
@@ -72,8 +72,19 @@ impl HistoryMutationRepository for LazySqliteHistoryMutationRepository {
         self.with_store(|store| HistoryMutationRepository::save_imported_file(store, request))
     }
 
-    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::delete_items(store, request))
+    fn trash_items(&self, request: HistoryTrashItemsRequest) -> Result<(), HistoryMutationError> {
+        self.with_store(|store| HistoryMutationRepository::trash_items(store, request))
+    }
+
+    fn restore_items(
+        &self,
+        request: HistoryRestoreItemsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        self.with_store(|store| HistoryMutationRepository::restore_items(store, request))
+    }
+
+    fn purge_items(&self, request: HistoryPurgeItemsRequest) -> Result<(), HistoryMutationError> {
+        self.with_store(|store| HistoryMutationRepository::purge_items(store, request))
     }
 
     fn update_transcript(
@@ -99,20 +110,18 @@ impl HistoryMutationRepository for LazySqliteHistoryMutationRepository {
         self.with_store(|store| HistoryMutationRepository::update_item_meta(store, request))
     }
 
-    fn update_project_assignments(
+    fn update_tag_assignments(
         &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
+        request: HistoryUpdateTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| {
-            HistoryMutationRepository::update_project_assignments(store, request)
-        })
+        self.with_store(|store| HistoryMutationRepository::update_tag_assignments(store, request))
     }
 
-    fn reassign_project(
+    fn replace_tag_assignments(
         &self,
-        request: HistoryReassignProjectRequest,
+        request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        self.with_store(|store| HistoryMutationRepository::reassign_project(store, request))
+        self.with_store(|store| HistoryMutationRepository::replace_tag_assignments(store, request))
     }
 }
 

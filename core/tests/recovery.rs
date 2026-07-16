@@ -44,7 +44,7 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
                 speaker: None,
                 speaker_attribution: None,
             }],
-            project_id: Some("project-1".to_string()),
+            tag_ids: vec!["project-1".to_string()],
             history_id: Some("history-1".to_string()),
             history_title: Some("History".to_string()),
             last_known_stage: RecoveryItemStage::Transcribing,
@@ -67,7 +67,7 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
 
     let value = serde_json::to_value(snapshot).unwrap();
 
-    assert_eq!(value["version"], 1);
+    assert_eq!(value["version"], 2);
     assert_eq!(value["items"][0]["filePath"], "C:/audio.wav");
     assert_eq!(value["items"][0]["hasSourceFile"], true);
     assert_eq!(value["items"][0]["fileStat"]["mtimeMs"], 2000);

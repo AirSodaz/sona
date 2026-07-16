@@ -8,7 +8,7 @@ import type {
   AutomationRule,
   AutomationRuleValidationResult,
 } from '../../types/automation';
-import type { ProjectRecord } from '../../types/project';
+import type { TagRecord } from '../../types/tag';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -30,6 +30,8 @@ const PROCESSED_STATUSES = new Set(['complete', 'error', 'discarded']);
 function normalizeAutomationRule(record: AutomationRuleRecord): AutomationRule {
   return {
     ...record,
+    saveHistory: record.saveHistory,
+    tagIds: record.tagIds,
     presetId: AUTOMATION_PRESET_IDS.has(record.presetId)
       ? record.presetId as AutomationRule['presetId']
       : 'custom',
@@ -80,7 +82,9 @@ export async function automationLoadRepositoryState(): Promise<AutomationReposit
 }
 
 export async function automationPersistRules(rules: AutomationRule[]): Promise<void> {
-  await invokeTauri(TauriCommand.automationRepository.persistRules, { rules });
+  await invokeTauri(TauriCommand.automationRepository.persistRules, {
+    rules: rules.map(toAutomationRuleInput),
+  });
 }
 
 export async function automationPersistProcessedEntries(
@@ -96,7 +100,7 @@ export async function automationPersistRepositoryState(
   processedEntries: AutomationProcessedEntry[],
 ): Promise<void> {
   await invokeTauri(TauriCommand.automationRepository.persistState, {
-    rules,
+    rules: rules.map(toAutomationRuleInput),
     processedEntries,
   });
 }
@@ -104,11 +108,23 @@ export async function automationPersistRepositoryState(
 export async function automationValidateRuleActivation(
   rule: AutomationRule,
   globalConfig: AppConfig,
-  project: ProjectRecord | null,
+  tags: TagRecord[] | TagRecord | null,
 ): Promise<AutomationRuleValidationResult> {
   return invokeTauri(TauriCommand.automationRepository.validateActivation, {
-    rule,
+    rule: toAutomationRuleInput(rule),
     globalConfig,
-    project,
+    tags: Array.isArray(tags) ? tags : tags ? [tags] : [],
   });
+}
+
+function toAutomationRuleInput(rule: AutomationRule) {
+  return {
+    ...rule,
+    saveHistory: rule.saveHistory ?? rule.projectId !== 'none',
+    tagIds: rule.tagIds ?? (
+      rule.projectId && rule.projectId !== 'none' && rule.projectId !== 'inbox'
+        ? [rule.projectId]
+        : []
+    ),
+  };
 }

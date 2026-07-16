@@ -165,6 +165,8 @@ impl SyncCausalContext {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncEntityKind {
+    Tag,
+    // Compatibility only: persisted v3 queues may still contain project operations.
     Project,
     HistoryItem,
     HistoryTranscript,

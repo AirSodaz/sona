@@ -1,14 +1,14 @@
 import type { ProjectCreateInput, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import {
-  projectCreate,
-  projectDelete,
-  projectGetActiveId,
-  projectList,
-  projectReorder,
-  projectSaveAll,
-  projectSetActiveId,
-  projectUpdate,
-} from './tauri/project';
+  tagCreate as projectCreate,
+  tagDelete as projectDelete,
+  tagGetActiveId as projectGetActiveId,
+  tagList as projectList,
+  tagReorder as projectReorder,
+  tagSaveAll as projectSaveAll,
+  tagSetActiveId as projectSetActiveId,
+  tagUpdate as projectUpdate,
+} from './tauri/tag';
 
 export interface ProjectServicePorts {
   projectCreate: typeof projectCreate;

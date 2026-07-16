@@ -2,6 +2,7 @@ import React from 'react';
 import { FileTextIcon, MicIcon, SettingsIcon } from '../Icons';
 import type { ProjectRecord } from '../../types/project';
 import type { ProjectSummaryChip, TranslationFn } from './types';
+import { Trash2 } from 'lucide-react';
 
 interface ProjectsHeaderProps {
   browseProject: ProjectRecord | null;
@@ -13,6 +14,9 @@ interface ProjectsHeaderProps {
   onOpenProjectSettings: () => void;
   onStartLiveRecord: () => void;
   showWorkflowActions: boolean;
+  isTrashScope?: boolean;
+  onEmptyTrash?: () => void;
+  trashItemCount?: number;
   summaryChips: ProjectSummaryChip[];
   t: TranslationFn;
 }
@@ -27,6 +31,9 @@ export function ProjectsHeader({
   onOpenProjectSettings,
   onStartLiveRecord,
   showWorkflowActions,
+  isTrashScope = false,
+  onEmptyTrash,
+  trashItemCount = 0,
   summaryChips,
   t,
 }: ProjectsHeaderProps): React.JSX.Element {
@@ -72,11 +79,24 @@ export function ProjectsHeader({
               type="button"
               className="btn btn-icon projects-header-icon"
               onClick={onOpenProjectSettings}
-              aria-label={t('projects.project_settings', { defaultValue: 'Project Settings' })}
-              data-tooltip={t('projects.project_settings', { defaultValue: 'Project Settings' })}
+              aria-label={t('projects.tag_settings', { defaultValue: 'Tag Settings' })}
+              data-tooltip={t('projects.tag_settings', { defaultValue: 'Tag Settings' })}
               data-tooltip-pos="bottom-left"
             >
               <SettingsIcon width={16} height={16} />
+            </button>
+          )}
+          {isTrashScope && onEmptyTrash && (
+            <button
+              type="button"
+              className="btn btn-icon projects-header-icon btn-danger"
+              onClick={onEmptyTrash}
+              disabled={trashItemCount === 0}
+              aria-label={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
+              data-tooltip={t('history.empty_trash', { defaultValue: 'Empty Trash' })}
+              data-tooltip-pos="bottom-left"
+            >
+              <Trash2 size={16} />
             </button>
           )}
         </div>

@@ -3,15 +3,19 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryMutationError,
-    HistoryUpdateTranscriptRequest,
+    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
+    HistoryDeleteItemsRequest, HistoryMutationError, HistoryReplaceTagAssignmentsRequest,
+    HistoryTrashItemsRequest, HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
+use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, TranscriptSnapshotReason,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
+    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceScope,
+    HistoryWorkspaceSortOrder, TranscriptSnapshotReason,
 };
-use sona_sqlite::LazySqliteHistoryMutationRepository;
+use sona_sqlite::{LazySqliteHistoryMutationRepository, LazySqliteHistoryQueryRepository};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -20,6 +24,9 @@ use std::sync::Arc;
 struct HistorySaveRecordingMetadata {
     segments: Value,
     duration: f64,
+    #[serde(default)]
+    tag_ids: Vec<String>,
+    #[serde(default)]
     project_id: Option<String>,
     audio_extension: Option<String>,
 }
@@ -39,6 +46,9 @@ struct HistorySaveImportedFileJsonRequest {
     source_path: String,
     segments: Value,
     duration: f64,
+    #[serde(default)]
+    tag_ids: Vec<String>,
+    #[serde(default)]
     project_id: Option<String>,
     converted_source_path: Option<String>,
 }
@@ -56,6 +66,20 @@ struct HistoryCreateTranscriptSnapshotJsonRequest {
     history_id: String,
     reason: TranscriptSnapshotReason,
     segments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyHistoryProjectAssignmentsRequest {
+    ids: Vec<String>,
+    project_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyHistoryReassignProjectRequest {
+    current_project_id: String,
+    next_project_id: Option<String>,
 }
 
 pub(crate) async fn create_history_live_draft_json(
@@ -95,7 +119,7 @@ pub(crate) async fn save_history_recording_json(
     let request = HistorySaveRecordingRequest {
         segments: parse_legacy_segments(metadata.segments)?,
         duration: metadata.duration,
-        project_id: metadata.project_id,
+        tag_ids: normalized_tag_ids(metadata.tag_ids, metadata.project_id),
         audio_bytes,
         native_audio_path,
         audio_extension: metadata.audio_extension,
@@ -113,7 +137,7 @@ pub(crate) async fn save_history_imported_file_json(
         source_path: request.source_path,
         segments: parse_legacy_segments(request.segments)?,
         duration: request.duration,
-        project_id: request.project_id,
+        tag_ids: normalized_tag_ids(request.tag_ids, request.project_id),
         converted_source_path: request.converted_source_path,
     };
     run_mutation(app_data_dir, move |service| {
@@ -126,8 +150,45 @@ pub(crate) async fn delete_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| service.delete_items(request)).await
+    let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
+    let deleted_at = u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(history_mutation_error)?
+            .as_millis(),
+    )
+    .map_err(history_mutation_error)?;
+    run_mutation(app_data_dir, move |service| {
+        service.trash_items(HistoryTrashItemsRequest {
+            ids: request.ids,
+            deleted_at,
+        })
+    })
+    .await
+}
+
+pub(crate) async fn trash_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    let request: HistoryTrashItemsRequest = parse_request(&request_json)?;
+    run_mutation(app_data_dir, move |service| service.trash_items(request)).await
+}
+
+pub(crate) async fn restore_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
+    run_mutation(app_data_dir, move |service| service.restore_items(request)).await
+}
+
+pub(crate) async fn purge_history_items_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
+    run_mutation(app_data_dir, move |service| service.purge_items(request)).await
 }
 
 pub(crate) async fn update_history_transcript_json(
@@ -176,9 +237,12 @@ pub(crate) async fn update_history_project_assignments_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: LegacyHistoryProjectAssignmentsRequest = parse_request(&request_json)?;
     run_mutation(app_data_dir, move |service| {
-        service.update_project_assignments(request)
+        service.replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
+            ids: request.ids,
+            tag_ids: request.project_id.into_iter().collect(),
+        })
     })
     .await
 }
@@ -187,11 +251,92 @@ pub(crate) async fn reassign_history_project_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request = parse_request(&request_json)?;
+    let request: LegacyHistoryReassignProjectRequest = parse_request(&request_json)?;
+    reassign_history_tag_compat(app_data_dir, request).await
+}
+
+pub(crate) async fn update_history_tag_assignments_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    let request: HistoryUpdateTagAssignmentsRequest = parse_request(&request_json)?;
     run_mutation(app_data_dir, move |service| {
-        service.reassign_project(request)
+        service.update_tag_assignments(request)
     })
     .await
+}
+
+pub(crate) async fn replace_history_tag_assignments_json(
+    app_data_dir: String,
+    request_json: String,
+) -> SonaCoreBindingResult<String> {
+    let request: HistoryReplaceTagAssignmentsRequest = parse_request(&request_json)?;
+    run_mutation(app_data_dir, move |service| {
+        service.replace_tag_assignments(request)
+    })
+    .await
+}
+
+async fn reassign_history_tag_compat(
+    app_data_dir: String,
+    request: LegacyHistoryReassignProjectRequest,
+) -> SonaCoreBindingResult<String> {
+    tokio::task::spawn_blocking(move || {
+        let app_data_dir =
+            std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_mutation_error)?;
+        ensure_existing_directory(&app_data_dir)?;
+        let query = HistoryQueryService::new(Arc::new(LazySqliteHistoryQueryRepository::new(
+            app_data_dir.clone(),
+        )));
+        let mut ids = Vec::new();
+        for scope in [HistoryWorkspaceScope::All, HistoryWorkspaceScope::Trash] {
+            let mut offset = 0;
+            loop {
+                let page = query
+                    .query_workspace(HistoryWorkspaceQueryRequest {
+                        scope: scope.clone(),
+                        query: String::new(),
+                        filter_type: HistoryWorkspaceFilterType::All,
+                        date_filter: HistoryWorkspaceDateFilter::All,
+                        sort_order: HistoryWorkspaceSortOrder::Newest,
+                        limit: 200,
+                        offset,
+                    })
+                    .map_err(history_mutation_error)?;
+                ids.extend(
+                    page.filtered_items
+                        .iter()
+                        .filter(|item| item.tag_ids.contains(&request.current_project_id))
+                        .map(|item| item.id.clone()),
+                );
+                if !page.has_more {
+                    break;
+                }
+                offset += page.filtered_items.len();
+            }
+        }
+        let mutation = HistoryMutationService::new(Arc::new(
+            LazySqliteHistoryMutationRepository::new(app_data_dir),
+        ));
+        mutation
+            .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
+                ids,
+                add_tag_ids: request.next_project_id.into_iter().collect(),
+                remove_tag_ids: vec![request.current_project_id],
+            })
+            .map_err(history_mutation_error)?;
+        canonical_json(())
+    })
+    .await
+    .map_err(history_mutation_error)?
+}
+
+fn normalized_tag_ids(tag_ids: Vec<String>, project_id: Option<String>) -> Vec<String> {
+    if tag_ids.is_empty() {
+        project_id.into_iter().collect()
+    } else {
+        tag_ids
+    }
 }
 
 fn parse_request<T: DeserializeOwned>(request_json: &str) -> SonaCoreBindingResult<T> {

@@ -4,8 +4,9 @@ use serde_json::json;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
-    HistoryMutationRepository, HistoryReassignProjectRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryMutationRepository, HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::{
@@ -36,7 +37,7 @@ impl HistoryMutationRepository for RecordingHistoryMutationRepository {
         self.record("create_live_draft");
         self.forwarded_details.lock().unwrap().push(format!(
             "draft:{:?}:{}:{:?}",
-            request.id, request.audio_extension, request.project_id
+            request.id, request.audio_extension, request.tag_ids
         ));
         Ok(LiveRecordingDraftResult {
             item: history_item("draft-1"),
@@ -94,12 +95,33 @@ impl HistoryMutationRepository for RecordingHistoryMutationRepository {
         Ok(history_item("import-1"))
     }
 
-    fn delete_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
-        self.record("delete_items");
+    fn trash_items(&self, request: HistoryTrashItemsRequest) -> Result<(), HistoryMutationError> {
+        self.record("trash_items");
         self.forwarded_details
             .lock()
             .unwrap()
-            .push(format!("delete:{:?}", request.ids));
+            .push(format!("trash:{:?}:{}", request.ids, request.deleted_at));
+        Ok(())
+    }
+
+    fn restore_items(
+        &self,
+        request: HistoryDeleteItemsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        self.record("restore_items");
+        self.forwarded_details
+            .lock()
+            .unwrap()
+            .push(format!("restore:{:?}", request.ids));
+        Ok(())
+    }
+
+    fn purge_items(&self, request: HistoryDeleteItemsRequest) -> Result<(), HistoryMutationError> {
+        self.record("purge_items");
+        self.forwarded_details
+            .lock()
+            .unwrap()
+            .push(format!("purge:{:?}", request.ids));
         Ok(())
     }
 
@@ -154,27 +176,27 @@ impl HistoryMutationRepository for RecordingHistoryMutationRepository {
         Ok(())
     }
 
-    fn update_project_assignments(
+    fn update_tag_assignments(
         &self,
-        request: HistoryUpdateProjectAssignmentsRequest,
+        request: HistoryUpdateTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        self.record("update_project_assignments");
-        self.forwarded_details
-            .lock()
-            .unwrap()
-            .push(format!("assign:{:?}:{:?}", request.ids, request.project_id));
+        self.record("update_tag_assignments");
+        self.forwarded_details.lock().unwrap().push(format!(
+            "assign:{:?}:{:?}:{:?}",
+            request.ids, request.add_tag_ids, request.remove_tag_ids
+        ));
         Ok(())
     }
 
-    fn reassign_project(
+    fn replace_tag_assignments(
         &self,
-        request: HistoryReassignProjectRequest,
+        request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
-        self.record("reassign_project");
-        self.forwarded_details.lock().unwrap().push(format!(
-            "reassign:{}:{:?}",
-            request.current_project_id, request.next_project_id
-        ));
+        self.record("replace_tag_assignments");
+        self.forwarded_details
+            .lock()
+            .unwrap()
+            .push(format!("replace:{:?}:{:?}", request.ids, request.tag_ids));
         Ok(())
     }
 }
@@ -192,7 +214,8 @@ fn history_item(id: &str) -> HistoryItemRecord {
         icon: None,
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
-        project_id: None,
+        tag_ids: Vec::new(),
+        deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
     }
@@ -219,7 +242,7 @@ fn recording_request() -> HistorySaveRecordingRequest {
     HistorySaveRecordingRequest {
         segments: segments(),
         duration: 1.0,
-        project_id: Some("project-1".to_string()),
+        tag_ids: vec!["project-1".to_string()],
         audio_bytes: Some(vec![1, 2, 3]),
         native_audio_path: None,
         audio_extension: Some("wav".to_string()),
@@ -232,7 +255,7 @@ fn imported_file_request() -> HistorySaveImportedFileRequest {
         source_path: "input.wav".to_string(),
         segments: segments(),
         duration: 1.0,
-        project_id: Some("project-1".to_string()),
+        tag_ids: vec!["project-1".to_string()],
         converted_source_path: None,
     }
 }
@@ -246,7 +269,7 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
         .create_live_draft(HistoryCreateLiveDraftRequest {
             id: Some("draft-1".to_string()),
             audio_extension: "wav".to_string(),
-            project_id: Some("project-1".to_string()),
+            tag_ids: vec!["project-1".to_string()],
             icon: Some("audio".to_string()),
         })
         .unwrap();
@@ -260,7 +283,18 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
     service.save_recording(recording_request()).unwrap();
     service.save_imported_file(imported_file_request()).unwrap();
     service
-        .delete_items(HistoryDeleteItemsRequest {
+        .trash_items(HistoryTrashItemsRequest {
+            ids: vec!["history-1".to_string()],
+            deleted_at: 10,
+        })
+        .unwrap();
+    service
+        .restore_items(HistoryDeleteItemsRequest {
+            ids: vec!["history-1".to_string()],
+        })
+        .unwrap();
+    service
+        .purge_items(HistoryDeleteItemsRequest {
             ids: vec!["history-1".to_string()],
         })
         .unwrap();
@@ -288,15 +322,16 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
         })
         .unwrap();
     service
-        .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
+        .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
             ids: vec!["history-1".to_string()],
-            project_id: Some("project-2".to_string()),
+            add_tag_ids: vec!["project-2".to_string()],
+            remove_tag_ids: vec!["project-1".to_string()],
         })
         .unwrap();
     service
-        .reassign_project(HistoryReassignProjectRequest {
-            current_project_id: "project-2".to_string(),
-            next_project_id: None,
+        .replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
+            ids: vec!["history-1".to_string()],
+            tag_ids: Vec::new(),
         })
         .unwrap();
 
@@ -307,28 +342,32 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             "complete_live_draft",
             "save_recording",
             "save_imported_file",
-            "delete_items",
+            "trash_items",
+            "restore_items",
+            "purge_items",
             "update_transcript",
             "create_transcript_snapshot",
             "update_item_meta",
-            "update_project_assignments",
-            "reassign_project",
+            "update_tag_assignments",
+            "replace_tag_assignments",
         ]
     );
     assert_eq!(repository.forwarded_segments.lock().unwrap().len(), 5);
     assert_eq!(
         *repository.forwarded_details.lock().unwrap(),
         [
-            "draft:Some(\"draft-1\"):wav:Some(\"project-1\")",
+            "draft:Some(\"draft-1\"):wav:[\"project-1\"]",
             "complete:draft-1:1",
             "recording:1:Some(\"wav\"):Some(3)",
             "import:Some(\"import-1\"):input.wav:1",
-            "delete:[\"history-1\"]",
+            "trash:[\"history-1\"]:10",
+            "restore:[\"history-1\"]",
+            "purge:[\"history-1\"]",
             "update-transcript:history-1",
             "snapshot:history-1:Polish",
             "meta:history-1:{\"title\":\"Renamed\",\"icon\":null}",
-            "assign:[\"history-1\"]:Some(\"project-2\")",
-            "reassign:project-2:None",
+            "assign:[\"history-1\"]:[\"project-2\"]:[\"project-1\"]",
+            "replace:[\"history-1\"]:[]",
         ]
     );
 }
@@ -355,7 +394,7 @@ fn service_forwards_a_canonical_transcript_to_the_repository() {
 }
 
 #[test]
-fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
+fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
     let repository = Arc::new(RecordingHistoryMutationRepository::default());
     let service = HistoryMutationService::new(repository.clone());
 
@@ -364,7 +403,7 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: Some(" ".to_string()),
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
@@ -372,7 +411,7 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: Some("CON".to_string()),
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
@@ -380,7 +419,7 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: Some("history:1".to_string()),
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
@@ -388,7 +427,7 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: Some("history-1.".to_string()),
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
@@ -396,25 +435,27 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: None,
                 audio_extension: "../wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
         service
-            .delete_items(HistoryDeleteItemsRequest {
+            .trash_items(HistoryTrashItemsRequest {
                 ids: vec!["history-1".to_string(), "".to_string()],
+                deleted_at: 10,
             })
             .unwrap_err(),
         service
-            .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
+            .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
                 ids: vec!["history-1".to_string()],
-                project_id: Some("\t".to_string()),
+                add_tag_ids: vec!["\t".to_string()],
+                remove_tag_ids: Vec::new(),
             })
             .unwrap_err(),
         service
-            .reassign_project(HistoryReassignProjectRequest {
-                current_project_id: "".to_string(),
-                next_project_id: None,
+            .replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
+                ids: vec!["history-1".to_string()],
+                tag_ids: vec!["".to_string()],
             })
             .unwrap_err(),
     ];
@@ -428,7 +469,7 @@ fn service_rejects_invalid_ids_projects_and_extensions_before_the_port() {
 }
 
 #[test]
-fn project_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
+fn tag_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
     let repository = Arc::new(RecordingHistoryMutationRepository::default());
     let service = HistoryMutationService::new(repository.clone());
 
@@ -436,7 +477,7 @@ fn project_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
         .create_live_draft(HistoryCreateLiveDraftRequest {
             id: Some("draft-1".to_string()),
             audio_extension: "wav".to_string(),
-            project_id: Some("team:alpha".to_string()),
+            tag_ids: vec!["team:alpha".to_string()],
             icon: None,
         })
         .unwrap();
@@ -455,7 +496,7 @@ fn project_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: Some("a".repeat(239)),
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap_err(),
@@ -544,10 +585,6 @@ fn service_validates_typed_metadata_values() {
 
     for updates in [
         HistoryItemMetaPatch {
-            project_id: Some(Some(String::new())),
-            ..HistoryItemMetaPatch::default()
-        },
-        HistoryItemMetaPatch {
             duration: Some(-1.0),
             ..HistoryItemMetaPatch::default()
         },
@@ -584,14 +621,12 @@ fn metadata_patch_preserves_explicit_null_for_clearable_fields() {
         "historyId": "history-1",
         "updates": {
             "icon": null,
-            "projectId": null,
             "draftSource": null
         }
     }))
     .unwrap();
 
     assert_eq!(request.updates.icon, Some(None));
-    assert_eq!(request.updates.project_id, Some(None));
     assert_eq!(request.updates.draft_source, Some(None));
 }
 
@@ -601,12 +636,16 @@ fn empty_bulk_mutations_remain_no_ops_without_opening_the_repository() {
     let service = HistoryMutationService::new(repository.clone());
 
     service
-        .delete_items(HistoryDeleteItemsRequest { ids: Vec::new() })
+        .trash_items(HistoryTrashItemsRequest {
+            ids: Vec::new(),
+            deleted_at: 10,
+        })
         .unwrap();
     service
-        .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
+        .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
             ids: Vec::new(),
-            project_id: Some("project-1".to_string()),
+            add_tag_ids: vec!["project-1".to_string()],
+            remove_tag_ids: Vec::new(),
         })
         .unwrap();
 

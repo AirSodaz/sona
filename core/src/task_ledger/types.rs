@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const TASK_LEDGER_VERSION: u32 = 1;
+pub const TASK_LEDGER_VERSION: u32 = 2;
 pub const TASK_LEDGER_DIR_NAME: &str = "task-ledger";
 pub const TASK_LEDGER_FILE_NAME: &str = "tasks.json";
 pub const TASK_LEDGER_UPDATED_EVENT: &str = "task-ledger-updated";
@@ -53,8 +53,8 @@ pub struct TaskLedgerRecord {
     pub stage: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,13 +117,8 @@ pub struct TaskLedgerPatch {
     )]
     #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
     pub history_id: Option<Option<String>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        with = "::serde_with::rust::double_option"
-    )]
-    #[cfg_attr(feature = "specta", specta(type = Option<Option<String>>))]
-    pub project_id: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag_ids: Option<Vec<String>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

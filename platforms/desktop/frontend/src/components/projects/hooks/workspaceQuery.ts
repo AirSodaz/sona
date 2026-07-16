@@ -23,8 +23,9 @@ export const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
     batchCount: 0,
   },
   itemCounts: {
-    inbox: 0,
-    byProjectId: {},
+    untagged: 0,
+    trash: 0,
+    byTagId: {},
   },
 };
 

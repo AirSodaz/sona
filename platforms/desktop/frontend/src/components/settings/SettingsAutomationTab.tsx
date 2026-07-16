@@ -271,10 +271,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return;
         }
 
-        if (!draft.name.trim() || !draft.projectId || !draft.watchDirectory.trim() || !draft.exportConfig.directory.trim()) {
+        if (!draft.name.trim() || !draft.watchDirectory.trim() || !draft.exportConfig.directory.trim()) {
             await alert(
                 t('automation.required_fields', {
-                    defaultValue: 'Complete the name, target, watch directory, and output directory before saving.',
+                    defaultValue: 'Complete the name, watch directory, and output directory before saving.',
                 }),
                 { variant: 'warning' },
             );
@@ -380,7 +380,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
             <SettingsSection
                 title={t('automation.rules', { defaultValue: 'Rules' })}
                 description={t('automation.rules_description', {
-                    defaultValue: 'Each rule can target a project, Inbox, or no saved record. Language, Polish Preset, and Export Prefix are configured independently.',
+                    defaultValue: 'Each rule can save to history with multiple tags, or skip history entirely.',
                 })}
             >
                 <div className="settings-item-container layout-horizontal">
@@ -404,8 +404,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
                 {newRuleDraft && (
                     <AutomationRuleCard
                         title={newRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' })}
-                        projectLabel={projectOptions.find((opt) => opt.value === newRuleDraft.projectId)?.label
-                            || t('projects.unknown_project')}
+                        projectLabel={newRuleDraft.saveHistory
+                            ? newRuleDraft.tagIds
+                                .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
+                                .filter(Boolean).join(', ') || t('projects.untagged', { defaultValue: 'Untagged' })
+                            : t('automation.history_disabled', { defaultValue: 'History off' })}
                         watchDirectory={newRuleDraft.watchDirectory}
                         outputDirectory={newRuleDraft.exportConfig.directory}
                         resultLabel={t('automation.draft_badge', { defaultValue: 'Draft' })}
@@ -440,8 +443,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         <AutomationRuleCard
                             key={rule.id}
                             title={displayRule.name}
-                            projectLabel={projectOptions.find((opt) => opt.value === displayRule.projectId)?.label
-                                || t('projects.unknown_project')}
+                            projectLabel={displayRule.saveHistory
+                                ? displayRule.tagIds
+                                    .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
+                                    .filter(Boolean).join(', ') || t('projects.untagged', { defaultValue: 'Untagged' })
+                                : t('automation.history_disabled', { defaultValue: 'History off' })}
                             watchDirectory={displayRule.watchDirectory}
                             outputDirectory={displayRule.exportConfig.directory}
                             statusLabel={getRuntimeStatusLabel(runtime?.status)}

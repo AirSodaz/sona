@@ -447,11 +447,9 @@ fn seed_sync_baseline_in_transaction(
     transaction: &Transaction<'_>,
     preset: SyncPresetV1,
 ) -> Result<(), DatabaseError> {
-    for (sort_order, project) in crate::project::load_projects_in_transaction(transaction)?
-        .iter()
-        .enumerate()
-    {
-        crate::project::record_project_sync_fields(transaction, project, Some(sort_order))?;
+    for tag in crate::tag::load_tags_in_transaction(transaction)? {
+        let sort_order = tag.sort_order;
+        crate::tag::record_tag_sync_fields(transaction, &tag, Some(sort_order))?;
     }
     seed_history_baseline_in_transaction(transaction)?;
     if preset != SyncPresetV1::Content {
@@ -468,8 +466,20 @@ fn seed_history_baseline_in_transaction(
 ) -> Result<(), DatabaseError> {
     let items = {
         let mut statement = transaction.prepare_cached(
-            "SELECT id, timestamp, duration, title, preview_text, icon, kind, project_id
+            "SELECT h.id, h.timestamp, h.duration, h.title, h.preview_text, h.icon, h.kind,
+                    COALESCE((
+                        SELECT json_group_array(tag_id)
+                        FROM (
+                            SELECT hit.tag_id
+                            FROM history_item_tags hit
+                            JOIN tags tag ON tag.id = hit.tag_id
+                            WHERE hit.history_id = h.id
+                            ORDER BY tag.sort_order, tag.id
+                        )
+                    ), '[]'),
+                    h.deleted_at
              FROM history_items
+             AS h
              WHERE status = 'complete'
              ORDER BY id",
         )?;
@@ -483,13 +493,17 @@ fn seed_history_baseline_in_transaction(
                     row.get::<_, String>(4)?,
                     row.get::<_, Option<String>>(5)?,
                     row.get::<_, String>(6)?,
-                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<i64>>(8)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?
     };
-    for (id, timestamp, duration, title, preview_text, icon, kind, project_id) in items {
+    for (id, timestamp, duration, title, preview_text, icon, kind, tag_ids_json, deleted_at) in
+        items
+    {
         let now_ms = u64::try_from(timestamp).unwrap_or(0);
+        let tag_ids: Vec<String> = serde_json::from_str(&tag_ids_json)?;
         for (field, value) in [
             ("timestamp", serde_json::json!(timestamp)),
             ("duration", serde_json::json!(duration)),
@@ -497,7 +511,8 @@ fn seed_history_baseline_in_transaction(
             ("previewText", serde_json::json!(preview_text)),
             ("icon", serde_json::json!(icon)),
             ("kind", serde_json::json!(kind)),
-            ("projectId", serde_json::json!(project_id)),
+            ("tagIds", serde_json::json!(tag_ids)),
+            ("deletedAt", serde_json::json!(deleted_at)),
         ] {
             record_local_field_change_in_transaction(
                 transaction,
@@ -678,6 +693,7 @@ pub fn record_sync_operation_in_transaction(
     transaction: &Transaction<'_>,
     operation: &SyncOperation,
 ) -> Result<(), DatabaseError> {
+    let operation = canonicalize_operation(operation);
     let configured_device = transaction
         .query_row("SELECT device_id FROM sync_state WHERE id = 1", [], |row| {
             row.get::<_, String>(0)
@@ -693,10 +709,10 @@ pub fn record_sync_operation_in_transaction(
             "Local sync operation device does not match sync_state.".to_string(),
         ));
     }
-    validate_operation(operation).map_err(|error| DatabaseError::Internal(error.to_string()))?;
+    validate_operation(&operation).map_err(|error| DatabaseError::Internal(error.to_string()))?;
     let entity_kind = entity_kind_json(operation.entity.kind)?;
     let field_name = operation_field(&operation.kind);
-    let operation_json = serde_json::to_string(operation)?;
+    let operation_json = serde_json::to_string(&operation)?;
     match &operation.kind {
         SyncOperationKind::DeleteEntity => {
             transaction.execute(
@@ -934,7 +950,7 @@ impl SyncLocalRepository for SqliteSyncRepository {
                 let mut encoded_bytes = 0_usize;
                 for row in rows {
                     let json = row?;
-                    let operation: SyncOperation = serde_json::from_str(&json)?;
+                    let operation = canonicalize_operation(&serde_json::from_str(&json)?);
                     if !operation_allowed(preset, &operation)
                         && !matches!(operation.kind, SyncOperationKind::DeleteEntity)
                     {
@@ -1035,7 +1051,9 @@ impl SyncLocalRepository for SqliteSyncRepository {
                     .query_map([], |row| row.get::<_, String>(0))?
                     .map(|row| {
                         let json = row?;
-                        serde_json::from_str(&json).map_err(DatabaseError::SerializationError)
+                        serde_json::from_str(&json)
+                            .map(|operation| canonicalize_operation(&operation))
+                            .map_err(DatabaseError::SerializationError)
                     })
                     .collect::<Result<Vec<_>, _>>()
             })
@@ -1105,9 +1123,10 @@ fn apply_remote_segment_in_transaction(
 
     let mut result = SyncRemoteApplyResult::default();
     for operation in &segment.operations {
-        validate_operation(operation)
+        let operation = canonicalize_operation(operation);
+        validate_operation(&operation)
             .map_err(|error| DatabaseError::Internal(error.to_string()))?;
-        if !operation_allowed(configured_preset, operation)
+        if !operation_allowed(configured_preset, &operation)
             && !matches!(operation.kind, SyncOperationKind::DeleteEntity)
         {
             return Err(DatabaseError::Internal(format!(
@@ -1117,7 +1136,7 @@ fn apply_remote_segment_in_transaction(
             )));
         }
         let entity_kind = entity_kind_json(operation.entity.kind)?;
-        apply_merged_remote_operation(transaction, operation, &entity_kind, &mut result)?;
+        apply_merged_remote_operation(transaction, &operation, &entity_kind, &mut result)?;
         result.applied_operation_count += 1;
     }
     observe_remote_clocks(transaction, &segment.operations)?;
@@ -1374,6 +1393,14 @@ fn validate_operation(operation: &SyncOperation) -> Result<(), SyncError> {
     }
 }
 
+fn canonicalize_operation(operation: &SyncOperation) -> SyncOperation {
+    let mut operation = operation.clone();
+    if operation.entity.kind == SyncEntityKind::Project {
+        operation.entity.kind = SyncEntityKind::Tag;
+    }
+    operation
+}
+
 fn operation_field(kind: &SyncOperationKind) -> &str {
     kind.field().unwrap_or(DELETE_FIELD)
 }
@@ -1386,7 +1413,7 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
         return true;
     };
     match operation.entity.kind {
-        SyncEntityKind::Project => matches!(
+        SyncEntityKind::Tag | SyncEntityKind::Project => matches!(
             field,
             "name"
                 | "description"
@@ -1408,7 +1435,15 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
         ),
         SyncEntityKind::HistoryItem => matches!(
             field,
-            "timestamp" | "duration" | "title" | "previewText" | "icon" | "kind" | "projectId"
+            "timestamp"
+                | "duration"
+                | "title"
+                | "previewText"
+                | "icon"
+                | "kind"
+                | "tagIds"
+                | "deletedAt"
+                | "projectId"
         ),
         SyncEntityKind::HistoryTranscript | SyncEntityKind::HistorySummary => field == "document",
         SyncEntityKind::TranscriptSnapshot => {
@@ -1446,6 +1481,8 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
             field,
             "name"
                 | "projectId"
+                | "saveHistory"
+                | "tagIds"
                 | "presetId"
                 | "recursive"
                 | "stageAutoPolish"
@@ -1492,7 +1529,9 @@ fn apply_domain_delete(
     entity_id: &str,
 ) -> Result<(), DatabaseError> {
     match kind {
-        SyncEntityKind::Project => execute_delete(transaction, "projects", "id", entity_id),
+        SyncEntityKind::Tag | SyncEntityKind::Project => {
+            execute_delete(transaction, "tags", "id", entity_id)
+        }
         SyncEntityKind::HistoryItem => {
             execute_delete(transaction, "history_items", "id", entity_id)
         }
@@ -1553,7 +1592,9 @@ fn apply_domain_field(
     value: &Value,
 ) -> Result<(), DatabaseError> {
     match kind {
-        SyncEntityKind::Project => apply_project_field(transaction, entity_id, field, value),
+        SyncEntityKind::Tag | SyncEntityKind::Project => {
+            apply_tag_field(transaction, entity_id, field, value, kind)
+        }
         SyncEntityKind::HistoryItem => {
             apply_history_item_field(transaction, entity_id, field, value)
         }
@@ -1636,14 +1677,15 @@ fn apply_domain_field(
     }
 }
 
-fn apply_project_field(
+fn apply_tag_field(
     transaction: &Transaction<'_>,
     entity_id: &str,
     field: &str,
     value: &Value,
+    kind: SyncEntityKind,
 ) -> Result<(), DatabaseError> {
     transaction.execute(
-        "INSERT OR IGNORE INTO projects (id, created_at, updated_at) VALUES (?1, 0, 0)",
+        "INSERT OR IGNORE INTO tags (id, created_at, updated_at) VALUES (?1, 0, 0)",
         [entity_id],
     )?;
     if let Some(link_kind) = match field {
@@ -1655,12 +1697,12 @@ fn apply_project_field(
     } {
         let targets = json_string_array(value, field)?;
         transaction.execute(
-            "DELETE FROM project_default_links WHERE project_id = ?1 AND kind = ?2",
+            "DELETE FROM tag_default_links WHERE tag_id = ?1 AND kind = ?2",
             params![entity_id, link_kind],
         )?;
         for (sort_order, target_id) in targets.iter().enumerate() {
             transaction.execute(
-                "INSERT INTO project_default_links (project_id, kind, target_id, sort_order)
+                "INSERT INTO tag_default_links (tag_id, kind, target_id, sort_order)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![
                     entity_id,
@@ -1686,9 +1728,9 @@ fn apply_project_field(
         "polishScenario" => "polish_scenario",
         "polishContext" => "polish_context",
         "exportFileNamePrefix" => "export_file_name_prefix",
-        _ => return unsupported_field(SyncEntityKind::Project, field),
+        _ => return unsupported_field(kind, field),
     };
-    update_json_column(transaction, "projects", "id", entity_id, column, value)
+    update_json_column(transaction, "tags", "id", entity_id, column, value)
 }
 
 fn apply_history_item_field(
@@ -1701,6 +1743,33 @@ fn apply_history_item_field(
         "INSERT OR IGNORE INTO history_items (id, timestamp) VALUES (?1, 0)",
         [entity_id],
     )?;
+    if field == "tagIds" {
+        let tag_ids = json_string_array(value, field)?;
+        transaction.execute(
+            "DELETE FROM history_item_tags WHERE history_id = ?1",
+            [entity_id],
+        )?;
+        for tag_id in tag_ids {
+            transaction.execute(
+                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
+                params![entity_id, tag_id],
+            )?;
+        }
+        return Ok(());
+    }
+    if field == "projectId" {
+        transaction.execute(
+            "DELETE FROM history_item_tags WHERE history_id = ?1",
+            [entity_id],
+        )?;
+        if let Some(tag_id) = value.as_str().filter(|tag_id| !tag_id.is_empty()) {
+            transaction.execute(
+                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
+                params![entity_id, tag_id],
+            )?;
+        }
+        return Ok(());
+    }
     let column = match field {
         "timestamp" => "timestamp",
         "duration" => "duration",
@@ -1708,7 +1777,7 @@ fn apply_history_item_field(
         "previewText" => "preview_text",
         "icon" => "icon",
         "kind" => "kind",
-        "projectId" => "project_id",
+        "deletedAt" => "deleted_at",
         _ => return unsupported_field(SyncEntityKind::HistoryItem, field),
     };
     update_json_column(transaction, "history_items", "id", entity_id, column, value)
@@ -1917,9 +1986,41 @@ fn apply_automation_rule_field(
         "INSERT OR IGNORE INTO automation_rules (id) VALUES (?1)",
         [entity_id],
     )?;
+    if field == "tagIds" {
+        let tag_ids = json_string_array(value, field)?;
+        transaction.execute(
+            "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+            [entity_id],
+        )?;
+        for tag_id in tag_ids {
+            transaction.execute(
+                "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)",
+                params![entity_id, tag_id],
+            )?;
+        }
+        return Ok(());
+    }
+    if field == "projectId" {
+        let project_id = value.as_str().unwrap_or_default();
+        transaction.execute(
+            "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+            [entity_id],
+        )?;
+        transaction.execute(
+            "UPDATE automation_rules SET save_history = ?1 WHERE id = ?2",
+            params![(project_id != "none") as i64, entity_id],
+        )?;
+        if !matches!(project_id, "" | "inbox" | "none") {
+            transaction.execute(
+                "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)",
+                params![entity_id, project_id],
+            )?;
+        }
+        return Ok(());
+    }
     let column = match field {
         "name" => "name",
-        "projectId" => "project_id",
+        "saveHistory" => "save_history",
         "presetId" => "preset_id",
         "recursive" => "recursive",
         "stageAutoPolish" => "stage_auto_polish",
@@ -2047,6 +2148,11 @@ fn unsupported_field<T>(kind: SyncEntityKind, field: &str) -> Result<T, Database
 }
 
 fn entity_kind_json(kind: SyncEntityKind) -> Result<String, DatabaseError> {
+    let kind = if kind == SyncEntityKind::Project {
+        SyncEntityKind::Tag
+    } else {
+        kind
+    };
     serde_json::to_string(&kind).map_err(DatabaseError::SerializationError)
 }
 
@@ -2058,7 +2164,8 @@ fn parse_preset(value: String) -> Result<SyncPresetV1, rusqlite::Error> {
 
 fn preset_allows(preset: SyncPresetV1, kind: SyncEntityKind) -> bool {
     match kind {
-        SyncEntityKind::Project
+        SyncEntityKind::Tag
+        | SyncEntityKind::Project
         | SyncEntityKind::HistoryItem
         | SyncEntityKind::HistoryTranscript
         | SyncEntityKind::HistorySummary

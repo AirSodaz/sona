@@ -84,12 +84,16 @@ export function useWorkspaceBrowseState({
       return { kind: 'all' };
     }
 
-    if (controls.isInboxScope || !controls.browseProjectId) {
-      return { kind: 'inbox' };
+    if (controls.isTrashScope) {
+      return { kind: 'trash' };
     }
 
-    return { kind: 'project', projectId: controls.browseProjectId };
-  }, [controls.browseProjectId, controls.isAllItemsScope, controls.isInboxScope]);
+    if (controls.isInboxScope || !controls.browseProjectId) {
+      return { kind: 'untagged' };
+    }
+
+    return { kind: 'tag', tagId: controls.browseProjectId };
+  }, [controls.browseProjectId, controls.isAllItemsScope, controls.isInboxScope, controls.isTrashScope]);
 
   const workspaceQueryResult = useWorkspaceQuery({
     scope: workspaceQueryScope,
@@ -151,6 +155,7 @@ export function useWorkspaceBrowseState({
     setBrowseScope: controls.setBrowseScope,
     isAllItemsScope: controls.isAllItemsScope,
     isInboxScope: controls.isInboxScope,
+    isTrashScope: controls.isTrashScope,
     browseProjectId: controls.browseProjectId,
     browseProject: controls.browseProject,
     isFilterMenuOpen: controls.isFilterMenuOpen,
