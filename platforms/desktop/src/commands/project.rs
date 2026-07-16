@@ -1,11 +1,10 @@
-use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::project_repository::{
     create_project, delete_project, get_active_project_id, list_projects, reorder_projects,
     replace_projects, set_active_project_id, update_project,
 };
-use sona_core::project::{ProjectDefaultsInput, ProjectRecord};
+use sona_core::project::{ProjectDefaultsInput, ProjectRecord, ProjectUpdateInput};
 
 #[tauri::command]
 pub async fn project_list<R: Runtime>(
@@ -24,7 +23,7 @@ pub async fn project_list<R: Runtime>(
 #[tauri::command]
 pub async fn project_save_all<R: Runtime>(
     app: AppHandle<R>,
-    projects: Vec<Value>,
+    projects: Vec<ProjectRecord>,
 ) -> Result<(), String> {
     replace_projects(&app, projects).await
 }
@@ -44,7 +43,7 @@ pub async fn project_create<R: Runtime>(
 pub async fn project_update<R: Runtime>(
     app: AppHandle<R>,
     project_id: String,
-    updates: Value,
+    updates: ProjectUpdateInput,
 ) -> Result<Option<ProjectRecord>, String> {
     update_project(&app, project_id, updates).await
 }

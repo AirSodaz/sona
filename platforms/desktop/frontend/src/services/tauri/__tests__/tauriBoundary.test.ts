@@ -359,6 +359,7 @@ describe('tauri boundary wrappers', () => {
       id: 'project-1',
       name: 'Project',
       description: '',
+      icon: '',
       createdAt: 1,
       updatedAt: 1,
       defaults: {

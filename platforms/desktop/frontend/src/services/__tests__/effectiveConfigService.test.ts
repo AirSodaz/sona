@@ -54,6 +54,7 @@ function createProject(): ProjectRecord {
     id: 'project-1',
     name: 'Project One',
     description: '',
+    icon: '',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     defaults: {

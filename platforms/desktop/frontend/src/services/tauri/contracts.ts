@@ -24,7 +24,11 @@ import type {
   AutomationRule,
   AutomationRuleValidationResult,
 } from "../../types/automation";
-import type { ProjectDefaults, ProjectRecord } from "../../types/project";
+import type {
+  ProjectCreateInput,
+  ProjectRecord,
+  ProjectUpdateInput,
+} from "../../types/project";
 import type {
   SpeakerProfileSample,
   SpeakerProcessingConfig,
@@ -244,18 +248,11 @@ type ProjectListArgs = {
   fallbackEnabledSpeakerProfileIds?: string[];
 };
 
-type ProjectCreateArgs = {
-  name: string;
-  description?: string;
-  icon?: string;
-  defaults: ProjectDefaults;
-};
+type ProjectCreateArgs = ProjectCreateInput;
 
 type ProjectUpdateArgs = {
   projectId: string;
-  updates: Partial<
-    Pick<ProjectRecord, "name" | "description" | "icon" | "defaults">
-  >;
+  updates: ProjectUpdateInput;
 };
 
 type AutomationRepositoryState = {

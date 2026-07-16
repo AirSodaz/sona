@@ -17,7 +17,8 @@ pub struct ProjectListOptions {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default, rename_all = "camelCase")]
 pub struct ProjectDefaultsInput {
     pub summary_template_id: Option<String>,
     pub summary_template: Option<String>,
@@ -32,16 +33,20 @@ pub struct ProjectDefaultsInput {
     pub enabled_speaker_profile_ids: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectCreateInput {
     pub name: String,
+    #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
     pub icon: Option<String>,
     pub defaults: ProjectDefaultsInput,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDefaults {
     pub summary_template_id: String,
@@ -59,15 +64,28 @@ pub struct ProjectDefaults {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecord {
     pub id: String,
     pub name: String,
     pub description: String,
     pub icon: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub created_at: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub updated_at: u64,
     pub defaults: ProjectDefaults,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default, rename_all = "camelCase")]
+pub struct ProjectUpdateInput {
+    pub name: Option<String>,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub defaults: Option<ProjectDefaultsPatch>,
 }
 
 pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";

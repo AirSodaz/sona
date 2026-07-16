@@ -311,6 +311,7 @@ describe('backupService', () => {
           id: 'project-1',
           name: 'Imported Project',
           description: '',
+          icon: '',
           createdAt: 1,
           updatedAt: 2,
           defaults: {
@@ -413,6 +414,7 @@ describe('backupService', () => {
           id: 'project-1',
           name: 'Imported Project',
           description: '',
+          icon: '',
           createdAt: 1,
           updatedAt: 2,
           defaults: {

@@ -9,7 +9,7 @@ use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
     ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaults,
     ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
-    ProjectRepositorySnapshot, ProjectStore, ProjectStoredState,
+    ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
 use std::sync::Arc;
 
@@ -60,6 +60,10 @@ where
         self.service().replace_projects_json(projects)
     }
 
+    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+        self.service().replace_projects(projects)
+    }
+
     pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
         self.service().create_project(input)
     }
@@ -70,6 +74,14 @@ where
         updates: Value,
     ) -> Result<Option<ProjectRecord>, String> {
         self.service().update_project_json(project_id, updates)
+    }
+
+    pub fn update_project(
+        &self,
+        project_id: &str,
+        updates: ProjectUpdateInput,
+    ) -> Result<Option<ProjectRecord>, String> {
+        self.service().update_project(project_id, updates)
     }
 
     pub fn delete_project(&self, project_id: &str) -> Result<(), String> {
@@ -1227,6 +1239,23 @@ mod tests {
         assert_eq!(created.created_at, 777);
         assert_eq!(created.updated_at, 777);
         assert_eq!(adapter.load_state().unwrap().projects, vec![created]);
+
+        let updated = adapter
+            .update_project(
+                "fixed-id",
+                ProjectUpdateInput {
+                    name: Some("Updated".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.name, "Updated");
+        assert_eq!(updated.updated_at, 777);
+
+        let replacement = record("replacement", "Replacement", 900);
+        adapter.replace_projects(vec![replacement.clone()]).unwrap();
+        assert_eq!(adapter.load_state().unwrap().projects, vec![replacement]);
     }
 
     #[test]

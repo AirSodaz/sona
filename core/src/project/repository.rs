@@ -15,13 +15,16 @@ pub struct ActiveProjectSelection {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRepositorySnapshot {
     pub projects: Vec<ProjectRecord>,
     pub active_project_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default, rename_all = "camelCase")]
 pub struct ProjectDefaultsPatch {
     pub summary_template_id: Option<String>,
     pub translation_language: Option<String>,

@@ -3,7 +3,7 @@ use std::future::Future;
 use serde_json::Value;
 use sona_core::project::{
     ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaultsInput,
-    ProjectListOptions, ProjectRecord, active_project_id_from_value,
+    ProjectListOptions, ProjectRecord, ProjectUpdateInput, active_project_id_from_value,
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::SqliteProjectAdapter;
@@ -33,7 +33,7 @@ pub async fn list_projects<R: Runtime>(
     fallback_enabled_polish_keyword_set_ids: Option<Vec<String>>,
     fallback_enabled_speaker_profile_ids: Option<Vec<String>>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_adapter(app, move |adapter| {
+    let projects = run_project_adapter(app, move |adapter| {
         adapter.list_projects(ProjectListOptions {
             fallback_enabled_polish_keyword_set_ids: fallback_enabled_polish_keyword_set_ids
                 .unwrap_or_default(),
@@ -41,14 +41,17 @@ pub async fn list_projects<R: Runtime>(
                 .unwrap_or_default(),
         })
     })
-    .await
+    .await?;
+    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    Ok(projects)
 }
 
 pub async fn replace_projects<R: Runtime>(
     app: &AppHandle<R>,
-    projects: Vec<Value>,
+    projects: Vec<ProjectRecord>,
 ) -> Result<(), String> {
-    run_project_adapter(app, move |adapter| adapter.replace_projects_json(projects)).await
+    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    run_project_adapter(app, move |adapter| adapter.replace_projects(projects)).await
 }
 
 pub async fn create_project<R: Runtime>(
@@ -58,7 +61,7 @@ pub async fn create_project<R: Runtime>(
     icon: Option<String>,
     defaults: ProjectDefaultsInput,
 ) -> Result<ProjectRecord, String> {
-    run_project_adapter(app, move |adapter| {
+    let project = run_project_adapter(app, move |adapter| {
         adapter.create_project(ProjectCreateInput {
             name,
             description,
@@ -66,18 +69,24 @@ pub async fn create_project<R: Runtime>(
             defaults,
         })
     })
-    .await
+    .await?;
+    sona_ts_bind::validate_project_record_for_typescript(&project)?;
+    Ok(project)
 }
 
 pub async fn update_project<R: Runtime>(
     app: &AppHandle<R>,
     project_id: String,
-    updates: Value,
+    updates: ProjectUpdateInput,
 ) -> Result<Option<ProjectRecord>, String> {
-    run_project_adapter(app, move |adapter| {
-        adapter.update_project_json(&project_id, updates)
+    let project = run_project_adapter(app, move |adapter| {
+        adapter.update_project(&project_id, updates)
     })
-    .await
+    .await?;
+    if let Some(project) = project.as_ref() {
+        sona_ts_bind::validate_project_record_for_typescript(project)?;
+    }
+    Ok(project)
 }
 
 pub async fn delete_project<R: Runtime>(
@@ -91,7 +100,10 @@ pub async fn reorder_projects<R: Runtime>(
     app: &AppHandle<R>,
     project_ids: Vec<String>,
 ) -> Result<Vec<ProjectRecord>, String> {
-    run_project_adapter(app, move |adapter| adapter.reorder_projects(project_ids)).await
+    let projects =
+        run_project_adapter(app, move |adapter| adapter.reorder_projects(project_ids)).await?;
+    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    Ok(projects)
 }
 
 pub async fn get_active_project_id<R: Runtime>(

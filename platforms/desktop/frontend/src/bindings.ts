@@ -178,6 +178,109 @@ export type PolishedSegment = {
 	text: string,
 };
 
+export type ProjectCreateInput = {
+	name: string,
+	description?: string | null,
+	icon?: string | null,
+	defaults: ProjectDefaultsInput,
+};
+
+export type ProjectDefaults = ProjectDefaults_Serialize | ProjectDefaults_Deserialize;
+
+export type ProjectDefaultsInput = {
+	summaryTemplateId?: string | null,
+	summaryTemplate?: string | null,
+	translationLanguage?: string | null,
+	polishPresetId?: string | null,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix?: string | null,
+	enabledTextReplacementSetIds?: string[] | null,
+	enabledHotwordSetIds?: string[] | null,
+	enabledPolishKeywordSetIds?: string[] | null,
+	enabledSpeakerProfileIds?: string[] | null,
+};
+
+export type ProjectDefaultsPatch = {
+	summaryTemplateId?: string | null,
+	translationLanguage?: string | null,
+	polishPresetId?: string | null,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix?: string | null,
+	enabledTextReplacementSetIds?: string[] | null,
+	enabledHotwordSetIds?: string[] | null,
+	enabledPolishKeywordSetIds?: string[] | null,
+	enabledSpeakerProfileIds?: string[] | null,
+};
+
+export type ProjectDefaults_Deserialize = {
+	summaryTemplateId: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	polishScenario: string | null,
+	polishContext: string | null,
+	exportFileNamePrefix: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+};
+
+export type ProjectDefaults_Serialize = {
+	summaryTemplateId: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	polishScenario?: string | null,
+	polishContext?: string | null,
+	exportFileNamePrefix: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+};
+
+export type ProjectRecord = ProjectRecord_Serialize | ProjectRecord_Deserialize;
+
+export type ProjectRecord_Deserialize = {
+	id: string,
+	name: string,
+	description: string,
+	icon: string,
+	createdAt: number,
+	updatedAt: number,
+	defaults: ProjectDefaults_Deserialize,
+};
+
+export type ProjectRecord_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	icon: string,
+	createdAt: number,
+	updatedAt: number,
+	defaults: ProjectDefaults_Serialize,
+};
+
+export type ProjectRepositorySnapshot = ProjectRepositorySnapshot_Serialize | ProjectRepositorySnapshot_Deserialize;
+
+export type ProjectRepositorySnapshot_Deserialize = {
+	projects: ProjectRecord_Deserialize[],
+	activeProjectId: string | null,
+};
+
+export type ProjectRepositorySnapshot_Serialize = {
+	projects: ProjectRecord_Serialize[],
+	activeProjectId: string | null,
+};
+
+export type ProjectUpdateInput = {
+	name?: string | null,
+	icon?: string | null,
+	description?: string | null,
+	defaults?: ProjectDefaultsPatch | null,
+};
+
 export type SpeakerLeader = {
 	speakerId: string,
 	label: string,

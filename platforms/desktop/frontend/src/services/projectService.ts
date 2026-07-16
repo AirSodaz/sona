@@ -1,4 +1,4 @@
-import type { ProjectDefaults, ProjectRecord } from '../types/project';
+import type { ProjectCreateInput, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import {
   projectCreate,
   projectDelete,
@@ -43,18 +43,13 @@ export class ProjectService {
     await this.ports.projectReorder(projectIds);
   }
 
-  async create(input: {
-    name: string;
-    description?: string;
-    icon?: string;
-    defaults: ProjectDefaults;
-  }): Promise<ProjectRecord> {
+  async create(input: ProjectCreateInput): Promise<ProjectRecord> {
     return this.ports.projectCreate(input);
   }
 
   async update(
     id: string,
-    updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>,
+    updates: ProjectUpdateInput,
   ): Promise<ProjectRecord | null> {
     return this.ports.projectUpdate(id, updates);
   }

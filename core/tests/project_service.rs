@@ -5,7 +5,7 @@ use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
     ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
     ProjectDefaultsPatch, ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord,
-    ProjectRepositoryService, ProjectStore, ProjectStoredState,
+    ProjectRepositoryService, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
 
 #[derive(Default)]
@@ -438,6 +438,56 @@ fn create_propagates_clock_and_store_errors_without_partial_writes() {
     assert!(failing_store.state.lock().unwrap().projects.is_empty());
     assert!(store_ids.0.lock().unwrap().is_empty());
     assert_eq!(*failing_store.calls.lock().unwrap(), vec!["insert_project"]);
+}
+
+#[test]
+fn typed_update_overlays_only_supplied_fields_and_uses_clock_timestamp() {
+    let store = MemoryProjectStore::with_state(ProjectStoredState {
+        projects: vec![project("p1", "Original")],
+        active_project_setting_json: None,
+    });
+    let ids = SequenceIds(Mutex::new(vec![]));
+    let clock = RecordingClock::fixed(777);
+    let updates: ProjectUpdateInput = serde_json::from_value(json!({
+        "description": "new description",
+        "defaults": {
+            "summaryTemplateId": "custom",
+            "enabledHotwordSetIds": []
+        }
+    }))
+    .unwrap();
+
+    let updated = service(&store, &ids, &clock)
+        .update_project("p1", updates)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(updated.name, "Original");
+    assert_eq!(updated.description, "new description");
+    assert_eq!(updated.icon, "icon-old");
+    assert_eq!(updated.updated_at, 777);
+    assert_eq!(updated.defaults.summary_template_id, "custom");
+    assert!(updated.defaults.enabled_hotword_set_ids.is_empty());
+    assert_eq!(updated.defaults.translation_language, "zh");
+    assert_eq!(*clock.calls.lock().unwrap(), 1);
+    assert_eq!(*store.calls.lock().unwrap(), vec!["update_project"]);
+}
+
+#[test]
+fn typed_replace_forwards_canonical_records_without_json_normalization() {
+    let store = MemoryProjectStore::default();
+    let ids = SequenceIds(Mutex::new(vec![]));
+    let mut replacement = project("canonical", "");
+    replacement.description = "typed description".to_string();
+    replacement.created_at = 123;
+    replacement.updated_at = 456;
+
+    service(&store, &ids, &FixedClock(0))
+        .replace_projects(vec![replacement.clone()])
+        .unwrap();
+
+    assert_eq!(store.state.lock().unwrap().projects, vec![replacement]);
+    assert_eq!(*store.calls.lock().unwrap(), vec!["replace_projects"]);
 }
 
 #[test]

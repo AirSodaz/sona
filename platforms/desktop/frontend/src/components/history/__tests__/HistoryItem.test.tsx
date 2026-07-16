@@ -46,6 +46,7 @@ describe('HistoryItem', () => {
           id: 'project-1',
           name: 'Alpha',
           description: 'Project alpha',
+          icon: '',
           createdAt: 1,
           updatedAt: 1,
           defaults: {

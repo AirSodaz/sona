@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AppConfig } from '../types/config';
-import type { ProjectDefaults, ProjectRecord } from '../types/project';
+import type { ProjectDefaults, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { buildProjectDefaultsFromConfig } from '../types/project';
 import { useConfigStore } from './configStore';
 import { historyService } from '../services/historyService';
@@ -24,7 +24,7 @@ interface ProjectState {
   error: string | null;
   loadProjects: () => Promise<void>;
   createProject: (input: CreateProjectInput, globalConfig: AppConfig) => Promise<ProjectRecord | null>;
-  updateProject: (id: string, updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>) => Promise<void>;
+  updateProject: (id: string, updates: ProjectUpdateInput) => Promise<void>;
   updateProjectDefaults: (id: string, updates: Partial<ProjectDefaults>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   setActiveProjectId: (projectId: string | null) => Promise<void>;

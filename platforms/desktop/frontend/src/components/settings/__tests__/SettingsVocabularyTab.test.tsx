@@ -78,6 +78,7 @@ describe('SettingsVocabularyTab', () => {
           id: 'project-1',
           name: 'Alpha',
           description: '',
+          icon: '',
           createdAt: 1,
           updatedAt: 1,
           defaults: {

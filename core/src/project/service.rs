@@ -6,8 +6,8 @@ use super::{
     ActiveProjectSelection, DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID,
     DEFAULT_TRANSLATION_LANGUAGE, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
     ProjectDefaultsPatch, ProjectListOptions, ProjectPatch, ProjectRecord,
-    ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, active_project_id_from_value,
-    normalize_defaults,
+    ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
+    active_project_id_from_value, normalize_defaults,
 };
 
 pub trait ProjectIdGenerator: Send + Sync {
@@ -45,6 +45,10 @@ impl<'a> ProjectRepositoryService<'a> {
         self.store.replace_projects(projects)
     }
 
+    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+        self.store.replace_projects(projects)
+    }
+
     pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
         let now = self.clock.now_ms()?;
         let project = ProjectRecord {
@@ -74,6 +78,21 @@ impl<'a> ProjectRepositoryService<'a> {
         };
 
         let patch = parse_project_patch(updates);
+        let updated_at = self.clock.now_ms()?;
+        self.store.update_project(project_id, patch, updated_at)
+    }
+
+    pub fn update_project(
+        &self,
+        project_id: &str,
+        updates: ProjectUpdateInput,
+    ) -> Result<Option<ProjectRecord>, String> {
+        let patch = ProjectPatch {
+            name: updates.name,
+            icon: updates.icon,
+            description: updates.description,
+            defaults: updates.defaults.unwrap_or_default(),
+        };
         let updated_at = self.clock.now_ms()?;
         self.store.update_project(project_id, patch, updated_at)
     }

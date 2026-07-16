@@ -1,29 +1,44 @@
+import type {
+  ProjectCreateInput as GeneratedProjectCreateInput,
+  ProjectDefaultsInput as GeneratedProjectDefaultsInput,
+  ProjectDefaultsPatch as GeneratedProjectDefaultsPatch,
+  ProjectDefaults_Serialize as GeneratedProjectDefaults,
+  ProjectRecord_Serialize as GeneratedProjectRecord,
+  ProjectUpdateInput as GeneratedProjectUpdateInput,
+} from '../bindings';
 import type { SummaryTemplateId } from './transcript';
 
-export interface ProjectDefaults {
-  summaryTemplateId: SummaryTemplateId;
-  translationLanguage: string;
-  polishPresetId: string;
-  /** Deprecated legacy scenario, retained only for migration. */
-  polishScenario?: string;
-  /** Deprecated legacy context, retained only for migration. */
-  polishContext?: string;
-  exportFileNamePrefix: string;
-  enabledTextReplacementSetIds: string[];
-  enabledHotwordSetIds: string[];
-  enabledPolishKeywordSetIds: string[];
-  enabledSpeakerProfileIds: string[];
-}
+type WithoutNull<T> = { [K in keyof T]: Exclude<T[K], null> };
+type NormalizedProjectCreateInput = WithoutNull<GeneratedProjectCreateInput>;
+type NormalizedProjectDefaultsInput = WithoutNull<GeneratedProjectDefaultsInput>;
+type NormalizedProjectDefaults = WithoutNull<GeneratedProjectDefaults>;
+type NormalizedProjectDefaultsPatch = WithoutNull<GeneratedProjectDefaultsPatch>;
+type NormalizedProjectUpdateInput = WithoutNull<GeneratedProjectUpdateInput>;
 
-export interface ProjectRecord {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
-  createdAt: number;
-  updatedAt: number;
+export type ProjectDefaults = Omit<NormalizedProjectDefaults, 'summaryTemplateId'> & {
+  summaryTemplateId: SummaryTemplateId;
+};
+export type ProjectDefaultsInput = Omit<
+  NormalizedProjectDefaultsInput,
+  'summaryTemplateId'
+> & {
+  summaryTemplateId?: SummaryTemplateId;
+};
+export type ProjectCreateInput = Omit<NormalizedProjectCreateInput, 'defaults'> & {
+  defaults: ProjectDefaultsInput;
+};
+export type ProjectDefaultsPatch = Omit<
+  NormalizedProjectDefaultsPatch,
+  'summaryTemplateId'
+> & {
+  summaryTemplateId?: SummaryTemplateId;
+};
+export type ProjectRecord = Omit<GeneratedProjectRecord, 'defaults'> & {
   defaults: ProjectDefaults;
-}
+};
+export type ProjectUpdateInput = Omit<NormalizedProjectUpdateInput, 'defaults'> & {
+  defaults?: ProjectDefaultsPatch;
+};
 
 export {
   buildProjectDefaultsFromConfig,

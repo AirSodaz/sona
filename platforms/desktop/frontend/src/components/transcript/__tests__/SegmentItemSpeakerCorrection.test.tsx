@@ -119,7 +119,9 @@ describe('SegmentItem speaker correction', () => {
       return {
         ...existing,
         ...updates,
-        defaults: updates.defaults ?? existing.defaults,
+        defaults: updates.defaults
+          ? { ...existing.defaults, ...updates.defaults }
+          : existing.defaults,
       };
     });
 
