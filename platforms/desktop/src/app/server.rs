@@ -191,10 +191,10 @@ pub async fn start_api_server(
     )?;
 
     let previous_server = controller.take_running_server().await;
-    if let Some(server) = previous_server {
-        if let Err(error) = server.stop().await {
-            log::warn!("Previous HTTP API Server stopped with error: {}", error);
-        }
+    if let Some(server) = previous_server
+        && let Err(error) = server.stop().await
+    {
+        log::warn!("Previous HTTP API Server stopped with error: {}", error);
     }
 
     refresh_online_asr_config(

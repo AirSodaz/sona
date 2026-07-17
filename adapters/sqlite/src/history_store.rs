@@ -528,14 +528,6 @@ pub(crate) fn insert_history_in_transaction(
     Ok(())
 }
 
-pub(crate) fn replace_history_in_transaction(
-    tx: &rusqlite::Transaction<'_>,
-    prepared: &PreparedHistoryRestore,
-) -> Result<(), DatabaseError> {
-    delete_history_in_transaction(tx)?;
-    insert_history_in_transaction(tx, prepared)
-}
-
 fn current_workspace_date_filter_thresholds() -> HistoryWorkspaceDateFilterThresholds {
     let now = Local::now();
     let today = local_day_start(now).unwrap_or(now);
@@ -2471,15 +2463,6 @@ where
         request: HistoryAudioCleanupRequest,
     ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
         Ok(self.run_audio_cleanup(request, true)?)
-    }
-
-    pub(crate) fn history_snapshot_for_backup(
-        &self,
-    ) -> Result<HistoryBackupSnapshot, HistoryStoreError> {
-        let _history_lock = acquire_history_file_lock(&self.app_local_data_dir)?;
-        Ok(self
-            .get_db()?
-            .with_rw_transaction(load_history_backup_in_transaction)?)
     }
 }
 

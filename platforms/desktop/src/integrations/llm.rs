@@ -17,6 +17,7 @@ pub(crate) use sona_core::llm::tasks::{
     prompt_char_count, split_summary_segments,
 };
 pub(crate) use sona_core::llm::usage::UsageRecord;
+#[cfg(test)]
 mod network;
 mod providers;
 #[cfg(test)]

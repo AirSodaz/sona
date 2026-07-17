@@ -99,7 +99,7 @@ struct DesktopTaskRuntime {
 impl DesktopTaskRuntime {
     fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
         Self {
-            inner: DesktopLlmAdapter::default(),
+            inner: DesktopLlmAdapter,
             usage: UsageRecorder::new(app, config, category),
         }
     }
@@ -245,7 +245,7 @@ pub(crate) async fn complete_llm_command(
 ) -> Result<LlmCompletionResponse, String> {
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
     let usage = UsageRecorder::new(app, request.config.clone(), category);
-    let response = complete_llm_with_port(request, DesktopLlmAdapter::default()).await?;
+    let response = complete_llm_with_port(request, DesktopLlmAdapter).await?;
     usage.record_usage(response.usage.clone());
     Ok(response)
 }
@@ -330,7 +330,7 @@ pub(crate) async fn summarize_transcript_command(
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter::default();
+    let adapter = DesktopLlmAdapter;
     LlmRuntimeService::new(&adapter, adapter)
         .list_models(request)
         .await
@@ -340,7 +340,7 @@ pub(crate) async fn list_llm_models_command(
 pub(crate) async fn describe_llm_model_command(
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter::default();
+    let adapter = DesktopLlmAdapter;
     LlmRuntimeService::new(&adapter, adapter)
         .describe_model(&config)
         .await

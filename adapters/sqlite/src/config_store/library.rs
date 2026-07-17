@@ -200,6 +200,7 @@ fn load_polish_keyword_sets(
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_vocabulary_set(
     statement: &mut rusqlite::CachedStatement<'_>,
     id: &str,

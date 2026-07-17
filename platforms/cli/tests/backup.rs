@@ -108,7 +108,8 @@ fn automation_state(history_id: &str) -> AutomationRepositoryState {
         rules: vec![AutomationRuleRecord {
             id: "backup-rule".to_string(),
             name: "Backup Rule".to_string(),
-            project_id: "backup-project".to_string(),
+            save_history: true,
+            tag_ids: vec!["backup-project".to_string()],
             preset_id: "general".to_string(),
             watch_directory: "C:/backup/watch".to_string(),
             recursive: true,
@@ -167,7 +168,7 @@ fn seed_five_scopes(app_data_dir: &Path) -> sona_core::backup::BackupDataset {
             }]))
             .unwrap(),
             duration: 1.0,
-            project_id: Some("backup-project".to_string()),
+            tag_ids: vec!["backup-project".to_string()],
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: None,
@@ -297,7 +298,7 @@ fn backup_export_inspect_import_roundtrips_five_scopes_and_migrates_config() {
 
     let manifest: BackupManifest = canonical_output(&export(&source_dir, &archive, "0.8.0"));
     assert_eq!(manifest.app_version, "0.8.0");
-    assert_eq!(manifest.counts.projects, 1);
+    assert_eq!(manifest.counts.tags, 1);
     assert_eq!(manifest.counts.history_items, 1);
     assert_eq!(manifest.counts.automation_rules, 1);
     assert_eq!(manifest.counts.automation_processed_entries, 1);
@@ -311,7 +312,7 @@ fn backup_export_inspect_import_roundtrips_five_scopes_and_migrates_config() {
     let before_inspect = prepared_workspace_names(&archive);
     let preview: PreparedBackupImport = canonical_output(&inspect(&archive));
     assert_eq!(preview.manifest, manifest);
-    assert_eq!(preview.projects.len(), 1);
+    assert_eq!(preview.tags.len(), 1);
     assert_eq!(preview.automation_rules.len(), 1);
     assert_eq!(preview.automation_processed_entries.len(), 1);
     assert_eq!(prepared_workspace_names(&archive), before_inspect);
@@ -323,7 +324,7 @@ fn backup_export_inspect_import_roundtrips_five_scopes_and_migrates_config() {
     assert_eq!(prepared_workspace_names(&archive), before_inspect);
 
     let restored = snapshot(&destination_dir);
-    assert_eq!(restored.projects, source.projects);
+    assert_eq!(restored.tags, source.tags);
     assert_eq!(restored.history.items, source.history.items);
     assert_eq!(
         restored.history.transcript_files,
@@ -434,23 +435,23 @@ fn backup_semantic_validation_fails_before_target_database_or_lock_creation() {
     fs::create_dir_all(&destination_dir).unwrap();
     seed_five_scopes(&source_dir);
 
-    let duplicate_projects = root.path().join("duplicate-projects.sona-backup");
-    export(&source_dir, &duplicate_projects, "0.8.0");
-    rewrite_archive(&duplicate_projects, |contents| {
-        update_json(&contents.join("projects/index.json"), |projects| {
-            let projects = projects.as_array_mut().unwrap();
-            projects.push(projects[0].clone());
+    let duplicate_tags = root.path().join("duplicate-tags.sona-backup");
+    export(&source_dir, &duplicate_tags, "0.8.0");
+    rewrite_archive(&duplicate_tags, |contents| {
+        update_json(&contents.join("tags/index.json"), |tags| {
+            let tags = tags.as_array_mut().unwrap();
+            tags.push(tags[0].clone());
         });
         update_json(&contents.join("manifest.json"), |manifest| {
-            manifest["counts"]["projects"] = json!(2);
+            manifest["counts"]["tags"] = json!(2);
         });
     });
 
-    let unknown_project = root.path().join("unknown-project.sona-backup");
-    export(&source_dir, &unknown_project, "0.8.0");
-    rewrite_archive(&unknown_project, |contents| {
+    let unknown_tag = root.path().join("unknown-tag.sona-backup");
+    export(&source_dir, &unknown_tag, "0.8.0");
+    rewrite_archive(&unknown_tag, |contents| {
         update_json(&contents.join("history/index.json"), |history| {
-            history[0]["projectId"] = json!("missing-project");
+            history[0]["tagIds"] = json!(["missing-tag"]);
         });
     });
 
@@ -466,10 +467,10 @@ fn backup_semantic_validation_fails_before_target_database_or_lock_creation() {
         });
     });
 
-    for archive in [&duplicate_projects, &unknown_project, &duplicate_automation] {
-        let archive_before = fs::read(&archive).unwrap();
+    for archive in [&duplicate_tags, &unknown_tag, &duplicate_automation] {
+        let archive_before = fs::read(archive).unwrap();
         let target_before = directory_entries(&destination_dir);
-        let prepared_before = prepared_workspace_names(&archive);
+        let prepared_before = prepared_workspace_names(archive);
         let error = sona_cli::run_cli_from_args([
             "sona-cli",
             "backup",
@@ -503,8 +504,8 @@ fn backup_semantic_validation_fails_before_target_database_or_lock_creation() {
     }
 
     let missing_destination = root.path().join("missing-destination");
-    let archive_before = fs::read(&duplicate_projects).unwrap();
-    let prepared_before = prepared_workspace_names(&duplicate_projects);
+    let archive_before = fs::read(&duplicate_tags).unwrap();
+    let prepared_before = prepared_workspace_names(&duplicate_tags);
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
         "backup",
@@ -512,7 +513,7 @@ fn backup_semantic_validation_fails_before_target_database_or_lock_creation() {
         "--app-data-dir",
         path_arg(&missing_destination).as_str(),
         "--archive",
-        path_arg(&duplicate_projects).as_str(),
+        path_arg(&duplicate_tags).as_str(),
         "--default-rule-set-name",
         "Imported Rules",
         "--confirm-replace",
@@ -521,11 +522,8 @@ fn backup_semantic_validation_fails_before_target_database_or_lock_creation() {
     assert!(matches!(error, sona_cli::CliError::Validation(_)));
     assert!(error.to_string().contains("Invalid backup:"));
     assert!(!missing_destination.exists());
-    assert_eq!(fs::read(&duplicate_projects).unwrap(), archive_before);
-    assert_eq!(
-        prepared_workspace_names(&duplicate_projects),
-        prepared_before
-    );
+    assert_eq!(fs::read(&duplicate_tags).unwrap(), archive_before);
+    assert_eq!(prepared_workspace_names(&duplicate_tags), prepared_before);
 
     let valid_archive = root.path().join("valid-missing-target.sona-backup");
     export(&source_dir, &valid_archive, "0.8.0");

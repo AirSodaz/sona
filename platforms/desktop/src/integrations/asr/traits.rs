@@ -6,6 +6,7 @@ use super::{AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment};
 
 #[async_trait]
 pub trait AsrBatchProcessor: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     async fn process_file(
         &self,
         emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,

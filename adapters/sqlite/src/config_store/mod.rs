@@ -49,7 +49,7 @@ pub(crate) fn load_state_in_transaction(
     let Some(base) = app_config::load(tx)? else {
         return Ok(None);
     };
-    let library = library::load(&tx)?;
+    let library = library::load(tx)?;
     Ok(Some(AppConfigStoredState {
         base_config_json: base.base_config_json,
         library,

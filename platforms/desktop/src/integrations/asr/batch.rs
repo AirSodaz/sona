@@ -232,6 +232,7 @@ where
     Ok(postprocessed_segments)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_batch_local<F>(
     r: &SafeOfflineRecognizer,
     samples: &[f32],

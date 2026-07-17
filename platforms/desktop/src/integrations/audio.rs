@@ -553,14 +553,15 @@ async fn drain_capture_worker_chunk(
     }
 
     let chunk = &pull_buffer[..len];
-    if !recorder_paused && let Some(w) = writer.as_mut() {
-        if let Err(e) = w.write_samples(chunk) {
-            eprintln!(
-                "[Audio] Failed to write {} WAV samples: {}",
-                kind.log_name(),
-                e
-            );
-        }
+    if !recorder_paused
+        && let Some(w) = writer.as_mut()
+        && let Err(e) = w.write_samples(chunk)
+    {
+        eprintln!(
+            "[Audio] Failed to write {} WAV samples: {}",
+            kind.log_name(),
+            e
+        );
     }
 
     feed_capture_audio_to_instances(app, kind, chunk).await;

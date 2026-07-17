@@ -459,7 +459,7 @@ impl<'a> SyncRuntime<'a> {
         }
         candidates.sort_by(|(left, _), (right, _)| left.cipher_hash.cmp(&right.cipher_hash));
 
-        for (parsed, key) in candidates {
+        if let Some((parsed, key)) = candidates.into_iter().next() {
             let object = self
                 .remote
                 .get(&key)
@@ -630,7 +630,7 @@ impl<'a> SyncRuntime<'a> {
         }
         candidates.sort_by(|(left, _), (right, _)| left.cipher_hash.cmp(&right.cipher_hash));
 
-        for (parsed, key) in candidates {
+        if let Some((parsed, key)) = candidates.into_iter().next() {
             let object =
                 self.remote.get(&key).await?.ok_or_else(|| {
                     protocol_error(format!("Remote checkpoint disappeared: {key}."))

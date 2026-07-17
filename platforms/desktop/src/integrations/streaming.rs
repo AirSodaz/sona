@@ -576,9 +576,7 @@ fn run_offline_inference_standalone(
     if speech_buffer.is_empty() {
         return None;
     }
-    let Some(r) = recognizer.offline() else {
-        return None;
-    };
+    let r = recognizer.offline()?;
 
     let mut full_audio = Vec::new();
     for chunk in speech_buffer {

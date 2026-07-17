@@ -10,7 +10,7 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
     let path_provider = TauriPathProvider::from_app(app);
     let app_local_data_dir = path_provider
         .resolve_path(PathKind::AppLocalData)
-        .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+        .map_err(std::io::Error::other)?;
 
     let db = Arc::new(sona_sqlite::Database::open(&app_local_data_dir)?);
     sona_sqlite::Database::set_global(Arc::clone(&db))?;

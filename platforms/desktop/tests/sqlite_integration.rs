@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
-    HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationRepository,
+    HistoryCreateTranscriptSnapshotRequest, HistoryMutationRepository, HistoryTrashItemsRequest,
     HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
@@ -27,8 +27,11 @@ fn clear_db(db: &Database) {
             "transcript_snapshots",
             "history_summaries",
             "history_transcripts",
+            "history_item_tags",
             "history_items",
-            "projects",
+            "tag_default_links",
+            "automation_rule_tags",
+            "tags",
             "automation_rules",
             "automation_processed",
             "task_ledger",
@@ -240,9 +243,9 @@ fn test_migration_and_crud() {
             .unwrap();
         assert_eq!(h, 2, "history_items count");
         let p: i64 = conn
-            .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM tags", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(p, 2, "projects count");
+        assert_eq!(p, 2, "tags count");
         let ar: i64 = conn
             .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
             .unwrap();
@@ -262,12 +265,12 @@ fn test_migration_and_crud() {
             .unwrap();
         assert_eq!(llm, 1, "llm_usage count");
 
-        let project = conn
+        let tag = conn
             .query_row(
                 "SELECT description, summary_template_id, translation_language,
                             polish_preset_id, polish_scenario, polish_context,
                             export_file_name_prefix
-                     FROM projects WHERE id = 'proj-1'",
+                     FROM tags WHERE id = 'proj-1'",
                 [],
                 |r| {
                     Ok((
@@ -282,26 +285,26 @@ fn test_migration_and_crud() {
                 },
             )
             .unwrap();
-        assert_eq!(project.0, "Work project");
-        assert_eq!(project.1, "detailed");
-        assert_eq!(project.2, "en");
-        assert_eq!(project.3, "formal");
-        assert_eq!(project.4.as_deref(), Some("meeting"));
-        assert_eq!(project.5.as_deref(), Some("weekly sync"));
-        assert_eq!(project.6, "work-");
+        assert_eq!(tag.0, "Work project");
+        assert_eq!(tag.1, "detailed");
+        assert_eq!(tag.2, "en");
+        assert_eq!(tag.3, "formal");
+        assert_eq!(tag.4.as_deref(), Some("meeting"));
+        assert_eq!(tag.5.as_deref(), Some("weekly sync"));
+        assert_eq!(tag.6, "work-");
 
         let link_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM project_default_links WHERE project_id = 'proj-1'",
+                "SELECT COUNT(*) FROM tag_default_links WHERE tag_id = 'proj-1'",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(link_count, 4, "project_default_links count");
+        assert_eq!(link_count, 4, "tag_default_links count");
 
         let rule = conn
             .query_row(
-                "SELECT project_id, preset_id, recursive, enabled, stage_auto_polish,
+                "SELECT save_history, preset_id, recursive, enabled, stage_auto_polish,
                             stage_polish_preset_id, stage_auto_translate,
                             stage_translation_language, stage_export_enabled,
                             export_directory, export_format, export_mode, export_prefix,
@@ -310,7 +313,7 @@ fn test_migration_and_crud() {
                 [],
                 |r| {
                     Ok((
-                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, i64>(2)?,
                         r.get::<_, i64>(3)?,
@@ -329,7 +332,7 @@ fn test_migration_and_crud() {
                 },
             )
             .unwrap();
-        assert_eq!(rule.0, "proj-1");
+        assert_eq!(rule.0, 1);
         assert_eq!(rule.1, "preset-1");
         assert_eq!(rule.2, 1);
         assert_eq!(rule.3, 1);
@@ -344,6 +347,15 @@ fn test_migration_and_crud() {
         assert_eq!(rule.12, "auto-");
         assert_eq!(rule.13, 1000);
         assert_eq!(rule.14, 2000);
+
+        let rule_tag: String = conn
+            .query_row(
+                "SELECT tag_id FROM automation_rule_tags WHERE rule_id = 'rule-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_tag, "proj-1");
 
         let processed = conn
             .query_row(
@@ -377,7 +389,7 @@ fn test_migration_and_crud() {
         let task = conn
             .query_row(
                 "SELECT kind, status, title, progress, retryable, cancelable, stage,
-                            history_id, project_id, automation_rule_id, source_fingerprint,
+                            history_id, tag_ids, automation_rule_id, source_fingerprint,
                             template_id, target_language
                      FROM task_ledger WHERE id = 'task-1'",
                 [],
@@ -391,7 +403,7 @@ fn test_migration_and_crud() {
                         r.get::<_, i64>(5)?,
                         r.get::<_, Option<String>>(6)?,
                         r.get::<_, Option<String>>(7)?,
-                        r.get::<_, Option<String>>(8)?,
+                        r.get::<_, String>(8)?,
                         r.get::<_, Option<String>>(9)?,
                         r.get::<_, Option<String>>(10)?,
                         r.get::<_, Option<String>>(11)?,
@@ -408,7 +420,7 @@ fn test_migration_and_crud() {
         assert_eq!(task.5, 1);
         assert_eq!(task.6.as_deref(), Some("polish"));
         assert_eq!(task.7.as_deref(), Some("hist-1"));
-        assert_eq!(task.8.as_deref(), Some("proj-1"));
+        assert_eq!(task.8, r#"["proj-1"]"#);
         assert_eq!(task.9.as_deref(), Some("rule-1"));
         assert_eq!(task.10.as_deref(), Some("fp-1"));
         assert_eq!(task.11.as_deref(), Some("tmpl-1"));
@@ -443,14 +455,14 @@ fn test_migration_and_crud() {
             )]))
             .unwrap(),
             duration: 2.0,
-            project_id: Some("proj-1".to_string()),
+            tag_ids: vec!["proj-1".to_string()],
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
         })
         .unwrap();
     assert_eq!(recording.preview_text, "New recording test...");
-    assert_eq!(recording.project_id.as_deref(), Some("proj-1"));
+    assert_eq!(recording.tag_ids, vec!["proj-1"]);
 
     let items = store.list_items().unwrap();
     assert_eq!(items.len(), 3);
@@ -502,10 +514,11 @@ fn test_migration_and_crud() {
     let snapshots = store.list_transcript_snapshots(&recording.id).unwrap();
     assert_eq!(snapshots.len(), 1);
 
-    // Delete
+    // Trash
     store
-        .delete_items(HistoryDeleteItemsRequest {
+        .trash_items(HistoryTrashItemsRequest {
             ids: vec![recording.id.clone()],
+            deleted_at: 1,
         })
         .unwrap();
     let items = store.list_items().unwrap();

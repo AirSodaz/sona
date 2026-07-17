@@ -169,7 +169,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment("seg-1", "before")],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![]),
                 native_audio_path: None,
                 audio_extension: None,
@@ -280,7 +280,7 @@ mod tests {
             .create_live_draft(HistoryCreateLiveDraftRequest {
                 id: None,
                 audio_extension: "wav".to_string(),
-                project_id: None,
+                tag_ids: Vec::new(),
                 icon: None,
             })
             .unwrap();
@@ -311,7 +311,7 @@ mod tests {
             .save_recording(HistorySaveRecordingRequest {
                 segments: vec![segment("seg-1", "test")],
                 duration: 1.0,
-                project_id: None,
+                tag_ids: Vec::new(),
                 audio_bytes: Some(vec![]),
                 native_audio_path: None,
                 audio_extension: None,

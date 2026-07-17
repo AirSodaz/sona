@@ -559,7 +559,8 @@ mod tests {
         AutomationStore::replace_state(&repo, &initial).unwrap();
 
         let replacement = processed_record("entry-new", "rule-1");
-        AutomationStore::replace_processed_entries(&repo, &[replacement.clone()]).unwrap();
+        AutomationStore::replace_processed_entries(&repo, std::slice::from_ref(&replacement))
+            .unwrap();
 
         let state = AutomationStore::load_state(&repo).unwrap();
         assert_eq!(state.rules, initial.rules);

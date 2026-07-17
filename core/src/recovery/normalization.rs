@@ -263,7 +263,7 @@ fn normalize_existing_timing(
     }
 
     let units = normalize_timing_units(timing.units.clone(), segment.start, segment.end);
-    (!units.is_empty()).then(|| RecoveredTranscriptTiming {
+    (!units.is_empty()).then_some(RecoveredTranscriptTiming {
         level: TranscriptTimingLevel::Token,
         source: timing.source,
         units,
@@ -305,7 +305,7 @@ fn build_token_timing_from_legacy(
         .collect::<Vec<_>>();
     let units = normalize_timing_units(units, segment.start, segment.end);
 
-    (!units.is_empty()).then(|| RecoveredTranscriptTiming {
+    (!units.is_empty()).then_some(RecoveredTranscriptTiming {
         level: TranscriptTimingLevel::Token,
         source: TranscriptTimingSource::Model,
         units,

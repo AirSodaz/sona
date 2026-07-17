@@ -34,7 +34,7 @@ fn create_history_fixture(app_data_dir: &Path) -> HistoryFixture {
         .save_recording(HistorySaveRecordingRequest {
             segments: segments.clone(),
             duration: 1.25,
-            project_id: None,
+            tag_ids: Vec::new(),
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -377,7 +377,7 @@ fn history_mutation_commands_share_policy_and_persist_files() {
     database
         .with_write_connection(|connection| {
             connection.execute(
-                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at) VALUES ('team:alpha', 'CLI', '', '', 0, 1, 1)",
+                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at) VALUES ('team:alpha', 'CLI', '', '', 0, 1, 1)",
                 [],
             )?;
             Ok(())
@@ -413,7 +413,7 @@ fn history_mutation_commands_share_policy_and_persist_files() {
         "--history-id".into(),
         recording_id,
     ]);
-    assert!(!persisted_audio.exists());
+    assert!(persisted_audio.exists());
 
     let list = run_owned(vec![
         "sona-cli".into(),
@@ -431,7 +431,7 @@ fn history_mutation_commands_share_policy_and_persist_files() {
         .find(|item| item["id"] == "cli-import")
         .unwrap();
     assert_eq!(imported["title"], "CLI renamed");
-    assert_eq!(imported["projectId"], Value::Null);
+    assert_eq!(imported["tagIds"], json!([]));
 }
 
 #[test]

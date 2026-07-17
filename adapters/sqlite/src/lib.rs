@@ -5,7 +5,6 @@ pub mod backup_state_repository;
 pub mod config_store;
 pub mod dashboard_repository;
 pub mod error;
-pub mod history_archive;
 pub mod history_fs_utils;
 pub mod history_mutation_repository;
 pub mod history_query_repository;
@@ -31,7 +30,6 @@ pub use dashboard_repository::{
     SqliteDashboardService, create_dashboard_service, load_dashboard_snapshot,
 };
 pub use error::DatabaseError;
-pub use history_archive::HistoryRepository;
 pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
@@ -789,6 +787,7 @@ macro_rules! impl_db_repository {
 
         impl $name<$crate::Database> {
             #[cfg(test)]
+            #[allow(dead_code)]
             pub(crate) fn with_db(
                 _app_local_data_dir: std::path::PathBuf,
                 db: $crate::Database,
@@ -816,6 +815,7 @@ macro_rules! impl_db_repository {
 
         impl $name<$crate::Database> {
             #[cfg(test)]
+            #[allow(dead_code)]
             pub(crate) fn with_db(
                 app_local_data_dir: std::path::PathBuf,
                 db: $crate::Database,

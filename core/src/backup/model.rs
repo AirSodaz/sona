@@ -128,6 +128,7 @@ pub struct PreparedBackupImport {
     pub analytics_content: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_backup_manifest(
     created_at_ms: i64,
     app_version: String,

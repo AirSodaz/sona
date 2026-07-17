@@ -112,7 +112,7 @@ mod tests {
                 recoverable: false,
                 stage: None,
                 history_id: None,
-                project_id: None,
+                tag_ids: Vec::new(),
                 file_path: None,
                 automation_rule_id: None,
                 source_fingerprint: None,

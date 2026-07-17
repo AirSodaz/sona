@@ -683,32 +683,29 @@ mod tests {
             .unwrap(),
             "project-a"
         );
-        assert_eq!(
+        assert!(
             tx.query_row(
                 "SELECT deleted_at IS NULL FROM history_items WHERE id = 'history-a'",
                 [],
                 |row| row.get::<_, bool>(0),
             )
-            .unwrap(),
-            true
+            .unwrap()
         );
-        assert_eq!(
+        assert!(
             tx.query_row(
                 "SELECT save_history FROM automation_rules WHERE id = 'rule-a'",
                 [],
                 |row| row.get::<_, bool>(0),
             )
-            .unwrap(),
-            true
+            .unwrap()
         );
-        assert_eq!(
-            tx.query_row(
+        assert!(
+            !tx.query_row(
                 "SELECT save_history FROM automation_rules WHERE id = 'rule-none'",
                 [],
                 |row| row.get::<_, bool>(0),
             )
-            .unwrap(),
-            false
+            .unwrap()
         );
         assert_eq!(
             tx.query_row(

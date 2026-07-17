@@ -33,7 +33,7 @@ impl LazySqliteHistoryQueryRepository {
 
 impl HistoryQueryRepository for LazySqliteHistoryQueryRepository {
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryQueryError> {
-        self.with_store(|store| HistoryQueryRepository::list_items(store))
+        self.with_store(HistoryQueryRepository::list_items)
     }
 
     fn list_items_with_reconciled_live_drafts(

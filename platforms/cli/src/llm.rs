@@ -36,6 +36,7 @@ pub struct LlmArgs {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum LlmCommands {
     /// Generates text or structured output.
     Generate(LlmGenerateArgs),

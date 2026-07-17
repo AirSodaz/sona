@@ -207,24 +207,6 @@ fn load_projects(conn: &rusqlite::Connection) -> Result<Vec<ProjectRecord>, Data
     Ok(projects)
 }
 
-pub(crate) fn load_projects_in_transaction(
-    tx: &rusqlite::Transaction<'_>,
-) -> Result<Vec<ProjectRecord>, DatabaseError> {
-    load_projects(tx)
-}
-
-pub(crate) fn insert_projects_in_transaction(
-    tx: &rusqlite::Transaction<'_>,
-    projects: &[ProjectRecord],
-) -> Result<(), DatabaseError> {
-    let sql = project_insert_sql();
-    for (sort_order, project) in projects.iter().enumerate() {
-        write_project_row(tx, &sql, project, sort_order as i64)?;
-        replace_tag_default_links(tx, &project.id, &project.defaults)?;
-    }
-    Ok(())
-}
-
 fn upsert_projects_in_transaction(
     tx: &rusqlite::Transaction<'_>,
     projects: &[ProjectRecord],
@@ -234,14 +216,6 @@ fn upsert_projects_in_transaction(
         write_project_row(tx, &sql, project, sort_order as i64)?;
         replace_tag_default_links(tx, &project.id, &project.defaults)?;
     }
-    Ok(())
-}
-
-pub(crate) fn delete_projects_in_transaction(
-    tx: &rusqlite::Transaction<'_>,
-) -> Result<(), DatabaseError> {
-    tx.execute("DELETE FROM tag_default_links", [])?;
-    tx.execute("DELETE FROM tags", [])?;
     Ok(())
 }
 

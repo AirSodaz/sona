@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{Args, Subcommand, ValueEnum};
@@ -624,8 +624,8 @@ fn absolute_path(path: PathBuf) -> CliResult<PathBuf> {
     std::path::absolute(path).map_err(|error| CliError::Io(error.to_string()))
 }
 
-fn absolute_existing_file(path: &PathBuf, label: &str) -> CliResult<PathBuf> {
-    let path = absolute_path(path.clone())?;
+fn absolute_existing_file(path: &Path, label: &str) -> CliResult<PathBuf> {
+    let path = absolute_path(path.to_path_buf())?;
     if !path.is_file() {
         return Err(CliError::Io(format!(
             "History {label} does not exist: {}",

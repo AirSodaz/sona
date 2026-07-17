@@ -12,9 +12,11 @@ use sona_sync::{
     regenerate_remote_recovery_key,
 };
 
+type MemoryObjects = Arc<Mutex<BTreeMap<String, (Vec<u8>, String)>>>;
+
 #[derive(Clone, Default)]
 struct MemoryStore {
-    objects: Arc<Mutex<BTreeMap<String, (Vec<u8>, String)>>>,
+    objects: MemoryObjects,
 }
 
 #[async_trait]

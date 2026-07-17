@@ -14,9 +14,11 @@ use sona_core::sync::{
 };
 use sona_sync::{SyncRuntime, create_vault, load_remote_state_for_join};
 
+type MemoryObjects = Arc<Mutex<BTreeMap<String, (Vec<u8>, String)>>>;
+
 #[derive(Clone, Default)]
 struct MemoryStore {
-    objects: Arc<Mutex<BTreeMap<String, (Vec<u8>, String)>>>,
+    objects: MemoryObjects,
     fail_after_create_once: Arc<Mutex<bool>>,
     omit_etags: Arc<AtomicBool>,
 }

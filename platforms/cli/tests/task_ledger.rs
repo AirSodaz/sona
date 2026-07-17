@@ -23,7 +23,7 @@ fn record(id: &str, title: &str, progress: f64, updated_at: u64) -> TaskLedgerRe
         recoverable: false,
         stage: None,
         history_id: None,
-        project_id: None,
+        tag_ids: Vec::new(),
         file_path: None,
         automation_rule_id: None,
         source_fingerprint: None,
@@ -91,7 +91,7 @@ fn task_ledger_list_outputs_empty_canonical_json() {
     let snapshot: TaskLedgerSnapshot = serde_json::from_str(&output.stdout).unwrap();
 
     assert_eq!(output.stderr, "");
-    assert_eq!(snapshot.version, 1);
+    assert_eq!(snapshot.version, 2);
     assert_eq!(snapshot.updated_at, None);
     assert!(snapshot.tasks.is_empty());
     assert!(output.stdout.contains("\"updatedAt\": null"));

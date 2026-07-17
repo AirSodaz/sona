@@ -42,6 +42,7 @@ pub async fn history_list_items<R: Runtime>(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn history_query_workspace<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,

@@ -36,7 +36,7 @@ fn diagnostics_error(reason: impl ToString) -> SonaCoreBindingError {
 mod tests {
     use super::load_diagnostics_snapshot_json;
     use crate::SonaCoreBindingError;
-    use serde_json::{Value, json};
+    use serde_json::json;
     use sha2::{Digest, Sha256};
     use sona_core::models::preset_models::find_preset_model;
     use sona_core::runtime::diagnostics::DiagnosticsCoreSnapshot;

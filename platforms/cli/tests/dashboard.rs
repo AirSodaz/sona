@@ -58,7 +58,7 @@ fn seed(app_data_dir: &Path, transcript_text: &str) -> Arc<Database> {
             }]))
             .unwrap(),
             duration: 2.5,
-            project_id: Some("project-dashboard".to_string()),
+            tag_ids: vec!["project-dashboard".to_string()],
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -169,14 +169,7 @@ fn dashboard_show_renders_exact_table_columns() {
     assert_eq!(lines.len(), 3);
     assert_eq!(
         lines[0].split_whitespace().collect::<Vec<_>>(),
-        [
-            "GENERATED",
-            "ITEMS",
-            "PROJECTS",
-            "DURATION",
-            "TOKENS",
-            "DEEP"
-        ]
+        ["GENERATED", "ITEMS", "TAGS", "DURATION", "TOKENS", "DEEP"]
     );
     assert!(
         lines[1]
@@ -216,7 +209,7 @@ fn dashboard_show_accepts_relative_path_and_deep_unicode() {
     let snapshot: Value = serde_json::from_str(&output.stdout).unwrap();
 
     assert_eq!(snapshot["content"]["overview"]["itemCount"], 1);
-    assert_eq!(snapshot["content"]["overview"]["projectCount"], 1);
+    assert_eq!(snapshot["content"]["overview"]["tagCount"], 1);
     assert_eq!(snapshot["content"]["overview"]["isDeepLoaded"], true);
     assert_eq!(
         snapshot["content"]["overview"]["transcriptCharacterCount"],
