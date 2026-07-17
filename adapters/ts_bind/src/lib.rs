@@ -16,6 +16,17 @@ pub use sona_core::automation::{
     AutomationRuntimePathCollectionOutcome, AutomationRuntimePathCollectionResult,
     AutomationRuntimeReplaceResult, AutomationRuntimeRuleConfig,
 };
+pub use sona_core::backup::{
+    BackupApplyPreparedImportRequest, BackupApplyResult, BackupExportRequest, BackupImportRequest,
+    BackupInspectRequest, BackupManifest, BackupManifestCounts, BackupManifestScopes,
+    BackupPrepareImportRequest, PreparedBackupImport,
+};
+pub use sona_core::config::{
+    AppAsrConfig, AppAsrModelSelection, AppAsrProviderConfig, AppAsrSelections, AppConfig, AppFont,
+    AppLanguagePreference, AppLogLevel, AppTheme, GpuAcceleration, HotwordRuleRecord,
+    HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord, ProjectsViewMode,
+    SummaryTemplateRecord, TextReplacementRuleRecord, TextReplacementSetRecord, VoiceTypingMode,
+};
 pub use sona_core::dashboard::models::{
     ContentStats, ContentTrendPoint, DashboardSnapshotDomainModel, DashboardUsageBucket,
     LlmUsageDashboardStats, OverviewStats, SpeakerLeader, SpeakerStats, UsageBreakdown,
@@ -97,6 +108,12 @@ pub use sona_core::storage_usage::{
     AudioUsageCategory, DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry,
     SQLiteUsageSummary, StorageUsageCategories, StorageUsageSnapshot,
     WebviewBrowsingDataClearResult, WebviewCacheUsageCategory,
+};
+pub use sona_core::sync::{
+    HybridLogicalClock, SyncCausalContext, SyncConflict, SyncConflictDetail, SyncConflictKind,
+    SyncConflictResolution, SyncConflictSummary, SyncEntityKey, SyncEntityKind, SyncErrorSnapshot,
+    SyncJoinPreview, SyncLifecycleState, SyncOperation, SyncOperationKind, SyncPresetV1,
+    SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot, SyncVersion,
 };
 pub use sona_core::tag::{
     TagCreateInput, TagDefaults, TagDefaultsInput, TagDefaultsPatch, TagRecord,
@@ -446,6 +463,35 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmProvider>()
         .register::<PolishPresetId>()
         .register::<SummaryTemplateId>()
+        .register::<BackupExportRequest>()
+        .register::<BackupPrepareImportRequest>()
+        .register::<BackupApplyPreparedImportRequest>()
+        .register::<BackupInspectRequest>()
+        .register::<BackupImportRequest>()
+        .register::<BackupApplyResult>()
+        .register::<BackupManifest>()
+        .register::<BackupManifestScopes>()
+        .register::<BackupManifestCounts>()
+        .register::<PreparedBackupImport>()
+        .register::<AppLanguagePreference>()
+        .register::<AppTheme>()
+        .register::<AppFont>()
+        .register::<AppLogLevel>()
+        .register::<ProjectsViewMode>()
+        .register::<VoiceTypingMode>()
+        .register::<GpuAcceleration>()
+        .register::<AppAsrModelSelection>()
+        .register::<AppAsrSelections>()
+        .register::<AppAsrProviderConfig>()
+        .register::<AppAsrConfig>()
+        .register::<SummaryTemplateRecord>()
+        .register::<PolishPresetRecord>()
+        .register::<TextReplacementRuleRecord>()
+        .register::<TextReplacementSetRecord>()
+        .register::<HotwordRuleRecord>()
+        .register::<HotwordSetRecord>()
+        .register::<PolishKeywordSetRecord>()
+        .register::<AppConfig>()
         .register::<LlmProviderStrategy>()
         .register::<LlmConfig>()
         .register::<LlmGenerateRequest>()
@@ -531,6 +577,25 @@ pub fn desktop_types() -> specta::Types {
         .register::<SQLiteUsageSummary>()
         .register::<SQLiteIndexUsageEntry>()
         .register::<WebviewBrowsingDataClearResult>()
+        .register::<SyncPresetV1>()
+        .register::<SyncLifecycleState>()
+        .register::<SyncErrorSnapshot>()
+        .register::<SyncStatusSnapshot>()
+        .register::<SyncRunResult>()
+        .register::<SyncJoinPreview>()
+        .register::<SyncProviderDescriptor>()
+        .register::<SyncConflictResolution>()
+        .register::<HybridLogicalClock>()
+        .register::<SyncVersion>()
+        .register::<SyncCausalContext>()
+        .register::<SyncEntityKind>()
+        .register::<SyncEntityKey>()
+        .register::<SyncOperationKind>()
+        .register::<SyncOperation>()
+        .register::<SyncConflictKind>()
+        .register::<SyncConflict>()
+        .register::<SyncConflictSummary>()
+        .register::<SyncConflictDetail>()
         .register::<TaskLedgerKind>()
         .register::<TaskLedgerStatus>()
         .register::<TaskLedgerRecord>()
@@ -644,6 +709,35 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmProvider",
     "PolishPresetId",
     "SummaryTemplateId",
+    "BackupExportRequest",
+    "BackupPrepareImportRequest",
+    "BackupApplyPreparedImportRequest",
+    "BackupInspectRequest",
+    "BackupImportRequest",
+    "BackupApplyResult",
+    "BackupManifest",
+    "BackupManifestScopes",
+    "BackupManifestCounts",
+    "PreparedBackupImport",
+    "AppLanguagePreference",
+    "AppTheme",
+    "AppFont",
+    "AppLogLevel",
+    "ProjectsViewMode",
+    "VoiceTypingMode",
+    "GpuAcceleration",
+    "AppAsrModelSelection",
+    "AppAsrSelections",
+    "AppAsrProviderConfig",
+    "AppAsrConfig",
+    "SummaryTemplateRecord",
+    "PolishPresetRecord",
+    "TextReplacementRuleRecord",
+    "TextReplacementSetRecord",
+    "HotwordRuleRecord",
+    "HotwordSetRecord",
+    "PolishKeywordSetRecord",
+    "AppConfig",
     "MessageRole",
     "StandardMessage",
     "StandardLlmRequest",
@@ -733,6 +827,25 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "SQLiteUsageSummary",
     "SQLiteIndexUsageEntry",
     "WebviewBrowsingDataClearResult",
+    "SyncPresetV1",
+    "SyncLifecycleState",
+    "SyncErrorSnapshot",
+    "SyncStatusSnapshot",
+    "SyncRunResult",
+    "SyncJoinPreview",
+    "SyncProviderDescriptor",
+    "SyncConflictResolution",
+    "HybridLogicalClock",
+    "SyncVersion",
+    "SyncCausalContext",
+    "SyncEntityKind",
+    "SyncEntityKey",
+    "SyncOperationKind",
+    "SyncOperation",
+    "SyncConflictKind",
+    "SyncConflict",
+    "SyncConflictSummary",
+    "SyncConflictDetail",
     "TaskLedgerKind",
     "TaskLedgerStatus",
     "TaskLedgerRecord",
@@ -1032,6 +1145,82 @@ mod tests {
     }
 
     #[test]
+    fn desktop_type_registry_contains_backup_and_sync_contracts() {
+        let types = desktop_types();
+        let names = types
+            .into_sorted_iter()
+            .map(|datatype| datatype.name.as_ref())
+            .collect::<Vec<_>>();
+
+        for expected in [
+            "BackupExportRequest",
+            "BackupManifest",
+            "BackupManifestScopes",
+            "BackupManifestCounts",
+            "PreparedBackupImport",
+            "SyncPresetV1",
+            "SyncLifecycleState",
+            "SyncErrorSnapshot",
+            "SyncStatusSnapshot",
+            "SyncRunResult",
+            "SyncJoinPreview",
+            "SyncProviderDescriptor",
+            "SyncConflictResolution",
+            "HybridLogicalClock",
+            "SyncVersion",
+            "SyncCausalContext",
+            "SyncEntityKind",
+            "SyncEntityKey",
+            "SyncOperationKind",
+            "SyncOperation",
+            "SyncConflictKind",
+            "SyncConflict",
+            "SyncConflictSummary",
+            "SyncConflictDetail",
+        ] {
+            assert!(names.contains(&expected), "missing {expected}");
+        }
+    }
+
+    #[test]
+    fn desktop_type_registry_contains_the_app_config_contract() {
+        let types = desktop_types();
+        let names = types
+            .into_sorted_iter()
+            .map(|datatype| datatype.name.as_ref())
+            .collect::<std::collections::HashSet<_>>();
+
+        for expected in [
+            "AppConfig",
+            "AppLanguagePreference",
+            "AppTheme",
+            "AppFont",
+            "AppLogLevel",
+            "ProjectsViewMode",
+            "AppAsrConfig",
+            "AppAsrSelections",
+            "AppAsrModelSelection",
+            "AppAsrProviderConfig",
+            "VoiceTypingMode",
+            "GpuAcceleration",
+        ] {
+            assert!(names.contains(expected), "missing {expected}");
+        }
+
+        let bindings = render_desktop_typescript_bindings().unwrap();
+        for expected in [
+            "export type AppConfig =",
+            "appLanguage?: AppLanguagePreference | null",
+            "asr?: AppAsrConfig_Deserialize | null",
+            "llmSettings?: unknown | null",
+            "export type AppAsrSelections =",
+            "voiceTyping: AppAsrModelSelection_Deserialize",
+        ] {
+            assert!(bindings.contains(expected), "missing {expected}");
+        }
+    }
+
+    #[test]
     fn desktop_type_registry_is_typescript_exportable() {
         render_desktop_typescript_bindings().unwrap();
     }
@@ -1070,6 +1259,53 @@ mod tests {
         assert!(bindings.contains("temperature"));
         assert!(bindings.contains("maxOutputTokens"));
         assert!(bindings.contains("contextWindow"));
+    }
+
+    #[test]
+    fn backup_and_sync_types_keep_canonical_shapes_and_transport_numbers() {
+        let bindings = render_desktop_typescript_bindings().unwrap();
+
+        for expected in [
+            "export type BackupManifest",
+            "export type BackupManifestCounts",
+            "schemaVersion: number",
+            "tags: number",
+            "export type PreparedBackupImport",
+            "export type SyncStatusSnapshot",
+            "lastSuccessAtMs: number | null",
+            "pendingOperationCount: number",
+            "export type SyncOperation",
+        ] {
+            assert!(bindings.contains(expected), "missing {expected}");
+        }
+
+        let entity_kind = bindings
+            .split_once("export type SyncEntityKind = ")
+            .expect("SyncEntityKind binding should be generated")
+            .1
+            .split_once(';')
+            .expect("SyncEntityKind binding should end with a semicolon")
+            .0;
+        assert!(entity_kind.contains("\"tag\""), "{entity_kind}");
+        assert!(entity_kind.contains("\"project\""), "{entity_kind}");
+    }
+
+    #[test]
+    fn sync_transport_validation_rejects_unsafe_timestamps() {
+        let status = SyncStatusSnapshot {
+            state: SyncLifecycleState::Idle,
+            provider_id: None,
+            vault_id: None,
+            preset: None,
+            last_success_at_ms: Some(TYPESCRIPT_MAX_SAFE_INTEGER + 1),
+            pending_operation_count: 0,
+            conflict_count: 0,
+            next_retry_at_ms: None,
+            last_error: None,
+        };
+
+        let error = validate_typescript_safe_integers(&status).unwrap_err();
+        assert!(error.contains("$.lastSuccessAtMs"), "{error}");
     }
 
     #[test]

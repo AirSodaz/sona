@@ -144,6 +144,14 @@ pub trait SyncLocalRepository: Send + Sync {
         &self,
         segment: &SyncRemoteSegment,
     ) -> Result<SyncRemoteApplyResult, SyncError>;
+
+    fn validate_preset_change(
+        &self,
+        preset: SyncPresetV1,
+        confirm_shrink: bool,
+    ) -> Result<(), SyncError>;
+
+    fn change_preset(&self, preset: SyncPresetV1, confirm_shrink: bool) -> Result<(), SyncError>;
 }
 
 pub trait SyncSecretStore: Send + Sync {

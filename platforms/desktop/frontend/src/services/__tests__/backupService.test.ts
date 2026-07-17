@@ -200,7 +200,7 @@ import { applyImportBackup, exportBackup, prepareImportBackup } from '../backupS
 
 function makeManifest() {
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     createdAt: '2026-04-29T00:00:00.000Z',
     appVersion: packageJson.version,
     historyMode: 'light' as const,
@@ -212,7 +212,7 @@ function makeManifest() {
       analytics: true as const,
     },
     counts: {
-      projects: 1,
+      tags: 1,
       historyItems: 1,
       transcriptFiles: 1,
       summaryFiles: 1,
@@ -306,7 +306,7 @@ describe('backupService', () => {
         batchModelPath: '',
         language: 'auto',
       },
-      projects: [
+      tags: [
         {
           id: 'project-1',
           name: 'Imported Project',
@@ -380,7 +380,7 @@ describe('backupService', () => {
       archivePath: '/imports/sparse.tar.bz2',
       manifest: makeManifest(),
       config: { theme: 'dark' },
-      projects: [{ id: 'project-sparse' }],
+      tags: [{ id: 'tag-sparse' }],
       automationRules: [{ id: 'rule-sparse' }],
       automationProcessedEntries: [{ ruleId: 'rule-sparse' }],
       analyticsContent: '{"schemaVersion":1}',
@@ -391,7 +391,7 @@ describe('backupService', () => {
     const prepared = await prepareImportBackup({ archivePath: '/imports/sparse.tar.bz2' });
 
     expect(prepared).toBe(rustPayload);
-    expect(prepared?.projects).toEqual([{ id: 'project-sparse' }]);
+    expect(prepared?.tags).toEqual([{ id: 'tag-sparse' }]);
     expect(prepared?.automationRules).toEqual([{ id: 'rule-sparse' }]);
     expect(prepared?.automationProcessedEntries).toEqual([{ ruleId: 'rule-sparse' }]);
   });
@@ -409,7 +409,7 @@ describe('backupService', () => {
         batchModelPath: '',
         language: 'auto',
       } as any,
-      projects: [
+      tags: [
         {
           id: 'project-1',
           name: 'Imported Project',

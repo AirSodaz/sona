@@ -37,7 +37,7 @@ export function buildBackupImportDetails(
     }),
     t('settings.backup.summary_projects', {
       defaultValue: 'Projects: {{count}}',
-      count: manifest.counts.projects,
+      count: manifest.counts.tags,
     }),
     t('settings.backup.summary_history_items', {
       defaultValue: 'History items: {{count}}',

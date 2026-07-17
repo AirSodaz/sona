@@ -1,50 +1,24 @@
-export type SyncPresetV1 = 'content' | 'standard' | 'full';
-export type SyncLifecycleState =
-  | 'disabled'
-  | 'locked'
-  | 'idle'
-  | 'syncing'
-  | 'paused'
-  | 'error';
+import type {
+  SyncPresetV1,
+  SyncStatusSnapshot,
+} from '../bindings';
 
-export interface SyncErrorSnapshot {
-  code: string;
-  message: string;
-  retryable: boolean;
-}
-
-export interface SyncStatusSnapshot {
-  state: SyncLifecycleState;
-  providerId: string | null;
-  vaultId: string | null;
-  preset: SyncPresetV1 | null;
-  lastSuccessAtMs: number | null;
-  pendingOperationCount: number;
-  conflictCount: number;
-  nextRetryAtMs: number | null;
-  lastError: SyncErrorSnapshot | null;
-}
-
-export interface SyncRunResult {
-  pulledSegmentCount: number;
-  pulledCheckpointCount: number;
-  pushedSegmentCount: number;
-  appliedOperationCount: number;
-  publishedOperationCount: number;
-  conflictCount: number;
-  checkpointPublished: boolean;
-}
-
-export interface SyncJoinPreview {
-  localOperationCount: number;
-  remoteOperationCount: number;
-  projectedConflictCount: number;
-}
-
-export interface SyncProviderDescriptor {
-  id: string;
-  displayName: string;
-}
+export type {
+  SyncConflictDetail,
+  SyncConflictKind,
+  SyncConflictResolution,
+  SyncConflictSummary,
+  SyncEntityKey,
+  SyncEntityKind,
+  SyncErrorSnapshot,
+  SyncJoinPreview,
+  SyncLifecycleState,
+  SyncOperation,
+  SyncPresetV1,
+  SyncProviderDescriptor,
+  SyncRunResult,
+  SyncStatusSnapshot,
+} from '../bindings';
 
 export interface WebDavObjectStoreConfig {
   serverUrl: string;
@@ -100,66 +74,6 @@ export interface SyncUnlockRecoveryRequest {
 export interface SyncChangePasswordRequest {
   currentMasterPassword: string;
   nextMasterPassword: string;
-}
-
-export type SyncConflictResolution =
-  | 'keep_current'
-  | 'use_conflicting'
-  | 'keep_both';
-export type SyncConflictKind = 'concurrent_write' | 'delete_vs_write';
-export type SyncEntityKind =
-  | 'project'
-  | 'history_item'
-  | 'history_transcript'
-  | 'history_summary'
-  | 'transcript_snapshot'
-  | 'setting'
-  | 'summary_template'
-  | 'polish_preset'
-  | 'vocabulary_set'
-  | 'vocabulary_rule'
-  | 'speaker_profile'
-  | 'automation_rule'
-  | 'credential_profile';
-
-export interface SyncEntityKey {
-  kind: SyncEntityKind;
-  id: string;
-}
-
-export interface SyncOperation {
-  operationId: string;
-  sourceDeviceId: string;
-  sourceSequence: number;
-  causalContext: {
-    observedSequences: Record<string, number>;
-  };
-  version: {
-    clock: {
-      physicalMs: number;
-      logical: number;
-    };
-    deviceId: string;
-    operationId: string;
-  };
-  entity: SyncEntityKey;
-  kind:
-    | { kind: 'set_field'; field: string; value: unknown }
-    | { kind: 'delete_entity' };
-}
-
-export interface SyncConflictSummary {
-  conflictId: string;
-  kind: SyncConflictKind;
-  entity: SyncEntityKey;
-  field: string | null;
-  createdAtMs: number;
-}
-
-export interface SyncConflictDetail {
-  summary: SyncConflictSummary;
-  current: SyncOperation;
-  conflicting: SyncOperation;
 }
 
 export const DISABLED_SYNC_STATUS: SyncStatusSnapshot = {

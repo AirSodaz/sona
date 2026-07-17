@@ -190,6 +190,7 @@ mod tests {
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
     use sona_core::task_ledger::repository::TaskLedgerStore;
+    use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
     use sona_sqlite::{Database, SqliteLedgerRepository};
     use std::fs;
     use std::path::Path;
@@ -227,13 +228,17 @@ mod tests {
         .to_string()
     }
 
+    fn empty_snapshot_json() -> String {
+        format!(r#"{{"version":{TASK_LEDGER_VERSION},"updatedAt":null,"tasks":[]}}"#)
+    }
+
     #[test]
     fn load_returns_empty_canonical_snapshot_json() {
         let dir = TestDir::new();
 
         let output = load_task_ledger_snapshot_json_at(dir.app_data_dir(), 1_000).unwrap();
 
-        assert_eq!(output, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
+        assert_eq!(output, empty_snapshot_json());
     }
 
     #[test]
@@ -295,8 +300,8 @@ mod tests {
             remove_task_ledger_record_json_at(dir.app_data_dir(), "missing".to_string(), 4_001)
                 .unwrap();
 
-        assert_eq!(patched, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
-        assert_eq!(removed, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
+        assert_eq!(patched, empty_snapshot_json());
+        assert_eq!(removed, empty_snapshot_json());
     }
 
     #[test]
@@ -310,7 +315,7 @@ mod tests {
         .unwrap();
 
         let output = clear_resolved_task_ledger_records_json_at(dir.app_data_dir(), 5_001).unwrap();
-        assert_eq!(output, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
+        assert_eq!(output, empty_snapshot_json());
 
         let db = Arc::new(Database::open(dir.path()).unwrap());
         let repository = SqliteLedgerRepository::new(db);

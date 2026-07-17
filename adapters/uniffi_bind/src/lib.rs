@@ -796,6 +796,15 @@ pub fn create_online_asr_streaming_session(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn create_asr_streaming_session(
+    instance_id: String,
+    request_json: String,
+    observer: std::sync::Arc<dyn FfiAsrStreamingObserver>,
+) -> SonaCoreBindingResult<std::sync::Arc<FfiAsrStreamingSession>> {
+    SonaCoreFacade::create_asr_streaming_session(instance_id, request_json, observer).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn transcribe_online_asr_batch(
     request: FfiOnlineAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
@@ -1957,10 +1966,7 @@ mod tests {
 
         assert_eq!(effective_config["summaryTemplateId"], "meeting");
         assert_eq!(effective_config["translationLanguage"], "ja");
-        assert_eq!(
-            effective_config["polishPresetId"],
-            serde_json::json!({ "Builtin": "meeting" })
-        );
+        assert_eq!(effective_config["polishPresetId"], "meeting");
     }
 
     #[test]

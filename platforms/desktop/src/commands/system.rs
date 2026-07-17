@@ -343,6 +343,8 @@ pub fn load_app_config<R: Runtime>(app: AppHandle<R>) -> Result<Option<Value>, S
 
 #[tauri::command]
 pub fn save_app_config<R: Runtime>(app: AppHandle<R>, config: Value) -> Result<(), String> {
+    sona_core::config::validate_app_config(&config)
+        .map_err(|error| format!("Invalid app config: {error}"))?;
     crate::platform::app_config::save_config(&app, config)
 }
 

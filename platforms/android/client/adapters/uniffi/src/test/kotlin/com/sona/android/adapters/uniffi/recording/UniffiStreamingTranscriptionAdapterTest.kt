@@ -1,7 +1,10 @@
 package com.sona.android.adapters.uniffi.recording
 
 import com.sona.android.application.recording.Pcm16Frame
+import com.sona.android.application.recording.LocalSherpaStreamingConfig
+import com.sona.android.application.recording.LocalSherpaModelFiles
 import com.sona.android.application.recording.StreamingCredential
+import com.sona.android.application.recording.StreamingEngineConfig
 import com.sona.android.application.recording.StreamingProviderProfile
 import com.sona.android.application.recording.StreamingTranscriptionEvent
 import com.sona.android.application.recording.StreamingTranscriptionRequest
@@ -70,6 +73,32 @@ class UniffiStreamingTranscriptionAdapterTest {
         events.await()
         assertEquals(listOf("start", "feed", "flush", "stop", "close"), bindings.handle.calls)
         assertArrayEquals(byteArrayOf(1, 2, 3), bindings.handle.fedBytes.single())
+    }
+
+    @Test
+    fun `open builds a local sherpa request without resolving an online provider`() = runTest {
+        val bindings = FakeStreamingBindings()
+        val session = UniffiStreamingTranscriptionAdapter(bindings).open(localRequest())
+
+        val root = parseJsonObject(checkNotNull(bindings.requestJson), "request")
+        assertEquals(
+            mapOf(
+                "engine" to "local-sherpa",
+                "mode" to "streaming",
+                "modelPath" to "/models/zipformer",
+                "modelType" to "zipformer",
+                "tokens" to "tokens.txt",
+            ),
+            mapOf(
+                "engine" to root.string("engine"),
+                "mode" to root.string("mode"),
+                "modelPath" to root.string("modelPath"),
+                "modelType" to root.string("modelType"),
+                "tokens" to root.getValue("fileConfig").jsonObject.string("tokens"),
+            ),
+        )
+        assertEquals(null, bindings.resolvedConfigJson)
+        session.close()
     }
 
     @Test
@@ -182,12 +211,28 @@ class UniffiStreamingTranscriptionAdapterTest {
 
     private fun request() = StreamingTranscriptionRequest(
         recordingId = "recording-1",
-        credential = StreamingCredential("secret-key"),
-        profile = StreamingProviderProfile(
-            providerId = "volcengine-doubao",
-            profileId = "volcengine-doubao-default",
-            streamingEndpoint = "wss://stream.example",
-            streamingResourceId = "stream-resource",
+        engine = StreamingEngineConfig.Online(
+            credential = StreamingCredential("secret-key"),
+            profile = StreamingProviderProfile(
+                providerId = "volcengine-doubao",
+                profileId = "volcengine-doubao-default",
+                streamingEndpoint = "wss://stream.example",
+                streamingResourceId = "stream-resource",
+            ),
+        ),
+        language = "auto",
+        enableItn = true,
+    )
+
+    private fun localRequest() = StreamingTranscriptionRequest(
+        recordingId = "recording-local",
+        engine = StreamingEngineConfig.LocalSherpa(
+            LocalSherpaStreamingConfig(
+                modelPath = "/models/zipformer",
+                numThreads = 2,
+                modelType = "zipformer",
+                fileConfig = LocalSherpaModelFiles(tokens = "tokens.txt"),
+            ),
         ),
         language = "auto",
         enableItn = true,
@@ -264,7 +309,7 @@ class UniffiStreamingTranscriptionAdapterTest {
             )
         }
 
-        override fun createSession(
+        override suspend fun createSession(
             instanceId: String,
             requestJson: String,
             observer: FfiAsrStreamingObserver,

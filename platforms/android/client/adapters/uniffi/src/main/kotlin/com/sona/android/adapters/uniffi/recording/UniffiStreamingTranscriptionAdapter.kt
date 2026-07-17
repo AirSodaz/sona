@@ -1,6 +1,7 @@
 package com.sona.android.adapters.uniffi.recording
 
 import com.sona.android.application.recording.Pcm16Frame
+import com.sona.android.application.recording.StreamingEngineConfig
 import com.sona.android.application.recording.StreamingTranscriptionEvent
 import com.sona.android.application.recording.StreamingTranscriptionPort
 import com.sona.android.application.recording.StreamingTranscriptionRequest
@@ -23,13 +24,18 @@ class UniffiStreamingTranscriptionAdapter internal constructor(
     override suspend fun open(
         request: StreamingTranscriptionRequest,
     ): StreamingTranscriptionSession {
-        val configJson = buildStreamingConfigJson(request)
-        val providerRequest = bindings.resolveProviderRequest(
-            providerId = request.profile.providerId,
-            profileId = request.profile.profileId,
-            configJson = configJson,
-        )
-        val requestJson = buildStreamingRequestJson(request, providerRequest)
+        val requestJson = when (val engine = request.engine) {
+            is StreamingEngineConfig.Online -> {
+                val providerRequest = bindings.resolveProviderRequest(
+                    providerId = engine.profile.providerId,
+                    profileId = engine.profile.profileId,
+                    configJson = buildStreamingConfigJson(engine),
+                )
+                buildOnlineStreamingRequestJson(request, providerRequest)
+            }
+            is StreamingEngineConfig.LocalSherpa ->
+                buildLocalStreamingRequestJson(request, engine)
+        }
         val events = Channel<StreamingTranscriptionEvent>(Channel.UNLIMITED)
         val observer = StreamingObserver(request.recordingId, events)
         val handle = try {

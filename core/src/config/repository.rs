@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+#[cfg(feature = "specta")]
+use specta::Type;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryTemplateRecord {
     pub id: String,
@@ -9,7 +12,8 @@ pub struct SummaryTemplateRecord {
     pub instructions: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PolishPresetRecord {
     pub id: String,
@@ -17,7 +21,8 @@ pub struct PolishPresetRecord {
     pub context: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TextReplacementRuleRecord {
     pub id: String,
@@ -25,7 +30,8 @@ pub struct TextReplacementRuleRecord {
     pub to: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TextReplacementSetRecord {
     pub id: String,
@@ -35,14 +41,16 @@ pub struct TextReplacementSetRecord {
     pub rules: Vec<TextReplacementRuleRecord>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct HotwordRuleRecord {
     pub id: String,
     pub text: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct HotwordSetRecord {
     pub id: String,
@@ -51,7 +59,8 @@ pub struct HotwordSetRecord {
     pub rules: Vec<HotwordRuleRecord>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PolishKeywordSetRecord {
     pub id: String,
@@ -60,16 +69,19 @@ pub struct PolishKeywordSetRecord {
     pub keywords: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerProfileSampleRecord {
     pub id: String,
     pub file_path: String,
     pub source_name: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub duration_seconds: f64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SpeakerProfileRecord {
     pub id: String,
@@ -78,7 +90,8 @@ pub struct SpeakerProfileRecord {
     pub samples: Vec<SpeakerProfileSampleRecord>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfigLibrary {
     pub summary_templates: Vec<SummaryTemplateRecord>,

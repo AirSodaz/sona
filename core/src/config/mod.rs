@@ -25,3 +25,8 @@ pub fn migrate_app_config(
 pub fn resolve_effective_config(global_config: Value, project: Option<Value>) -> Value {
     migration::resolve_effective_config_inner(global_config, project.as_ref())
 }
+
+pub fn validate_app_config(config: &Value) -> Result<(), ConfigError> {
+    serde_json::from_value::<AppConfig>(service::app_config_payload(config).clone())?;
+    Ok(())
+}

@@ -7,7 +7,7 @@ import uniffi.sona_uniffi_bind.FfiAsrStreamingErrorEvent
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
-import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
+import uniffi.sona_uniffi_bind.createAsrStreamingSession
 import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryTranscriptSnapshotJson
@@ -188,8 +188,8 @@ object SonaUniffiConsumerSmoke {
 
     fun publishedSmokeTypeName(): String = SonaUniffiSmoke::class.java.name
 
-    fun createStreamingSession(): FfiAsrStreamingSession =
-        createOnlineAsrStreamingSession(
+    suspend fun createStreamingSession(): FfiAsrStreamingSession =
+        createAsrStreamingSession(
             instanceId = "android-live-1",
             requestJson = streamingRequestJson,
             observer = RecordingAsrObserver(),

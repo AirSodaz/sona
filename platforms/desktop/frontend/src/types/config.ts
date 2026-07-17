@@ -8,16 +8,21 @@
 
 import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
 import type { SpeakerProfile } from './speaker';
+import type {
+  AppConfig as GeneratedAppConfig,
+  AppLanguagePreference as GeneratedAppLanguagePreference,
+  AppLogLevel as GeneratedAppLogLevel,
+} from '../bindings';
 
 // ---------------------------------------------------------------------------
 // UI preferences
 // ---------------------------------------------------------------------------
 
 /** Supported minimum log levels, from most verbose to least verbose. */
-export type AppLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+export type AppLogLevel = GeneratedAppLogLevel;
 
 /** Saved UI language preference. */
-export type AppLanguagePreference = 'auto' | 'en' | 'zh' | 'zh-TW' | 'ja' | 'ko';
+export type AppLanguagePreference = GeneratedAppLanguagePreference;
 
 /** Resolved UI language loaded by i18next. */
 export type ResolvedAppLanguage = Exclude<AppLanguagePreference, 'auto'>;
@@ -86,8 +91,7 @@ export interface AsrModelSelection {
   profileId?: string | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type OnlineAsrProviderConfig = Record<string, any>;
+export type OnlineAsrProviderConfig = Record<string, unknown>;
 
 export interface AsrProviderConfig {
   online?: Record<string, OnlineAsrProviderConfig>;
@@ -320,6 +324,8 @@ export interface ApiServerConfig {
   httpServerMaxConcurrent?: number;
   /** Maximum number of tasks waiting in the queue. Default: 100. */
   httpServerMaxQueueSize?: number;
+  /** Maximum number of concurrent streaming sessions. */
+  httpServerMaxStreaming?: number;
   /** Maximum file upload size in MB. Default: 50. */
   httpServerMaxUploadSizeMB?: number;
   /** Time-to-Live for completed/failed jobs in minutes. Default: 60. */
@@ -350,6 +356,7 @@ export interface HistoryStorageConfig {
  * Existing code that references `AppConfig` continues to work unchanged.
  */
 export type AppConfig =
+  GeneratedAppConfig &
   BaseConfig &
   UIConfig &
   ShortcutConfig &

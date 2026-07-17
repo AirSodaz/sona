@@ -9,7 +9,7 @@ import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
 import uniffi.sona_uniffi_bind.FfiLlmPromptChunk
 import uniffi.sona_uniffi_bind.FfiPolishedSegment
 import uniffi.sona_uniffi_bind.SonaCoreBindingException
-import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
+import uniffi.sona_uniffi_bind.createAsrStreamingSession
 import uniffi.sona_uniffi_bind.createProjectJson
 import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
@@ -107,8 +107,8 @@ object SonaUniffiSmoke {
         }
     """.trimIndent()
 
-    fun createStreamingSession(): FfiAsrStreamingSession =
-        createOnlineAsrStreamingSession(
+    suspend fun createStreamingSession(): FfiAsrStreamingSession =
+        createAsrStreamingSession(
             instanceId = "android-live-1",
             requestJson = streamingRequestJson,
             observer = RecordingAsrObserver(),

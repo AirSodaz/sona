@@ -9,6 +9,7 @@ use super::SyncError;
 pub const SYNC_PROTOCOL_VERSION: u64 = 1;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPresetV1 {
     Content,
@@ -18,6 +19,7 @@ pub enum SyncPresetV1 {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncLifecycleState {
     Disabled,
@@ -29,6 +31,7 @@ pub enum SyncLifecycleState {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncErrorSnapshot {
     pub code: String,
@@ -37,40 +40,63 @@ pub struct SyncErrorSnapshot {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatusSnapshot {
     pub state: SyncLifecycleState,
     pub provider_id: Option<String>,
     pub vault_id: Option<String>,
     pub preset: Option<SyncPresetV1>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub last_success_at_ms: Option<u64>,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub pending_operation_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub conflict_count: u64,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub next_retry_at_ms: Option<u64>,
     pub last_error: Option<SyncErrorSnapshot>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncRunResult {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub pulled_segment_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub pulled_checkpoint_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub pushed_segment_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub applied_operation_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub published_operation_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub conflict_count: u64,
     pub checkpoint_published: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncJoinPreview {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub local_operation_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub remote_operation_count: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub projected_conflict_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncProviderDescriptor {
     pub id: String,
@@ -78,6 +104,7 @@ pub struct SyncProviderDescriptor {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncConflictResolution {
     KeepCurrent,
@@ -86,8 +113,10 @@ pub enum SyncConflictResolution {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub struct HybridLogicalClock {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub physical_ms: u64,
     pub logical: u32,
 }
@@ -126,6 +155,7 @@ impl HybridLogicalClock {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncVersion {
     pub clock: HybridLogicalClock,
@@ -149,8 +179,13 @@ impl PartialOrd for SyncVersion {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncCausalContext {
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = BTreeMap<String, specta_typescript::Number>)
+    )]
     pub observed_sequences: BTreeMap<String, u64>,
 }
 
@@ -163,6 +198,7 @@ impl SyncCausalContext {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncEntityKind {
     Tag,
@@ -183,6 +219,7 @@ pub enum SyncEntityKind {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEntityKey {
     pub kind: SyncEntityKind,
@@ -190,9 +227,14 @@ pub struct SyncEntityKey {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SyncOperationKind {
-    SetField { field: String, value: Value },
+    SetField {
+        field: String,
+        #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
+        value: Value,
+    },
     DeleteEntity,
 }
 
@@ -223,10 +265,12 @@ impl SyncOperationKind {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncOperation {
     pub operation_id: String,
     pub source_device_id: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub source_sequence: u64,
     pub causal_context: SyncCausalContext,
     pub version: SyncVersion,
@@ -247,6 +291,7 @@ impl SyncOperation {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncConflictKind {
     ConcurrentWrite,
@@ -254,6 +299,7 @@ pub enum SyncConflictKind {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncConflict {
     pub kind: SyncConflictKind,
@@ -262,16 +308,19 @@ pub struct SyncConflict {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncConflictSummary {
     pub conflict_id: String,
     pub kind: SyncConflictKind,
     pub entity: SyncEntityKey,
     pub field: Option<String>,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub created_at_ms: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncConflictDetail {
     pub summary: SyncConflictSummary,

@@ -437,7 +437,7 @@ fn startup_settings_from_projection(
     }
 }
 
-fn app_config_payload(value: &Value) -> &Value {
+pub(super) fn app_config_payload(value: &Value) -> &Value {
     value
         .get("sona-config")
         .filter(|value| value.is_object())

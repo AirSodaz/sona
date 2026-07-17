@@ -4,15 +4,15 @@ use std::sync::{Arc, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use sona_core::sync::{
-    SyncConflictResolution, SyncErrorSnapshot, SyncLifecycleState, SyncLocalRepository,
-    SyncObjectStore, SyncPresetV1, SyncProviderDescriptor, SyncStatusSnapshot,
+    SyncConflictResolution, SyncLocalRepository, SyncObjectStore, SyncPresetV1,
+    SyncProviderDescriptor, SyncStatusSnapshot,
 };
 use sona_sqlite::{Database, SqliteSyncRepository};
 use sona_sync::{
-    OpenedRemoteVault, SyncBackoffPolicy, SyncRuntime, change_remote_master_password,
-    create_remote_vault, load_remote_state_for_join, open_remote_vault_with_password,
-    open_remote_vault_with_recovery_key, regenerate_remote_recovery_key,
-    update_remote_vault_preset,
+    OpenedRemoteVault, SyncRetryState, SyncStatusContext, build_sync_status,
+    change_remote_master_password, change_sync_preset, create_remote_vault, disabled_sync_status,
+    load_remote_state_for_join, open_remote_vault_with_password,
+    open_remote_vault_with_recovery_key, regenerate_remote_recovery_key, run_sync_cycle,
 };
 use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig};
 use tokio::sync::Mutex;
@@ -82,12 +82,8 @@ struct PersistedConfig {
     device_id: String,
     preset: SyncPresetV1,
     webdav: ProviderConfig,
-    last_success_at_ms: Option<u64>,
-    #[serde(default)]
-    consecutive_failures: u32,
-    #[serde(default)]
-    next_retry_at_ms: Option<u64>,
-    last_error: Option<SyncErrorSnapshot>,
+    #[serde(flatten)]
+    retry: SyncRetryState,
 }
 
 #[derive(Serialize)]
@@ -314,6 +310,8 @@ pub(crate) async fn run_now_json(app_data_dir: String) -> SonaCoreBindingResult<
 async fn run_now(app_data_dir: &str) -> SonaCoreBindingResult<sona_core::sync::SyncRunResult> {
     let repository =
         repository(app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
+    let mut config =
+        load_config(app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
     if repository.is_paused().map_err(sync_error)? {
         return Err(sync_binding_error("Sync is paused."));
     }
@@ -325,41 +323,18 @@ async fn run_now(app_data_dir: &str) -> SonaCoreBindingResult<sona_core::sync::S
         .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
     let session = session.lock().await;
     let now_ms = now_ms();
-    let result = SyncRuntime::new(
+    let jitter = (uuid::Uuid::new_v4().as_u128() % 1_000_001) as u32;
+    let result = run_sync_cycle(
         &repository,
         &session.store,
         session.opened.vault_key.as_slice(),
+        &mut config.retry,
+        now_ms,
+        jitter,
     )
-    .run_at(now_ms)
     .await;
-    let mut config =
-        load_config(app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    match result {
-        Ok(result) => {
-            config.last_success_at_ms = Some(now_ms);
-            config.consecutive_failures = 0;
-            config.next_retry_at_ms = None;
-            config.last_error = None;
-            save_config(app_data_dir, &config)?;
-            Ok(result)
-        }
-        Err(error) => {
-            config.consecutive_failures = config.consecutive_failures.saturating_add(1);
-            let jitter = (uuid::Uuid::new_v4().as_u128() % 1_000_001) as u32;
-            config.next_retry_at_ms = Some(SyncBackoffPolicy::default().next_retry_at_ms(
-                now_ms,
-                config.consecutive_failures,
-                jitter,
-            ));
-            config.last_error = Some(SyncErrorSnapshot {
-                code: "sync_error".to_string(),
-                message: error.to_string(),
-                retryable: matches!(error, sona_core::sync::SyncError::ObjectStore(_)),
-            });
-            save_config(app_data_dir, &config)?;
-            Err(sync_error(error))
-        }
-    }
+    save_config(app_data_dir, &config)?;
+    result.map_err(sync_error)
 }
 
 pub(crate) async fn change_preset_json(
@@ -370,9 +345,6 @@ pub(crate) async fn change_preset_json(
     let preset: SyncPresetV1 = parse_core_json(&preset_json, "sync preset")?;
     let repository =
         repository(&app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    repository
-        .validate_preset_change(preset, confirm_shrink)
-        .map_err(sync_error)?;
     let session = sessions()
         .lock()
         .await
@@ -380,20 +352,10 @@ pub(crate) async fn change_preset_json(
         .cloned()
         .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
     let mut session = session.lock().await;
-    let store = session.store.clone();
-    let previous = session.opened.header.preset;
-    update_remote_vault_preset(&store, &mut session.opened, preset)
+    let Session { store, opened } = &mut *session;
+    change_sync_preset(&repository, store, opened, preset, confirm_shrink)
         .await
         .map_err(sync_error)?;
-    if let Err(error) = repository.change_preset(preset, confirm_shrink) {
-        let rollback = update_remote_vault_preset(&store, &mut session.opened, previous).await;
-        return match rollback {
-            Ok(()) => Err(sync_error(error)),
-            Err(rollback_error) => Err(sync_binding_error(format!(
-                "Local preset update failed ({error}); remote rollback also failed ({rollback_error})."
-            ))),
-        };
-    }
     let mut config =
         load_config(&app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
     config.preset = preset;
@@ -474,31 +436,25 @@ pub(crate) fn resolve_conflict_json(
 
 async fn status(app_data_dir: &str) -> SonaCoreBindingResult<SyncStatusSnapshot> {
     let Some(config) = load_config(app_data_dir)? else {
-        return Ok(disabled_status());
+        return Ok(disabled_sync_status());
     };
     let repository = repository(app_data_dir)?
         .ok_or_else(|| sync_binding_error("SQLite sync state is missing."))?;
     let runtime = repository.load_runtime_state().map_err(sync_error)?;
     let unlocked = sessions().lock().await.contains_key(app_data_dir);
-    Ok(SyncStatusSnapshot {
-        state: if repository.is_paused().map_err(sync_error)? {
-            SyncLifecycleState::Paused
-        } else if config.last_error.is_some() && unlocked {
-            SyncLifecycleState::Error
-        } else if unlocked {
-            SyncLifecycleState::Idle
-        } else {
-            SyncLifecycleState::Locked
+    Ok(build_sync_status(
+        SyncStatusContext {
+            provider_id: config.provider_id.clone(),
+            vault_id: config.vault_id.clone(),
+            preset: runtime.preset,
+            paused: repository.is_paused().map_err(sync_error)?,
+            unlocked,
+            syncing: false,
+            pending_operation_count: repository.pending_operation_count().map_err(sync_error)?,
+            conflict_count: repository.unresolved_conflict_count().map_err(sync_error)?,
         },
-        provider_id: Some(config.provider_id),
-        vault_id: Some(config.vault_id),
-        preset: Some(runtime.preset),
-        last_success_at_ms: config.last_success_at_ms,
-        pending_operation_count: repository.pending_operation_count().map_err(sync_error)?,
-        conflict_count: repository.unresolved_conflict_count().map_err(sync_error)?,
-        next_retry_at_ms: config.next_retry_at_ms,
-        last_error: config.last_error,
-    })
+        &config.retry,
+    ))
 }
 
 fn ensure_unconfigured(app_data_dir: &str) -> SonaCoreBindingResult<()> {
@@ -538,10 +494,7 @@ fn persisted_config(
             remote_root: provider.remote_root.clone(),
             username: provider.username.clone(),
         },
-        last_success_at_ms: None,
-        consecutive_failures: 0,
-        next_retry_at_ms: None,
-        last_error: None,
+        retry: SyncRetryState::default(),
     }
 }
 
@@ -579,20 +532,6 @@ fn config_path(app_data_dir: &str) -> PathBuf {
     Path::new(app_data_dir).join(CONFIG_FILE)
 }
 
-fn disabled_status() -> SyncStatusSnapshot {
-    SyncStatusSnapshot {
-        state: SyncLifecycleState::Disabled,
-        provider_id: None,
-        vault_id: None,
-        preset: None,
-        last_success_at_ms: None,
-        pending_operation_count: 0,
-        conflict_count: 0,
-        next_retry_at_ms: None,
-        last_error: None,
-    }
-}
-
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -612,6 +551,7 @@ fn sync_binding_error(reason: impl Into<String>) -> SonaCoreBindingError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sona_core::sync::SyncLifecycleState;
 
     #[tokio::test]
     async fn unconfigured_status_uses_the_shared_disabled_contract() {

@@ -40,6 +40,7 @@ pub struct BackupRestoreDataset {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupExportRequest {
     pub archive_path: String,
@@ -47,12 +48,14 @@ pub struct BackupExportRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupPrepareImportRequest {
     pub archive_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupApplyPreparedImportRequest {
     pub import_id: String,
@@ -60,12 +63,14 @@ pub struct BackupApplyPreparedImportRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupInspectRequest {
     pub archive_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupImportRequest {
     pub archive_path: String,
@@ -74,6 +79,7 @@ pub struct BackupImportRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupApplyResult {
     pub import_id: String,
@@ -81,8 +87,10 @@ pub struct BackupApplyResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupManifest {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub schema_version: u64,
     pub created_at: String,
     pub app_version: String,
@@ -92,6 +100,7 @@ pub struct BackupManifest {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupManifestScopes {
     pub config: bool,
@@ -102,28 +111,50 @@ pub struct BackupManifestScopes {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BackupManifestCounts {
     #[serde(alias = "projects")]
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub tags: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub history_items: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub transcript_files: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub summary_files: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub automation_rules: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub automation_processed_entries: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub analytics_files: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedBackupImport {
     pub import_id: String,
     pub archive_path: String,
     pub manifest: BackupManifest,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub config: Value,
     #[serde(alias = "projects")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Vec<specta_typescript::Unknown>)
+    )]
     pub tags: Vec<Value>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Vec<specta_typescript::Unknown>)
+    )]
     pub automation_rules: Vec<Value>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Vec<specta_typescript::Unknown>)
+    )]
     pub automation_processed_entries: Vec<Value>,
     pub analytics_content: String,
 }

@@ -526,6 +526,15 @@ impl SonaCoreFacade {
         )
     }
 
+    pub async fn create_asr_streaming_session(
+        instance_id: String,
+        request_json: String,
+        observer: Arc<dyn FfiAsrStreamingObserver>,
+    ) -> SonaCoreBindingResult<Arc<FfiAsrStreamingSession>> {
+        asr_streaming_bridge::create_asr_streaming_session(instance_id, request_json, observer)
+            .await
+    }
+
     pub async fn transcribe_online_asr_batch(
         request: FfiOnlineAsrBatchRequest,
     ) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
@@ -787,6 +796,7 @@ impl SonaCoreFacade {
 mod task_ledger_tests {
     use super::SonaCoreFacade;
     use serde_json::{Value, json};
+    use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
 
     #[test]
     fn facade_loads_and_upserts_task_ledger_json() {
@@ -794,7 +804,10 @@ mod task_ledger_tests {
         let app_data_dir = dir.path().to_string_lossy().into_owned();
 
         let empty = SonaCoreFacade::load_task_ledger_snapshot_json(app_data_dir.clone()).unwrap();
-        assert_eq!(empty, r#"{"version":1,"updatedAt":null,"tasks":[]}"#);
+        assert_eq!(
+            empty,
+            format!(r#"{{"version":{TASK_LEDGER_VERSION},"updatedAt":null,"tasks":[]}}"#)
+        );
 
         let record = json!({
             "id": "facade-task",

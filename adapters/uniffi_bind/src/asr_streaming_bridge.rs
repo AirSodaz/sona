@@ -9,11 +9,14 @@ use crate::{
 };
 use sona_core::ports::asr::{
     AsrEngine, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-    AsrTranscriptUpdateEvent, AsrTranscriptionRequest, SherpaError,
+    AsrTranscriptUpdateEvent, AsrTranscriptionRequest, LocalSherpaStreamingRequest, SherpaError,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_local_asr::runtime::RecognizerPool;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+static LOCAL_RECOGNIZER_POOL: OnceLock<RecognizerPool> = OnceLock::new();
 
 #[uniffi::export(foreign)]
 pub trait FfiAsrStreamingObserver: Send + Sync {
@@ -115,6 +118,39 @@ pub(crate) fn create_online_asr_streaming_session(
         request,
         Arc::new(FfiAsrRuntimeObserver::new(observer)),
     )?;
+
+    Ok(Arc::new(FfiAsrStreamingSession { inner }))
+}
+
+pub(crate) async fn create_asr_streaming_session(
+    instance_id: String,
+    request_json: String,
+    observer: Arc<dyn FfiAsrStreamingObserver>,
+) -> SonaCoreBindingResult<Arc<FfiAsrStreamingSession>> {
+    let request: AsrTranscriptionRequest =
+        parse_core_json(&request_json, "ASR transcription request")?;
+    let observer: Arc<dyn AsrRuntimeObserver> = Arc::new(FfiAsrRuntimeObserver::new(observer));
+    let inner: Arc<dyn AsrStreamingSession> = match request.engine() {
+        AsrEngine::Online => sona_online_asr::OnlineAsrAdapter.create_streaming_session(
+            instance_id,
+            request,
+            observer,
+        )?,
+        AsrEngine::LocalSherpa => {
+            let request =
+                LocalSherpaStreamingRequest::from_local_sherpa_request(instance_id, request)
+                    .map_err(SherpaError::Generic)?;
+            sona_local_asr::streaming::create_streaming_session(
+                LOCAL_RECOGNIZER_POOL
+                    .get_or_init(RecognizerPool::new)
+                    .clone(),
+                request,
+                observer,
+            )
+            .await
+            .map_err(SherpaError::Generic)?
+        }
+    };
 
     Ok(Arc::new(FfiAsrStreamingSession { inner }))
 }
@@ -449,6 +485,24 @@ mod tests {
             error,
             SonaCoreBindingError::AsrRuntime { code, .. }
                 if code == "STREAMING_NOT_SUPPORTED"
+        ));
+    }
+
+    #[tokio::test]
+    async fn generic_factory_routes_local_streaming_to_the_local_adapter() {
+        let error = create_asr_streaming_session(
+            "live-1".into(),
+            local_request_json(AsrMode::Streaming),
+            recording_observer(),
+        )
+        .await
+        .err()
+        .expect("the placeholder local model should fail during local adapter setup");
+
+        assert!(matches!(
+            error,
+            SonaCoreBindingError::AsrRuntime { code, .. }
+                if code == "GENERIC_ERROR"
         ));
     }
 

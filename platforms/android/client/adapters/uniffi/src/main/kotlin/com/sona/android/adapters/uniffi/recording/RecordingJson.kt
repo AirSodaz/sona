@@ -3,6 +3,7 @@ package com.sona.android.adapters.uniffi.recording
 import com.sona.android.application.recording.SpeakerAttribution
 import com.sona.android.application.recording.SpeakerCandidate
 import com.sona.android.application.recording.SpeakerTag
+import com.sona.android.application.recording.StreamingEngineConfig
 import com.sona.android.application.recording.StreamingTranscriptionRequest
 import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.recording.TranscriptTiming
@@ -21,14 +22,14 @@ internal val recordingJson = Json {
     ignoreUnknownKeys = true
 }
 
-internal fun buildStreamingConfigJson(request: StreamingTranscriptionRequest): String =
+internal fun buildStreamingConfigJson(engine: StreamingEngineConfig.Online): String =
     buildJsonObject {
-        put("apiKey", request.credential.apiKey)
-        put("streamingEndpoint", request.profile.streamingEndpoint)
-        put("streamingResourceId", request.profile.streamingResourceId)
+        put("apiKey", engine.credential.apiKey)
+        put("streamingEndpoint", engine.profile.streamingEndpoint)
+        put("streamingResourceId", engine.profile.streamingResourceId)
     }.toString()
 
-internal fun buildStreamingRequestJson(
+internal fun buildOnlineStreamingRequestJson(
     request: StreamingTranscriptionRequest,
     provider: UniffiOnlineProviderRequest,
 ): String = buildJsonObject {
@@ -50,6 +51,75 @@ internal fun buildStreamingRequestJson(
         put("profileId", provider.profileId)
         put("config", recordingJson.parseToJsonElement(provider.configJson))
     })
+}.toString()
+
+internal fun buildLocalStreamingRequestJson(
+    request: StreamingTranscriptionRequest,
+    engine: StreamingEngineConfig.LocalSherpa,
+): String = buildJsonObject {
+    val config = engine.config
+    put("mode", "streaming")
+    put("language", request.language)
+    put("enableItn", request.enableItn)
+    put("normalizationOptions", buildJsonObject {
+        put("enableTimeline", false)
+    })
+    put("postprocessOptions", buildJsonObject {
+        put("textReplacementSets", buildJsonArray {})
+        put("dropFinalDotSegments", true)
+    })
+    if (config.hotwords == null) {
+        put("hotwords", JsonNull)
+    } else {
+        put("hotwords", config.hotwords)
+    }
+    put("speakerProcessing", JsonNull)
+    put("engine", "local-sherpa")
+    put("modelId", JsonNull)
+    put("modelPath", config.modelPath)
+    put("numThreads", config.numThreads)
+    if (config.punctuationModel == null) {
+        put("punctuationModel", JsonNull)
+    } else {
+        put("punctuationModel", config.punctuationModel)
+    }
+    if (config.vadModel == null) {
+        put("vadModel", JsonNull)
+    } else {
+        put("vadModel", config.vadModel)
+    }
+    put("vadBuffer", config.vadBuffer)
+    put("modelType", config.modelType)
+    val files = config.fileConfig
+    if (files == null) {
+        put("fileConfig", JsonNull)
+    } else {
+        put("fileConfig", buildJsonObject {
+            mapOf(
+                "encoder" to files.encoder,
+                "decoder" to files.decoder,
+                "model" to files.model,
+                "joiner" to files.joiner,
+                "tokens" to files.tokens,
+                "convFrontend" to files.convFrontend,
+                "encoderAdaptor" to files.encoderAdaptor,
+                "llm" to files.llm,
+                "embedding" to files.embedding,
+                "tokenizer" to files.tokenizer,
+            ).forEach { (key, value) ->
+                if (value == null) {
+                    put(key, JsonNull)
+                } else {
+                    put(key, value)
+                }
+            }
+        })
+    }
+    if (config.gpuAcceleration == null) {
+        put("gpuAcceleration", JsonNull)
+    } else {
+        put("gpuAcceleration", config.gpuAcceleration)
+    }
 }.toString()
 
 internal fun transcriptSegmentsJson(segments: List<TranscriptSegment>): JsonArray =

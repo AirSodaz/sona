@@ -1,8 +1,5 @@
 use serde_json::{Map, Value, json};
 
-use crate::domain::{
-    BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
-};
 use crate::ports::asr::online_asr_providers;
 
 pub const CURRENT_CONFIG_VERSION: i64 = 7;
@@ -60,19 +57,11 @@ pub fn default_config() -> Value {
         ("gpuAcceleration", json!("auto")),
         ("llmSettings", create_llm_settings()),
         ("summaryEnabled", json!(true)),
-        (
-            "summaryTemplateId",
-            json!(SummaryTemplateId::Builtin(
-                BuiltinSummaryTemplateId::General
-            )),
-        ),
+        ("summaryTemplateId", json!(DEFAULT_SUMMARY_TEMPLATE_ID)),
         ("summaryCustomTemplates", json!([])),
         ("translationLanguage", json!("zh")),
         ("polishKeywords", json!("")),
-        (
-            "polishPresetId",
-            json!(PolishPresetId::Builtin(BuiltinPolishPresetId::General)),
-        ),
+        ("polishPresetId", json!(DEFAULT_POLISH_PRESET_ID)),
         ("polishCustomPresets", json!([])),
         ("autoPolish", json!(false)),
         ("autoPolishFrequency", json!(5)),

@@ -1,6 +1,7 @@
 use crate::json_bridge::parse_core_json;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+use sona_core::config::validate_app_config;
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::path::Path;
@@ -17,6 +18,9 @@ pub(crate) fn save_app_config_json(
     config_json: String,
 ) -> SonaCoreBindingResult<()> {
     let config: Value = parse_core_json(&config_json, "app config")?;
+    validate_app_config(&config).map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: format!("Invalid app config: {error}"),
+    })?;
     with_app_config_adapter(&app_data_dir, |adapter| adapter.save_config(&config))
 }
 
@@ -215,6 +219,17 @@ mod tests {
         ] {
             assert!(matches!(error, SonaCoreBindingError::InvalidInput { .. }));
         }
+    }
+
+    #[test]
+    fn invalid_known_app_config_fields_are_rejected_before_save() {
+        let dir = TestDir::new();
+        let invalid = json!({"appLanguage": 42});
+
+        let error = save_app_config_json(dir.app_data_dir(), invalid.to_string()).unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::InvalidInput { .. }));
+        assert_eq!(load_app_config_json(dir.app_data_dir()).unwrap(), None);
     }
 
     #[test]

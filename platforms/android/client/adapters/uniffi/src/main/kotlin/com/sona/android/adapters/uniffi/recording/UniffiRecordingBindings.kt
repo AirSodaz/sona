@@ -2,9 +2,9 @@ package com.sona.android.adapters.uniffi.recording
 
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
+import uniffi.sona_uniffi_bind.createAsrStreamingSession
 import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
-import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
 import uniffi.sona_uniffi_bind.purgeHistoryItemsJson
 import uniffi.sona_uniffi_bind.loadHistoryTranscriptJson
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
@@ -70,7 +70,7 @@ internal interface UniffiStreamingBindings {
         configJson: String,
     ): UniffiOnlineProviderRequest
 
-    fun createSession(
+    suspend fun createSession(
         instanceId: String,
         requestJson: String,
         observer: FfiAsrStreamingObserver,
@@ -94,12 +94,12 @@ internal object GeneratedUniffiStreamingBindings : UniffiStreamingBindings {
         )
     }
 
-    override fun createSession(
+    override suspend fun createSession(
         instanceId: String,
         requestJson: String,
         observer: FfiAsrStreamingObserver,
     ): UniffiStreamingSessionHandle = GeneratedUniffiStreamingSessionHandle(
-        createOnlineAsrStreamingSession(instanceId, requestJson, observer),
+        createAsrStreamingSession(instanceId, requestJson, observer),
     )
 }
 

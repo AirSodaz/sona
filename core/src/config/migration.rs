@@ -1,8 +1,5 @@
 use super::defaults::*;
 use super::types::MigrationResult;
-use crate::domain::{
-    BuiltinPolishPresetId, BuiltinSummaryTemplateId, PolishPresetId, SummaryTemplateId,
-};
 use crate::ports::asr::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
@@ -84,17 +81,17 @@ pub(crate) fn resolve_effective_config_inner(
                 .to_string(),
         ),
     );
+    let selected_polish_preset_id = defaults
+        .and_then(|value| value.get("polishPresetId"))
+        .and_then(flatten_id_value)
+        .or_else(|| config.get("polishPresetId").and_then(flatten_id_value));
+    let polish_preset_id = coerce_polish_preset_id(
+        selected_polish_preset_id.as_deref(),
+        config.get("polishCustomPresets"),
+    );
     config.insert(
         "polishPresetId".to_string(),
-        json!(
-            defaults
-                .and_then(|value| value.get("polishPresetId"))
-                .and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok())
-                .or_else(|| config
-                    .get("polishPresetId")
-                    .and_then(|v| serde_json::from_value::<PolishPresetId>(v.clone()).ok()))
-                .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
-        ),
+        Value::String(polish_preset_id),
     );
 
     for (field, defaults_field) in [
@@ -222,23 +219,14 @@ fn normalize_current_config(existing: Value) -> Value {
 
     set(&mut config, "llmSettings", llm_settings);
     set(&mut config, "summaryEnabled", summary_enabled);
-    let summary_template_val = json!(
-        serde_json::from_value::<SummaryTemplateId>(json!(summary_template_id)).unwrap_or(
-            SummaryTemplateId::Builtin(BuiltinSummaryTemplateId::General)
-        )
-    );
-    set(&mut config, "summaryTemplateId", summary_template_val);
+    set(&mut config, "summaryTemplateId", json!(summary_template_id));
     set(
         &mut config,
         "summaryCustomTemplates",
         summary_custom_templates,
     );
     set(&mut config, "polishKeywords", json!(""));
-    let polish_preset_val = json!(
-        serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
-            .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
-    );
-    set(&mut config, "polishPresetId", polish_preset_val);
+    set(&mut config, "polishPresetId", json!(polish_preset_id));
     set(&mut config, "polishCustomPresets", polish_custom_presets);
     set(&mut config, "polishKeywordSets", polish_keyword_sets);
     set(&mut config, "logLevel", json!(log_level));
@@ -269,6 +257,7 @@ fn normalize_current_config(existing: Value) -> Value {
         "keepMicrophoneActive",
         json!(keep_microphone_active),
     );
+    sanitize_typed_config_fields(&mut config);
     set(&mut config, "__original", original);
     config
 }
@@ -543,13 +532,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(&parsed, "translationLanguage", "zh")),
         ),
         ("polishKeywords", json!("")),
-        (
-            "polishPresetId",
-            json!(
-                serde_json::from_value::<PolishPresetId>(json!(polish_preset_id))
-                    .unwrap_or(PolishPresetId::Builtin(BuiltinPolishPresetId::General))
-            ),
-        ),
+        ("polishPresetId", json!(polish_preset_id)),
         ("polishCustomPresets", polish_custom_presets),
         (
             "polishKeywordSets",
@@ -704,7 +687,142 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         );
     }
 
+    sanitize_typed_config_fields(&mut config);
     config
+}
+
+fn sanitize_typed_config_fields(config: &mut Value) {
+    let Some(config) = config.as_object_mut() else {
+        return;
+    };
+    let defaults = default_config().as_object().cloned().unwrap_or_default();
+
+    for (key, allowed) in [
+        (
+            "appLanguage",
+            &["auto", "en", "zh", "zh-TW", "ja", "ko"][..],
+        ),
+        ("theme", &["auto", "light", "dark"][..]),
+        (
+            "font",
+            &["system", "serif", "sans", "mono", "arial", "georgia"][..],
+        ),
+        ("logLevel", &["trace", "debug", "info", "warn", "error"][..]),
+        ("projectsViewMode", &["list", "grid", "table"][..]),
+        ("voiceTypingMode", &["hold", "toggle"][..]),
+        (
+            "gpuAcceleration",
+            &["auto", "cpu", "cuda", "coreml", "directml"][..],
+        ),
+    ] {
+        repair_field_type(config, &defaults, key, |value| {
+            value.as_str().is_some_and(|value| allowed.contains(&value))
+        });
+    }
+
+    for key in [
+        "liveRecordShortcut",
+        "microphoneId",
+        "systemAudioDeviceId",
+        "streamingModelPath",
+        "batchModelPath",
+        "punctuationModelPath",
+        "vadModelPath",
+        "speakerSegmentationModelPath",
+        "speakerEmbeddingModelPath",
+        "modelDownloadMirror",
+        "captionFontColor",
+        "language",
+        "summaryTemplateId",
+        "translationLanguage",
+        "polishKeywords",
+        "polishPresetId",
+        "polishContext",
+        "polishScenario",
+        "voiceTypingShortcut",
+        "httpServerHost",
+        "httpServerApiKey",
+        "httpServerIpWhitelist",
+    ] {
+        repair_field_type(config, &defaults, key, Value::is_string);
+    }
+
+    for key in [
+        "minimizeToTrayOnExit",
+        "autoCheckUpdates",
+        "muteDuringRecording",
+        "keepMicrophoneActive",
+        "lockWindow",
+        "alwaysOnTop",
+        "startOnLaunch",
+        "enableTimeline",
+        "enableITN",
+        "batchVadEnabled",
+        "summaryEnabled",
+        "autoPolish",
+        "voiceTypingEnabled",
+        "httpServerEnabled",
+    ] {
+        repair_field_type(config, &defaults, key, Value::is_boolean);
+    }
+
+    for key in [
+        "configVersion",
+        "maxConcurrent",
+        "autoPolishFrequency",
+        "httpServerPort",
+        "httpServerMaxConcurrent",
+        "httpServerMaxQueueSize",
+        "httpServerMaxStreaming",
+        "httpServerMaxUploadSizeMB",
+        "httpServerJobTtlMinutes",
+    ] {
+        repair_field_type(config, &defaults, key, |value| value.as_i64().is_some());
+    }
+
+    for key in [
+        "microphoneBoost",
+        "captionWindowWidth",
+        "captionFontSize",
+        "captionBackgroundOpacity",
+        "vadBufferSize",
+        "llmRequestTimeoutSeconds",
+    ] {
+        repair_field_type(config, &defaults, key, Value::is_number);
+    }
+
+    for key in [
+        "summaryCustomTemplates",
+        "polishCustomPresets",
+        "textReplacementSets",
+        "hotwordSets",
+        "polishKeywordSets",
+        "speakerProfiles",
+        "hotwords",
+        "textReplacements",
+    ] {
+        repair_field_type(config, &defaults, key, Value::is_array);
+    }
+
+    repair_field_type(config, &defaults, "historyAudioRetentionDays", |value| {
+        value.is_null() || value.as_i64().is_some()
+    });
+}
+
+fn repair_field_type(
+    config: &mut Map<String, Value>,
+    defaults: &Map<String, Value>,
+    key: &str,
+    is_valid: impl Fn(&Value) -> bool,
+) {
+    if !config.get(key).is_some_and(|value| !is_valid(value)) {
+        return;
+    }
+    if let Some(default) = defaults.get(key) {
+        config.insert(key.to_string(), default.clone());
+    } else {
+        config.remove(key);
+    }
 }
 
 fn merge_default(source: Value) -> Value {

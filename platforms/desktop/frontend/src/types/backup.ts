@@ -1,32 +1,17 @@
+import type {
+  BackupManifest_Serialize as GeneratedBackupManifest,
+  PreparedBackupImport_Serialize as GeneratedPreparedBackupImport,
+} from '../bindings';
 import type { AutomationProcessedEntry, AutomationRule } from './automation';
 import type { AppConfig } from './config';
-import type { ProjectRecord } from './project';
+import type { TagRecord } from './tag';
 
-export const BACKUP_SCHEMA_VERSION = 1 as const;
+export const BACKUP_SCHEMA_VERSION = 2 as const;
 export const BACKUP_HISTORY_MODE = 'light' as const;
 
-export interface BackupManifestV1 {
-  schemaVersion: typeof BACKUP_SCHEMA_VERSION;
-  createdAt: string;
-  appVersion: string;
-  historyMode: typeof BACKUP_HISTORY_MODE;
-  scopes: {
-    config: true;
-    workspace: true;
-    history: true;
-    automation: true;
-    analytics: true;
-  };
-  counts: {
-    projects: number;
-    historyItems: number;
-    transcriptFiles: number;
-    summaryFiles: number;
-    automationRules: number;
-    automationProcessedEntries: number;
-    analyticsFiles: number;
-  };
-}
+export type BackupManifest = GeneratedBackupManifest;
+// Compatibility alias for callers that still import the pre-v2 TypeScript name.
+export type BackupManifestV1 = BackupManifest;
 
 export interface ExportBackupResult {
   archivePath: string;
@@ -59,15 +44,14 @@ export interface UploadRemoteBackupResult {
   manifest: BackupManifestV1;
 }
 
-export interface PreparedBackupImport {
-  importId: string;
-  archivePath: string;
-  manifest: BackupManifestV1;
+export type PreparedBackupImport = Omit<
+  GeneratedPreparedBackupImport,
+  'config' | 'tags' | 'automationRules' | 'automationProcessedEntries'
+> & {
   config: AppConfig;
-  projects: ProjectRecord[];
+  tags: TagRecord[];
   automationRules: AutomationRule[];
   automationProcessedEntries: AutomationProcessedEntry[];
-  analyticsContent: string;
-}
+};
 
 export type BackupOperationBlocker = 'recording' | 'batch_queue';

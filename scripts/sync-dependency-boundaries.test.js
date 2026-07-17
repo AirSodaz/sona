@@ -54,3 +54,23 @@ test('the workspace uses the renamed sync WebDAV adapter only', () => {
   assert.doesNotMatch(workspace, /"adapters\/webdav"/u);
   assert.equal(fs.existsSync(path.join(repoRoot, 'adapters', 'webdav')), false);
 });
+
+test('desktop and UniFFI delegate sync status and retry transitions to sona-sync', () => {
+  const hosts = [
+    read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
+    read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
+  ];
+
+  for (const source of hosts) {
+    assert.match(source, /\bbuild_sync_status\b/u);
+    assert.match(source, /\brun_sync_cycle\b/u);
+    assert.match(source, /\bchange_sync_preset\b/u);
+    assert.doesNotMatch(source, /\bSyncBackoffPolicy\b/u);
+    assert.doesNotMatch(source, /\bupdate_remote_vault_preset\b/u);
+    assert.doesNotMatch(source, /\.validate_preset_change\s*\(/u);
+    assert.doesNotMatch(source, /\.change_preset\s*\(/u);
+    assert.doesNotMatch(source, /\bfn disabled_status\s*\(/u);
+    assert.doesNotMatch(source, /\bfn sync_error_code\s*\(/u);
+    assert.doesNotMatch(source, /\bfn is_retryable\s*\(/u);
+  }
+});

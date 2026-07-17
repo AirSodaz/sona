@@ -3,17 +3,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sona_core::sync::{
-    SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncErrorSnapshot,
-    SyncJoinPreview, SyncLifecycleState, SyncLocalRepository, SyncObjectKey, SyncObjectStore,
-    SyncPresetV1, SyncProviderDescriptor, SyncRunResult, SyncSecretStore, SyncStatusSnapshot,
+    SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncJoinPreview,
+    SyncLocalRepository, SyncObjectKey, SyncObjectStore, SyncPresetV1, SyncProviderDescriptor,
+    SyncRunResult, SyncSecretStore, SyncStatusSnapshot,
 };
 use sona_sqlite::SqliteSyncRepository;
 use sona_sync::{
-    LegacyRemoteBackupEntry, LegacyRemoteBackupService, OpenedRemoteVault, SyncBackoffPolicy,
-    SyncRuntime, change_remote_master_password, create_remote_vault,
-    legacy_provider_credential_key, load_remote_state_for_join, open_remote_vault_with_password,
+    LegacyRemoteBackupEntry, LegacyRemoteBackupService, OpenedRemoteVault, SyncRetryState,
+    SyncStatusContext, build_sync_status, change_remote_master_password, change_sync_preset,
+    create_remote_vault, disabled_sync_status, legacy_provider_credential_key,
+    load_remote_state_for_join, open_remote_vault_with_password,
     open_remote_vault_with_recovery_key, open_remote_vault_with_vault_key,
-    regenerate_remote_recovery_key, update_remote_vault_preset,
+    regenerate_remote_recovery_key, run_sync_cycle,
 };
 use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig};
 use tauri::{AppHandle, Manager, Runtime};
@@ -105,10 +106,8 @@ struct PersistedSyncConfig {
     webdav: PersistedWebDavConfig,
     #[serde(default)]
     paused: bool,
-    last_success_at_ms: Option<u64>,
-    consecutive_failures: u32,
-    next_retry_at_ms: Option<u64>,
-    last_error: Option<SyncErrorSnapshot>,
+    #[serde(flatten)]
+    retry: SyncRetryState,
 }
 
 struct UnlockedSession {
@@ -197,7 +196,7 @@ impl DesktopSyncManager {
         app: &AppHandle<R>,
     ) -> Result<SyncStatusSnapshot, String> {
         let Some(config) = load_config(app)? else {
-            return Ok(disabled_status());
+            return Ok(disabled_sync_status());
         };
         if !self.manually_locked.load(Ordering::SeqCst)
             && let Err(error) = self.restore_session_from_secret_store(&config).await
@@ -209,28 +208,21 @@ impl DesktopSyncManager {
         })?;
         let runtime = repository.load_runtime_state().map_err(sync_error)?;
         let unlocked = self.session.lock().await.is_some();
-        let state = if self.syncing.load(Ordering::SeqCst) {
-            SyncLifecycleState::Syncing
-        } else if repository.is_paused().map_err(sync_error)? {
-            SyncLifecycleState::Paused
-        } else if !unlocked {
-            SyncLifecycleState::Locked
-        } else if config.last_error.is_some() {
-            SyncLifecycleState::Error
-        } else {
-            SyncLifecycleState::Idle
-        };
-        Ok(SyncStatusSnapshot {
-            state,
-            provider_id: Some(config.provider_id),
-            vault_id: Some(config.vault_id),
-            preset: Some(runtime.preset),
-            last_success_at_ms: config.last_success_at_ms,
-            pending_operation_count: repository.pending_operation_count().map_err(sync_error)?,
-            conflict_count: repository.unresolved_conflict_count().map_err(sync_error)?,
-            next_retry_at_ms: config.next_retry_at_ms,
-            last_error: config.last_error,
-        })
+        Ok(build_sync_status(
+            SyncStatusContext {
+                provider_id: config.provider_id.clone(),
+                vault_id: config.vault_id.clone(),
+                preset: runtime.preset,
+                paused: repository.is_paused().map_err(sync_error)?,
+                unlocked,
+                syncing: self.syncing.load(Ordering::SeqCst),
+                pending_operation_count: repository
+                    .pending_operation_count()
+                    .map_err(sync_error)?,
+                conflict_count: repository.unresolved_conflict_count().map_err(sync_error)?,
+            },
+            &config.retry,
+        ))
     }
 
     pub async fn create_vault<R: Runtime>(
@@ -446,7 +438,7 @@ impl DesktopSyncManager {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.to_string()),
         }
-        Ok(disabled_status())
+        Ok(disabled_sync_status())
     }
 
     pub async fn run_now<R: Runtime>(&self, app: &AppHandle<R>) -> Result<SyncRunResult, String> {
@@ -470,39 +462,18 @@ impl DesktopSyncManager {
             .as_ref()
             .ok_or_else(|| "Sync vault is locked.".to_string())?;
         let now_ms = now_ms();
-        let result = SyncRuntime::new(
+        let jitter = (uuid::Uuid::new_v4().as_u128() % 1_000_001) as u32;
+        let result = run_sync_cycle(
             &repository,
             &session.store,
             session.opened.vault_key.as_slice(),
+            &mut config.retry,
+            now_ms,
+            jitter,
         )
-        .run_at(now_ms)
         .await;
-        match result {
-            Ok(result) => {
-                config.last_success_at_ms = Some(now_ms);
-                config.consecutive_failures = 0;
-                config.next_retry_at_ms = None;
-                config.last_error = None;
-                save_config(app, &config)?;
-                Ok(result)
-            }
-            Err(error) => {
-                config.consecutive_failures = config.consecutive_failures.saturating_add(1);
-                let jitter = (uuid::Uuid::new_v4().as_u128() % 1_000_001) as u32;
-                config.next_retry_at_ms = Some(SyncBackoffPolicy::default().next_retry_at_ms(
-                    now_ms,
-                    config.consecutive_failures,
-                    jitter,
-                ));
-                config.last_error = Some(SyncErrorSnapshot {
-                    code: sync_error_code(&error).to_string(),
-                    message: error.to_string(),
-                    retryable: is_retryable(&error),
-                });
-                save_config(app, &config)?;
-                Err(error.to_string())
-            }
-        }
+        save_config(app, &config)?;
+        result.map_err(sync_error)
     }
 
     pub async fn change_preset<R: Runtime>(
@@ -512,28 +483,15 @@ impl DesktopSyncManager {
         confirm_shrink: bool,
     ) -> Result<SyncStatusSnapshot, String> {
         let repository = repository(app)?.ok_or_else(|| "Sync is not configured.".to_string())?;
-        repository
-            .validate_preset_change(preset, confirm_shrink)
-            .map_err(sync_error)?;
         {
             let mut session = self.session.lock().await;
             let session = session
                 .as_mut()
                 .ok_or_else(|| "Sync vault is locked.".to_string())?;
-            let previous = session.opened.header.preset;
-            update_remote_vault_preset(&session.store, &mut session.opened, preset)
+            let UnlockedSession { store, opened } = session;
+            change_sync_preset(&repository, store, opened, preset, confirm_shrink)
                 .await
                 .map_err(sync_error)?;
-            if let Err(error) = repository.change_preset(preset, confirm_shrink) {
-                let rollback =
-                    update_remote_vault_preset(&session.store, &mut session.opened, previous).await;
-                return match rollback {
-                    Ok(()) => Err(sync_error(error)),
-                    Err(rollback_error) => Err(format!(
-                        "Local preset update failed ({error}); remote rollback also failed ({rollback_error})."
-                    )),
-                };
-            }
         }
         let mut config = load_config(app)?.ok_or_else(|| "Sync is not configured.".to_string())?;
         config.preset = preset;
@@ -730,10 +688,7 @@ fn persisted_config(
             username: provider.username.clone(),
         },
         paused: false,
-        last_success_at_ms: None,
-        consecutive_failures: 0,
-        next_retry_at_ms: None,
-        last_error: None,
+        retry: SyncRetryState::default(),
     }
 }
 
@@ -777,20 +732,6 @@ fn config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
         .map_err(|error| error.to_string())
 }
 
-fn disabled_status() -> SyncStatusSnapshot {
-    SyncStatusSnapshot {
-        state: SyncLifecycleState::Disabled,
-        provider_id: None,
-        vault_id: None,
-        preset: None,
-        last_success_at_ms: None,
-        pending_operation_count: 0,
-        conflict_count: 0,
-        next_retry_at_ms: None,
-        last_error: None,
-    }
-}
-
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -799,20 +740,4 @@ fn now_ms() -> u64 {
 
 fn sync_error(error: impl ToString) -> String {
     error.to_string()
-}
-
-fn sync_error_code(error: &sona_core::sync::SyncError) -> &'static str {
-    match error {
-        sona_core::sync::SyncError::InvalidOperation(_) => "invalid_operation",
-        sona_core::sync::SyncError::InvalidObjectKey(_) => "invalid_object_key",
-        sona_core::sync::SyncError::ObjectStore(_) => "provider_error",
-        sona_core::sync::SyncError::LocalRepository(_) => "local_repository_error",
-        sona_core::sync::SyncError::SecretStore(_) => "secret_store_error",
-        sona_core::sync::SyncError::Protocol(_) => "protocol_error",
-        sona_core::sync::SyncError::Crypto(_) => "crypto_error",
-    }
-}
-
-fn is_retryable(error: &sona_core::sync::SyncError) -> bool {
-    matches!(error, sona_core::sync::SyncError::ObjectStore(_))
 }

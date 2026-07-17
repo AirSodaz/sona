@@ -94,7 +94,7 @@ function validateManifest(raw: unknown): BackupManifestV1 {
       analytics: true,
     },
     counts: {
-      projects: typeof counts.projects === 'number' ? counts.projects : 0,
+      tags: typeof counts.tags === 'number' ? counts.tags : 0,
       historyItems: typeof counts.historyItems === 'number' ? counts.historyItems : 0,
       transcriptFiles: typeof counts.transcriptFiles === 'number' ? counts.transcriptFiles : 0,
       summaryFiles: typeof counts.summaryFiles === 'number' ? counts.summaryFiles : 0,

@@ -300,6 +300,19 @@ impl SyncLocalRepository for FakeLocalRepository {
             conflict_count: 0,
         })
     }
+
+    fn validate_preset_change(
+        &self,
+        _preset: SyncPresetV1,
+        _confirm_shrink: bool,
+    ) -> Result<(), SyncError> {
+        Ok(())
+    }
+
+    fn change_preset(&self, preset: SyncPresetV1, _confirm_shrink: bool) -> Result<(), SyncError> {
+        self.inner.lock().unwrap().runtime.preset = preset;
+        Ok(())
+    }
 }
 
 fn operation() -> SyncOperation {

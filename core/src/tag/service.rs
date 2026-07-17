@@ -37,7 +37,11 @@ impl<'a> TagRepositoryService<'a> {
     }
 
     pub fn replace_tags_json(&self, tags: Vec<Value>) -> Result<(), String> {
-        let tags = tags.iter().map(normalize_replacement_tag).collect();
+        let tags = tags
+            .iter()
+            .enumerate()
+            .map(|(index, tag)| normalize_replacement_tag(tag, index))
+            .collect();
         self.store.replace_tags(tags)
     }
 
@@ -170,7 +174,7 @@ fn create_defaults(input: TagDefaultsInput) -> TagDefaults {
     }
 }
 
-fn normalize_replacement_tag(input: &Value) -> TagRecord {
+fn normalize_replacement_tag(input: &Value, index: usize) -> TagRecord {
     let source = input.as_object();
     let defaults = source
         .and_then(|object| object.get("defaults"))
@@ -186,7 +190,7 @@ fn normalize_replacement_tag(input: &Value) -> TagRecord {
             .and_then(|source| source.get("sortOrder"))
             .and_then(Value::as_u64)
             .and_then(|value| usize::try_from(value).ok())
-            .unwrap_or_default(),
+            .unwrap_or(index),
         created_at: replacement_timestamp(source, "createdAt"),
         updated_at: replacement_timestamp(source, "updatedAt"),
         defaults: normalize_defaults(defaults, &TagListOptions::default()),

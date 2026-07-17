@@ -67,8 +67,10 @@ class RecordingPortsContractTest {
         val transcriptionSession = transcription.open(
             StreamingTranscriptionRequest(
                 recordingId = "live-1",
-                credential = credential,
-                profile = profile,
+                engine = StreamingEngineConfig.Online(
+                    credential = credential,
+                    profile = profile,
+                ),
                 language = "auto",
                 enableItn = true,
             ),

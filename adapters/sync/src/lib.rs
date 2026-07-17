@@ -1,5 +1,6 @@
 //! Provider-neutral encrypted synchronization for Sona.
 
+mod application;
 mod backoff;
 mod crypto;
 mod legacy_backup;
@@ -7,6 +8,11 @@ mod protocol;
 mod runtime;
 mod vault;
 
+pub use application::{
+    SyncPresetChangeError, SyncRetryState, SyncStatusContext, apply_sync_run_result,
+    build_sync_status, change_sync_preset, disabled_sync_status, is_retryable_sync_error,
+    run_sync_cycle, sync_error_code,
+};
 pub use backoff::SyncBackoffPolicy;
 pub use crypto::{
     CreatedVault, PasswordKeySlotV1, RecoveryKeySlotV1, VaultHeaderV1, change_master_password,

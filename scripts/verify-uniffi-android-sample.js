@@ -12,6 +12,11 @@ const requireGradle = args.includes('--require-gradle');
 const skipGradle = args.includes('--skip-gradle');
 const downloadGradle = args.includes('--download-gradle');
 const sampleProjectDir = path.join(repoRoot, 'platforms', 'android', 'sample-consumer');
+const generatedKotlinSmokeDir = path.join(
+  repoRoot,
+  'target',
+  'uniffi-android-sample-kotlin-smoke',
+);
 const defaultAndroidAbi = 'arm64-v8a';
 const defaultJniLibraryEntry = 'jni/arm64-v8a/libsona_uniffi_bind.so';
 const requiredSherpaRuntimeLibraries = [
@@ -185,6 +190,53 @@ function verifyClassPrefix(classEntries, classPrefix, archiveLabel) {
   }
 }
 
+function verifyGenericStreamingFactory() {
+  const generatedBindings = fs.readFileSync(path.join(
+    generatedKotlinSmokeDir,
+    'uniffi',
+    'sona_uniffi_bind',
+    'sona_uniffi_bind.kt',
+  ), 'utf8');
+  if (!/suspend fun `createAsrStreamingSession`/u.test(generatedBindings)) {
+    throw new Error('Generated Kotlin bindings are missing createAsrStreamingSession');
+  }
+
+  for (const sourcePath of [
+    path.join(
+      sampleProjectDir,
+      'sample-library',
+      'src',
+      'main',
+      'kotlin',
+      'com',
+      'sona',
+      'uniffi',
+      'sample',
+      'SonaUniffiSmoke.kt',
+    ),
+    path.join(
+      sampleProjectDir,
+      'consumer-library',
+      'src',
+      'main',
+      'kotlin',
+      'com',
+      'sona',
+      'uniffi',
+      'consumer',
+      'SonaUniffiConsumerSmoke.kt',
+    ),
+  ]) {
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    if (!/import uniffi\.sona_uniffi_bind\.createAsrStreamingSession/u.test(source)) {
+      throw new Error(`Missing generic streaming factory import in ${sourcePath}`);
+    }
+    if (!/suspend fun createStreamingSession\(\): FfiAsrStreamingSession\s*=\s*createAsrStreamingSession\(/u.test(source)) {
+      throw new Error(`Missing generic streaming factory smoke call in ${sourcePath}`);
+    }
+  }
+}
+
 function verifyAndroidSampleAarContents(aarPath) {
   if (!fs.existsSync(aarPath)) {
     throw new Error(`Missing Android sample AAR at ${aarPath}`);
@@ -350,8 +402,10 @@ run('node', [
   '--profile',
   'debug',
   '--out-dir',
-  path.join(repoRoot, 'target', 'uniffi-android-sample-kotlin-smoke'),
+  generatedKotlinSmokeDir,
 ]);
+
+verifyGenericStreamingFactory();
 
 run('node', [
   path.join(repoRoot, 'scripts', 'build-uniffi-android-libs.js'),

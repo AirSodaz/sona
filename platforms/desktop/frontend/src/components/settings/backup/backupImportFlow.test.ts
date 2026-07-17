@@ -7,12 +7,15 @@ import type {
   BackupManifestV1,
   PreparedBackupImport,
 } from '../../../types/backup';
-import { runPreparedBackupImportFlow } from './backupImportFlow';
+import {
+  buildBackupImportDetails,
+  runPreparedBackupImportFlow,
+} from './backupImportFlow';
 import { preparedBackupImportActions } from './useBackupSettingsController';
 
 function buildManifest(): BackupManifestV1 {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     createdAt: '2026-05-01T00:00:00.000Z',
     appVersion: '0.6.4',
     historyMode: 'light',
@@ -24,7 +27,7 @@ function buildManifest(): BackupManifestV1 {
       analytics: true,
     },
     counts: {
-      projects: 2,
+      tags: 2,
       historyItems: 5,
       transcriptFiles: 5,
       summaryFiles: 3,
@@ -41,12 +44,26 @@ function buildPreparedImport(): PreparedBackupImport {
     archivePath: 'C:\\backups\\sona-backup.tar.bz2',
     manifest: buildManifest(),
     config: {} as unknown as PreparedBackupImport['config'],
-    projects: [],
+    tags: [],
     automationRules: [],
     automationProcessedEntries: [],
     analyticsContent: '{}',
   } as PreparedBackupImport;
 }
+
+describe('buildBackupImportDetails', () => {
+  it('uses the canonical tag count from a schema v2 manifest', () => {
+    const t = vi.fn((key: string, options?: Record<string, unknown>) => (
+      key === 'settings.backup.summary_projects'
+        ? `Workspace tags: ${String(options?.count)}`
+        : key
+    ));
+
+    const details = buildBackupImportDetails(t, buildManifest());
+
+    expect(details).toContain('Workspace tags: 2');
+  });
+});
 
 describe('runPreparedBackupImportFlow', () => {
   it('disposes a prepared import when the user cancels before apply', async () => {

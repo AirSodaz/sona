@@ -16,7 +16,7 @@ function clientSource(module, ...segments) {
   return read('platforms', 'android', 'client', module, 'src', 'main', ...segments);
 }
 
-test('Android online recording adapters own generated bindings and close event streams', () => {
+test('Android streaming adapters support online and local engines behind generated bindings', () => {
   const bindings = clientSource(
     path.join('adapters', 'uniffi'),
     'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
@@ -43,7 +43,8 @@ test('Android online recording adapters own generated bindings and close event s
   assert.match(streaming, /override fun onStreamingError/u);
   assert.match(streaming, /finally[\s\S]*eventChannel\.close/u);
   assert.match(history, /RecordingHistoryPort/u);
-  assert.match(bindings, /createOnlineAsrStreamingSession/u);
+  assert.match(bindings, /createAsrStreamingSession/u);
+  assert.match(streaming, /StreamingEngineConfig\.LocalSherpa/u);
   assert.match(bindings, /createHistoryLiveDraftJson/u);
   assert.match(bindings, /updateHistoryTranscriptJson/u);
   assert.match(bindings, /completeHistoryLiveDraftJson/u);

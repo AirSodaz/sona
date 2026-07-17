@@ -1096,6 +1096,18 @@ impl SyncLocalRepository for SqliteSyncRepository {
             })
             .map_err(sync_database_error)
     }
+
+    fn validate_preset_change(
+        &self,
+        preset: SyncPresetV1,
+        confirm_shrink: bool,
+    ) -> Result<(), SyncError> {
+        SqliteSyncRepository::validate_preset_change(self, preset, confirm_shrink)
+    }
+
+    fn change_preset(&self, preset: SyncPresetV1, confirm_shrink: bool) -> Result<(), SyncError> {
+        SqliteSyncRepository::change_preset(self, preset, confirm_shrink).map(|_| ())
+    }
 }
 
 fn apply_remote_segment_in_transaction(

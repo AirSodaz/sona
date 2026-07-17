@@ -139,8 +139,10 @@ class LiveRecordingCoordinator(
                 transcription = streamingTranscription.open(
                     StreamingTranscriptionRequest(
                         recordingId = recordingId,
-                        credential = credential,
-                        profile = profile,
+                        engine = StreamingEngineConfig.Online(
+                            credential = credential,
+                            profile = profile,
+                        ),
                         language = "auto",
                         enableItn = true,
                     ),

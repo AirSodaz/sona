@@ -50,7 +50,7 @@ function OperationValue({ operation }: { operation: SyncOperation }): React.JSX.
     return (
       <div className="sync-credential-conflict-value">
         <span>{operation.sourceDeviceId}</span>
-        <time>{new Date(operation.version.clock.physicalMs).toLocaleString()}</time>
+        <time>{new Date(operation.version.clock.physical_ms).toLocaleString()}</time>
       </div>
     );
   }
