@@ -194,7 +194,7 @@ fn speaker_attribution_to_ffi(attribution: &SpeakerAttribution) -> FfiSpeakerAtt
     }
 }
 
-fn transcript_segment_to_ffi(segment: &TranscriptSegment) -> FfiTranscriptSegment {
+pub(crate) fn transcript_segment_to_ffi(segment: &TranscriptSegment) -> FfiTranscriptSegment {
     FfiTranscriptSegment {
         id: segment.id.clone(),
         text: segment.text.clone(),

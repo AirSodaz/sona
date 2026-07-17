@@ -47,7 +47,47 @@ test('Android online recording adapters own generated bindings and close event s
   assert.match(bindings, /createHistoryLiveDraftJson/u);
   assert.match(bindings, /updateHistoryTranscriptJson/u);
   assert.match(bindings, /completeHistoryLiveDraftJson/u);
-  assert.match(bindings, /deleteHistoryItemsJson/u);
+  assert.match(bindings, /purgeHistoryItemsJson/u);
+});
+
+test('Android online batch ASR stays behind an application port and Tokio UniFFI adapter', () => {
+  const port = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'OnlineBatchPorts.kt',
+  );
+  const adapter = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiOnlineBatchTranscriptionAdapter.kt',
+  );
+  const bindings = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiOnlineBatchBindings.kt',
+  );
+  const transcriptMapper = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiTranscriptMapper.kt',
+  );
+  const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const rustBatchBridge = read('adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs');
+
+  assert.match(port, /enum class OnlineBatchProvider/u);
+  assert.match(port, /interface OnlineBatchTranscriptionPort/u);
+  assert.match(port, /OnlineBatchCredential\(apiKey=<redacted>\)/u);
+  assert.doesNotMatch(port, /^import (?:android|androidx|uniffi)\./mu);
+  assert.match(adapter, /OnlineBatchTranscriptionPort/u);
+  assert.match(adapter, /FfiTranscriptSegment::toApplication/u);
+  assert.match(bindings, /FfiOnlineAsrApiKey/u);
+  assert.match(bindings, /transcribeOnlineAsrBatch/u);
+  assert.match(transcriptMapper, /internal fun FfiTranscriptSegment\.toApplication/u);
+  assert.match(rustBatchBridge, /find_online_asr_provider/u);
+  assert.match(rustBatchBridge, /<redacted>/u);
+  assert.match(
+    rustBindings,
+    /#\[uniffi::export\(async_runtime = "tokio"\)\]\s+pub async fn transcribe_online_asr_batch/u,
+  );
 });
 
 test('Android recording composition preserves lifecycle, permission, and credential boundaries', () => {

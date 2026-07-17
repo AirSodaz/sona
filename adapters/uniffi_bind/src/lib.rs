@@ -1,4 +1,5 @@
 mod app_config_repository_bridge;
+mod asr_batch_bridge;
 mod asr_bridge;
 mod asr_streaming_bridge;
 mod automation_bridge;
@@ -23,6 +24,10 @@ mod storage_usage_bridge;
 mod sync_bridge;
 mod tag_bridge;
 mod task_ledger_bridge;
+pub use asr_batch_bridge::{
+    FfiOnlineAsrApiKey, FfiOnlineAsrBatchProvider, FfiOnlineAsrBatchRequest,
+    FfiOnlineAsrBatchResult,
+};
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use facade::SonaCoreFacade;
 pub use llm_task_bridge::FfiLlmTaskObserver;
@@ -788,6 +793,13 @@ pub fn create_online_asr_streaming_session(
     observer: std::sync::Arc<dyn FfiAsrStreamingObserver>,
 ) -> SonaCoreBindingResult<std::sync::Arc<FfiAsrStreamingSession>> {
     SonaCoreFacade::create_online_asr_streaming_session(instance_id, request_json, observer)
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn transcribe_online_asr_batch(
+    request: FfiOnlineAsrBatchRequest,
+) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
+    SonaCoreFacade::transcribe_online_asr_batch(request).await
 }
 
 #[uniffi::export]

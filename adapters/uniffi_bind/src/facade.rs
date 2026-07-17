@@ -3,15 +3,16 @@ use crate::{
     FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmModelSummary,
     FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput, FfiLlmTaskFinal, FfiLlmTaskObserver,
     FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot, FfiModelSelectionPaths,
-    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest,
-    FfiPolishedSegment, FfiPresetModel, FfiResolvedModelDownload, FfiRuntimePathStatus,
-    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult,
-    app_config_repository_bridge, asr_bridge, asr_streaming_bridge, automation_bridge,
-    backup_bridge, config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge,
-    history_mutation_bridge, history_query_bridge, llm_bridge, llm_runtime_bridge, llm_task_bridge,
-    model_bridge, project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge,
-    tag_bridge, task_ledger_bridge,
+    FfiOnlineAsrBatchRequest, FfiOnlineAsrBatchResult, FfiOnlineAsrProvider,
+    FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
+    FfiResolvedModelDownload, FfiRuntimePathStatus, FfiSummarizeTranscriptRequest,
+    FfiSummarySegmentInput, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, app_config_repository_bridge,
+    asr_batch_bridge, asr_bridge, asr_streaming_bridge, automation_bridge, backup_bridge,
+    config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_mutation_bridge,
+    history_query_bridge, llm_bridge, llm_runtime_bridge, llm_task_bridge, model_bridge,
+    project_bridge, recovery_bridge, runtime_bridge, storage_usage_bridge, tag_bridge,
+    task_ledger_bridge,
 };
 use std::sync::Arc;
 
@@ -523,6 +524,12 @@ impl SonaCoreFacade {
             request_json,
             observer,
         )
+    }
+
+    pub async fn transcribe_online_asr_batch(
+        request: FfiOnlineAsrBatchRequest,
+    ) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
+        asr_batch_bridge::transcribe_online_asr_batch(request).await
     }
 
     pub fn default_batch_segmentation_mode() -> FfiBatchSegmentationMode {
