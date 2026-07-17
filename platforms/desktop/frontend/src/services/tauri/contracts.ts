@@ -12,6 +12,7 @@ import type {
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
   AutomationRuntimeRuleConfig,
+  AsrTranscriptionRequest_Serialize as CoreAsrTranscriptionRequest,
   DiagnosticsCoreInput,
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
@@ -39,6 +40,7 @@ import type {
   ModelSelectionPaths as CoreModelSelectionPaths,
   RecoveryItemInput_Serialize,
   RecoverySnapshot_Serialize,
+  SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
   StorageUsageSnapshot_Serialize,
   TranscriptDiffResult_Serialize,
   TranscriptDiffRow_Serialize,
@@ -55,7 +57,6 @@ import type {
 import type {
   AppConfig,
   AppLogLevel,
-  TextReplacementRuleSet,
 } from "../../types/config";
 import type {
   ProjectCreateInput,
@@ -113,7 +114,6 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from "../llmTaskTypes";
-import type { ModelFileConfig } from "../../types/model";
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
@@ -162,46 +162,6 @@ type SetCapturePausedArgs = {
 };
 
 type HistoryDraftTransportHandle = LiveRecordingDraftResult;
-
-type TranscriptPostprocessOptions = {
-  textReplacementSets?: TextReplacementRuleSet[];
-  dropFinalDotSegments?: boolean;
-};
-
-type AsrTranscriptionRequestBase = {
-  mode: "streaming" | "batch";
-  language: string;
-  enableItn: boolean;
-  normalizationOptions: {
-    enableTimeline: boolean;
-  };
-  postprocessOptions: TranscriptPostprocessOptions;
-};
-
-type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
-  engine: "local-sherpa";
-  modelId?: string | null;
-  modelPath: string;
-  numThreads: number;
-  punctuationModel: string | null;
-  vadModel: string | null;
-  vadBuffer: number;
-  batchSegmentationMode?: "vad" | "whole";
-  modelType: string;
-  fileConfig?: ModelFileConfig;
-  hotwords: string | null;
-};
-
-type OnlineAsrRequest = AsrTranscriptionRequestBase & {
-  engine: "online";
-  onlineProvider: {
-    providerId: string;
-    profileId: string;
-    config: unknown;
-  };
-};
-
-type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
 
 type ProjectListArgs = {
   fallbackEnabledPolishKeywordSetIds?: string[];
@@ -668,7 +628,7 @@ export type TauriCommandContractMap = {
   [TauriCommand.recognizer.init]: {
     args: {
       instanceId: string;
-      asrRequest: AsrTranscriptionRequest;
+      asrRequest: CoreAsrTranscriptionRequest;
     };
     result: void;
   };
@@ -695,8 +655,8 @@ export type TauriCommandContractMap = {
     args: {
       filePath: string;
       saveToPath: string | null;
-      speakerProcessing: SpeakerProcessingConfig | null;
-      asrRequest: AsrTranscriptionRequest;
+      speakerProcessing: CoreSpeakerProcessingConfig | null;
+      asrRequest: CoreAsrTranscriptionRequest;
       instanceId?: string;
     };
     result: TranscriptSegment[];

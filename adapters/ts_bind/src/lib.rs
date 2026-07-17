@@ -589,6 +589,25 @@ pub fn desktop_types() -> specta::Types {
         .register::<TranscriptDiffResult>()
         .register::<TranscriptSummaryRecordPayload>()
         .register::<HistorySummaryPayload>()
+        .register::<AsrEngine>()
+        .register::<AsrMode>()
+        .register::<BatchSegmentationMode>()
+        .register::<ModelFileConfig>()
+        .register::<SpeakerProcessingConfig>()
+        .register::<SpeakerProfile>()
+        .register::<SpeakerProfileSample>()
+        .register::<TranscriptNormalizationOptions>()
+        .register::<TranscriptPostprocessOptions>()
+        .register::<TranscriptTextReplacementRule>()
+        .register::<TranscriptTextReplacementRuleSet>()
+        .register::<AsrTranscriptionRequest>()
+        .register::<AsrEngineConfig>()
+        .register::<OnlineAsrProviderRequest>()
+        .register::<OnlineAsrProvider>()
+        .register::<OnlineAsrCapability>()
+        .register::<OnlineAsrBatchCapability>()
+        .register::<OnlineAsrLocalFileBatchMode>()
+        .register::<VolcengineDoubaoAsrConfig>()
 }
 
 const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
@@ -925,6 +944,25 @@ mod tests {
             "HistorySummaryPayload",
             "TranscriptSnapshotRecord",
             "TranscriptDiffResult",
+            "AsrEngine",
+            "AsrMode",
+            "BatchSegmentationMode",
+            "ModelFileConfig",
+            "SpeakerProcessingConfig",
+            "SpeakerProfile",
+            "SpeakerProfileSample",
+            "TranscriptNormalizationOptions",
+            "TranscriptPostprocessOptions",
+            "TranscriptTextReplacementRule",
+            "TranscriptTextReplacementRuleSet",
+            "AsrTranscriptionRequest",
+            "AsrEngineConfig",
+            "OnlineAsrProviderRequest",
+            "OnlineAsrProvider",
+            "OnlineAsrCapability",
+            "OnlineAsrBatchCapability",
+            "OnlineAsrLocalFileBatchMode",
+            "VolcengineDoubaoAsrConfig",
         ] {
             assert!(names.contains(&expected), "missing {expected}");
         }
@@ -933,6 +971,23 @@ mod tests {
     #[test]
     fn desktop_type_registry_is_typescript_exportable() {
         render_desktop_typescript_bindings().unwrap();
+    }
+
+    #[test]
+    fn asr_types_keep_dynamic_json_unknown_and_required_floats_finite() {
+        let bindings = render_desktop_typescript_bindings().unwrap();
+        let speaker_profile_sample = bindings
+            .split_once("export type SpeakerProfileSample = {")
+            .expect("SpeakerProfileSample binding should be generated")
+            .1
+            .split_once("};")
+            .expect("SpeakerProfileSample binding should have a closing delimiter")
+            .0;
+
+        assert!(bindings.contains("config?: unknown"));
+        assert!(bindings.contains("defaults: unknown"));
+        assert!(bindings.contains("vadBuffer: number"));
+        assert!(speaker_profile_sample.contains("durationSeconds: number"));
     }
 
     #[test]

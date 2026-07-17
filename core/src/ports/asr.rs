@@ -479,6 +479,7 @@ pub enum AsrEngineConfig {
         punctuation_model: Option<String>,
         #[serde(default)]
         vad_model: Option<String>,
+        #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
         vad_buffer: f32,
         #[serde(default)]
         batch_segmentation_mode: BatchSegmentationMode,
@@ -575,6 +576,7 @@ pub struct OnlineAsrProviderRequest {
     pub provider_id: String,
     pub profile_id: String,
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub config: Value,
 }
 
@@ -608,6 +610,7 @@ struct OnlineAsrProviderManifest {
 pub struct OnlineAsrProvider {
     pub id: String,
     pub profile_id: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub defaults: Value,
     pub streaming: OnlineAsrCapability,
     pub batch: OnlineAsrBatchCapability,

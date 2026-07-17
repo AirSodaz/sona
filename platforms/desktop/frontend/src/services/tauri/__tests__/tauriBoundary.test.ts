@@ -39,7 +39,7 @@ import {
   historyUpdateTranscript,
 } from '../history';
 import { completeLlm, describeLlmModel, generateLlmText, runTranscriptLlmJob } from '../llm';
-import { initRecognizer } from '../recognizer';
+import { initRecognizer, processBatchFile } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import {
   automationLoadRepositoryState,
@@ -921,6 +921,7 @@ describe('tauri boundary wrappers', () => {
       asrRequest: {
         engine: 'local-sherpa',
         mode: 'streaming',
+        modelId: null,
         modelPath: 'C:/models/live',
         numThreads: 4,
         enableItn: true,
@@ -929,6 +930,9 @@ describe('tauri boundary wrappers', () => {
         vadModel: null,
         vadBuffer: 5,
         modelType: 'sensevoice',
+        fileConfig: {
+          encoder: 'encoder.onnx',
+        },
         hotwords: null,
         normalizationOptions: {
           enableTimeline: false,
@@ -945,6 +949,7 @@ describe('tauri boundary wrappers', () => {
       asrRequest: {
         engine: 'local-sherpa',
         mode: 'streaming',
+        modelId: null,
         modelPath: 'C:/models/live',
         numThreads: 4,
         enableItn: true,
@@ -953,7 +958,20 @@ describe('tauri boundary wrappers', () => {
         vadModel: null,
         vadBuffer: 5,
         modelType: 'sensevoice',
+        fileConfig: {
+          encoder: 'encoder.onnx',
+          decoder: null,
+          model: null,
+          joiner: null,
+          tokens: null,
+          convFrontend: null,
+          encoderAdaptor: null,
+          llm: null,
+          embedding: null,
+          tokenizer: null,
+        },
         hotwords: null,
+        speakerProcessing: null,
         normalizationOptions: {
           enableTimeline: false,
         },
@@ -963,6 +981,101 @@ describe('tauri boundary wrappers', () => {
         },
       },
     });
+  });
+
+  it('normalizes batch speaker processing for the generated Core contract', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce([]);
+
+    await processBatchFile({
+      filePath: 'C:/audio.wav',
+      saveToPath: null,
+      speakerProcessing: {
+        speakerSegmentationModelPath: 'C:/models/seg.onnx',
+        speakerEmbeddingModelPath: 'C:/models/embed.onnx',
+        speakerProfiles: [{
+          id: 'profile-1',
+          name: 'Alice',
+          enabled: true,
+          samples: [{
+            id: 'sample-1',
+            filePath: 'C:/samples/alice.wav',
+            sourceName: 'alice.wav',
+            durationSeconds: 1.5,
+          }],
+        }],
+      },
+      asrRequest: {
+        engine: 'local-sherpa',
+        mode: 'batch',
+        modelId: null,
+        modelPath: 'C:/models/batch',
+        numThreads: 4,
+        enableItn: false,
+        language: 'auto',
+        punctuationModel: null,
+        vadModel: null,
+        vadBuffer: 5,
+        modelType: 'sensevoice',
+        hotwords: null,
+        normalizationOptions: { enableTimeline: true },
+        postprocessOptions: {
+          textReplacementSets: [],
+          dropFinalDotSegments: true,
+        },
+      },
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.recognizer.processBatchFile, {
+      filePath: 'C:/audio.wav',
+      saveToPath: null,
+      speakerProcessing: {
+        speakerSegmentationModelPath: 'C:/models/seg.onnx',
+        speakerEmbeddingModelPath: 'C:/models/embed.onnx',
+        speakerProfiles: [{
+          id: 'profile-1',
+          name: 'Alice',
+          enabled: true,
+          samples: [{
+            id: 'sample-1',
+            filePath: 'C:/samples/alice.wav',
+            sourceName: 'alice.wav',
+            durationSeconds: 1.5,
+          }],
+        }],
+      },
+      asrRequest: expect.objectContaining({
+        engine: 'local-sherpa',
+        mode: 'batch',
+        speakerProcessing: null,
+      }),
+    });
+  });
+
+  it('rejects non-finite ASR transport numbers before invoking Tauri', async () => {
+    await expect(initRecognizer({
+      instanceId: 'record',
+      asrRequest: {
+        engine: 'local-sherpa',
+        mode: 'streaming',
+        modelId: null,
+        modelPath: 'C:/models/live',
+        numThreads: 4,
+        enableItn: true,
+        language: 'auto',
+        punctuationModel: null,
+        vadModel: null,
+        vadBuffer: Number.POSITIVE_INFINITY,
+        modelType: 'sensevoice',
+        hotwords: null,
+        normalizationOptions: { enableTimeline: false },
+        postprocessOptions: {
+          textReplacementSets: [],
+          dropFinalDotSegments: true,
+        },
+      },
+    })).rejects.toThrow('asrRequest.vadBuffer must be a finite number');
+
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('automation wrappers centralize runtime rule calls', async () => {

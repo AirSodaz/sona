@@ -18,6 +18,7 @@ pub struct SpeakerProfileSample {
     pub id: String,
     pub file_path: String,
     pub source_name: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub duration_seconds: f32,
 }
 
