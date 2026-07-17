@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+mod error;
 mod repository;
 mod service;
 
+pub use error::TagError;
 pub use repository::{
     ActiveTagSelection, TagDefaultsPatch, TagPatch, TagRepositorySnapshot, TagStore, TagStoredState,
 };
@@ -98,17 +100,17 @@ pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub const DEFAULT_TRANSLATION_LANGUAGE: &str = "zh";
 pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
 
-pub fn normalize_tag_record_for_import(input: &Value) -> Result<Value, String> {
+pub fn normalize_tag_record_for_import(input: &Value) -> Result<Value, TagError> {
     normalize_tag_record_for_import_with_timestamp(input, 0)
 }
 
 pub fn normalize_tag_record_for_import_with_timestamp(
     input: &Value,
     fallback_timestamp: u64,
-) -> Result<Value, String> {
+) -> Result<Value, TagError> {
     let tag =
         normalize_tag_value_with_timestamp(input, &TagListOptions::default(), fallback_timestamp);
-    serde_json::to_value(tag).map_err(|error| error.to_string())
+    serde_json::to_value(tag).map_err(TagError::Serialization)
 }
 
 pub fn normalize_tag_value(input: &Value, options: &TagListOptions) -> TagRecord {

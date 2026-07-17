@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sona_core::tag::{TagDefaults, TagRecord, TagStore};
+use sona_core::tag::{TagDefaults, TagError, TagRecord, TagStore};
 use sona_sqlite::{Database, SqliteTagRepository};
 
 fn tag(id: &str, name: &str, color: &str, sort_order: usize) -> TagRecord {
@@ -57,4 +57,22 @@ fn tag_repository_round_trips_color_sort_order_defaults_and_reordering() {
     );
     assert_eq!(reordered[0].sort_order, 0);
     assert_eq!(reordered[1].sort_order, 1);
+}
+
+#[test]
+fn tag_repository_maps_database_errors_to_repository_variant() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let repository = SqliteTagRepository::new(db);
+
+    let error = repository
+        .replace_tags(vec![
+            tag("duplicate", "First", "#000000", 0),
+            tag("duplicate", "Last", "#111111", 1),
+        ])
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        TagError::Repository(message) if message.contains("UNIQUE constraint failed")
+    ));
 }

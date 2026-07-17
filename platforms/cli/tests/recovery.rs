@@ -7,7 +7,7 @@ fn write_recovery_snapshot(app_data_dir: &std::path::Path, source_path: &std::pa
     std::fs::write(
         recovery_dir.join(QUEUE_RECOVERY_FILE_NAME),
         serde_json::to_vec_pretty(&json!({
-            "version": 1,
+            "version": 2,
             "updatedAt": 42,
             "items": [{
                 "id": "recovery-1",
@@ -67,7 +67,7 @@ fn recovery_json_preserves_control_and_multibyte_fields() {
     std::fs::write(
         recovery_dir.join(QUEUE_RECOVERY_FILE_NAME),
         serde_json::to_vec(&json!({
-            "version": 1,
+            "version": 2,
             "updatedAt": 42,
             "items": [{
                 "id": "row\nid\t\u{1b}",
@@ -141,7 +141,7 @@ fn recovery_list_initializes_and_outputs_empty_json_snapshot() {
     .unwrap();
     let snapshot: RecoverySnapshot = serde_json::from_str(&output.stdout).unwrap();
 
-    assert_eq!(snapshot.version, 1);
+    assert_eq!(snapshot.version, 2);
     assert_eq!(snapshot.updated_at, None);
     assert!(snapshot.items.is_empty());
     assert!(

@@ -1,7 +1,9 @@
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
 
 pub fn create_history_recording_path(provider: &dyn PathProvider) -> Result<String, String> {
-    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let app_data_dir = provider
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let history_dir = app_data_dir.join("history");
     sona_runtime_fs::ensure_directory_exists(&history_dir)?;
 

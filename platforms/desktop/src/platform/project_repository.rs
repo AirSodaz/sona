@@ -1,6 +1,7 @@
 use std::future::Future;
 
 use serde_json::Value;
+use sona_core::project::ProjectError;
 use sona_core::project::{
     ACTIVE_PROJECT_SETTINGS_KEY, ActiveProjectSelection, ProjectCreateInput, ProjectDefaultsInput,
     ProjectListOptions, ProjectRecord, ProjectUpdateInput, active_project_id_from_value,
@@ -17,12 +18,12 @@ async fn run_project_adapter<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, 
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(&SqliteProjectAdapter) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
         let adapter = SqliteProjectAdapter::new(db, Arc::new(UuidGenerator), Arc::new(SystemClock));
-        task(&adapter)
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

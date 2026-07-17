@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use sona_core::project::{ProjectRecord, ProjectRepositorySnapshot};
+use sona_core::project::{ProjectError, ProjectRecord, ProjectRepositorySnapshot};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{Database, SqliteProjectAdapter};
 use std::path::PathBuf;
@@ -45,7 +45,7 @@ fn run_projects_list(args: ProjectsListArgs) -> CliResult<CliOutput> {
         Arc::new(SystemClock),
     )
     .load_state()
-    .map_err(CliError::Io)?;
+    .map_err(map_project_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&state)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -54,6 +54,14 @@ fn run_projects_list(args: ProjectsListArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
+}
+
+fn map_project_error(error: ProjectError) -> CliError {
+    let message = error.to_string();
+    match error {
+        ProjectError::Serialization(_) => CliError::Serialize(message),
+        ProjectError::Repository(_) | ProjectError::Clock(_) => CliError::Io(message),
+    }
 }
 
 fn render_projects_table(state: &ProjectRepositorySnapshot) -> String {
@@ -87,4 +95,34 @@ fn project_row(project: &ProjectRecord, active_project_id: Option<&str>) -> [Str
         (active_project_id == Some(project.id.as_str())).to_string(),
         project.updated_at.to_string(),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_project_error;
+    use crate::CliError;
+    use sona_core::ports::time::ClockError;
+    use sona_core::project::ProjectError;
+
+    fn json_error() -> serde_json::Error {
+        serde_json::from_str::<serde_json::Value>("{").unwrap_err()
+    }
+
+    #[test]
+    fn maps_project_error_variants_to_cli_categories() {
+        assert!(matches!(
+            map_project_error(ProjectError::Serialization(json_error())),
+            CliError::Serialize(_)
+        ));
+        assert!(matches!(
+            map_project_error(ProjectError::Repository("database unavailable".to_string())),
+            CliError::Io(_)
+        ));
+        assert!(matches!(
+            map_project_error(ProjectError::Clock(ClockError::Unavailable(
+                "system clock unavailable".to_string()
+            ))),
+            CliError::Io(_)
+        ));
+    }
 }

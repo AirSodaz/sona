@@ -4,8 +4,9 @@ use super::repository::{
     AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
 };
 use super::{
-    AutomationRule, AutomationRuleActivationEnvironment, AutomationRuleValidationResult,
-    normalize_automation_path, resolve_batch_model_path, validate_rule_activation,
+    AutomationError, AutomationRule, AutomationRuleActivationEnvironment,
+    AutomationRuleValidationResult, normalize_automation_path, resolve_batch_model_path,
+    validate_rule_activation,
 };
 use serde_json::Value;
 
@@ -28,11 +29,11 @@ impl<'a> AutomationRepositoryService<'a> {
         Self { store, ids }
     }
 
-    pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+    pub fn load_state(&self) -> Result<AutomationRepositoryState, AutomationError> {
         self.store.load_state()
     }
 
-    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), String> {
+    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), AutomationError> {
         let rules = rules
             .into_iter()
             .map(|rule| normalize_rule_record(rule, self.ids))
@@ -43,7 +44,7 @@ impl<'a> AutomationRepositoryService<'a> {
     pub fn replace_processed_entries(
         &self,
         entries: Vec<AutomationProcessedInput>,
-    ) -> Result<(), String> {
+    ) -> Result<(), AutomationError> {
         let entries = entries
             .into_iter()
             .map(|entry| normalize_processed_record(entry, self.ids))
@@ -51,7 +52,7 @@ impl<'a> AutomationRepositoryService<'a> {
         self.store.replace_processed_entries(&entries)
     }
 
-    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), String> {
+    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), AutomationError> {
         let rules = input
             .rules
             .into_iter()

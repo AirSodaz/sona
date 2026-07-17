@@ -1,7 +1,11 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use serde_json::Value;
+#[cfg(test)]
+use sona_core::ports::time::ClockError;
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
+use sona_core::task_ledger::{
+    TaskLedgerError,
+    types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot},
+};
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteTaskLedgerAdapter};
 use std::path::Path;
@@ -69,13 +73,13 @@ fn patch_task_ledger_record_json_with_clock(
     patch_json: String,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
-    let patch = serde_json::from_str::<Value>(&patch_json).map_err(|error| {
+    let patch = serde_json::from_str::<TaskLedgerPatch>(&patch_json).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
             reason: format!("Invalid task ledger patch JSON: {error}"),
         }
     })?;
     with_task_ledger_adapter(&app_data_dir, clock, |adapter| {
-        adapter.patch_task_json(&id, patch)
+        adapter.patch_task(&id, patch)
     })
     .and_then(serialize_snapshot)
 }
@@ -100,7 +104,7 @@ fn clear_resolved_task_ledger_records_json_with_clock(
 fn with_task_ledger_adapter<T>(
     app_data_dir: &str,
     clock: Arc<dyn UnixMillisClock>,
-    operation: impl FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, String>,
+    operation: impl FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, TaskLedgerError>,
 ) -> SonaCoreBindingResult<T> {
     let database = Database::open(Path::new(app_data_dir)).map_err(task_ledger_error)?;
     let adapter = SqliteTaskLedgerAdapter::new(Arc::new(database), clock);
@@ -122,7 +126,7 @@ struct FixedClock(u64);
 
 #[cfg(test)]
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
@@ -189,6 +193,7 @@ mod tests {
     };
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
+    use sona_core::ports::time::{ClockError, UnixMillisClock};
     use sona_core::task_ledger::repository::TaskLedgerStore;
     use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
     use sona_sqlite::{Database, SqliteLedgerRepository};
@@ -340,6 +345,13 @@ mod tests {
             6_001,
         )
         .unwrap_err();
+        let patch_shape_error = patch_task_ledger_record_json_at(
+            dir.app_data_dir(),
+            "task-1".to_string(),
+            json!({"progress": "invalid"}).to_string(),
+            6_002,
+        )
+        .unwrap_err();
 
         assert!(matches!(
             record_error,
@@ -347,6 +359,10 @@ mod tests {
         ));
         assert!(matches!(
             patch_error,
+            SonaCoreBindingError::InvalidInput { .. }
+        ));
+        assert!(matches!(
+            patch_shape_error,
             SonaCoreBindingError::InvalidInput { .. }
         ));
     }
@@ -360,6 +376,26 @@ mod tests {
         let error =
             load_task_ledger_snapshot_json_at(blocked.to_string_lossy().into_owned(), 7_000)
                 .unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::TaskLedger { .. }));
+    }
+
+    #[test]
+    fn clock_failures_map_to_task_ledger_error() {
+        struct FailingClock;
+
+        impl UnixMillisClock for FailingClock {
+            fn now_ms(&self) -> Result<u64, ClockError> {
+                Err(ClockError::Unavailable("test clock failure".to_string()))
+            }
+        }
+
+        let dir = TestDir::new();
+        let error = super::load_task_ledger_snapshot_json_with_clock(
+            dir.app_data_dir(),
+            Arc::new(FailingClock),
+        )
+        .unwrap_err();
 
         assert!(matches!(error, SonaCoreBindingError::TaskLedger { .. }));
     }

@@ -5,7 +5,7 @@ use crate::ports::time::UnixMillisClock;
 use super::{
     ActiveTagSelection, DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID,
     DEFAULT_TRANSLATION_LANGUAGE, TagCreateInput, TagDefaults, TagDefaultsInput, TagDefaultsPatch,
-    TagListOptions, TagPatch, TagRecord, TagRepositorySnapshot, TagStore, TagStoredState,
+    TagError, TagListOptions, TagPatch, TagRecord, TagRepositorySnapshot, TagStore, TagStoredState,
     TagUpdateInput, active_tag_id_from_value, normalize_defaults,
 };
 
@@ -28,15 +28,15 @@ impl<'a> TagRepositoryService<'a> {
         Self { store, ids, clock }
     }
 
-    pub fn load_state(&self) -> Result<TagRepositorySnapshot, String> {
+    pub fn load_state(&self) -> Result<TagRepositorySnapshot, TagError> {
         snapshot_from_state(self.store.load_state()?)
     }
 
-    pub fn list_tags(&self, _options: TagListOptions) -> Result<Vec<TagRecord>, String> {
+    pub fn list_tags(&self, _options: TagListOptions) -> Result<Vec<TagRecord>, TagError> {
         Ok(self.store.load_state()?.tags)
     }
 
-    pub fn replace_tags_json(&self, tags: Vec<Value>) -> Result<(), String> {
+    pub fn replace_tags_json(&self, tags: Vec<Value>) -> Result<(), TagError> {
         let tags = tags
             .iter()
             .enumerate()
@@ -45,11 +45,11 @@ impl<'a> TagRepositoryService<'a> {
         self.store.replace_tags(tags)
     }
 
-    pub fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), String> {
+    pub fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), TagError> {
         self.store.replace_tags(tags)
     }
 
-    pub fn create_tag(&self, input: TagCreateInput) -> Result<TagRecord, String> {
+    pub fn create_tag(&self, input: TagCreateInput) -> Result<TagRecord, TagError> {
         let now = self.clock.now_ms()?;
         let tag = TagRecord {
             id: self.ids.generate_id(),
@@ -69,7 +69,7 @@ impl<'a> TagRepositoryService<'a> {
         &self,
         tag_id: &str,
         updates: Value,
-    ) -> Result<Option<TagRecord>, String> {
+    ) -> Result<Option<TagRecord>, TagError> {
         let Some(updates) = updates.as_object() else {
             return Ok(self
                 .store
@@ -88,7 +88,7 @@ impl<'a> TagRepositoryService<'a> {
         &self,
         tag_id: &str,
         updates: TagUpdateInput,
-    ) -> Result<Option<TagRecord>, String> {
+    ) -> Result<Option<TagRecord>, TagError> {
         let patch = TagPatch {
             name: updates.name,
             icon: updates.icon,
@@ -100,32 +100,32 @@ impl<'a> TagRepositoryService<'a> {
         self.store.update_tag(tag_id, patch, updated_at)
     }
 
-    pub fn delete_tag(&self, tag_id: &str) -> Result<(), String> {
+    pub fn delete_tag(&self, tag_id: &str) -> Result<(), TagError> {
         self.store.delete_tag(tag_id)
     }
 
-    pub fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, String> {
+    pub fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, TagError> {
         self.store.reorder_tags(tag_ids)
     }
 
-    pub fn get_active_tag_id(&self) -> Result<Option<String>, String> {
+    pub fn get_active_tag_id(&self) -> Result<Option<String>, TagError> {
         Ok(self.get_active_tag_selection()?.tag_id)
     }
 
-    pub fn get_active_tag_selection(&self) -> Result<ActiveTagSelection, String> {
+    pub fn get_active_tag_selection(&self) -> Result<ActiveTagSelection, TagError> {
         active_selection_from_setting_json(
             self.store.load_state()?.active_tag_setting_json.as_deref(),
         )
     }
 
-    pub fn set_active_tag_id(&self, tag_id: Option<String>) -> Result<(), String> {
+    pub fn set_active_tag_id(&self, tag_id: Option<String>) -> Result<(), TagError> {
         let value = tag_id.map(Value::String).unwrap_or(Value::Null);
-        let setting_json = serde_json::to_string(&value).map_err(|error| error.to_string())?;
+        let setting_json = serde_json::to_string(&value)?;
         self.store.set_active_tag_setting_json(setting_json)
     }
 }
 
-fn snapshot_from_state(state: TagStoredState) -> Result<TagRepositorySnapshot, String> {
+fn snapshot_from_state(state: TagStoredState) -> Result<TagRepositorySnapshot, TagError> {
     let active_tag_id =
         active_selection_from_setting_json(state.active_tag_setting_json.as_deref())?.tag_id;
 
@@ -137,11 +137,11 @@ fn snapshot_from_state(state: TagStoredState) -> Result<TagRepositorySnapshot, S
 
 fn active_selection_from_setting_json(
     setting_json: Option<&str>,
-) -> Result<ActiveTagSelection, String> {
+) -> Result<ActiveTagSelection, TagError> {
     let tag_id = setting_json
         .map(serde_json::from_str::<Value>)
         .transpose()
-        .map_err(|error| error.to_string())?
+        .map_err(TagError::Serialization)?
         .as_ref()
         .and_then(active_tag_id_from_value);
 

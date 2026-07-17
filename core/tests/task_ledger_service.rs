@@ -1,5 +1,6 @@
 use serde_json::json;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
@@ -25,11 +26,11 @@ impl MemoryStore {
 }
 
 impl TaskLedgerStore for MemoryStore {
-    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, String> {
+    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, TaskLedgerError> {
         Ok(self.records())
     }
 
-    fn upsert_record(&self, record: &TaskLedgerRecord) -> Result<(), String> {
+    fn upsert_record(&self, record: &TaskLedgerRecord) -> Result<(), TaskLedgerError> {
         let mut records = self.records.lock().unwrap();
         records.retain(|item| item.id != record.id);
         records.push(record.clone());
@@ -39,8 +40,8 @@ impl TaskLedgerStore for MemoryStore {
     fn update_record(
         &self,
         id: &str,
-        update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, String>,
-    ) -> Result<(), String> {
+        update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, TaskLedgerError>,
+    ) -> Result<(), TaskLedgerError> {
         let mut records = self.records.lock().unwrap();
         if let Some(index) = records.iter().position(|item| item.id == id) {
             records[index] = update(records[index].clone())?;
@@ -48,7 +49,7 @@ impl TaskLedgerStore for MemoryStore {
         Ok(())
     }
 
-    fn remove_record(&self, id: &str) -> Result<(), String> {
+    fn remove_record(&self, id: &str) -> Result<(), TaskLedgerError> {
         self.records.lock().unwrap().retain(|item| item.id != id);
         Ok(())
     }
@@ -56,7 +57,7 @@ impl TaskLedgerStore for MemoryStore {
     fn remove_records_matching(
         &self,
         predicate: &mut dyn FnMut(&TaskLedgerRecord) -> bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TaskLedgerError> {
         self.records.lock().unwrap().retain(|item| !predicate(item));
         Ok(())
     }
@@ -65,38 +66,38 @@ impl TaskLedgerStore for MemoryStore {
 struct FailingStore;
 
 impl TaskLedgerStore for FailingStore {
-    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, String> {
-        Err("store failure".into())
+    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, TaskLedgerError> {
+        Err(TaskLedgerError::Repository("store failure".into()))
     }
 
-    fn upsert_record(&self, _record: &TaskLedgerRecord) -> Result<(), String> {
-        Err("store failure".into())
+    fn upsert_record(&self, _record: &TaskLedgerRecord) -> Result<(), TaskLedgerError> {
+        Err(TaskLedgerError::Repository("store failure".into()))
     }
 
     fn update_record(
         &self,
         _id: &str,
-        _update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, String>,
-    ) -> Result<(), String> {
-        Err("store failure".into())
+        _update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, TaskLedgerError>,
+    ) -> Result<(), TaskLedgerError> {
+        Err(TaskLedgerError::Repository("store failure".into()))
     }
 
-    fn remove_record(&self, _id: &str) -> Result<(), String> {
-        Err("store failure".into())
+    fn remove_record(&self, _id: &str) -> Result<(), TaskLedgerError> {
+        Err(TaskLedgerError::Repository("store failure".into()))
     }
 
     fn remove_records_matching(
         &self,
         _predicate: &mut dyn FnMut(&TaskLedgerRecord) -> bool,
-    ) -> Result<(), String> {
-        Err("store failure".into())
+    ) -> Result<(), TaskLedgerError> {
+        Err(TaskLedgerError::Repository("store failure".into()))
     }
 }
 
-struct FixedClock(Result<u64, String>);
+struct FixedClock(Result<u64, ClockError>);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         self.0.clone()
     }
 }
@@ -305,7 +306,7 @@ fn invalid_patch_returns_serialization_error() {
         .patch_task_json_at("task-2", json!({"status":"not-a-status"}), 7_000)
         .unwrap_err();
 
-    assert!(error.starts_with("Serialization error: "));
+    assert!(matches!(error, TaskLedgerError::Serialization(_)));
 }
 
 #[test]
@@ -373,33 +374,22 @@ fn empty_snapshot_has_no_update_time() {
 }
 
 #[test]
-fn store_errors_are_returned_unchanged() {
+fn store_errors_preserve_repository_category() {
     let service = service(&FailingStore);
 
-    assert_eq!(
-        service.load_snapshot_at(9_000).unwrap_err(),
-        "store failure"
-    );
-    assert_eq!(
+    assert_repository_error(service.load_snapshot_at(9_000).unwrap_err());
+    assert_repository_error(
         service
             .upsert_task_at(record("task", TaskLedgerStatus::Pending), 9_000)
             .unwrap_err(),
-        "store failure"
     );
-    assert_eq!(
+    assert_repository_error(
         service
             .patch_task_at("task", TaskLedgerPatch::default(), 9_000)
             .unwrap_err(),
-        "store failure"
     );
-    assert_eq!(
-        service.remove_task_at("task", 9_000).unwrap_err(),
-        "store failure"
-    );
-    assert_eq!(
-        service.clear_resolved_at(9_000).unwrap_err(),
-        "store failure"
-    );
+    assert_repository_error(service.remove_task_at("task", 9_000).unwrap_err());
+    assert_repository_error(service.clear_resolved_at(9_000).unwrap_err());
 }
 
 #[test]
@@ -435,13 +425,26 @@ fn task_ledger_runtime_methods_use_the_injected_clock() {
 #[test]
 fn task_ledger_runtime_methods_propagate_clock_errors_before_writes() {
     let store = MemoryStore::default();
-    let clock = FixedClock(Err("task ledger clock unavailable".to_string()));
+    let clock = FixedClock(Err(ClockError::Unavailable(
+        "task ledger clock unavailable".to_string(),
+    )));
     let service = TaskLedgerService::new(&store, &clock);
 
     let error = service
         .upsert_task(record("runtime", TaskLedgerStatus::Pending))
         .unwrap_err();
 
-    assert_eq!(error, "task ledger clock unavailable");
+    assert!(matches!(
+        error,
+        TaskLedgerError::Clock(ClockError::Unavailable(reason))
+            if reason == "task ledger clock unavailable"
+    ));
     assert!(store.records().is_empty());
+}
+
+fn assert_repository_error(error: TaskLedgerError) {
+    assert!(matches!(
+        error,
+        TaskLedgerError::Repository(reason) if reason == "store failure"
+    ));
 }

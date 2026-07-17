@@ -1,3 +1,4 @@
+use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot,
 };
@@ -12,12 +13,12 @@ async fn run_task_ledger_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> R
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, TaskLedgerError> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
         let adapter = SqliteTaskLedgerAdapter::new(db, Arc::new(SystemClock));
-        task(&adapter)
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

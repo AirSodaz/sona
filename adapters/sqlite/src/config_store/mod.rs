@@ -9,7 +9,7 @@ use rusqlite::Transaction;
 use serde_json::Value;
 use sona_core::config::{
     AppConfigRepositoryService, AppConfigRepositorySnapshot, AppConfigStartupProjection,
-    AppConfigStore, AppConfigStoredState,
+    AppConfigStore, AppConfigStoredState, ConfigError,
 };
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::runtime::serve::ServeStartupSettings;
@@ -445,31 +445,31 @@ where
         }
     }
 
-    pub fn load_config(&self) -> Result<Option<Value>, String> {
+    pub fn load_config(&self) -> Result<Option<Value>, ConfigError> {
         self.service().load_config()
     }
 
-    pub fn inspect_state(&self) -> Result<Option<AppConfigRepositorySnapshot>, String> {
+    pub fn inspect_state(&self) -> Result<Option<AppConfigRepositorySnapshot>, ConfigError> {
         self.service().inspect_state()
     }
 
-    pub fn save_config(&self, config: &Value) -> Result<(), String> {
+    pub fn save_config(&self, config: &Value) -> Result<(), ConfigError> {
         self.service().save_config(config)
     }
 
-    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, String> {
+    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, ConfigError> {
         self.service().get_setting(key)
     }
 
-    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), String> {
+    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), ConfigError> {
         self.service().set_setting(key, value)
     }
 
-    pub fn load_app_config_payload(&self) -> Result<Option<Value>, String> {
+    pub fn load_app_config_payload(&self) -> Result<Option<Value>, ConfigError> {
         self.service().load_app_config_payload()
     }
 
-    pub fn load_serve_startup_settings(&self) -> Result<Option<ServeStartupSettings>, String> {
+    pub fn load_serve_startup_settings(&self) -> Result<Option<ServeStartupSettings>, ConfigError> {
         self.service().load_serve_startup_settings()
     }
 
@@ -482,50 +482,50 @@ impl<D> AppConfigStore for SqliteConfigStore<D>
 where
     D: DatabasePort,
 {
-    fn load_state(&self) -> Result<Option<AppConfigStoredState>, String> {
+    fn load_state(&self) -> Result<Option<AppConfigStoredState>, ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_connection(|conn| {
                 let tx = conn.unchecked_transaction()?;
                 let state = load_state_in_transaction(&tx)?;
                 tx.commit()?;
                 Ok(state)
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 
-    fn load_base_config_json(&self) -> Result<Option<String>, String> {
+    fn load_base_config_json(&self) -> Result<Option<String>, ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_connection(app_config::load_base_config_json)
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 
-    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, String> {
+    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_connection(app_config::load_startup_projection)
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 
-    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), String> {
+    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_rw_transaction(|tx| replace_state_in_transaction(tx, &state))
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 
-    fn load_setting_json(&self, key: &str) -> Result<Option<String>, String> {
+    fn load_setting_json(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_connection(|conn| settings::load(conn, key))
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 
-    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), String> {
+    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), ConfigError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ConfigError::Repository(error.to_string()))?
             .with_rw_transaction(|tx| settings::set(tx, key, &value_json))
-            .map_err(|error| error.to_string())
+            .map_err(|error| ConfigError::Repository(error.to_string()))
     }
 }

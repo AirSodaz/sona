@@ -46,7 +46,8 @@ where
     E: ToString,
 {
     let app_local_data_dir = crate::platform::paths::TauriPathProvider::from_app(app)
-        .resolve_path(crate::platform::paths::PathKind::AppLocalData)?;
+        .resolve_path(crate::platform::paths::PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     run_llm_db_task(app_local_data_dir, db, task).await
 }

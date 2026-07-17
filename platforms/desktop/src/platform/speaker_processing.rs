@@ -25,7 +25,9 @@ pub async fn import_speaker_profile_sample(
     source_path: String,
     source_name: Option<String>,
 ) -> Result<SpeakerProfileSample, String> {
-    let app_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let app_data_dir = provider
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     sona_local_asr::speaker_processing::import_speaker_profile_sample(
         &app_data_dir,
         profile_id,

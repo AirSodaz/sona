@@ -281,4 +281,20 @@ mod tests {
         assert_eq!(error.exit_code(), 2);
         assert_eq!(error.to_string(), "Invalid IP rule format: not-a-rule");
     }
+
+    #[test]
+    fn structured_error_categories_keep_exit_code_contracts() {
+        assert_eq!(
+            CliError::Validation("invalid input".to_string()).exit_code(),
+            2
+        );
+        assert_eq!(
+            CliError::Serialize("failed to render output".to_string()).exit_code(),
+            1
+        );
+        assert_eq!(
+            CliError::Io("storage unavailable".to_string()).exit_code(),
+            5
+        );
+    }
 }

@@ -5,7 +5,7 @@ use rusqlite::types::Type;
 use serde_json::Value;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{
-    ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectIdGenerator,
+    ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectError, ProjectIdGenerator,
     ProjectListOptions, ProjectPatch, ProjectRecord, ProjectRepositoryService,
     ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
@@ -52,23 +52,26 @@ where
         }
     }
 
-    pub fn load_state(&self) -> Result<ProjectRepositorySnapshot, String> {
+    pub fn load_state(&self) -> Result<ProjectRepositorySnapshot, ProjectError> {
         self.service().load_state()
     }
 
-    pub fn list_projects(&self, options: ProjectListOptions) -> Result<Vec<ProjectRecord>, String> {
+    pub fn list_projects(
+        &self,
+        options: ProjectListOptions,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         self.service().list_projects(options)
     }
 
-    pub fn replace_projects_json(&self, projects: Vec<Value>) -> Result<(), String> {
+    pub fn replace_projects_json(&self, projects: Vec<Value>) -> Result<(), ProjectError> {
         self.service().replace_projects_json(projects)
     }
 
-    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError> {
         self.service().replace_projects(projects)
     }
 
-    pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
+    pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, ProjectError> {
         self.service().create_project(input)
     }
 
@@ -76,7 +79,7 @@ where
         &self,
         project_id: &str,
         updates: Value,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         self.service().update_project_json(project_id, updates)
     }
 
@@ -84,23 +87,26 @@ where
         &self,
         project_id: &str,
         updates: ProjectUpdateInput,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         self.service().update_project(project_id, updates)
     }
 
-    pub fn delete_project(&self, project_id: &str) -> Result<(), String> {
+    pub fn delete_project(&self, project_id: &str) -> Result<(), ProjectError> {
         self.service().delete_project(project_id)
     }
 
-    pub fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+    pub fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         self.service().reorder_projects(project_ids)
     }
 
-    pub fn get_active_project_selection(&self) -> Result<ActiveProjectSelection, String> {
+    pub fn get_active_project_selection(&self) -> Result<ActiveProjectSelection, ProjectError> {
         self.service().get_active_project_selection()
     }
 
-    pub fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), String> {
+    pub fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), ProjectError> {
         self.service().set_active_project_id(project_id)
     }
 
@@ -270,7 +276,7 @@ impl<D> ProjectStore for SqliteProjectRepository<D>
 where
     D: DatabasePort,
 {
-    fn load_state(&self) -> Result<ProjectStoredState, String> {
+    fn load_state(&self) -> Result<ProjectStoredState, ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_read_connection(|conn| {
@@ -292,10 +298,10 @@ where
                     })
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 
-    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, String> {
+    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -305,7 +311,7 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| ProjectError::Repository(error.to_string()))?;
         Ok(project)
     }
 
@@ -314,7 +320,7 @@ where
         project_id: &str,
         patch: ProjectPatch,
         updated_at: u64,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_rw_transaction(|tx| {
@@ -367,10 +373,10 @@ where
                     Ok(Some(project))
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 
-    fn delete_project(&self, project_id: &str) -> Result<(), String> {
+    fn delete_project(&self, project_id: &str) -> Result<(), ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -384,10 +390,10 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 
-    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -413,10 +419,13 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 
-    fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_rw_transaction(|tx| {
@@ -441,10 +450,10 @@ where
                     Ok(projects)
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 
-    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), String> {
+    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), ProjectError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -456,7 +465,7 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| ProjectError::Repository(error.to_string()))
     }
 }
 
@@ -1168,7 +1177,10 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(error.contains("UNIQUE constraint failed"), "{error}");
+        assert!(
+            matches!(error, ProjectError::Repository(ref message) if message.contains("UNIQUE constraint failed")),
+            "{error}"
+        );
         assert!(ProjectStore::load_state(&repo).unwrap().projects.is_empty());
     }
 
@@ -1299,7 +1311,7 @@ mod tests {
     }
     struct FixedClock;
     impl UnixMillisClock for FixedClock {
-        fn now_ms(&self) -> Result<u64, String> {
+        fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
             Ok(777)
         }
     }

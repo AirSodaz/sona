@@ -25,7 +25,7 @@ pub fn resolve_runtime_environment_status(
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let log_dir = provider
         .resolve_path(crate::platform::paths::PathKind::AppLogData)
-        .map_err(|e: String| -> String { e })?;
+        .map_err(|error| error.to_string())?;
 
     resolve_runtime_environment_status_for_log_dir(log_dir)
 }

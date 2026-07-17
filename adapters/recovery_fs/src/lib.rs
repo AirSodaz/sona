@@ -1,3 +1,5 @@
+use sona_core::ports::fs::FileSystem;
+use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::empty_snapshot;
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::service::RecoveryService;
@@ -6,9 +8,9 @@ use sona_core::recovery::types::{
     RecoverySnapshotInput,
 };
 use sona_runtime_fs::{
-    FsSourcePathStatusProvider, SystemClock, ensure_directory_exists, write_json_pretty_atomic,
+    FsSourcePathStatusProvider, RealFileSystem, SystemClock, ensure_directory_exists,
+    write_json_pretty_atomic,
 };
-use std::fs;
 use std::path::PathBuf;
 
 pub struct FsRecoveryAdapter {
@@ -26,15 +28,18 @@ impl FsRecoveryAdapter {
         }
     }
 
-    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, String> {
+    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, RecoveryError> {
         self.service().load_snapshot()
     }
 
-    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, String> {
+    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, RecoveryError> {
         self.service().load_snapshot_at(now_ms)
     }
 
-    pub fn save_snapshot(&self, items: Vec<RecoveryItemInput>) -> Result<RecoverySnapshot, String> {
+    pub fn save_snapshot(
+        &self,
+        items: Vec<RecoveryItemInput>,
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.service().save_snapshot(items)
     }
 
@@ -42,7 +47,7 @@ impl FsRecoveryAdapter {
         &self,
         items: Vec<RecoveryItemInput>,
         now_ms: u64,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.service().save_snapshot_at(items, now_ms)
     }
 
@@ -50,7 +55,7 @@ impl FsRecoveryAdapter {
         &self,
         queue_items: Vec<RecoveryItemInput>,
         resolved_ids: Vec<String>,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.service()
             .persist_queue_snapshot(queue_items, resolved_ids)
     }
@@ -60,7 +65,7 @@ impl FsRecoveryAdapter {
         queue_items: Vec<RecoveryItemInput>,
         resolved_ids: Vec<String>,
         now_ms: u64,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.service()
             .persist_queue_snapshot_at(queue_items, resolved_ids, now_ms)
     }
@@ -89,15 +94,18 @@ impl FsRecoverySnapshotStore {
 }
 
 impl RecoverySnapshotStore for FsRecoverySnapshotStore {
-    fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, String> {
+    fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, RecoveryError> {
         let recovery_dir = self.recovery_dir();
-        ensure_directory_exists(&recovery_dir)?;
+        ensure_directory_exists(&recovery_dir).map_err(RecoveryError::Repository)?;
         let recovery_path = self.queue_recovery_path();
         if !recovery_path.exists() {
-            write_json_pretty_atomic(&recovery_path, &empty_snapshot())?;
+            write_json_pretty_atomic(&recovery_path, &empty_snapshot())
+                .map_err(RecoveryError::Repository)?;
         }
 
-        let content = fs::read_to_string(recovery_path).map_err(|error| error.to_string())?;
+        let content = RealFileSystem
+            .read_to_string(&recovery_path)
+            .map_err(|error| RecoveryError::Repository(error.to_string()))?;
         match serde_json::from_str::<RecoverySnapshotInput>(&content) {
             Ok(input) => Ok(input),
             Err(error) => {
@@ -107,7 +115,8 @@ impl RecoverySnapshotStore for FsRecoverySnapshotStore {
         }
     }
 
-    fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), String> {
+    fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), RecoveryError> {
         write_json_pretty_atomic(&self.queue_recovery_path(), snapshot)
+            .map_err(RecoveryError::Repository)
     }
 }

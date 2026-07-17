@@ -3,6 +3,8 @@ use serde_json::Value;
 #[cfg(feature = "specta")]
 use specta::Type;
 
+use super::ConfigError;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -139,10 +141,10 @@ pub struct AppConfigRepositorySnapshot {
 }
 
 pub trait AppConfigStore: Send + Sync {
-    fn load_state(&self) -> Result<Option<AppConfigStoredState>, String>;
-    fn load_base_config_json(&self) -> Result<Option<String>, String>;
-    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, String>;
-    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), String>;
-    fn load_setting_json(&self, key: &str) -> Result<Option<String>, String>;
-    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), String>;
+    fn load_state(&self) -> Result<Option<AppConfigStoredState>, ConfigError>;
+    fn load_base_config_json(&self) -> Result<Option<String>, ConfigError>;
+    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, ConfigError>;
+    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), ConfigError>;
+    fn load_setting_json(&self, key: &str) -> Result<Option<String>, ConfigError>;
+    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), ConfigError>;
 }

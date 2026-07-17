@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::project::{
     ProjectCreateInput, ProjectDefaultsInput, ProjectIdGenerator, ProjectRepositoryService,
     ProjectRepositorySnapshot,
@@ -20,7 +20,7 @@ impl ProjectIdGenerator for SequenceIds {
 struct SequenceClock(Mutex<Vec<u64>>);
 
 impl UnixMillisClock for SequenceClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0.lock().unwrap().remove(0))
     }
 }

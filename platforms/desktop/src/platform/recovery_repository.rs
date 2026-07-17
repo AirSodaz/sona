@@ -1,16 +1,19 @@
 use crate::platform::paths::{PathKind, PathProvider};
+use sona_core::recovery::RecoveryError;
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
 use sona_recovery_fs::FsRecoveryAdapter;
 
 async fn run_recovery_adapter_task<T, F>(provider: &dyn PathProvider, task: F) -> Result<T, String>
 where
     T: Send + 'static,
-    F: FnOnce(&FsRecoveryAdapter) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&FsRecoveryAdapter) -> Result<T, RecoveryError> + Send + 'static,
 {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = provider
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn_blocking(move || {
         let adapter = FsRecoveryAdapter::new(app_local_data_dir);
-        task(&adapter)
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

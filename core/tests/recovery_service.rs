@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::service::RecoveryService;
@@ -29,16 +30,17 @@ impl MemoryRecoveryStore {
 }
 
 impl RecoverySnapshotStore for MemoryRecoveryStore {
-    fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, String> {
+    fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, RecoveryError> {
         Ok(self.input.lock().unwrap().clone())
     }
 
-    fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), String> {
+    fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), RecoveryError> {
         *self.saved.lock().unwrap() = Some(snapshot.clone());
         *self.input.lock().unwrap() = serde_json::from_value(
-            serde_json::to_value(snapshot).map_err(|error| error.to_string())?,
+            serde_json::to_value(snapshot)
+                .map_err(|error| RecoveryError::Repository(error.to_string()))?,
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| RecoveryError::Repository(error.to_string()))?;
         Ok(())
     }
 }
@@ -67,10 +69,10 @@ impl SourcePathStatusProvider for FixedSourcePaths {
     }
 }
 
-struct FixedClock(Result<u64, String>);
+struct FixedClock(Result<u64, ClockError>);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         self.0.clone()
     }
 }
@@ -388,11 +390,17 @@ fn recovery_runtime_methods_use_the_injected_clock() {
 fn recovery_runtime_methods_propagate_clock_errors() {
     let store = MemoryRecoveryStore::empty();
     let paths = FixedSourcePaths::file();
-    let clock = FixedClock(Err("recovery clock unavailable".to_string()));
+    let clock = FixedClock(Err(ClockError::Unavailable(
+        "recovery clock unavailable".to_string(),
+    )));
     let service = RecoveryService::new(&store, &paths, &clock);
 
     let error = service.load_snapshot().unwrap_err();
 
-    assert_eq!(error, "recovery clock unavailable");
+    assert!(matches!(
+        error,
+        RecoveryError::Clock(ClockError::Unavailable(ref reason))
+            if reason == "recovery clock unavailable"
+    ));
     assert!(store.saved_snapshot().is_none());
 }

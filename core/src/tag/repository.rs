@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::TagRecord;
+use super::{TagError, TagRecord};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TagStoredState {
@@ -48,22 +48,22 @@ pub struct TagPatch {
 }
 
 pub trait TagStore: Send + Sync {
-    fn load_state(&self) -> Result<TagStoredState, String>;
+    fn load_state(&self) -> Result<TagStoredState, TagError>;
 
-    fn insert_tag(&self, tag: TagRecord) -> Result<TagRecord, String>;
+    fn insert_tag(&self, tag: TagRecord) -> Result<TagRecord, TagError>;
 
     fn update_tag(
         &self,
         tag_id: &str,
         patch: TagPatch,
         updated_at: u64,
-    ) -> Result<Option<TagRecord>, String>;
+    ) -> Result<Option<TagRecord>, TagError>;
 
-    fn delete_tag(&self, tag_id: &str) -> Result<(), String>;
+    fn delete_tag(&self, tag_id: &str) -> Result<(), TagError>;
 
-    fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), String>;
+    fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), TagError>;
 
-    fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, String>;
+    fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, TagError>;
 
-    fn set_active_tag_setting_json(&self, setting_json: String) -> Result<(), String>;
+    fn set_active_tag_setting_json(&self, setting_json: String) -> Result<(), TagError>;
 }

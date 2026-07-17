@@ -1,5 +1,6 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
+use sona_core::automation::AutomationError;
 pub use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
@@ -44,22 +45,22 @@ where
         }
     }
 
-    pub fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+    pub fn load_state(&self) -> Result<AutomationRepositoryState, AutomationError> {
         self.service().load_state()
     }
 
-    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), String> {
+    pub fn replace_rules(&self, rules: Vec<AutomationRuleInput>) -> Result<(), AutomationError> {
         self.service().replace_rules(rules)
     }
 
     pub fn replace_processed_entries(
         &self,
         entries: Vec<AutomationProcessedInput>,
-    ) -> Result<(), String> {
+    ) -> Result<(), AutomationError> {
         self.service().replace_processed_entries(entries)
     }
 
-    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), String> {
+    pub fn replace_state(&self, input: AutomationRepositoryInput) -> Result<(), AutomationError> {
         self.service().replace_state(input)
     }
 
@@ -139,7 +140,7 @@ impl<D> AutomationStore for SqliteAutomationRepository<D>
 where
     D: DatabasePort,
 {
-    fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+    fn load_state(&self) -> Result<AutomationRepositoryState, AutomationError> {
         self.get_db()
             .and_then(|db| {
                 db.with_read_connection(|conn| {
@@ -151,10 +152,10 @@ where
                     Ok(state)
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| AutomationError::Repository(error.to_string()))
     }
 
-    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), String> {
+    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -165,13 +166,13 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| AutomationError::Repository(error.to_string()))
     }
 
     fn replace_processed_entries(
         &self,
         entries: &[AutomationProcessedRecord],
-    ) -> Result<(), String> {
+    ) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -180,10 +181,10 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| AutomationError::Repository(error.to_string()))
     }
 
-    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String> {
+    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), AutomationError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -192,7 +193,7 @@ where
                     record_automation_rules_sync(tx, &previous, &state.rules)
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| AutomationError::Repository(error.to_string()))
     }
 }
 
@@ -646,7 +647,10 @@ mod tests {
             rules: vec![rule_record("rule-new", "New")],
             processed_entries: vec![processed_record("entry-new", "rule-new")],
         };
-        assert!(AutomationStore::replace_state(&repo, &replacement).is_err());
+        assert!(matches!(
+            AutomationStore::replace_state(&repo, &replacement),
+            Err(AutomationError::Repository(message)) if message.contains("forced processed insert failure")
+        ));
 
         assert_eq!(AutomationStore::load_state(&repo).unwrap(), initial);
     }

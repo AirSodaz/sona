@@ -1,6 +1,9 @@
 use clap::{Args, Subcommand};
 use serde::Serialize;
-use sona_core::task_ledger::types::{TaskLedgerRecord, TaskLedgerSnapshot};
+use sona_core::task_ledger::{
+    TaskLedgerError,
+    types::{TaskLedgerRecord, TaskLedgerSnapshot},
+};
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteTaskLedgerAdapter};
 use std::path::PathBuf;
@@ -42,7 +45,7 @@ fn run_task_ledger_list(args: TaskLedgerListArgs) -> CliResult<CliOutput> {
         .map_err(|error| CliError::Io(error.to_string()))?;
     let snapshot = SqliteTaskLedgerAdapter::new(Arc::new(database), Arc::new(SystemClock))
         .load_snapshot()
-        .map_err(CliError::Io)?;
+        .map_err(map_task_ledger_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -51,6 +54,14 @@ fn run_task_ledger_list(args: TaskLedgerListArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
+}
+
+fn map_task_ledger_error(error: TaskLedgerError) -> CliError {
+    let message = error.to_string();
+    match error {
+        TaskLedgerError::Serialization(_) => CliError::Serialize(message),
+        TaskLedgerError::Repository(_) | TaskLedgerError::Clock(_) => CliError::Io(message),
+    }
 }
 
 fn render_task_ledger_table(snapshot: &TaskLedgerSnapshot) -> CliResult<String> {
@@ -96,5 +107,37 @@ fn enum_label<T: Serialize>(value: &T) -> CliResult<String> {
         _ => Err(CliError::Serialize(
             "Task ledger enum did not serialize as a string".to_string(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_task_ledger_error;
+    use crate::CliError;
+    use sona_core::ports::time::ClockError;
+    use sona_core::task_ledger::TaskLedgerError;
+
+    fn json_error() -> serde_json::Error {
+        serde_json::from_str::<serde_json::Value>("{").unwrap_err()
+    }
+
+    #[test]
+    fn maps_task_ledger_error_variants_to_cli_categories() {
+        assert!(matches!(
+            map_task_ledger_error(TaskLedgerError::Serialization(json_error())),
+            CliError::Serialize(_)
+        ));
+        assert!(matches!(
+            map_task_ledger_error(TaskLedgerError::Repository(
+                "database unavailable".to_string()
+            )),
+            CliError::Io(_)
+        ));
+        assert!(matches!(
+            map_task_ledger_error(TaskLedgerError::Clock(ClockError::Unavailable(
+                "system clock unavailable".to_string()
+            ))),
+            CliError::Io(_)
+        ));
     }
 }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
@@ -7,7 +7,7 @@ use sona_core::automation::{
 };
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
-use sona_core::ports::fs::FileSystem;
+use sona_core::ports::fs::{FileSystem, FileSystemError, FileSystemOperation};
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
@@ -610,6 +610,77 @@ fn real_file_system_supports_atomic_json_helpers() {
     let contents = fs.read_to_string(path.as_path()).unwrap();
     assert!(contents.contains("\"key\""));
     assert!(fs.metadata(&path).unwrap().unwrap().is_file);
+}
+
+#[test]
+fn real_file_system_errors_preserve_operations_and_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    let fs = RealFileSystem;
+    let blocked_directory = dir.path().join("blocked-directory");
+    std::fs::write(&blocked_directory, b"file").unwrap();
+    let missing_file = dir.path().join("missing.bin");
+    let rename_target = dir.path().join("renamed.bin");
+
+    assert_file_system_error(
+        fs.create_dir_all(&blocked_directory).unwrap_err(),
+        FileSystemOperation::CreateDirectory,
+        &blocked_directory,
+        None,
+    );
+    assert_file_system_error(
+        fs.write_file(dir.path(), b"contents").unwrap_err(),
+        FileSystemOperation::WriteFile,
+        dir.path(),
+        None,
+    );
+    assert_file_system_error(
+        fs.read_file(&missing_file).unwrap_err(),
+        FileSystemOperation::ReadFile,
+        &missing_file,
+        None,
+    );
+    assert_file_system_error(
+        fs.read_to_string(&missing_file).unwrap_err(),
+        FileSystemOperation::ReadText,
+        &missing_file,
+        None,
+    );
+    assert_file_system_error(
+        fs.rename(&missing_file, &rename_target).unwrap_err(),
+        FileSystemOperation::Rename,
+        &missing_file,
+        Some(&rename_target),
+    );
+    assert_file_system_error(
+        fs.remove_file(&missing_file).unwrap_err(),
+        FileSystemOperation::RemoveFile,
+        &missing_file,
+        None,
+    );
+    assert_file_system_error(
+        fs.remove_dir_all(&missing_file).unwrap_err(),
+        FileSystemOperation::RemoveDirectory,
+        &missing_file,
+        None,
+    );
+    assert_file_system_error(
+        fs.metadata(Path::new("\0invalid")).unwrap_err(),
+        FileSystemOperation::Metadata,
+        Path::new("\0invalid"),
+        None,
+    );
+}
+
+fn assert_file_system_error(
+    error: FileSystemError,
+    operation: FileSystemOperation,
+    path: &Path,
+    target: Option<&Path>,
+) {
+    assert_eq!(error.operation, operation);
+    assert_eq!(error.path, path);
+    assert_eq!(error.target.as_deref(), target);
+    assert!(!error.reason.is_empty());
 }
 
 #[test]

@@ -1,10 +1,10 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
-use sona_core::automation::AutomationRule;
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
     AutomationRuleInputExportConfig, AutomationRuleInputStageConfig,
 };
+use sona_core::automation::{AutomationError, AutomationRule};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
 use sona_sqlite::{Database, SqliteAutomationAdapter};
 use std::path::Path;
@@ -71,7 +71,7 @@ pub(crate) fn validate_automation_rule_activation_json(
 
 fn with_automation_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, String>,
+    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(automation_error)?;
     let adapter = SqliteAutomationAdapter::new(Arc::new(database), Arc::new(UuidGenerator));

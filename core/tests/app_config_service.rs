@@ -4,12 +4,12 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 use sona_core::config::{
     AppConfigLibrary, AppConfigRepositoryService, AppConfigRepositorySnapshot,
-    AppConfigStartupProjection, AppConfigStore, AppConfigStoredState, HotwordRuleRecord,
-    HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord, SpeakerProfileRecord,
-    SpeakerProfileSampleRecord, SummaryTemplateRecord, TextReplacementRuleRecord,
-    TextReplacementSetRecord,
+    AppConfigStartupProjection, AppConfigStore, AppConfigStoredState, ConfigError,
+    HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord,
+    SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
+    TextReplacementRuleRecord, TextReplacementSetRecord,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 
 #[derive(Clone, Debug, PartialEq)]
 enum StoreCall {
@@ -42,12 +42,12 @@ impl MemoryAppConfigStore {
 }
 
 impl AppConfigStore for MemoryAppConfigStore {
-    fn load_state(&self) -> Result<Option<AppConfigStoredState>, String> {
+    fn load_state(&self) -> Result<Option<AppConfigStoredState>, ConfigError> {
         self.calls.lock().unwrap().push(StoreCall::LoadState);
         Ok(self.state.lock().unwrap().clone())
     }
 
-    fn load_base_config_json(&self) -> Result<Option<String>, String> {
+    fn load_base_config_json(&self) -> Result<Option<String>, ConfigError> {
         self.calls
             .lock()
             .unwrap()
@@ -60,7 +60,7 @@ impl AppConfigStore for MemoryAppConfigStore {
             .map(|state| state.base_config_json.clone()))
     }
 
-    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, String> {
+    fn load_startup_projection(&self) -> Result<Option<AppConfigStartupProjection>, ConfigError> {
         self.calls
             .lock()
             .unwrap()
@@ -73,7 +73,7 @@ impl AppConfigStore for MemoryAppConfigStore {
             .map(|state| state.startup_projection.clone()))
     }
 
-    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), String> {
+    fn replace_state(&self, state: AppConfigStoredState) -> Result<(), ConfigError> {
         self.calls
             .lock()
             .unwrap()
@@ -82,7 +82,7 @@ impl AppConfigStore for MemoryAppConfigStore {
         Ok(())
     }
 
-    fn load_setting_json(&self, key: &str) -> Result<Option<String>, String> {
+    fn load_setting_json(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self.calls
             .lock()
             .unwrap()
@@ -90,7 +90,7 @@ impl AppConfigStore for MemoryAppConfigStore {
         Ok(self.settings.lock().unwrap().get(key).cloned())
     }
 
-    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), String> {
+    fn set_setting_json(&self, key: &str, value_json: String) -> Result<(), ConfigError> {
         self.calls
             .lock()
             .unwrap()
@@ -110,14 +110,16 @@ struct FailingClock;
 static FIXED_CLOCK: FixedClock = FixedClock(1_234_567);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
 
 impl UnixMillisClock for FailingClock {
-    fn now_ms(&self) -> Result<u64, String> {
-        Err("clock before Unix epoch".into())
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        Err(ClockError::BeforeUnixEpoch(
+            "clock before Unix epoch".into(),
+        ))
     }
 }
 
@@ -1000,10 +1002,11 @@ fn setting_json_round_trips_malformed_storage_and_preserves_empty_keys() {
         service.get_setting("").unwrap(),
         Some(json!({"version": 1, "status": "completed"}))
     );
+    let error = service.get_setting("bad").unwrap_err();
+    assert!(matches!(error, ConfigError::Serialization(_)));
     assert!(
-        service
-            .get_setting("bad")
-            .unwrap_err()
+        error
+            .to_string()
             .starts_with("Serialization error: EOF while parsing an object at line 1 column 1")
     );
     assert_eq!(
@@ -1116,10 +1119,11 @@ fn malformed_base_json_uses_serialization_prefix() {
         startup_projection: empty_projection(),
     };
     let malformed_store = MemoryAppConfigStore::with_state(malformed);
+    let error = service(&malformed_store).load_config().unwrap_err();
+    assert!(matches!(error, ConfigError::Serialization(_)));
     assert!(
-        service(&malformed_store)
-            .load_config()
-            .unwrap_err()
+        error
+            .to_string()
             .starts_with("Serialization error: EOF while parsing an object at line 1 column 1")
     );
 }

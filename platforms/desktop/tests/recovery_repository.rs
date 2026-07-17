@@ -1,5 +1,5 @@
 use serde_json::json;
-use sona_core::ports::path::{PathKind, PathProvider};
+use sona_core::ports::path::{PathKind, PathProvider, PathProviderError};
 use sona_core::recovery::types::RecoveryItemInput;
 use std::fs::{self, File};
 use std::path::PathBuf;
@@ -32,13 +32,37 @@ impl RecordingPathProvider {
 }
 
 impl PathProvider for RecordingPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
         self.resolved_kinds.lock().unwrap().push(kind);
         match kind {
             PathKind::AppLocalData => Ok(self.app_local_data_dir.clone()),
-            _ => Err(format!("unexpected path kind: {kind:?}")),
+            _ => Err(PathProviderError::new(
+                kind,
+                format!("unexpected path kind: {kind:?}"),
+            )),
         }
     }
+}
+
+struct FailingPathProvider;
+
+impl PathProvider for FailingPathProvider {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+        Err(PathProviderError::new(
+            kind,
+            "desktop test path unavailable",
+        ))
+    }
+}
+
+#[tokio::test]
+async fn load_snapshot_preserves_path_kind_at_the_string_command_boundary() {
+    let error = load_snapshot(&FailingPathProvider).await.unwrap_err();
+
+    assert_eq!(
+        error,
+        "Failed to resolve AppLocalData path: desktop test path unavailable"
+    );
 }
 
 #[tokio::test]
@@ -52,7 +76,7 @@ async fn load_snapshot_resolves_app_local_data_before_delegating() {
     assert_eq!(
         serde_json::to_value(snapshot).unwrap(),
         json!({
-            "version": 1,
+            "version": 2,
             "updatedAt": null,
             "items": []
         })

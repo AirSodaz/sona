@@ -2,6 +2,7 @@ use std::future::Future;
 
 use serde_json::Value;
 use sona_core::project::ACTIVE_PROJECT_SETTINGS_KEY;
+use sona_core::tag::TagError;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagDefaultsInput, TagListOptions,
     TagRecord, TagUpdateInput, active_tag_id_from_value,
@@ -18,12 +19,12 @@ async fn run_tag_adapter<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, Stri
 where
     R: Runtime,
     T: Send + 'static,
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     tauri::async_runtime::spawn_blocking(move || {
         let adapter = SqliteTagAdapter::new(db, Arc::new(UuidGenerator), Arc::new(SystemClock));
-        task(&adapter)
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

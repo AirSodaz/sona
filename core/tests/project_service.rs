@@ -1,11 +1,11 @@
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::project::{
     ActiveProjectSelection, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
-    ProjectDefaultsPatch, ProjectIdGenerator, ProjectListOptions, ProjectPatch, ProjectRecord,
-    ProjectRepositoryService, ProjectStore, ProjectStoredState, ProjectUpdateInput,
+    ProjectDefaultsPatch, ProjectError, ProjectIdGenerator, ProjectListOptions, ProjectPatch,
+    ProjectRecord, ProjectRepositoryService, ProjectStore, ProjectStoredState, ProjectUpdateInput,
 };
 
 #[derive(Default)]
@@ -28,22 +28,22 @@ impl MemoryProjectStore {
         *self.fail_with.lock().unwrap() = Some(message.to_string());
     }
 
-    fn begin_call(&self, call: &'static str) -> Result<(), String> {
+    fn begin_call(&self, call: &'static str) -> Result<(), ProjectError> {
         self.calls.lock().unwrap().push(call);
         if let Some(error) = self.fail_with.lock().unwrap().take() {
-            return Err(error);
+            return Err(ProjectError::Repository(error));
         }
         Ok(())
     }
 }
 
 impl ProjectStore for MemoryProjectStore {
-    fn load_state(&self) -> Result<ProjectStoredState, String> {
+    fn load_state(&self) -> Result<ProjectStoredState, ProjectError> {
         self.begin_call("load_state")?;
         Ok(self.state.lock().unwrap().clone())
     }
 
-    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, String> {
+    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, ProjectError> {
         self.begin_call("insert_project")?;
         self.state.lock().unwrap().projects.push(project.clone());
         Ok(project)
@@ -54,7 +54,7 @@ impl ProjectStore for MemoryProjectStore {
         project_id: &str,
         patch: ProjectPatch,
         updated_at: u64,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         self.begin_call("update_project")?;
         let mut state = self.state.lock().unwrap();
         let Some(project) = state
@@ -79,21 +79,24 @@ impl ProjectStore for MemoryProjectStore {
         Ok(Some(project.clone()))
     }
 
-    fn delete_project(&self, project_id: &str) -> Result<(), String> {
+    fn delete_project(&self, project_id: &str) -> Result<(), ProjectError> {
         self.begin_call("delete_project")?;
         let mut state = self.state.lock().unwrap();
         state.projects.retain(|project| project.id != project_id);
         Ok(())
     }
 
-    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError> {
         self.begin_call("replace_projects")?;
         let mut state = self.state.lock().unwrap();
         state.projects = projects;
         Ok(())
     }
 
-    fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         self.begin_call("reorder_projects")?;
         *self.last_reorder.lock().unwrap() = Some(project_ids.clone());
         let state = self.state.lock().unwrap();
@@ -105,7 +108,7 @@ impl ProjectStore for MemoryProjectStore {
         Ok(projects)
     }
 
-    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), String> {
+    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), ProjectError> {
         self.begin_call("set_active_project_setting_json")?;
         let mut state = self.state.lock().unwrap();
         state.active_project_setting_json = Some(setting_json);
@@ -124,13 +127,13 @@ impl ProjectIdGenerator for SequenceIds {
 struct FixedClock(u64);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
 
 struct RecordingClock {
-    result: Result<u64, String>,
+    result: Result<u64, ClockError>,
     calls: Mutex<usize>,
 }
 
@@ -144,14 +147,14 @@ impl RecordingClock {
 
     fn failing(message: &str) -> Self {
         Self {
-            result: Err(message.to_string()),
+            result: Err(ClockError::Unavailable(message.to_string())),
             calls: Mutex::new(0),
         }
     }
 }
 
 impl UnixMillisClock for RecordingClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         *self.calls.lock().unwrap() += 1;
         self.result.clone()
     }
@@ -316,7 +319,9 @@ fn malformed_and_raw_empty_active_settings_return_exact_parse_errors_without_mut
             .load_state()
             .unwrap_err();
 
-        assert_eq!(error, expected_error);
+        assert!(
+            matches!(error, ProjectError::Serialization(ref source) if source.to_string() == expected_error)
+        );
         assert_eq!(*store.state.lock().unwrap(), original);
         assert_eq!(*store.calls.lock().unwrap(), vec!["load_state"]);
     }
@@ -416,12 +421,12 @@ fn create_propagates_clock_and_store_errors_without_partial_writes() {
         defaults: ProjectDefaultsInput::default(),
     };
 
-    assert_eq!(
+    assert!(matches!(
         service(&clock_store, &clock_ids, &clock)
             .create_project(input.clone())
             .unwrap_err(),
-        "clock failed exactly"
-    );
+        ProjectError::Clock(ClockError::Unavailable(reason)) if reason == "clock failed exactly"
+    ));
     assert!(clock_store.state.lock().unwrap().projects.is_empty());
     assert!(clock_store.calls.lock().unwrap().is_empty());
     assert_eq!(*clock_ids.0.lock().unwrap(), vec!["id-clock"]);
@@ -429,12 +434,12 @@ fn create_propagates_clock_and_store_errors_without_partial_writes() {
     let failing_store = MemoryProjectStore::default();
     failing_store.fail("store failed exactly");
     let store_ids = SequenceIds(Mutex::new(vec!["id-store".to_string()]));
-    assert_eq!(
+    assert!(matches!(
         service(&failing_store, &store_ids, &FixedClock(88))
             .create_project(input)
             .unwrap_err(),
-        "store failed exactly"
-    );
+        ProjectError::Repository(reason) if reason == "store failed exactly"
+    ));
     assert!(failing_store.state.lock().unwrap().projects.is_empty());
     assert!(store_ids.0.lock().unwrap().is_empty());
     assert_eq!(*failing_store.calls.lock().unwrap(), vec!["insert_project"]);
@@ -674,12 +679,12 @@ fn replace_projects_propagates_store_error_without_partial_write() {
     store.fail("replace failed exactly");
     let ids = SequenceIds(Mutex::new(vec![]));
 
-    assert_eq!(
+    assert!(matches!(
         service(&store, &ids, &FixedClock(0))
             .replace_projects_json(vec![json!({"id": "new", "name": "New"})])
             .unwrap_err(),
-        "replace failed exactly"
-    );
+        ProjectError::Repository(reason) if reason == "replace failed exactly"
+    ));
     assert_eq!(*store.state.lock().unwrap(), original);
     assert_eq!(*store.calls.lock().unwrap(), vec!["replace_projects"]);
 }

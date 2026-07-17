@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::ports::time::UnixMillisClock;
+use crate::recovery::RecoveryError;
 use crate::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_input_with_source_paths,
     recovered_item_from_saved_input_with_source_paths, snapshot_from_input_with_source_paths_at,
@@ -28,11 +29,11 @@ impl<'a> RecoveryService<'a> {
         }
     }
 
-    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, String> {
+    pub fn load_snapshot(&self) -> Result<RecoverySnapshot, RecoveryError> {
         self.load_snapshot_at(self.clock.now_ms()?)
     }
 
-    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, String> {
+    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<RecoverySnapshot, RecoveryError> {
         let input = self.store.load_snapshot_input()?;
         let source_paths = SourcePathStatusProviderRef(self.source_paths);
         Ok(snapshot_from_input_with_source_paths_at(
@@ -47,7 +48,7 @@ impl<'a> RecoveryService<'a> {
         &self,
         items: Vec<RecoveryItemInput>,
         now_ms: u64,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         let source_paths = SourcePathStatusProviderRef(self.source_paths);
         let items = items
             .into_iter()
@@ -61,7 +62,10 @@ impl<'a> RecoveryService<'a> {
         Ok(snapshot)
     }
 
-    pub fn save_snapshot(&self, items: Vec<RecoveryItemInput>) -> Result<RecoverySnapshot, String> {
+    pub fn save_snapshot(
+        &self,
+        items: Vec<RecoveryItemInput>,
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.save_snapshot_at(items, self.clock.now_ms()?)
     }
 
@@ -70,7 +74,7 @@ impl<'a> RecoveryService<'a> {
         queue_items: Vec<RecoveryItemInput>,
         resolved_ids: Vec<String>,
         now_ms: u64,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         let mut observed_item_ids = resolved_ids
             .into_iter()
             .filter_map(|id| non_empty_string(&id))
@@ -105,7 +109,7 @@ impl<'a> RecoveryService<'a> {
         &self,
         queue_items: Vec<RecoveryItemInput>,
         resolved_ids: Vec<String>,
-    ) -> Result<RecoverySnapshot, String> {
+    ) -> Result<RecoverySnapshot, RecoveryError> {
         self.persist_queue_snapshot_at(queue_items, resolved_ids, self.clock.now_ms()?)
     }
 }

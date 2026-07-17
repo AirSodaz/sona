@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::ports::time::UnixMillisClock;
 
+use super::TaskLedgerError;
 use super::repository::TaskLedgerStore;
 use super::types::{
     TASK_LEDGER_VERSION, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
@@ -19,11 +20,11 @@ impl<'a> TaskLedgerService<'a> {
         Self { store, clock }
     }
 
-    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.load_snapshot_at(self.clock.now_ms()?)
     }
 
-    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
+    pub fn load_snapshot_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let records = self.store.load_records()?;
         Ok(snapshot_from_records_at(records, now_ms))
     }
@@ -32,13 +33,16 @@ impl<'a> TaskLedgerService<'a> {
         &self,
         record: TaskLedgerRecord,
         now_ms: u64,
-    ) -> Result<TaskLedgerSnapshot, String> {
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let record = normalize_record_at(record, now_ms);
         self.store.upsert_record(&record)?;
         self.load_snapshot_at(now_ms)
     }
 
-    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<TaskLedgerSnapshot, String> {
+    pub fn upsert_task(
+        &self,
+        record: TaskLedgerRecord,
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.upsert_task_at(record, self.clock.now_ms()?)
     }
 
@@ -47,7 +51,7 @@ impl<'a> TaskLedgerService<'a> {
         id: &str,
         patch: TaskLedgerPatch,
         now_ms: u64,
-    ) -> Result<TaskLedgerSnapshot, String> {
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut update = |record| Ok(apply_typed_patch_at(record, id, &patch, now_ms));
         self.store.update_record(id, &mut update)?;
         self.load_snapshot_at(now_ms)
@@ -57,7 +61,7 @@ impl<'a> TaskLedgerService<'a> {
         &self,
         id: &str,
         patch: TaskLedgerPatch,
-    ) -> Result<TaskLedgerSnapshot, String> {
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.patch_task_at(id, patch, self.clock.now_ms()?)
     }
 
@@ -66,32 +70,40 @@ impl<'a> TaskLedgerService<'a> {
         id: &str,
         patch: Value,
         now_ms: u64,
-    ) -> Result<TaskLedgerSnapshot, String> {
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut update = |record| merge_json_patch_at(record, id, &patch, now_ms);
         self.store.update_record(id, &mut update)?;
         self.load_snapshot_at(now_ms)
     }
 
-    pub fn patch_task_json(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+    pub fn patch_task_json(
+        &self,
+        id: &str,
+        patch: Value,
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.patch_task_json_at(id, patch, self.clock.now_ms()?)
     }
 
-    pub fn remove_task_at(&self, id: &str, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
+    pub fn remove_task_at(
+        &self,
+        id: &str,
+        now_ms: u64,
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.store.remove_record(id)?;
         self.load_snapshot_at(now_ms)
     }
 
-    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, String> {
+    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.remove_task_at(id, self.clock.now_ms()?)
     }
 
-    pub fn clear_resolved_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, String> {
+    pub fn clear_resolved_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut should_remove = |record: &TaskLedgerRecord| !is_retained_status(&record.status);
         self.store.remove_records_matching(&mut should_remove)?;
         self.load_snapshot_at(now_ms)
     }
 
-    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, String> {
+    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.clear_resolved_at(self.clock.now_ms()?)
     }
 }
@@ -164,24 +176,20 @@ fn merge_json_patch_at(
     id: &str,
     patch: &Value,
     now_ms: u64,
-) -> Result<TaskLedgerRecord, String> {
+) -> Result<TaskLedgerRecord, TaskLedgerError> {
     if let Some(patch_object) = patch.as_object() {
-        let mut current = serde_json::to_value(&record).map_err(serialization_error)?;
+        let mut current = serde_json::to_value(&record)?;
         if let Some(current_object) = current.as_object_mut() {
             for (key, value) in patch_object {
                 current_object.insert(key.clone(), value.clone());
             }
         }
-        record = serde_json::from_value(current).map_err(serialization_error)?;
+        record = serde_json::from_value(current)?;
     }
 
     record.id = id.to_string();
     record.updated_at = now_ms;
     Ok(normalize_record_at(record, now_ms))
-}
-
-fn serialization_error(error: serde_json::Error) -> String {
-    format!("Serialization error: {error}")
 }
 
 fn normalize_record_at(mut record: TaskLedgerRecord, now_ms: u64) -> TaskLedgerRecord {

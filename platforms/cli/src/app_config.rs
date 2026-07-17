@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use sona_core::config::AppConfigRepositorySnapshot;
+use sona_core::config::{AppConfigRepositorySnapshot, ConfigError};
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::path::PathBuf;
@@ -41,7 +41,7 @@ fn run_app_config_show(args: AppConfigShowArgs) -> CliResult<CliOutput> {
         .map_err(|error| CliError::Io(error.to_string()))?;
     let snapshot = SqliteAppConfigAdapter::new(Arc::new(database), Arc::new(SystemClock))
         .inspect_state()
-        .map_err(CliError::Io)?;
+        .map_err(map_config_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -50,6 +50,17 @@ fn run_app_config_show(args: AppConfigShowArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
+}
+
+fn map_config_error(error: ConfigError) -> CliError {
+    let message = error.to_string();
+    match error {
+        ConfigError::Json(_) | ConfigError::Validation { .. } | ConfigError::InvalidLogLevel(_) => {
+            CliError::Validation(message)
+        }
+        ConfigError::Serialization(_) => CliError::Serialize(message),
+        ConfigError::Repository(_) => CliError::Io(message),
+    }
 }
 
 fn render_app_config_table(snapshot: Option<&AppConfigRepositorySnapshot>) -> String {
@@ -90,4 +101,42 @@ fn render_app_config_table(snapshot: Option<&AppConfigRepositorySnapshot>) -> St
         append_table_row(&mut output, &values, &widths);
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_config_error;
+    use crate::CliError;
+    use sona_core::config::ConfigError;
+
+    fn json_error() -> serde_json::Error {
+        serde_json::from_str::<serde_json::Value>("{").unwrap_err()
+    }
+
+    #[test]
+    fn maps_config_error_variants_to_cli_categories() {
+        assert!(matches!(
+            map_config_error(ConfigError::Json(json_error())),
+            CliError::Validation(_)
+        ));
+        assert!(matches!(
+            map_config_error(ConfigError::Validation {
+                field: "theme".to_string(),
+                reason: "invalid".to_string(),
+            }),
+            CliError::Validation(_)
+        ));
+        assert!(matches!(
+            map_config_error(ConfigError::InvalidLogLevel("verbose".to_string())),
+            CliError::Validation(_)
+        ));
+        assert!(matches!(
+            map_config_error(ConfigError::Serialization(json_error())),
+            CliError::Serialize(_)
+        ));
+        assert!(matches!(
+            map_config_error(ConfigError::Repository("database unavailable".to_string())),
+            CliError::Io(_)
+        ));
+    }
 }

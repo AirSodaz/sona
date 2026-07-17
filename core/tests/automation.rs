@@ -5,6 +5,7 @@ use sona_core::automation::{
     AutomationRuntimePathMetadata, AutomationRuntimeRuleConfig, collect_runtime_rule_path_result,
     resolve_batch_model_path, should_consider_runtime_candidate_path, validate_rule_activation,
 };
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 
 #[test]
 fn valid_online_asr_and_custom_llm_rule_passes_activation_validation() {
@@ -161,13 +162,20 @@ fn runtime_path_collection_classifies_adapter_metadata_states() {
     let error_result = collect_runtime_rule_path_result(
         &rule,
         "C:\\watch\\meeting.wav",
-        Err("denied".to_string()),
+        Err(FileSystemError::new(
+            FileSystemOperation::Metadata,
+            "C:\\watch\\meeting.wav",
+            "denied",
+        )),
     );
     assert_eq!(
         error_result.outcome,
         AutomationRuntimePathCollectionOutcome::Error
     );
-    assert_eq!(error_result.error.as_deref(), Some("denied"));
+    assert_eq!(
+        error_result.error.as_deref(),
+        Some("Filesystem read metadata failed for C:\\watch\\meeting.wav: denied")
+    );
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use sona_core::config::{
     AppConfigLibrary, AppConfigStartupProjection, AppConfigStore, AppConfigStoredState,
-    HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord,
+    ConfigError, HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord,
     SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
     TextReplacementRuleRecord, TextReplacementSetRecord,
 };
@@ -12,7 +12,7 @@ use sona_sqlite::{Database, DatabaseError, SqliteAppConfigAdapter, SqliteConfigS
 struct FixedClock;
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
         Ok(1)
     }
 }
@@ -756,7 +756,10 @@ fn nested_rule_trigger_failure_rolls_back_base_and_every_library_table() {
     let mut rejected = state("rejected", 40);
     rejected.library.text_replacement_sets[0].rules[0].id = "bad-rule".into();
 
-    assert!(AppConfigStore::replace_state(&store, rejected).is_err());
+    assert!(matches!(
+        AppConfigStore::replace_state(&store, rejected),
+        Err(ConfigError::Repository(message)) if message.contains("bad nested rule")
+    ));
     assert_eq!(AppConfigStore::load_state(&store).unwrap(), Some(original));
 }
 
@@ -794,6 +797,19 @@ fn settings_preserve_exact_raw_json_text() {
         AppConfigStore::load_setting_json(&store, "raw").unwrap(),
         Some(raw)
     );
+}
+
+#[test]
+fn adapter_preserves_core_json_error_variant_for_invalid_setting_json() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let store = SqliteConfigStore::new(Arc::clone(&db));
+    AppConfigStore::set_setting_json(&store, "invalid", "{".to_string()).unwrap();
+    let adapter = SqliteAppConfigAdapter::new(db, Arc::new(FixedClock));
+
+    assert!(matches!(
+        adapter.get_setting("invalid"),
+        Err(ConfigError::Serialization(_))
+    ));
 }
 
 #[test]

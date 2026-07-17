@@ -5,10 +5,13 @@ use crate::domain::{BuiltinLlmProvider, LlmProvider};
 use crate::ports::asr::{
     VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY, VOLCENGINE_DOUBAO_PROVIDER_ID, online_asr_providers,
 };
+use crate::ports::fs::FileSystemError;
 
+mod error;
 pub mod repository;
 pub mod service;
 
+pub use error::AutomationError;
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -275,7 +278,7 @@ pub fn should_consider_runtime_candidate_path(
 pub fn collect_runtime_rule_path_result(
     rule: &AutomationRuntimeRuleConfig,
     file_path: &str,
-    metadata: Result<Option<AutomationRuntimePathMetadata>, String>,
+    metadata: Result<Option<AutomationRuntimePathMetadata>, FileSystemError>,
 ) -> AutomationRuntimePathCollectionResult {
     if !is_supported_runtime_media_path(file_path) {
         return runtime_path_result(
@@ -325,7 +328,7 @@ pub fn collect_runtime_rule_path_result(
             file_path,
             AutomationRuntimePathCollectionOutcome::Error,
             None,
-            Some(error),
+            Some(error.to_string()),
         ),
     }
 }

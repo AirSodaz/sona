@@ -1,4 +1,5 @@
 use serde_json::json;
+use sona_core::recovery::RecoveryError;
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot, RecoverySnapshotInput};
 use sona_recovery_fs::{FsRecoveryAdapter, FsRecoverySnapshotStore};
@@ -16,7 +17,7 @@ fn first_load_creates_the_canonical_empty_snapshot_file() {
     assert_eq!(input, RecoverySnapshotInput::default());
     assert_eq!(
         fs::read_to_string(path).unwrap(),
-        "{\n  \"version\": 1,\n  \"updatedAt\": null,\n  \"items\": []\n}"
+        "{\n  \"version\": 2,\n  \"updatedAt\": null,\n  \"items\": []\n}"
     );
 }
 
@@ -73,9 +74,14 @@ fn load_returns_an_error_when_recovery_directory_cannot_be_created() {
     let dir = tempdir().unwrap();
     let blocked = dir.path().join("blocked");
     File::create(&blocked).unwrap();
-    let store = FsRecoverySnapshotStore::new(blocked);
+    let store = FsRecoverySnapshotStore::new(blocked.clone());
 
-    assert!(store.load_snapshot_input().is_err());
+    let error = store.load_snapshot_input().unwrap_err();
+    assert!(matches!(
+        error,
+        RecoveryError::Repository(reason)
+            if reason.contains("create directory") && reason.contains(blocked.to_string_lossy().as_ref())
+    ));
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use sona_core::recovery::types::RecoverySnapshot;
+use sona_core::recovery::{RecoveryError, types::RecoverySnapshot};
 use sona_recovery_fs::FsRecoveryAdapter;
 use std::path::PathBuf;
 
@@ -37,7 +37,7 @@ pub fn run_recovery(args: RecoveryArgs) -> CliResult<CliOutput> {
 fn run_recovery_list(args: RecoveryListArgs) -> CliResult<CliOutput> {
     let snapshot = FsRecoveryAdapter::new(args.app_data_dir)
         .load_snapshot()
-        .map_err(CliError::Io)?;
+        .map_err(map_recovery_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&snapshot)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -46,6 +46,15 @@ fn run_recovery_list(args: RecoveryListArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
+}
+
+fn map_recovery_error(error: RecoveryError) -> CliError {
+    let message = error.to_string();
+    match error {
+        RecoveryError::Repository(_) | RecoveryError::Path(_) | RecoveryError::Clock(_) => {
+            CliError::Io(message)
+        }
+    }
 }
 
 fn render_recovery_table(snapshot: &RecoverySnapshot) -> String {
@@ -90,7 +99,7 @@ mod tests {
 
     fn snapshot_with_rows(rows: &[(&str, &str)]) -> RecoverySnapshot {
         serde_json::from_value(json!({
-            "version": 1,
+            "version": 2,
             "updatedAt": 42,
             "items": rows.iter().map(|(id, filename)| json!({
                 "id": id,
@@ -151,5 +160,33 @@ mod tests {
 
         assert_eq!(stage_columns.len(), 2);
         assert_eq!(stage_columns[0], stage_columns[1]);
+    }
+
+    #[test]
+    fn maps_recovery_error_variants_to_io() {
+        use crate::CliError;
+        use sona_core::ports::{
+            path::{PathKind, PathProviderError},
+            time::ClockError,
+        };
+        use sona_core::recovery::RecoveryError;
+
+        assert!(matches!(
+            super::map_recovery_error(RecoveryError::Repository("storage unavailable".to_string())),
+            CliError::Io(_)
+        ));
+        assert!(matches!(
+            super::map_recovery_error(RecoveryError::Path(PathProviderError::new(
+                PathKind::AppData,
+                "path unavailable"
+            ))),
+            CliError::Io(_)
+        ));
+        assert!(matches!(
+            super::map_recovery_error(RecoveryError::Clock(ClockError::Unavailable(
+                "system clock unavailable".to_string()
+            ))),
+            CliError::Io(_)
+        ));
     }
 }

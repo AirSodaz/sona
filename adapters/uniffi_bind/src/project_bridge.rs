@@ -1,7 +1,9 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+#[cfg(test)]
+use sona_core::ports::time::ClockError;
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::{ProjectCreateInput, ProjectIdGenerator};
+use sona_core::project::{ProjectCreateInput, ProjectError, ProjectIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{Database, SqliteProjectAdapter};
 use std::path::Path;
@@ -24,7 +26,7 @@ pub(crate) fn replace_projects_json(
     projects_json: String,
 ) -> SonaCoreBindingResult<()> {
     let projects = parse_json_array("projects", &projects_json)?;
-    with_project_adapter(
+    with_project_input_adapter(
         &app_data_dir,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
@@ -120,7 +122,7 @@ fn update_project_json_with_clock(
 ) -> SonaCoreBindingResult<String> {
     let project_id = parse_project_id("project ID", &project_id)?;
     let updates = parse_json_object("project updates", &updates_json)?;
-    with_project_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
+    with_project_input_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
         adapter.update_project_json(&project_id, updates)
     })
     .and_then(serialize_project)
@@ -133,11 +135,25 @@ fn with_project_adapter<T, F>(
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteProjectAdapter) -> Result<T, String>,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(project_error)?;
     let adapter = SqliteProjectAdapter::new(Arc::new(database), ids, clock);
     operation(&adapter).map_err(project_error)
+}
+
+fn with_project_input_adapter<T, F>(
+    app_data_dir: &str,
+    ids: Arc<dyn ProjectIdGenerator>,
+    clock: Arc<dyn UnixMillisClock>,
+    operation: F,
+) -> SonaCoreBindingResult<T>
+where
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError>,
+{
+    let database = Database::open(Path::new(app_data_dir)).map_err(project_error)?;
+    let adapter = SqliteProjectAdapter::new(Arc::new(database), ids, clock);
+    operation(&adapter).map_err(project_input_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -215,6 +231,15 @@ fn project_error(reason: impl ToString) -> SonaCoreBindingError {
     }
 }
 
+fn project_input_error(error: ProjectError) -> SonaCoreBindingError {
+    match error {
+        ProjectError::Serialization(source) => {
+            invalid_input(format!("Invalid project JSON: {source}"))
+        }
+        error => project_error(error),
+    }
+}
+
 #[cfg(test)]
 fn create_project_json_at(
     app_data_dir: String,
@@ -257,7 +282,7 @@ struct FixedClock(u64);
 
 #[cfg(test)]
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
@@ -271,7 +296,10 @@ mod tests {
     };
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
+    use sona_core::ports::time::{ClockError, UnixMillisClock};
+    use sona_runtime_fs::UuidGenerator;
     use std::fs;
+    use std::sync::Arc;
 
     fn app_data_dir(dir: &tempfile::TempDir) -> String {
         dir.path().to_string_lossy().into_owned()
@@ -463,5 +491,27 @@ mod tests {
         ] {
             assert!(matches!(error, SonaCoreBindingError::Project { .. }));
         }
+    }
+
+    #[test]
+    fn clock_failures_are_project_errors() {
+        struct FailingClock;
+
+        impl UnixMillisClock for FailingClock {
+            fn now_ms(&self) -> Result<u64, ClockError> {
+                Err(ClockError::Unavailable("test clock failure".to_string()))
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let error = super::create_project_json_with_runtime(
+            app_data_dir(&dir),
+            json!({"name":"New", "defaults":{}}).to_string(),
+            Arc::new(UuidGenerator),
+            Arc::new(FailingClock),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::Project { .. }));
     }
 }

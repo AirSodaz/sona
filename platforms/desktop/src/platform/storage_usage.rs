@@ -6,8 +6,9 @@ pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClea
 pub async fn get_usage_snapshot<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<StorageUsageSnapshot, String> {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
 
     let snapshot = tauri::async_runtime::spawn_blocking(move || {
@@ -27,8 +28,9 @@ pub async fn get_usage_snapshot<R: Runtime>(
 pub async fn clear_webview_browsing_data<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<WebviewBrowsingDataClearResult, String> {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let before_bytes = observable_webview_cache_bytes(app_local_data_dir.clone()).await?;
     let Some(main_window) = app.get_webview_window("main") else {
         return Err("Main WebView window is not available.".to_string());

@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+mod error;
 mod repository;
 mod service;
 
+pub use error::ProjectError;
 pub use repository::{
     ActiveProjectSelection, ProjectDefaultsPatch, ProjectPatch, ProjectRepositorySnapshot,
     ProjectStore, ProjectStoredState,
@@ -92,20 +94,20 @@ pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub const DEFAULT_TRANSLATION_LANGUAGE: &str = "zh";
 pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
 
-pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, String> {
+pub fn normalize_project_record_for_import(input: &Value) -> Result<Value, ProjectError> {
     normalize_project_record_for_import_with_timestamp(input, 0)
 }
 
 pub fn normalize_project_record_for_import_with_timestamp(
     input: &Value,
     fallback_timestamp: u64,
-) -> Result<Value, String> {
+) -> Result<Value, ProjectError> {
     let project = normalize_project_value_with_timestamp(
         input,
         &ProjectListOptions::default(),
         fallback_timestamp,
     );
-    serde_json::to_value(project).map_err(|error| error.to_string())
+    serde_json::to_value(project).map_err(ProjectError::Serialization)
 }
 
 pub fn normalize_project_value(input: &Value, options: &ProjectListOptions) -> ProjectRecord {

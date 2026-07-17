@@ -1,4 +1,5 @@
 use serde_json::Value;
+use sona_core::config::ConfigError;
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::sync::Arc;
@@ -6,10 +7,10 @@ use tauri::{AppHandle, Runtime};
 
 fn run_app_config_adapter<T>(
     db: Arc<Database>,
-    operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, String>,
+    operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 ) -> Result<T, String> {
     let adapter = SqliteAppConfigAdapter::new(db, Arc::new(SystemClock));
-    operation(&adapter)
+    operation(&adapter).map_err(|error| error.to_string())
 }
 
 pub fn load_config<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Value>, String> {
@@ -96,6 +97,9 @@ mod tests {
         let error =
             run_app_config_adapter(db, |adapter| adapter.get_setting("locale")).unwrap_err();
 
-        assert_eq!(error, "Query error: no such table: app_settings");
+        assert_eq!(
+            error,
+            "Configuration repository error: Query error: no such table: app_settings"
+        );
     }
 }

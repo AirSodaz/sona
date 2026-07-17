@@ -1,4 +1,4 @@
-pub use sona_core::ports::path::{PathKind, PathProvider};
+pub use sona_core::ports::path::{PathKind, PathProvider, PathProviderError};
 pub use sona_runtime_fs::{
     default_desktop_app_data_roots, default_desktop_models_dir,
     select_desktop_models_dir_from_app_roots,
@@ -36,37 +36,47 @@ impl<R: Runtime> TauriPathProvider<R> {
 }
 
 impl<R: Runtime> PathProvider for TauriPathProvider<R> {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
         match kind {
-            PathKind::AppData => self.app.path().app_data_dir().map_err(|e| e.to_string()),
+            PathKind::AppData => self
+                .app
+                .path()
+                .app_data_dir()
+                .map_err(|error| PathProviderError::new(kind, error.to_string())),
             PathKind::AppLocalData => self
                 .app
                 .path()
                 .app_local_data_dir()
-                .map_err(|e| e.to_string()),
-            PathKind::AppLogData => self.app.path().app_log_dir().map_err(|e| e.to_string()),
+                .map_err(|error| PathProviderError::new(kind, error.to_string())),
+            PathKind::AppLogData => self
+                .app
+                .path()
+                .app_log_dir()
+                .map_err(|error| PathProviderError::new(kind, error.to_string())),
         }
     }
 }
 
 #[cfg(test)]
 pub struct MockPathProvider {
-    entries: HashMap<PathKind, Result<PathBuf, String>>,
+    entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>,
 }
 
 #[cfg(test)]
 impl MockPathProvider {
-    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, String>>) -> Self {
+    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>) -> Self {
         Self { entries }
     }
 }
 
 #[cfg(test)]
 impl PathProvider for MockPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
-        self.entries
-            .get(&kind)
-            .cloned()
-            .unwrap_or_else(|| Err(format!("path kind {:?} not configured", kind)))
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+        self.entries.get(&kind).cloned().unwrap_or_else(|| {
+            Err(PathProviderError::new(
+                kind,
+                format!("path kind {kind:?} not configured"),
+            ))
+        })
     }
 }

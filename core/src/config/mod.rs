@@ -27,6 +27,7 @@ pub fn resolve_effective_config(global_config: Value, project: Option<Value>) ->
 }
 
 pub fn validate_app_config(config: &Value) -> Result<(), ConfigError> {
-    serde_json::from_value::<AppConfig>(service::app_config_payload(config).clone())?;
+    serde_json::from_value::<AppConfig>(service::app_config_payload(config).clone())
+        .map_err(ConfigError::Json)?;
     Ok(())
 }

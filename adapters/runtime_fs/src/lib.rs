@@ -20,8 +20,8 @@ use sona_core::export::ExportFormat;
 use sona_core::models::catalog::ModelSummary;
 use sona_core::models::paths::{ModelsDirStatus, status_of};
 use sona_core::models::preset_models::{PresetModel, preset_models};
-use sona_core::ports::fs::{FileMetadata, FileSystem};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::fs::{FileMetadata, FileSystem, FileSystemError, FileSystemOperation};
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::config::{
@@ -37,7 +37,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 const GLOB_PATTERN_CHARS: &[char] = &['*', '?', '['];
@@ -91,57 +91,108 @@ impl TagIdGenerator for UuidGenerator {
 }
 
 impl UnixMillisClock for SystemClock {
-    fn now_ms(&self) -> Result<u64, String> {
-        let millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| error.to_string())?
-            .as_millis();
-        u64::try_from(millis).map_err(|error| error.to_string())
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        unix_millis_from_system_time(SystemTime::now())
+    }
+}
+
+fn unix_millis_from_system_time(time: SystemTime) -> Result<u64, ClockError> {
+    let duration = time
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| ClockError::BeforeUnixEpoch(error.to_string()))?;
+    unix_millis_from_duration(duration)
+}
+
+fn unix_millis_from_duration(duration: Duration) -> Result<u64, ClockError> {
+    u64::try_from(duration.as_millis()).map_err(|error| ClockError::OutOfRange(error.to_string()))
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::{unix_millis_from_duration, unix_millis_from_system_time};
+    use sona_core::ports::time::ClockError;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn system_time_conversion_classifies_pre_epoch_and_out_of_range_values() {
+        let before_epoch = UNIX_EPOCH.checked_sub(Duration::from_millis(1)).unwrap();
+        assert!(matches!(
+            unix_millis_from_system_time(before_epoch),
+            Err(ClockError::BeforeUnixEpoch(_))
+        ));
+
+        let too_large = Duration::from_millis(u64::MAX)
+            .checked_add(Duration::from_millis(1))
+            .unwrap();
+        assert!(matches!(
+            unix_millis_from_duration(too_large),
+            Err(ClockError::OutOfRange(_))
+        ));
     }
 }
 
 impl FileSystem for RealFileSystem {
-    fn create_dir_all(&self, path: &Path) -> Result<(), String> {
-        fs::create_dir_all(path).map_err(|error| error.to_string())
+    fn create_dir_all(&self, path: &Path) -> Result<(), FileSystemError> {
+        fs::create_dir_all(path)
+            .map_err(|error| file_system_error(FileSystemOperation::CreateDirectory, path, error))
     }
 
-    fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
+    fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), FileSystemError> {
         if let Some(parent) = path.parent() {
             self.create_dir_all(parent)?;
         }
-        fs::write(path, contents).map_err(|error| error.to_string())
+        fs::write(path, contents)
+            .map_err(|error| file_system_error(FileSystemOperation::WriteFile, path, error))
     }
 
-    fn read_file(&self, path: &Path) -> Result<Vec<u8>, String> {
-        fs::read(path).map_err(|error| error.to_string())
+    fn read_file(&self, path: &Path) -> Result<Vec<u8>, FileSystemError> {
+        fs::read(path)
+            .map_err(|error| file_system_error(FileSystemOperation::ReadFile, path, error))
     }
 
-    fn read_to_string(&self, path: &Path) -> Result<String, String> {
-        fs::read_to_string(path).map_err(|error| error.to_string())
+    fn read_to_string(&self, path: &Path) -> Result<String, FileSystemError> {
+        fs::read_to_string(path)
+            .map_err(|error| file_system_error(FileSystemOperation::ReadText, path, error))
     }
 
-    fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
-        fs::rename(from, to).map_err(|error| error.to_string())
+    fn rename(&self, from: &Path, to: &Path) -> Result<(), FileSystemError> {
+        fs::rename(from, to).map_err(|error| {
+            FileSystemError::with_target(FileSystemOperation::Rename, from, to, error.to_string())
+        })
     }
 
-    fn remove_file(&self, path: &Path) -> Result<(), String> {
-        fs::remove_file(path).map_err(|error| error.to_string())
+    fn remove_file(&self, path: &Path) -> Result<(), FileSystemError> {
+        fs::remove_file(path)
+            .map_err(|error| file_system_error(FileSystemOperation::RemoveFile, path, error))
     }
 
-    fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
-        fs::remove_dir_all(path).map_err(|error| error.to_string())
+    fn remove_dir_all(&self, path: &Path) -> Result<(), FileSystemError> {
+        fs::remove_dir_all(path)
+            .map_err(|error| file_system_error(FileSystemOperation::RemoveDirectory, path, error))
     }
 
-    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, String> {
+    fn metadata(&self, path: &Path) -> Result<Option<FileMetadata>, FileSystemError> {
         match fs::metadata(path) {
             Ok(metadata) => Ok(Some(FileMetadata {
                 is_file: metadata.is_file(),
                 is_dir: metadata.is_dir(),
             })),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.to_string()),
+            Err(error) => Err(file_system_error(
+                FileSystemOperation::Metadata,
+                path,
+                error,
+            )),
         }
     }
+}
+
+fn file_system_error(
+    operation: FileSystemOperation,
+    path: &Path,
+    error: std::io::Error,
+) -> FileSystemError {
+    FileSystemError::new(operation, path, error.to_string())
 }
 
 pub fn write_json_pretty_atomic<T: Serialize + ?Sized>(
@@ -156,13 +207,16 @@ pub fn remove_path_if_exists(path: &Path) -> Result<(), String> {
 }
 
 pub fn ensure_directory_exists(path: &Path) -> Result<(), String> {
-    fs::create_dir_all(path).map_err(|error| error.to_string())
+    RealFileSystem
+        .create_dir_all(path)
+        .map_err(|error| error.to_string())
 }
 
 pub fn path_exists(path: &Path) -> Result<bool, String> {
     RealFileSystem
         .metadata(path)
         .map(|metadata| metadata.is_some())
+        .map_err(|error| error.to_string())
 }
 
 pub fn write_transcript_output_file(path: &Path, output: &str) -> Result<(), String> {
@@ -178,7 +232,12 @@ pub fn write_cli_config_template_file(
 ) -> Result<(), String> {
     let fs = RealFileSystem;
 
-    if fs.metadata(path)?.is_some() && !force {
+    if fs
+        .metadata(path)
+        .map_err(|error| error.to_string())?
+        .is_some()
+        && !force
+    {
         return Err(format!(
             "Config file already exists: {}. Use --force to overwrite.",
             path.display()
@@ -211,7 +270,8 @@ fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
 
 fn write_binary_atomic(fs: &dyn FileSystem, path: &Path, contents: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs.create_dir_all(parent)?;
+        fs.create_dir_all(parent)
+            .map_err(|error| error.to_string())?;
     }
 
     let temp_path = path.with_extension(format!(
@@ -222,7 +282,8 @@ fn write_binary_atomic(fs: &dyn FileSystem, path: &Path, contents: &[u8]) -> Res
         Uuid::new_v4()
     ));
 
-    fs.write_file(&temp_path, contents)?;
+    fs.write_file(&temp_path, contents)
+        .map_err(|error| error.to_string())?;
 
     replace_path_atomically(fs, &temp_path, path)
 }
@@ -241,10 +302,14 @@ fn replace_path_atomically(
         Uuid::new_v4()
     );
     let backup_path = final_path.with_extension(&backup_name);
-    let had_existing = fs.metadata(final_path)?.is_some();
+    let had_existing = fs
+        .metadata(final_path)
+        .map_err(|error| error.to_string())?
+        .is_some();
 
     if had_existing {
-        fs.rename(final_path, &backup_path)?;
+        fs.rename(final_path, &backup_path)
+            .map_err(|error| error.to_string())?;
     }
 
     match fs.rename(temp_path, final_path) {
@@ -260,15 +325,15 @@ fn replace_path_atomically(
                 let _ = fs.rename(&backup_path, final_path);
             }
             let _ = remove_path_if_exists_with(fs, temp_path);
-            Err(error)
+            Err(error.to_string())
         }
     }
 }
 
 fn remove_path_if_exists_with(fs: &dyn FileSystem, path: &Path) -> Result<(), String> {
-    match fs.metadata(path)? {
-        Some(meta) if meta.is_dir => fs.remove_dir_all(path),
-        Some(_) => fs.remove_file(path),
+    match fs.metadata(path).map_err(|error| error.to_string())? {
+        Some(meta) if meta.is_dir => fs.remove_dir_all(path).map_err(|error| error.to_string()),
+        Some(_) => fs.remove_file(path).map_err(|error| error.to_string()),
         None => Ok(()),
     }
 }
@@ -412,11 +477,18 @@ pub fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
 
 pub fn automation_runtime_path_metadata(
     file_path: &str,
-) -> Result<Option<AutomationRuntimePathMetadata>, String> {
+) -> Result<Option<AutomationRuntimePathMetadata>, FileSystemError> {
+    let path = Path::new(file_path);
     let metadata = match fs::metadata(file_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.to_string()),
+        Err(error) => {
+            return Err(file_system_error(
+                FileSystemOperation::Metadata,
+                path,
+                error,
+            ));
+        }
     };
 
     let mtime_ms = metadata

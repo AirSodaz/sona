@@ -69,8 +69,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let result = llm_helpers::run_llm_db_task(app_local_data_dir, db, task).await?;
     validate_history_transport(result)
@@ -86,8 +87,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let result =
         run_history_file_task_inner(app_local_data_dir, db, state.file_lock.clone(), task).await?;
@@ -104,8 +106,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let lock = state.file_lock.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -124,8 +127,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let repository = Arc::new(SqliteHistoryStore::new(app_local_data_dir, db));
@@ -146,8 +150,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let lock = state.file_lock.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -166,8 +171,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let repository = Arc::new(SqliteHistoryStore::new(app_local_data_dir, db));
@@ -190,8 +196,9 @@ where
         + Send
         + 'static,
 {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     let archive = state.archive();
     tauri::async_runtime::spawn_blocking(move || {
@@ -259,8 +266,9 @@ pub async fn open_history_folder<R: Runtime>(
     app: &AppHandle<R>,
     state: &HistoryRepositoryState,
 ) -> Result<(), String> {
-    let app_local_data_dir =
-        TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     let db = crate::platform::database::sqlite_database(app);
     {
         let _guard = state.file_lock.lock().map_err(|error| error.to_string())?;

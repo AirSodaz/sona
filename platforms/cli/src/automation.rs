@@ -1,5 +1,8 @@
 use clap::{Args, Subcommand};
-use sona_core::automation::repository::{AutomationRepositoryState, AutomationRuleRecord};
+use sona_core::automation::{
+    AutomationError,
+    repository::{AutomationRepositoryState, AutomationRuleRecord},
+};
 use sona_runtime_fs::UuidGenerator;
 use sona_sqlite::{Database, SqliteAutomationAdapter};
 use std::path::PathBuf;
@@ -41,7 +44,7 @@ fn run_automation_list(args: AutomationListArgs) -> CliResult<CliOutput> {
         .map_err(|error| CliError::Io(error.to_string()))?;
     let state = SqliteAutomationAdapter::new(Arc::new(database), Arc::new(UuidGenerator))
         .load_state()
-        .map_err(CliError::Io)?;
+        .map_err(map_automation_error)?;
     let output = if args.json {
         serde_json::to_string_pretty(&state)
             .map_err(|error| CliError::Serialize(error.to_string()))?
@@ -50,6 +53,13 @@ fn run_automation_list(args: AutomationListArgs) -> CliResult<CliOutput> {
     };
 
     Ok(CliOutput::stdout(output))
+}
+
+fn map_automation_error(error: AutomationError) -> CliError {
+    let message = error.to_string();
+    match error {
+        AutomationError::Repository(_) => CliError::Io(message),
+    }
 }
 
 fn render_automation_table(state: &AutomationRepositoryState) -> String {
@@ -85,4 +95,21 @@ fn rule_row(rule: &AutomationRuleRecord) -> [String; 5] {
         rule.enabled.to_string(),
         sanitize_table_cell(&rule.watch_directory),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_automation_error;
+    use crate::CliError;
+    use sona_core::automation::AutomationError;
+
+    #[test]
+    fn maps_automation_repository_errors_to_io() {
+        assert!(matches!(
+            map_automation_error(AutomationError::Repository(
+                "database unavailable".to_string()
+            )),
+            CliError::Io(_)
+        ));
+    }
 }

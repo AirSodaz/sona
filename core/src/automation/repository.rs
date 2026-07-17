@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::AutomationError;
+
 #[cfg(feature = "specta")]
 use specta::Type;
 
@@ -267,11 +269,11 @@ pub struct AutomationRepositoryState {
 }
 
 pub trait AutomationStore: Send + Sync {
-    fn load_state(&self) -> Result<AutomationRepositoryState, String>;
-    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), String>;
+    fn load_state(&self) -> Result<AutomationRepositoryState, AutomationError>;
+    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), AutomationError>;
     fn replace_processed_entries(
         &self,
         entries: &[AutomationProcessedRecord],
-    ) -> Result<(), String>;
-    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String>;
+    ) -> Result<(), AutomationError>;
+    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), AutomationError>;
 }

@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 
-use sona_core::ports::path::{PathKind, PathProvider};
+use sona_core::ports::path::{PathKind, PathProvider, PathProviderError};
 
 struct TestPathProvider;
 
 impl PathProvider for TestPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
         match kind {
             PathKind::AppLocalData => Ok(PathBuf::from("/sona-test/app-local-data")),
-            _ => Err(format!("path kind {:?} not configured", kind)),
+            _ => Err(PathProviderError::new(
+                kind,
+                format!("path kind {kind:?} not configured"),
+            )),
         }
     }
 }

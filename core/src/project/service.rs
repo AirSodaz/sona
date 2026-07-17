@@ -5,7 +5,7 @@ use crate::ports::time::UnixMillisClock;
 use super::{
     ActiveProjectSelection, DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID,
     DEFAULT_TRANSLATION_LANGUAGE, ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput,
-    ProjectDefaultsPatch, ProjectListOptions, ProjectPatch, ProjectRecord,
+    ProjectDefaultsPatch, ProjectError, ProjectListOptions, ProjectPatch, ProjectRecord,
     ProjectRepositorySnapshot, ProjectStore, ProjectStoredState, ProjectUpdateInput,
     active_project_id_from_value, normalize_defaults,
 };
@@ -29,27 +29,27 @@ impl<'a> ProjectRepositoryService<'a> {
         Self { store, ids, clock }
     }
 
-    pub fn load_state(&self) -> Result<ProjectRepositorySnapshot, String> {
+    pub fn load_state(&self) -> Result<ProjectRepositorySnapshot, ProjectError> {
         snapshot_from_state(self.store.load_state()?)
     }
 
     pub fn list_projects(
         &self,
         _options: ProjectListOptions,
-    ) -> Result<Vec<ProjectRecord>, String> {
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         Ok(self.store.load_state()?.projects)
     }
 
-    pub fn replace_projects_json(&self, projects: Vec<Value>) -> Result<(), String> {
+    pub fn replace_projects_json(&self, projects: Vec<Value>) -> Result<(), ProjectError> {
         let projects = projects.iter().map(normalize_replacement_project).collect();
         self.store.replace_projects(projects)
     }
 
-    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String> {
+    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError> {
         self.store.replace_projects(projects)
     }
 
-    pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
+    pub fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, ProjectError> {
         let now = self.clock.now_ms()?;
         let project = ProjectRecord {
             id: self.ids.generate_id(),
@@ -67,7 +67,7 @@ impl<'a> ProjectRepositoryService<'a> {
         &self,
         project_id: &str,
         updates: Value,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         let Some(updates) = updates.as_object() else {
             return Ok(self
                 .store
@@ -86,7 +86,7 @@ impl<'a> ProjectRepositoryService<'a> {
         &self,
         project_id: &str,
         updates: ProjectUpdateInput,
-    ) -> Result<Option<ProjectRecord>, String> {
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
         let patch = ProjectPatch {
             name: updates.name,
             icon: updates.icon,
@@ -97,19 +97,22 @@ impl<'a> ProjectRepositoryService<'a> {
         self.store.update_project(project_id, patch, updated_at)
     }
 
-    pub fn delete_project(&self, project_id: &str) -> Result<(), String> {
+    pub fn delete_project(&self, project_id: &str) -> Result<(), ProjectError> {
         self.store.delete_project(project_id)
     }
 
-    pub fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
+    pub fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         self.store.reorder_projects(project_ids)
     }
 
-    pub fn get_active_project_id(&self) -> Result<Option<String>, String> {
+    pub fn get_active_project_id(&self) -> Result<Option<String>, ProjectError> {
         Ok(self.get_active_project_selection()?.project_id)
     }
 
-    pub fn get_active_project_selection(&self) -> Result<ActiveProjectSelection, String> {
+    pub fn get_active_project_selection(&self) -> Result<ActiveProjectSelection, ProjectError> {
         active_selection_from_setting_json(
             self.store
                 .load_state()?
@@ -118,14 +121,16 @@ impl<'a> ProjectRepositoryService<'a> {
         )
     }
 
-    pub fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), String> {
+    pub fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), ProjectError> {
         let value = project_id.map(Value::String).unwrap_or(Value::Null);
-        let setting_json = serde_json::to_string(&value).map_err(|error| error.to_string())?;
+        let setting_json = serde_json::to_string(&value)?;
         self.store.set_active_project_setting_json(setting_json)
     }
 }
 
-fn snapshot_from_state(state: ProjectStoredState) -> Result<ProjectRepositorySnapshot, String> {
+fn snapshot_from_state(
+    state: ProjectStoredState,
+) -> Result<ProjectRepositorySnapshot, ProjectError> {
     let active_project_id =
         active_selection_from_setting_json(state.active_project_setting_json.as_deref())?
             .project_id;
@@ -138,11 +143,11 @@ fn snapshot_from_state(state: ProjectStoredState) -> Result<ProjectRepositorySna
 
 fn active_selection_from_setting_json(
     setting_json: Option<&str>,
-) -> Result<ActiveProjectSelection, String> {
+) -> Result<ActiveProjectSelection, ProjectError> {
     let project_id = setting_json
         .map(serde_json::from_str::<Value>)
         .transpose()
-        .map_err(|error| error.to_string())?
+        .map_err(ProjectError::Serialization)?
         .as_ref()
         .and_then(active_project_id_from_value);
 

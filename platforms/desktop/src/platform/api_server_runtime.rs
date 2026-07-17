@@ -10,7 +10,9 @@ pub struct ApiServerRuntimeDirs {
 pub fn resolve_api_server_runtime_dirs(
     provider: &dyn PathProvider,
 ) -> Result<ApiServerRuntimeDirs, String> {
-    let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData)?;
+    let app_local_data_dir = provider
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
     Ok(ApiServerRuntimeDirs {
         temp_dir: app_local_data_dir.join("api_temp"),
         models_dir: app_local_data_dir.join("models"),
@@ -27,7 +29,7 @@ pub fn resolve_api_server_runtime_dirs_for_app<R: tauri::Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::paths::MockPathProvider;
+    use crate::platform::paths::{MockPathProvider, PathProviderError};
     use std::collections::HashMap;
 
     #[test]
@@ -48,12 +50,18 @@ mod tests {
         let mut entries = HashMap::new();
         entries.insert(
             PathKind::AppLocalData,
-            Err("app local data unavailable".to_string()),
+            Err(PathProviderError::new(
+                PathKind::AppLocalData,
+                "app local data unavailable",
+            )),
         );
         let provider = MockPathProvider::from_map(entries);
 
         let error = resolve_api_server_runtime_dirs(&provider).unwrap_err();
 
-        assert_eq!(error, "app local data unavailable");
+        assert_eq!(
+            error,
+            "Failed to resolve AppLocalData path: app local data unavailable"
+        );
     }
 }

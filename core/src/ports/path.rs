@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use thiserror::Error;
 
 /// Path kinds supported by `PathProvider`.
 /// Add variants here as needed; match arms in impls will guide you.
@@ -10,13 +11,29 @@ pub enum PathKind {
     AppLogData,
 }
 
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error("Failed to resolve {kind:?} path: {reason}")]
+pub struct PathProviderError {
+    pub kind: PathKind,
+    pub reason: String,
+}
+
+impl PathProviderError {
+    pub fn new(kind: PathKind, reason: impl Into<String>) -> Self {
+        Self {
+            kind,
+            reason: reason.into(),
+        }
+    }
+}
+
 /// Port for resolving application-specific data directories.
 pub trait PathProvider: Send + Sync {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String>;
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError>;
 }
 
 impl<T: PathProvider + ?Sized> PathProvider for Arc<T> {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
         (**self).resolve_path(kind)
     }
 }
@@ -27,7 +44,7 @@ mod tests {
     use std::collections::HashMap;
 
     struct TestPathProvider {
-        entries: HashMap<PathKind, Result<PathBuf, String>>,
+        entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>,
     }
 
     impl TestPathProvider {
@@ -45,17 +62,19 @@ mod tests {
             Self { entries }
         }
 
-        fn from_map(entries: HashMap<PathKind, Result<PathBuf, String>>) -> Self {
+        fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>) -> Self {
             Self { entries }
         }
     }
 
     impl PathProvider for TestPathProvider {
-        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, String> {
-            self.entries
-                .get(&kind)
-                .cloned()
-                .unwrap_or_else(|| Err(format!("path kind {:?} not configured", kind)))
+        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+            self.entries.get(&kind).cloned().unwrap_or_else(|| {
+                Err(PathProviderError::new(
+                    kind,
+                    format!("path kind {kind:?} not configured"),
+                ))
+            })
         }
     }
 

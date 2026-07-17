@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 use sona_core::config::{AppConfigRepositoryService, AppConfigRepositorySnapshot};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_sqlite::{Database, SqliteConfigStore};
 use std::path::Path;
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 struct FixedClock(u64);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }

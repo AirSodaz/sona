@@ -25,7 +25,7 @@ use sona_sqlite::{
 struct FixedClock;
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
         Ok(5_000)
     }
 }

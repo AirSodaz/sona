@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ProjectRecord;
+use super::{ProjectError, ProjectRecord};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProjectStoredState {
@@ -47,22 +47,25 @@ pub struct ProjectPatch {
 }
 
 pub trait ProjectStore: Send + Sync {
-    fn load_state(&self) -> Result<ProjectStoredState, String>;
+    fn load_state(&self) -> Result<ProjectStoredState, ProjectError>;
 
-    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, String>;
+    fn insert_project(&self, project: ProjectRecord) -> Result<ProjectRecord, ProjectError>;
 
     fn update_project(
         &self,
         project_id: &str,
         patch: ProjectPatch,
         updated_at: u64,
-    ) -> Result<Option<ProjectRecord>, String>;
+    ) -> Result<Option<ProjectRecord>, ProjectError>;
 
-    fn delete_project(&self, project_id: &str) -> Result<(), String>;
+    fn delete_project(&self, project_id: &str) -> Result<(), ProjectError>;
 
-    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), String>;
+    fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError>;
 
-    fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String>;
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError>;
 
-    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), String>;
+    fn set_active_project_setting_json(&self, setting_json: String) -> Result<(), ProjectError>;
 }

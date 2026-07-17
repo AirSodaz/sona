@@ -8,9 +8,9 @@ use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
-    ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagDefaults, TagIdGenerator,
-    TagListOptions, TagPatch, TagRecord, TagRepositoryService, TagRepositorySnapshot, TagStore,
-    TagStoredState, TagUpdateInput,
+    ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagDefaults, TagError,
+    TagIdGenerator, TagListOptions, TagPatch, TagRecord, TagRepositoryService,
+    TagRepositorySnapshot, TagStore, TagStoredState, TagUpdateInput,
 };
 use std::sync::Arc;
 
@@ -49,23 +49,23 @@ where
         }
     }
 
-    pub fn load_state(&self) -> Result<TagRepositorySnapshot, String> {
+    pub fn load_state(&self) -> Result<TagRepositorySnapshot, TagError> {
         self.service().load_state()
     }
 
-    pub fn list_tags(&self, options: TagListOptions) -> Result<Vec<TagRecord>, String> {
+    pub fn list_tags(&self, options: TagListOptions) -> Result<Vec<TagRecord>, TagError> {
         self.service().list_tags(options)
     }
 
-    pub fn replace_tags_json(&self, tags: Vec<Value>) -> Result<(), String> {
+    pub fn replace_tags_json(&self, tags: Vec<Value>) -> Result<(), TagError> {
         self.service().replace_tags_json(tags)
     }
 
-    pub fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), String> {
+    pub fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), TagError> {
         self.service().replace_tags(tags)
     }
 
-    pub fn create_tag(&self, input: TagCreateInput) -> Result<TagRecord, String> {
+    pub fn create_tag(&self, input: TagCreateInput) -> Result<TagRecord, TagError> {
         self.service().create_tag(input)
     }
 
@@ -73,7 +73,7 @@ where
         &self,
         tag_id: &str,
         updates: Value,
-    ) -> Result<Option<TagRecord>, String> {
+    ) -> Result<Option<TagRecord>, TagError> {
         self.service().update_tag_json(tag_id, updates)
     }
 
@@ -81,23 +81,23 @@ where
         &self,
         tag_id: &str,
         updates: TagUpdateInput,
-    ) -> Result<Option<TagRecord>, String> {
+    ) -> Result<Option<TagRecord>, TagError> {
         self.service().update_tag(tag_id, updates)
     }
 
-    pub fn delete_tag(&self, tag_id: &str) -> Result<(), String> {
+    pub fn delete_tag(&self, tag_id: &str) -> Result<(), TagError> {
         self.service().delete_tag(tag_id)
     }
 
-    pub fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, String> {
+    pub fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, TagError> {
         self.service().reorder_tags(tag_ids)
     }
 
-    pub fn get_active_tag_selection(&self) -> Result<ActiveTagSelection, String> {
+    pub fn get_active_tag_selection(&self) -> Result<ActiveTagSelection, TagError> {
         self.service().get_active_tag_selection()
     }
 
-    pub fn set_active_tag_id(&self, tag_id: Option<String>) -> Result<(), String> {
+    pub fn set_active_tag_id(&self, tag_id: Option<String>) -> Result<(), TagError> {
         self.service().set_active_tag_id(tag_id)
     }
 
@@ -291,7 +291,7 @@ impl<D> TagStore for SqliteTagRepository<D>
 where
     D: DatabasePort,
 {
-    fn load_state(&self) -> Result<TagStoredState, String> {
+    fn load_state(&self) -> Result<TagStoredState, TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_read_connection(|conn| {
@@ -313,10 +313,10 @@ where
                     })
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
-    fn insert_tag(&self, tag: TagRecord) -> Result<TagRecord, String> {
+    fn insert_tag(&self, tag: TagRecord) -> Result<TagRecord, TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -326,7 +326,7 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| TagError::Repository(error.to_string()))?;
         Ok(tag)
     }
 
@@ -335,7 +335,7 @@ where
         tag_id: &str,
         patch: TagPatch,
         updated_at: u64,
-    ) -> Result<Option<TagRecord>, String> {
+    ) -> Result<Option<TagRecord>, TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_rw_transaction(|tx| {
@@ -388,10 +388,10 @@ where
                     Ok(Some(tag))
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
-    fn delete_tag(&self, tag_id: &str) -> Result<(), String> {
+    fn delete_tag(&self, tag_id: &str) -> Result<(), TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -405,10 +405,10 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
-    fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), String> {
+    fn replace_tags(&self, tags: Vec<TagRecord>) -> Result<(), TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -435,10 +435,10 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
-    fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, String> {
+    fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_rw_transaction(|tx| {
@@ -463,10 +463,10 @@ where
                     Ok(tags)
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
-    fn set_active_tag_setting_json(&self, setting_json: String) -> Result<(), String> {
+    fn set_active_tag_setting_json(&self, setting_json: String) -> Result<(), TagError> {
         self.get_db()
             .and_then(|db| {
                 db.with_transaction(|tx| {
@@ -478,7 +478,7 @@ where
                     Ok(())
                 })
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 }
 

@@ -62,7 +62,7 @@ where
                     DatabaseError::NotFoundError("Application config is missing.".to_string())
                 })?;
                 let config = app_config_value_from_stored_state(config_state)
-                    .map_err(DatabaseError::Internal)?;
+                    .map_err(|error| DatabaseError::Internal(error.to_string()))?;
                 let tags = load_tags_in_transaction(tx)?;
                 let history = load_history_backup_in_transaction(tx)?;
                 let automation = load_automation_in_transaction(tx)?;

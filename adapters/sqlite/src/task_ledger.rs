@@ -3,6 +3,7 @@ use crate::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
 use sona_core::ports::time::UnixMillisClock;
+use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
@@ -49,11 +50,14 @@ where
         }
     }
 
-    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
+    pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().load_snapshot()
     }
 
-    pub fn upsert_task(&self, record: TaskLedgerRecord) -> Result<TaskLedgerSnapshot, String> {
+    pub fn upsert_task(
+        &self,
+        record: TaskLedgerRecord,
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().upsert_task(record)
     }
 
@@ -61,19 +65,23 @@ where
         &self,
         id: &str,
         patch: TaskLedgerPatch,
-    ) -> Result<TaskLedgerSnapshot, String> {
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().patch_task(id, patch)
     }
 
-    pub fn patch_task_json(&self, id: &str, patch: Value) -> Result<TaskLedgerSnapshot, String> {
+    pub fn patch_task_json(
+        &self,
+        id: &str,
+        patch: Value,
+    ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().patch_task_json(id, patch)
     }
 
-    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, String> {
+    pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().remove_task(id)
     }
 
-    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, String> {
+    pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().clear_resolved()
     }
 
@@ -86,9 +94,9 @@ impl<D> TaskLedgerStore for SqliteLedgerRepository<D>
 where
     D: DatabasePort,
 {
-    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, String> {
+    fn load_records(&self) -> Result<Vec<TaskLedgerRecord>, TaskLedgerError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))?
             .with_connection(|conn| {
                 let sql = format!("SELECT {TASK_LEDGER_COLUMNS} FROM task_ledger ORDER BY id");
                 let mut stmt = conn.prepare_cached(&sql)?;
@@ -99,27 +107,27 @@ where
                 }
                 Ok(records)
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))
     }
 
-    fn upsert_record(&self, record: &TaskLedgerRecord) -> Result<(), String> {
+    fn upsert_record(&self, record: &TaskLedgerRecord) -> Result<(), TaskLedgerError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))?
             .with_write_connection(|conn| {
                 let mut stmt = conn.prepare_cached(UPSERT_TASK_SQL)?;
                 execute_upsert_task(&mut stmt, record)
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))
     }
 
     fn update_record(
         &self,
         id: &str,
-        update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, String>,
-    ) -> Result<(), String> {
-        self.get_db()
-            .map_err(|error| error.to_string())?
-            .with_rw_transaction(|tx| {
+        update: &mut dyn FnMut(TaskLedgerRecord) -> Result<TaskLedgerRecord, TaskLedgerError>,
+    ) -> Result<(), TaskLedgerError> {
+        let mut callback_error = None;
+        let database_result = self.get_db().and_then(|db| {
+            db.with_rw_transaction(|tx| {
                 let record = {
                     let sql =
                         format!("SELECT {TASK_LEDGER_COLUMNS} FROM task_ledger WHERE id = ?1");
@@ -130,32 +138,43 @@ where
                 let Some(record) = record else {
                     return Ok(());
                 };
-                let record = update(record).map_err(DatabaseError::Internal)?;
+                let record = match update(record) {
+                    Ok(record) => record,
+                    Err(error) => {
+                        let message = error.to_string();
+                        callback_error = Some(error);
+                        return Err(DatabaseError::Internal(message));
+                    }
+                };
                 if record.id != id {
                     tx.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
                 }
                 let mut stmt = tx.prepare_cached(UPSERT_TASK_SQL)?;
                 execute_upsert_task(&mut stmt, &record)
             })
-            .map_err(|error| error.to_string())
+        });
+        if let Some(error) = callback_error {
+            return Err(error);
+        }
+        database_result.map_err(|error| TaskLedgerError::Repository(error.to_string()))
     }
 
-    fn remove_record(&self, id: &str) -> Result<(), String> {
+    fn remove_record(&self, id: &str) -> Result<(), TaskLedgerError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))?
             .with_write_connection(|conn| {
                 conn.execute("DELETE FROM task_ledger WHERE id = ?1", [id])?;
                 Ok(())
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))
     }
 
     fn remove_records_matching(
         &self,
         predicate: &mut dyn FnMut(&TaskLedgerRecord) -> bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TaskLedgerError> {
         self.get_db()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))?
             .with_rw_transaction(|tx| {
                 let ids = {
                     let sql = format!("SELECT {TASK_LEDGER_COLUMNS} FROM task_ledger ORDER BY id");
@@ -176,7 +195,7 @@ where
                 }
                 Ok(())
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TaskLedgerError::Repository(error.to_string()))
     }
 }
 
@@ -265,6 +284,7 @@ mod tests {
     use super::*;
     use crate::Database;
     use serde_json::json;
+    use sona_core::ports::time::ClockError;
     use sona_core::task_ledger::repository::TaskLedgerStore;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -272,7 +292,7 @@ mod tests {
     struct TestClock;
 
     impl UnixMillisClock for TestClock {
-        fn now_ms(&self) -> Result<u64, String> {
+        fn now_ms(&self) -> Result<u64, ClockError> {
             Ok(0)
         }
     }
@@ -282,8 +302,16 @@ mod tests {
     struct FixedClock(u64);
 
     impl UnixMillisClock for FixedClock {
-        fn now_ms(&self) -> Result<u64, String> {
+        fn now_ms(&self) -> Result<u64, ClockError> {
             Ok(self.0)
+        }
+    }
+
+    struct FailingClock;
+
+    impl UnixMillisClock for FailingClock {
+        fn now_ms(&self) -> Result<u64, ClockError> {
+            Err(ClockError::Unavailable("test clock failure".to_string()))
         }
     }
 
@@ -332,6 +360,59 @@ mod tests {
     }
 
     #[test]
+    fn task_ledger_adapter_preserves_clock_error_variant() {
+        let adapter = SqliteTaskLedgerAdapter::new(
+            Arc::new(Database::open_in_memory().unwrap()),
+            Arc::new(FailingClock),
+        );
+
+        assert!(matches!(
+            adapter.load_snapshot(),
+            Err(TaskLedgerError::Clock(ClockError::Unavailable(message))) if message == "test clock failure"
+        ));
+    }
+
+    #[test]
+    fn task_ledger_adapter_preserves_core_json_error_variant() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let adapter = SqliteTaskLedgerAdapter::new(db, Arc::new(FixedClock(2_000)));
+        adapter
+            .upsert_task(make_record("json-error", TaskLedgerStatus::Pending))
+            .unwrap();
+
+        assert!(matches!(
+            adapter.patch_task_json("json-error", json!({"progress": "invalid"})),
+            Err(TaskLedgerError::Serialization(_))
+        ));
+    }
+
+    #[test]
+    fn store_port_maps_database_errors_to_repository_variant() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
+        TaskLedgerStore::upsert_record(
+            &repo,
+            &make_record("invalid-kind", TaskLedgerStatus::Pending),
+        )
+        .unwrap();
+        repo.get_db()
+            .unwrap()
+            .with_write_connection(|conn| {
+                conn.execute(
+                    "UPDATE task_ledger SET kind = 'invalid-kind' WHERE id = 'invalid-kind'",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        assert!(matches!(
+            TaskLedgerStore::load_records(&repo),
+            Err(TaskLedgerError::Repository(_))
+        ));
+    }
+
+    #[test]
     fn store_port_updates_existing_record_atomically() {
         let db = Database::open_in_memory().unwrap();
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
@@ -371,11 +452,15 @@ mod tests {
         let repo = SqliteLedgerRepository::with_db(PathBuf::new(), db);
         let task = make_record("rollback-id", TaskLedgerStatus::Pending);
         TaskLedgerStore::upsert_record(&repo, &task).unwrap();
-        let mut update = |_record: TaskLedgerRecord| Err("sentinel update failure".to_string());
+        let mut update = |_record: TaskLedgerRecord| {
+            Err(TaskLedgerError::Serialization(
+                serde_json::from_str::<Value>("{").unwrap_err(),
+            ))
+        };
 
         let error = TaskLedgerStore::update_record(&repo, "rollback-id", &mut update).unwrap_err();
 
-        assert_eq!(error, "sentinel update failure");
+        assert!(matches!(error, TaskLedgerError::Serialization(_)));
         assert_eq!(TaskLedgerStore::load_records(&repo).unwrap(), vec![task]);
     }
 

@@ -1,5 +1,6 @@
 use serde::Serialize;
 use serde_json::Value;
+use sona_core::automation::AutomationError;
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
 };
@@ -40,12 +41,12 @@ async fn run_automation_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Re
 where
     R: Runtime,
     T: Send + Serialize + 'static,
-    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, String> + Send + 'static,
+    F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError> + Send + 'static,
 {
     let db = crate::platform::database::sqlite_database(app);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let adapter = SqliteAutomationAdapter::new(db, Arc::new(UuidGenerator));
-        task(&adapter)
+        task(&adapter).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())??;

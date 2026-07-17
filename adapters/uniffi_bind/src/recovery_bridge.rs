@@ -56,8 +56,10 @@ fn serialize_snapshot(snapshot: &RecoverySnapshot) -> SonaCoreBindingResult<Stri
     serde_json::to_string(snapshot).map_err(|error| recovery_error(error.to_string()))
 }
 
-fn recovery_error(reason: String) -> SonaCoreBindingError {
-    SonaCoreBindingError::Recovery { reason }
+fn recovery_error(error: impl ToString) -> SonaCoreBindingError {
+    SonaCoreBindingError::Recovery {
+        reason: error.to_string(),
+    }
 }
 
 #[cfg(test)]

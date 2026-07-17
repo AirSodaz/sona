@@ -19,7 +19,7 @@ fn state_json(rule_name: &str, watch_directory: &str) -> AutomationRepositoryInp
     serde_json::from_value(json!({
         "rules": [{
             "name": rule_name,
-            "projectId": "project-1",
+            "tagIds": [],
             "presetId": "preset-1",
             "watchDirectory": watch_directory,
             "recursive": true,
@@ -162,10 +162,10 @@ fn automation_list_outputs_rules_table_and_processed_summary() {
     let output = run_list(dir.path(), false);
 
     assert_eq!(output.stderr, "");
-    for header in ["ID", "NAME", "PROJECT", "ENABLED", "WATCH"] {
+    for header in ["ID", "NAME", "TAGS", "ENABLED", "WATCH"] {
         assert!(output.stdout.contains(header));
     }
-    for value in ["rule-1", "Morning import", "project-1", "true", "C:\\watch"] {
+    for value in ["rule-1", "Morning import", "true", "C:\\watch"] {
         assert!(output.stdout.contains(value));
     }
     assert!(output.stdout.ends_with("Processed entries: 1\n"));
@@ -215,16 +215,16 @@ fn automation_table_aligns_unicode_names_by_display_width() {
         .unwrap();
 
     let output = run_list(dir.path(), false);
-    let project_columns = output
+    let tag_columns = output
         .stdout
         .lines()
         .skip(2)
         .take(2)
-        .map(|line| UnicodeWidthStr::width(&line[..line.find("project-1").unwrap()]))
+        .map(|line| UnicodeWidthStr::width(&line[..line.find("true").unwrap()]))
         .collect::<Vec<_>>();
 
-    assert_eq!(project_columns.len(), 2);
-    assert_eq!(project_columns[0], project_columns[1]);
+    assert_eq!(tag_columns.len(), 2);
+    assert_eq!(tag_columns[0], tag_columns[1]);
 }
 
 #[test]

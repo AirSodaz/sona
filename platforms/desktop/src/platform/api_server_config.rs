@@ -1,4 +1,5 @@
 use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use sona_core::config::ConfigError;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
 };
@@ -33,12 +34,12 @@ fn database_for_app_local_data_dir_or_open(
 
 fn with_config_adapter<T>(
     app_local_data_dir: &Path,
-    load: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, String>,
+    load: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 ) -> Result<T, String> {
     let database =
         database_for_app_local_data_dir(app_local_data_dir).map_err(|error| error.to_string())?;
     let adapter = SqliteAppConfigAdapter::new(database, Arc::new(SystemClock));
-    load(&adapter)
+    load(&adapter).map_err(|error| error.to_string())
 }
 
 fn load_sqlite_app_config_payload(provider: &dyn PathProvider) -> Option<serde_json::Value> {

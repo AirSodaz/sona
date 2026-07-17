@@ -1,7 +1,9 @@
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+#[cfg(test)]
+use sona_core::ports::time::ClockError;
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::tag::{TagCreateInput, TagIdGenerator};
+use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{Database, SqliteTagAdapter};
 use std::path::Path;
@@ -24,7 +26,7 @@ pub(crate) fn replace_tags_json(
     tags_json: String,
 ) -> SonaCoreBindingResult<()> {
     let tags = parse_json_array("tags", &tags_json)?;
-    with_tag_adapter(
+    with_tag_input_adapter(
         &app_data_dir,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
@@ -112,7 +114,7 @@ fn update_tag_json_with_clock(
 ) -> SonaCoreBindingResult<String> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
     let updates = parse_json_object("tag updates", &updates_json)?;
-    with_tag_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
+    with_tag_input_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
         adapter.update_tag_json(&tag_id, updates)
     })
     .and_then(serialize_tag)
@@ -125,11 +127,25 @@ fn with_tag_adapter<T, F>(
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, String>,
+    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
 {
     let database = Database::open(Path::new(app_data_dir)).map_err(tag_error)?;
     let adapter = SqliteTagAdapter::new(Arc::new(database), ids, clock);
     operation(&adapter).map_err(tag_error)
+}
+
+fn with_tag_input_adapter<T, F>(
+    app_data_dir: &str,
+    ids: Arc<dyn TagIdGenerator>,
+    clock: Arc<dyn UnixMillisClock>,
+    operation: F,
+) -> SonaCoreBindingResult<T>
+where
+    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
+{
+    let database = Database::open(Path::new(app_data_dir)).map_err(tag_error)?;
+    let adapter = SqliteTagAdapter::new(Arc::new(database), ids, clock);
+    operation(&adapter).map_err(tag_input_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -207,6 +223,13 @@ fn tag_error(reason: impl ToString) -> SonaCoreBindingError {
     }
 }
 
+fn tag_input_error(error: TagError) -> SonaCoreBindingError {
+    match error {
+        TagError::Serialization(source) => invalid_input(format!("Invalid tag JSON: {source}")),
+        error => tag_error(error),
+    }
+}
+
 #[cfg(test)]
 fn create_tag_json_at(
     app_data_dir: String,
@@ -249,7 +272,7 @@ struct FixedClock(u64);
 
 #[cfg(test)]
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
@@ -262,7 +285,10 @@ mod tests {
     };
     use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
+    use sona_core::ports::time::{ClockError, UnixMillisClock};
+    use sona_runtime_fs::UuidGenerator;
     use std::fs;
+    use std::sync::Arc;
 
     fn app_data_dir(dir: &tempfile::TempDir) -> String {
         dir.path().to_string_lossy().into_owned()
@@ -442,5 +468,27 @@ mod tests {
         ] {
             assert!(matches!(error, SonaCoreBindingError::Tag { .. }));
         }
+    }
+
+    #[test]
+    fn clock_failures_are_tag_errors() {
+        struct FailingClock;
+
+        impl UnixMillisClock for FailingClock {
+            fn now_ms(&self) -> Result<u64, ClockError> {
+                Err(ClockError::Unavailable("test clock failure".to_string()))
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let error = super::create_tag_json_with_runtime(
+            app_data_dir(&dir),
+            json!({"name":"New", "defaults":{}}).to_string(),
+            Arc::new(UuidGenerator),
+            Arc::new(FailingClock),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::Tag { .. }));
     }
 }

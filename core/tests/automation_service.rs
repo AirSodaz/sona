@@ -8,7 +8,7 @@ use sona_core::automation::service::{
     AutomationValidationService,
 };
 use sona_core::automation::{
-    AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
+    AutomationError, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
 };
 use std::sync::Mutex;
 
@@ -20,15 +20,15 @@ struct MemoryStore {
 }
 
 impl AutomationStore for MemoryStore {
-    fn load_state(&self) -> Result<AutomationRepositoryState, String> {
+    fn load_state(&self) -> Result<AutomationRepositoryState, AutomationError> {
         if let Some(error) = self.fail_with.lock().unwrap().clone() {
-            return Err(error);
+            return Err(AutomationError::Repository(error));
         }
         self.calls.lock().unwrap().push("load_state");
         Ok(self.state.lock().unwrap().clone())
     }
 
-    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), String> {
+    fn replace_rules(&self, rules: &[AutomationRuleRecord]) -> Result<(), AutomationError> {
         self.calls.lock().unwrap().push("replace_rules");
         self.state.lock().unwrap().rules = rules.to_vec();
         Ok(())
@@ -37,13 +37,13 @@ impl AutomationStore for MemoryStore {
     fn replace_processed_entries(
         &self,
         entries: &[AutomationProcessedRecord],
-    ) -> Result<(), String> {
+    ) -> Result<(), AutomationError> {
         self.calls.lock().unwrap().push("replace_processed_entries");
         self.state.lock().unwrap().processed_entries = entries.to_vec();
         Ok(())
     }
 
-    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), String> {
+    fn replace_state(&self, state: &AutomationRepositoryState) -> Result<(), AutomationError> {
         self.calls.lock().unwrap().push("replace_state");
         *self.state.lock().unwrap() = state.clone();
         Ok(())
@@ -243,14 +243,16 @@ fn load_state_returns_store_records_without_renormalizing() {
 }
 
 #[test]
-fn store_errors_are_returned_unchanged() {
+fn store_errors_preserve_repository_category() {
     let store = MemoryStore::default();
     *store.fail_with.lock().unwrap() = Some("storage unavailable".into());
     let ids = SequenceIds(Mutex::new(vec![]));
 
     assert_eq!(
         AutomationRepositoryService::new(&store, &ids).load_state(),
-        Err("storage unavailable".into())
+        Err(AutomationError::Repository(
+            "storage unavailable".to_string()
+        ))
     );
 }
 

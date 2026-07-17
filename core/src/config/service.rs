@@ -14,7 +14,7 @@ use crate::runtime::serve::{
 
 use super::{
     AppConfigLibrary, AppConfigRepositorySnapshot, AppConfigStartupProjection, AppConfigStore,
-    AppConfigStoredState, HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord,
+    AppConfigStoredState, ConfigError, HotwordRuleRecord, HotwordSetRecord, PolishKeywordSetRecord,
     PolishPresetRecord, SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
     TextReplacementRuleRecord, TextReplacementSetRecord,
 };
@@ -36,14 +36,14 @@ impl<'a> AppConfigRepositoryService<'a> {
         Self { store, clock }
     }
 
-    pub fn load_config(&self) -> Result<Option<Value>, String> {
+    pub fn load_config(&self) -> Result<Option<Value>, ConfigError> {
         self.store
             .load_state()?
             .map(app_config_value_from_stored_state)
             .transpose()
     }
 
-    pub fn inspect_state(&self) -> Result<Option<AppConfigRepositorySnapshot>, String> {
+    pub fn inspect_state(&self) -> Result<Option<AppConfigRepositorySnapshot>, ConfigError> {
         let Some(state) = self.store.load_state()? else {
             return Ok(None);
         };
@@ -68,36 +68,35 @@ impl<'a> AppConfigRepositoryService<'a> {
         }))
     }
 
-    pub fn save_config(&self, config: &Value) -> Result<(), String> {
+    pub fn save_config(&self, config: &Value) -> Result<(), ConfigError> {
         let updated_at = self.clock.now_ms().unwrap_or_default() as i64;
         self.store
             .replace_state(app_config_stored_state_from_value(config, updated_at)?)
     }
 
-    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, String> {
+    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, ConfigError> {
         self.store
             .load_setting_json(key)?
-            .map(|json| serde_json::from_str(&json).map_err(serialization_error))
+            .map(|json| serde_json::from_str(&json).map_err(ConfigError::Serialization))
             .transpose()
     }
 
-    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), String> {
-        let value_json = serde_json::to_string(value).map_err(serialization_error)?;
+    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), ConfigError> {
+        let value_json = serde_json::to_string(value)?;
         self.store.set_setting_json(key, value_json)
     }
 
-    pub fn load_app_config_payload(&self) -> Result<Option<Value>, String> {
+    pub fn load_app_config_payload(&self) -> Result<Option<Value>, ConfigError> {
         self.store
             .load_base_config_json()?
             .map(|base_config_json| {
-                let config =
-                    serde_json::from_str(&base_config_json).map_err(serialization_error)?;
+                let config = serde_json::from_str(&base_config_json)?;
                 Ok(app_config_payload_owned(config))
             })
             .transpose()
     }
 
-    pub fn load_serve_startup_settings(&self) -> Result<Option<ServeStartupSettings>, String> {
+    pub fn load_serve_startup_settings(&self) -> Result<Option<ServeStartupSettings>, ConfigError> {
         Ok(self
             .store
             .load_startup_projection()?
@@ -108,11 +107,11 @@ impl<'a> AppConfigRepositoryService<'a> {
 pub fn app_config_stored_state_from_value(
     config: &Value,
     updated_at: i64,
-) -> Result<AppConfigStoredState, String> {
+) -> Result<AppConfigStoredState, ConfigError> {
     let startup_projection = AppConfigStartupProjection::from_config(config);
     let config_version = config_version_from_config(config);
     let (base_config, library) = extract_library_config(config);
-    let base_config_json = serde_json::to_string(&base_config).map_err(serialization_error)?;
+    let base_config_json = serde_json::to_string(&base_config)?;
 
     Ok(AppConfigStoredState {
         base_config_json,
@@ -162,8 +161,10 @@ impl AppConfigStartupProjection {
     }
 }
 
-pub fn app_config_value_from_stored_state(state: AppConfigStoredState) -> Result<Value, String> {
-    let config = serde_json::from_str(&state.base_config_json).map_err(serialization_error)?;
+pub fn app_config_value_from_stored_state(
+    state: AppConfigStoredState,
+) -> Result<Value, ConfigError> {
+    let config = serde_json::from_str(&state.base_config_json)?;
     inject_library_config(config, state.library)
 }
 
@@ -182,7 +183,10 @@ fn extract_library_config(config: &Value) -> (Value, AppConfigLibrary) {
     (base_config, typed_library(raw_library))
 }
 
-fn inject_library_config(mut config: Value, library: AppConfigLibrary) -> Result<Value, String> {
+fn inject_library_config(
+    mut config: Value,
+    library: AppConfigLibrary,
+) -> Result<Value, ConfigError> {
     let payload = ensure_object(app_config_payload_mut(&mut config));
     insert_serialized(payload, SUMMARY_TEMPLATES_KEY, library.summary_templates)?;
     insert_serialized(payload, POLISH_PRESETS_KEY, library.polish_presets)?;
@@ -205,11 +209,8 @@ fn insert_serialized(
     payload: &mut Map<String, Value>,
     key: &str,
     records: impl serde::Serialize,
-) -> Result<(), String> {
-    payload.insert(
-        key.to_string(),
-        serde_json::to_value(records).map_err(serialization_error)?,
-    );
+) -> Result<(), ConfigError> {
+    payload.insert(key.to_string(), serde_json::to_value(records)?);
     Ok(())
 }
 
@@ -538,8 +539,4 @@ fn usize_or_default(value: i64, default: usize) -> usize {
 
 fn u64_or_default(value: i64, default: u64) -> u64 {
     u64::try_from(value).unwrap_or(default)
-}
-
-fn serialization_error(error: serde_json::Error) -> String {
-    format!("Serialization error: {error}")
 }

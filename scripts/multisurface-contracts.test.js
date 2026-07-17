@@ -88,3 +88,31 @@ test('desktop AppConfig is constrained by the generated Rust contract', () => {
   assert.match(configTypes, /GeneratedAppConfig\s*&/u);
   assert.doesNotMatch(configTypes, /Record<string, any>/u);
 });
+
+test('core domain and host ports expose structured errors', () => {
+  const structuredErrorFiles = [
+    ['core', 'src', 'config', 'repository.rs'],
+    ['core', 'src', 'config', 'service.rs'],
+    ['core', 'src', 'project', 'repository.rs'],
+    ['core', 'src', 'project', 'service.rs'],
+    ['core', 'src', 'tag', 'repository.rs'],
+    ['core', 'src', 'tag', 'service.rs'],
+    ['core', 'src', 'automation', 'repository.rs'],
+    ['core', 'src', 'automation', 'service.rs'],
+    ['core', 'src', 'recovery', 'repository.rs'],
+    ['core', 'src', 'recovery', 'service.rs'],
+    ['core', 'src', 'task_ledger', 'repository.rs'],
+    ['core', 'src', 'task_ledger', 'service.rs'],
+    ['core', 'src', 'ports', 'fs.rs'],
+    ['core', 'src', 'ports', 'path.rs'],
+    ['core', 'src', 'ports', 'time.rs'],
+  ];
+
+  for (const file of structuredErrorFiles) {
+    assert.doesNotMatch(
+      read(...file),
+      /Result\s*<[\s\S]*?,\s*String\s*>/u,
+      `${file.join('/')} must use a structured error`,
+    );
+  }
+});
