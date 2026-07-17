@@ -2383,10 +2383,7 @@ mod tests {
         assert_eq!(result.config["captionBackgroundOpacity"], 0.0);
         assert_eq!(result.config["summaryTemplateId"], "general");
         assert_eq!(result.config["polishKeywords"], "");
-        assert_eq!(
-            result.config["polishPresetId"],
-            json!({ "Custom": "custom-9158016c" })
-        );
+        assert_eq!(result.config["polishPresetId"], "custom-9158016c");
         assert_eq!(
             result.config["polishCustomPresets"][0],
             json!({
@@ -2454,9 +2451,9 @@ mod tests {
             "streamingModelPath": "C:/models/live",
             "offlineModelPath": "C:/models/offline",
             "summaryEnabled": true,
-            "summaryTemplateId": { "Builtin": "meeting" },
+            "summaryTemplateId": "meeting",
             "summaryCustomTemplates": [],
-            "polishPresetId": { "Builtin": "meeting" },
+            "polishPresetId": "meeting",
             "polishCustomPresets": [],
             "polishKeywordSets": [],
             "speakerProfiles": [],
@@ -2466,6 +2463,7 @@ mod tests {
             "llmSettings": {
                 "activeProvider": "open_ai",
                 "customProviders": {},
+                "modelDiscovery": {},
                 "providers": {
                     "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "" }
                 },
@@ -2494,14 +2492,8 @@ mod tests {
             result.config["asr"]["selections"]["voiceTyping"]["modelPath"],
             "C:/models/live"
         );
-        assert_eq!(
-            result.config["summaryTemplateId"],
-            json!({ "Builtin": "meeting" })
-        );
-        assert_eq!(
-            result.config["polishPresetId"],
-            json!({ "Builtin": "meeting" })
-        );
+        assert_eq!(result.config["summaryTemplateId"], "meeting");
+        assert_eq!(result.config["polishPresetId"], "meeting");
         assert_eq!(result.config["logLevel"], "debug");
         assert_eq!(result.config["keepMicrophoneActive"], true);
     }
@@ -2960,7 +2952,7 @@ mod tests {
 
         assert_eq!(resolved["summaryTemplateId"], "custom-summary");
         assert_eq!(resolved["translationLanguage"], "ja");
-        assert_eq!(resolved["polishPresetId"], json!({ "Builtin": "meeting" }));
+        assert_eq!(resolved["polishPresetId"], "meeting");
         assert_eq!(resolved["textReplacementSets"][0]["id"], "tr-a");
         assert_eq!(resolved["textReplacementSets"][0]["enabled"], false);
         assert_eq!(resolved["textReplacementSets"][1]["enabled"], true);
