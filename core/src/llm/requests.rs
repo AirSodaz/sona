@@ -21,9 +21,17 @@ pub struct LlmConfig {
     pub model: String,
     pub api_path: Option<String>,
     pub api_version: Option<String>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub temperature: Option<f32>,
     pub reasoning_enabled: Option<bool>,
     pub reasoning_level: Option<String>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub timeout_seconds: Option<u64>,
 }
 
@@ -163,6 +171,10 @@ pub struct PolishSegmentsRequest {
     pub task_id: String,
     pub config: LlmConfig,
     pub segments: Vec<LlmSegmentInput>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub chunk_size: Option<usize>,
     pub context: Option<String>,
     pub keywords: Option<String>,
@@ -175,6 +187,10 @@ pub struct TranslateSegmentsRequest {
     pub task_id: String,
     pub config: LlmConfig,
     pub segments: Vec<LlmSegmentInput>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub chunk_size: Option<usize>,
     pub target_language: String,
     pub target_language_name: Option<String>,
@@ -188,6 +204,10 @@ pub struct SummarizeTranscriptRequest {
     pub config: LlmConfig,
     pub template: SummaryTemplateConfig,
     pub segments: Vec<SummarySegmentInput>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub chunk_char_budget: Option<usize>,
 }
 
@@ -205,6 +225,14 @@ pub struct TranscriptLlmJobRequest {
     pub context: Option<String>,
     pub keywords: Option<String>,
     pub template: Option<SummaryTemplateConfig>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub chunk_size: Option<usize>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub chunk_char_budget: Option<usize>,
 }

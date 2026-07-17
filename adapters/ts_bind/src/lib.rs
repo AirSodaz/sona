@@ -44,11 +44,17 @@ pub use sona_core::history::{
     TranscriptSummaryRecordPayload,
 };
 pub use sona_core::llm::provider_protocol::{
-    LlmModelSummary, MessageRole, StandardLlmRequest, StandardLlmResponse, StandardMessage,
+    LlmModality, LlmModelMetadataSource, LlmModelSummary, MessageRole, StandardLlmRequest,
+    StandardLlmResponse, StandardMessage,
 };
 pub use sona_core::llm::requests::{
     LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload, PolishSegmentsRequest,
     SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranslateSegmentsRequest,
+};
+pub use sona_core::llm::runtime::{
+    LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
+    LlmExecutionMetadata, LlmPromptCachePolicy, LlmResponseFormat, LlmResponseFormatKind,
+    LlmStreamDelta,
 };
 pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
@@ -440,6 +446,30 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmProvider>()
         .register::<PolishPresetId>()
         .register::<SummaryTemplateId>()
+        .register::<LlmProviderStrategy>()
+        .register::<LlmConfig>()
+        .register::<LlmGenerateRequest>()
+        .register::<LlmModelsRequest>()
+        .register::<PolishSegmentsRequest>()
+        .register::<TranslateSegmentsRequest>()
+        .register::<SummarizeTranscriptRequest>()
+        .register::<TranscriptLlmJobRequest>()
+        .register::<LlmResponseFormat>()
+        .register::<LlmPromptCachePolicy>()
+        .register::<LlmCapabilityPolicy>()
+        .register::<LlmCompletionOptions>()
+        .register::<LlmCompletionRequest>()
+        .register::<LlmResponseFormatKind>()
+        .register::<LlmExecutionMetadata>()
+        .register::<LlmCompletionResponse>()
+        .register::<LlmStreamDelta>()
+        .register::<LlmModelSummary>()
+        .register::<LlmModality>()
+        .register::<LlmModelMetadataSource>()
+        .register::<LlmGenerateSource>()
+        .register::<LlmUsageCategory>()
+        .register::<TokenUsage>()
+        .register::<LlmUsageEventPayload>()
         .register::<LlmTaskType>()
         .register::<LlmSegmentInput>()
         .register::<SummarySegmentInput>()
@@ -627,6 +657,17 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "TranslateSegmentsRequest",
     "SummarizeTranscriptRequest",
     "TranscriptLlmJobRequest",
+    "LlmResponseFormat",
+    "LlmPromptCachePolicy",
+    "LlmCapabilityPolicy",
+    "LlmCompletionOptions",
+    "LlmCompletionRequest",
+    "LlmResponseFormatKind",
+    "LlmExecutionMetadata",
+    "LlmCompletionResponse",
+    "LlmStreamDelta",
+    "LlmModality",
+    "LlmModelMetadataSource",
     "TranscriptSummaryRecordPayload",
     "HistorySummaryPayload",
     "LlmProviderStrategy",
@@ -852,6 +893,28 @@ mod tests {
             "LlmProvider",
             "PolishPresetId",
             "SummaryTemplateId",
+            "LlmProviderStrategy",
+            "LlmConfig",
+            "LlmGenerateRequest",
+            "LlmModelsRequest",
+            "PolishSegmentsRequest",
+            "TranslateSegmentsRequest",
+            "SummarizeTranscriptRequest",
+            "TranscriptLlmJobRequest",
+            "LlmResponseFormat",
+            "LlmPromptCachePolicy",
+            "LlmCapabilityPolicy",
+            "LlmCompletionOptions",
+            "LlmCompletionRequest",
+            "LlmResponseFormatKind",
+            "LlmExecutionMetadata",
+            "LlmCompletionResponse",
+            "LlmModelSummary",
+            "LlmModality",
+            "LlmModelMetadataSource",
+            "LlmGenerateSource",
+            "LlmUsageCategory",
+            "TokenUsage",
             "LlmTaskType",
             "LlmSegmentInput",
             "SummarySegmentInput",
@@ -991,6 +1054,25 @@ mod tests {
     }
 
     #[test]
+    fn llm_types_keep_dynamic_json_unknown_and_transport_numbers_explicit() {
+        let bindings = render_desktop_typescript_bindings().unwrap();
+
+        for expected in [
+            "export type LlmConfig",
+            "export type LlmCompletionOptions",
+            "export type LlmCompletionRequest",
+            "export type LlmCompletionResponse",
+            "export type LlmModelSummary",
+        ] {
+            assert!(bindings.contains(expected), "missing {expected}");
+        }
+        assert!(bindings.contains("schema: unknown"));
+        assert!(bindings.contains("temperature"));
+        assert!(bindings.contains("maxOutputTokens"));
+        assert!(bindings.contains("contextWindow"));
+    }
+
+    #[test]
     fn committed_desktop_bindings_match_the_type_registry() {
         let frontend_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -1005,7 +1087,8 @@ mod tests {
         let generated = render_desktop_typescript_bindings().unwrap();
 
         assert_eq!(
-            committed, generated,
+            committed.replace("\r\n", "\n"),
+            generated,
             "desktop bindings are stale; run `pnpm run generate:desktop-bindings`"
         );
     }

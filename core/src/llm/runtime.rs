@@ -22,6 +22,7 @@ pub enum LlmResponseFormat {
     JsonObject,
     JsonSchema {
         name: String,
+        #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
         schema: Value,
     },
 }
@@ -48,7 +49,15 @@ pub enum LlmCapabilityPolicy {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase", default)]
 pub struct LlmCompletionOptions {
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub temperature: Option<f32>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub max_output_tokens: Option<u64>,
     pub reasoning_enabled: Option<bool>,
     pub reasoning_level: Option<String>,
@@ -155,6 +164,10 @@ pub struct LlmExecutionMetadata {
 pub struct LlmCompletionResponse {
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Unknown>)
+    )]
     pub json: Option<Value>,
     pub usage: Option<TokenUsage>,
     pub execution: LlmExecutionMetadata,

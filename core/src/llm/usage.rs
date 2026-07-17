@@ -45,14 +45,20 @@ impl From<LlmGenerateSource> for LlmUsageCategory {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub prompt_tokens: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub completion_tokens: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub total_tokens: u64,
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub cached_input_tokens: u64,
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub cache_creation_input_tokens: u64,
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub reasoning_tokens: u64,
 }
 

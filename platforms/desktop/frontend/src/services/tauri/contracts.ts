@@ -1,8 +1,5 @@
 import type { BackupManifestV1, PreparedBackupImport } from "../../types/backup";
-import type {
-  DashboardSnapshot,
-  LlmGenerateCommandRequest,
-} from "../../types/dashboard";
+import type { DashboardSnapshot } from "../../types/dashboard";
 import type {
   AutomationProcessedInput_Serialize,
   AutomationRepositoryState_Serialize,
@@ -35,18 +32,28 @@ import type {
   HistoryWorkspaceQueryRequest,
   HistoryWorkspaceQueryResult,
   LiveRecordingDraftResult,
+  LlmCompletionRequest_Serialize as CoreLlmCompletionRequest,
+  LlmCompletionResponse_Serialize as CoreLlmCompletionResponse,
+  LlmConfig_Serialize as CoreLlmConfig,
+  LlmGenerateRequest_Serialize as CoreLlmGenerateRequest,
+  LlmModelSummary as CoreLlmModelSummary,
+  LlmModelsRequest_Serialize as CoreLlmModelsRequest,
   ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
   ModelCatalogSnapshot as CoreModelCatalogSnapshot,
   ModelSelectionPaths as CoreModelSelectionPaths,
+  PolishSegmentsRequest_Serialize as CorePolishSegmentsRequest,
   RecoveryItemInput_Serialize,
   RecoverySnapshot_Serialize,
   SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
   StorageUsageSnapshot_Serialize,
+  SummarizeTranscriptRequest_Serialize as CoreSummarizeTranscriptRequest,
   TranscriptDiffResult_Serialize,
   TranscriptDiffRow_Serialize,
+  TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
   TranscriptSegment_Serialize,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotRecord_Serialize,
+  TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
   WebviewBrowsingDataClearResult,
 } from "../../bindings";
 import type {
@@ -74,12 +81,6 @@ import type {
 } from "../../types/speaker";
 import type { TranscriptSegment } from "../../types/transcript";
 import type {
-  LlmCompletionRequest,
-  LlmCompletionResponse,
-  LlmConfig,
-  LlmDiscoveredModelSummary,
-} from "../../types/llm";
-import type {
   TaskLedgerPatch,
   TaskLedgerRecord,
   TaskLedgerSnapshot,
@@ -106,13 +107,9 @@ import type {
 } from "../../types/sync";
 import type {
   PolishedSegment,
-  PolishSegmentsRequest,
-  SummarizeTranscriptRequest,
-  TranscriptLlmJobRequest,
   TranscriptLlmJobResult,
   TranscriptSummaryResult,
   TranslatedSegment,
-  TranslateSegmentsRequest,
 } from "../llmTaskTypes";
 import type {
   ApplySpeakerProfileToGroupRequest,
@@ -196,13 +193,6 @@ type AutomationValidateActivationArgs = {
 type ExportBackupArchiveRequest = {
   archivePath: string;
   appVersion: string;
-};
-
-type ListLlmModelsRequest = {
-  provider: string;
-  strategy?: string;
-  baseUrl: string;
-  apiKey: string;
 };
 
 export type ModelSelectionPaths = CoreModelSelectionPaths;
@@ -594,35 +584,35 @@ export type TauriCommandContractMap = {
     result: void;
   };
   [TauriCommand.llm.generateText]: {
-    args: { request: LlmGenerateCommandRequest };
+    args: { request: CoreLlmGenerateRequest };
     result: string;
   };
   [TauriCommand.llm.complete]: {
-    args: { request: LlmCompletionRequest };
-    result: LlmCompletionResponse;
+    args: { request: CoreLlmCompletionRequest };
+    result: CoreLlmCompletionResponse;
   };
   [TauriCommand.llm.describeModel]: {
-    args: { config: LlmConfig };
-    result: LlmDiscoveredModelSummary | null;
+    args: { config: CoreLlmConfig };
+    result: CoreLlmModelSummary | null;
   };
   [TauriCommand.llm.listModels]: {
-    args: { request: ListLlmModelsRequest };
-    result: LlmDiscoveredModelSummary[];
+    args: { request: CoreLlmModelsRequest };
+    result: CoreLlmModelSummary[];
   };
   [TauriCommand.llm.polishTranscriptSegments]: {
-    args: { request: PolishSegmentsRequest };
+    args: { request: CorePolishSegmentsRequest };
     result: PolishedSegment[];
   };
   [TauriCommand.llm.runTranscriptJob]: {
-    args: { request: TranscriptLlmJobRequest };
+    args: { request: CoreTranscriptLlmJobRequest };
     result: TranscriptLlmJobResult;
   };
   [TauriCommand.llm.summarizeTranscript]: {
-    args: { request: SummarizeTranscriptRequest };
+    args: { request: CoreSummarizeTranscriptRequest };
     result: TranscriptSummaryResult;
   };
   [TauriCommand.llm.translateTranscriptSegments]: {
-    args: { request: TranslateSegmentsRequest };
+    args: { request: CoreTranslateSegmentsRequest };
     result: TranslatedSegment[];
   };
   [TauriCommand.recognizer.init]: {

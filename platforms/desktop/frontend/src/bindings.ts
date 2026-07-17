@@ -735,15 +735,169 @@ export type LiveRecordingDraftResult = {
 	audioAbsolutePath: string,
 };
 
+export type LlmCapabilityPolicy = "strict" | "compatible";
+
+export type LlmCompletionOptions = {
+	temperature?: number | null,
+	maxOutputTokens?: number | null,
+	reasoningEnabled?: boolean | null,
+	reasoningLevel?: string | null,
+	responseFormat?: LlmResponseFormat,
+	promptCache?: LlmPromptCachePolicy,
+	capabilityPolicy?: LlmCapabilityPolicy,
+};
+
+export type LlmCompletionRequest = LlmCompletionRequest_Serialize | LlmCompletionRequest_Deserialize;
+
+export type LlmCompletionRequest_Deserialize = {
+	config: LlmConfig_Deserialize,
+	systemPrompt?: string | null,
+	input: string,
+	options?: LlmCompletionOptions,
+	source?: LlmGenerateSource | null,
+};
+
+export type LlmCompletionRequest_Serialize = {
+	config: LlmConfig_Serialize,
+	systemPrompt: string | null,
+	input: string,
+	options: LlmCompletionOptions,
+	source: LlmGenerateSource | null,
+};
+
+export type LlmCompletionResponse = LlmCompletionResponse_Serialize | LlmCompletionResponse_Deserialize;
+
+export type LlmCompletionResponse_Deserialize = {
+	text: string,
+	json: unknown | null,
+	usage: TokenUsage | null,
+	execution: LlmExecutionMetadata,
+};
+
+export type LlmCompletionResponse_Serialize = {
+	text: string,
+	json?: unknown | null,
+	usage: TokenUsage | null,
+	execution: LlmExecutionMetadata,
+};
+
+export type LlmConfig = LlmConfig_Serialize | LlmConfig_Deserialize;
+
+export type LlmConfig_Deserialize = {
+	provider: LlmProvider_Deserialize,
+	strategy: LlmProviderStrategy,
+	baseUrl: string,
+	apiKey: string,
+	model: string,
+	apiPath: string | null,
+	apiVersion: string | null,
+	temperature: number | null,
+	reasoningEnabled: boolean | null,
+	reasoningLevel: string | null,
+	timeoutSeconds: number | null,
+};
+
+export type LlmConfig_Serialize = {
+	provider: LlmProvider_Serialize,
+	strategy: LlmProviderStrategy,
+	baseUrl: string,
+	apiKey: string,
+	model: string,
+	apiPath: string | null,
+	apiVersion: string | null,
+	temperature: number | null,
+	reasoningEnabled: boolean | null,
+	reasoningLevel: string | null,
+	timeoutSeconds: number | null,
+};
+
+export type LlmExecutionMetadata = {
+	requestedFormat: LlmResponseFormatKind,
+	appliedFormat: LlmResponseFormatKind,
+	warnings: string[],
+	attempts: number,
+};
+
+export type LlmGenerateRequest = LlmGenerateRequest_Serialize | LlmGenerateRequest_Deserialize;
+
+export type LlmGenerateRequest_Deserialize = {
+	config: LlmConfig_Deserialize,
+	input: string,
+	source: LlmGenerateSource | null,
+};
+
+export type LlmGenerateRequest_Serialize = {
+	config: LlmConfig_Serialize,
+	input: string,
+	source: LlmGenerateSource | null,
+};
+
+export type LlmGenerateSource = "title_generation" | "connection_test" | "generic";
+
+export type LlmModality = "text" | "image" | "audio" | "video" | "pdf";
+
+export type LlmModelMetadataSource = "provider" | "models_dev";
+
+export type LlmModelSummary = {
+	model: string,
+	displayName?: string | null,
+	inputPrice: number | null,
+	outputPrice: number | null,
+	cacheReadPrice?: number | null,
+	cacheWritePrice?: number | null,
+	contextWindow: number | null,
+	maxOutputTokens: number | null,
+	knowledgeCutoff?: string | null,
+	releaseDate?: string | null,
+	lastUpdated?: string | null,
+	inputModalities?: LlmModality[],
+	outputModalities?: LlmModality[],
+	supportsMultimodal: boolean | null,
+	supportsTools: boolean | null,
+	supportsReasoning: boolean | null,
+	supportsStructuredOutput?: boolean | null,
+	supportsPromptCaching?: boolean | null,
+	metadataSources?: LlmModelMetadataSource[],
+};
+
+export type LlmModelsRequest = LlmModelsRequest_Serialize | LlmModelsRequest_Deserialize;
+
+export type LlmModelsRequest_Deserialize = {
+	provider: LlmProvider_Deserialize,
+	strategy?: LlmProviderStrategy | null,
+	baseUrl: string,
+	apiKey: string,
+};
+
+export type LlmModelsRequest_Serialize = {
+	provider: LlmProvider_Serialize,
+	strategy: LlmProviderStrategy | null,
+	baseUrl: string,
+	apiKey: string,
+};
+
+export type LlmPromptCachePolicy = "disabled" | "automatic";
+
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
+
+export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path";
 
 export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
 export type LlmProvider_Serialize = ({ Builtin: BuiltinLlmProvider_Serialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
+export type LlmResponseFormat = { type: "text" } | { type: "json_object" } | { type: "json_schema"; name: string; schema: unknown };
+
+export type LlmResponseFormatKind = "text" | "json_object" | "json_schema";
+
 export type LlmSegmentInput = {
 	id: string,
 	text: string,
+};
+
+export type LlmStreamDelta = {
+	text: string,
+	delta: string,
 };
 
 export type LlmTaskChunkPayload<T> = {
@@ -770,6 +924,8 @@ export type LlmTaskTextPayload = {
 };
 
 export type LlmTaskType = "polish" | "translate" | "summary";
+
+export type LlmUsageCategory = "summary" | "translation" | "polish" | "title_generation" | "connection_test" | "generic";
 
 export type LlmUsageDashboardStats = LlmUsageDashboardStats_Serialize | LlmUsageDashboardStats_Deserialize;
 
@@ -801,6 +957,24 @@ export type LlmUsageDashboardStats_Serialize = {
 	byCategoryTopRows: UsageBreakdown[],
 	byCategoryMaxValue: number,
 	recentDaily: UsageTrendPoint[],
+};
+
+export type LlmUsageEventPayload = LlmUsageEventPayload_Serialize | LlmUsageEventPayload_Deserialize;
+
+export type LlmUsageEventPayload_Deserialize = {
+	occurredAt: string,
+	provider: LlmProvider_Deserialize,
+	model: string,
+	category: LlmUsageCategory,
+	usage: TokenUsage | null,
+};
+
+export type LlmUsageEventPayload_Serialize = {
+	occurredAt: string,
+	provider: LlmProvider_Serialize,
+	model: string,
+	category: LlmUsageCategory,
+	usage: TokenUsage | null,
 };
 
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
@@ -1091,6 +1265,26 @@ export type PathStatusesInput = {
 };
 
 export type PolishPresetId = ({ Builtin: BuiltinPolishPresetId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
+
+export type PolishSegmentsRequest = PolishSegmentsRequest_Serialize | PolishSegmentsRequest_Deserialize;
+
+export type PolishSegmentsRequest_Deserialize = {
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	context: string | null,
+	keywords: string | null,
+};
+
+export type PolishSegmentsRequest_Serialize = {
+	taskId: string,
+	config: LlmConfig_Serialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	context: string | null,
+	keywords: string | null,
+};
 
 export type PolishedSegment = {
 	id: string,
@@ -1558,12 +1752,36 @@ export type StorageUsageSnapshot_Serialize = {
 	categories: StorageUsageCategories_Serialize,
 };
 
+export type SummarizeTranscriptRequest = SummarizeTranscriptRequest_Serialize | SummarizeTranscriptRequest_Deserialize;
+
+export type SummarizeTranscriptRequest_Deserialize = {
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	template: SummaryTemplateConfig,
+	segments: SummarySegmentInput[],
+	chunkCharBudget: number | null,
+};
+
+export type SummarizeTranscriptRequest_Serialize = {
+	taskId: string,
+	config: LlmConfig_Serialize,
+	template: SummaryTemplateConfig,
+	segments: SummarySegmentInput[],
+	chunkCharBudget: number | null,
+};
+
 export type SummarySegmentInput = {
 	id: string,
 	text: string,
 	start: number | null,
 	end: number | null,
 	isFinal: boolean,
+};
+
+export type SummaryTemplateConfig = {
+	id: string,
+	name: string,
+	instructions: string,
 };
 
 export type SummaryTemplateId = ({ Builtin: BuiltinSummaryTemplateId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
@@ -1787,6 +2005,15 @@ export type TaskLedgerStatus = "pending" | "running" | "cancelRequested" | "fail
 
 export type TimestampSupportHint = "token" | "segment" | "unknown";
 
+export type TokenUsage = {
+	promptTokens: number,
+	completionTokens: number,
+	totalTokens: number,
+	cachedInputTokens?: number,
+	cacheCreationInputTokens?: number,
+	reasoningTokens?: number,
+};
+
 export type TranscriptDiffResult = TranscriptDiffResult_Serialize | TranscriptDiffResult_Deserialize;
 
 export type TranscriptDiffResult_Deserialize = {
@@ -1820,6 +2047,38 @@ export type TranscriptDiffRow_Serialize = {
 };
 
 export type TranscriptDiffStatus = "unchanged" | "modified" | "added" | "removed";
+
+export type TranscriptLlmJobRequest = TranscriptLlmJobRequest_Serialize | TranscriptLlmJobRequest_Deserialize;
+
+export type TranscriptLlmJobRequest_Deserialize = {
+	taskId: string,
+	taskType: LlmTaskType,
+	jobHistoryId: string | null,
+	config: LlmConfig_Deserialize,
+	segments: TranscriptSegment_Deserialize[],
+	targetLanguage: string | null,
+	targetLanguageName: string | null,
+	context: string | null,
+	keywords: string | null,
+	template: SummaryTemplateConfig | null,
+	chunkSize: number | null,
+	chunkCharBudget: number | null,
+};
+
+export type TranscriptLlmJobRequest_Serialize = {
+	taskId: string,
+	taskType: LlmTaskType,
+	jobHistoryId: string | null,
+	config: LlmConfig_Serialize,
+	segments: TranscriptSegment_Serialize[],
+	targetLanguage: string | null,
+	targetLanguageName: string | null,
+	context: string | null,
+	keywords: string | null,
+	template: SummaryTemplateConfig | null,
+	chunkSize: number | null,
+	chunkCharBudget: number | null,
+};
 
 export type TranscriptNormalizationOptions = {
 	enableTimeline: boolean,
@@ -1921,6 +2180,26 @@ export type TranscriptTimingUnit = {
 	text: string,
 	start: number,
 	end: number,
+};
+
+export type TranslateSegmentsRequest = TranslateSegmentsRequest_Serialize | TranslateSegmentsRequest_Deserialize;
+
+export type TranslateSegmentsRequest_Deserialize = {
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	targetLanguage: string,
+	targetLanguageName: string | null,
+};
+
+export type TranslateSegmentsRequest_Serialize = {
+	taskId: string,
+	config: LlmConfig_Serialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	targetLanguage: string,
+	targetLanguageName: string | null,
 };
 
 export type TranslatedSegment = {

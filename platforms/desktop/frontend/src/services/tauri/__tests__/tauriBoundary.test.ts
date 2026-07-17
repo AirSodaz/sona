@@ -38,7 +38,16 @@ import {
   historySaveRecording,
   historyUpdateTranscript,
 } from '../history';
-import { completeLlm, describeLlmModel, generateLlmText, runTranscriptLlmJob } from '../llm';
+import {
+  completeLlm,
+  describeLlmModel,
+  generateLlmText,
+  listLlmModels,
+  polishTranscriptSegments,
+  runTranscriptLlmJob,
+  summarizeTranscript,
+  translateTranscriptSegments,
+} from '../llm';
 import { initRecognizer, processBatchFile } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import {
@@ -94,6 +103,30 @@ import {
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
+
+const uiLlmConfig = {
+  provider: 'open_ai',
+  strategy: 'openai_compatible',
+  baseUrl: 'https://api.openai.com',
+  apiKey: 'test-key',
+  model: 'gpt-4.1',
+  temperature: 0.7,
+  timeoutSeconds: 30,
+} as const;
+
+const coreLlmConfig = {
+  provider: { Builtin: 'open_ai' },
+  strategy: 'open_ai_compatible',
+  baseUrl: 'https://api.openai.com',
+  apiKey: 'test-key',
+  model: 'gpt-4.1',
+  apiPath: null,
+  apiVersion: null,
+  temperature: 0.7,
+  reasoningEnabled: null,
+  reasoningLevel: null,
+  timeoutSeconds: 30,
+} as const;
 
 describe('tauri boundary wrappers', () => {
   beforeEach(() => {
@@ -838,7 +871,7 @@ describe('tauri boundary wrappers', () => {
     vi.mocked(invoke).mockResolvedValueOnce('generated');
 
     const result = await generateLlmText({
-      config: {} as any,
+      config: uiLlmConfig,
       input: 'hello',
       source: 'generic',
     });
@@ -846,7 +879,7 @@ describe('tauri boundary wrappers', () => {
     expect(result).toBe('generated');
     expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.generateText, {
       request: {
-        config: {} as any,
+        config: coreLlmConfig,
         input: 'hello',
         source: 'generic',
       },
@@ -870,19 +903,201 @@ describe('tauri boundary wrappers', () => {
       .mockResolvedValueOnce({ model: 'gpt-4.1', displayName: 'GPT-4.1' });
 
     const request = {
-      config: {} as any,
+      config: uiLlmConfig,
       input: 'answer',
-      options: { responseFormat: { type: 'json_object' as const } },
+      options: {
+        maxOutputTokens: 4096,
+        responseFormat: { type: 'json_object' as const },
+      },
     };
     await expect(completeLlm(request)).resolves.toEqual(response);
-    await expect(describeLlmModel({ model: 'gpt-4.1' } as any)).resolves.toEqual(
+    await expect(describeLlmModel(uiLlmConfig)).resolves.toEqual(
       expect.objectContaining({ displayName: 'GPT-4.1' }),
     );
 
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llm.complete, { request });
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llm.describeModel, {
-      config: { model: 'gpt-4.1' },
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llm.complete, {
+      request: {
+        config: coreLlmConfig,
+        systemPrompt: null,
+        input: 'answer',
+        options: {
+          temperature: null,
+          maxOutputTokens: 4096,
+          reasoningEnabled: null,
+          reasoningLevel: null,
+          responseFormat: { type: 'json_object' },
+          promptCache: 'disabled',
+          capabilityPolicy: 'compatible',
+        },
+        source: null,
+      },
     });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llm.describeModel, {
+      config: coreLlmConfig,
+    });
+  });
+
+  it('normalizes model-list providers and legacy strategy spellings', async () => {
+    const models = [{ model: 'gpt-4.1', inputPrice: 0.01, contextWindow: 1_000_000 }];
+    vi.mocked(invoke).mockResolvedValueOnce(models);
+
+    await expect(listLlmModels({
+      provider: 'open_ai',
+      strategy: 'openai_compatible',
+      baseUrl: 'https://api.openai.com',
+      apiKey: 'test-key',
+    })).resolves.toEqual(models);
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.listModels, {
+      request: {
+        provider: { Builtin: 'open_ai' },
+        strategy: 'open_ai_compatible',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'test-key',
+      },
+    });
+  });
+
+  it('rejects non-finite and unsafe LLM request numbers before invoking Tauri', async () => {
+    await expect(completeLlm({
+      config: { ...uiLlmConfig, temperature: Number.POSITIVE_INFINITY },
+      input: 'answer',
+    })).rejects.toThrow('request.config.temperature must be a finite number');
+
+    await expect(completeLlm({
+      config: uiLlmConfig,
+      input: 'answer',
+      options: { maxOutputTokens: Number.MAX_SAFE_INTEGER + 1 },
+    })).rejects.toThrow('request.options.maxOutputTokens must be a non-negative safe integer');
+
+    await expect(completeLlm({
+      config: uiLlmConfig,
+      input: 'answer',
+      options: {
+        responseFormat: {
+          type: 'json_schema',
+          name: 'answer',
+          schema: { maximum: Number.POSITIVE_INFINITY },
+        },
+      },
+    })).rejects.toThrow('request.options.responseFormat.schema.maximum must be a finite number');
+
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-finite and unsafe LLM response metadata at the Tauri boundary', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce([
+      { model: 'broken-price', inputPrice: Number.POSITIVE_INFINITY },
+    ]);
+
+    await expect(listLlmModels({
+      provider: 'open_ai',
+      baseUrl: 'https://api.openai.com',
+      apiKey: 'test-key',
+    })).rejects.toThrow('result[0].inputPrice must be a finite number');
+
+    vi.mocked(invoke).mockResolvedValueOnce([
+      { model: 'unsafe-window', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
+    ]);
+
+    await expect(listLlmModels({
+      provider: 'open_ai',
+      baseUrl: 'https://api.openai.com',
+      apiKey: 'test-key',
+    })).rejects.toThrow('result[0].contextWindow must be a non-negative safe integer');
+  });
+
+  it('rejects unsafe dynamic JSON numbers in LLM completion responses', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      text: '{}',
+      json: { nested: [Number.MAX_SAFE_INTEGER + 1] },
+      usage: null,
+      execution: {
+        requestedFormat: 'json_object',
+        appliedFormat: 'json_object',
+        warnings: [],
+        attempts: 1,
+      },
+    });
+
+    await expect(completeLlm({
+      config: uiLlmConfig,
+      input: 'answer',
+    })).rejects.toThrow('result.json.nested[0] must be a safe integer');
+  });
+
+  it('normalizes all transcript task requests to generated Core contracts', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        templateId: 'default',
+        content: 'summary',
+      });
+
+    await polishTranscriptSegments({
+      taskId: 'polish-task',
+      config: uiLlmConfig,
+      segments: [{ id: '1', text: 'hello' }],
+    });
+    await translateTranscriptSegments({
+      taskId: 'translate-task',
+      config: uiLlmConfig,
+      segments: [{ id: '1', text: 'hello' }],
+      targetLanguage: 'zh',
+    });
+    await summarizeTranscript({
+      taskId: 'summary-task',
+      config: uiLlmConfig,
+      template: {
+        id: 'default',
+        name: 'Default',
+        instructions: 'Summarize.',
+        builtIn: true,
+      },
+      segments: [{ id: '1', text: 'hello', start: 0, end: 1, isFinal: true }],
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llm.polishTranscriptSegments, {
+      request: {
+        taskId: 'polish-task',
+        config: coreLlmConfig,
+        segments: [{ id: '1', text: 'hello' }],
+        chunkSize: null,
+        context: null,
+        keywords: null,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llm.translateTranscriptSegments, {
+      request: {
+        taskId: 'translate-task',
+        config: coreLlmConfig,
+        segments: [{ id: '1', text: 'hello' }],
+        chunkSize: null,
+        targetLanguage: 'zh',
+        targetLanguageName: null,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.llm.summarizeTranscript, {
+      request: {
+        taskId: 'summary-task',
+        config: coreLlmConfig,
+        template: { id: 'default', name: 'Default', instructions: 'Summarize.' },
+        segments: [{ id: '1', text: 'hello', start: 0, end: 1, isFinal: true }],
+        chunkCharBudget: null,
+      },
+    });
+  });
+
+  it('rejects unsafe transcript task chunk sizes before invoking Tauri', async () => {
+    await expect(polishTranscriptSegments({
+      taskId: 'polish-task',
+      config: uiLlmConfig,
+      segments: [{ id: '1', text: 'hello' }],
+      chunkSize: -1,
+    })).rejects.toThrow('request.chunkSize must be a non-negative safe integer');
+
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('transcript llm job wrapper forwards the unified job request', async () => {
@@ -897,7 +1112,7 @@ describe('tauri boundary wrappers', () => {
       taskId: 'translate-task-id',
       taskType: 'translate',
       jobHistoryId: 'history-a',
-      config: {} as any,
+      config: uiLlmConfig,
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
       targetLanguage: 'zh',
     });
@@ -908,9 +1123,201 @@ describe('tauri boundary wrappers', () => {
         taskId: 'translate-task-id',
         taskType: 'translate',
         jobHistoryId: 'history-a',
-        config: {} as any,
+        config: coreLlmConfig,
         segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
         targetLanguage: 'zh',
+        targetLanguageName: null,
+        context: null,
+        keywords: null,
+        template: null,
+        chunkSize: null,
+        chunkCharBudget: null,
+      },
+    });
+  });
+
+  it('derives the Core default strategy for custom LLM providers', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce('ok');
+
+    await generateLlmText({
+      config: {
+        provider: 'custom-claude-gateway',
+        baseUrl: 'https://llm.example.com',
+        apiKey: 'test-key',
+        model: 'claude-compatible',
+      },
+      input: 'hello',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.generateText, {
+      request: {
+        config: {
+          provider: { Custom: 'custom-claude-gateway' },
+          strategy: 'open_ai_compatible',
+          baseUrl: 'https://llm.example.com',
+          apiKey: 'test-key',
+          model: 'claude-compatible',
+          apiPath: null,
+          apiVersion: null,
+          temperature: null,
+          reasoningEnabled: null,
+          reasoningLevel: null,
+          timeoutSeconds: null,
+        },
+        input: 'hello',
+        source: null,
+      },
+    });
+  });
+
+  it('derives the Core default strategy for built-in LLM providers', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce('ok');
+
+    await generateLlmText({
+      config: {
+        provider: 'open_ai',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'test-key',
+        model: 'gpt-4.1',
+      },
+      input: 'hello',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.generateText, {
+      request: {
+        config: {
+          provider: { Builtin: 'open_ai' },
+          strategy: 'open_ai',
+          baseUrl: 'https://api.openai.com',
+          apiKey: 'test-key',
+          model: 'gpt-4.1',
+          apiPath: null,
+          apiVersion: null,
+          temperature: null,
+          reasoningEnabled: null,
+          reasoningLevel: null,
+          timeoutSeconds: null,
+        },
+        input: 'hello',
+        source: null,
+      },
+    });
+  });
+
+  it('drops stale fields outside the selected transcript LLM job variant', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      segments: [],
+    });
+
+    await runTranscriptLlmJob({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      config: uiLlmConfig,
+      segments: [],
+      targetLanguage: 'zh',
+      context: 'stale polish context',
+      keywords: 'stale polish keywords',
+      template: {
+        id: 'stale-summary-template',
+        name: 'Stale',
+        instructions: 'Do not forward.',
+        builtIn: false,
+      },
+      chunkCharBudget: 2048,
+    } as unknown as Parameters<typeof runTranscriptLlmJob>[0]);
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.runTranscriptJob, {
+      request: {
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: null,
+        config: coreLlmConfig,
+        segments: [],
+        targetLanguage: 'zh',
+        targetLanguageName: null,
+        context: null,
+        keywords: null,
+        template: null,
+        chunkSize: null,
+        chunkCharBudget: null,
+      },
+    });
+  });
+
+  it('keeps only polish fields in the normalized transcript LLM job', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      segments: [],
+    });
+
+    await runTranscriptLlmJob({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      config: uiLlmConfig,
+      segments: [],
+      context: 'meeting transcript',
+      keywords: 'Sona',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.runTranscriptJob, {
+      request: {
+        taskId: 'polish-task-id',
+        taskType: 'polish',
+        jobHistoryId: null,
+        config: coreLlmConfig,
+        segments: [],
+        targetLanguage: null,
+        targetLanguageName: null,
+        context: 'meeting transcript',
+        keywords: 'Sona',
+        template: null,
+        chunkSize: null,
+        chunkCharBudget: null,
+      },
+    });
+  });
+
+  it('keeps only the Core summary template in the normalized transcript LLM job', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      summary: null,
+    });
+
+    await runTranscriptLlmJob({
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      config: uiLlmConfig,
+      segments: [],
+      template: {
+        id: 'general',
+        name: 'General',
+        instructions: 'Summarize.',
+        builtIn: true,
+      },
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.runTranscriptJob, {
+      request: {
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: null,
+        config: coreLlmConfig,
+        segments: [],
+        targetLanguage: null,
+        targetLanguageName: null,
+        context: null,
+        keywords: null,
+        template: {
+          id: 'general',
+          name: 'General',
+          instructions: 'Summarize.',
+        },
+        chunkSize: null,
+        chunkCharBudget: null,
       },
     });
   });

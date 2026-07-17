@@ -65,13 +65,37 @@ pub struct LlmModelSummary {
     pub model: String,
     #[serde(default)]
     pub display_name: Option<String>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub input_price: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub output_price: Option<f64>,
     #[serde(default)]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub cache_read_price: Option<f64>,
     #[serde(default)]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub cache_write_price: Option<f64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub context_window: Option<u64>,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Number>)
+    )]
     pub max_output_tokens: Option<u64>,
     #[serde(default)]
     pub knowledge_cutoff: Option<String>,
