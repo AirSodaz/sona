@@ -1,37 +1,129 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::path::PathBuf;
+use std::sync::{Arc, OnceLock, RwLock};
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sona_core::sync::{
-    SyncConflictResolution, SyncLocalRepository, SyncObjectStore, SyncPresetV1,
-    SyncProviderDescriptor, SyncStatusSnapshot,
+    SyncConflictResolution, SyncError, SyncPresetV1, SyncSecretStore, SyncStatusSnapshot,
 };
-use sona_sqlite::{Database, SqliteSyncRepository};
+use sona_sqlite::{Database, SqliteSyncRepositoryFactory};
 use sona_sync::{
-    OpenedRemoteVault, SyncRetryState, SyncStatusContext, build_sync_status,
-    change_remote_master_password, change_sync_preset, create_remote_vault, disabled_sync_status,
-    load_remote_state_for_join, open_remote_vault_with_password,
-    open_remote_vault_with_recovery_key, regenerate_remote_recovery_key, run_sync_cycle,
+    JsonFileSyncConfigStore, SyncApplication, SyncProviderFactory, SyncProviderInput,
+    SyncProviderRegistry, SystemSyncApplicationEnvironment,
 };
-use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig};
-use tokio::sync::Mutex;
+use sona_sync_webdav::{WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 
 use crate::json_bridge::{parse_core_json, serialize_core_json};
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 const CONFIG_FILE: &str = "sync.json";
 
-struct Session {
-    store: WebDavObjectStore,
-    opened: OpenedRemoteVault,
+#[uniffi::export(foreign)]
+#[async_trait]
+pub trait FfiSyncSecretStore: Send + Sync {
+    async fn get(&self, key: String) -> SonaCoreBindingResult<Option<Vec<u8>>>;
+    async fn set(&self, key: String, value: Vec<u8>) -> SonaCoreBindingResult<()>;
+    async fn delete(&self, key: String) -> SonaCoreBindingResult<()>;
 }
 
-type SharedSession = Arc<Mutex<Session>>;
+pub(crate) fn register_sync_secret_store(store: Arc<dyn FfiSyncSecretStore>) {
+    *secret_store_registration()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(store);
+}
 
-fn sessions() -> &'static Mutex<HashMap<String, SharedSession>> {
-    static SESSIONS: OnceLock<Mutex<HashMap<String, SharedSession>>> = OnceLock::new();
-    SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
+fn secret_store_registration() -> &'static RwLock<Option<Arc<dyn FfiSyncSecretStore>>> {
+    static STORE: OnceLock<RwLock<Option<Arc<dyn FfiSyncSecretStore>>>> = OnceLock::new();
+    STORE.get_or_init(|| RwLock::new(None))
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ForeignSyncSecretStore;
+
+#[async_trait]
+impl SyncSecretStore for ForeignSyncSecretStore {
+    async fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError> {
+        let callback = registered_secret_store();
+        match callback {
+            Some(callback) => callback
+                .get(key.to_string())
+                .await
+                .map_err(secret_store_error),
+            None => Ok(None),
+        }
+    }
+
+    async fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError> {
+        let callback = registered_secret_store();
+        match callback {
+            Some(callback) => callback
+                .set(key.to_string(), value.to_vec())
+                .await
+                .map_err(secret_store_error),
+            None => Ok(()),
+        }
+    }
+
+    async fn delete_secret(&self, key: &str) -> Result<(), SyncError> {
+        let callback = registered_secret_store();
+        match callback {
+            Some(callback) => callback
+                .delete(key.to_string())
+                .await
+                .map_err(secret_store_error),
+            None => Ok(()),
+        }
+    }
+}
+
+fn registered_secret_store() -> Option<Arc<dyn FfiSyncSecretStore>> {
+    secret_store_registration()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+fn secret_store_error(error: SonaCoreBindingError) -> SyncError {
+    SyncError::SecretStore(error.to_string())
+}
+
+fn applications() -> &'static RwLock<HashMap<PathBuf, Arc<SyncApplication>>> {
+    static APPLICATIONS: OnceLock<RwLock<HashMap<PathBuf, Arc<SyncApplication>>>> = OnceLock::new();
+    APPLICATIONS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn application(app_data_dir: &str) -> SonaCoreBindingResult<Arc<SyncApplication>> {
+    let path = PathBuf::from(app_data_dir);
+    if let Some(application) = applications()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&path)
+        .cloned()
+    {
+        return Ok(application);
+    }
+
+    std::fs::create_dir_all(&path).map_err(sync_error)?;
+    let database = Arc::new(Database::open(&path).map_err(sync_error)?);
+    let application = Arc::new(SyncApplication::new(
+        Arc::new(JsonFileSyncConfigStore::new(path.join(CONFIG_FILE))),
+        Arc::new(SqliteSyncRepositoryFactory::new(database)),
+        provider_registry(),
+        Arc::new(ForeignSyncSecretStore),
+        Arc::new(SystemSyncApplicationEnvironment),
+    ));
+
+    let mut cached = applications()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    Ok(Arc::clone(
+        cached.entry(path).or_insert_with(|| application),
+    ))
+}
+
+fn provider_registry() -> SyncProviderRegistry {
+    SyncProviderRegistry::new([Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>])
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -66,26 +158,6 @@ struct ChangePasswordRequest {
     next_master_password: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProviderConfig {
-    server_url: String,
-    remote_root: String,
-    username: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PersistedConfig {
-    provider_id: String,
-    vault_id: String,
-    device_id: String,
-    preset: SyncPresetV1,
-    webdav: ProviderConfig,
-    #[serde(flatten)]
-    retry: SyncRetryState,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateResult {
@@ -97,24 +169,18 @@ struct CreateResult {
 
 pub(crate) async fn test_provider_json(config_json: String) -> SonaCoreBindingResult<String> {
     let config: WebDavObjectStoreConfig = parse_core_json(&config_json, "sync provider")?;
-    let store = WebDavObjectStore::new(config).map_err(sync_error)?;
-    let capabilities = store.probe().await.map_err(sync_error)?;
-    if !capabilities.conditional_create || !capabilities.compare_and_swap || !capabilities.delete {
-        return Err(sync_binding_error(
-            "WebDAV server lacks required conditional object operations.",
-        ));
-    }
-    serialize_core_json(
-        &SyncProviderDescriptor {
-            id: "webdav".to_string(),
-            display_name: "WebDAV".to_string(),
-        },
-        "sync provider descriptor",
-    )
+    let descriptor = provider_registry()
+        .test_provider(provider_input(config)?)
+        .await
+        .map_err(sync_error)?;
+    serialize_core_json(&descriptor, "sync provider descriptor")
 }
 
 pub(crate) async fn get_status_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let status = status(&app_data_dir).await?;
+    let status = application(&app_data_dir)?
+        .status()
+        .await
+        .map_err(sync_error)?;
     serialize_core_json(&status, "sync status")
 }
 
@@ -122,51 +188,22 @@ pub(crate) async fn create_vault_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    ensure_unconfigured(&app_data_dir)?;
     let request: CreateRequest = parse_core_json(&request_json, "sync create request")?;
-    let store = WebDavObjectStore::new(request.provider.clone()).map_err(sync_error)?;
-    store.probe().await.map_err(sync_error)?;
-    let vault_id = uuid::Uuid::new_v4().to_string();
-    let device_id = uuid::Uuid::new_v4().to_string();
-    let created = create_remote_vault(
-        &store,
-        &vault_id,
-        request.preset,
-        &request.master_password,
-        request.create_recovery_key,
-    )
-    .await
-    .map_err(sync_error)?;
-    SqliteSyncRepository::initialize(
-        database(&app_data_dir)?,
-        &vault_id,
-        &device_id,
-        request.preset,
-    )
-    .map_err(sync_error)?;
-    save_config(
-        &app_data_dir,
-        &persisted_config(
-            &request.provider,
-            vault_id.clone(),
-            device_id.clone(),
+    let result = application(&app_data_dir)?
+        .create(
+            provider_input(request.provider)?,
             request.preset,
-        ),
-    )?;
-    sessions().lock().await.insert(
-        app_data_dir.clone(),
-        Arc::new(Mutex::new(Session {
-            store,
-            opened: created.opened,
-        })),
-    );
-    let _ = run_now(&app_data_dir).await;
+            &request.master_password,
+            request.create_recovery_key,
+        )
+        .await
+        .map_err(sync_error)?;
     serialize_core_json(
         &CreateResult {
-            vault_id,
-            device_id,
-            recovery_key: created.recovery_key,
-            status: status(&app_data_dir).await?,
+            vault_id: result.vault_id,
+            device_id: result.device_id,
+            recovery_key: result.recovery_key,
+            status: result.status,
         },
         "sync create result",
     )
@@ -176,25 +213,15 @@ pub(crate) async fn preview_join_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    ensure_unconfigured(&app_data_dir)?;
     let request: JoinRequest = parse_core_json(&request_json, "sync join preview request")?;
-    let store = WebDavObjectStore::new(request.provider).map_err(sync_error)?;
-    let opened =
-        open_remote_vault_with_password(&store, &request.vault_id, &request.master_password)
-            .await
-            .map_err(sync_error)?;
-    let remote_segments =
-        load_remote_state_for_join(&store, &request.vault_id, opened.vault_key.as_slice())
-            .await
-            .map_err(sync_error)?;
-    let preview = SqliteSyncRepository::preview_join(
-        database(&app_data_dir)?,
-        &request.vault_id,
-        &format!("preview-{}", uuid::Uuid::new_v4()),
-        opened.header.preset,
-        &remote_segments,
-    )
-    .map_err(sync_error)?;
+    let preview = application(&app_data_dir)?
+        .preview_join(
+            provider_input(request.provider)?,
+            &request.vault_id,
+            &request.master_password,
+        )
+        .await
+        .map_err(sync_error)?;
     serialize_core_json(&preview, "sync join preview")
 }
 
@@ -202,35 +229,16 @@ pub(crate) async fn join_vault_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    ensure_unconfigured(&app_data_dir)?;
     let request: JoinRequest = parse_core_json(&request_json, "sync join request")?;
-    let store = WebDavObjectStore::new(request.provider.clone()).map_err(sync_error)?;
-    let opened =
-        open_remote_vault_with_password(&store, &request.vault_id, &request.master_password)
-            .await
-            .map_err(sync_error)?;
-    let device_id = uuid::Uuid::new_v4().to_string();
-    SqliteSyncRepository::initialize(
-        database(&app_data_dir)?,
-        &request.vault_id,
-        &device_id,
-        opened.header.preset,
-    )
-    .map_err(sync_error)?;
-    save_config(
-        &app_data_dir,
-        &persisted_config(
-            &request.provider,
-            request.vault_id,
-            device_id,
-            opened.header.preset,
-        ),
-    )?;
-    sessions().lock().await.insert(
-        app_data_dir.clone(),
-        Arc::new(Mutex::new(Session { store, opened })),
-    );
-    run_now_json(app_data_dir).await
+    let result = application(&app_data_dir)?
+        .join(
+            provider_input(request.provider)?,
+            &request.vault_id,
+            &request.master_password,
+        )
+        .await
+        .map_err(sync_error)?;
+    serialize_core_json(&result, "sync run result")
 }
 
 pub(crate) async fn unlock_json(
@@ -239,102 +247,65 @@ pub(crate) async fn unlock_json(
     recovery: bool,
 ) -> SonaCoreBindingResult<String> {
     let request: UnlockRequest = parse_core_json(&request_json, "sync unlock request")?;
-    let config =
-        load_config(&app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    let provider = runtime_provider(&config, request.provider_password)?;
-    let store = WebDavObjectStore::new(provider).map_err(sync_error)?;
-    let opened = if recovery {
-        open_remote_vault_with_recovery_key(
-            &store,
-            &config.vault_id,
-            request
-                .recovery_key
-                .as_deref()
-                .ok_or_else(|| sync_binding_error("Recovery key is required."))?,
-        )
-        .await
+    let application = application(&app_data_dir)?;
+    let status = if recovery {
+        application
+            .unlock_with_recovery_key(
+                request.provider_password.into_bytes(),
+                request
+                    .recovery_key
+                    .as_deref()
+                    .ok_or_else(|| sync_binding_error("Recovery key is required."))?,
+            )
+            .await
     } else {
-        open_remote_vault_with_password(
-            &store,
-            &config.vault_id,
-            request
-                .master_password
-                .as_deref()
-                .ok_or_else(|| sync_binding_error("Master password is required."))?,
-        )
-        .await
+        application
+            .unlock_with_password(
+                request.provider_password.into_bytes(),
+                request
+                    .master_password
+                    .as_deref()
+                    .ok_or_else(|| sync_binding_error("Master password is required."))?,
+            )
+            .await
     }
     .map_err(sync_error)?;
-    sessions().lock().await.insert(
-        app_data_dir.clone(),
-        Arc::new(Mutex::new(Session { store, opened })),
-    );
-    get_status_json(app_data_dir).await
+    serialize_core_json(&status, "sync status")
 }
 
 pub(crate) async fn lock(app_data_dir: String) -> SonaCoreBindingResult<()> {
-    sessions().lock().await.remove(&app_data_dir);
-    Ok(())
+    application(&app_data_dir)?
+        .lock()
+        .await
+        .map(|_| ())
+        .map_err(sync_error)
 }
 
 pub(crate) async fn set_paused_json(
     app_data_dir: String,
     paused: bool,
 ) -> SonaCoreBindingResult<String> {
-    repository(&app_data_dir)?
-        .ok_or_else(|| sync_binding_error("Sync is not configured."))?
+    let status = application(&app_data_dir)?
         .set_paused(paused)
+        .await
         .map_err(sync_error)?;
-    get_status_json(app_data_dir).await
+    serialize_core_json(&status, "sync status")
 }
 
 pub(crate) async fn disconnect_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    if let Some(repository) = repository(&app_data_dir)? {
-        repository.disconnect().map_err(sync_error)?;
-    }
-    sessions().lock().await.remove(&app_data_dir);
-    let path = config_path(&app_data_dir);
-    match std::fs::remove_file(path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(sync_error(error)),
-    }
-    get_status_json(app_data_dir).await
+    let status = application(&app_data_dir)?
+        .disconnect()
+        .await
+        .map_err(sync_error)?;
+    serialize_core_json(&status, "sync status")
 }
 
 pub(crate) async fn run_now_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let result = run_now(&app_data_dir).await?;
-    serialize_core_json(&result, "sync run result")
-}
-
-async fn run_now(app_data_dir: &str) -> SonaCoreBindingResult<sona_core::sync::SyncRunResult> {
-    let repository =
-        repository(app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    let mut config =
-        load_config(app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    if repository.is_paused().map_err(sync_error)? {
-        return Err(sync_binding_error("Sync is paused."));
-    }
-    let session = sessions()
-        .lock()
+    let result = application(&app_data_dir)?
+        .run()
         .await
-        .get(app_data_dir)
-        .cloned()
-        .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
-    let session = session.lock().await;
-    let now_ms = now_ms();
-    let jitter = (uuid::Uuid::new_v4().as_u128() % 1_000_001) as u32;
-    let result = run_sync_cycle(
-        &repository,
-        &session.store,
-        session.opened.vault_key.as_slice(),
-        &mut config.retry,
-        now_ms,
-        jitter,
-    )
-    .await;
-    save_config(app_data_dir, &config)?;
-    result.map_err(sync_error)
+        .map_err(sync_error)?;
+    serialize_core_json(&result, "sync run result")
 }
 
 pub(crate) async fn change_preset_json(
@@ -343,25 +314,11 @@ pub(crate) async fn change_preset_json(
     confirm_shrink: bool,
 ) -> SonaCoreBindingResult<String> {
     let preset: SyncPresetV1 = parse_core_json(&preset_json, "sync preset")?;
-    let repository =
-        repository(&app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    let session = sessions()
-        .lock()
-        .await
-        .get(&app_data_dir)
-        .cloned()
-        .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
-    let mut session = session.lock().await;
-    let Session { store, opened } = &mut *session;
-    change_sync_preset(&repository, store, opened, preset, confirm_shrink)
+    let status = application(&app_data_dir)?
+        .change_preset(preset, confirm_shrink)
         .await
         .map_err(sync_error)?;
-    let mut config =
-        load_config(&app_data_dir)?.ok_or_else(|| sync_binding_error("Sync is not configured."))?;
-    config.preset = preset;
-    save_config(&app_data_dir, &config)?;
-    drop(session);
-    get_status_json(app_data_dir).await
+    serialize_core_json(&status, "sync status")
 }
 
 pub(crate) async fn change_master_password_json(
@@ -370,42 +327,25 @@ pub(crate) async fn change_master_password_json(
 ) -> SonaCoreBindingResult<()> {
     let request: ChangePasswordRequest =
         parse_core_json(&request_json, "sync password change request")?;
-    let session = sessions()
-        .lock()
+    application(&app_data_dir)?
+        .change_master_password(
+            &request.current_master_password,
+            &request.next_master_password,
+        )
         .await
-        .get(&app_data_dir)
-        .cloned()
-        .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
-    let mut session = session.lock().await;
-    let store = session.store.clone();
-    change_remote_master_password(
-        &store,
-        &mut session.opened,
-        &request.current_master_password,
-        &request.next_master_password,
-    )
-    .await
-    .map_err(sync_error)
+        .map_err(sync_error)
 }
 
 pub(crate) async fn generate_recovery_key(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let session = sessions()
-        .lock()
-        .await
-        .get(&app_data_dir)
-        .cloned()
-        .ok_or_else(|| sync_binding_error("Sync vault is locked."))?;
-    let mut session = session.lock().await;
-    let store = session.store.clone();
-    regenerate_remote_recovery_key(&store, &mut session.opened)
+    application(&app_data_dir)?
+        .generate_recovery_key()
         .await
         .map_err(sync_error)
 }
 
 pub(crate) fn list_conflicts_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let conflicts = repository(&app_data_dir)?
-        .ok_or_else(|| sync_binding_error("Sync is not configured."))?
-        .list_conflict_summaries()
+    let conflicts = application(&app_data_dir)?
+        .list_conflicts()
         .map_err(sync_error)?;
     serialize_core_json(&conflicts, "sync conflicts")
 }
@@ -414,9 +354,8 @@ pub(crate) fn get_conflict_json(
     app_data_dir: String,
     conflict_id: String,
 ) -> SonaCoreBindingResult<String> {
-    let conflict = repository(&app_data_dir)?
-        .ok_or_else(|| sync_binding_error("Sync is not configured."))?
-        .get_conflict_detail(&conflict_id)
+    let conflict = application(&app_data_dir)?
+        .get_conflict(&conflict_id)
         .map_err(sync_error)?;
     serialize_core_json(&conflict, "sync conflict")
 }
@@ -428,118 +367,33 @@ pub(crate) fn resolve_conflict_json(
 ) -> SonaCoreBindingResult<()> {
     let resolution: SyncConflictResolution =
         parse_core_json(&resolution_json, "sync conflict resolution")?;
-    repository(&app_data_dir)?
-        .ok_or_else(|| sync_binding_error("Sync is not configured."))?
-        .resolve_conflict(&conflict_id, resolution, now_ms())
+    application(&app_data_dir)?
+        .resolve_conflict(&conflict_id, resolution)
         .map_err(sync_error)
 }
 
-async fn status(app_data_dir: &str) -> SonaCoreBindingResult<SyncStatusSnapshot> {
-    let Some(config) = load_config(app_data_dir)? else {
-        return Ok(disabled_sync_status());
-    };
-    let repository = repository(app_data_dir)?
-        .ok_or_else(|| sync_binding_error("SQLite sync state is missing."))?;
-    let runtime = repository.load_runtime_state().map_err(sync_error)?;
-    let unlocked = sessions().lock().await.contains_key(app_data_dir);
-    Ok(build_sync_status(
-        SyncStatusContext {
-            provider_id: config.provider_id.clone(),
-            vault_id: config.vault_id.clone(),
-            preset: runtime.preset,
-            paused: repository.is_paused().map_err(sync_error)?,
-            unlocked,
-            syncing: false,
-            pending_operation_count: repository.pending_operation_count().map_err(sync_error)?,
-            conflict_count: repository.unresolved_conflict_count().map_err(sync_error)?,
-        },
-        &config.retry,
-    ))
-}
-
-fn ensure_unconfigured(app_data_dir: &str) -> SonaCoreBindingResult<()> {
-    if load_config(app_data_dir)?.is_some() || repository(app_data_dir)?.is_some() {
-        Err(sync_binding_error(
-            "This Sona data directory is already connected to a sync vault.",
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-fn database(app_data_dir: &str) -> SonaCoreBindingResult<Arc<Database>> {
-    std::fs::create_dir_all(app_data_dir).map_err(sync_error)?;
-    Database::open(&PathBuf::from(app_data_dir))
-        .map(Arc::new)
-        .map_err(sync_error)
-}
-
-fn repository(app_data_dir: &str) -> SonaCoreBindingResult<Option<SqliteSyncRepository>> {
-    SqliteSyncRepository::open_existing(database(app_data_dir)?).map_err(sync_error)
-}
-
-fn persisted_config(
-    provider: &WebDavObjectStoreConfig,
-    vault_id: String,
-    device_id: String,
-    preset: SyncPresetV1,
-) -> PersistedConfig {
-    PersistedConfig {
+fn provider_input(config: WebDavObjectStoreConfig) -> SonaCoreBindingResult<SyncProviderInput> {
+    Ok(SyncProviderInput {
         provider_id: "webdav".to_string(),
-        vault_id,
-        device_id,
-        preset,
-        webdav: ProviderConfig {
-            server_url: provider.server_url.clone(),
-            remote_root: provider.remote_root.clone(),
-            username: provider.username.clone(),
-        },
-        retry: SyncRetryState::default(),
-    }
-}
-
-fn runtime_provider(
-    config: &PersistedConfig,
-    password: String,
-) -> SonaCoreBindingResult<WebDavObjectStoreConfig> {
-    WebDavObjectStoreConfig::new(
-        &config.webdav.server_url,
-        &config.webdav.remote_root,
-        &config.webdav.username,
-        password,
-    )
-    .map_err(sync_error)
-}
-
-fn load_config(app_data_dir: &str) -> SonaCoreBindingResult<Option<PersistedConfig>> {
-    match std::fs::read(config_path(app_data_dir)) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map(Some).map_err(sync_error),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(sync_error(error)),
-    }
-}
-
-fn save_config(app_data_dir: &str, config: &PersistedConfig) -> SonaCoreBindingResult<()> {
-    std::fs::create_dir_all(app_data_dir).map_err(sync_error)?;
-    std::fs::write(
-        config_path(app_data_dir),
-        serde_json::to_vec_pretty(config).map_err(sync_error)?,
-    )
-    .map_err(sync_error)
-}
-
-fn config_path(app_data_dir: &str) -> PathBuf {
-    Path::new(app_data_dir).join(CONFIG_FILE)
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_millis() as u64)
+        configuration: serde_json::to_value(config).map_err(sync_error)?,
+    })
 }
 
 fn sync_error(error: impl ToString) -> SonaCoreBindingError {
-    sync_binding_error(error.to_string())
+    let message = error.to_string();
+    let reason = match message.as_str() {
+        "Sync provider does not support required conditional object operations." => {
+            "WebDAV server lacks required conditional object operations.".to_string()
+        }
+        "Sync connection metadata exists but local sync state is missing." => {
+            "SQLite sync state is missing.".to_string()
+        }
+        "Local sync state is missing." => "Sync is not configured.".to_string(),
+        _ => message
+            .strip_prefix("Sync configuration error: ")
+            .map_or(message.clone(), str::to_string),
+    };
+    sync_binding_error(reason)
 }
 
 fn sync_binding_error(reason: impl Into<String>) -> SonaCoreBindingError {
@@ -549,9 +403,50 @@ fn sync_binding_error(reason: impl Into<String>) -> SonaCoreBindingError {
 }
 
 #[cfg(test)]
+fn clear_applications_for_tests() {
+    applications()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
+}
+
+#[cfg(test)]
+fn clear_sync_runtime_for_tests() {
+    clear_applications_for_tests();
+    *secret_store_registration()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use sona_core::sync::SyncLifecycleState;
+    use sona_sync::SyncApplicationError;
+    use std::collections::BTreeMap;
+    use std::sync::Mutex as StdMutex;
+
+    #[derive(Default)]
+    struct MemoryFfiSyncSecretStore {
+        values: StdMutex<BTreeMap<String, Vec<u8>>>,
+    }
+
+    #[async_trait]
+    impl FfiSyncSecretStore for MemoryFfiSyncSecretStore {
+        async fn get(&self, key: String) -> SonaCoreBindingResult<Option<Vec<u8>>> {
+            Ok(self.values.lock().unwrap().get(&key).cloned())
+        }
+
+        async fn set(&self, key: String, value: Vec<u8>) -> SonaCoreBindingResult<()> {
+            self.values.lock().unwrap().insert(key, value);
+            Ok(())
+        }
+
+        async fn delete(&self, key: String) -> SonaCoreBindingResult<()> {
+            self.values.lock().unwrap().remove(&key);
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn unconfigured_status_uses_the_shared_disabled_contract() {
@@ -562,5 +457,80 @@ mod tests {
         let status: SyncStatusSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(status.state, SyncLifecycleState::Disabled);
         assert_eq!(status.pending_operation_count, 0);
+    }
+
+    #[tokio::test]
+    async fn secret_store_proxy_is_noop_until_a_foreign_store_is_registered() {
+        clear_sync_runtime_for_tests();
+        let proxy = ForeignSyncSecretStore;
+
+        assert_eq!(proxy.read_secret("missing").await.unwrap(), None);
+        proxy.write_secret("ephemeral", b"ignored").await.unwrap();
+        proxy.delete_secret("ephemeral").await.unwrap();
+
+        let store = Arc::new(MemoryFfiSyncSecretStore::default());
+        register_sync_secret_store(store.clone());
+        proxy.write_secret("provider", b"password").await.unwrap();
+        assert_eq!(
+            proxy.read_secret("provider").await.unwrap(),
+            Some(b"password".to_vec())
+        );
+        proxy.delete_secret("provider").await.unwrap();
+        assert_eq!(proxy.read_secret("provider").await.unwrap(), None);
+        clear_sync_runtime_for_tests();
+    }
+
+    #[tokio::test]
+    async fn application_is_cached_per_data_directory_and_can_be_recreated() {
+        clear_sync_runtime_for_tests();
+        let directory = tempfile::tempdir().unwrap();
+        let app_data_dir = directory.path().to_string_lossy().into_owned();
+
+        let first = application(&app_data_dir).unwrap();
+        let second = application(&app_data_dir).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+
+        clear_applications_for_tests();
+        let restarted = application(&app_data_dir).unwrap();
+        assert!(!Arc::ptr_eq(&first, &restarted));
+        assert_eq!(
+            restarted.status().await.unwrap().state,
+            SyncLifecycleState::Disabled
+        );
+        clear_sync_runtime_for_tests();
+    }
+
+    #[test]
+    fn shared_application_errors_keep_the_existing_uniffi_text_contract() {
+        let cases = [
+            (
+                SyncApplicationError::InvalidState(
+                    "Sync provider does not support required conditional object operations."
+                        .to_string(),
+                ),
+                "WebDAV server lacks required conditional object operations.",
+            ),
+            (
+                SyncApplicationError::InvalidState(
+                    "Sync connection metadata exists but local sync state is missing.".to_string(),
+                ),
+                "SQLite sync state is missing.",
+            ),
+            (
+                SyncApplicationError::InvalidState("Local sync state is missing.".to_string()),
+                "Sync is not configured.",
+            ),
+            (
+                SyncApplicationError::Config("invalid sync.json".to_string()),
+                "invalid sync.json",
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert!(matches!(
+                sync_error(error),
+                SonaCoreBindingError::Sync { reason } if reason == expected
+            ));
+        }
     }
 }

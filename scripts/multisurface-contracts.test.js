@@ -116,3 +116,51 @@ test('core domain and host ports expose structured errors', () => {
     );
   }
 });
+
+test('desktop and UniFFI host sync through the shared application layer', () => {
+  const hosts = [
+    read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
+    read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
+  ];
+  const lowLevelCalls = [
+    'create_remote_vault',
+    'open_remote_vault_with_password',
+    'open_remote_vault_with_recovery_key',
+    'open_remote_vault_with_vault_key',
+    'run_sync_cycle',
+    'load_remote_state_for_join',
+  ];
+
+  for (const source of hosts) {
+    assert.match(source, /\bSyncApplication\b/u);
+    for (const call of lowLevelCalls) {
+      assert.doesNotMatch(source, new RegExp(`\\b${call}\\b`, 'u'));
+    }
+    assert.doesNotMatch(
+      source,
+      /\bstruct\s+(?:UnlockedSession|Session|PersistedSyncConfig|PersistedConfig)\b/u,
+    );
+  }
+});
+
+test('Android registers its secure sync secret store with the UniFFI binding', () => {
+  const container = read(
+    'platforms',
+    'android',
+    'client',
+    'app',
+    'src',
+    'main',
+    'kotlin',
+    'com',
+    'sona',
+    'android',
+    'app',
+    'composition',
+    'SonaAppContainer.kt',
+  );
+
+  assert.match(container, /AndroidSyncSecretStore\.create\(appContext\)/u);
+  assert.match(container, /UniffiSyncSecretStoreRegistrar\(\)/u);
+  assert.match(container, /register\(syncSecretStore\)/u);
+});

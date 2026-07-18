@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -154,8 +155,53 @@ pub trait SyncLocalRepository: Send + Sync {
     fn change_preset(&self, preset: SyncPresetV1, confirm_shrink: bool) -> Result<(), SyncError>;
 }
 
+/// Application-facing repository capabilities that sit alongside the runtime
+/// repository consumed by the sync engine.
+pub trait SyncApplicationRepository: Send + Sync {
+    fn runtime_repository(&self) -> &dyn SyncLocalRepository;
+
+    fn is_paused(&self) -> Result<bool, SyncError>;
+    fn set_paused(&self, paused: bool) -> Result<(), SyncError>;
+    fn pending_operation_count(&self) -> Result<u64, SyncError>;
+    fn unresolved_conflict_count(&self) -> Result<u64, SyncError>;
+    fn disconnect(&self) -> Result<(), SyncError>;
+    fn list_conflict_summaries(&self) -> Result<Vec<super::SyncConflictSummary>, SyncError>;
+    fn get_conflict_detail(
+        &self,
+        conflict_id: &str,
+    ) -> Result<Option<super::SyncConflictDetail>, SyncError>;
+    fn resolve_conflict(
+        &self,
+        conflict_id: &str,
+        resolution: super::SyncConflictResolution,
+        resolved_at_ms: u64,
+    ) -> Result<(), SyncError>;
+}
+
+/// Opens the local sync repository and owns initialization/preview operations
+/// that require the adapter's underlying storage handle.
+pub trait SyncRepositoryFactory: Send + Sync {
+    fn open(&self) -> Result<Option<Arc<dyn SyncApplicationRepository>>, SyncError>;
+
+    fn initialize(
+        &self,
+        vault_id: &str,
+        device_id: &str,
+        preset: SyncPresetV1,
+    ) -> Result<Arc<dyn SyncApplicationRepository>, SyncError>;
+
+    fn preview(
+        &self,
+        vault_id: &str,
+        preview_device_id: &str,
+        preset: SyncPresetV1,
+        remote_segments: &[SyncRemoteSegment],
+    ) -> Result<super::SyncJoinPreview, SyncError>;
+}
+
+#[async_trait]
 pub trait SyncSecretStore: Send + Sync {
-    fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError>;
-    fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError>;
-    fn delete_secret(&self, key: &str) -> Result<(), SyncError>;
+    async fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError>;
+    async fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError>;
+    async fn delete_secret(&self, key: &str) -> Result<(), SyncError>;
 }

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use keyring::{Entry, Error as KeyringError};
 use sona_core::sync::{SyncError, SyncSecretStore};
 
@@ -13,8 +14,9 @@ impl SystemSyncSecretStore {
     }
 }
 
+#[async_trait]
 impl SyncSecretStore for SystemSyncSecretStore {
-    fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError> {
+    async fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError> {
         match Self::entry(key)?.get_secret() {
             Ok(secret) => Ok(Some(secret)),
             Err(KeyringError::NoEntry) => Ok(None),
@@ -22,13 +24,13 @@ impl SyncSecretStore for SystemSyncSecretStore {
         }
     }
 
-    fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError> {
+    async fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError> {
         Self::entry(key)?
             .set_secret(value)
             .map_err(|error| SyncError::SecretStore(error.to_string()))
     }
 
-    fn delete_secret(&self, key: &str) -> Result<(), SyncError> {
+    async fn delete_secret(&self, key: &str) -> Result<(), SyncError> {
         match Self::entry(key)?.delete_credential() {
             Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
             Err(error) => Err(SyncError::SecretStore(error.to_string())),

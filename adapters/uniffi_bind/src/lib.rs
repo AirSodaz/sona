@@ -53,6 +53,7 @@ pub use mapper::{
     FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
 };
+pub use sync_bridge::FfiSyncSecretStore;
 
 uniffi::setup_scaffolding!();
 
@@ -367,6 +368,11 @@ pub async fn import_backup_archive_json(
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_test_provider_json(config_json: String) -> SonaCoreBindingResult<String> {
     sync_bridge::test_provider_json(config_json).await
+}
+
+#[uniffi::export]
+pub fn register_sync_secret_store(store: std::sync::Arc<dyn FfiSyncSecretStore>) {
+    sync_bridge::register_sync_secret_store(store);
 }
 
 #[uniffi::export(async_runtime = "tokio")]

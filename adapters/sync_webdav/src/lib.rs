@@ -1,14 +1,18 @@
 use std::collections::{BTreeSet, VecDeque};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use reqwest::header::{ETAG, IF_MATCH, IF_NONE_MATCH};
 use reqwest::{Client, Method, StatusCode};
 use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sona_core::sync::{
     SyncDeleteResult, SyncError, SyncListPage, SyncObject, SyncObjectKey, SyncObjectMetadata,
-    SyncObjectPrefix, SyncObjectStore, SyncObjectStoreCapabilities, SyncPutResult,
+    SyncObjectPrefix, SyncObjectStore, SyncObjectStoreCapabilities, SyncProviderDescriptor,
+    SyncPutResult,
 };
+use sona_sync::{SyncProvider, SyncProviderFactory};
 use url::Url;
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -22,6 +26,81 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </propfind>"#;
 const LIST_PAGE_SIZE: usize = 1_000;
 const MAX_OBJECT_BYTES: usize = 72 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WebDavSyncProviderFactory;
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedWebDavConfig {
+    server_url: String,
+    remote_root: String,
+    username: String,
+}
+
+#[async_trait]
+impl SyncProviderFactory for WebDavSyncProviderFactory {
+    fn provider_id(&self) -> &str {
+        "webdav"
+    }
+
+    fn credential_secret_key(&self, vault_id: &str) -> String {
+        format!("webdav-password:{vault_id}")
+    }
+
+    async fn prepare(&self, configuration: Value) -> Result<SyncProvider, SyncError> {
+        let config: WebDavObjectStoreConfig =
+            serde_json::from_value(configuration).map_err(provider_configuration_error)?;
+        build_provider(config)
+    }
+
+    async fn restore(
+        &self,
+        persisted_configuration: Value,
+        credential: Vec<u8>,
+    ) -> Result<SyncProvider, SyncError> {
+        let persisted: PersistedWebDavConfig = serde_json::from_value(persisted_configuration)
+            .map_err(provider_configuration_error)?;
+        let password = String::from_utf8(credential)
+            .map_err(|_| store_error("WebDAV provider credential must be valid UTF-8."))?;
+        build_provider(WebDavObjectStoreConfig {
+            server_url: persisted.server_url,
+            remote_root: persisted.remote_root,
+            username: persisted.username,
+            password,
+        })
+    }
+}
+
+fn build_provider(config: WebDavObjectStoreConfig) -> Result<SyncProvider, SyncError> {
+    let config = WebDavObjectStoreConfig::new(
+        &config.server_url,
+        &config.remote_root,
+        &config.username,
+        &config.password,
+    )?;
+    let persisted_configuration = serde_json::to_value(PersistedWebDavConfig {
+        server_url: config.server_url.clone(),
+        remote_root: config.remote_root.clone(),
+        username: config.username.clone(),
+    })
+    .map_err(provider_configuration_error)?;
+    let credential = config.password.as_bytes().to_vec();
+    let store = Arc::new(WebDavObjectStore::new(config)?);
+    Ok(SyncProvider {
+        descriptor: SyncProviderDescriptor {
+            id: "webdav".to_string(),
+            display_name: "WebDAV".to_string(),
+        },
+        store,
+        persisted_configuration,
+        credential,
+    })
+}
+
+fn provider_configuration_error(error: impl std::fmt::Display) -> SyncError {
+    store_error(format!("WebDAV provider configuration is invalid: {error}"))
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

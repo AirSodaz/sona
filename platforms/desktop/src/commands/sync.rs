@@ -22,10 +22,12 @@ pub async fn sync_get_status<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn sync_test_webdav_provider(
+pub async fn sync_test_webdav_provider<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
     config: WebDavObjectStoreConfig,
 ) -> Result<SyncProviderDescriptor, String> {
-    DesktopSyncManager::test_webdav_provider(config).await
+    manager.test_webdav_provider(&app, config).await
 }
 
 #[tauri::command]
@@ -73,9 +75,10 @@ pub async fn sync_create_vault<R: Runtime>(
 #[tauri::command]
 pub async fn sync_preview_join<R: Runtime>(
     app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
     request: SyncPreviewJoinRequest,
 ) -> Result<SyncJoinPreview, String> {
-    DesktopSyncManager::preview_join(&app, request).await
+    manager.preview_join(&app, request).await
 }
 
 #[tauri::command]
@@ -168,23 +171,28 @@ pub async fn sync_generate_recovery_key<R: Runtime>(
 #[tauri::command]
 pub async fn sync_list_conflicts<R: Runtime>(
     app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
 ) -> Result<Vec<SyncConflictSummary>, String> {
-    DesktopSyncManager::list_conflicts(&app)
+    manager.list_conflicts(&app).await
 }
 
 #[tauri::command]
 pub async fn sync_get_conflict<R: Runtime>(
     app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
     conflict_id: String,
 ) -> Result<Option<SyncConflictDetail>, String> {
-    DesktopSyncManager::get_conflict(&app, &conflict_id)
+    manager.get_conflict(&app, &conflict_id).await
 }
 
 #[tauri::command]
 pub async fn sync_resolve_conflict<R: Runtime>(
     app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
     conflict_id: String,
     resolution: SyncConflictResolution,
 ) -> Result<(), String> {
-    DesktopSyncManager::resolve_conflict(&app, &conflict_id, resolution)
+    manager
+        .resolve_conflict(&app, &conflict_id, resolution)
+        .await
 }

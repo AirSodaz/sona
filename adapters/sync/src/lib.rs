@@ -9,9 +9,12 @@ mod runtime;
 mod vault;
 
 pub use application::{
-    SyncPresetChangeError, SyncRetryState, SyncStatusContext, apply_sync_run_result,
-    build_sync_status, change_sync_preset, disabled_sync_status, is_retryable_sync_error,
-    run_sync_cycle, sync_error_code,
+    JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig, SyncApplicationEnvironment,
+    SyncApplicationError, SyncConfigStore, SyncCreateResult, SyncPresetChangeError, SyncProvider,
+    SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
+    SyncStatusContext, SystemSyncApplicationEnvironment, apply_sync_run_result, build_sync_status,
+    change_sync_preset, disabled_sync_status, is_retryable_sync_error, run_sync_cycle,
+    sync_error_code,
 };
 pub use backoff::SyncBackoffPolicy;
 pub use crypto::{

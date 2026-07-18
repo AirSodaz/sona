@@ -38,7 +38,9 @@ pub use storage_usage_repository::{
     LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
     load_storage_usage_snapshot_with_database,
 };
-pub use sync_repository::{SqliteSyncRepository, record_sync_operation_in_transaction};
+pub use sync_repository::{
+    SqliteSyncRepository, SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,
+};
 pub use tag::{SqliteTagAdapter, SqliteTagRepository};
 pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 

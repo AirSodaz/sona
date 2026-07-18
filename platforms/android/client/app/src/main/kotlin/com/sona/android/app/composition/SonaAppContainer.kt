@@ -6,18 +6,21 @@ import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
+import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
+import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
 import com.sona.android.application.settings.AppearanceSettingsPort
+import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
@@ -27,6 +30,10 @@ class SonaAppContainer(context: Context) {
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
+    private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
+    private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
+        register(syncSecretStore)
+    }
     private val providerCatalog = UniffiStreamingProviderCatalogAdapter()
     private val microphoneCapture = AndroidMicrophoneCapturePort(
         backendFactory = ::createAudioBackend,
@@ -40,6 +47,7 @@ class SonaAppContainer(context: Context) {
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
+    val syncSecrets: SyncSecretStorePort = syncSecretStore
     val recordingLibrary: RecordingLibraryPort = history
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =

@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::{BTreeMap, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use sona_core::sync::{
@@ -8,12 +8,17 @@ use sona_core::sync::{
     SyncLocalRuntimeState, SyncObject, SyncObjectKey, SyncObjectMetadata, SyncObjectPrefix,
     SyncObjectStore, SyncObjectStoreCapabilities, SyncOperation, SyncPresetV1,
     SyncPublishedCheckpoint, SyncPublishedSegment, SyncPutResult, SyncRemoteApplyResult,
-    SyncRemoteSegment, SyncRunResult,
+    SyncRemoteSegment, SyncRepositoryFactory, SyncRunResult, SyncSecretStore,
 };
+use sona_sqlite::{Database, SqliteSyncRepositoryFactory};
 use sona_sync::{
-    SyncPresetChangeError, SyncRetryState, SyncStatusContext, apply_sync_run_result,
-    build_sync_status, change_sync_preset, create_remote_vault, disabled_sync_status,
+    JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig, SyncApplicationEnvironment,
+    SyncApplicationError, SyncConfigStore, SyncPresetChangeError, SyncProvider,
+    SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
+    SyncStatusContext, apply_sync_run_result, build_sync_status, change_sync_preset,
+    create_remote_vault, disabled_sync_status,
 };
+use tokio::sync::Notify;
 
 #[derive(Default)]
 struct MemoryStore {
@@ -391,4 +396,737 @@ async fn preset_change_reports_local_and_remote_rollback_failures() {
     assert!(error.to_string().contains("Local preset update failed"));
     assert!(error.to_string().contains("remote rollback also failed"));
     assert_eq!(opened.header.preset, SyncPresetV1::Full);
+}
+
+#[test]
+fn json_config_store_reads_legacy_paused_but_does_not_write_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sync.json");
+    std::fs::write(
+        &path,
+        r#"{
+  "providerId": "webdav",
+  "vaultId": "vault-a",
+  "deviceId": "device-a",
+  "preset": "standard",
+  "webdav": {
+    "serverUrl": "https://dav.example.com",
+    "remoteRoot": "sona",
+    "username": "alice"
+  },
+  "paused": true,
+  "consecutiveFailures": 2,
+  "nextRetryAtMs": 3000
+}"#,
+    )
+    .unwrap();
+    let store = JsonFileSyncConfigStore::new(path.clone());
+
+    let config = store.load().unwrap().unwrap();
+
+    assert_eq!(config.provider_id, "webdav");
+    assert_eq!(config.retry.consecutive_failures, 2);
+    assert_eq!(
+        config.provider_configuration,
+        serde_json::json!({
+            "serverUrl": "https://dav.example.com",
+            "remoteRoot": "sona",
+            "username": "alice"
+        })
+    );
+
+    store.save(&config).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert!(saved.get("paused").is_none());
+    assert_eq!(saved["consecutiveFailures"], 2);
+    assert_eq!(saved["webdav"]["username"], "alice");
+}
+
+struct TestProviderFactory {
+    store: Arc<dyn SyncObjectStore>,
+}
+
+impl Default for TestProviderFactory {
+    fn default() -> Self {
+        Self {
+            store: Arc::new(MemoryStore::default()),
+        }
+    }
+}
+
+#[async_trait]
+impl SyncProviderFactory for TestProviderFactory {
+    fn provider_id(&self) -> &str {
+        "test"
+    }
+
+    fn credential_secret_key(&self, vault_id: &str) -> String {
+        format!("test-password:{vault_id}")
+    }
+
+    async fn prepare(&self, configuration: serde_json::Value) -> Result<SyncProvider, SyncError> {
+        Ok(SyncProvider {
+            descriptor: sona_core::sync::SyncProviderDescriptor {
+                id: "test".to_string(),
+                display_name: "Test".to_string(),
+            },
+            store: self.store.clone(),
+            persisted_configuration: serde_json::json!({ "account": configuration["account"] }),
+            credential: configuration["password"]
+                .as_str()
+                .unwrap()
+                .as_bytes()
+                .to_vec(),
+        })
+    }
+
+    async fn restore(
+        &self,
+        persisted_configuration: serde_json::Value,
+        credential: Vec<u8>,
+    ) -> Result<SyncProvider, SyncError> {
+        Ok(SyncProvider {
+            descriptor: sona_core::sync::SyncProviderDescriptor {
+                id: "test".to_string(),
+                display_name: "Test".to_string(),
+            },
+            store: self.store.clone(),
+            persisted_configuration,
+            credential,
+        })
+    }
+}
+
+#[tokio::test]
+async fn provider_registry_separates_persisted_settings_from_credentials() {
+    let registry = SyncProviderRegistry::new([Arc::new(TestProviderFactory::default()) as Arc<_>]);
+
+    let descriptor = registry
+        .test_provider(SyncProviderInput {
+            provider_id: "test".to_string(),
+            configuration: serde_json::json!({
+                "account": "alice",
+                "password": "secret"
+            }),
+        })
+        .await
+        .unwrap();
+    assert_eq!(descriptor.id, "test");
+
+    let provider = registry
+        .prepare(SyncProviderInput {
+            provider_id: "test".to_string(),
+            configuration: serde_json::json!({
+                "account": "alice",
+                "password": "secret"
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        provider.persisted_configuration,
+        serde_json::json!({ "account": "alice" })
+    );
+    assert_eq!(provider.credential, b"secret");
+    assert_eq!(
+        registry.credential_secret_key("test", "vault-a").unwrap(),
+        "test-password:vault-a"
+    );
+
+    let restored = registry
+        .restore(
+            "test",
+            provider.persisted_configuration.clone(),
+            provider.credential.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(restored.credential, b"secret");
+
+    assert!(matches!(
+        registry
+            .prepare(SyncProviderInput {
+                provider_id: "missing".to_string(),
+                configuration: serde_json::Value::Null,
+            })
+            .await,
+        Err(SyncApplicationError::UnknownProvider(provider)) if provider == "missing"
+    ));
+}
+
+#[derive(Default)]
+struct MemoryConfigStore(Mutex<Option<SyncApplicationConfig>>);
+
+impl SyncConfigStore for MemoryConfigStore {
+    fn load(&self) -> Result<Option<SyncApplicationConfig>, SyncApplicationError> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+
+    fn save(&self, config: &SyncApplicationConfig) -> Result<(), SyncApplicationError> {
+        *self.0.lock().unwrap() = Some(config.clone());
+        Ok(())
+    }
+
+    fn delete(&self) -> Result<(), SyncApplicationError> {
+        *self.0.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct MemorySecretStore(Mutex<BTreeMap<String, Vec<u8>>>);
+
+#[async_trait]
+impl SyncSecretStore for MemorySecretStore {
+    async fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError> {
+        Ok(self.0.lock().unwrap().get(key).cloned())
+    }
+
+    async fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError> {
+        self.0
+            .lock()
+            .unwrap()
+            .insert(key.to_string(), value.to_vec());
+        Ok(())
+    }
+
+    async fn delete_secret(&self, key: &str) -> Result<(), SyncError> {
+        self.0.lock().unwrap().remove(key);
+        Ok(())
+    }
+}
+
+struct FixedEnvironment {
+    ids: Mutex<VecDeque<String>>,
+}
+
+impl FixedEnvironment {
+    fn new(ids: impl IntoIterator<Item = &'static str>) -> Self {
+        Self {
+            ids: Mutex::new(ids.into_iter().map(str::to_string).collect()),
+        }
+    }
+}
+
+impl SyncApplicationEnvironment for FixedEnvironment {
+    fn now_ms(&self) -> u64 {
+        1_000
+    }
+
+    fn next_id(&self) -> String {
+        self.ids.lock().unwrap().pop_front().unwrap()
+    }
+
+    fn jitter(&self) -> u32 {
+        500_000
+    }
+}
+
+#[tokio::test]
+async fn application_manual_lock_suppresses_restore_until_restart() {
+    let config = Arc::new(MemoryConfigStore::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let providers = SyncProviderRegistry::new([
+        Arc::new(TestProviderFactory::default()) as Arc<dyn SyncProviderFactory>
+    ]);
+    let application = SyncApplication::new(
+        config.clone(),
+        factory.clone(),
+        providers.clone(),
+        secrets.clone(),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    );
+
+    let created = application
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "master-password",
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.vault_id, "vault-a");
+    assert_eq!(created.device_id, "device-a");
+    assert_eq!(
+        created.status.state,
+        SyncLifecycleState::Error,
+        "create keeps the connection when the initial sync fails"
+    );
+    assert_eq!(
+        secrets.read_secret("test-password:vault-a").await.unwrap(),
+        Some(b"provider-secret".to_vec())
+    );
+    assert!(
+        secrets
+            .read_secret("vault-key:vault-a")
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    assert_eq!(
+        application.lock().await.unwrap().state,
+        SyncLifecycleState::Locked
+    );
+    assert_eq!(
+        application.status().await.unwrap().state,
+        SyncLifecycleState::Locked
+    );
+
+    let restarted = SyncApplication::new(
+        config,
+        factory,
+        providers,
+        secrets,
+        Arc::new(FixedEnvironment::new([])),
+    );
+    assert_eq!(
+        restarted.status().await.unwrap().state,
+        SyncLifecycleState::Error
+    );
+}
+
+#[tokio::test]
+async fn application_owns_join_unlock_pause_and_disconnect_lifecycle() {
+    let provider_factory = Arc::new(TestProviderFactory::default());
+    let providers =
+        SyncProviderRegistry::new([provider_factory.clone() as Arc<dyn SyncProviderFactory>]);
+    let source = SyncApplication::new(
+        Arc::new(MemoryConfigStore::default()),
+        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+            Database::open_in_memory().unwrap(),
+        ))),
+        providers.clone(),
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(FixedEnvironment::new(["vault-shared", "device-source"])),
+    );
+    source
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "old-password",
+            false,
+        )
+        .await
+        .unwrap();
+
+    let config = Arc::new(MemoryConfigStore::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let joining = SyncApplication::new(
+        config.clone(),
+        repository_factory.clone(),
+        providers,
+        secrets.clone(),
+        Arc::new(FixedEnvironment::new(["preview-device", "device-joining"])),
+    );
+    let provider_input = || SyncProviderInput {
+        provider_id: "test".to_string(),
+        configuration: serde_json::json!({
+            "account": "alice",
+            "password": "provider-secret"
+        }),
+    };
+
+    let preview = joining
+        .preview_join(provider_input(), "vault-shared", "old-password")
+        .await
+        .unwrap();
+    assert_eq!(preview.remote_operation_count, 0);
+
+    let join_error = joining
+        .join(provider_input(), "vault-shared", "old-password")
+        .await
+        .unwrap_err();
+    assert!(matches!(join_error, SyncApplicationError::Sync(_)));
+    assert_eq!(
+        joining.status().await.unwrap().state,
+        SyncLifecycleState::Error
+    );
+
+    assert_eq!(
+        joining.set_paused(true).await.unwrap().state,
+        SyncLifecycleState::Paused
+    );
+    assert_eq!(
+        joining.set_paused(false).await.unwrap().state,
+        SyncLifecycleState::Error
+    );
+    assert_eq!(
+        joining.lock().await.unwrap().state,
+        SyncLifecycleState::Locked
+    );
+    assert_eq!(
+        joining
+            .unlock_with_password(b"provider-secret".to_vec(), "old-password")
+            .await
+            .unwrap()
+            .state,
+        SyncLifecycleState::Error
+    );
+
+    joining
+        .change_master_password("old-password", "new-password")
+        .await
+        .unwrap();
+    let recovery_key = joining.generate_recovery_key().await.unwrap();
+    joining.lock().await.unwrap();
+    assert!(
+        joining
+            .unlock_with_password(b"provider-secret".to_vec(), "old-password")
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        joining
+            .unlock_with_recovery_key(b"provider-secret".to_vec(), &recovery_key)
+            .await
+            .unwrap()
+            .state,
+        SyncLifecycleState::Error
+    );
+
+    assert_eq!(
+        joining.disconnect().await.unwrap().state,
+        SyncLifecycleState::Disabled
+    );
+    assert!(config.load().unwrap().is_none());
+    assert!(repository_factory.open().unwrap().is_none());
+    assert!(secrets.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn application_changes_preset_and_delegates_conflicts() {
+    let application = SyncApplication::new(
+        Arc::new(MemoryConfigStore::default()),
+        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+            Database::open_in_memory().unwrap(),
+        ))),
+        SyncProviderRegistry::new([
+            Arc::new(TestProviderFactory::default()) as Arc<dyn SyncProviderFactory>
+        ]),
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    );
+    application
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "master-password",
+            false,
+        )
+        .await
+        .unwrap();
+
+    let status = application
+        .change_preset(SyncPresetV1::Full, true)
+        .await
+        .unwrap();
+    assert_eq!(status.preset, Some(SyncPresetV1::Full));
+    assert!(application.list_conflicts().unwrap().is_empty());
+    assert!(application.get_conflict("missing").unwrap().is_none());
+    assert!(
+        application
+            .resolve_conflict(
+                "missing",
+                sona_core::sync::SyncConflictResolution::KeepCurrent,
+            )
+            .is_err()
+    );
+}
+
+struct FailingSecretStore;
+
+#[async_trait]
+impl SyncSecretStore for FailingSecretStore {
+    async fn read_secret(&self, _key: &str) -> Result<Option<Vec<u8>>, SyncError> {
+        Ok(None)
+    }
+
+    async fn write_secret(&self, _key: &str, _value: &[u8]) -> Result<(), SyncError> {
+        Err(SyncError::SecretStore("write failed".to_string()))
+    }
+
+    async fn delete_secret(&self, _key: &str) -> Result<(), SyncError> {
+        Err(SyncError::SecretStore("delete failed".to_string()))
+    }
+}
+
+#[tokio::test]
+async fn secret_write_is_best_effort_but_delete_failure_stops_disconnect() {
+    let config = Arc::new(MemoryConfigStore::default());
+    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let application = SyncApplication::new(
+        config.clone(),
+        repository_factory.clone(),
+        SyncProviderRegistry::new([
+            Arc::new(TestProviderFactory::default()) as Arc<dyn SyncProviderFactory>
+        ]),
+        Arc::new(FailingSecretStore),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    );
+
+    application
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "master-password",
+            false,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        application.disconnect().await,
+        Err(SyncApplicationError::Sync(SyncError::SecretStore(_)))
+    ));
+    assert!(config.load().unwrap().is_some());
+    assert!(repository_factory.open().unwrap().is_some());
+}
+
+struct FailingSaveConfigStore;
+
+impl SyncConfigStore for FailingSaveConfigStore {
+    fn load(&self) -> Result<Option<SyncApplicationConfig>, SyncApplicationError> {
+        Ok(None)
+    }
+
+    fn save(&self, _config: &SyncApplicationConfig) -> Result<(), SyncApplicationError> {
+        Err(SyncApplicationError::Config("save failed".to_string()))
+    }
+
+    fn delete(&self) -> Result<(), SyncApplicationError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn config_failure_does_not_roll_back_remote_or_local_vault_creation() {
+    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let application = SyncApplication::new(
+        Arc::new(FailingSaveConfigStore),
+        repository_factory.clone(),
+        SyncProviderRegistry::new([
+            Arc::new(TestProviderFactory::default()) as Arc<dyn SyncProviderFactory>
+        ]),
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    );
+
+    assert!(matches!(
+        application
+            .create(
+                SyncProviderInput {
+                    provider_id: "test".to_string(),
+                    configuration: serde_json::json!({
+                        "account": "alice",
+                        "password": "provider-secret"
+                    }),
+                },
+                SyncPresetV1::Standard,
+                "master-password",
+                false,
+            )
+            .await,
+        Err(SyncApplicationError::Config(message)) if message == "save failed"
+    ));
+    assert!(repository_factory.open().unwrap().is_some());
+}
+
+#[derive(Default)]
+struct BlockingStore {
+    inner: MemoryStore,
+    block_next_list: AtomicBool,
+    entered: Notify,
+    release: Notify,
+}
+
+#[async_trait]
+impl SyncObjectStore for BlockingStore {
+    async fn probe(&self) -> Result<SyncObjectStoreCapabilities, SyncError> {
+        self.inner.probe().await
+    }
+
+    async fn list(
+        &self,
+        prefix: &SyncObjectPrefix,
+        continuation: Option<&str>,
+    ) -> Result<SyncListPage, SyncError> {
+        if self.block_next_list.swap(false, Ordering::SeqCst) {
+            self.entered.notify_one();
+            self.release.notified().await;
+        }
+        self.inner.list(prefix, continuation).await
+    }
+
+    async fn get(&self, key: &SyncObjectKey) -> Result<Option<SyncObject>, SyncError> {
+        self.inner.get(key).await
+    }
+
+    async fn put_if_absent(
+        &self,
+        key: &SyncObjectKey,
+        bytes: Vec<u8>,
+    ) -> Result<SyncPutResult, SyncError> {
+        self.inner.put_if_absent(key, bytes).await
+    }
+
+    async fn compare_and_swap(
+        &self,
+        key: &SyncObjectKey,
+        expected_etag: Option<&str>,
+        bytes: Vec<u8>,
+    ) -> Result<SyncPutResult, SyncError> {
+        self.inner.compare_and_swap(key, expected_etag, bytes).await
+    }
+
+    async fn delete(
+        &self,
+        key: &SyncObjectKey,
+        expected_etag: Option<&str>,
+    ) -> Result<SyncDeleteResult, SyncError> {
+        self.inner.delete(key, expected_etag).await
+    }
+}
+
+#[tokio::test]
+async fn concurrent_run_reports_syncing_and_rejects_the_second_run() {
+    let store = Arc::new(BlockingStore::default());
+    let application = Arc::new(SyncApplication::new(
+        Arc::new(MemoryConfigStore::default()),
+        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+            Database::open_in_memory().unwrap(),
+        ))),
+        SyncProviderRegistry::new([Arc::new(TestProviderFactory {
+            store: store.clone(),
+        }) as Arc<dyn SyncProviderFactory>]),
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    ));
+    application
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "master-password",
+            false,
+        )
+        .await
+        .unwrap();
+    store.block_next_list.store(true, Ordering::SeqCst);
+
+    let running_application = application.clone();
+    let running = tokio::spawn(async move { running_application.run().await });
+    store.entered.notified().await;
+
+    assert_eq!(
+        application.status().await.unwrap().state,
+        SyncLifecycleState::Syncing
+    );
+    assert!(matches!(
+        application.run().await,
+        Err(SyncApplicationError::InvalidState(message))
+            if message == "A sync run is already in progress."
+    ));
+
+    store.release.notify_one();
+    let _ = running.await.unwrap();
+}
+
+#[tokio::test]
+async fn disconnect_waits_for_an_active_run_and_cannot_be_undone_by_retry_persistence() {
+    let store = Arc::new(BlockingStore::default());
+    let config = Arc::new(MemoryConfigStore::default());
+    let application = Arc::new(SyncApplication::new(
+        config.clone(),
+        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+            Database::open_in_memory().unwrap(),
+        ))),
+        SyncProviderRegistry::new([Arc::new(TestProviderFactory {
+            store: store.clone(),
+        }) as Arc<dyn SyncProviderFactory>]),
+        Arc::new(MemorySecretStore::default()),
+        Arc::new(FixedEnvironment::new(["vault-a", "device-a"])),
+    ));
+    application
+        .create(
+            SyncProviderInput {
+                provider_id: "test".to_string(),
+                configuration: serde_json::json!({
+                    "account": "alice",
+                    "password": "provider-secret"
+                }),
+            },
+            SyncPresetV1::Standard,
+            "master-password",
+            false,
+        )
+        .await
+        .unwrap();
+    store.block_next_list.store(true, Ordering::SeqCst);
+
+    let running_application = application.clone();
+    let running = tokio::spawn(async move { running_application.run().await });
+    store.entered.notified().await;
+
+    let disconnecting_application = application.clone();
+    let disconnecting = tokio::spawn(async move { disconnecting_application.disconnect().await });
+    tokio::task::yield_now().await;
+    tokio::task::yield_now().await;
+    assert!(
+        !disconnecting.is_finished(),
+        "disconnect must wait for the active run to finish"
+    );
+
+    store.release.notify_one();
+    let _ = running.await.unwrap();
+    assert_eq!(
+        disconnecting.await.unwrap().unwrap().state,
+        SyncLifecycleState::Disabled
+    );
+    assert!(config.load().unwrap().is_none());
+    assert_eq!(
+        application.status().await.unwrap().state,
+        SyncLifecycleState::Disabled
+    );
 }

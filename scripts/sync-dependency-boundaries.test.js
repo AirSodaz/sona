@@ -33,10 +33,10 @@ test('sona-sync remains provider neutral', () => {
   }
 });
 
-test('sona-sync-webdav depends on ports but not the sync runtime or local database', () => {
+test('sona-sync-webdav implements the provider factory without depending on the local database', () => {
   const manifest = read('adapters', 'sync_webdav', 'Cargo.toml');
   assert.match(manifest, /^sona-core\s*=/mu);
-  assert.doesNotMatch(manifest, /^sona-sync\s*=/mu);
+  assert.match(manifest, /^sona-sync\s*=/mu);
   assert.doesNotMatch(manifest, /^sona-sqlite\s*=/mu);
 
   const source = [
@@ -55,22 +55,25 @@ test('the workspace uses the renamed sync WebDAV adapter only', () => {
   assert.equal(fs.existsSync(path.join(repoRoot, 'adapters', 'webdav')), false);
 });
 
-test('desktop and UniFFI delegate sync status and retry transitions to sona-sync', () => {
+test('desktop and UniFFI delegate the complete sync lifecycle to SyncApplication', () => {
   const hosts = [
     read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
     read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
   ];
 
   for (const source of hosts) {
-    assert.match(source, /\bbuild_sync_status\b/u);
-    assert.match(source, /\brun_sync_cycle\b/u);
-    assert.match(source, /\bchange_sync_preset\b/u);
-    assert.doesNotMatch(source, /\bSyncBackoffPolicy\b/u);
-    assert.doesNotMatch(source, /\bupdate_remote_vault_preset\b/u);
-    assert.doesNotMatch(source, /\.validate_preset_change\s*\(/u);
-    assert.doesNotMatch(source, /\.change_preset\s*\(/u);
-    assert.doesNotMatch(source, /\bfn disabled_status\s*\(/u);
-    assert.doesNotMatch(source, /\bfn sync_error_code\s*\(/u);
-    assert.doesNotMatch(source, /\bfn is_retryable\s*\(/u);
+    assert.match(source, /\bSyncApplication\b/u);
+    for (const forbidden of [
+      'create_remote_vault',
+      'open_remote_vault_with_password',
+      'open_remote_vault_with_recovery_key',
+      'open_remote_vault_with_vault_key',
+      'run_sync_cycle',
+      'load_remote_state_for_join',
+      'change_sync_preset',
+    ]) {
+      assert.doesNotMatch(source, new RegExp(`\\b${forbidden}\\b`, 'u'));
+    }
+    assert.doesNotMatch(source, /\bstruct\s+(?:UnlockedSession|Session|PersistedSyncConfig|PersistedConfig)\b/u);
   }
 });

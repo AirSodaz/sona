@@ -4,11 +4,12 @@ use std::sync::Arc;
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
 use sona_core::sync::{
-    HybridLogicalClock, SyncCausalContext, SyncConflict, SyncConflictDetail,
-    SyncConflictResolution, SyncConflictSummary, SyncDeviceCursor, SyncEntityKey, SyncEntityKind,
-    SyncError, SyncJoinPreview, SyncLocalRepository, SyncLocalRuntimeState, SyncOperation,
-    SyncOperationKind, SyncPresetV1, SyncPublishedCheckpoint, SyncPublishedSegment,
-    SyncRemoteApplyResult, SyncRemoteSegment, SyncVersion, merge_operations,
+    HybridLogicalClock, SyncApplicationRepository, SyncCausalContext, SyncConflict,
+    SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncDeviceCursor,
+    SyncEntityKey, SyncEntityKind, SyncError, SyncJoinPreview, SyncLocalRepository,
+    SyncLocalRuntimeState, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedCheckpoint,
+    SyncPublishedSegment, SyncRemoteApplyResult, SyncRemoteSegment, SyncRepositoryFactory,
+    SyncVersion, merge_operations,
 };
 
 use crate::{Database, DatabaseError};
@@ -18,6 +19,51 @@ const DELETE_FIELD: &str = "__entity__";
 #[derive(Clone)]
 pub struct SqliteSyncRepository {
     db: Arc<Database>,
+}
+
+#[derive(Clone)]
+pub struct SqliteSyncRepositoryFactory {
+    db: Arc<Database>,
+}
+
+impl SqliteSyncRepositoryFactory {
+    pub fn new(db: Arc<Database>) -> Self {
+        Self { db }
+    }
+}
+
+impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
+    fn open(&self) -> Result<Option<Arc<dyn SyncApplicationRepository>>, SyncError> {
+        SqliteSyncRepository::open_existing(Arc::clone(&self.db)).map(|repository| {
+            repository.map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
+        })
+    }
+
+    fn initialize(
+        &self,
+        vault_id: &str,
+        device_id: &str,
+        preset: SyncPresetV1,
+    ) -> Result<Arc<dyn SyncApplicationRepository>, SyncError> {
+        SqliteSyncRepository::initialize(Arc::clone(&self.db), vault_id, device_id, preset)
+            .map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
+    }
+
+    fn preview(
+        &self,
+        vault_id: &str,
+        preview_device_id: &str,
+        preset: SyncPresetV1,
+        remote_segments: &[SyncRemoteSegment],
+    ) -> Result<SyncJoinPreview, SyncError> {
+        SqliteSyncRepository::preview_join(
+            Arc::clone(&self.db),
+            vault_id,
+            preview_device_id,
+            preset,
+            remote_segments,
+        )
+    }
 }
 
 impl SqliteSyncRepository {
@@ -1107,6 +1153,52 @@ impl SyncLocalRepository for SqliteSyncRepository {
 
     fn change_preset(&self, preset: SyncPresetV1, confirm_shrink: bool) -> Result<(), SyncError> {
         SqliteSyncRepository::change_preset(self, preset, confirm_shrink).map(|_| ())
+    }
+}
+
+impl SyncApplicationRepository for SqliteSyncRepository {
+    fn runtime_repository(&self) -> &dyn SyncLocalRepository {
+        self
+    }
+
+    fn is_paused(&self) -> Result<bool, SyncError> {
+        SqliteSyncRepository::is_paused(self)
+    }
+
+    fn set_paused(&self, paused: bool) -> Result<(), SyncError> {
+        SqliteSyncRepository::set_paused(self, paused)
+    }
+
+    fn pending_operation_count(&self) -> Result<u64, SyncError> {
+        SqliteSyncRepository::pending_operation_count(self)
+    }
+
+    fn unresolved_conflict_count(&self) -> Result<u64, SyncError> {
+        SqliteSyncRepository::unresolved_conflict_count(self)
+    }
+
+    fn disconnect(&self) -> Result<(), SyncError> {
+        SqliteSyncRepository::disconnect(self)
+    }
+
+    fn list_conflict_summaries(&self) -> Result<Vec<SyncConflictSummary>, SyncError> {
+        SqliteSyncRepository::list_conflict_summaries(self)
+    }
+
+    fn get_conflict_detail(
+        &self,
+        conflict_id: &str,
+    ) -> Result<Option<SyncConflictDetail>, SyncError> {
+        SqliteSyncRepository::get_conflict_detail(self, conflict_id)
+    }
+
+    fn resolve_conflict(
+        &self,
+        conflict_id: &str,
+        resolution: SyncConflictResolution,
+        resolved_at_ms: u64,
+    ) -> Result<(), SyncError> {
+        SqliteSyncRepository::resolve_conflict(self, conflict_id, resolution, resolved_at_ms)
     }
 }
 

@@ -14,11 +14,11 @@ use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
 use sona_core::sync::{
     HybridLogicalClock, SyncCausalContext, SyncConflictResolution, SyncEntityKey, SyncEntityKind,
     SyncLocalRepository, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedSegment,
-    SyncRemoteSegment, SyncVersion,
+    SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
 };
 use sona_sqlite::{
     Database, DatabaseError, SqliteAppConfigAdapter, SqliteAutomationRepository,
-    SqliteHistoryStore, SqliteProjectRepository, SqliteSyncRepository,
+    SqliteHistoryStore, SqliteProjectRepository, SqliteSyncRepository, SqliteSyncRepositoryFactory,
     record_sync_operation_in_transaction,
 };
 
@@ -1086,4 +1086,52 @@ fn shrinking_preset_requires_confirmation_and_publishes_removed_domain_tombstone
     assert!(rule_exists);
     assert_eq!(state.preset, SyncPresetV1::Standard);
     assert!(state.checkpoint_required);
+}
+
+#[test]
+fn sync_repository_factory_opens_initializes_previews_and_exposes_application_state() {
+    let db = Arc::new(Database::open_in_memory().unwrap());
+    let factory = SqliteSyncRepositoryFactory::new(Arc::clone(&db));
+
+    assert!(factory.open().unwrap().is_none());
+    let preview = factory
+        .preview(
+            "preview-vault",
+            "preview-device",
+            SyncPresetV1::Standard,
+            &[],
+        )
+        .unwrap();
+    assert_eq!(preview.remote_operation_count, 0);
+
+    let repository = factory
+        .initialize("vault-a", "device-a", SyncPresetV1::Standard)
+        .unwrap();
+    assert_eq!(
+        repository
+            .runtime_repository()
+            .load_runtime_state()
+            .unwrap()
+            .vault_id,
+        "vault-a"
+    );
+    assert!(!repository.is_paused().unwrap());
+    assert_eq!(repository.pending_operation_count().unwrap(), 0);
+    assert_eq!(repository.unresolved_conflict_count().unwrap(), 0);
+    assert!(repository.list_conflict_summaries().unwrap().is_empty());
+    assert!(
+        repository
+            .get_conflict_detail("missing-conflict")
+            .unwrap()
+            .is_none()
+    );
+
+    repository.set_paused(true).unwrap();
+    assert!(repository.is_paused().unwrap());
+
+    let reopened = factory.open().unwrap().expect("initialized repository");
+    assert!(reopened.is_paused().unwrap());
+
+    reopened.disconnect().unwrap();
+    assert!(factory.open().unwrap().is_none());
 }
