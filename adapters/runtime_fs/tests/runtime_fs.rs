@@ -10,7 +10,6 @@ use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_
 use sona_core::ports::fs::{FileSystem, FileSystemError, FileSystemOperation};
 use sona_core::ports::runtime::{BatchTranscribePlanResolver, ModelCatalogProvider};
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::diagnostics::{
     DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
@@ -156,12 +155,6 @@ fn uuid_generator_returns_distinct_uuid_v4_strings() {
         Uuid::parse_str(&second).unwrap().get_version(),
         Some(Version::Random)
     );
-}
-
-#[test]
-fn uuid_generator_implements_project_id_port() {
-    let id = ProjectIdGenerator::generate_id(&UuidGenerator);
-    assert_eq!(uuid::Uuid::parse_str(&id).unwrap().get_version_num(), 4);
 }
 
 #[test]

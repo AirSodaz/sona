@@ -19,11 +19,11 @@ use sona_core::history::{
     HistorySaveRecordingRequest, HistorySummaryPayload, TranscriptSummaryRecordPayload,
 };
 use sona_core::history_store::HistoryStore;
-use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
+use sona_core::tag::{TagDefaults, TagRecord, TagStore};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{
     Database, SqliteAutomationRepository, SqliteBackupStateRepository, SqliteConfigStore,
-    SqliteHistoryStore, SqliteProjectRepository, llm_usage,
+    SqliteHistoryStore, SqliteTagRepository, llm_usage,
 };
 
 fn rewrite_archive(archive: &Path, mutate: impl FnOnce(&Path)) {
@@ -81,15 +81,17 @@ fn legacy_config(label: &str) -> Value {
     })
 }
 
-fn project() -> ProjectRecord {
-    ProjectRecord {
+fn tag() -> TagRecord {
+    TagRecord {
         id: "backup-project".to_string(),
         name: "Backup Project".to_string(),
         description: "Roundtrip workspace".to_string(),
         icon: "folder".to_string(),
+        color: String::new(),
+        sort_order: 0,
         created_at: 100,
         updated_at: 200,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: "general".to_string(),
             translation_language: "en".to_string(),
             polish_preset_id: "general".to_string(),
@@ -152,8 +154,8 @@ fn seed_five_scopes(app_data_dir: &Path) -> sona_core::backup::BackupDataset {
     SqliteConfigStore::new(Arc::clone(&database))
         .replace_state(app_config_stored_state_from_value(&legacy_config("source"), 1).unwrap())
         .unwrap();
-    SqliteProjectRepository::new(Arc::clone(&database))
-        .replace_projects(vec![project()])
+    SqliteTagRepository::new(Arc::clone(&database))
+        .replace_tags(vec![tag()])
         .unwrap();
 
     let history_store = SqliteHistoryStore::with_environment(

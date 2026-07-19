@@ -7,7 +7,7 @@ use sona_core::history::{
     HistorySaveRecordingRequest,
 };
 use sona_core::ports::time::{ClockError, UnixMillisClock};
-use sona_sqlite::LazySqliteHistoryMutationRepository;
+use sona_sqlite::DeferredSqliteHistoryMutationRepository;
 
 struct TestClock;
 
@@ -26,7 +26,7 @@ impl HistoryIdGenerator for TestIds {
 }
 
 fn service(app_data_dir: &std::path::Path) -> HistoryMutationService {
-    HistoryMutationService::new(Arc::new(LazySqliteHistoryMutationRepository::new(
+    HistoryMutationService::new(Arc::new(DeferredSqliteHistoryMutationRepository::new(
         app_data_dir.to_path_buf(),
         Arc::new(TestClock),
         Arc::new(TestIds),
@@ -34,10 +34,10 @@ fn service(app_data_dir: &std::path::Path) -> HistoryMutationService {
 }
 
 #[test]
-fn lazy_repository_implements_the_core_history_mutation_port() {
+fn deferred_repository_implements_the_core_history_mutation_port() {
     fn assert_port<T: HistoryMutationRepository>() {}
 
-    assert_port::<LazySqliteHistoryMutationRepository>();
+    assert_port::<DeferredSqliteHistoryMutationRepository>();
 }
 
 #[test]

@@ -5,7 +5,6 @@ use sona_core::config::ConfigError;
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use sona_core::ports::path::{PathKind, PathProviderError};
 use sona_core::ports::time::ClockError;
-use sona_core::project::ProjectError;
 use sona_core::recovery::RecoveryError;
 use sona_core::tag::TagError;
 use sona_core::task_ledger::TaskLedgerError;
@@ -39,7 +38,6 @@ fn path_and_clock_errors_keep_machine_readable_context() {
 #[test]
 fn domain_errors_distinguish_repository_serialization_and_clock_failures() {
     let config = ConfigError::Repository("config store".to_string());
-    let project = ProjectError::Clock(ClockError::Unavailable("project clock".to_string()));
     let tag = TagError::Repository("tag store".to_string());
     let automation = AutomationError::Repository("automation store".to_string());
     let recovery = RecoveryError::Path(PathProviderError::new(
@@ -50,7 +48,6 @@ fn domain_errors_distinguish_repository_serialization_and_clock_failures() {
     let ledger = TaskLedgerError::Serialization(ledger_error);
 
     assert!(matches!(config, ConfigError::Repository(_)));
-    assert!(matches!(project, ProjectError::Clock(_)));
     assert!(matches!(tag, TagError::Repository(_)));
     assert!(matches!(automation, AutomationError::Repository(_)));
     assert!(matches!(recovery, RecoveryError::Path(_)));

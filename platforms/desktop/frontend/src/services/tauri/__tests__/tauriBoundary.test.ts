@@ -70,16 +70,6 @@ import {
   llmUsageReplaceRaw,
 } from '../llmUsage';
 import {
-  projectCreate,
-  projectDelete,
-  projectGetActiveId,
-  projectList,
-  projectReorder,
-  projectSaveAll,
-  projectSetActiveId,
-  projectUpdate,
-} from '../project';
-import {
   recoveryLoadSnapshot,
   recoveryPersistQueueSnapshot,
   recoverySaveSnapshot,
@@ -1588,94 +1578,6 @@ describe('tauri boundary wrappers', () => {
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.automation.replaceRuntimeRules, {
       rules: [rule],
-    });
-  });
-
-  it('project repository wrappers forward repository commands', async () => {
-    const defaults = {
-      summaryTemplateId: 'general',
-      translationLanguage: 'zh',
-      polishPresetId: 'general',
-      exportFileNamePrefix: '',
-      enabledTextReplacementSetIds: [],
-      enabledHotwordSetIds: [],
-      enabledPolishKeywordSetIds: [],
-      enabledSpeakerProfileIds: [],
-    };
-    const wireProject = {
-      id: 'project-1',
-      name: 'Research',
-      description: 'Notes',
-      icon: 'folder',
-      createdAt: 100,
-      updatedAt: 101,
-      defaults: {
-        ...defaults,
-        polishScenario: null,
-        polishContext: null,
-      },
-    };
-    const project = {
-      ...wireProject,
-      color: '#123456',
-      sortOrder: 4,
-      defaults,
-    };
-    vi.mocked(invoke)
-      .mockResolvedValueOnce([wireProject])
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(wireProject)
-      .mockResolvedValueOnce(wireProject)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce([wireProject])
-      .mockResolvedValueOnce('project-1')
-      .mockResolvedValueOnce(undefined);
-
-    const listed = await projectList({
-      fallbackEnabledPolishKeywordSetIds: ['keywords'],
-      fallbackEnabledSpeakerProfileIds: ['speaker'],
-    });
-    await projectSaveAll([project]);
-    await projectCreate({ name: 'Research', description: 'Notes', icon: 'folder', defaults });
-    await projectUpdate('project-1', { name: 'Updated' });
-    await projectDelete('project-1');
-    await projectReorder(['project-2', 'project-1']);
-    await projectGetActiveId();
-    await projectSetActiveId('project-2');
-
-    expect(listed).toEqual([{
-      ...wireProject,
-      color: '#64748b',
-      sortOrder: 0,
-      defaults,
-    }]);
-
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.project.list, {
-      fallbackEnabledPolishKeywordSetIds: ['keywords'],
-      fallbackEnabledSpeakerProfileIds: ['speaker'],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.project.saveAll, {
-      projects: [wireProject],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.project.create, {
-      name: 'Research',
-      description: 'Notes',
-      icon: 'folder',
-      defaults,
-    });
-    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.project.update, {
-      projectId: 'project-1',
-      updates: { name: 'Updated' },
-    });
-    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.project.delete, {
-      projectId: 'project-1',
-    });
-    expect(invoke).toHaveBeenNthCalledWith(6, TauriCommand.project.reorder, {
-      projectIds: ['project-2', 'project-1'],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(7, TauriCommand.project.getActiveId);
-    expect(invoke).toHaveBeenNthCalledWith(8, TauriCommand.project.setActiveId, {
-      projectId: 'project-2',
     });
   });
 

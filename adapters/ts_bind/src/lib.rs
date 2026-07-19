@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 //! TypeScript-facing metadata for Sona core bindings.
 //!
 //! This adapter owns the transport-neutral core type registry, TypeScript rendering,
@@ -95,10 +93,6 @@ pub use sona_core::ports::asr::{
     OnlineAsrBatchCapability, OnlineAsrCapability, OnlineAsrLocalFileBatchMode, OnlineAsrProvider,
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
-};
-pub use sona_core::project::{
-    ProjectCreateInput, ProjectDefaults, ProjectDefaultsInput, ProjectDefaultsPatch, ProjectRecord,
-    ProjectRepositorySnapshot, ProjectUpdateInput,
 };
 pub use sona_core::recovery::types::{
     RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
@@ -301,18 +295,6 @@ pub fn validate_task_ledger_record_for_typescript(
 ) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(record)?;
     validate_task_ledger_record_numbers("$", record)
-}
-
-pub fn validate_project_record_for_typescript(
-    record: &ProjectRecord,
-) -> Result<(), TypescriptBindingError> {
-    validate_typescript_safe_integers(record)
-}
-
-pub fn validate_project_records_for_typescript(
-    records: &[ProjectRecord],
-) -> Result<(), TypescriptBindingError> {
-    validate_typescript_safe_integers(records)
 }
 
 pub fn validate_tag_record_for_typescript(
@@ -652,13 +634,6 @@ pub fn desktop_types() -> specta::Types {
         .register::<TaskLedgerRecord>()
         .register::<TaskLedgerPatch>()
         .register::<TaskLedgerSnapshot>()
-        .register::<ProjectDefaultsInput>()
-        .register::<ProjectCreateInput>()
-        .register::<ProjectDefaults>()
-        .register::<ProjectDefaultsPatch>()
-        .register::<ProjectUpdateInput>()
-        .register::<ProjectRecord>()
-        .register::<ProjectRepositorySnapshot>()
         .register::<TagDefaultsInput>()
         .register::<TagCreateInput>()
         .register::<TagDefaults>()
@@ -902,13 +877,6 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "TaskLedgerRecord",
     "TaskLedgerPatch",
     "TaskLedgerSnapshot",
-    "ProjectDefaultsInput",
-    "ProjectCreateInput",
-    "ProjectDefaults",
-    "ProjectDefaultsPatch",
-    "ProjectUpdateInput",
-    "ProjectRecord",
-    "ProjectRepositorySnapshot",
     "TagDefaultsInput",
     "TagCreateInput",
     "TagDefaults",
@@ -1159,13 +1127,6 @@ mod tests {
             "TaskLedgerRecord",
             "TaskLedgerPatch",
             "TaskLedgerSnapshot",
-            "ProjectDefaultsInput",
-            "ProjectCreateInput",
-            "ProjectDefaults",
-            "ProjectDefaultsPatch",
-            "ProjectUpdateInput",
-            "ProjectRecord",
-            "ProjectRepositorySnapshot",
             "AutomationRuleInput",
             "AutomationProcessedInput",
             "AutomationRepositoryState",
@@ -1296,7 +1257,6 @@ mod tests {
 
         for expected in [
             "export type RustTauriCommandContractMap = {",
-            "\"project_create\": {",
             "\"tag_update\": {",
             "\"task_ledger_patch_task\": {",
             "\"recovery_save_snapshot\": {",
@@ -1457,33 +1417,6 @@ mod tests {
         };
         let progress_error = validate_task_ledger_patch_for_typescript(&patch).unwrap_err();
         assert_non_finite_path(progress_error, "$.progress");
-    }
-
-    #[test]
-    fn project_validation_rejects_unsafe_timestamps() {
-        let project = ProjectRecord {
-            id: "project-1".to_string(),
-            name: "Project".to_string(),
-            description: String::new(),
-            icon: String::new(),
-            created_at: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
-            updated_at: 1,
-            defaults: ProjectDefaults {
-                summary_template_id: "general".to_string(),
-                translation_language: "zh".to_string(),
-                polish_preset_id: "general".to_string(),
-                polish_scenario: None,
-                polish_context: None,
-                export_file_name_prefix: String::new(),
-                enabled_text_replacement_set_ids: Vec::new(),
-                enabled_hotword_set_ids: Vec::new(),
-                enabled_polish_keyword_set_ids: Vec::new(),
-                enabled_speaker_profile_ids: Vec::new(),
-            },
-        };
-
-        let error = validate_project_record_for_typescript(&project).unwrap_err();
-        assert_unsafe_integer_path(error, "$.createdAt");
     }
 
     #[test]
@@ -1755,13 +1688,6 @@ mod tests {
         assert_specta_type::<TaskLedgerRecord>();
         assert_specta_type::<TaskLedgerPatch>();
         assert_specta_type::<TaskLedgerSnapshot>();
-        assert_specta_type::<ProjectDefaultsInput>();
-        assert_specta_type::<ProjectCreateInput>();
-        assert_specta_type::<ProjectDefaults>();
-        assert_specta_type::<ProjectDefaultsPatch>();
-        assert_specta_type::<ProjectUpdateInput>();
-        assert_specta_type::<ProjectRecord>();
-        assert_specta_type::<ProjectRepositorySnapshot>();
         assert_specta_type::<TagDefaultsInput>();
         assert_specta_type::<TagCreateInput>();
         assert_specta_type::<TagDefaults>();

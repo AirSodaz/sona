@@ -486,20 +486,6 @@ describe('TranscriptSpeakerReviewPanel', () => {
         };
       }
 
-      if (command === 'project_update') {
-        return {
-          project: {
-            id: args.projectId,
-            name: args.updates.name || 'Mock Project',
-            description: args.updates.description || '',
-            icon: args.updates.icon || '',
-            defaults: args.updates.defaults || {},
-            createdAt: '2026-05-01T00:00:00.000Z',
-            updatedAt: '2026-05-01T00:00:00.000Z',
-          },
-        };
-      }
-
       throw new Error(`Unexpected command: ${command}`);
     });
   });

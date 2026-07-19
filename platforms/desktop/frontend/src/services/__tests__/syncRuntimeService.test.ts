@@ -142,7 +142,7 @@ describe('syncRuntimeService', () => {
     await flushStartup();
     expect(testContext.runNow).not.toHaveBeenCalled();
 
-    notifySyncLocalChangeForCommand('project_update');
+    notifySyncLocalChangeForCommand('tag_update');
     await vi.advanceTimersByTimeAsync(5_000);
     expect(testContext.runNow).not.toHaveBeenCalled();
 

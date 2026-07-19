@@ -1,13 +1,11 @@
-#![allow(deprecated)]
-
 use std::future::Future;
 
 use serde_json::Value;
-use sona_core::project::ACTIVE_PROJECT_SETTINGS_KEY;
 use sona_core::tag::TagError;
 use sona_core::tag::{
-    ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagDefaultsInput, TagListOptions,
-    TagRecord, TagUpdateInput, active_tag_id_from_value,
+    ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, LEGACY_ACTIVE_PROJECT_SETTINGS_KEY,
+    TagCreateInput, TagDefaultsInput, TagListOptions, TagRecord, TagUpdateInput,
+    active_tag_id_from_value,
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::SqliteTagAdapter;
@@ -119,7 +117,7 @@ pub async fn get_active_tag_id<R: Runtime>(app: &AppHandle<R>) -> Result<Option<
         || {
             legacy_store
                 .get(ACTIVE_TAG_SETTINGS_KEY)
-                .or_else(|| legacy_store.get(ACTIVE_PROJECT_SETTINGS_KEY))
+                .or_else(|| legacy_store.get(LEGACY_ACTIVE_PROJECT_SETTINGS_KEY))
         },
         |tag_id| async move {
             run_tag_adapter(app, move |adapter| adapter.set_active_tag_id(Some(tag_id))).await

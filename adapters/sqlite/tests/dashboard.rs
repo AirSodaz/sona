@@ -14,13 +14,13 @@ use sona_core::history::{HistoryIdGenerator, HistorySaveRecordingRequest};
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
 use sona_core::ports::time::{ClockError, UnixMillisClock};
-use sona_core::project::{
+use sona_core::tag::{
     DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
-    ProjectDefaults, ProjectRecord, ProjectStore,
+    TagDefaults, TagRecord, TagStore,
 };
 use sona_sqlite::llm_usage::{read_stats, record_usage};
 use sona_sqlite::{
-    Database, SqliteHistoryStore, SqliteProjectRepository, create_dashboard_service,
+    Database, SqliteHistoryStore, SqliteTagRepository, create_dashboard_service,
     load_dashboard_snapshot,
 };
 
@@ -53,15 +53,17 @@ fn history_store(path: &Path, database: Arc<Database>) -> SqliteHistoryStore {
     )
 }
 
-fn project() -> ProjectRecord {
-    ProjectRecord {
+fn tag() -> TagRecord {
+    TagRecord {
         id: "project-dashboard".to_string(),
         name: "Dashboard".to_string(),
         description: String::new(),
         icon: String::new(),
+        color: String::new(),
+        sort_order: 0,
         created_at: 1,
         updated_at: 1,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: DEFAULT_SUMMARY_TEMPLATE_ID.to_string(),
             translation_language: DEFAULT_TRANSLATION_LANGUAGE.to_string(),
             polish_preset_id: DEFAULT_POLISH_PRESET_ID.to_string(),
@@ -147,8 +149,8 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let writer = Arc::new(Database::open(dir.path()).unwrap());
     let history = history_store(dir.path(), Arc::clone(&writer));
     history.ensure_ready().unwrap();
-    let projects = SqliteProjectRepository::new(Arc::clone(&writer));
-    ProjectStore::insert_project(&projects, project()).unwrap();
+    let tags = SqliteTagRepository::new(Arc::clone(&writer));
+    TagStore::insert_tag(&tags, tag()).unwrap();
 
     let unicode_text = "你好, dashboard 🌍";
     history

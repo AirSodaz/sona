@@ -11,16 +11,16 @@ use sona_core::history::mutation_repository::{
     HistoryMutationRepository, HistoryUpdateTranscriptRequest,
 };
 use sona_core::ports::time::UnixMillisClock;
-use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
 use sona_core::sync::{
     HybridLogicalClock, SyncCausalContext, SyncConflictResolution, SyncEntityKey, SyncEntityKind,
     SyncLocalRepository, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedSegment,
     SyncRemoteSegment, SyncRepositoryFactory, SyncVersion,
 };
+use sona_core::tag::{TagDefaults, TagRecord, TagStore};
 use sona_sqlite::{
     Database, DatabaseError, SqliteAppConfigAdapter, SqliteAutomationRepository,
-    SqliteHistoryStore, SqliteProjectRepository, SqliteSyncRepository as RealSqliteSyncRepository,
-    SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,
+    SqliteHistoryStore, SqliteSyncRepository as RealSqliteSyncRepository,
+    SqliteSyncRepositoryFactory, SqliteTagRepository, record_sync_operation_in_transaction,
 };
 
 struct FixedClock;
@@ -540,7 +540,7 @@ fn pending_operations_are_filtered_by_preset_and_portable_field_whitelist() {
 }
 
 #[test]
-fn project_repository_writes_business_row_and_outbox_in_one_transaction() {
+fn tag_repository_writes_business_row_and_outbox_in_one_transaction() {
     let db = Arc::new(Database::open_in_memory().unwrap());
     let sync = SqliteSyncRepository::initialize(
         Arc::clone(&db),
@@ -549,15 +549,17 @@ fn project_repository_writes_business_row_and_outbox_in_one_transaction() {
         SyncPresetV1::Standard,
     )
     .unwrap();
-    let projects = SqliteProjectRepository::new(Arc::clone(&db));
-    let project = ProjectRecord {
+    let tags = SqliteTagRepository::new(Arc::clone(&db));
+    let tag = TagRecord {
         id: "project-captured".to_string(),
         name: "Captured".to_string(),
         description: "Portable".to_string(),
         icon: "folder".to_string(),
+        color: String::new(),
+        sort_order: 0,
         created_at: 1_000,
         updated_at: 1_000,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: "meeting".to_string(),
             translation_language: "ja".to_string(),
             polish_preset_id: "general".to_string(),
@@ -571,13 +573,13 @@ fn project_repository_writes_business_row_and_outbox_in_one_transaction() {
         },
     };
 
-    ProjectStore::insert_project(&projects, project.clone()).unwrap();
+    TagStore::insert_tag(&tags, tag.clone()).unwrap();
 
     let pending = sync
         .load_pending_operations(SyncPresetV1::Standard, 256, usize::MAX)
         .unwrap();
     assert!(pending.iter().any(|operation| {
-        operation.entity.id == project.id
+        operation.entity.id == tag.id
             && matches!(
                 &operation.kind,
                 SyncOperationKind::SetField { field, value }
@@ -585,22 +587,24 @@ fn project_repository_writes_business_row_and_outbox_in_one_transaction() {
             )
     }));
     assert!(pending.iter().all(|operation| {
-        operation.entity.kind == SyncEntityKind::Tag && operation.entity.id == project.id
+        operation.entity.kind == SyncEntityKind::Tag && operation.entity.id == tag.id
     }));
 }
 
 #[test]
-fn join_preview_projects_conflicts_and_rolls_back_every_write() {
+fn join_preview_tags_conflicts_and_rolls_back_every_write() {
     let db = Arc::new(Database::open_in_memory().unwrap());
-    let projects = SqliteProjectRepository::new(Arc::clone(&db));
-    let project = ProjectRecord {
+    let tags = SqliteTagRepository::new(Arc::clone(&db));
+    let tag = TagRecord {
         id: "preview-project".to_string(),
         name: "Local name".to_string(),
         description: "Local description".to_string(),
         icon: "folder".to_string(),
+        color: String::new(),
+        sort_order: 0,
         created_at: 1_000,
         updated_at: 1_000,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: "general".to_string(),
             translation_language: "zh".to_string(),
             polish_preset_id: "general".to_string(),
@@ -613,7 +617,7 @@ fn join_preview_projects_conflicts_and_rolls_back_every_write() {
             enabled_speaker_profile_ids: Vec::new(),
         },
     };
-    ProjectStore::insert_project(&projects, project.clone()).unwrap();
+    TagStore::insert_tag(&tags, tag.clone()).unwrap();
     let remote = SyncRemoteSegment {
         device_id: "remote-device".to_string(),
         sequence: 1,
@@ -623,7 +627,7 @@ fn join_preview_projects_conflicts_and_rolls_back_every_write() {
             "remote-device",
             1,
             SyncEntityKind::Project,
-            &project.id,
+            &tag.id,
             "name",
             json!("Remote name"),
         )],
@@ -641,10 +645,7 @@ fn join_preview_projects_conflicts_and_rolls_back_every_write() {
     assert!(preview.local_operation_count > 0);
     assert_eq!(preview.remote_operation_count, 1);
     assert_eq!(preview.projected_conflict_count, 1);
-    assert_eq!(
-        ProjectStore::load_state(&projects).unwrap().projects,
-        vec![project]
-    );
+    assert_eq!(TagStore::load_state(&tags).unwrap().tags, vec![tag]);
     db.with_connection(|connection| {
         for table in [
             "sync_state",

@@ -4,27 +4,29 @@ use sona_core::history::HistorySaveRecordingRequest;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
-use sona_core::project::{
+use sona_core::tag::{
     DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
-    ProjectDefaults, ProjectRecord, ProjectStore,
+    TagDefaults, TagRecord, TagStore,
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::llm_usage::record_usage;
-use sona_sqlite::{Database, SqliteHistoryStore, SqliteProjectRepository};
+use sona_sqlite::{Database, SqliteHistoryStore, SqliteTagRepository};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-fn project() -> ProjectRecord {
-    ProjectRecord {
+fn tag() -> TagRecord {
+    TagRecord {
         id: "project-dashboard".to_string(),
         name: "Dashboard".to_string(),
         description: String::new(),
         icon: String::new(),
+        color: String::new(),
+        sort_order: 0,
         created_at: 1,
         updated_at: 1,
-        defaults: ProjectDefaults {
+        defaults: TagDefaults {
             summary_template_id: DEFAULT_SUMMARY_TEMPLATE_ID.to_string(),
             translation_language: DEFAULT_TRANSLATION_LANGUAGE.to_string(),
             polish_preset_id: DEFAULT_POLISH_PRESET_ID.to_string(),
@@ -48,11 +50,7 @@ fn seed(app_data_dir: &Path, transcript_text: &str) -> Arc<Database> {
         Arc::new(UuidGenerator),
     );
     history.ensure_ready().unwrap();
-    ProjectStore::insert_project(
-        &SqliteProjectRepository::new(Arc::clone(&database)),
-        project(),
-    )
-    .unwrap();
+    TagStore::insert_tag(&SqliteTagRepository::new(Arc::clone(&database)), tag()).unwrap();
     history
         .save_recording(HistorySaveRecordingRequest {
             segments: serde_json::from_value(json!([{

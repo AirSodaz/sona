@@ -36,8 +36,8 @@ test('Android library reads history through an application port and UniFFI adapt
   assert.match(port, /interface RecordingLibraryPort/u);
   assert.doesNotMatch(port, /^import (?:android|androidx|uniffi)\./mu);
   assert.match(adapter, /RecordingLibraryPort/u);
-  assert.match(bindings, /queryHistoryWorkspaceJson/u);
-  assert.match(bindings, /loadHistoryTranscriptJson/u);
+  assert.match(bindings, /queryHistoryWorkspaceV1/u);
+  assert.match(bindings, /loadHistoryTranscriptV1/u);
   for (const functionName of [
     'query_history_workspace_json',
     'load_history_transcript_json',

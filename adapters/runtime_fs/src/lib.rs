@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 mod dashboard_time;
 mod diagnostics;
 mod diagnostics_time;
@@ -28,7 +26,6 @@ use sona_core::ports::runtime::{
     BatchTranscribePlanResolver, ModelCatalogProvider, RuntimeCapabilityError,
 };
 use sona_core::ports::time::{ClockError, UnixMillisClock};
-use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::config::{
     ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection,
@@ -116,12 +113,6 @@ impl AutomationIdGenerator for UuidGenerator {
 }
 
 impl HistoryIdGenerator for UuidGenerator {
-    fn generate_id(&self) -> String {
-        Uuid::new_v4().to_string()
-    }
-}
-
-impl ProjectIdGenerator for UuidGenerator {
     fn generate_id(&self) -> String {
         Uuid::new_v4().to_string()
     }

@@ -142,11 +142,10 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
     rustRegistry.matchAll(/TauriCommandContract::new\(\s*"([^"]+)"/gu),
     (match) => match[1],
   );
-  assert.equal(registryCommands.length, 61);
+  assert.equal(registryCommands.length, 53);
   assert.equal(new Set(registryCommands).size, registryCommands.length);
 
   const commandGroups = [
-    'project',
     'tag',
     'taskLedger',
     'recovery',
@@ -196,7 +195,6 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   );
 
   for (const [command, args, result] of [
-    ['project_save_all', '{ projects: ProjectRecord_Deserialize[] }', 'void'],
     ['tag_update', '{ tagId: string; updates: TagUpdateInput }', 'TagRecord_Serialize | null'],
     ['task_ledger_patch_task', '{ id: string; patch: TaskLedgerPatch_Deserialize }', 'TaskLedgerSnapshot_Serialize'],
     ['recovery_save_snapshot', '{ items: RecoveryItemInput_Deserialize[] }', 'RecoverySnapshot_Serialize'],
@@ -221,8 +219,6 @@ test('core domain and host ports expose structured errors', () => {
   const structuredErrorFiles = [
     ['core', 'src', 'config', 'repository.rs'],
     ['core', 'src', 'config', 'service.rs'],
-    ['core', 'src', 'project', 'repository.rs'],
-    ['core', 'src', 'project', 'service.rs'],
     ['core', 'src', 'tag', 'repository.rs'],
     ['core', 'src', 'tag', 'service.rs'],
     ['core', 'src', 'automation', 'repository.rs'],
@@ -667,36 +663,11 @@ test('UniFFI tests own application context and History environments', () => {
   assert.doesNotMatch(historyFixtures, /SqliteHistoryStore::new\s*\(/u);
 });
 
-test('legacy SQLite Project persistence delegates to the canonical Tag repository', () => {
-  const projectRepository = read('adapters', 'sqlite', 'src', 'project.rs');
-
-  assert.match(projectRepository, /\bSqliteTagRepository\b/u);
-  assert.match(projectRepository, /\bTagStore\b/u);
-  assert.doesNotMatch(projectRepository, /\brusqlite\b/u);
-  assert.doesNotMatch(
-    projectRepository,
-    /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[\s\S]{0,120}\btags\b/iu,
-  );
-  assert.doesNotMatch(projectRepository, /\brecord_local_(?:delete|field_change)_in_transaction\b/u);
-});
-
-test('new production code cannot consume the legacy Project compatibility API', () => {
-  const allowedConsumers = new Set([
-    'adapters/runtime_fs/src/lib.rs',
-    'adapters/sqlite/src/application_context.rs',
-    'adapters/sqlite/src/lib.rs',
-    'adapters/sqlite/src/project.rs',
-    'adapters/ts_bind/src/lib.rs',
-    'adapters/uniffi_bind/src/project_bridge.rs',
-    'platforms/cli/src/projects.rs',
-    'platforms/desktop/src/commands/project.rs',
-    'platforms/desktop/src/platform/project_repository.rs',
-    'platforms/desktop/src/platform/tag_repository.rs',
-  ]);
+test('new production code cannot consume the removed Project API', () => {
   const compatibilityUse = /\b(?:sona_core::project|SqliteProject(?:Adapter|Repository)|Project(?:Store|RepositoryService|Record))\b/u;
 
   for (const { relativePath, source } of rustSources('adapters', 'platforms')) {
-    if (!relativePath.includes('/tests/') && !allowedConsumers.has(relativePath)) {
+    if (!relativePath.includes('/tests/')) {
       assert.doesNotMatch(
         source,
         compatibilityUse,
@@ -713,7 +684,6 @@ test('hosts reuse the shared SQLite application context', () => {
     'backup_bridge.rs',
     'history_mutation_bridge.rs',
     'history_query_bridge.rs',
-    'project_bridge.rs',
     'sync_bridge.rs',
     'tag_bridge.rs',
     'task_ledger_bridge.rs',
@@ -732,7 +702,7 @@ test('hosts reuse the shared SQLite application context', () => {
   assert.doesNotMatch(desktopSetup, /manage\(db\)/u);
   assert.doesNotMatch(desktopDatabase, /\bDatabase::(?:global|set_global)\b/u);
 
-  for (const file of ['app_config.rs', 'automation.rs', 'backup.rs', 'history.rs', 'projects.rs', 'task_ledger.rs']) {
+  for (const file of ['app_config.rs', 'automation.rs', 'backup.rs', 'history.rs', 'task_ledger.rs']) {
     const source = withoutInlineRustTests(read('platforms', 'cli', 'src', file));
     assert.match(source, /\bSqliteApplicationContext\b/u, `${file} must use the CLI context`);
     assert.doesNotMatch(source, /\bDatabase::open(?:_read_only)?\b/u);

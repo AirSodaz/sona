@@ -17,7 +17,6 @@ pub mod media_detector;
 pub mod model_downloads;
 pub mod paths;
 pub mod preset_models;
-pub mod project_repository;
 pub mod recovery_repository;
 pub mod runtime_status;
 pub mod speaker_processing;

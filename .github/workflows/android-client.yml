@@ -54,6 +54,9 @@ jobs:
     name: Build Android Client
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    env:
+      SHERPA_ONNX_VERSION: 1.13.4
+      SHERPA_ONNX_TAG: v1.13.4
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -93,6 +96,13 @@ jobs:
 
       - name: Configure Android NDK
         run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Prepare host sherpa-onnx shared libraries
+        run: |
+          archive="sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2"
+          wget "https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/${archive}"
+          tar -xjf "${archive}"
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/${archive%.tar.bz2}/lib" >> "$GITHUB_ENV"
 
       - name: Build and verify Android client
         env:

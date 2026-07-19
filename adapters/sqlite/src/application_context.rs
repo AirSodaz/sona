@@ -5,17 +5,13 @@ use std::sync::Arc;
 use sona_core::automation::service::AutomationIdGenerator;
 use sona_core::history::HistoryIdGenerator;
 use sona_core::ports::time::UnixMillisClock;
-#[allow(deprecated)]
-use sona_core::project::ProjectIdGenerator;
 use sona_core::tag::TagIdGenerator;
 
-#[allow(deprecated)]
 use crate::{
     Database, DatabaseError, SqliteAppConfigAdapter, SqliteAutomationAdapter,
     SqliteAutomationRepository, SqliteBackupStateRepository, SqliteDashboardService,
-    SqliteHistoryStore, SqliteLedgerRepository, SqliteProjectAdapter, SqliteProjectRepository,
-    SqliteSyncRepositoryFactory, SqliteTagAdapter, SqliteTagRepository, SqliteTaskLedgerAdapter,
-    create_dashboard_service,
+    SqliteHistoryStore, SqliteLedgerRepository, SqliteSyncRepositoryFactory, SqliteTagAdapter,
+    SqliteTagRepository, SqliteTaskLedgerAdapter, create_dashboard_service,
 };
 
 /// Shared SQLite composition root for one application-data directory.
@@ -98,20 +94,6 @@ impl SqliteApplicationContext {
 
     pub fn automation_repository(&self) -> SqliteAutomationRepository {
         SqliteAutomationRepository::new(self.database())
-    }
-
-    #[allow(deprecated)]
-    pub fn project_adapter(
-        &self,
-        ids: Arc<dyn ProjectIdGenerator>,
-        clock: Arc<dyn UnixMillisClock>,
-    ) -> SqliteProjectAdapter {
-        SqliteProjectAdapter::new(self.database(), ids, clock)
-    }
-
-    #[allow(deprecated)]
-    pub fn project_repository(&self) -> SqliteProjectRepository {
-        SqliteProjectRepository::new(self.database())
     }
 
     pub fn tag_adapter(

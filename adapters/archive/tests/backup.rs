@@ -21,7 +21,7 @@ use sona_core::history::{
     HistoryAudioStatus, HistoryBackupSnapshot, HistoryItemKind, HistoryItemRecord,
     HistoryItemStatus,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::tag::{TagDefaults, TagRecord};
 use tar::{EntryType, Header};
 use uuid::Uuid;
@@ -444,7 +444,7 @@ impl BackupStateRepository for FixedBackupState {
 struct FixedClock(u64);
 
 impl UnixMillisClock for FixedClock {
-    fn now_ms(&self) -> Result<u64, String> {
+    fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }

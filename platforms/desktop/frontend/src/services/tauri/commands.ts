@@ -82,16 +82,6 @@ export const TauriCommand = {
   export: {
     transcriptFile: 'export_transcript_file',
   },
-  project: {
-    list: 'project_list',
-    saveAll: 'project_save_all',
-    create: 'project_create',
-    update: 'project_update',
-    delete: 'project_delete',
-    reorder: 'project_reorder',
-    getActiveId: 'project_get_active_id',
-    setActiveId: 'project_set_active_id',
-  },
   tag: {
     list: 'tag_list',
     saveAll: 'tag_save_all',

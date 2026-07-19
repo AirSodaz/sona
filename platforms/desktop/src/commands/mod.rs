@@ -6,7 +6,6 @@ pub mod downloads;
 pub mod export;
 pub mod history;
 pub mod llm;
-pub mod project;
 pub mod storage;
 pub mod sync;
 pub mod system;
@@ -18,14 +17,6 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::archive::extract_tar_bz2,
         crate::commands::archive::create_tar_bz2,
         crate::commands::system::get_dashboard_snapshot,
-        crate::commands::project::project_list,
-        crate::commands::project::project_save_all,
-        crate::commands::project::project_create,
-        crate::commands::project::project_update,
-        crate::commands::project::project_delete,
-        crate::commands::project::project_reorder,
-        crate::commands::project::project_get_active_id,
-        crate::commands::project::project_set_active_id,
         crate::commands::tag::tag_list,
         crate::commands::tag::tag_save_all,
         crate::commands::tag::tag_create,

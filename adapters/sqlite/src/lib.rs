@@ -14,7 +14,6 @@ mod legacy_change_time;
 pub mod legacy_migration;
 pub mod llm_usage;
 pub mod ports;
-pub mod project;
 pub mod schema;
 pub mod storage_usage;
 pub mod storage_usage_repository;
@@ -39,8 +38,6 @@ pub use history_mutation_repository::{
 };
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
-#[allow(deprecated)]
-pub use project::{SqliteProjectAdapter, SqliteProjectRepository};
 pub use storage_usage_repository::{
     LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
     load_storage_usage_snapshot_with_database,

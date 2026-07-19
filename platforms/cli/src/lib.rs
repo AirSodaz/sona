@@ -13,7 +13,6 @@ mod live_audio;
 mod live_output;
 mod llm;
 mod models;
-mod projects;
 mod recovery;
 mod serve;
 mod storage;
@@ -198,8 +197,6 @@ enum Commands {
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
-    /// Inspects persisted projects.
-    Projects(projects::ProjectsArgs),
     /// Inspects persisted recovery snapshots.
     Recovery(recovery::RecoveryArgs),
     /// Runs the shared local HTTP API server.
@@ -260,7 +257,6 @@ fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
-        Commands::Projects(args) => projects::run_projects(args),
         Commands::Recovery(args) => recovery::run_recovery(args),
         Commands::Serve(args) => serve::run_serve(args),
         Commands::Storage(args) => storage::run_storage(args),

@@ -19,38 +19,6 @@ impl TauriCommandContract {
 
 const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
     TauriCommandContract::new(
-        "project_list",
-        "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",
-        "ProjectRecord_Serialize[]",
-    ),
-    TauriCommandContract::new(
-        "project_save_all",
-        "{ projects: ProjectRecord_Deserialize[] }",
-        "void",
-    ),
-    TauriCommandContract::new(
-        "project_create",
-        "{ name: string; description?: string | null; icon?: string | null; defaults: ProjectDefaultsInput }",
-        "ProjectRecord_Serialize",
-    ),
-    TauriCommandContract::new(
-        "project_update",
-        "{ projectId: string; updates: ProjectUpdateInput }",
-        "ProjectRecord_Serialize | null",
-    ),
-    TauriCommandContract::new("project_delete", "{ projectId: string }", "void"),
-    TauriCommandContract::new(
-        "project_reorder",
-        "{ projectIds: string[] }",
-        "ProjectRecord_Serialize[]",
-    ),
-    TauriCommandContract::new("project_get_active_id", "undefined", "string | null"),
-    TauriCommandContract::new(
-        "project_set_active_id",
-        "{ projectId: string | null }",
-        "void",
-    ),
-    TauriCommandContract::new(
         "tag_list",
         "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",
         "TagRecord_Serialize[]",
@@ -302,7 +270,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 61);
+        assert_eq!(contracts.len(), 53);
         let names = contracts
             .iter()
             .map(|contract| contract.command)
@@ -310,7 +278,6 @@ mod tests {
         assert_eq!(names.len(), contracts.len());
 
         for expected in [
-            "project_list",
             "tag_list",
             "task_ledger_load_snapshot",
             "recovery_load_snapshot",
